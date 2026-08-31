@@ -5,13 +5,13 @@
 @use '../../styles/markdown-layout' as markdown;
 
 .mermaid-block {
-  --mermaid-block-shadow-color: var(--bf-appearance-token-color-overlay-black-40);
+  --mermaid-block-shadow-color: color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent);
 
   margin: markdown.$block-gap 0;
   border-radius: 6px;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-element-bg-base);
+  background: var(--bf-color-surface-canvas);
+  border: 1px solid var(--bf-color-action-neutral-surface);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -19,19 +19,19 @@
   &:hover {
     box-shadow:
       0 8px 24px var(--mermaid-block-shadow-color),
-      inset 0 1px 0 var(--bf-appearance-token-element-bg-medium),
-      inset 0 -1px 0 var(--bf-appearance-token-element-bg-subtle);
-    border-color: var(--bf-appearance-token-element-bg-strong);
+      inset 0 1px 0 var(--bf-color-action-neutral-surface-hover),
+      inset 0 -1px 0 var(--bf-color-surface-subtle);
+    border-color: var(--bf-color-action-neutral-surface-pressed);
   }
 
   &--streaming {
     .mermaid-block__streaming {
-      padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
+      padding: var(--bf-control-flow-chat-code-block-padding-block) var(--bf-control-flow-chat-code-block-padding-inline);
     }
 
     .streaming-cursor {
       display: inline-block;
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
       animation: bitfun-mermaid-streaming-cursor-blink 1s step-end infinite;
       margin-left: 2px;
     }
@@ -46,11 +46,11 @@
     .mermaid-block__hint {
       display: flex;
       align-items: center;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
-      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
-      background: var(--bf-appearance-token-color-warning-bg);
-      border-top: 1px solid var(--bf-appearance-token-color-warning-border);
-      color: var(--bf-appearance-token-color-warning);
+      gap: var(--bf-control-flow-chat-inline-gap);
+      padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
+      background: var(--bf-color-status-warning-surface);
+      border-top: 1px solid var(--bf-color-status-warning-border);
+      color: var(--bf-color-status-warning-content);
       font-size: var(--bf-type-flow-support-font-size);
 
       svg {
@@ -62,7 +62,7 @@
   &--waiting,
   &--rendering {
     .mermaid-block__loading {
-      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+      padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
       text-align: center;
     }
 
@@ -70,10 +70,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
-      color: var(--bf-appearance-token-color-accent-500);
+      gap: var(--bf-control-flow-chat-inline-gap);
+      color: var(--bf-color-accent-default);
       font-size: var(--bf-type-flow-control-font-size);
-      margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
+      margin-bottom: var(--bf-control-flow-chat-card-gap);
 
       .spinning {
         animation: bitfun-mermaid-loading-spin 1s linear infinite;
@@ -90,7 +90,7 @@
     position: relative;
 
     .mermaid-block__diagram {
-      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+      padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
       background: transparent;
       overflow-x: auto;
       animation: bitfun-mermaid-diagram-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -129,8 +129,8 @@
     }
 
     .mermaid-block__source {
-      padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
-      border-top: 1px solid var(--bf-appearance-token-element-bg-base);
+      padding: var(--bf-control-flow-chat-code-block-padding-block) var(--bf-control-flow-chat-code-block-padding-inline);
+      border-top: 1px solid var(--bf-color-action-neutral-surface);
       background: transparent;
 
       .mermaid-code {
@@ -144,16 +144,16 @@
   }
 
   &--error {
-    border-color: var(--bf-appearance-token-color-error-border);
+    border-color: var(--bf-color-status-danger-border);
 
     .mermaid-block__error-message {
       display: flex;
       align-items: center;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
-      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
-      background: var(--bf-appearance-token-color-error-bg);
-      border-bottom: 1px solid var(--bf-appearance-token-color-error-border);
-      color: var(--bf-appearance-token-color-error);
+      gap: var(--bf-control-flow-chat-inline-gap);
+      padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
+      background: var(--bf-color-status-danger-surface);
+      border-bottom: 1px solid var(--bf-color-status-danger-border);
+      color: var(--bf-color-status-danger-content);
       font-size: var(--bf-type-flow-control-font-size);
 
       svg {
@@ -163,16 +163,16 @@
 
     .mermaid-block__actions {
       display: flex;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
-      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
-      background: var(--bf-appearance-token-color-bg-secondary);
-      border-top: 1px solid var(--bf-appearance-token-element-bg-base);
+      gap: var(--bf-control-flow-chat-inline-gap);
+      padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
+      background: var(--bf-color-surface-panel);
+      border-top: 1px solid var(--bf-color-action-neutral-surface);
     }
   }
 
 
   .mermaid-block__code-preview {
-    padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
+    padding: var(--bf-control-flow-chat-code-block-padding-block) var(--bf-control-flow-chat-code-block-padding-inline);
     background: transparent;
 
     .mermaid-code {
@@ -184,7 +184,7 @@
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-type-flow-code-font-size);
       line-height: var(--bf-type-flow-code-line-height);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       overflow-x: auto;
       white-space: pre;
 
@@ -217,7 +217,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     transition:
       transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -225,8 +225,8 @@
       color 0.15s ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &:active {
@@ -238,7 +238,7 @@
     }
 
     &.copied {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
   }
 
@@ -248,9 +248,9 @@
     gap: 0.375rem;
     padding: 0.5rem 0.875rem;
     background: transparent;
-    border: 1px solid var(--bf-appearance-token-element-bg-medium);
+    border: 1px solid var(--bf-color-action-neutral-surface-hover);
     border-radius: 4px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
     cursor: pointer;
     transition:
@@ -260,9 +260,9 @@
       color 0.2s ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      border-color: var(--bf-appearance-token-element-bg-strong);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-surface-subtle);
+      border-color: var(--bf-color-action-neutral-surface-pressed);
+      color: var(--bf-color-content-primary);
     }
 
     &:active {
@@ -329,7 +329,7 @@
     }
 
     .edgeLabel {
-      background-color: var(--bf-appearance-token-color-bg-secondary);
+      background-color: var(--bf-color-surface-panel);
     }
   }
 }
@@ -337,7 +337,7 @@
 @media print {
   .mermaid-block {
     break-inside: avoid;
-    border: 1px solid var(--bf-appearance-token-color-static-black);
+    border: 1px solid var(--bf-color-content-on-light);
 
     .mermaid-block__actions {
       display: none;

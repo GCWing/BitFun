@@ -17,7 +17,7 @@ export function H1({ children, style, ...props }: CanvasHeadingProps) {
         margin: 0,
         fontWeight: 'var(--bf-type-heading-display-font-weight)',
         letterSpacing: 'var(--bf-type-heading-display-letter-spacing)',
-        color: 'var(--bf-appearance-token-color-text-primary)',
+        color: 'var(--bf-color-content-primary)',
         ...style,
       }}
     >
@@ -37,7 +37,7 @@ export function H2({ children, style, ...props }: CanvasHeadingProps) {
         margin: 0,
         fontWeight: 'var(--bf-type-heading-page-font-weight)',
         letterSpacing: 'var(--bf-type-heading-page-letter-spacing)',
-        color: 'var(--bf-appearance-token-color-text-primary)',
+        color: 'var(--bf-color-content-primary)',
         ...style,
       }}
     >
@@ -57,7 +57,7 @@ export function H3({ children, style, ...props }: CanvasHeadingProps) {
         margin: 0,
         fontWeight: 'var(--bf-type-heading-section-font-weight)',
         letterSpacing: 'var(--bf-type-heading-section-letter-spacing)',
-        color: 'var(--bf-appearance-token-color-text-primary)',
+        color: 'var(--bf-color-content-primary)',
         ...style,
       }}
     >
@@ -115,7 +115,7 @@ export function Link({ children, style, ...props }: CanvasLinkProps) {
       target={props.target ?? '_blank'}
       rel={props.rel ?? 'noreferrer'}
       style={{
-        color: 'var(--bf-appearance-token-color-accent-500)',
+        color: 'var(--bf-color-accent-default)',
         textDecoration: 'none',
         ...style,
       }}

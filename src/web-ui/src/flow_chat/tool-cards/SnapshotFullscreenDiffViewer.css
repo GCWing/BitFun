@@ -3,20 +3,12 @@
  */
 
 .snapshot-fullscreen-overlay {
-  --private-diff-fullscreen-accept-rgb: 110, 184, 140;
-  --private-diff-fullscreen-reject-rgb: 199, 112, 112;
-  --private-diff-fullscreen-selected-rgb: 112, 150, 196;
-  --private-diff-fullscreen-accept-color: rgb(var(--private-diff-fullscreen-accept-rgb));
-  --private-diff-fullscreen-reject-color: rgb(var(--private-diff-fullscreen-reject-rgb));
-  --private-diff-fullscreen-selected-color: rgb(var(--private-diff-fullscreen-selected-rgb));
-  --private-diff-fullscreen-pending-color: var(--bf-appearance-token-color-warning);
-
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, transparent);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 90%, transparent);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -27,13 +19,13 @@
 .snapshot-fullscreen-container {
   width: 95vw;
   height: 95vh;
-  background: var(--bf-appearance-token-color-bg-secondary);
+  background: var(--bf-color-surface-panel);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-  box-shadow: 0 20px 60px var(--bf-appearance-token-color-overlay-black-80);
+  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
 }
 
 /* Header toolbar */
@@ -42,8 +34,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-12);
+  background: var(--bf-color-surface-canvas);
+  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   flex-shrink: 0;
 }
 
@@ -59,9 +51,9 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
+  background: color-mix(in srgb, var(--bf-color-accent-hover) 10%, transparent);
   border-radius: 6px;
-  color: var(--bf-appearance-token-color-accent-600);
+  color: var(--bf-color-accent-hover);
 }
 
 .session-details {
@@ -73,7 +65,7 @@
 .session-title {
   font-size: var(--bf-font-size-xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .session-stats {
@@ -81,16 +73,16 @@
   align-items: center;
   gap: 8px;
   font-size: var(--bf-type-flow-control-font-size);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .session-stats .additions {
-  color: var(--private-diff-fullscreen-accept-color);
+  color: var(--bf-domain-git-added);
   font-weight: var(--bf-font-weight-semibold);
 }
 
 .session-stats .deletions {
-  color: var(--private-diff-fullscreen-reject-color);
+  color: var(--bf-domain-git-deleted);
   font-weight: var(--bf-font-weight-semibold);
 }
 
@@ -103,7 +95,7 @@
 .header-divider {
   width: 1px;
   height: 24px;
-  background: var(--bf-appearance-token-color-overlay-white-12);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   margin: 0 4px;
 }
 
@@ -113,8 +105,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 93%, var(--bf-appearance-token-color-static-white));
-  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 93%, var(--bf-color-content-on-dark));
+  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -141,7 +133,7 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-appearance-token-color-overlay-white-60);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
   cursor: pointer;
   transition:
     background-color 160ms ease,
@@ -154,14 +146,14 @@
 }
 
 .file-tab:hover {
-  background: var(--bf-appearance-token-color-overlay-white-08);
-  color: var(--bf-appearance-token-color-overlay-white-80);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 80%, transparent);
 }
 
 .file-tab.active {
-  background: rgba(var(--private-diff-fullscreen-selected-rgb), 0.1);
-  color: var(--private-diff-fullscreen-selected-color);
-  border-color: rgba(var(--private-diff-fullscreen-selected-rgb), 0.3);
+  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+  color: var(--bf-color-accent-default);
+  border-color: color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
 }
 
 .file-tab .file-name {
@@ -174,19 +166,19 @@
 }
 
 .file-tab .file-status[data-status="pending"] {
-  color: var(--private-diff-fullscreen-pending-color);
+  color: var(--bf-color-status-warning-content);
 }
 
 .file-tab .file-status[data-status="accepted"] {
-  color: var(--private-diff-fullscreen-accept-color);
+  color: var(--bf-domain-git-added);
 }
 
 .file-tab .file-status[data-status="rejected"] {
-  color: var(--private-diff-fullscreen-reject-color);
+  color: var(--bf-domain-git-deleted);
 }
 
 .file-tab .file-status[data-status="partial"] {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 /* Current file header */
@@ -195,8 +187,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 96%, var(--bf-appearance-token-color-static-white));
-  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
+  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   flex-shrink: 0;
 }
 
@@ -214,7 +206,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: var(--bf-appearance-token-color-overlay-white-60);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
   flex-shrink: 0;
 }
 
@@ -229,13 +221,13 @@
 .file-details .file-name {
   font-size: var(--bf-font-size-base);
   font-weight: var(--bf-font-weight-medium);
-  color: var(--bf-appearance-token-color-overlay-white-90);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
   font-family: var(--bf-font-family-mono);
 }
 
 .file-details .file-path-full {
   font-size: var(--bf-type-flow-support-font-size);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 50%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 50%, transparent);
   font-family: var(--bf-font-family-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -255,7 +247,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 88%, var(--bf-appearance-token-color-static-white));
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 88%, var(--bf-color-content-on-dark));
 }
 
 /* Override WebDiffViewer for fullscreen layout */
@@ -284,21 +276,21 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bf-appearance-token-color-overlay-black-80);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--bf-appearance-token-color-overlay-white-90);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
   font-size: var(--bf-font-size-base);
 }
 
 .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--bf-appearance-token-color-overlay-white-20);
-  border-top: 2px solid var(--private-diff-fullscreen-selected-color);
+  border: 2px solid color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
+  border-top: 2px solid var(--bf-color-accent-default);
   border-radius: 50%;
   animation: snapshot-fullscreen-diff-spin 1s linear infinite;
 }
@@ -379,13 +371,13 @@
 
 /* File count badge */
 .diff-stats .file-count {
-  background: rgba(var(--private-diff-fullscreen-selected-rgb), 0.1);
-  color: var(--private-diff-fullscreen-selected-color);
+  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+  color: var(--bf-color-accent-default);
   padding: 2px 6px;
   border-radius: 10px;
   font-size: var(--bf-type-flow-micro-font-size);
   font-weight: var(--bf-font-weight-semibold);
-  border: 1px solid rgba(var(--private-diff-fullscreen-selected-rgb), 0.3);
+  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
 }
 
 /* Ensure icons render correctly */

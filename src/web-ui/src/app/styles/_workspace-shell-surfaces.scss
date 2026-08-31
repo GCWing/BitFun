@@ -8,30 +8,30 @@
 @mixin sidebar-background {
   background: color-mix(
     in srgb,
-    var(--bf-appearance-token-chrome-bg-primary) 50%,
-    var(--bf-appearance-token-chrome-bg-workbench)
+    var(--bf-color-surface-chrome) 50%,
+    var(--bf-color-surface-workbench)
   );
 }
 
 @mixin navigation-feedback {
-  background: var(--bf-appearance-token-element-bg-soft);
+  background: var(--bf-color-action-quiet-hover);
 
   :root[data-bf-appearance-mode='light'] & {
     background: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-static-black) 5%,
+      var(--bf-color-content-on-light) 5%,
       transparent
     );
   }
 }
 
 @mixin sidebar-hairline-color {
-  border-color: var(--bf-appearance-token-border-subtle);
+  border-color: var(--bf-color-border-subtle);
 
   :root[data-bf-appearance-mode='light'] & {
     border-color: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-static-black) 5%,
+      var(--bf-color-content-on-light) 5%,
       transparent
     );
   }

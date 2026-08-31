@@ -75,7 +75,7 @@ struct SessionActionSurface: View {
                 .stroke(BitFunTheme.line, lineWidth: 1)
         )
         .shadow(
-            color: presentation == .popover ? BitFunTheme.line : .clear,
+            color: presentation == .popover ? BitFunTheme.line : BitFunTheme.transparent,
             radius: presentation == .popover ? 20 : 0,
             y: presentation == .popover ? 8 : 0
         )
@@ -132,8 +132,8 @@ struct SessionActionSurface: View {
                 }
                 confirmationButton(
                     "删除",
-                    fill: BitFunTheme.red,
-                    foreground: .white,
+                    fill: BitFunTheme.statusDanger,
+                    foreground: BitFunTheme.contentOnAction,
                     emphasized: true
                 ) {
                     onDelete()
@@ -153,11 +153,11 @@ struct SessionActionSurface: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 19, weight: .regular))
-                    .foregroundStyle(destructive ? BitFunTheme.red : BitFunTheme.muted)
+                    .foregroundStyle(destructive ? BitFunTheme.statusDanger : BitFunTheme.muted)
                     .frame(width: 23, height: 23)
                 Text(model.localized(title))
                     .font(.system(size: 15))
-                    .foregroundStyle(destructive ? BitFunTheme.red : BitFunTheme.ink)
+                    .foregroundStyle(destructive ? BitFunTheme.statusDanger : BitFunTheme.ink)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)

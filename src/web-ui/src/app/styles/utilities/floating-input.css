@@ -3,31 +3,31 @@
 /* Base floating input styles */
 .floating-input-base {
   position: fixed;
-  bottom: var(--bf-appearance-token-size-gap-5);
+  bottom: var(--bf-space-5);
   left: 50%;
   transform: translateX(-50%);
   width: 400px; /* Width when unfocused */
-  max-width: calc(100vw - calc(var(--bf-appearance-token-size-gap-5) * 2));
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 70%, transparent);
+  max-width: calc(100vw - calc(var(--bf-space-5) * 2));
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 70%, transparent);
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  border-radius: calc(var(--bf-appearance-token-size-radius-lg) * 2); /* Pill shape */
-  border: 1px solid var(--bf-appearance-token-border-accent-subtle);
+  border-radius: calc(var(--bf-radius-lg) * 2); /* Pill shape */
+  border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 15%, transparent);
   box-shadow: 
-    var(--bf-appearance-token-shadow-xl),
-    0 4px 15px color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
-  padding: var(--bf-appearance-token-size-gap-3) var(--bf-appearance-token-size-gap-4);
+    var(--bf-shadow-xl),
+    0 4px 15px color-mix(in srgb, var(--bf-color-accent-hover) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  padding: var(--bf-space-3) var(--bf-space-4);
   z-index: 100;
   transition:
-    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    border-radius var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    opacity var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    padding var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    width var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    border-radius var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    padding var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    width var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   opacity: 0.6; /* Overall opacity when inactive */
   display: flex;
   align-items: center;
@@ -37,11 +37,11 @@
 /* Hover effect for floating input */
 .floating-input-base:hover {
   opacity: 0.8;
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 25%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent);
   box-shadow: 
-    0 12px 40px var(--bf-appearance-token-color-overlay-black-40),
-    0 6px 20px var(--bf-appearance-token-border-accent-subtle),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12);
+    0 12px 40px color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent),
+    0 6px 20px color-mix(in srgb, var(--bf-color-accent-hover) 15%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   transform: translateX(-50%) translateY(-1px);
 }
 
@@ -49,14 +49,14 @@
 .floating-input-base:focus-within {
   opacity: 1;
   width: 800px; /* Expanded width when active */
-  padding: var(--bf-appearance-token-size-gap-4) var(--bf-appearance-token-size-gap-5);
-  border-radius: var(--bf-appearance-token-size-radius-lg);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 50%, transparent);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 98%, transparent);
+  padding: var(--bf-space-4) var(--bf-space-5);
+  border-radius: var(--bf-radius-lg);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 50%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 98%, transparent);
   box-shadow: 
-    0 20px 60px color-mix(in srgb, var(--bf-appearance-token-color-static-black) 60%, transparent),
-    0 10px 40px color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 25%, transparent),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-20);
+    0 20px 60px color-mix(in srgb, var(--bf-color-content-on-light) 60%, transparent),
+    0 10px 40px color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
   transform: translateX(-50%) translateY(-4px);
 }
 
@@ -65,7 +65,7 @@
   flex: 1;
   background: transparent;
   border: none;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-sm);
   font-family:var(--bf-font-family-sans);
   line-height: var(--bf-line-height-base);
@@ -76,7 +76,7 @@
 }
 
 .floating-input-base .floating-input-field::placeholder {
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 50%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 50%, transparent);
   font-style: italic;
 }
 
@@ -84,37 +84,37 @@
 .floating-input-base .floating-input-button {
   background: none;
   border: none;
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 70%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
   cursor: pointer;
-  padding: var(--bf-appearance-token-size-gap-2);
-  border-radius: var(--bf-appearance-token-size-radius-sm);
+  padding: var(--bf-space-2);
+  border-radius: var(--bf-radius-sm);
   transition:
-    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-    color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-    opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-    transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: var(--bf-appearance-token-size-gap-2);
+  margin-left: var(--bf-space-2);
 }
 
 .floating-input-base .floating-input-button:hover:not(:disabled) {
-  color: var(--bf-appearance-token-color-accent-500);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
+  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--bf-color-accent-hover) 10%, transparent);
 }
 
 .floating-input-base .floating-input-button:disabled {
-  opacity: var(--bf-appearance-token-opacity-disabled);
+  opacity: var(--bf-opacity-disabled);
   cursor: default;
 }
 
 /* Inner container styles when active */
 .floating-input-base:focus-within .floating-input-wrapper {
-  background: var(--bf-appearance-token-color-overlay-black-20);
-  border: 1px solid var(--bf-appearance-token-border-accent-soft);
-  border-radius: var(--bf-appearance-token-size-radius-md);
-  padding: var(--bf-appearance-token-size-gap-2);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 30%, transparent);
+  border-radius: var(--bf-radius-md);
+  padding: var(--bf-space-2);
 }
 
 /* Message container needs bottom space to avoid overlap */
@@ -127,14 +127,14 @@
   .floating-input-base {
     width: calc(50vw);
     bottom: 15px;
-    padding: var(--bf-appearance-token-size-gap-1) var(--bf-appearance-token-size-gap-3);
+    padding: var(--bf-space-1) var(--bf-space-3);
     min-width: 300px;
     max-width: calc(100vw - 30px);
   }
   
   .floating-input-base:focus-within {
     width: calc(100vw - 20px);
-    padding: var(--bf-appearance-token-size-gap-3) var(--bf-appearance-token-size-gap-4);
+    padding: var(--bf-space-3) var(--bf-space-4);
   }
   
   .has-floating-input {
@@ -143,16 +143,16 @@
 }
 
 :root[data-bf-appearance-mode='dark'] .floating-input-base {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 65%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 12%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 65%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 12%, transparent);
 }
 
 :root[data-bf-appearance-mode='dark'] .floating-input-base:hover {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 75%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 20%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 75%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 20%, transparent);
 }
 
 :root[data-bf-appearance-mode='dark'] .floating-input-base:focus-within {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 99%, transparent);
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 45%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 99%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 45%, transparent);
 }

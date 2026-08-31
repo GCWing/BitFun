@@ -44,7 +44,7 @@ describe('FlowChat collapse spacing', () => {
 
     expect(exploreContent).toContain('padding: 0;');
     expect(thinkingContent).toMatch(
-      /padding:\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-x\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*0;/,
+      /padding:\s*var\(--bf-control-flow-chat-card-expanded-padding-block\)\s*var\(--bf-control-flow-chat-card-expanded-padding-inline\)\s*var\(--bf-control-flow-chat-card-expanded-padding-block\)\s*0;/,
     );
   });
 
@@ -62,12 +62,12 @@ describe('FlowChat collapse spacing', () => {
       'margin-inline-start: 0;',
     );
     expect(extractBlock(subagentStyles, '.subagent-items-container')).toContain(
-      'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);',
+      'padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);',
     );
     expect(
       extractBlock(subagentProjectionStyles, '.subagent-projection-container--expanded'),
     ).toContain(
-      'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);',
+      'padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);',
     );
     expect(
       extractBlock(taskStyles, '.task-expanded-content .task-prompt-content'),
@@ -81,7 +81,7 @@ describe('FlowChat collapse spacing', () => {
   it('lets product-owned full-bleed footer surfaces consume the shared body inset', () => {
     const miniAppStyles = readSource('../../tool-cards/MiniAppToolDisplay.scss');
     expect(miniAppStyles).toContain(
-      ".miniapp-tool-display[data-bf-attention='prominent'] .miniapp-result-footer {\n  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));",
+      ".miniapp-tool-display[data-bf-attention='prominent'] .miniapp-result-footer {\n  margin-left: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-inline));",
     );
   });
 });

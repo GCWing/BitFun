@@ -29,11 +29,11 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         position: 'relative', overflow: 'hidden',
-        background: 'var(--color-bg-primary)',
+        background: 'var(--bf-color-surface-canvas)',
       }}>
         <div style={{
           position: 'absolute', top: 0, bottom: 0, right: 0, width: 1,
-          backgroundImage: `linear-gradient(180deg, var(--border-subtle) 0%, var(--border-subtle) 50%, transparent 50%, transparent 100%)`,
+          backgroundImage: `linear-gradient(180deg, var(--bf-color-border-subtle) 0%, var(--bf-color-border-subtle) 50%, transparent 50%, transparent 100%)`,
           backgroundSize: '1px 8px', pointerEvents: 'none', zIndex: 10,
         }} />
 
@@ -44,13 +44,13 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
           <img src={logoUrl} alt="BitFun" style={{
             display: 'block', margin: '0 auto 16px',
             width: 56, height: 56, borderRadius: 14,
-            filter: 'drop-shadow(0 0 40px color-mix(in srgb, var(--color-accent-500) 8%, transparent))',
+            filter: 'drop-shadow(0 0 40px color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent))',
           }} />
           <h1 style={{
-            fontFamily: 'var(--font-sans)', fontSize: 42, fontWeight: 700,
-            color: 'var(--color-text-primary)', letterSpacing: '-0.03em',
+            fontFamily: 'var(--bf-font-family-sans)', fontSize: 42, fontWeight: 700,
+            color: 'var(--bf-color-content-primary)', letterSpacing: '-0.03em',
             lineHeight: 0.95, margin: '0 0 16px 0',
-            textShadow: '0 0 60px color-mix(in srgb, var(--color-accent-500) 15%, transparent)',
+            textShadow: '0 0 60px color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent)',
           }}>BitFun</h1>
         </div>
 
@@ -68,7 +68,7 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
             padding: '0 24px',
             textAlign: 'center',
             fontSize: 11,
-            color: 'var(--color-text-muted)',
+            color: 'var(--bf-color-content-muted)',
             opacity: 0.6,
             letterSpacing: '0.5px',
           }}>
@@ -107,36 +107,36 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
                         display: 'flex', alignItems: 'center', gap: 12,
                         padding: '14px 16px', width: '100%',
                         background: isSelected
-                          ? 'color-mix(in srgb, var(--color-accent-500) 8%, transparent)'
-                          : 'var(--element-bg-subtle)',
+                          ? 'color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent)'
+                          : 'var(--bf-color-surface-subtle)',
                         border: 'none',
-                        borderRadius: 'var(--size-radius-sm)',
+                        borderRadius: 'var(--bf-radius-sm)',
                         cursor: 'pointer', textAlign: 'left',
                         transition: 'all 0.25s ease',
                         outline: 'none',
-                        fontFamily: 'var(--font-sans)',
+                        fontFamily: 'var(--bf-font-family-sans)',
                         boxShadow: 'none',
                       }}
                       onMouseEnter={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.background = 'var(--element-bg-soft)';
+                          e.currentTarget.style.background = 'var(--bf-color-action-neutral-surface)';
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.background = 'var(--element-bg-subtle)';
+                          e.currentTarget.style.background = 'var(--bf-color-surface-subtle)';
                         }
                       }}
                     >
                       <div style={{ flex: 1 }}>
                         <div style={{
                           fontSize: 14, fontWeight: 500,
-                          color: isSelected ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                          color: isSelected ? 'var(--bf-color-content-primary)' : 'var(--bf-color-content-secondary)',
                           transition: 'color 0.2s ease',
                         }}>{lang.nativeName}</div>
                         <div style={{
                           fontSize: 11,
-                          color: 'var(--color-text-muted)', opacity: 0.7,
+                          color: 'var(--bf-color-content-muted)', opacity: 0.7,
                           marginTop: 2,
                         }}>{lang.label}</div>
                       </div>

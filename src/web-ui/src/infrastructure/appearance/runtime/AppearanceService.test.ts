@@ -8,6 +8,7 @@ import type {
   ResolvedAppearance,
   StoredAppearancePackage,
 } from '../types';
+import { APPEARANCE_SCHEMA_VERSION } from '../types';
 import type { AppearanceRuntime } from './AppearanceRuntime';
 import { AppearanceService } from './AppearanceService';
 
@@ -205,10 +206,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const stored: StoredAppearancePackage = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'market.shared', name: 'Shared',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'market.shared', name: 'Shared',
         version: '1.0.0', mode: 'dark',
       },
       archive: new ArrayBuffer(4),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-03T00:00:00.000Z',
     };
@@ -243,10 +245,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const first: StoredAppearancePackage = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'market.theme', name: 'Market Theme',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'market.theme', name: 'Market Theme',
         version: '1.0.0', mode: 'dark',
       },
       archive: new ArrayBuffer(4),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-03T00:00:00.000Z',
     };
@@ -295,10 +298,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const parsed: StoredAppearancePackage = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'unexpected.theme', name: 'Unexpected',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'unexpected.theme', name: 'Unexpected',
         version: '1.0.0', mode: 'dark',
       },
       archive: new ArrayBuffer(4),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-03T00:00:00.000Z',
     };
@@ -315,6 +319,71 @@ describe('AppearanceService', () => {
       },
     })).rejects.toThrow('does not match the reviewed package');
     expect(await storage.get('unexpected.theme')).toBeNull();
+  });
+
+  it('rewrites a stored v1 archive once and exports only its canonical v2 archive', async () => {
+    configMocks.getConfig.mockResolvedValue('system');
+    const storage = new MemoryAppearanceStorage();
+    const legacyArchive = new Uint8Array([1, 1, 1]).buffer;
+    const canonicalArchive = new Uint8Array([2, 2, 2, 2]).buffer;
+    const importedAt = '2026-08-03T00:00:00.000Z';
+    await storage.put({
+      manifest: {
+        schema: 'bitfun.appearance', schemaVersion: 1, id: 'legacy.saved', name: 'Legacy Saved',
+        version: '1.0.0', mode: 'dark',
+        renderers: {
+          'css-tokens': {
+            version: 1,
+            settings: { tokens: { '--bf-appearance-token-color-bg-primary': '#101820' } },
+          },
+        },
+      },
+      archive: legacyArchive,
+      assets: {},
+      importedAt,
+    });
+    const canonical: StoredAppearancePackage = {
+      manifest: {
+        schema: 'bitfun.appearance',
+        schemaVersion: APPEARANCE_SCHEMA_VERSION,
+        id: 'legacy.saved',
+        name: 'Legacy Saved',
+        version: '1.0.0',
+        mode: 'dark',
+        renderers: {
+          'theme-tokens': {
+            version: 1,
+            settings: { tokens: { '--bf-color-surface-canvas': '#101820' } },
+          },
+        },
+      },
+      archive: canonicalArchive,
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
+      assets: {},
+      importedAt: 'parser timestamp is replaced',
+    };
+    const parser = { parse: vi.fn(async () => canonical) } as unknown as AppearancePackageParser;
+    const { runtime } = createService();
+    const service = new AppearanceService(runtime, parser, storage);
+
+    await service.initialize();
+    await service.reconcilePersistedState();
+
+    const migrated = await storage.get('legacy.saved');
+    expect(parser.parse).toHaveBeenCalledOnce();
+    expect(parser.parse).toHaveBeenCalledWith(legacyArchive);
+    expect(migrated).toMatchObject({
+      manifest: {
+        schemaVersion: APPEARANCE_SCHEMA_VERSION,
+        renderers: { 'theme-tokens': expect.any(Object) },
+      },
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
+      importedAt,
+    });
+    expect(migrated?.manifest.renderers).not.toHaveProperty('css-tokens');
+    expect(new Uint8Array(await service.exportPackage('legacy.saved')))
+      .toEqual(new Uint8Array(canonicalArchive));
+    expect(parser.parse).toHaveBeenCalledOnce();
   });
 
   it('rolls the runtime back when selection persistence fails', async () => {
@@ -377,12 +446,13 @@ describe('AppearanceService', () => {
     const backgroundBytes = new Uint8Array([4, 5, 6]).buffer;
     const packageBase = {
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       importedAt: '2026-07-29T00:00:00.000Z',
     };
     await storage.put({
       ...packageBase,
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'explicit.preview', name: 'Explicit',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'explicit.preview', name: 'Explicit',
         version: '1.0.0', mode: 'light', preview: { kind: 'asset', assetId: 'hero' },
       },
       assets: { hero: { mimeType: 'image/webp', bytes: previewBytes, width: 16, height: 9 } },
@@ -390,7 +460,7 @@ describe('AppearanceService', () => {
     await storage.put({
       ...packageBase,
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'fallback.preview', name: 'Fallback',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'fallback.preview', name: 'Fallback',
         version: '1.0.0', mode: 'light',
       },
       assets: { background: { mimeType: 'image/png', bytes: backgroundBytes, width: 16, height: 9 } },
@@ -408,9 +478,10 @@ describe('AppearanceService', () => {
     const posterBytes = new Uint8Array([4, 5, 6]).buffer;
     await storage.put({
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       importedAt: '2026-07-29T00:00:00.000Z',
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'video.preview', name: 'Video',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'video.preview', name: 'Video',
         version: '1.0.0', mode: 'dark',
       },
       assets: {
@@ -460,10 +531,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const stored: StoredAppearancePackage = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'shared.market-theme',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'shared.market-theme',
         name: 'Shared Market Theme', version: '1.0.0', mode: 'dark',
       },
       archive: new ArrayBuffer(4),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-03T00:00:00.000Z',
     };
@@ -507,10 +579,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const oldPackage = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'sample.active', name: 'Old',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'sample.active', name: 'Old',
         version: '1.0.0', mode: 'dark',
       } as AppearancePackage,
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-07-29T00:00:00.000Z',
     };
@@ -551,10 +624,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const stored = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'sample.saved', name: 'Saved',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'sample.saved', name: 'Saved',
         version: '1.0.0', mode: 'dark',
       } as AppearancePackage,
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-07-29T00:00:00.000Z',
     };
@@ -579,10 +653,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const stored = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'sample.active-delete', name: 'Active',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'sample.active-delete', name: 'Active',
         version: '1.0.0', mode: 'dark',
       } as AppearancePackage,
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-07-29T00:00:00.000Z',
     };
@@ -617,10 +692,11 @@ describe('AppearanceService', () => {
     const storage = new MemoryAppearanceStorage();
     const stored = {
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'sample.degraded-delete', name: 'Degraded',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'sample.degraded-delete', name: 'Degraded',
         version: '1.0.0', mode: 'dark',
       } as AppearancePackage,
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-07-29T00:00:00.000Z',
     };
@@ -702,10 +778,11 @@ describe('AppearanceService', () => {
     const { runtime, service, storage } = createService();
     await storage.put({
       manifest: {
-        schema: 'bitfun.appearance', schemaVersion: 1, id: 'sample.dynamic', name: 'Dynamic',
+        schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'sample.dynamic', name: 'Dynamic',
         version: '1.0.0', mode: 'dark',
       },
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-01T00:00:00.000Z',
     });
@@ -734,12 +811,13 @@ describe('AppearanceService', () => {
     configMocks.getConfig.mockResolvedValue('sample.dynamic');
     const { runtime, service, storage } = createService();
     const manifest: AppearancePackage = {
-      schema: 'bitfun.appearance', schemaVersion: 1, id: 'sample.dynamic', name: 'Dynamic',
+      schema: 'bitfun.appearance', schemaVersion: APPEARANCE_SCHEMA_VERSION, id: 'sample.dynamic', name: 'Dynamic',
       version: '1.0.0', mode: 'dark',
     };
     await storage.put({
       manifest,
       archive: new ArrayBuffer(1),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-01T00:00:00.000Z',
     });
@@ -747,6 +825,7 @@ describe('AppearanceService', () => {
     await storage.put({
       manifest: { ...manifest, name: 'Dynamic Updated' },
       archive: new ArrayBuffer(2),
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets: {},
       importedAt: '2026-08-02T00:00:00.000Z',
     });

@@ -13,13 +13,13 @@ $scene-gutter: clamp(28px, 4vw, 64px);
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
   &__nav {
     flex: 0 0 auto;
     padding: $size-gap-3 $scene-gutter;
-    background: var(--bf-appearance-token-color-bg-scene);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-surface-scene);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
   // Layout glue: keep the active pane in the flex sizing chain so each

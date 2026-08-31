@@ -5,7 +5,7 @@ import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels'
 import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../../services/general-chat/GeneralChatConfigStore';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
-import { CARD, GREEN, INK, LINE, MUTED, RED, SOFT, SUBTLE } from './Theme';
+import { CARD, INK, LINE, MUTED, SOFT, STATUS_DANGER, STATUS_SUCCESS, SUBTLE, TRANSPARENT } from './Theme';
 import { SheetCloseHeader } from './SheetCloseHeader';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
 
@@ -216,7 +216,7 @@ export struct ModelServiceSettingsPanel {
     .width('100%')
     .height(ModelServiceSettingsPolicy.ACCOUNT_MODEL_ROW_HEIGHT)
     .padding({ left: 10, right: 10 })
-    .backgroundColor(this.isSelectedModel(model) ? SOFT : '#00000000')
+    .backgroundColor(this.isSelectedModel(model) ? SOFT : TRANSPARENT)
     .borderRadius(9)
     .onClick(() => {
       this.onSelectModel(model.id);
@@ -275,7 +275,7 @@ export struct ModelServiceSettingsPanel {
           Text(this.feedbackText)
             .fontSize(MobileDesignTypography.bodySmall.size)
             .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-            .fontColor(this.feedbackIsError ? RED : GREEN)
+            .fontColor(this.feedbackIsError ? STATUS_DANGER : STATUS_SUCCESS)
             .width('100%')
         }
       }
@@ -504,7 +504,7 @@ export struct ModelServiceSettingsPanel {
           RemoteI18n.t('settings.modelService.clearKey'))
           .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
-          .fontColor(this.sheetState.draftClearApiKey ? INK : RED)
+          .fontColor(this.sheetState.draftClearApiKey ? INK : STATUS_DANGER)
           .width('100%')
           .onClick(() => {
             this.sheetState.draftClearApiKey = !this.sheetState.draftClearApiKey;

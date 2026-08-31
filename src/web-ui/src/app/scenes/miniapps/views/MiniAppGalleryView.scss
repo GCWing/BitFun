@@ -1,12 +1,12 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .miniapp-gallery {
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
   .gallery-page-header {
     position: relative;
     padding-block: $size-gap-6 $size-gap-5;
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -32,17 +32,17 @@
         width: 8px;
         height: 8px;
         border-radius: $size-radius-full;
-        background: var(--bf-appearance-token-color-text-primary);
-        box-shadow: 0 0 0 2px var(--bf-appearance-token-element-bg-medium);
+        background: var(--bf-color-content-primary);
+        box-shadow: 0 0 0 2px var(--bf-color-action-neutral-surface-hover);
       }
     }
 
     &:not(.is-empty) .gallery-zone__header {
       min-height: 58px;
       padding: 0 $size-gap-4;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border: 1px solid var(--bf-color-border-subtle);
       border-radius: $size-radius-lg;
-      background: var(--bf-appearance-token-element-bg-subtle);
+      background: var(--bf-color-surface-subtle);
       box-sizing: border-box;
     }
 
@@ -53,9 +53,9 @@
       min-height: 58px;
       padding: 0 $size-gap-4;
       column-gap: $size-gap-4;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border: 1px solid var(--bf-color-border-subtle);
       border-radius: $size-radius-lg;
-      background: var(--bf-appearance-token-element-bg-subtle);
+      background: var(--bf-color-surface-subtle);
       box-sizing: border-box;
 
       .gallery-zone__header {

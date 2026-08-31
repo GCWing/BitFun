@@ -1,7 +1,7 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { WatchProvisionPhase, WatchProvisionState } from '../state/WatchProvisionState';
-import { CARD, GREEN, INK, LINE, MODAL_SCRIM, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT,
+import { CARD, STATUS_SUCCESS, INK, LINE, SCRIM, MUTED, PRIMARY_ACTION, CONTENT_ON_ACTION, STATUS_DANGER, SOFT,
   SUBTLE } from './Theme';
 
 /**
@@ -23,7 +23,7 @@ export struct WatchProvisionCard {
         Text('')
           .width('100%')
           .height('100%')
-          .backgroundColor(MODAL_SCRIM)
+          .backgroundColor(SCRIM)
           .onClick(() => {
             // Tapping away while the desktop is minting would leave the watch
             // with no answer and no card to explain it.
@@ -88,7 +88,7 @@ export struct WatchProvisionCard {
                 Text(this.state.message)
                   .fontSize(MobileDesignTypography.bodySmall.size)
                   .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-                  .fontColor(RED)
+                  .fontColor(STATUS_DANGER)
                   .width('100%')
               }
             }
@@ -110,7 +110,7 @@ export struct WatchProvisionCard {
             Text(this.state.message)
               .fontSize(MobileDesignTypography.bodyLarge.size)
               .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
-              .fontColor(this.state.phase === WatchProvisionPhase.Done ? GREEN : RED)
+              .fontColor(this.state.phase === WatchProvisionPhase.Done ? STATUS_SUCCESS : STATUS_DANGER)
               .width('100%')
           }
 
@@ -130,7 +130,7 @@ export struct WatchProvisionCard {
                 .height(56)
                 .fontSize(MobileDesignTypography.labelLarge.size)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(PRIMARY_ACTION_TEXT)
+                .fontColor(CONTENT_ON_ACTION)
                 .backgroundColor(PRIMARY_ACTION)
                 .borderRadius(28)
                 .onClick(() => { this.onApprove(''); })
@@ -155,7 +155,7 @@ export struct WatchProvisionCard {
                 .height(56)
                 .fontSize(MobileDesignTypography.labelLarge.size)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(PRIMARY_ACTION_TEXT)
+                .fontColor(CONTENT_ON_ACTION)
                 .backgroundColor(PRIMARY_ACTION)
                 .borderRadius(28)
                 .enabled(this.password.length > 0)
@@ -173,7 +173,7 @@ export struct WatchProvisionCard {
               .height(56)
               .fontSize(MobileDesignTypography.labelLarge.size)
               .fontWeight(FontWeight.Bold)
-              .fontColor(PRIMARY_ACTION_TEXT)
+              .fontColor(CONTENT_ON_ACTION)
               .backgroundColor(PRIMARY_ACTION)
               .borderRadius(28)
               .onClick(this.onDismiss)

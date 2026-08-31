@@ -9,10 +9,10 @@
   flex-direction: column;
   gap: $size-gap-1;
   padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px dashed var(--bf-appearance-token-border-base);
+  border-bottom: 1px dashed var(--bf-color-border-default);
 
   // Frosted glass effect aligned with FlowChatHeader.
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 45%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 45%, transparent);
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
 
@@ -28,7 +28,7 @@
     width: 100%;
     margin: 0 auto;
     border-bottom: none;
-    border-top: 1px dashed var(--bf-appearance-token-border-base);
+    border-top: 1px dashed var(--bf-color-border-default);
     padding: 8px 12px;
 
     .session-file-modifications-bar__list {
@@ -56,7 +56,7 @@
   .file-count {
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
   }
 
@@ -69,11 +69,11 @@
     font-family: var(--bf-font-family-mono);
 
     .stat-add {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
 
     .stat-del {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -88,7 +88,7 @@
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
       transform $motion-fast $easing-standard,
@@ -98,8 +98,8 @@
     flex-shrink: 0;
 
     &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &:active:not(:disabled) {
@@ -128,7 +128,7 @@
     padding-right: 4px;
 
     scrollbar-width: thin;
-    scrollbar-color: var(--bf-appearance-token-border-medium) transparent;
+    scrollbar-color: var(--bf-color-field-border-hover) transparent;
 
     &::-webkit-scrollbar {
       width: 6px;
@@ -139,11 +139,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: var(--bf-appearance-token-border-medium);
+      background-color: var(--bf-color-field-border-hover);
       border-radius: 3px;
 
       &:hover {
-        background-color: var(--bf-appearance-token-border-strong);
+        background-color: var(--bf-color-border-strong);
       }
     }
   }
@@ -158,17 +158,17 @@
     border: none;
     border-radius: 4px;
     font-size: var(--bf-type-flow-control-font-size);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     cursor: pointer;
     transition: background-color $motion-fast $easing-standard;
     user-select: none;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:active {
-      background: var(--bf-appearance-token-element-bg-base);
+      background: var(--bf-color-action-neutral-surface);
     }
 
     &__icon {
@@ -180,15 +180,15 @@
       height: 20px;
 
       .icon-write {
-        color: var(--bf-appearance-token-color-success);
+        color: var(--bf-color-status-success-content);
       }
 
       .icon-edit {
-        color: var(--bf-appearance-token-color-accent-500);
+        color: var(--bf-color-accent-default);
       }
 
       .icon-delete {
-        color: var(--bf-appearance-token-color-error);
+        color: var(--bf-color-status-danger-content);
       }
     }
 
@@ -207,9 +207,9 @@
       min-height: 20px;
       padding: 0 7px;
       border-radius: 999px;
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 18%, var(--bf-appearance-token-border-subtle));
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 9%, transparent);
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 72%, var(--bf-appearance-token-color-text-secondary));
+      border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 18%, var(--bf-color-border-subtle));
+      background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 9%, transparent);
+      color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 72%, var(--bf-color-content-secondary));
       font-size: var(--bf-type-flow-micro-font-size);
       font-weight: var(--bf-font-weight-semibold);
       line-height: var(--bf-line-height-none);
@@ -227,17 +227,17 @@
       font-family: var(--bf-font-family-mono);
 
       .stat-add {
-        color: var(--bf-appearance-token-color-success);
+        color: var(--bf-color-status-success-content);
       }
 
       .stat-del {
-        color: var(--bf-appearance-token-color-error);
+        color: var(--bf-color-status-danger-content);
       }
     }
 
     &__error {
       font-size: var(--bf-type-flow-support-font-size);
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
       font-style: italic;
     }
 
@@ -245,7 +245,7 @@
     &--delete {
       .file-row__name {
         text-decoration: line-through;
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
       }
     }
 
@@ -266,10 +266,10 @@
     justify-content: center;
     padding: 8px;
     font-size: var(--bf-type-flow-control-font-size);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-style: italic;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 50%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-panel) 50%, transparent);
     border-radius: 4px;
-    border: 1px dashed var(--bf-appearance-token-border-base);
+    border: 1px dashed var(--bf-color-border-default);
   }
 }

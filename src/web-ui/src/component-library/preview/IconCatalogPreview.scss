@@ -12,19 +12,19 @@
     align-items: center;
     gap: 20px;
     padding: 16px 18px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 14px;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__navigation-context-copy {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     strong {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-semibold);
     }
@@ -49,11 +49,11 @@
     min-height: 30px;
     padding: 0 8px;
     border-radius: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
 
     &.is-active {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
 
     svg {
@@ -75,10 +75,10 @@
     justify-content: center;
     min-height: 250px;
     padding: 34px 24px 24px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 22px;
-    background: var(--bf-appearance-token-color-bg-primary);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-surface-canvas);
+    color: var(--bf-color-content-primary);
   }
 
   &__glyph {
@@ -103,7 +103,7 @@
     }
 
     code {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-meta);
     }
   }
@@ -115,7 +115,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__size-sample {
@@ -128,7 +128,7 @@
     min-height: 36px;
 
     small {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-meta);
       line-height: var(--bf-line-height-none);
     }

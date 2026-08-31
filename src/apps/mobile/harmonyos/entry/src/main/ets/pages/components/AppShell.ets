@@ -7,7 +7,11 @@ import {
   SettingsSheetKind
 } from '../policy/SettingsPlacementPolicy';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
-import { PAGE_BG } from './Theme';
+import {
+  PAGE_BG,
+  SHELL_SCRIM,
+  TRANSPARENT,
+} from './Theme';
 
 const WIDE_SHEET_RADIUS: number = 30;
 
@@ -77,7 +81,7 @@ export struct AppShell {
       .clip(true)
       .shadow({
         radius: this.shellState.showSidebar ? 34 : 0,
-        color: this.shellState.showSidebar ? '#24000000' : '#00000000',
+        color: this.shellState.showSidebar ? SHELL_SCRIM : TRANSPARENT,
         offsetX: this.shellState.showSidebar ? -10 : 0
       })
       .blur(this.shellState.showSidebar ? 1.1 : 0)
@@ -112,7 +116,7 @@ export struct AppShell {
     .clip(this.usesWideSheetChrome(this.settingsPlacement))
     .shadow({
       radius: this.usesWideSheetChrome(this.settingsPlacement) ? 30 : 0,
-      color: this.usesWideSheetChrome(this.settingsPlacement) ? '#22000000' : '#00000000',
+      color: this.usesWideSheetChrome(this.settingsPlacement) ? SHELL_SCRIM : TRANSPARENT,
       offsetY: this.usesWideSheetChrome(this.settingsPlacement) ? 12 : 0
     })
   }
@@ -128,7 +132,7 @@ export struct AppShell {
     .clip(this.usesWideSheetChrome(this.connectPlacement))
     .shadow({
       radius: this.usesWideSheetChrome(this.connectPlacement) ? 30 : 0,
-      color: this.usesWideSheetChrome(this.connectPlacement) ? '#22000000' : '#00000000',
+      color: this.usesWideSheetChrome(this.connectPlacement) ? SHELL_SCRIM : TRANSPARENT,
       offsetY: this.usesWideSheetChrome(this.connectPlacement) ? 12 : 0
     })
   }

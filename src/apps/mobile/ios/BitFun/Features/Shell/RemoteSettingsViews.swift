@@ -375,7 +375,7 @@ struct RemoteControlSettingsView: View {
 
                 if let failure = model.remotePermissionFailure, !failure.isEmpty {
                     Text(failure)
-                        .font(.system(size: 12)).foregroundStyle(BitFunTheme.red)
+                        .font(.system(size: 12)).foregroundStyle(BitFunTheme.statusDanger)
                         .padding(.horizontal, 18).padding(.bottom, 10)
                 }
 
@@ -389,7 +389,7 @@ struct RemoteControlSettingsView: View {
     private var fullAccessConfirmation: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.localized("确认完全访问"))
-                .font(.system(size: 15, weight: .bold)).foregroundStyle(BitFunTheme.red)
+                .font(.system(size: 15, weight: .bold)).foregroundStyle(BitFunTheme.statusDanger)
             Text(model.localized("完全访问会取消所有操作确认。仅在你信任当前桌面端时启用。"))
                 .font(.system(size: 13)).foregroundStyle(BitFunTheme.ink).lineSpacing(4)
             HStack(spacing: 10) {
@@ -401,7 +401,7 @@ struct RemoteControlSettingsView: View {
             }
         }
         .padding(16)
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(BitFunTheme.red, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(BitFunTheme.statusDanger, lineWidth: 1))
         .padding(.horizontal, 12).padding(.bottom, 14)
     }
 
@@ -465,9 +465,9 @@ struct RemoteControlSettingsView: View {
         Button(action: action) {
             Text(model.localized(title))
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(destructive ? Color.white : BitFunTheme.ink)
+                .foregroundStyle(destructive ? BitFunTheme.contentOnAction : BitFunTheme.ink)
                 .frame(maxWidth: .infinity, minHeight: 42)
-                .background(destructive ? BitFunTheme.red : BitFunTheme.soft)
+                .background(destructive ? BitFunTheme.statusDanger : BitFunTheme.soft)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -652,7 +652,7 @@ struct GeneralChatConfigSheet: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: option.selected ? "checkmark.circle" : "circle")
-                                        .foregroundStyle(option.selected ? BitFunTheme.ink : Color.clear)
+                                        .foregroundStyle(option.selected ? BitFunTheme.ink : BitFunTheme.transparent)
                                         .frame(width: 20, height: 20)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(option.primaryLabel)
@@ -667,7 +667,7 @@ struct GeneralChatConfigSheet: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .frame(height: MobileDesignGeometry.modelAccountRowHeight)
-                                .background(option.selected ? BitFunTheme.soft : Color.clear)
+                                .background(option.selected ? BitFunTheme.soft : BitFunTheme.transparent)
                                 .clipShape(RoundedRectangle(cornerRadius: 9))
                             }
                             .buttonStyle(.plain)
@@ -698,7 +698,7 @@ struct GeneralChatConfigSheet: View {
                     } label: {
                         Text(model.localized(clearAPIKey ? "保留已保存的 Key" : "清除已保存的 API Key"))
                             .font(MobileDesignTypography.bodySmall.font)
-                            .foregroundStyle(clearAPIKey ? BitFunTheme.ink : BitFunTheme.red)
+                            .foregroundStyle(clearAPIKey ? BitFunTheme.ink : BitFunTheme.statusDanger)
                     }
                     .buttonStyle(.plain)
                 }
@@ -723,11 +723,11 @@ struct GeneralChatConfigSheet: View {
                 }
                 if let failure = model.generalConfigFailure {
                     Text(configFailureText(failure))
-                        .font(MobileDesignTypography.bodySmall.font).foregroundStyle(BitFunTheme.red)
+                        .font(MobileDesignTypography.bodySmall.font).foregroundStyle(BitFunTheme.statusDanger)
                 }
                 if let message = model.generalConnectionTestMessage {
                     Text(message).font(MobileDesignTypography.bodySmall.font)
-                        .foregroundStyle(message == model.localized("连接成功") ? BitFunTheme.green : BitFunTheme.red)
+                        .foregroundStyle(message == model.localized("连接成功") ? BitFunTheme.statusSuccess : BitFunTheme.statusDanger)
                 }
             }
             .padding(.horizontal, 16)
@@ -806,7 +806,7 @@ struct GeneralChatConfigSheet: View {
         Button(action: action) {
             Text(model.localized(title))
                 .font(MobileDesignTypography.bodyLarge.font.weight(.medium))
-                .foregroundStyle(primary ? Color.white : BitFunTheme.ink)
+                .foregroundStyle(primary ? BitFunTheme.contentOnAction : BitFunTheme.ink)
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(primary ? BitFunTheme.accent : BitFunTheme.soft)
                 .clipShape(Capsule())

@@ -16,8 +16,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-primary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-canvas);
+  color: var(--bf-color-content-primary);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -29,7 +29,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 }
 
 .skills-tabs-bar__tabs {
@@ -42,7 +42,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   width: 1px;
   height: 12px;
   margin: 0 6px;
-  background: var(--bf-appearance-token-border-medium);
+  background: var(--bf-color-field-border-hover);
   flex-shrink: 0;
 }
 
@@ -54,7 +54,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-regular);
   line-height: var(--bf-line-height-ui);
@@ -62,16 +62,16 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   transition: color $motion-fast $easing-standard;
 
   &:hover:not(.is-active) {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &.is-active {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-weight: var(--bf-font-weight-medium);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 2px;
   }
 }
@@ -114,8 +114,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--bf-appearance-token-border-subtle);
-  background: var(--bf-appearance-token-color-bg-primary);
+  border-right: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-canvas);
 }
 
 .skills-sidebar__header {
@@ -127,7 +127,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   margin: 0;
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   letter-spacing: var(--bf-letter-spacing-snug);
 }
 
@@ -149,7 +149,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border: none;
   border-radius: $size-radius-base;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-regular);
   cursor: pointer;
@@ -157,24 +157,24 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
 
   &.is-empty {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.55;
     cursor: default;
   }
 
   &:hover:not(.is-empty):not(.is-active) {
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-primary);
   }
 
   &.is-active {
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface-hover);
+    color: var(--bf-color-content-primary);
     font-weight: var(--bf-font-weight-medium);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 2px;
   }
 }
@@ -201,13 +201,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--bf-appearance-token-element-bg-medium);
-  color: var(--bf-appearance-token-color-text-muted);
+  background: var(--bf-color-action-neutral-surface-hover);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-micro);
   font-weight: var(--bf-font-weight-medium);
 
   .skills-sidebar__item.is-active & {
-    background: var(--bf-appearance-token-element-bg-soft);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   .skills-sidebar__item.is-empty & {
@@ -218,13 +218,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-sidebar__footer {
   flex-shrink: 0;
   padding: 10px 12px 12px;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
 }
 
 .skills-sidebar__hint {
   margin: 0;
   font-size: var(--bf-font-size-meta);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   opacity: 0.75;
   line-height: var(--bf-line-height-support);
 }
@@ -246,7 +246,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   gap: 8px;
   padding: 11px 16px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .skills-main__toolbar-search {
@@ -260,10 +260,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: $size-radius-full;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
@@ -273,18 +273,18 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     border-color $motion-fast $easing-standard;
 
   &:hover {
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &.is-active {
-    color: var(--bf-appearance-token-color-accent-500);
-    background: var(--bf-appearance-token-color-accent-100);
-    border-color: var(--bf-appearance-token-color-accent-300);
+    color: var(--bf-color-accent-default);
+    background: var(--bf-color-action-secondary-background);
+    border-color: var(--bf-color-action-secondary-pressed);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 2px;
   }
 }
@@ -307,12 +307,12 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, var(--bf-appearance-token-border-subtle));
+  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 18%, var(--bf-color-border-subtle));
   border-radius: $size-radius-lg;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent), transparent 42%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 7%, var(--bf-appearance-token-color-bg-secondary)), var(--bf-appearance-token-color-bg-secondary));
-  box-shadow: 0 10px 30px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.05);
+    radial-gradient(circle at top right, color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bf-color-accent-default) 7%, var(--bf-color-surface-panel)), var(--bf-color-surface-panel));
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--bf-color-content-on-light) 5%, transparent);
 }
 
 .skills-suite__hero-copy {
@@ -334,7 +334,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   font-weight: var(--bf-font-weight-semibold);
   letter-spacing: var(--bf-letter-spacing-caps);
   text-transform: uppercase;
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
 }
 
 .skills-suite__title {
@@ -342,13 +342,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   font-size: var(--bf-font-size-3xl);
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-line-height-tight);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .skills-suite__subtitle {
   margin: 0;
   max-width: 720px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-sm);
   line-height: var(--bf-line-height-comfortable);
 }
@@ -358,7 +358,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: flex-end;
   gap: 12px;
   padding: 0 2px 2px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .skills-suite__modes {
@@ -381,13 +381,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   padding: 2px 0 12px;
   border: none;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   white-space: nowrap;
   transition: color $motion-fast $easing-standard;
 
   &:hover:not(:disabled):not(.is-active) {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &::after {
@@ -403,15 +403,15 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   &.is-active {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     &::after {
-      background: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-accent-default);
     }
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 4px;
     border-radius: 4px;
   }
@@ -438,7 +438,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   gap: 7px;
   font-size: var(--bf-font-size-meta);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .skills-suite__loading {
@@ -448,7 +448,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .skills-suite__loading-icon {
@@ -471,7 +471,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__section-label {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-meta);
   font-weight: var(--bf-font-weight-semibold);
   letter-spacing: var(--bf-letter-spacing-wider);
@@ -490,10 +490,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   flex-direction: column;
   gap: 14px;
   padding: 16px 18px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  box-shadow: 0 8px 24px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.04);
+  background: var(--bf-color-surface-panel);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 4%, transparent);
 }
 
 .skills-suite__group-head {
@@ -527,12 +527,12 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-suite__group-title {
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .skills-suite__group-count {
   font-size: var(--bf-font-size-meta);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .skills-suite__skills {
@@ -547,10 +547,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   gap: 6px;
   max-width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 999px;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  color: var(--bf-appearance-token-color-text-muted);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-meta);
   font-weight: var(--bf-font-weight-medium);
   line-height: var(--bf-line-height-none);
@@ -562,7 +562,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     opacity $motion-fast $easing-standard;
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 2px;
   }
 
@@ -572,9 +572,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   &.is-enabled {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, var(--bf-appearance-token-element-bg-subtle));
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, var(--bf-appearance-token-border-subtle));
-    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, var(--bf-color-surface-subtle));
+    border-color: color-mix(in srgb, var(--bf-color-status-success-content) 28%, var(--bf-color-border-subtle));
+    color: var(--bf-color-content-primary);
   }
 
   &.is-disabled {
@@ -582,8 +582,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   &.is-shadowed {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-element-bg-subtle));
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, var(--bf-appearance-token-border-subtle));
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, var(--bf-color-surface-subtle));
+    border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 30%, var(--bf-color-border-subtle));
 
     .skills-suite__skill-chip-name {
       text-decoration: line-through;
@@ -591,13 +591,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   &.is-dirty {
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 34%, var(--bf-appearance-token-border-subtle));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+    border-color: color-mix(in srgb, var(--bf-color-accent-default) 34%, var(--bf-color-border-subtle));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
   }
 
   &.is-globally-disabled {
-    border-color: var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &.is-globally-disabled {
@@ -615,7 +615,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__skill-chip-status {
-  color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
   font-size: var(--bf-font-size-micro);
   font-weight: var(--bf-font-weight-medium);
   white-space: nowrap;
@@ -649,7 +649,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   min-height: 28px;
   padding: 0 12px 8px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-meta);
   line-height: var(--bf-line-height-tight);
 }
@@ -659,7 +659,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   min-width: 0;
   gap: 7px;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-semibold);
 }
@@ -672,8 +672,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   height: 18px;
   padding: 0 5px;
   border-radius: $size-radius-full;
-  background: var(--bf-appearance-token-element-bg-medium);
-  color: var(--bf-appearance-token-color-text-muted);
+  background: var(--bf-color-action-neutral-surface-hover);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-micro);
   font-weight: var(--bf-font-weight-medium);
 }
@@ -694,9 +694,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-main__loading {
   flex: 0 1 auto;
   min-height: 0;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-color-bg-secondary);
+  background: var(--bf-color-surface-panel);
 }
 
 .skills-main__grid {
@@ -709,7 +709,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   min-height: 64px;
   padding: 9px 12px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   background: transparent;
   cursor: pointer;
   animation: skills-card-in 0.18s $easing-decelerate both;
@@ -721,18 +721,18 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &:focus-visible {
     position: relative;
     z-index: 1;
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: -2px;
   }
 
   &.is-shadowed {
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
 
     .skills-card__name {
       text-decoration: line-through;
@@ -765,9 +765,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--bf-appearance-token-element-bg-medium);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-action-neutral-surface-hover);
+  border: 1px solid var(--bf-color-border-subtle);
+  color: var(--bf-color-content-secondary);
 }
 
 .skills-card__info {
@@ -790,7 +790,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-card__name {
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   line-height: var(--bf-line-height-base);
   white-space: nowrap;
   overflow: hidden;
@@ -799,7 +799,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-card__desc {
   font-size: var(--bf-font-size-meta);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   opacity: 0.82;
   line-height: var(--bf-line-height-base);
   display: -webkit-box;
@@ -841,7 +841,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-card__level {
   gap: 6px;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-xs);
   white-space: nowrap;
 
@@ -857,7 +857,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-card__status-unavailable {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
 }
 
@@ -878,8 +878,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-card-skeleton {
   flex-shrink: 0;
   height: 64px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-  background: var(--bf-appearance-token-element-bg-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-subtle);
   animation: skills-card-in 0.2s $easing-decelerate both;
   @include surface-stagger.animation-delay(32ms);
 
@@ -907,16 +907,16 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid var(--bf-appearance-token-border-medium);
+  border: 1px solid var(--bf-color-field-border-hover);
   border-radius: $size-radius-base;
-  background: var(--bf-appearance-token-element-bg-soft);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-action-quiet-hover);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
   transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
 
   &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface-hover);
+    color: var(--bf-color-content-primary);
   }
 
   &:disabled {
@@ -929,7 +929,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-width: 60px;
   text-align: center;
   font-size: var(--bf-font-size-sm);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -946,11 +946,11 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-height: 200px;
   padding: 32px;
   font-size: var(--bf-font-size-sm);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   text-align: center;
 
   &--error {
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
   }
 }
 
@@ -960,7 +960,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   justify-content: center;
   gap: 12px;
   min-height: 160px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   text-align: center;
 }
 
@@ -981,8 +981,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   align-items: center;
   justify-content: center;
   padding: 18px 20px 16px;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-surface-panel);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .skills-discover__hero-content {
@@ -1002,7 +1002,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-discover__subtitle {
   margin: 0 0 12px;
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   line-height: var(--bf-line-height-comfortable);
 }
 
@@ -1023,7 +1023,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-discover__results-info {
   margin-bottom: 10px;
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .skills-discover__grid {
@@ -1040,8 +1040,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-discover__skeleton-card {
   height: 142px;
   border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-surface-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   animation: skills-card-in 0.18s $easing-decelerate both;
   @include surface-stagger.animation-delay(40ms);
 }
@@ -1056,7 +1056,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     align-items: center;
     gap: 4px;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__detail-path-btn {
@@ -1072,16 +1072,16 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     line-height: var(--bf-line-height-base);
     text-align: left;
     word-break: break-all;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
     transition: color $motion-fast $easing-standard;
 
-    &:hover { color: var(--bf-appearance-token-color-accent-600); }
+    &:hover { color: var(--bf-color-accent-hover); }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 2px;
     }
   }
@@ -1094,13 +1094,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
   &__detail-label {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-weight: var(--bf-font-weight-medium);
   }
 
   &__detail-value,
   &__detail-link {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-meta);
     word-break: break-all;
@@ -1126,7 +1126,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__form-hint,
   &__validating {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__validation {
@@ -1135,15 +1135,15 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     font-size: var(--bf-font-size-sm);
 
     &.is-valid {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-success) 30%, transparent);
-      color: var(--bf-appearance-token-color-success);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-color-status-success-content) 30%, transparent);
+      color: var(--bf-color-status-success-content);
     }
 
     &.is-invalid {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 30%, transparent);
-      color: var(--bf-appearance-token-color-error);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 30%, transparent);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -1164,7 +1164,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     gap: $size-gap-2;
     margin-top: $size-gap-1;
     padding-top: $size-gap-3;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 }
 
@@ -1207,7 +1207,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     flex-direction: row;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
 
     .skills-sidebar__header,
     .skills-sidebar__footer {

@@ -14,7 +14,7 @@
    * the typewriter finishes. Both read as the whole chat refreshing.
    */
   margin-bottom: 0;
-  padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
+  padding: 0 var(--bf-control-flow-chat-content-padding-inline);
   position: relative;
   opacity: 1;
 
@@ -31,15 +31,15 @@
   }
 
   @media (max-width: 768px) {
-    padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    padding: 0 var(--bf-control-flow-chat-content-padding-inline-mobile);
   }
 }
 
 .model-round-item__header {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
-  padding: 0 var(--bf-appearance-token-flowchat-control-gap);
+  margin-bottom: var(--bf-control-flow-chat-inline-gap);
+  padding: 0 var(--bf-control-flow-chat-control-gap);
 }
 
 // Action button container (bottom-right of last round).
@@ -80,10 +80,10 @@
 }
 
 .model-round-item__history-loader {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-support-font-size);
   line-height: var(--bf-type-flow-support-line-height);
-  padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
+  padding: var(--bf-control-flow-chat-inline-gap) 0;
 }
 
 .model-round-item__retry-history {
@@ -98,14 +98,14 @@
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-control-font-size);
   line-height: var(--bf-type-flow-control-line-height);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &:active {
@@ -113,7 +113,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-border-accent);
+    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
     outline-offset: 2px;
     border-radius: 3px;
   }
@@ -121,7 +121,7 @@
 
 .model-round-item__retry-attempt {
   padding: 0.35rem 0 0.15rem;
-  border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 62%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--bf-color-border-default) 62%, transparent);
 }
 
 .model-round-item__retry-attempt-label {
@@ -130,7 +130,7 @@
   flex-wrap: wrap;
   gap: 0.25rem;
   margin-bottom: 0.35rem;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-meta-font-size);
   line-height: var(--bf-type-flow-meta-line-height);
   text-transform: uppercase;
@@ -148,22 +148,22 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
 
   &:hover {
-    background: var(--bf-appearance-token-color-overlay-white-08);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+    color: var(--bf-color-content-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-border-accent);
+    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
   }
 }
 
 .model-round-item__attempt-diagnostic-toggle {
-  color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
 }
 
 .model-round-item__attempt-diagnostic-details {
@@ -172,10 +172,10 @@
   width: min(100%, 48rem);
   margin: 0.2rem 0 0.45rem;
   padding: 0.55rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 72%, transparent);
   border-radius: 4px;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-surface-panel);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-regular);
   letter-spacing: var(--bf-letter-spacing-normal);
@@ -191,7 +191,7 @@
 
 .model-round-item__attempt-diagnostic-category {
   margin-bottom: 0.35rem;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-weight: var(--bf-font-weight-semibold);
 }
 
@@ -201,7 +201,7 @@
 
 .model-round-item__attempt-diagnostic-tool-title {
   margin-bottom: 0.2rem;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-weight: var(--bf-font-weight-semibold);
 }
 
@@ -211,7 +211,7 @@
   justify-content: space-between;
   gap: 0.5rem;
   min-width: 0;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-meta-font-size);
 }
 
@@ -221,8 +221,8 @@
   padding: 0.45rem;
   overflow: auto;
   border-radius: 3px;
-  background: var(--bf-appearance-token-color-bg-tertiary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-tertiary);
+  color: var(--bf-color-content-primary);
   font-family:var(--bf-font-family-mono);
   font-size: var(--bf-type-flow-support-font-size);
   line-height: var(--bf-line-height-compact);
@@ -240,7 +240,7 @@
   background: transparent;
   border: none;
   border-radius: 4px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -248,8 +248,8 @@
   opacity: 1;
   
   &:hover {
-    background: var(--bf-appearance-token-color-overlay-white-08);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+    color: var(--bf-color-content-primary);
   }
 
   &:active {
@@ -257,7 +257,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-border-accent);
+    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
   }
 
@@ -276,8 +276,8 @@
 // Copy button
 .model-round-item__copy-btn {
   &.copied {
-    color: var(--bf-appearance-token-color-success);
-    background: var(--bf-appearance-token-color-success-bg);
+    color: var(--bf-color-status-success-content);
+    background: var(--bf-color-status-success-surface);
   }
 }
 
@@ -324,13 +324,13 @@
     opacity: 1;
     transform: translateY(0);
     max-height: 96px;
-    margin-bottom: var(--bf-appearance-token-flowchat-flow-item-gap);
+    margin-bottom: var(--bf-control-flow-chat-flow-item-gap);
   }
   55% {
     opacity: 0.72;
     transform: translateY(-1px);
     max-height: 96px;
-    margin-bottom: var(--bf-appearance-token-flowchat-flow-item-gap);
+    margin-bottom: var(--bf-control-flow-chat-flow-item-gap);
   }
   100% {
     opacity: 0;
@@ -349,10 +349,10 @@
 
 /* Focus highlight for programmatic "jump to marker" navigation. */
 .flowchat-flow-item.flowchat-flow-item--focused {
-  outline: 2px solid var(--bf-appearance-token-border-accent);
+  outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
   outline-offset: 2px;
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
-  box-shadow: var(--bf-appearance-token-glow-shadow-blue);
+  border-radius: var(--bf-control-flow-chat-card-radius);
+  box-shadow: var(--bf-shadow-accent-glow);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,11 +8,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-sm);
 }
 
 .bitfun-config-page-message {
-  margin-bottom: var(--bf-appearance-token-size-gap-1);
+  margin-bottom: var(--bf-space-1);
 }
 

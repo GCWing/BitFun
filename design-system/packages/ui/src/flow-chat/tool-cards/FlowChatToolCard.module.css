@@ -2,7 +2,7 @@
   .prominentRoot,
   .ambientRoot {
     --_tool-card-action-size: var(--bf-space-6);
-    --_icon-size: var(--bf-font-size-xl);
+    --_flow-chat-tool-card-icon-size: var(--bf-font-size-xl);
     --_tool-card-transition: var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     box-sizing: border-box;
@@ -261,8 +261,8 @@
   .iconMarks {
     position: relative;
     display: inline-flex;
-    inline-size: var(--_icon-size);
-    block-size: var(--_icon-size);
+    inline-size: var(--_flow-chat-tool-card-icon-size);
+    block-size: var(--_flow-chat-tool-card-icon-size);
     align-items: center;
     justify-content: center;
   }

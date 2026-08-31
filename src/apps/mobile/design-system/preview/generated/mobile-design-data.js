@@ -10,6 +10,10 @@ export const mobileTokens = {
       "light": "#FFFFFF",
       "dark": "#000000"
     },
+    "transparent": {
+      "light": "#00000000",
+      "dark": "#00000000"
+    },
     "page_bg": {
       "light": "#FFFFFF",
       "dark": "#151514"
@@ -50,7 +54,7 @@ export const mobileTokens = {
       "light": "#111111",
       "dark": "#454540"
     },
-    "primary_action_text": {
+    "content_on_action": {
       "light": "#FFFFFF",
       "dark": "#FFFFFF"
     },
@@ -74,9 +78,49 @@ export const mobileTokens = {
       "light": "#FFD021",
       "dark": "#FFD021"
     },
-    "modal_scrim": {
+    "scrim": {
       "light": "#44000000",
       "dark": "#44000000"
+    },
+    "shell_scrim": {
+      "light": "#24000000",
+      "dark": "#24000000"
+    },
+    "media_background": {
+      "light": "#FF000000",
+      "dark": "#FF000000"
+    },
+    "media_scrim": {
+      "light": "#B8000000",
+      "dark": "#B8000000"
+    },
+    "media_control_background": {
+      "light": "#8C000000",
+      "dark": "#8C000000"
+    },
+    "toast_background": {
+      "light": "#D1171717",
+      "dark": "#D1171717"
+    },
+    "shadow_faint": {
+      "light": "#08000000",
+      "dark": "#08000000"
+    },
+    "shadow_subtle": {
+      "light": "#12000000",
+      "dark": "#12000000"
+    },
+    "shadow_medium": {
+      "light": "#18000000",
+      "dark": "#18000000"
+    },
+    "shadow_strong": {
+      "light": "#24000000",
+      "dark": "#24000000"
+    },
+    "floating_border": {
+      "light": "#18000000",
+      "dark": "#18000000"
     },
     "soft": {
       "light": "#F4F3F0",
@@ -86,11 +130,11 @@ export const mobileTokens = {
       "light": "#F7F7F5",
       "dark": "#1E1E1C"
     },
-    "green": {
+    "status_success": {
       "light": "#27C46A",
       "dark": "#3BD47B"
     },
-    "red": {
+    "status_danger": {
       "light": "#E04F4F",
       "dark": "#FF6B6B"
     },
@@ -328,11 +372,11 @@ export const mobileComponents = {
       "tokens": [
         "sheet_action_height",
         "primary_action",
-        "primary_action_text",
+        "content_on_action",
         "card",
         "soft",
         "line",
-        "red",
+        "status_danger",
         "label_large"
       ],
       "platformNotes": "The semantic style is shared; a workflow may override height when its context requires a larger target, while preserving typography, radius, color, and disabled treatment."
@@ -443,7 +487,7 @@ export const mobileComponents = {
     "adaptive_modal_surface": {
       "purpose": "Hosts settings, connection, creation, selection, and detail flows without crossing a physical fold or obscuring more of the workspace than necessary.",
       "anatomy": [
-        "modal_scrim",
+        "scrim",
         "paper_surface",
         "header",
         "scroll_content",
@@ -457,7 +501,7 @@ export const mobileComponents = {
         "error"
       ],
       "tokens": [
-        "modal_scrim",
+        "scrim",
         "sheet_top_radius",
         "sheet_side_radius",
         "sheet_horizontal_padding",
@@ -519,7 +563,7 @@ export const mobileComponents = {
         "card",
         "line",
         "soft",
-        "red"
+        "status_danger"
       ],
       "platformNotes": "Compact session lists use a transparent native sheet hosting the same 16-unit paper surface that wide lists anchor as a popover; deletion confirmation replaces the action rows in place. This is distinct from the active conversation header's action_popover."
     },
@@ -565,7 +609,7 @@ export const mobileComponents = {
       ],
       "tokens": [
         "sheet_action_height",
-        "red",
+        "status_danger",
         "soft",
         "line"
       ],
@@ -683,7 +727,7 @@ export const mobileComponents = {
       "tokens": [
         "connect_hero_bg",
         "connect_hero_surface",
-        "modal_scrim",
+        "scrim",
         "sheet_side_radius",
         "primary_action",
         "card",
@@ -748,11 +792,11 @@ export const mobileComponents = {
         "sheet_header_height",
         "settings_prominent_card_radius",
         "settings_compact_card_radius",
-        "modal_scrim",
+        "scrim",
         "card",
         "soft",
         "line",
-        "red"
+        "status_danger"
       ],
       "platformNotes": "The account page replaces this page inside the same adaptive modal. Full-access confirmation replaces content inside the permission card; it never opens a system alert or a second sheet."
     },

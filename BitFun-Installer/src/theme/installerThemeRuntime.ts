@@ -15,24 +15,32 @@ export function applyInstallerThemeToDocument(theme: InstallerTheme): void {
   const root = document.documentElement;
   const { colors } = theme;
 
-  root.style.setProperty('--color-bg-primary', colors.background.primary);
-  root.style.setProperty('--color-bg-secondary', colors.background.secondary);
-  root.style.setProperty('--color-text-primary', colors.text.primary);
-  root.style.setProperty('--color-text-secondary', colors.text.secondary);
-  root.style.setProperty('--color-text-muted', colors.text.muted);
-  root.style.setProperty('--element-bg-subtle', colors.element.subtle);
-  root.style.setProperty('--element-bg-soft', colors.element.soft);
-  root.style.setProperty('--element-bg-medium', colors.element.medium);
-  root.style.setProperty('--border-subtle', colors.border.subtle);
-  root.style.setProperty('--border-base', colors.border.base);
-  root.style.setProperty('--color-success', colors.semantic.success);
-  root.style.setProperty('--color-warning', colors.semantic.warning);
-  root.style.setProperty('--color-error', colors.semantic.error);
+  root.style.setProperty('--bf-color-surface-canvas', colors.background.primary);
+  root.style.setProperty('--bf-color-surface-panel', colors.background.secondary);
+  root.style.setProperty('--bf-color-content-primary', colors.text.primary);
+  root.style.setProperty('--bf-color-content-secondary', colors.text.secondary);
+  root.style.setProperty('--bf-color-content-muted', colors.text.muted);
+  root.style.setProperty('--bf-color-surface-subtle', colors.element.subtle);
+  root.style.setProperty('--bf-color-action-neutral-surface', colors.element.soft);
+  root.style.setProperty('--bf-color-action-neutral-surface-pressed', colors.element.medium);
+  root.style.setProperty('--bf-color-border-subtle', colors.border.subtle);
+  root.style.setProperty('--bf-color-border-default', colors.border.base);
+  root.style.setProperty('--bf-color-status-success-content', colors.semantic.success);
+  root.style.setProperty('--bf-color-status-warning-content', colors.semantic.warning);
+  root.style.setProperty('--bf-color-status-danger-content', colors.semantic.error);
 
-  root.style.setProperty('--color-accent-500', colors.accent);
+  root.style.setProperty('--bf-color-accent-default', colors.accent);
 
-  root.setAttribute('data-theme', theme.id);
-  root.setAttribute('data-theme-type', theme.type);
+  root.setAttribute('data-bf-design-system-root', '');
+  root.setAttribute('data-color-scheme', theme.type);
+  root.setAttribute('data-contrast', 'standard');
+  root.setAttribute('data-density', 'comfortable');
+  root.setAttribute('data-installer-theme', theme.id);
+  root.style.colorScheme = theme.type;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute(
+    'content',
+    colors.background.primary,
+  );
 }
 
 /**

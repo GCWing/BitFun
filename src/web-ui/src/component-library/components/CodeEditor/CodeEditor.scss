@@ -1,20 +1,6 @@
 @use '../../styles/tokens.scss' as tokens;
 
 .code-editor {
-  --code-editor-blue-rgb: 130, 170, 255;
-  --code-editor-teal-rgb: 127, 219, 202;
-  --code-editor-purple-rgb: 199, 146, 234;
-  --code-editor-warm-rgb: 225, 171, 128;
-  --code-editor-find-rgb: 255, 193, 7;
-  --code-editor-current-find-rgb: 255, 152, 0;
-  --code-editor-blue-100: rgba(var(--code-editor-blue-rgb), 1);
-  --code-editor-blue-40: rgba(var(--code-editor-blue-rgb), 0.4);
-  --code-editor-blue-30: rgba(var(--code-editor-blue-rgb), 0.3);
-  --code-editor-blue-25: rgba(var(--code-editor-blue-rgb), 0.25);
-  --code-editor-teal-15: rgba(var(--code-editor-teal-rgb), 0.15);
-  --code-editor-teal-08: rgba(var(--code-editor-teal-rgb), 0.08);
-  --code-editor-current-find-50: rgba(var(--code-editor-current-find-rgb), 0.5);
-
   position: relative;
   width: 100%;
   height: 100%;
@@ -25,22 +11,22 @@
     height: 100%;
     border-radius: 12px;
     overflow: hidden;
-    background: var(--bf-appearance-token-color-bg-primary);
-    border: 1px solid var(--code-editor-blue-25);
+    background: var(--bf-color-surface-canvas);
+    border: 1px solid var(--bf-color-accent-border-subtle);
     box-shadow:
-      0 8px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.5),
-      0 0 0 1px var(--code-editor-teal-08) inset,
-      0 2px 16px rgba(var(--code-editor-blue-rgb), 0.12);
+      var(--bf-shadow-lg),
+      0 0 0 1px var(--bf-color-accent-secondary-surface) inset,
+      0 2px 16px var(--bf-color-accent-surface);
     transition:
       border-color 0.18s ease,
       box-shadow 0.18s ease;
 
     &:hover {
-      border-color: var(--code-editor-blue-40);
+      border-color: var(--bf-color-accent-border);
       box-shadow:
-        0 12px 48px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.6),
-        0 0 0 1px rgba(var(--code-editor-teal-rgb), 0.12) inset,
-        0 2px 20px rgba(var(--code-editor-blue-rgb), 0.2);
+        var(--bf-shadow-xl),
+        0 0 0 1px var(--bf-color-accent-secondary-surface-strong) inset,
+        var(--bf-shadow-accent-glow);
     }
 
     &::before {
@@ -52,9 +38,9 @@
       height: 2px;
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--code-editor-purple-rgb), 0.3) 25%,
-        rgba(var(--code-editor-blue-rgb), 0.5) 50%,
-        rgba(var(--code-editor-teal-rgb), 0.3) 75%,
+        color-mix(in srgb, var(--bf-color-accent-secondary) 30%, transparent) 25%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent) 75%,
         transparent 100%
       );
       z-index: 1;
@@ -69,33 +55,33 @@
         }
 
         .margin-view-overlays .line-numbers {
-          color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.35);
+          color: var(--bf-color-content-muted);
           font-weight: var(--bf-font-weight-regular);
           font-variant-numeric: tabular-nums;
         }
 
         .margin-view-overlays .current-line ~ .line-numbers {
-          color: var(--code-editor-blue-100);
+          color: var(--bf-color-accent-default);
           font-weight: var(--bf-font-weight-bold);
-          text-shadow: 0 0 10px rgba(var(--code-editor-blue-rgb), 0.6);
+          text-shadow: 0 0 10px color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent);
         }
 
         .margin-view-overlays .line-numbers:hover {
-          color: var(--bf-appearance-token-color-overlay-white-60);
+          color: var(--bf-color-content-secondary);
         }
 
         .view-overlays .current-line {
           background: linear-gradient(90deg,
-            rgba(var(--code-editor-blue-rgb), 0.08) 0%,
-            rgba(var(--code-editor-teal-rgb), 0.06) 50%,
-            rgba(var(--code-editor-purple-rgb), 0.04) 100%
+            var(--bf-color-accent-surface) 0%,
+            var(--bf-color-accent-surface-subtle) 50%,
+            var(--bf-color-accent-secondary-surface) 100%
           );
-          border-left: 3px solid rgba(var(--code-editor-blue-rgb), 0.5);
+          border-left: 3px solid var(--bf-color-accent-border);
           border-right: none;
         }
 
         .selected-text {
-          background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 35%, transparent) !important;
+          background: color-mix(in srgb, var(--bf-color-accent-hover) 35%, transparent) !important;
         }
 
         .monaco-scrollable-element > .scrollbar {
@@ -103,74 +89,65 @@
           box-shadow: none !important;
 
           .slider {
-            background: linear-gradient(135deg,
-              rgba(var(--code-editor-warm-rgb), 0.35),
-              rgba(var(--code-editor-purple-rgb), 0.35)
-            ) !important;
+            background: var(--bf-color-scrollbar-thumb) !important;
             border-radius: 6px;
             transition: box-shadow 0.18s ease;
 
             &:hover {
-              background: linear-gradient(135deg,
-                rgba(var(--code-editor-warm-rgb), 0.55),
-                rgba(var(--code-editor-purple-rgb), 0.55)
-              ) !important;
-              box-shadow: 0 0 8px rgba(var(--code-editor-warm-rgb), 0.4);
+              background: var(--bf-color-scrollbar-thumb-hover) !important;
+              box-shadow: 0 0 8px var(--bf-color-accent-secondary-surface-strong);
             }
 
             &.active {
-              background: linear-gradient(135deg,
-                rgba(var(--code-editor-warm-rgb), 0.7),
-                rgba(var(--code-editor-purple-rgb), 0.7)
-              ) !important;
-              box-shadow: 0 0 12px rgba(var(--code-editor-warm-rgb), 0.5);
+              background: var(--bf-color-accent-secondary) !important;
+              box-shadow: 0 0 12px var(--bf-color-accent-secondary-border);
             }
           }
         }
 
         .cursor {
           background: linear-gradient(180deg,
-            rgba(var(--code-editor-blue-rgb), 1),
-            rgba(var(--code-editor-teal-rgb), 1)
+            var(--bf-color-accent-default),
+            var(--bf-color-accent-secondary)
           );
           width: 2px !important;
           box-shadow:
-            0 0 16px rgba(var(--code-editor-blue-rgb), 0.9),
-            0 0 32px rgba(var(--code-editor-teal-rgb), 0.5);
+            0 0 16px color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent),
+            0 0 32px color-mix(in srgb, var(--bf-color-accent-secondary) 50%, transparent);
         }
 
         .bracket-match {
-          background: var(--code-editor-teal-15);
-          border: 1px solid rgba(var(--code-editor-teal-rgb), 0.7);
+          background: var(--bf-color-accent-secondary-surface-strong);
+          border: 1px solid var(--bf-color-accent-secondary-border);
           border-radius: 2px;
-          box-shadow: 0 0 10px rgba(var(--code-editor-teal-rgb), 0.4);
+          box-shadow: 0 0 10px var(--bf-color-accent-secondary-surface-strong);
         }
 
         .findMatch {
-          background: rgba(var(--code-editor-find-rgb), 0.35);
-          border: 1px solid rgba(var(--code-editor-find-rgb), 0.7);
+          background: var(--bf-color-status-warning-surface);
+          border: 1px solid var(--bf-color-status-warning-border);
           border-radius: 2px;
-          box-shadow: 0 0 6px rgba(var(--code-editor-find-rgb), 0.3);
+          box-shadow: 0 0 6px color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent);
         }
 
         .currentFindMatch {
-          background: var(--code-editor-current-find-50);
-          border: 1px solid rgba(var(--code-editor-current-find-rgb), 1);
+          background: color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent);
+          border: 1px solid var(--bf-color-status-warning-content);
           border-radius: 2px;
-          box-shadow: 0 0 10px var(--code-editor-current-find-50);
+          box-shadow: 0 0 10px color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent);
         }
 
         .cldr {
           &.codicon {
-            color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.4);
+            color: color-mix(in srgb, var(--bf-color-content-on-dark) 40%, transparent);
             transition:
               transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
               color 0.2s ease,
               text-shadow 0.2s ease;
 
             &:hover {
-              color: var(--code-editor-blue-100);
-              text-shadow: 0 0 10px rgba(var(--code-editor-blue-rgb), 0.8);
+              color: var(--bf-color-accent-default);
+              text-shadow: 0 0 10px color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
               transform: scale(1.1);
             }
           }
@@ -178,15 +155,15 @@
 
         .suggest-widget {
           background: linear-gradient(135deg,
-            color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 98%, transparent) 0%,
-            color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 98%, transparent) 100%
+            color-mix(in srgb, var(--bf-color-surface-canvas) 98%, transparent) 0%,
+            color-mix(in srgb, var(--bf-color-surface-panel) 98%, transparent) 100%
           );
-          border: 1px solid var(--code-editor-blue-40);
+          border: 1px solid var(--bf-color-accent-border);
           border-radius: 10px;
           box-shadow:
-            0 12px 48px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.7),
-            0 0 0 1px var(--code-editor-teal-08) inset,
-            0 4px 16px var(--code-editor-blue-25);
+            var(--bf-shadow-xl),
+            0 0 0 1px var(--bf-color-accent-secondary-surface) inset,
+            var(--bf-shadow-accent-glow);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           overflow: hidden;
@@ -200,9 +177,9 @@
             height: 2px;
             background: linear-gradient(90deg,
               transparent 0%,
-              rgba(var(--code-editor-purple-rgb), 0.4) 25%,
-              rgba(var(--code-editor-blue-rgb), 0.7) 50%,
-              rgba(var(--code-editor-teal-rgb), 0.4) 75%,
+              color-mix(in srgb, var(--bf-color-accent-secondary) 40%, transparent) 25%,
+              color-mix(in srgb, var(--bf-color-accent-default) 70%, transparent) 50%,
+              color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 75%,
               transparent 100%
             );
           }
@@ -213,29 +190,29 @@
 
             &.focused {
               background: linear-gradient(90deg,
-                rgba(var(--code-editor-blue-rgb), 0.2) 0%,
-                var(--code-editor-teal-15) 100%
+                var(--bf-color-accent-surface-strong) 0%,
+                var(--bf-color-accent-secondary-surface-strong) 100%
               );
-              box-shadow: 0 0 12px var(--code-editor-blue-30);
+              box-shadow: 0 0 12px var(--bf-color-accent-surface-strong);
             }
 
             &:hover {
-              background: rgba(var(--code-editor-blue-rgb), 0.12);
+              background: var(--bf-color-accent-surface);
             }
           }
         }
 
         .monaco-hover {
           background: linear-gradient(135deg,
-            color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 98%, transparent) 0%,
-            color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 98%, transparent) 100%
+            color-mix(in srgb, var(--bf-color-surface-canvas) 98%, transparent) 0%,
+            color-mix(in srgb, var(--bf-color-surface-panel) 98%, transparent) 100%
           );
-          border: 1px solid var(--code-editor-blue-40);
+          border: 1px solid var(--bf-color-accent-border);
           border-radius: 8px;
           box-shadow:
-            0 8px 40px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.7),
-            0 0 0 1px var(--code-editor-teal-08) inset,
-            0 2px 12px var(--code-editor-blue-25);
+            var(--bf-shadow-lg),
+            0 0 0 1px var(--bf-color-accent-secondary-surface) inset,
+            var(--bf-shadow-accent-glow);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           animation: bitfun-code-editor-hover-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -254,21 +231,21 @@
 
         .parameter-hints-widget {
           background: linear-gradient(135deg,
-            color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 98%, transparent) 0%,
-            color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 98%, transparent) 100%
+            color-mix(in srgb, var(--bf-color-surface-canvas) 98%, transparent) 0%,
+            color-mix(in srgb, var(--bf-color-surface-panel) 98%, transparent) 100%
           );
-          border: 1px solid var(--code-editor-blue-40);
+          border: 1px solid var(--bf-color-accent-border);
           border-radius: 8px;
           box-shadow:
-            0 8px 40px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.7),
-            0 0 0 1px var(--code-editor-teal-08) inset,
-            0 2px 12px var(--code-editor-blue-25);
+            var(--bf-shadow-lg),
+            0 0 0 1px var(--bf-color-accent-secondary-surface) inset,
+            var(--bf-shadow-accent-glow);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
 
           .signature {
             &.focused {
-              background: rgba(var(--code-editor-blue-rgb), 0.1);
+              background: var(--bf-color-accent-surface);
             }
           }
         }
@@ -283,15 +260,15 @@
 
           .minimap-slider {
             background: linear-gradient(135deg,
-              rgba(var(--code-editor-blue-rgb), 0.2),
-              var(--code-editor-teal-15)
+              var(--bf-color-accent-surface-strong),
+              var(--bf-color-accent-secondary-surface-strong)
             ) !important;
-            border: 1px solid var(--code-editor-blue-30);
+            border: 1px solid var(--bf-color-accent-border-subtle);
 
             &:hover {
               background: linear-gradient(135deg,
-                rgba(var(--code-editor-blue-rgb), 0.3),
-                rgba(var(--code-editor-teal-rgb), 0.25)
+                var(--bf-color-accent-border-subtle),
+                var(--bf-color-accent-secondary-border)
               ) !important;
             }
           }
@@ -299,11 +276,11 @@
 
         .indent-guides {
           .indent-guide {
-            border-left: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+            border-left: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
 
             &.indent-guide-active {
-              border-left: 1px solid rgba(var(--code-editor-blue-rgb), 0.6);
-              box-shadow: -1px 0 6px rgba(var(--code-editor-blue-rgb), 0.4);
+              border-left: 1px solid var(--bf-color-accent-border);
+              box-shadow: -1px 0 6px var(--bf-color-accent-surface-strong);
             }
           }
         }
@@ -317,7 +294,7 @@
         .monaco-editor {
           .margin,
           .monaco-editor-background {
-            background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 20%, transparent) !important;
+            background: color-mix(in srgb, var(--bf-color-surface-canvas) 20%, transparent) !important;
           }
         }
       }
@@ -337,10 +314,10 @@
     right: 12px;
     z-index: 10;
     padding: 8px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 85%, transparent);
-    border: 1px solid var(--code-editor-blue-40);
+    background: color-mix(in srgb, var(--bf-color-surface-canvas) 85%, transparent);
+    border: 1px solid var(--bf-color-accent-border);
     border-radius: 6px;
-    color: rgba(var(--code-editor-blue-rgb), 0.8);
+    color: var(--bf-color-accent-default);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -355,13 +332,13 @@
     -webkit-backdrop-filter: blur(10px);
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 95%, transparent);
-      border-color: rgba(var(--code-editor-blue-rgb), 0.8);
-      color: var(--code-editor-blue-100);
+      background: color-mix(in srgb, var(--bf-color-surface-canvas) 95%, transparent);
+      border-color: var(--bf-color-accent-default);
+      color: var(--bf-color-accent-hover);
       box-shadow:
-        0 4px 16px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.6),
-        0 0 20px var(--code-editor-blue-40),
-        0 0 40px rgba(var(--code-editor-teal-rgb), 0.2);
+        var(--bf-shadow-base),
+        0 0 20px var(--bf-color-accent-surface-strong),
+        0 0 40px var(--bf-color-accent-secondary-surface-strong);
       transform: scale(1.08);
     }
 
@@ -385,7 +362,7 @@
     width: 100vw !important;
     height: 100vh !important;
     z-index: tokens.$z-fullscreen;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
     animation: bitfun-code-editor-fullscreen-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
 
     .code-editor__wrapper {
@@ -398,11 +375,11 @@
     .code-editor__fullscreen-btn {
       top: 16px;
       right: 16px;
-      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 90%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 50%, transparent);
+      background: color-mix(in srgb, var(--bf-color-surface-canvas) 90%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-accent-hover) 50%, transparent);
 
       &:hover {
-        background: var(--bf-appearance-token-color-bg-primary);
+        background: var(--bf-color-surface-canvas);
       }
     }
   }

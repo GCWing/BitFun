@@ -347,5 +347,5 @@ pub fn scroll_boundary_script() -> &'static str {
 
 /// Minimal MiniApp iframe first-paint contract before the host sends Appearance variables.
 pub fn build_miniapp_default_appearance_css() -> &'static str {
-    r#"<style id="bitfun-appearance-default">:root{color-scheme:light dark;background:transparent;}</style>"#
+    include_str!("generated/default_appearance_style.html")
 }

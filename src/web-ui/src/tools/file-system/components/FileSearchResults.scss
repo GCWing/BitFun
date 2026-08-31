@@ -12,7 +12,7 @@ $_icon-size: 16px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 
   &--empty {
     justify-content: center;
@@ -22,7 +22,7 @@ $_icon-size: 16px;
 
 .bitfun-search-results__empty {
   text-align: center;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   padding: $size-gap-8;
 
   &-icon {
@@ -39,14 +39,14 @@ $_icon-size: 16px;
 
 .bitfun-search-results__header {
   padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px solid var(--bf-appearance-token-border-base);
-  background: var(--bf-appearance-token-color-bg-primary);
+  border-bottom: 1px solid var(--bf-color-border-default);
+  background: var(--bf-color-surface-canvas);
   flex-shrink: 0;
 }
 
 .bitfun-search-results__count {
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-weight: var(--bf-font-weight-medium);
 }
 
@@ -86,18 +86,18 @@ $_icon-size: 16px;
     transition:
       background-color $motion-base $easing-standard,
       color $motion-base $easing-standard;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     text-align: left;
     font: inherit;
     appearance: none;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
     }
 
     &:focus-visible {
-      outline: 1px solid var(--bf-appearance-token-color-accent-500);
+      outline: 1px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
   }
@@ -109,11 +109,11 @@ $_icon-size: 16px;
     width: 20px;
     height: 20px;
     border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     &--directory {
-      background: var(--bf-appearance-token-color-warning-bg);
-      color: var(--bf-appearance-token-color-warning);
+      background: var(--bf-color-status-warning-surface);
+      color: var(--bf-color-status-warning-content);
     }
   }
 
@@ -133,7 +133,7 @@ $_icon-size: 16px;
 
   &-path {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
     @include mixins.text-ellipsis;
     width: 100%;
@@ -146,8 +146,8 @@ $_icon-size: 16px;
     min-height: 20px;
     border: none;
     border-radius: 10px;
-    background: var(--bf-appearance-token-git-color-branch-bg);
-    color: var(--bf-appearance-token-git-color-branch);
+    background: var(--bf-domain-git-branch-background);
+    color: var(--bf-domain-git-branch);
     cursor: pointer;
     transition:
       transform $motion-fast $easing-standard,
@@ -157,7 +157,7 @@ $_icon-size: 16px;
     appearance: none;
 
     &:hover {
-      background: var(--bf-appearance-token-git-color-branch-bg-hover);
+      background: var(--bf-domain-git-branch-background-hover);
     }
 
     &:active {
@@ -165,7 +165,7 @@ $_icon-size: 16px;
     }
 
     &:focus-visible {
-      outline: 1px solid var(--bf-appearance-token-color-accent-500);
+      outline: 1px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
 
@@ -208,15 +208,15 @@ $_icon-size: 16px;
   appearance: none;
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-color-action-neutral-surface);
   }
 
   &:active {
-    background: var(--bf-appearance-token-element-bg-soft);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &:focus-visible {
-    outline: 1px solid var(--bf-appearance-token-color-accent-500);
+    outline: 1px solid var(--bf-color-accent-default);
     outline-offset: 1px;
   }
   &-content {
@@ -227,7 +227,7 @@ $_icon-size: 16px;
       display: block;
       font-size: var(--bf-font-size-xs);
       font-family: var(--bf-font-family-mono);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -237,15 +237,15 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__highlight {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 25%, transparent);
-  color: var(--bf-appearance-token-color-accent-500);
+  background: color-mix(in srgb, var(--bf-color-accent-default) 25%, transparent);
+  color: var(--bf-color-accent-default);
   padding: 1px 2px;
   border-radius: 2px;
   font-weight: var(--bf-font-weight-medium);
 }
 
 .bitfun-search-results__showing {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-weight: var(--bf-font-weight-regular);
   opacity: 0.7;
 }
@@ -254,9 +254,9 @@ $_icon-size: 16px;
   @include mixins.flex-layout(row, center, center, $size-gap-1);
   padding: $size-gap-1 $size-gap-2;
   flex-shrink: 0;
-  border-top: 1px solid var(--bf-appearance-token-border-base);
-  background: var(--bf-appearance-token-element-bg-subtle);
-  color: var(--bf-appearance-token-color-text-muted);
+  border-top: 1px solid var(--bf-color-border-default);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
   cursor: pointer;
   transition:
@@ -266,12 +266,12 @@ $_icon-size: 16px;
   user-select: none;
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-accent-600);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-accent-hover);
   }
 
   &:active {
-    background: var(--bf-appearance-token-element-bg-medium);
+    background: var(--bf-color-action-neutral-surface-hover);
   }
 
   svg {

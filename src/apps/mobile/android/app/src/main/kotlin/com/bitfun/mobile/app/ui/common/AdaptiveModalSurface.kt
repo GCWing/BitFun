@@ -58,7 +58,7 @@ internal fun AdaptiveModalSurface(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(bitFunColors.modalScrim)
+                    .background(MaterialTheme.colorScheme.scrim)
                     .clickable(onClick = onDismissRequest)
                     .safeDrawingPadding()
                     .imePadding(),

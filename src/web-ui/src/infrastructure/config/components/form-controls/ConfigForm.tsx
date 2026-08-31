@@ -43,7 +43,7 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({
     ...(grid && {
       display: 'grid',
       gridTemplateColumns: `repeat(${columns}, 1fr)`,
-      gap: 'var(--bf-appearance-token-size-gap-4)'
+      gap: 'var(--bf-space-4)'
     }),
     ...(disabled && {
       opacity: 0.6,
@@ -80,9 +80,9 @@ export interface ConfigFormRowProps {
 }
 
 const gapSizes = {
-  sm: 'var(--bf-appearance-token-size-gap-2)', // 8px
-  md: 'var(--bf-appearance-token-size-gap-4)', // 16px
-  lg: 'var(--bf-appearance-token-size-gap-6)'  // 24px
+  sm: 'var(--bf-space-2)', // 8px
+  md: 'var(--bf-space-4)', // 16px
+  lg: 'var(--bf-space-6)'  // 24px
 };
 
 export const ConfigFormRow: React.FC<ConfigFormRowProps> = ({

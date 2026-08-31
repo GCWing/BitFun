@@ -2,7 +2,7 @@ import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/Mo
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiMessage } from '../state/ConversationUiModels';
 import { MessageImageGallery } from './ChatMessageContent';
-import { ACCENT, INK, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
+import { ACCENT, INK, MUTED, CONTENT_ON_ACTION, STATUS_DANGER, SOFT } from './Theme';
 
 @ComponentV2
 export struct ChatTypingDots {
@@ -49,10 +49,10 @@ export struct ChatMessageRetryAction {
     Row({ space: 8 }) {
       Text(this.assistant ? RemoteI18n.t('generalChat.replyInterrupted') : RemoteI18n.t('chat.sendFailed'))
         .fontSize(MobileDesignTypography.labelSmall.size)
-        .fontColor(RED)
+        .fontColor(STATUS_DANGER)
       Text(RemoteI18n.t('common.retry'))
         .fontSize(MobileDesignTypography.labelSmall.size)
-        .fontColor(PRIMARY_ACTION_TEXT)
+        .fontColor(CONTENT_ON_ACTION)
         .height(28)
         .padding({ left: 10, right: 10 })
         .backgroundColor(ACCENT)

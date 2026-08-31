@@ -9,8 +9,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-primary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-canvas);
+  color: var(--bf-color-content-primary);
   overflow: hidden;
   font-family: var(--bf-font-family-sans);
 
@@ -21,7 +21,7 @@
     right: 0;
     bottom: 0;
     z-index: $z-fullscreen;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
   }
 
   // Toolbar layout comes from the design-system Toolbar; keep it pinned to the top.
@@ -40,7 +40,7 @@
 
   &__filename {
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -49,7 +49,7 @@
   &__dimensions,
   &__filesize {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
   }
 
@@ -67,12 +67,12 @@
     position: relative;
     // Checkerboard pattern for transparent images
     // Uses theme CSS variables to adapt to any theme
-    background-color: var(--bf-appearance-token-color-bg-primary);
+    background-color: var(--bf-color-surface-canvas);
     background-image: 
-      linear-gradient(45deg, var(--bf-appearance-token-element-bg-soft) 25%, transparent 25%),
-      linear-gradient(-45deg, var(--bf-appearance-token-element-bg-soft) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, var(--bf-appearance-token-element-bg-soft) 75%),
-      linear-gradient(-45deg, transparent 75%, var(--bf-appearance-token-element-bg-soft) 75%);
+      linear-gradient(45deg, var(--bf-color-action-quiet-hover) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--bf-color-action-quiet-hover) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--bf-color-action-quiet-hover) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--bf-color-action-quiet-hover) 75%);
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
   }
@@ -93,7 +93,7 @@
     max-height: 100%;
     object-fit: contain;
     transition: transform 0.2s ease-out;
-    box-shadow: 0 4px 20px var(--bf-appearance-token-color-overlay-black-80);
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
   }
 
   // Loading State
@@ -103,7 +103,7 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     p {
       margin: 0;
@@ -114,8 +114,8 @@
   &__spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid var(--bf-appearance-token-border-medium);
-    border-top-color: var(--bf-appearance-token-color-accent-500);
+    border: 3px solid var(--bf-color-field-border-hover);
+    border-top-color: var(--bf-color-accent-default);
     border-radius: 50%;
     animation: bitfun-image-viewer-spin 0.8s linear infinite;
   }
@@ -144,14 +144,14 @@
 
     p {
       margin: 0;
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
       font-size: var(--bf-font-size-base);
     }
   }
 
   &__error-path {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     word-break: break-all;
     max-width: 600px;
   }

@@ -7,7 +7,7 @@
 
   &__optional-label {
     margin-left: 4px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
     opacity: 0.75;
@@ -32,7 +32,7 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transition: color $motion-base $easing-standard;
   }
   
@@ -66,11 +66,11 @@
     
     &:hover {
       .default-model-config__expand-text {
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
       }
       
       .default-model-config__expand-line {
-        border-color: var(--bf-appearance-token-border-base);
+        border-color: var(--bf-color-border-default);
       }
     }
     
@@ -87,14 +87,14 @@
     width: calc(40% - 40px);
     height: 0;
     border: none;
-    border-top: 1px dashed var(--bf-appearance-token-border-subtle);
+    border-top: 1px dashed var(--bf-color-border-subtle);
     transition: border-color 0.15s ease;
   }
   
   &__expand-text {
     flex-shrink: 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transition: color 0.15s ease;
     white-space: nowrap;
   }
@@ -130,7 +130,7 @@
   &__slot-label {
     font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
   
   &__slot-badge {
@@ -140,26 +140,26 @@
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     border-radius: $size-radius-sm;
-    background: var(--bf-appearance-token-color-success-bg);
+    background: var(--bf-color-status-success-surface);
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     
     &--optional {
-      background: var(--bf-appearance-token-color-warning-bg);
-      color: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-color-status-warning-surface);
+      color: var(--bf-color-content-muted);
     }
   }
   
   &__slot-description {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-base);
     margin: 0;
   }
   
   &__slot-hint {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin: 0;
     font-style: italic;
   }
@@ -190,7 +190,7 @@
     
     &--configured {
       .default-model-config__capability-status {
-        color: var(--bf-appearance-token-color-accent-500);
+        color: var(--bf-color-accent-default);
         font-weight: var(--bf-font-weight-medium);
       }
     }
@@ -209,17 +209,17 @@
     gap: $size-gap-2;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     
     svg {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       flex-shrink: 0;
     }
   }
   
   &__capability-status {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -228,7 +228,7 @@
   
   &__capability-description {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-ui);
     margin: 0;
   }
@@ -237,7 +237,7 @@
   
   &__advanced-settings {
     margin-top: $size-gap-4;
-    border-top: 1px dashed var(--bf-appearance-token-border-base);
+    border-top: 1px dashed var(--bf-color-border-default);
     padding-top: $size-gap-2;
   }
   
@@ -249,7 +249,7 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     transition:
@@ -263,8 +263,8 @@
     border-radius: $size-radius-sm;
     
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-color-content-primary);
+      background: var(--bf-color-surface-subtle);
     }
     
     svg {
@@ -296,13 +296,13 @@
   &__override-title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin: 0 0 $size-gap-1 0;
   }
   
   &__override-description {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     margin: 0 0 $size-gap-3 0;
   }
   
@@ -322,7 +322,7 @@
     flex: 0 0 140px;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -342,12 +342,12 @@
     justify-content: center;
     padding: $size-gap-10 $size-gap-5;
     text-align: center;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     
     svg {
       margin-bottom: $size-gap-3;
       opacity: 0.4;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
     
     p {
@@ -368,7 +368,7 @@
     
     p {
       margin-top: $size-gap-4;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
     }
   }

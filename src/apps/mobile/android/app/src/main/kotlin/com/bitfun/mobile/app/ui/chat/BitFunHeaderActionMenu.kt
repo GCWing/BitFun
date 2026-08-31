@@ -49,6 +49,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
 import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
 import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 
 internal const val HEADER_ACTION_MENU_TEST_TAG: String = "header-action-menu"
 
@@ -197,7 +198,7 @@ private fun HeaderActionRow(action: BitFunHeaderAction, onDismiss: () -> Unit) {
             .clip(RoundedCornerShape(10.dp))
             .background(
                 if (action.selected) MaterialTheme.colorScheme.surfaceVariant
-                else androidx.compose.ui.graphics.Color.Transparent,
+                else bitFunColors.transparent,
             )
             .clickable(enabled = action.enabled) {
                 action.onClick()

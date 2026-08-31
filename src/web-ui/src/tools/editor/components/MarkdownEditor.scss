@@ -8,8 +8,8 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
   overflow: hidden;
 }
 
@@ -20,8 +20,8 @@
   gap: $size-gap-3;
   min-height: 34px;
   padding: 4px $size-gap-3;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 92%, var(--bf-appearance-token-color-bg-elevated));
+  border-bottom: 1px solid var(--bf-color-border-subtle);
+  background: color-mix(in srgb, var(--bf-color-surface-scene) 92%, var(--bf-color-surface-raised));
   flex-shrink: 0;
 }
 
@@ -48,8 +48,8 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
 }
 
 .bitfun-markdown-editor-error {
@@ -58,8 +58,8 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
 
   .error-content {
     display: flex;
@@ -68,21 +68,21 @@
     gap: $size-gap-4;
     padding: $size-gap-8;
     text-align: center;
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-color-action-neutral-surface);
     border-radius: $size-radius-lg;
-    border: 1px solid var(--bf-appearance-token-border-base);
+    border: 1px solid var(--bf-color-border-default);
     backdrop-filter: blur(8px);
 
     .error-icon {
       width: 48px;
       height: 48px;
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
 
     p {
       margin: 0;
       font-size: var(--bf-font-size-sm);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
 
   }
@@ -90,7 +90,7 @@
 
 // Markdown preview inside m-editor only (align with flow-chat markdown chrome via shared Sass values).
 .m-editor .markdown-body {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-family: var(--bf-font-family-sans);
   font-size: var(--bf-font-size-sm);
   line-height: var(--bf-line-height-relaxed);
@@ -100,18 +100,18 @@
     margin-bottom: $size-gap-4;
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   strong, b {
     font-weight: var(--bf-font-weight-bold);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 
   h1 {
     font-size: var(--bf-font-size-3xl);
-    color: var(--bf-appearance-token-color-text-primary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-color-content-primary);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     padding-bottom: $size-gap-3;
     text-align: center;
     letter-spacing: var(--bf-letter-spacing-wider);
@@ -119,7 +119,7 @@
 
   h2 {
     font-size: var(--bf-font-size-2xl);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     padding-bottom: $size-gap-2;
   }
 
@@ -134,12 +134,12 @@
   }
 
   a {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     text-decoration: none;
     transition: color $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--bf-appearance-token-color-accent-600);
+      color: var(--bf-color-accent-hover);
       text-decoration: underline;
     }
   }
@@ -182,7 +182,7 @@
     color: markdownCode.$pre-code-fg;
     background: markdownCode.$pre-bg;
     border: 1px dashed markdownCode.$pre-border;
-    border-radius: var(--bf-appearance-token-flowchat-card-radius);
+    border-radius: var(--bf-control-flow-chat-card-radius);
     box-shadow: markdownCode.$pre-shadow;
     transition:
       border-color 0.3s ease,
@@ -263,7 +263,7 @@
     left: 0;
     top: 0;
     width: markdownLayout.$list-marker-width;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-weight: var(--bf-font-weight-medium);
   }
 
@@ -314,7 +314,7 @@
     margin-bottom: $size-gap-4;
     font-size: var(--bf-font-size-base);
     border: 1px solid markdownTable.$border;
-    border-radius: var(--bf-appearance-token-flowchat-card-radius);
+    border-radius: var(--bf-control-flow-chat-card-radius);
     background: markdownTable.$surface;
     box-shadow: markdownTable.$shadow;
     overflow: hidden;
@@ -340,7 +340,7 @@
   }
 
   table td {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   table th + th,
@@ -378,30 +378,30 @@
 
   table tbody tr:first-child th:first-child,
   table thead th:first-child {
-    border-top-left-radius: var(--bf-appearance-token-flowchat-card-radius);
+    border-top-left-radius: var(--bf-control-flow-chat-card-radius);
   }
 
   table tbody tr:first-child th:last-child,
   table thead th:last-child {
-    border-top-right-radius: var(--bf-appearance-token-flowchat-card-radius);
+    border-top-right-radius: var(--bf-control-flow-chat-card-radius);
   }
 
   table tbody tr:last-child td:first-child,
   table tbody tr:last-child th:first-child {
-    border-bottom-left-radius: var(--bf-appearance-token-flowchat-card-radius);
+    border-bottom-left-radius: var(--bf-control-flow-chat-card-radius);
   }
 
   table tbody tr:last-child td:last-child,
   table tbody tr:last-child th:last-child {
-    border-bottom-right-radius: var(--bf-appearance-token-flowchat-card-radius);
+    border-bottom-right-radius: var(--bf-control-flow-chat-card-radius);
   }
 
   table tbody tr:first-child th:only-child {
-    border-radius: var(--bf-appearance-token-flowchat-card-radius) var(--bf-appearance-token-flowchat-card-radius) 0 0;
+    border-radius: var(--bf-control-flow-chat-card-radius) var(--bf-control-flow-chat-card-radius) 0 0;
   }
 
   table tbody tr:last-child td:only-child {
-    border-radius: 0 0 var(--bf-appearance-token-flowchat-card-radius) var(--bf-appearance-token-flowchat-card-radius);
+    border-radius: 0 0 var(--bf-control-flow-chat-card-radius) var(--bf-control-flow-chat-card-radius);
   }
 
   table th code,
@@ -429,8 +429,8 @@
   details {
     margin: 0 0 $size-gap-4;
     padding: $size-gap-3 $size-gap-4;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 86%, transparent);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: color-mix(in srgb, var(--bf-color-surface-panel) 86%, transparent);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-lg;
 
     > :last-child {
@@ -441,11 +441,11 @@
   summary {
     cursor: pointer;
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     list-style-position: outside;
 
     &::marker {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -458,7 +458,7 @@
     padding: 0;
     margin: $size-gap-5 0;
     border: 0;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
     background: none;
     overflow: visible;
   }

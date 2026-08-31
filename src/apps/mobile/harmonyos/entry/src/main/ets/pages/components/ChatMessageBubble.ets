@@ -6,7 +6,7 @@ import { ChatMessageStructurePolicy, StructuredRenderGroup } from '../policy/Cha
 import { AssistantProcessLayoutPolicy } from '../policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { ThinkingPresentationPolicy } from '../policy/ThinkingPresentationPolicy';
-import { ACCENT, INK, LINE, RED } from './Theme';
+import { ACCENT, INK, LINE, STATUS_DANGER } from './Theme';
 import { MessageBodyMarkdown, MessageFileCards, MessageImageGallery, MessageMarkdown } from './ChatMessageContent';
 import { ChatMessageRetryAction, ChatTypingDots, ChatUserMessageBubble } from './ChatMessageChrome';
 import { SubagentTaskCard } from './SubagentTaskCard';
@@ -121,7 +121,7 @@ export struct ChatMessageBubble {
       Text(RemoteI18n.t('chat.responseFailed'))
         .fontSize(MobileDesignTypography.labelSmall.size)
         .fontWeight(FontWeight.Medium)
-        .fontColor(RED)
+        .fontColor(STATUS_DANGER)
       Text(errorText.trim())
         .fontSize(MobileDesignTypography.bodySmall.size)
         .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
@@ -138,7 +138,7 @@ export struct ChatMessageBubble {
     }
     .width('100%')
     .padding({ left: 12, top: 2, bottom: 2 })
-    .border({ width: { left: 2 }, color: RED })
+    .border({ width: { left: 2 }, color: STATUS_DANGER })
     .alignItems(HorizontalAlign.Start)
   }
 

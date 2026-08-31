@@ -66,6 +66,8 @@ test("reference colors expose ordered name-plus-number scales for authoring", ()
     "navy",
     "blue",
     "cyan",
+    "purple",
+    "pink",
     "green",
     "amber",
     "red",
@@ -185,10 +187,7 @@ test("primary text and primary action pairs meet normal text contrast", async ()
       ) >= 4.5,
     );
     for (const status of ["info", "success", "warning", "danger"]) {
-      // The existing BitFun light Appearance warning pair is 4.38:1. Keep
-      // that single migration baseline exact instead of silently restyling
-      // the product; all other default and high-contrast pairs remain 4.5:1.
-      const minimumContrast = mode === "light" && status === "warning" ? 4.38 : 4.5;
+      const minimumContrast = 4.5;
       assert.ok(
         contrastRatio(
           variant[`color.status.${status}.surface`].value,

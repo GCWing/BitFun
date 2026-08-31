@@ -25,7 +25,7 @@ describe('CodeSnippetContextImpl language metadata', () => {
 
   it('keeps mermaid diagram context color in the UI exception registry', () => {
     expect(APPEARANCE_DOMAIN_TOKENS.mermaidDiagram).toBe(
-      'var(--bf-appearance-token-domain-mermaid-diagram)',
+      'var(--bf-domain-mermaid-diagram)',
     );
   });
 });

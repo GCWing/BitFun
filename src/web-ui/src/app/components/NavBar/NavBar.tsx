@@ -85,7 +85,7 @@ const NavBar: React.FC<NavBarProps> = ({
 
   if (isCollapsed) {
     return (
-      <div data-bf-component="nav-bar" data-bf-part="root" data-bf-state="collapsed" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+      <div data-bf-component="nav-bar" data-bf-part="root" data-bf-state="collapsed" data-bf-theme-scope="chrome" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
         <Tooltip content={t('header.expandLeftPanel')} placement="bottom" followCursor>
           <button
             type="button"
@@ -103,7 +103,7 @@ const NavBar: React.FC<NavBarProps> = ({
   }
 
   return (
-    <div data-bf-component="nav-bar" data-bf-part="root" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+    <div data-bf-component="nav-bar" data-bf-part="root" data-bf-theme-scope="chrome" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
       <Tooltip content={t('header.collapseLeftPanel')} placement="bottom" followCursor>
         <button
           type="button"

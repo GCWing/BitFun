@@ -19,12 +19,14 @@ Renderer entries use this shape:
 }
 ```
 
-## css-tokens
+## theme-tokens
 
-`settings` contains `tokens` and `background`. Query accepted token names with:
+`settings.tokens` contains only canonical `--bf-*` theme, component, and registered domain tokens. Optional
+`settings.scopes` contains a registered scope such as `chrome`, whose values are limited to the scoped canonical
+theme-token set. Query accepted root token names with:
 
 ```powershell
-python scripts/bitfun_appearance.py contract tokens css
+python scripts/bitfun_appearance.py contract tokens theme
 ```
 
 ## monaco

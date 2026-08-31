@@ -77,7 +77,7 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
   const appearanceStyle = useMemo(() => {
     const style: React.CSSProperties & Record<string, string> = {
       background: 'transparent',
-      color: 'var(--bf-appearance-token-color-text-primary)',
+      color: 'var(--bf-color-content-primary)',
       width: '100%',
     };
 

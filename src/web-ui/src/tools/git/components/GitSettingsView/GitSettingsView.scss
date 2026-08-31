@@ -9,8 +9,8 @@ $opacity-high: 0.8 !default;
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-primary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-canvas);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-font-family-sans);
 
   &__header {
@@ -18,8 +18,8 @@ $opacity-high: 0.8 !default;
     align-items: center;
     justify-content: space-between;
     padding: $size-gap-4;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-element-bg-soft);
+    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &__header-left {
@@ -31,7 +31,7 @@ $opacity-high: 0.8 !default;
       margin: 0;
       font-size: var(--bf-font-size-lg);
       font-weight: var(--bf-font-weight-semibold);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 
@@ -50,15 +50,15 @@ $opacity-high: 0.8 !default;
     position: relative;
 
     &--success {
-      background: var(--bf-appearance-token-color-success-bg);
-      border-bottom: 1px solid var(--bf-appearance-token-color-success);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      border-bottom: 1px solid var(--bf-color-status-success-content);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-appearance-token-color-error-bg);
-      border-bottom: 1px solid var(--bf-appearance-token-color-error);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      border-bottom: 1px solid var(--bf-color-status-danger-content);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -114,21 +114,21 @@ $opacity-high: 0.8 !default;
     gap: $size-gap-2;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__form-description {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin-top: -$size-gap-1;
   }
 
   &__form-input {
     padding: $size-gap-2 $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-action-neutral-surface);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: $size-radius-base;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-family: var(--bf-font-family-mono);
     transition:
@@ -137,12 +137,12 @@ $opacity-high: 0.8 !default;
 
     &:focus {
       outline: none;
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-medium);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &::placeholder {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     &:disabled {
@@ -153,10 +153,10 @@ $opacity-high: 0.8 !default;
 
   &__form-select {
     padding: $size-gap-2 $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-action-neutral-surface);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: $size-radius-base;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     cursor: pointer;
     transition:
@@ -166,8 +166,8 @@ $opacity-high: 0.8 !default;
 
     &:focus {
       outline: none;
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-medium);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:disabled {
@@ -191,7 +191,7 @@ $opacity-high: 0.8 !default;
     label {
       margin: 0;
       font-size: var(--bf-font-size-sm);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       cursor: pointer;
       user-select: none;
     }
@@ -211,26 +211,26 @@ $opacity-high: 0.8 !default;
     gap: $size-gap-2;
     margin-bottom: $size-gap-4;
     padding-bottom: $size-gap-2;
-    border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   }
 
   &__section-title {
     font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin: 0;
   }
 
   &__section-description {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     margin-top: $size-gap-1;
   }
 
   &__config-item {
     padding: $size-gap-4;
-    background: var(--bf-appearance-token-element-bg-soft);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-action-quiet-hover);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: $size-radius-base;
     margin-bottom: $size-gap-3;
     transition:
@@ -238,8 +238,8 @@ $opacity-high: 0.8 !default;
       border-color $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      border-color: var(--bf-appearance-token-border-medium);
+      background: var(--bf-color-action-neutral-surface);
+      border-color: var(--bf-color-field-border-hover);
     }
 
     &:last-child {
@@ -255,14 +255,14 @@ $opacity-high: 0.8 !default;
   &__config-key {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin-bottom: $size-gap-1;
     font-family: var(--bf-font-family-mono);
   }
 
   &__config-value {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-family: var(--bf-font-family-mono);
     white-space: nowrap;
     overflow: hidden;
@@ -284,13 +284,13 @@ $opacity-high: 0.8 !default;
     height: 100%;
     padding: $size-gap-10;
     text-align: center;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     h3 {
       font-size: var(--bf-font-size-lg);
       font-weight: var(--bf-font-weight-medium);
       margin: $size-gap-4 0 $size-gap-2 0;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
 
     p {
@@ -305,7 +305,7 @@ $opacity-high: 0.8 !default;
 
   &__error-message {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
     margin-bottom: $size-gap-4;
   }
 
@@ -314,8 +314,8 @@ $opacity-high: 0.8 !default;
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-action-neutral-surface);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: $size-radius-base;
     cursor: pointer;
     transition:
@@ -325,15 +325,15 @@ $opacity-high: 0.8 !default;
     margin-top: $size-gap-4;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      border-color: var(--bf-appearance-token-border-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
+      border-color: var(--bf-color-field-border-hover);
     }
   }
 
   &__advanced-content {
     margin-top: $size-gap-3;
     padding: $size-gap-4;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     border-radius: $size-radius-base;
   }
 }

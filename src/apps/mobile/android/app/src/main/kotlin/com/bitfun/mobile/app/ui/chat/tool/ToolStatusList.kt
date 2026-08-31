@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -37,6 +36,7 @@ import com.bitfun.mobile.core.feature.session.ToolOperation
 import com.bitfun.mobile.core.feature.session.ToolPhase
 import com.bitfun.mobile.core.feature.session.ToolRow
 import com.bitfun.mobile.core.feature.session.collapseToolRows
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 
 /** Anything the desktop must be told about a rejection needs a reason; this is ours. */
 private const val REJECT_REASON = "Rejected from the Android client"
@@ -193,13 +193,13 @@ internal fun ToolStatusRow(
                 color = if (emphasized) {
                     MaterialTheme.colorScheme.surfaceVariant
                 } else {
-                    Color.Transparent
+                    bitFunColors.transparent
                 },
                 shape = RoundedCornerShape(if (emphasized) 14.dp else 8.dp),
             )
             .border(
                 width = if (emphasized) 1.dp else 0.dp,
-                color = if (emphasized) MaterialTheme.colorScheme.outlineVariant else Color.Transparent,
+                color = if (emphasized) MaterialTheme.colorScheme.outlineVariant else bitFunColors.transparent,
                 shape = RoundedCornerShape(if (emphasized) 14.dp else 8.dp),
             )
             .padding(

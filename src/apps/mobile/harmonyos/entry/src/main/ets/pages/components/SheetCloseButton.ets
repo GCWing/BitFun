@@ -1,6 +1,6 @@
 import { MobileDesignGeometry } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { INK } from './Theme';
+import { INK, TRANSPARENT } from './Theme';
 
 /** Quiet top-right close affordance with a full-size touch target. */
 @ComponentV2
@@ -19,7 +19,7 @@ export struct SheetCloseButton {
     .width(this.touchSize)
     .height(this.touchSize)
     .padding(0)
-    .backgroundColor('#00000000')
+    .backgroundColor(TRANSPARENT)
     .borderRadius(12)
     .stateEffect(true)
     .opacity(this.isEnabled ? 1 : 0.4)

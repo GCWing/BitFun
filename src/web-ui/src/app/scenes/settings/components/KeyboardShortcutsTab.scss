@@ -23,8 +23,8 @@
     padding: 8px 12px;
     margin-bottom: 16px;
     border-radius: 6px;
-    background: var(--bf-appearance-token-color-error-bg);
-    color: var(--bf-appearance-token-color-error);
+    background: var(--bf-color-status-danger-surface);
+    color: var(--bf-color-status-danger-content);
     font-size: var(--bf-font-size-sm);
   }
 
@@ -42,15 +42,15 @@
     border-radius: 6px;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &--recording {
-      background: var(--bf-appearance-token-color-accent-100);
+      background: var(--bf-color-action-secondary-background);
     }
 
     &--conflict {
-      background: var(--bf-appearance-token-color-warning-bg);
+      background: var(--bf-color-status-warning-surface);
     }
 
     &--modified .kb-shortcuts__item-name {
@@ -68,7 +68,7 @@
 
   &__item-name {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -77,7 +77,7 @@
   &__item-hint {
     font-size: var(--bf-font-size-micro);
     line-height: var(--bf-line-height-compact);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-weight: var(--bf-font-weight-regular);
     white-space: normal;
     opacity: 0.62;
@@ -85,7 +85,7 @@
 
   &__item-conflict-hint {
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 
   &__item-key {
@@ -105,8 +105,8 @@
     user-select: none;
 
     &:hover {
-      border-color: var(--bf-appearance-token-border-base);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border-color: var(--bf-color-border-default);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -115,9 +115,9 @@
     align-items: center;
     padding: 3px 8px;
     border-radius: 4px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    border: 1px solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
     font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-xs);
     cursor: pointer;
@@ -126,19 +126,19 @@
     justify-content: center;
 
     &:hover {
-      border-color: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-accent-default);
+      color: var(--bf-color-content-primary);
     }
 
     &--recording {
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-color-accent-100);
-      color: var(--bf-appearance-token-color-accent-500);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-secondary-background);
+      color: var(--bf-color-accent-default);
     }
 
     &--conflict {
-      border-color: var(--bf-appearance-token-color-warning);
-      color: var(--bf-appearance-token-color-warning);
+      border-color: var(--bf-color-status-warning-content);
+      color: var(--bf-color-status-warning-content);
     }
   }
 
@@ -149,23 +149,23 @@
     width: 22px;
     height: 22px;
     border-radius: 4px;
-    border: 1px solid var(--bf-appearance-token-border-base);
+    border: 1px solid var(--bf-color-border-default);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
     cursor: pointer;
     padding: 0;
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      border-color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-primary);
+      border-color: var(--bf-color-content-secondary);
     }
   }
 
   &__empty {
     padding: 32px;
     text-align: center;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-base);
   }
 }
@@ -175,7 +175,7 @@
 .kb-shortcuts-page-header.bitfun-config-page-header {
   .bitfun-config-page-header__subtitle {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.88;
   }
 }

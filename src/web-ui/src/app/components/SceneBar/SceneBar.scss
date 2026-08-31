@@ -54,7 +54,7 @@
     );
     --_scene-bar-scroll-button-surface: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-bg-scene) 76%,
+      var(--bf-color-surface-scene) 76%,
       transparent
     );
 
@@ -97,13 +97,13 @@
       inset-inline-start: 0;
       mask-image: linear-gradient(
         to right,
-        var(--bf-appearance-token-color-static-black) 0
+        var(--bf-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
       -webkit-mask-image: linear-gradient(
         to right,
-        var(--bf-appearance-token-color-static-black) 0
+        var(--bf-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
@@ -113,13 +113,13 @@
       inset-inline-end: 0;
       mask-image: linear-gradient(
         to left,
-        var(--bf-appearance-token-color-static-black) 0
+        var(--bf-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
       -webkit-mask-image: linear-gradient(
         to left,
-        var(--bf-appearance-token-color-static-black) 0
+        var(--bf-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );

@@ -2,8 +2,8 @@
   font-size: var(--bf-font-size-meta);
   padding: 1px 6px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 88%, transparent);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
+  color: var(--bf-color-content-secondary);
   white-space: nowrap;
 }
 
@@ -18,20 +18,20 @@
   align-items: baseline;
   gap: 8px;
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 
   code {
     font-size: var(--bf-font-size-meta);
     padding: 1px 6px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 88%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
   }
 }
 
 .computer-use-tool-card__row-label {
   flex-shrink: 0;
   min-width: 64px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .computer-use-tool-card__loop-warning {
@@ -40,8 +40,8 @@
   gap: 6px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
-  color: var(--bf-appearance-token-color-warning);
+  background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
+  color: var(--bf-color-status-warning-content);
   font-size: var(--bf-font-size-xs);
 
   svg {
@@ -59,7 +59,7 @@
   flex-direction: column;
   gap: 10px;
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 
   p {
     margin: 0;

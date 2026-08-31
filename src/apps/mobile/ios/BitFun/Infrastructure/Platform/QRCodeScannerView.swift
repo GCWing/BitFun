@@ -21,11 +21,11 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        view.backgroundColor = UIColor(BitFunTheme.mediaBackground)
         let close = UIButton(type: .system)
         close.setImage(UIImage(systemName: "xmark"), for: .normal)
-        close.tintColor = .white
-        close.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        close.tintColor = UIColor(BitFunTheme.contentOnAction)
+        close.backgroundColor = UIColor(BitFunTheme.mediaControlBackground)
         close.layer.cornerRadius = 22
         close.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
         close.translatesAutoresizingMaskIntoConstraints = false

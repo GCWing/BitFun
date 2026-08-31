@@ -12,15 +12,15 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   padding: 0;
   cursor: pointer;
   outline: none;
   user-select: none;
   transition:
-    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-    border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-    color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   svg {
     width: 16px;
@@ -28,14 +28,14 @@
   }
 
   &:active:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &:focus-visible {
     outline: none;
     box-shadow: inset 0 0 0 2px color-mix(
       in srgb,
-      var(--bf-appearance-token-color-accent-500) 55%,
+      var(--bf-color-accent-default) 55%,
       transparent
     );
   }
@@ -49,9 +49,9 @@
 
 @media (hover: hover) and (pointer: fine) {
   .popup-close-button:hover:not(:disabled) {
-    border-color: var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
+    border-color: var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-primary);
   }
 }
 

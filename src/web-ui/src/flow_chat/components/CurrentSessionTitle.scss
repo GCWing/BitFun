@@ -19,7 +19,7 @@
   &__text {
     font-size: var(--bf-type-flow-body-font-size);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -39,7 +39,7 @@
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     opacity: 1;
     transition:
@@ -50,14 +50,14 @@
     flex-shrink: 0;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-accent-default);
       transform: translateY(-1px);
     }
 
     &:active {
       transform: translateY(0);
-      background: var(--bf-appearance-token-element-bg-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     svg {
@@ -67,11 +67,11 @@
 
   &:hover {
     .bitfun-current-session-title__text {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
 
     .bitfun-current-session-title__create-btn {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 }

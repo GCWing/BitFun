@@ -1,6 +1,6 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, RED } from './Theme';
+import { CARD, INK, LINE, MUTED, SHADOW_MEDIUM, STATUS_DANGER, TRANSPARENT } from './Theme';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 export enum SessionActionPresentation {
@@ -108,7 +108,7 @@ export struct SessionActionSurface {
     .borderRadius(16)
     .shadow({
       radius: this.presentation === SessionActionPresentation.Popover ? 20 : 0,
-      color: this.presentation === SessionActionPresentation.Popover ? '#1A000000' : '#00000000',
+      color: this.presentation === SessionActionPresentation.Popover ? SHADOW_MEDIUM : TRANSPARENT,
       offsetY: this.presentation === SessionActionPresentation.Popover ? 8 : 0
     })
     .alignItems(HorizontalAlign.Center)
@@ -121,7 +121,7 @@ export struct SessionActionSurface {
       Text(label)
         .layoutWeight(1)
         .fontSize(MobileDesignTypography.titleSmall.size)
-        .fontColor(destructive ? RED : INK)
+        .fontColor(destructive ? STATUS_DANGER : INK)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
@@ -129,7 +129,7 @@ export struct SessionActionSurface {
     .height(46)
     .padding({ left: 10, right: 10 })
     .borderRadius(8)
-    .backgroundColor('#00000000')
+    .backgroundColor(TRANSPARENT)
     .onClick(action)
   }
 
@@ -142,7 +142,7 @@ export struct SessionActionSurface {
     } else if (kind === 'archive') {
       SymbolGlyph($r('sys.symbol.archivebox'))
         .fontSize(19)
-        .fontColor([destructive ? RED : MUTED])
+        .fontColor([destructive ? STATUS_DANGER : MUTED])
     } else if (kind === 'export') {
       SymbolGlyph($r('sys.symbol.cloud'))
         .fontSize(19)
@@ -150,7 +150,7 @@ export struct SessionActionSurface {
     } else {
       SymbolGlyph($r('sys.symbol.trash'))
         .fontSize(19)
-        .fontColor([RED])
+        .fontColor([STATUS_DANGER])
     }
   }
 

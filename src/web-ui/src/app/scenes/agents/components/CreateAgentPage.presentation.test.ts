@@ -56,10 +56,10 @@ describe('CreateAgentPage presentation contract', () => {
       /\.th-create-page__panel \{[\s\S]*border: 1px solid[\s\S]*border-radius:/,
     );
     expect(stylesheet).toMatch(
-      /\.th-create-page__panel \{[\s\S]*background: var\(--bf-appearance-token-color-bg-scene\);[\s\S]*box-shadow: none;/,
+      /\.th-create-page__panel \{[\s\S]*background: var\(--bf-color-surface-scene\);[\s\S]*box-shadow: none;/,
     );
     expect(stylesheet).not.toContain(
-      'var(--bf-appearance-token-element-bg-base) 84%',
+      'var(--bf-color-action-neutral-surface) 84%',
     );
     expect(stylesheet).toMatch(
       /\.th-create-panel__context-options \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;/,

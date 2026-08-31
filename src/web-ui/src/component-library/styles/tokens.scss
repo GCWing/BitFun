@@ -5,7 +5,7 @@
 
 $badge-border-radius: var(--bf-radius-sm);
 $badge-padding-x: var(--bf-space-2);
-$badge-padding-y: var(--bf-appearance-token-badge-padding-y);
+$badge-padding-y: var(--bf-component-badge-padding-block);
 
 $blur-base: var(--bf-effect-blur-base);
 $blur-medium: var(--bf-effect-blur-medium);
@@ -17,9 +17,9 @@ $easing-decelerate: var(--bf-motion-easing-decelerate);
 $easing-smooth: var(--bf-motion-easing-smooth);
 $easing-standard: var(--bf-motion-easing-standard);
 
-$glow-shadow-blue: var(--bf-appearance-token-glow-shadow-blue);
-$inner-glow-top: var(--bf-appearance-token-inner-glow-top);
-$inner-glow-top-hover: var(--bf-appearance-token-inner-glow-top-hover);
+$glow-shadow-blue: var(--bf-shadow-accent-glow);
+$inner-glow-top: var(--bf-shadow-inner-highlight);
+$inner-glow-top-hover: var(--bf-shadow-inner-highlight-hover);
 
 $motion-base: var(--bf-motion-duration-base);
 $motion-fast: var(--bf-motion-duration-fast);
@@ -29,7 +29,7 @@ $motion-slow: var(--bf-motion-duration-slow);
 
 $opacity-disabled: var(--bf-opacity-disabled);
 $opacity-hover: var(--bf-opacity-hover);
-$overlay-white-24: var(--bf-appearance-token-color-overlay-white-24);
+$overlay-white-24: color-mix(in srgb, var(--bf-color-content-on-dark) 24%, transparent);
 $shadow-sm: var(--bf-shadow-sm);
 $shadow-xs: var(--bf-shadow-xs);
 

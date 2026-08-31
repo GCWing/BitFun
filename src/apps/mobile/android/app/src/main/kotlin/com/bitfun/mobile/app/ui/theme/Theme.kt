@@ -30,21 +30,21 @@ private val LightTokens = MobileDesignColors.Light
 private val DarkTokens = MobileDesignColors.Dark
 private val InkLight = LightTokens.Ink
 private val InkDark = DarkTokens.Ink
-private val White = LightTokens.PrimaryActionText
+private val ContentOnAction = LightTokens.ContentOnAction
 
 private val LightScheme = lightColorScheme(
     primary = LightTokens.PrimaryAction,
-    onPrimary = White, // primary_action_text
+    onPrimary = ContentOnAction,
     primaryContainer = LightTokens.Soft,
     onPrimaryContainer = InkLight,
     secondary = LightTokens.Accent,
-    onSecondary = White,
+    onSecondary = ContentOnAction,
     secondaryContainer = LightTokens.Soft,
     onSecondaryContainer = InkLight,
     // file_link: the one saturated hue in the palette. Material has no link
     // role, so it lands on tertiary — which is also the "busy" connection dot.
     tertiary = LightTokens.FileLink,
-    onTertiary = White,
+    onTertiary = ContentOnAction,
     background = LightTokens.PageBg,
     onBackground = InkLight,
     surface = LightTokens.Card,
@@ -72,21 +72,22 @@ private val LightScheme = lightColorScheme(
     inversePrimary = LightTokens.Line,
     outline = LightTokens.Subtle,
     outlineVariant = LightTokens.Line,
-    error = LightTokens.Red,
-    onError = White,
+    error = LightTokens.StatusDanger,
+    onError = ContentOnAction,
     // The HarmonyOS palette has no error container; rather than invent a hue,
     // a failure card is the same soft surface with the error colour on it.
     errorContainer = LightTokens.Soft,
-    onErrorContainer = LightTokens.Red,
+    onErrorContainer = LightTokens.StatusDanger,
+    scrim = LightTokens.Scrim,
 )
 
 private val DarkScheme = darkColorScheme(
     primary = DarkTokens.PrimaryAction,
-    onPrimary = White,
+    onPrimary = ContentOnAction,
     primaryContainer = DarkTokens.Soft,
     onPrimaryContainer = InkDark,
     secondary = DarkTokens.Accent,
-    onSecondary = White,
+    onSecondary = ContentOnAction,
     secondaryContainer = DarkTokens.Soft,
     onSecondaryContainer = InkDark,
     tertiary = DarkTokens.FileLink,
@@ -110,10 +111,11 @@ private val DarkScheme = darkColorScheme(
     inversePrimary = DarkTokens.Line,
     outline = DarkTokens.Subtle,
     outlineVariant = DarkTokens.Line,
-    error = DarkTokens.Red,
-    onError = White,
+    error = DarkTokens.StatusDanger,
+    onError = ContentOnAction,
     errorContainer = DarkTokens.Soft,
-    onErrorContainer = DarkTokens.Red,
+    onErrorContainer = DarkTokens.StatusDanger,
+    scrim = DarkTokens.Scrim,
 )
 
 /**
@@ -123,8 +125,17 @@ private val DarkScheme = darkColorScheme(
  * because primary here is near-black ink and a black dot reads as "off".
  */
 internal data class BitFunColors(
-    val success: Color,
-    val modalScrim: Color,
+    val transparent: Color,
+    val statusSuccess: Color,
+    val shellScrim: Color,
+    val mediaBackground: Color,
+    val mediaScrim: Color,
+    val mediaControlBackground: Color,
+    val toastBackground: Color,
+    val shadowSubtle: Color,
+    val shadowMedium: Color,
+    val shadowStrong: Color,
+    val floatingBorder: Color,
     val heroBackground: Color,
     val heroSurface: Color,
     val heroAccent: Color,
@@ -154,8 +165,17 @@ internal data class CodeSyntaxColors(
 )
 
 private val LightExtras = BitFunColors(
-    success = LightTokens.Green,
-    modalScrim = LightTokens.ModalScrim,
+    transparent = LightTokens.Transparent,
+    statusSuccess = LightTokens.StatusSuccess,
+    shellScrim = LightTokens.ShellScrim,
+    mediaBackground = LightTokens.MediaBackground,
+    mediaScrim = LightTokens.MediaScrim,
+    mediaControlBackground = LightTokens.MediaControlBackground,
+    toastBackground = LightTokens.ToastBackground,
+    shadowSubtle = LightTokens.ShadowSubtle,
+    shadowMedium = LightTokens.ShadowMedium,
+    shadowStrong = LightTokens.ShadowStrong,
+    floatingBorder = LightTokens.FloatingBorder,
     heroBackground = LightTokens.ConnectHeroBg,
     heroSurface = LightTokens.ConnectHeroSurface,
     heroAccent = LightTokens.ConnectHeroAccent,
@@ -175,8 +195,17 @@ private val LightExtras = BitFunColors(
 )
 
 private val DarkExtras = BitFunColors(
-    success = DarkTokens.Green,
-    modalScrim = DarkTokens.ModalScrim,
+    transparent = DarkTokens.Transparent,
+    statusSuccess = DarkTokens.StatusSuccess,
+    shellScrim = DarkTokens.ShellScrim,
+    mediaBackground = DarkTokens.MediaBackground,
+    mediaScrim = DarkTokens.MediaScrim,
+    mediaControlBackground = DarkTokens.MediaControlBackground,
+    toastBackground = DarkTokens.ToastBackground,
+    shadowSubtle = DarkTokens.ShadowSubtle,
+    shadowMedium = DarkTokens.ShadowMedium,
+    shadowStrong = DarkTokens.ShadowStrong,
+    floatingBorder = DarkTokens.FloatingBorder,
     heroBackground = DarkTokens.ConnectHeroBg,
     heroSurface = DarkTokens.ConnectHeroSurface,
     heroAccent = DarkTokens.ConnectHeroAccent,

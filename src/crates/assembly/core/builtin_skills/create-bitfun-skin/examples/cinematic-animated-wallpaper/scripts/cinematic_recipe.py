@@ -96,11 +96,6 @@ def rgba(value: str, alpha: float, spaced: bool = True) -> str:
     return f"rgba({red}{separator}{green}{separator}{blue}{separator}{alpha:.2f})"
 
 
-def rgb_triplet(value: str, spaced: bool = True) -> str:
-    separator = ", " if spaced else ","
-    return separator.join(str(channel) for channel in hex_rgb(value))
-
-
 def resolve_palette_values(value: Any, colors: Mapping[str, str]) -> Any:
     if isinstance(value, dict):
         if value.get("kind") == "palette":
@@ -216,49 +211,63 @@ def build_renderers(colors: Mapping[str, str], appearance_id: str) -> dict[str, 
     surface = colors["surface"]
     elevated = colors["surfaceElevated"]
     accent = colors["accent"]
+    theme_tokens = {
+        "--bf-color-surface-canvas": rgba(background, 0.78),
+        "--bf-color-surface-panel": rgba(surface, 0.72),
+        "--bf-color-surface-tertiary": rgba(elevated, 0.76),
+        "--bf-color-surface-raised": rgba(elevated, 0.74),
+        "--bf-color-surface-scene": rgba(background, 0.08),
+        "--bf-color-surface-workbench": rgba(background, 0.08),
+        "--bf-color-surface-chrome": rgba(background, 0.18),
+        "--bf-color-surface-subtle": rgba(surface, 0.50),
+        "--bf-color-action-quiet-hover": rgba(surface, 0.58),
+        "--bf-color-action-neutral-surface": rgba(elevated, 0.66),
+        "--bf-color-action-neutral-surface-hover": rgba(elevated, 0.70),
+        "--bf-color-action-neutral-surface-pressed": rgba(elevated, 0.78),
+        "--bf-color-content-primary": colors["text"],
+        "--bf-color-content-secondary": colors["textSecondary"],
+        "--bf-color-content-muted": colors["textMuted"],
+        "--bf-color-content-disabled": colors["textDisabled"],
+        "--bf-color-accent-default": accent,
+        "--bf-color-accent-hover": colors["accentStrong"],
+        "--bf-color-border-subtle": rgba(accent, 0.08),
+        "--bf-color-border-default": rgba(accent, 0.12),
+        "--bf-color-border-strong": rgba(accent, 0.28),
+        "--bf-color-status-danger-content": colors["danger"],
+        "--bf-color-status-danger-surface": rgba(colors["danger"], 0.28),
+        "--bf-color-status-danger-border": rgba(colors["danger"], 0.38),
+        "--bf-color-status-warning-content": colors["warning"],
+        "--bf-color-status-success-content": colors["success"],
+        "--bf-color-status-info-content": colors["info"],
+        "--bf-color-scrollbar-thumb": rgba(accent, 0.22),
+        "--bf-color-scrollbar-thumb-hover": rgba(accent, 0.38),
+    }
+    widget_tokens = {
+        "--bf-color-surface-canvas": background,
+        "--bf-color-surface-panel": surface,
+        "--bf-color-surface-tertiary": elevated,
+        "--bf-color-surface-raised": elevated,
+        "--bf-color-surface-scene": background,
+        "--bf-color-content-primary": colors["text"],
+        "--bf-color-content-secondary": colors["textSecondary"],
+        "--bf-color-content-muted": colors["textMuted"],
+        "--bf-color-content-disabled": colors["textDisabled"],
+        "--bf-color-accent-default": accent,
+        "--bf-color-accent-hover": colors["accentStrong"],
+        "--bf-color-border-subtle": rgba(accent, 0.08, spaced=False),
+        "--bf-color-border-default": rgba(accent, 0.12, spaced=False),
+        "--bf-color-border-strong": rgba(accent, 0.28, spaced=False),
+        "--bf-color-surface-subtle": rgba(surface, 0.50, spaced=False),
+        "--bf-color-action-quiet-hover": rgba(surface, 0.58, spaced=False),
+        "--bf-color-action-neutral-surface": rgba(elevated, 0.66, spaced=False),
+        "--bf-color-action-neutral-surface-hover": rgba(elevated, 0.70, spaced=False),
+        "--bf-color-action-neutral-surface-pressed": rgba(elevated, 0.78, spaced=False),
+    }
     return {
-        "css-tokens": {
+        "theme-tokens": {
             "version": 1,
             "settings": {
-                "background": rgba(background, 0.18),
-                "tokens": {
-                    "--bf-appearance-token-color-bg-primary": rgba(background, 0.78),
-                    "--bf-appearance-token-color-bg-secondary": rgba(surface, 0.72),
-                    "--bf-appearance-token-color-bg-tertiary": rgba(elevated, 0.76),
-                    "--bf-appearance-token-color-bg-elevated": rgba(elevated, 0.74),
-                    "--bf-appearance-token-color-bg-scene": rgba(background, 0.08),
-                    "--bf-appearance-token-color-bg-workbench": rgba(background, 0.08),
-                    "--bf-appearance-token-element-bg-subtle": rgba(surface, 0.50),
-                    "--bf-appearance-token-element-bg-soft": rgba(surface, 0.58),
-                    "--bf-appearance-token-element-bg-base": rgba(elevated, 0.66),
-                    "--bf-appearance-token-element-bg-medium": rgba(elevated, 0.70),
-                    "--bf-appearance-token-element-bg-hover": rgba(elevated, 0.78),
-                    "--bf-appearance-token-color-text-primary": colors["text"],
-                    "--bf-appearance-token-color-text-secondary": colors["textSecondary"],
-                    "--bf-appearance-token-color-text-muted": colors["textMuted"],
-                    "--bf-appearance-token-color-text-disabled": colors["textDisabled"],
-                    "--bf-appearance-token-color-accent-500": accent,
-                    "--bf-appearance-token-color-accent-500-rgb": rgb_triplet(accent),
-                    "--bf-appearance-token-color-accent-600": colors["accentStrong"],
-                    "--bf-appearance-token-color-cyan-500": colors["info"],
-                    "--bf-appearance-token-border-subtle": rgba(accent, 0.08),
-                    "--bf-appearance-token-border-base": rgba(accent, 0.12),
-                    "--bf-appearance-token-border-medium": rgba(accent, 0.18),
-                    "--bf-appearance-token-border-strong": rgba(accent, 0.28),
-                    "--bf-appearance-token-glass-bg-base": rgba(surface, 0.58),
-                    "--bf-appearance-token-glass-bg-hover": rgba(elevated, 0.68),
-                    "--bf-appearance-token-glass-bg-active": rgba(elevated, 0.76),
-                    "--bf-appearance-token-glass-border-base": rgba(accent, 0.12),
-                    "--bf-appearance-token-glass-border-hover": rgba(accent, 0.22),
-                    "--bf-appearance-token-color-error": colors["danger"],
-                    "--bf-appearance-token-color-error-bg": rgba(colors["danger"], 0.28),
-                    "--bf-appearance-token-color-error-border": rgba(colors["danger"], 0.38),
-                    "--bf-appearance-token-color-warning": colors["warning"],
-                    "--bf-appearance-token-color-success": colors["success"],
-                    "--bf-appearance-token-color-info": colors["info"],
-                    "--bf-appearance-token-scrollbar-thumb": rgba(accent, 0.22),
-                    "--bf-appearance-token-scrollbar-thumb-hover": rgba(accent, 0.38),
-                },
+                "tokens": theme_tokens,
             },
         },
         "monaco": {
@@ -345,28 +354,7 @@ def build_renderers(colors: Mapping[str, str], appearance_id: str) -> dict[str, 
             "settings": {
                 "id": appearance_id,
                 "mode": "dark",
-                "vars": {
-                    "--bf-appearance-token-color-bg-primary": background,
-                    "--bf-appearance-token-color-bg-secondary": surface,
-                    "--bf-appearance-token-color-bg-tertiary": elevated,
-                    "--bf-appearance-token-color-bg-elevated": elevated,
-                    "--bf-appearance-token-color-bg-scene": background,
-                    "--bf-appearance-token-color-text-primary": colors["text"],
-                    "--bf-appearance-token-color-text-secondary": colors["textSecondary"],
-                    "--bf-appearance-token-color-text-muted": colors["textMuted"],
-                    "--bf-appearance-token-color-text-disabled": colors["textDisabled"],
-                    "--bf-appearance-token-color-accent-500": accent,
-                    "--bf-appearance-token-color-accent-500-rgb": rgb_triplet(accent, spaced=False),
-                    "--bf-appearance-token-color-accent-600": colors["accentStrong"],
-                    "--bf-appearance-token-border-subtle": rgba(accent, 0.08, spaced=False),
-                    "--bf-appearance-token-border-base": rgba(accent, 0.12, spaced=False),
-                    "--bf-appearance-token-border-medium": rgba(accent, 0.18, spaced=False),
-                    "--bf-appearance-token-element-bg-subtle": rgba(surface, 0.50, spaced=False),
-                    "--bf-appearance-token-element-bg-soft": rgba(surface, 0.58, spaced=False),
-                    "--bf-appearance-token-element-bg-base": rgba(elevated, 0.66, spaced=False),
-                    "--bf-appearance-token-element-bg-medium": rgba(elevated, 0.70, spaced=False),
-                    "--bf-appearance-token-element-bg-hover": rgba(elevated, 0.78, spaced=False),
-                },
+                "vars": widget_tokens,
             },
         },
         "bitfun-canvas": {
@@ -423,7 +411,7 @@ def build_manifest(
     colors = palette["colors"]
     manifest: dict[str, Any] = {
         "schema": "bitfun.appearance",
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "id": appearance_id,
         "name": name,
         "version": version,

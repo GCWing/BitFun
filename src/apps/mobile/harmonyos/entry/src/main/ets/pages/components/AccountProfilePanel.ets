@@ -2,7 +2,7 @@ import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/Mo
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
-import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import { CARD, STATUS_SUCCESS, INK, LINE, MUTED, PAGE_BG, STATUS_DANGER, SOFT } from './Theme';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { SheetCloseHeader } from './SheetCloseHeader';
 
@@ -91,7 +91,7 @@ export struct AccountProfilePanel {
         RemoteI18n.t('remote.settings.accountNotSignedIn'))
         .fontSize(MobileDesignTypography.bodySmall.size)
         .fontWeight(FontWeight.Medium)
-        .fontColor(this.isAccountAuthenticated() ? GREEN : MUTED)
+        .fontColor(this.isAccountAuthenticated() ? STATUS_SUCCESS : MUTED)
     }
     .width('100%')
     .constraintSize({ minHeight: 72 })
@@ -161,7 +161,7 @@ export struct AccountProfilePanel {
         Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.accountSignedIn') :
           RemoteI18n.t('remote.settings.accountNotSignedIn'))
           .fontSize(MobileDesignTypography.bodyMedium.size)
-          .fontColor(this.isAccountAuthenticated() ? GREEN : MUTED)
+          .fontColor(this.isAccountAuthenticated() ? STATUS_SUCCESS : MUTED)
       }
       .width('100%')
 
@@ -228,7 +228,7 @@ export struct AccountProfilePanel {
         }
         if (this.accountDevicesError.length > 0 && this.desktopDevices().length > 0) {
           Text(this.accountDevicesError)
-            .fontSize(MobileDesignTypography.bodySmall.size).lineHeight(MobileDesignTypography.bodySmall.lineHeight).fontColor(RED).width('100%')
+            .fontSize(MobileDesignTypography.bodySmall.size).lineHeight(MobileDesignTypography.bodySmall.lineHeight).fontColor(STATUS_DANGER).width('100%')
         }
       }
       .width('100%')
@@ -256,7 +256,7 @@ export struct AccountProfilePanel {
           .fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium).fontColor(INK)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.deviceStatus(device))
-          .fontSize(MobileDesignTypography.bodySmall.size).fontColor(device.online ? GREEN : MUTED)
+          .fontSize(MobileDesignTypography.bodySmall.size).fontColor(device.online ? STATUS_SUCCESS : MUTED)
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
@@ -327,10 +327,10 @@ export struct AccountProfilePanel {
     }
     Row({ space: 14 }) {
       SymbolGlyph($r('sys.symbol.arrow_right_and_square'))
-        .fontSize(22).fontColor([RED]).width(24).height(24)
+        .fontSize(22).fontColor([STATUS_DANGER]).width(24).height(24)
       Text(this.logoutBusy ? RemoteI18n.t('remote.settings.accountLoggingOut') :
         RemoteI18n.t('remote.settings.accountLogout'))
-        .fontSize(MobileDesignTypography.titleMedium.size).fontWeight(FontWeight.Medium).fontColor(RED)
+        .fontSize(MobileDesignTypography.titleMedium.size).fontWeight(FontWeight.Medium).fontColor(STATUS_DANGER)
     }
     .width('100%')
     .constraintSize({ minHeight: 62 })

@@ -15,11 +15,11 @@
   font-size: var(--bf-type-flow-support-font-size);
   line-height: var(--bf-type-flow-support-line-height);
   font-weight: var(--bf-font-weight-regular);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .copyable-text-preview__empty {
-  color: color-mix(in srgb, var(--bf-appearance-token-color-error) 72%, var(--bf-appearance-token-color-static-white));
+  color: color-mix(in srgb, var(--bf-color-status-danger-content) 72%, var(--bf-color-content-on-dark));
   font-style: italic;
 }
 
@@ -27,7 +27,7 @@
   max-width: 100%;
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-appearance-token-size-gap-2);
+  gap: var(--bf-space-2);
   font-family:var(--bf-font-family-sans);
   font-size: var(--bf-type-flow-control-font-size);
   line-height: var(--bf-type-flow-support-line-height);
@@ -49,7 +49,7 @@
 .copyable-text-preview-tooltip__copy {
   flex: none;
   margin-top: 1px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 
   &.icon-btn--xs {
     width: 18px;
@@ -63,6 +63,6 @@
   }
 
   &.copied {
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-color-status-success-content);
   }
 }

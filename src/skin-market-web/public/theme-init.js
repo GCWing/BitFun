@@ -15,9 +15,11 @@
         ? 'dark'
         : 'light';
 
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', theme === 'dark' ? '#101216' : '#f4f5f7');
+  var root = document.documentElement;
+  root.setAttribute('data-bf-design-system-root', '');
+  root.dataset.colorScheme = theme;
+  root.dataset.contrast = 'standard';
+  root.dataset.density = 'comfortable';
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
 })();

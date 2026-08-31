@@ -33,17 +33,17 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 50%;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:active {
     transform: scale(0.96);
-    color: var(--color-text-primary);
-    background: var(--element-bg-base);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-neutral-surface-hover);
   }
 }
 
@@ -63,13 +63,13 @@
 .pairing-page__brand {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-accent-500);
+  color: var(--bf-color-accent-default);
   letter-spacing: 0.5px;
 }
 
 .pairing-page__state {
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   text-align: center;
 }
 
@@ -88,7 +88,7 @@
 
 .pairing-page__field-label {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--bf-color-content-secondary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -97,16 +97,16 @@
   width: 100%;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: var(--size-radius-base);
-  background: var(--color-bg-elevated);
-  color: var(--color-text-primary);
+  background: var(--bf-color-surface-raised);
+  color: var(--bf-color-content-primary);
   font-size: var(--font-size-base);
   outline: none;
 
   &:focus {
-    border-color: var(--color-accent-400);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-400) 18%, transparent);
+    border-color: var(--bf-color-accent-border);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-border) 18%, transparent);
   }
 }
 
@@ -114,7 +114,7 @@
   margin: 0;
   font-size: var(--font-size-xs);
   line-height: 1.5;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   text-align: left;
 }
 
@@ -127,20 +127,20 @@
 
 .pairing-page__error {
   font-size: var(--font-size-xs);
-  color: var(--color-error);
+  color: var(--bf-color-status-danger-content);
   text-align: center;
   max-width: 280px;
   padding: var(--size-gap-2) var(--size-gap-3);
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error-border);
+  background: var(--bf-color-status-danger-surface);
+  border: 1px solid var(--bf-color-status-danger-border);
   border-radius: var(--size-radius-base);
 }
 
 .pairing-page__retry {
   padding: var(--size-gap-3) var(--size-gap-8);
-  background: var(--btn-default-bg);
-  color: var(--color-text-primary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-color-action-secondary-background);
+  color: var(--bf-color-content-primary);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: var(--size-radius-base);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -148,7 +148,7 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:active {
-    background: var(--btn-hover-bg);
+    background: var(--bf-color-action-secondary-hover);
   }
 
   &:disabled {

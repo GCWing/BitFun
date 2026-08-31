@@ -10,7 +10,7 @@ function errorText(error: unknown): string {
 
 export function CanvasRuntimeErrorPanel({ error }: { error: unknown }) {
   return (
-    <main style={{ maxWidth: 860, margin: '0 auto', padding: 12, border: '1px solid var(--bf-appearance-token-border-base)', borderRadius: 8 }}>
+    <main style={{ maxWidth: 860, margin: '0 auto', padding: 12, border: '1px solid var(--bf-color-border-default)', borderRadius: 8 }}>
       <h1 style={{
         fontSize: 'var(--bf-type-heading-page-font-size)',
         fontWeight: 'var(--bf-type-heading-page-font-weight)',

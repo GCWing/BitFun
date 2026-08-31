@@ -764,9 +764,9 @@ for (const [file, source] of adapterFiles) {
   }
 }
 
-const cssTokenAdapterSource = fs.readFileSync(path.join(sourceRoot, 'infrastructure', 'appearance', 'adapters', 'CssTokenAppearanceAdapter.ts'), 'utf8');
-if (!cssTokenAdapterSource.includes('APPEARANCE_CSS_TOKEN_NAMES') || cssTokenAdapterSource.includes("startsWith(ALLOWED_TOKEN_PREFIX)")) {
-  failures.push('CssTokenAppearanceAdapter must validate against the closed host token registry');
+const themeTokenAdapterSource = fs.readFileSync(path.join(sourceRoot, 'infrastructure', 'appearance', 'adapters', 'ThemeTokenAppearanceAdapter.ts'), 'utf8');
+if (!themeTokenAdapterSource.includes('APPEARANCE_ROOT_TOKEN_NAMES') || themeTokenAdapterSource.includes("startsWith(ALLOWED_TOKEN_PREFIX)")) {
+  failures.push('ThemeTokenAppearanceAdapter must validate against the closed canonical token registry');
 }
 const widgetAdapterSource = fs.readFileSync(path.join(sourceRoot, 'infrastructure', 'appearance', 'adapters', 'WidgetAppearanceAdapter.ts'), 'utf8');
 if (!widgetAdapterSource.includes('WIDGET_APPEARANCE_VARIABLE_NAMES')) {
@@ -803,7 +803,7 @@ for (const [file, source] of productionSources) {
   if (/\bThemeService\b|\bthemeService\b|\buseTheme\b|\buseThemeStore\b|ThemeAppearanceBridge/.test(source)) {
     failures.push(`${relative(file)}: legacy Theme runtime reference is forbidden`);
   }
-  if (/data-theme(?:-type)?|data-bf-theme|bitfun\/request-theme|themeChange|onThemeChange/.test(source)) {
+  if (/data-theme(?:-type)?|data-bf-theme(?!-scope(?=$|[="'\]\s]))|bitfun\/request-theme|themeChange|onThemeChange/.test(source)) {
     failures.push(`${relative(file)}: legacy Theme DOM or bridge contract is forbidden`);
   }
   if (/--(?:color|border|element|git-color|scrollbar|shadow|blur|size|opacity|motion|easing|font|line-height|btn|flowchat|scene)-/.test(source)) {

@@ -8,8 +8,8 @@
   
   &-toolbar {
     padding: $size-gap-2;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-element-bg-soft);
+    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--bf-color-action-quiet-hover);
     backdrop-filter: blur(8px);
   }
 
@@ -18,9 +18,9 @@
     align-items: flex-start;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
     line-height: var(--bf-line-height-support);
 
@@ -29,7 +29,7 @@
       width: 16px;
       height: 16px;
       margin-top: 2px;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
   }
   
@@ -53,8 +53,8 @@
     outline: 0;
     padding: $size-gap-3;
     box-sizing: border-box;
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-primary);
     font: inherit;
     font-family:var(--bf-font-family-mono);
     line-height: var(--bf-line-height-relaxed);
@@ -73,45 +73,45 @@
   &-mode-split {
     .m-editor-content {
       > .m-editor-edit-panel {
-        border-right: 1px solid var(--bf-appearance-token-border-base);
+        border-right: 1px solid var(--bf-color-border-default);
       }
     }
   }
   
   &-dark {
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-primary);
     
     .m-editor-textarea {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
     
     .m-editor-toolbar {
-      background: var(--bf-appearance-token-element-bg-soft);
-      border-bottom-color: var(--bf-appearance-token-border-base);
+      background: var(--bf-color-action-quiet-hover);
+      border-bottom-color: var(--bf-color-border-default);
     }
     
     .m-editor-edit-panel {
-      border-right-color: var(--bf-appearance-token-border-base) !important;
+      border-right-color: var(--bf-color-border-default) !important;
     }
   }
   
   &-light {
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-primary);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-primary);
+    border: 1px solid var(--bf-color-border-default);
     
     .m-editor-textarea {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
     
     .m-editor-toolbar {
-      background: var(--bf-appearance-token-element-bg-soft);
-      border-bottom-color: var(--bf-appearance-token-border-base);
+      background: var(--bf-color-action-quiet-hover);
+      border-bottom-color: var(--bf-color-border-default);
     }
     
     .m-editor-edit-panel {
-      border-right-color: var(--bf-appearance-token-border-base) !important;
+      border-right-color: var(--bf-color-border-default) !important;
     }
 
   }

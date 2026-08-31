@@ -1,6 +1,6 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT, STATUS_DANGER } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
@@ -340,7 +340,7 @@ export struct RemoteControlSettingsSheet {
         .width('100%')
         .height(28)
         .fontSize(MobileDesignTypography.labelSmall.size)
-        .fontColor(this.permissionModeError.length > 0 ? RED : MUTED)
+        .fontColor(this.permissionModeError.length > 0 ? STATUS_DANGER : MUTED)
         .padding({ left: 18, right: 18, top: 4 })
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -398,7 +398,7 @@ export struct RemoteControlSettingsSheet {
         .width('100%')
         .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(FontWeight.Bold)
-        .fontColor(RED)
+        .fontColor(STATUS_DANGER)
       Text(RemoteI18n.t('remote.permissions.fullAccessWarningBody'))
         .width('100%')
         .fontSize(MobileDesignTypography.bodySmall.size)
@@ -425,7 +425,7 @@ export struct RemoteControlSettingsSheet {
     .width('100%')
     .padding({ left: 16, right: 16, top: 14, bottom: 16 })
     .backgroundColor(CARD)
-    .border({ width: 1, color: RED })
+    .border({ width: 1, color: STATUS_DANGER })
     .borderRadius(18)
     .margin({ left: 12, right: 12, bottom: 14 })
   }

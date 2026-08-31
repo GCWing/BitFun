@@ -1,6 +1,16 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
-import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, SOFT } from './Theme';
+import {
+  ACCENT,
+  CARD,
+  CONTENT_ON_ACTION,
+  INK,
+  LINE,
+  MUTED,
+  PAGE_BG,
+  SOFT,
+  TRANSPARENT,
+} from './Theme';
 import { CompactMenuButton } from './CompactMenuButton';
 import { NavigationBackButton } from './NavigationBackButton';
 import { TemplateIcon } from './TemplateIcon';
@@ -134,7 +144,7 @@ export struct ConversationHeader {
       .width(MobileDesignGeometry.controlTouchSize)
       .height(MobileDesignGeometry.controlTouchSize)
       .padding(0)
-      .backgroundColor('#00000000')
+      .backgroundColor(TRANSPARENT)
       .borderRadius(12)
       .stateEffect(true)
       .accessibilityText(RemoteI18n.t('sidebar.more'))
@@ -143,7 +153,7 @@ export struct ConversationHeader {
           this.actionsMenu();
         },
         placement: Placement.BottomRight,
-        popupColor: '#00000000',
+        popupColor: TRANSPARENT,
         enableArrow: false,
         autoCancel: true,
         mask: false,
@@ -182,7 +192,7 @@ export struct ConversationHeader {
         .width(52)
         .height(42)
         .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontColor(PRIMARY_ACTION_TEXT)
+        .fontColor(CONTENT_ON_ACTION)
         .textAlign(TextAlign.Center)
         .backgroundColor(this.renameTitle.trim().length > 0 ? ACCENT : SOFT)
         .borderRadius(14)

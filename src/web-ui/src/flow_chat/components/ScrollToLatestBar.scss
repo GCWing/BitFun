@@ -44,23 +44,23 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
 
     mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      var(--bf-appearance-token-color-overlay-black-20) 20%,
-      var(--bf-appearance-token-color-overlay-black-50) 40%,
-      var(--bf-appearance-token-color-overlay-black-80) 60%,
-      black 85%
+      color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent) 20%,
+      var(--bf-color-overlay-scrim) 40%,
+      color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent) 60%,
+      currentColor 85%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      var(--bf-appearance-token-color-overlay-black-20) 20%,
-      var(--bf-appearance-token-color-overlay-black-50) 40%,
-      var(--bf-appearance-token-color-overlay-black-80) 60%,
-      black 85%
+      color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent) 20%,
+      var(--bf-color-overlay-scrim) 40%,
+      color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent) 60%,
+      currentColor 85%
     );
     transition: opacity 140ms ease;
   }
@@ -97,9 +97,9 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 1.5px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-muted);
+    border: 1.5px solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     pointer-events: none;
     padding: 0;
@@ -121,16 +121,16 @@
     outline: none;
     
     .scroll-to-latest-bar__btn {
-      border-color: var(--bf-appearance-token-border-strong);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-border-strong);
+      color: var(--bf-color-content-primary);
     }
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .scroll-to-latest-bar[data-visible='true']:hover .scroll-to-latest-bar__btn {
-    border-color: var(--bf-appearance-token-border-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    border-color: var(--bf-color-field-border-hover);
+    color: var(--bf-color-content-primary);
     transform: translateY(1px);
   }
 }

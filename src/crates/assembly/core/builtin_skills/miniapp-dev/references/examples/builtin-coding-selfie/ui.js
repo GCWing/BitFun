@@ -417,7 +417,7 @@ function renderDonut(langs) {
   svg.innerHTML = '';
   const total = langs.reduce((acc, l) => acc + l.weight, 0);
   if (total <= 0) {
-    svg.innerHTML = '<circle cx="60" cy="60" r="46" fill="none" stroke="rgba(148,163,184,0.12)" stroke-width="12" />';
+    svg.innerHTML = '<circle cx="60" cy="60" r="46" fill="none" stroke="var(--cs-card-2)" stroke-width="12" />';
     $('lang-legend').innerHTML = `<li class="cs-legend-row"><span></span><span class="cs-legend-name" style="color:var(--cs-text-muted)">${t('noCommitsThisRange')}</span><span></span></li>`;
     return;
   }
@@ -444,7 +444,7 @@ function renderDonut(langs) {
     const s = slices[i];
     const frac = s.weight / total;
     const dash = c * frac;
-    const color = s.isOther ? 'rgba(148,163,184,0.35)' : LANG_COLORS[i % LANG_COLORS.length];
+    const color = s.isOther ? 'var(--cs-text-muted)' : LANG_COLORS[i % LANG_COLORS.length];
     const arc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     arc.setAttribute('cx', '60');
     arc.setAttribute('cy', '60');
@@ -469,7 +469,7 @@ function renderDonut(langs) {
   slices.forEach((s, i) => {
     const li = document.createElement('li');
     li.className = 'cs-legend-row';
-    const color = s.isOther ? 'rgba(148,163,184,0.35)' : LANG_COLORS[i % LANG_COLORS.length];
+    const color = s.isOther ? 'var(--cs-text-muted)' : LANG_COLORS[i % LANG_COLORS.length];
     const pct = (s.weight / total) * 100;
     const barPct = (s.weight / maxWeight) * 100;
     const safeName = escapeHtml(s.name);

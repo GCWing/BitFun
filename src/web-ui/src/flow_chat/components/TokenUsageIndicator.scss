@@ -36,7 +36,7 @@
     right: 0;
     height: 6px;
     transform: translateY(-50%);
-    background: var(--bf-appearance-token-color-overlay-white-08);
+    background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
     border-radius: 8px;
     overflow: hidden;
     transition:
@@ -80,18 +80,18 @@
   
   // Normal state (0-69%)
   &--normal {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
 
     .bitfun-token-usage__progress-track {
-      background: var(--bf-appearance-token-glass-blue-subtle);
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent);
     }
     
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        var(--bf-appearance-token-border-accent-soft),
-        color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent)
+        color-mix(in srgb, var(--bf-color-accent-hover) 30%, transparent),
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent)
       );
     }
     
@@ -99,35 +99,35 @@
   
   // Warning state (70-89%)
   &--warning {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
 
     .bitfun-token-usage__progress-track {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent);
     }
     
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent),
-        color-mix(in srgb, var(--bf-appearance-token-color-warning) 50%, transparent)
+        color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent),
+        color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent)
       );
     }
   }
 
   &--critical {
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
 
     .bitfun-token-usage__progress-track {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 30%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 30%, transparent);
     }
 
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bf-appearance-token-color-error) 45%, transparent),
-        color-mix(in srgb, var(--bf-appearance-token-color-error) 75%, transparent)
+        color-mix(in srgb, var(--bf-color-status-danger-content) 45%, transparent),
+        color-mix(in srgb, var(--bf-color-status-danger-content) 75%, transparent)
       );
     }
   }

@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "description": "Authoritative registry for every BitFun frontend color surface, its canonical token owner, narrowly scoped specialized palette owners, and non-product artifacts excluded from ordinary UI governance.",
+  "contracts": {
+    "webSystem": "design-system/packages/design-tokens/src/system.tokens.json",
+    "webTheme": "design-system/packages/theme-bitfun/src/light.tokens.json",
+    "miniappAppearance": "src/shared/miniapp-appearance/contract.json",
+    "nativeMobile": "src/apps/mobile/design-system/tokens/mobile-tokens.json"
+  },
+  "discovery": {
+    "miniappParents": [
+      "MiniApp/Demo",
+      "src/crates/contracts/product-domains/src/miniapp/builtin/assets",
+      "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples"
+    ]
+  },
+  "surfaces": [
+    {
+      "id": "design-system-token-owner",
+      "label": "Design system token authoring",
+      "kind": "contract-owner",
+      "owner": "@bitfun/design-tokens and @bitfun/theme-bitfun",
+      "roots": [
+        "design-system/packages/design-tokens/src",
+        "design-system/packages/theme-bitfun/src"
+      ]
+    },
+    {
+      "id": "web-ui",
+      "label": "Web UI",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun plus Web UI Appearance theme-tokens",
+      "root": "src/web-ui",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.json"
+      }
+    },
+    {
+      "id": "design-system-ui",
+      "label": "Public design-system UI package",
+      "kind": "canonical-web",
+      "owner": "@bitfun/ui consuming peer-owned canonical tokens",
+      "root": "design-system/packages/ui",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.design-system-ui.json",
+        "packageContracts": ["@bitfun/design-tokens", "@bitfun/theme-bitfun"]
+      }
+    },
+    {
+      "id": "design-lab",
+      "label": "Design Lab",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun",
+      "root": "design-system/apps/design-lab",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.design-lab.json"
+      }
+    },
+    {
+      "id": "miniapp-market",
+      "label": "Mini App Market",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun",
+      "root": "src/miniapp-market-web",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.miniapp-market.json"
+      }
+    },
+    {
+      "id": "skin-market",
+      "label": "Skin Market",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun",
+      "root": "src/skin-market-web",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.skin-market.json"
+      }
+    },
+    {
+      "id": "website",
+      "label": "Public website",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun",
+      "root": "website",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.website.json"
+      }
+    },
+    {
+      "id": "mobile-web",
+      "label": "Mobile Web and Remote Control",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun",
+      "root": "src/mobile-web",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.mobile-web.json"
+      }
+    },
+    {
+      "id": "installer",
+      "label": "BitFun Installer",
+      "kind": "canonical-web",
+      "owner": "@bitfun/theme-bitfun with the installer preset owner",
+      "root": "BitFun-Installer",
+      "audit": {
+        "engine": "theme",
+        "baseline": "scripts/theme-color-governance-baseline.installer.json"
+      }
+    },
+    {
+      "id": "desktop-bootstrap",
+      "label": "Desktop pre-JavaScript bootstrap pages",
+      "kind": "canonical-web",
+      "owner": "generated @bitfun/theme-bitfun bootstrap projection",
+      "root": "src/apps/desktop/bootstrap-ui",
+      "audit": {
+        "engine": "theme",
+        "policy": "canonical-ui-zero",
+        "packageContracts": ["@bitfun/design-tokens", "@bitfun/theme-bitfun"]
+      }
+    },
+    {
+      "id": "mobile-design-preview",
+      "label": "Native mobile comparison preview",
+      "kind": "canonical-web",
+      "owner": "canonical web tokens for chrome and generated native mobile tokens for device content",
+      "root": "src/apps/mobile/design-system/preview",
+      "audit": {
+        "engine": "theme",
+        "policy": "canonical-ui-zero",
+        "packageContracts": ["@bitfun/design-tokens", "@bitfun/theme-bitfun"],
+        "excludePaths": ["generated"]
+      }
+    },
+    {
+      "id": "cli",
+      "label": "CLI and TUI",
+      "kind": "terminal",
+      "owner": "src/apps/cli/themes/presets and the terminal theme adapter",
+      "root": "src/apps/cli",
+      "audit": {
+        "engine": "cli",
+        "baseline": "scripts/theme-color-governance-baseline.cli.json"
+      }
+    },
+    {
+      "id": "native-android",
+      "label": "Native Android",
+      "kind": "native-mobile",
+      "owner": "src/apps/mobile/design-system/tokens/mobile-tokens.json",
+      "root": "src/apps/mobile/android/app/src/main/kotlin",
+      "audit": {
+        "engine": "native",
+        "platform": "android",
+        "extensions": [".kt"],
+        "excludePaths": [
+          "com/bitfun/mobile/app/ui/theme/generated",
+          "com/bitfun/mobile/app/ui/preview/generated"
+        ]
+      }
+    },
+    {
+      "id": "native-ios",
+      "label": "Native iOS",
+      "kind": "native-mobile",
+      "owner": "src/apps/mobile/design-system/tokens/mobile-tokens.json",
+      "root": "src/apps/mobile/ios/BitFun",
+      "audit": {
+        "engine": "native",
+        "platform": "ios",
+        "extensions": [".swift"],
+        "excludeFiles": [
+          "Features/DesignSystem/GeneratedMobileDesignTokens.swift",
+          "Features/DesignSystem/GeneratedMobilePreviewScenarios.swift"
+        ]
+      }
+    },
+    {
+      "id": "native-harmonyos",
+      "label": "Native HarmonyOS",
+      "kind": "native-mobile",
+      "owner": "src/apps/mobile/design-system/tokens/mobile-tokens.json",
+      "root": "src/apps/mobile/harmonyos/entry/src/main/ets",
+      "audit": {
+        "engine": "native",
+        "platform": "harmonyos",
+        "extensions": [".ets"],
+        "excludePaths": ["generated"]
+      }
+    },
+    {
+      "id": "miniapp-coding-selfie",
+      "label": "Coding Selfie MiniApp",
+      "kind": "miniapp",
+      "owner": "MiniApp public appearance contract",
+      "root": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/coding-selfie",
+      "audit": {
+        "engine": "miniapp",
+        "rawColorOwners": [
+          {
+            "kind": "data-viz",
+            "file": "ui.js",
+            "startMarker": "const LANG_COLORS = [",
+            "endMarker": "];",
+            "reason": "Categorical language-series colors must remain distinguishable and are renderer data, not application chrome."
+          }
+        ]
+      }
+    },
+    {
+      "id": "miniapp-divination",
+      "label": "Daily Divination MiniApp",
+      "kind": "miniapp",
+      "owner": "self-contained bespoke theme",
+      "root": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/divination",
+      "audit": {
+        "engine": "miniapp",
+        "rawColorOwners": [
+          {
+            "kind": "bespoke-theme",
+            "pathPrefixes": ["style.css", "ui.js"],
+            "reason": "The tarot scene is an intentionally self-contained illustrated light/dark theme whose palette is the product content."
+          }
+        ]
+      }
+    },
+    {
+      "id": "miniapp-gomoku",
+      "label": "Gomoku MiniApp",
+      "kind": "miniapp",
+      "owner": "MiniApp public appearance contract",
+      "root": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/gomoku",
+      "audit": {
+        "engine": "miniapp",
+        "rawColorOwners": [
+          {
+            "kind": "game-renderer",
+            "file": "style.css",
+            "linePattern": "^\\s*--g-stone-(?:black|white)(?:-stroke)?\\s*:",
+            "reason": "Stone fills and contrast rims are game-renderer content and must not become reusable UI tokens."
+          }
+        ]
+      }
+    },
+    {
+      "id": "miniapp-ppt-live",
+      "label": "PPT Live MiniApp",
+      "kind": "miniapp",
+      "owner": "MiniApp public appearance contract for editor chrome and slide-renderer ownership for authored content",
+      "root": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live",
+      "audit": {
+        "engine": "miniapp",
+        "excludePaths": ["dist"],
+        "rawColorOwners": [
+          {
+            "kind": "slide-renderer",
+            "pathPrefixes": ["src", "test"],
+            "reason": "Slide markup, export fixtures, and presentation authoring palettes are user-content renderer data rather than MiniApp editor chrome."
+          }
+        ]
+      }
+    },
+    {
+      "id": "miniapp-regex-playground",
+      "label": "Regex Playground MiniApp",
+      "kind": "miniapp",
+      "owner": "MiniApp public appearance contract",
+      "root": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/regex-playground",
+      "audit": {
+        "engine": "miniapp"
+      }
+    },
+    {
+      "id": "miniapp-git-graph",
+      "label": "Git Graph MiniApp",
+      "kind": "miniapp",
+      "owner": "MiniApp public appearance contract",
+      "root": "MiniApp/Demo/git-graph",
+      "audit": {
+        "engine": "miniapp",
+        "rawColorOwners": [
+          {
+            "kind": "data-viz",
+            "files": ["source/styles/tokens.css", "source/style.css"],
+            "linePattern": "^\\s*--branch-[5-7]\\s*:",
+            "reason": "The final three branch-lane colors extend the host semantic set for categorical graph separation."
+          }
+        ],
+        "generatedBundles": [
+          {
+            "output": "source/ui.js",
+            "inputs": [
+              "source/ui/state.js",
+              "source/ui/appearance.js",
+              "source/ui/graph/layout.js",
+              "source/ui/graph/renderRowSvg.js",
+              "source/ui/services/gitClient.js",
+              "source/ui/components/contextMenu.js",
+              "source/ui/components/modal.js",
+              "source/ui/components/findWidget.js",
+              "source/ui/panels/remotePanel.js",
+              "source/ui/panels/detailPanel.js",
+              "source/ui/main.js",
+              "source/ui/bootstrap.js"
+            ]
+          },
+          {
+            "output": "source/style.css",
+            "inputs": [
+              "source/styles/tokens.css",
+              "source/styles/layout.css",
+              "source/styles/graph.css",
+              "source/styles/detail-panel.css",
+              "source/styles/overlay.css"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "miniapp-icon-design-system",
+      "label": "Icon Design System MiniApp",
+      "kind": "miniapp",
+      "owner": "MiniApp public appearance contract",
+      "root": "MiniApp/Demo/icon-design-system",
+      "audit": {
+        "engine": "miniapp"
+      }
+    }
+  ],
+  "mirrors": [
+    {
+      "surfaceId": "miniapp-git-graph",
+      "path": "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/demo-git-graph"
+    },
+    {
+      "surfaceId": "miniapp-icon-design-system",
+      "path": "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/demo-icon-design-system"
+    },
+    {
+      "surfaceId": "miniapp-coding-selfie",
+      "path": "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/builtin-coding-selfie"
+    },
+    {
+      "surfaceId": "miniapp-divination",
+      "path": "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/builtin-daily-divination"
+    },
+    {
+      "surfaceId": "miniapp-gomoku",
+      "path": "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/builtin-gomoku"
+    },
+    {
+      "surfaceId": "miniapp-regex-playground",
+      "path": "src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/builtin-regex-playground"
+    }
+  ],
+  "generatedChecks": [
+    {
+      "id": "desktop-appearance-projection",
+      "surfaceIds": ["web-ui", "desktop-bootstrap"],
+      "command": ["node", "scripts/generate-startup-appearance-bootstrap.mjs", "--check"]
+    },
+    {
+      "id": "miniapp-appearance-projection",
+      "surfaceKinds": ["miniapp"],
+      "command": ["node", "scripts/generate-miniapp-appearance-contract.mjs", "--check"]
+    },
+    {
+      "id": "native-mobile-token-projection",
+      "surfaceKinds": ["native-mobile"],
+      "surfaceIds": ["mobile-design-preview"],
+      "command": ["node", "scripts/mobile-ui-design-system.mjs", "--check"]
+    },
+    {
+      "id": "native-mobile-preview-assets",
+      "surfaceKinds": ["native-mobile"],
+      "surfaceIds": ["mobile-design-preview"],
+      "command": ["node", "scripts/mobile-ui-preview.mjs", "--check"]
+    }
+  ],
+  "exclusions": [
+    {
+      "id": "monaco-generated",
+      "path": "src/web-ui/public/monaco-editor",
+      "kind": "generated-third-party",
+      "owner": "Monaco package copy step",
+      "reason": "Vendored editor output is verified by the Monaco asset check and is not BitFun application UI source."
+    },
+    {
+      "id": "relay-static",
+      "path": "src/apps/relay-server/static",
+      "kind": "static-operational-surface",
+      "owner": "Relay server",
+      "reason": "Self-contained relay operational pages do not load the product design-system runtime and are governed by their owning server surface."
+    },
+    {
+      "id": "e2e-fixtures",
+      "path": "tests/e2e/fixtures",
+      "kind": "test-fixture",
+      "owner": "E2E tests",
+      "reason": "Fixture colors describe test input and are never shipped as product UI."
+    },
+    {
+      "id": "diagnostic-report-html",
+      "path": "scripts/request-trace-tools/usage-dashboard.html",
+      "kind": "diagnostic-artifact",
+      "owner": "Request trace tooling",
+      "reason": "The standalone diagnostic report is not a product frontend and has an independent operational lifecycle."
+    },
+    {
+      "id": "ppt-content-source",
+      "path": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/src",
+      "kind": "slide-renderer",
+      "owner": "PPT Live slide renderer",
+      "reason": "Presentation content and export palettes are renderer payloads, not editor chrome."
+    },
+    {
+      "id": "ppt-content-tests",
+      "path": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/test",
+      "kind": "slide-renderer",
+      "owner": "PPT Live slide renderer tests",
+      "reason": "Expected slide markup colors test renderer fidelity rather than application chrome."
+    },
+    {
+      "id": "ppt-generated-bundle",
+      "path": "src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist",
+      "kind": "generated-output",
+      "owner": "PPT Live build-bitfun.mjs",
+      "reason": "Bundled JavaScript is generated from the registered PPT source owner."
+    },
+    {
+      "id": "android-template-icons",
+      "path": "src/apps/mobile/android/app/src/main/res/drawable",
+      "kind": "native-template-asset",
+      "owner": "Android resource layer",
+      "reason": "Monochrome vector templates are tinted by native semantic tokens at render time."
+    },
+    {
+      "id": "ios-template-icons",
+      "path": "src/apps/mobile/ios/BitFun/Resources.xcassets",
+      "kind": "native-template-asset",
+      "owner": "iOS asset catalog",
+      "reason": "Template images and app metadata are tinted or consumed by the platform asset layer."
+    },
+    {
+      "id": "harmony-template-media",
+      "path": "src/apps/mobile/harmonyos/entry/src/main/resources/base/media",
+      "kind": "native-template-asset",
+      "owner": "HarmonyOS resource layer",
+      "reason": "Template media is tinted by semantic ResourceColor values in the native UI."
+    },
+    {
+      "id": "mobile-preview-generated",
+      "path": "src/apps/mobile/design-system/preview/generated",
+      "kind": "generated-output",
+      "owner": "scripts/mobile-ui-design-system.mjs",
+      "reason": "Preview data is generated from the native mobile token contract and checked for drift."
+    },
+    {
+      "id": "desktop-bootstrap-generated",
+      "path": "src/apps/desktop/src/generated",
+      "kind": "generated-output",
+      "owner": "scripts/generate-startup-appearance-bootstrap.mjs",
+      "reason": "Desktop first-paint theme CSS and manifests are generated from canonical Appearance and theme sources."
+    },
+    {
+      "id": "miniapp-appearance-generated",
+      "path": "src/crates/contracts/product-domains/src/miniapp/generated",
+      "kind": "generated-output",
+      "owner": "scripts/generate-miniapp-appearance-contract.mjs",
+      "reason": "MiniApp first-paint variables are generated from the public projection contract."
+    }
+  ]
+}

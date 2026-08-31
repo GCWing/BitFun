@@ -62,7 +62,7 @@ struct ComposerBar: View {
                     : MobileDesignGeometry.composerCollapsedRadius
             )
         )
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 2)
+        .shadow(color: BitFunTheme.shadowSubtle, radius: 10, y: 2)
         .padding(.horizontal, MobileDesignGeometry.contentGutter)
         .padding(.top, 8)
         .padding(.bottom, 14)
@@ -184,7 +184,7 @@ struct ComposerBar: View {
                 "",
                 text: $model.draft,
                 prompt: Text(speech.isListening ? model.localized("正在聆听") : placeholder)
-                    .foregroundColor(speech.isListening ? BitFunTheme.green : BitFunTheme.muted),
+                    .foregroundColor(speech.isListening ? BitFunTheme.statusSuccess : BitFunTheme.muted),
                 axis: .vertical
             )
             .font(MobileDesignTypography.bodyLarge.font)
@@ -199,10 +199,10 @@ struct ComposerBar: View {
         }
         .padding(.leading, speech.isListening ? 12 : 4)
         .padding(.trailing, 4)
-        .background(speech.isListening ? BitFunTheme.soft : Color.clear)
+        .background(speech.isListening ? BitFunTheme.soft : BitFunTheme.transparent)
         .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .stroke(speech.isListening ? BitFunTheme.green : Color.clear, lineWidth: 1)
+                .stroke(speech.isListening ? BitFunTheme.statusSuccess : BitFunTheme.transparent, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
@@ -292,9 +292,9 @@ struct ComposerBar: View {
                         Button { model.removeComposerImage(id: attachment.id) } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(Color.white)
+                                .foregroundStyle(BitFunTheme.contentOnAction)
                                 .frame(width: 20, height: 20)
-                                .background(Color.black.opacity(0.72))
+                                .background(BitFunTheme.mediaScrim)
                                 .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
@@ -343,7 +343,7 @@ struct ComposerBar: View {
                             HStack(spacing: 10) {
                                 Image(systemName: option.selected ? "checkmark.circle" : "circle")
                                     .font(.system(size: 16))
-                                    .foregroundStyle(option.selected ? BitFunTheme.ink : Color.clear)
+                                    .foregroundStyle(option.selected ? BitFunTheme.ink : BitFunTheme.transparent)
                                     .frame(width: 20, height: 20)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(option.primaryLabel)
@@ -359,7 +359,7 @@ struct ComposerBar: View {
                             }
                             .padding(.horizontal, 10)
                             .frame(height: MobileDesignGeometry.composerModelSelectorRowHeight)
-                            .background(option.selected ? BitFunTheme.soft : Color.clear)
+                            .background(option.selected ? BitFunTheme.soft : BitFunTheme.transparent)
                             .clipShape(
                                 RoundedRectangle(
                                     cornerRadius: MobileDesignGeometry.composerModelSelectorRowRadius
@@ -447,7 +447,7 @@ private struct ListeningWave: View {
         HStack(spacing: 2) {
             ForEach([8.0, 14.0, 10.0, 17.0], id: \.self) { height in
                 Capsule()
-                    .fill(BitFunTheme.green)
+                    .fill(BitFunTheme.statusSuccess)
                     .frame(width: 2, height: height)
             }
         }

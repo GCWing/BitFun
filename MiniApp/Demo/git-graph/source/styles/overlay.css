@@ -35,7 +35,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  box-shadow: var(--bitfun-shadow-overlay);
 }
 .find-widget__input {
   width: 220px;
@@ -64,7 +64,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  box-shadow: var(--bitfun-shadow-overlay);
   font-size: 12px;
 }
 .context-menu[aria-hidden="true"] { display: none; }
@@ -106,7 +106,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px rgba(0,0,0,.35);
+  box-shadow: var(--bitfun-shadow-overlay);
 }
 .modal-dialog__header {
   display: flex;

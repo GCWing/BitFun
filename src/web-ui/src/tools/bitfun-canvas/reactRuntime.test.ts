@@ -129,7 +129,7 @@ describe('React Canvas runtime bridge', () => {
 
     expect(html).toContain('nextAppearance.vars');
     expect(html).toContain("rootStyle.setProperty(name, value.trim())");
-    expect(html).toContain('--bf-appearance-token-color-bg-primary');
+    expect(html).toContain('--bf-color-surface-canvas');
   });
 
   it('exposes semantic appearance tokens through useHostAppearance().tokens', async () => {

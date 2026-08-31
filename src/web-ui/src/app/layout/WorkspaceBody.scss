@@ -26,7 +26,7 @@ $_resize-target-width: 6px;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   padding: 0;
   gap: 0;
 }
@@ -99,11 +99,11 @@ $_resize-target-width: 6px;
   padding: $size-gap-4 $size-gap-4 0;
   overflow: hidden;
   border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
-  background: var(--bf-appearance-token-color-bg-scene);
-  box-shadow: -4px 0 12px -6px var(--bf-appearance-token-color-overlay-slate-08);
+  background: var(--bf-color-surface-scene);
+  box-shadow: -4px 0 12px -6px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
 
   :root[data-bf-appearance-mode='dark'] & {
-    box-shadow: -5px 0 16px -7px var(--bf-appearance-token-color-overlay-black-30);
+    box-shadow: -5px 0 16px -7px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
   }
 
   // Resize feedback follows only the rounded boundary shared with navigation.
@@ -128,14 +128,14 @@ $_resize-target-width: 6px;
 @media (hover: hover) and (pointer: fine) {
   .bitfun-workspace-body__nav-divider:hover ~ .bitfun-workspace-body__scene-area {
     .bitfun-workspace-body__scene-surface::after {
-      border-color: var(--bf-appearance-token-border-subtle);
+      border-color: var(--bf-color-border-subtle);
       opacity: 1;
     }
   }
 }
 
 .bitfun-is-resizing-nav .bitfun-workspace-body__scene-surface::after {
-  border-color: var(--bf-appearance-token-border-base);
+  border-color: var(--bf-color-border-default);
   opacity: 1;
 }
 

@@ -19,9 +19,9 @@ export function getAlphaColor(color: string, alphaHex = '44', percent = 27): str
 }
 
 export const CAPABILITY_ACCENT: Record<CapabilityCategory, string> = {
-  coding: 'var(--bf-appearance-token-color-accent-500)',
+  coding: 'var(--bf-color-accent-default)',
   docs: APPEARANCE_DOMAIN_TOKENS.agentCapability.docs,
-  analysis: 'var(--bf-appearance-token-color-purple-500)',
+  analysis: 'var(--bf-color-accent-secondary)',
   testing: APPEARANCE_DOMAIN_TOKENS.agentCapability.testing,
   creative: APPEARANCE_DOMAIN_TOKENS.agentCapability.creative,
   ops: APPEARANCE_DOMAIN_TOKENS.agentCapability.ops,
@@ -33,16 +33,16 @@ export function getCapabilityAccentBorder(category: CapabilityCategory): string 
 
 export const CORE_AGENT_ACCENTS = {
   agentic: {
-    accentColor: 'var(--bf-appearance-token-color-indigo-500)',
-    accentBg: getAlphaColor('var(--bf-appearance-token-color-indigo-500)', '1a', 10),
+    accentColor: 'var(--bf-color-accent-default)',
+    accentBg: getAlphaColor('var(--bf-color-accent-default)', '1a', 10),
   },
   Cowork: {
     accentColor: APPEARANCE_DOMAIN_TOKENS.tealAction,
     accentBg: getAlphaColor(APPEARANCE_DOMAIN_TOKENS.tealAction, '1a', 10),
   },
   ComputerUse: {
-    accentColor: 'var(--bf-appearance-token-color-warning)',
-    accentBg: 'var(--bf-appearance-token-color-warning-bg)',
+    accentColor: 'var(--bf-color-status-warning-content)',
+    accentBg: 'var(--bf-color-status-warning-surface)',
   },
 } as const satisfies Record<string, AgentAccentStyle>;
 

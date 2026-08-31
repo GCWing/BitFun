@@ -365,16 +365,16 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     alignItems: 'center',
     gap: '10px',
     padding: '10px 14px',
-    border: '1px solid var(--border-subtle)',
+    border: '1px solid var(--bf-color-border-subtle)',
     borderRadius: '10px',
-    background: 'var(--element-bg-subtle)',
+    background: 'var(--bf-color-surface-subtle)',
     cursor: state.status === 'ready' || state.status === 'done' ? 'pointer' : 'default',
     maxWidth: '300px',
     verticalAlign: 'middle',
     transition: 'background 0.15s',
   };
 
-  const iconColor = 'var(--color-text-muted)';
+  const iconColor = 'var(--bf-color-content-muted)';
 
   if (state.status === 'loading') {
     return (
@@ -416,14 +416,14 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          color: 'var(--color-text-primary)',
+          color: 'var(--bf-color-content-primary)',
         }}>
           {name}
         </span>
         <span style={{
           display: 'block',
           fontSize: '0.75rem',
-          color: 'var(--color-text-muted)',
+          color: 'var(--bf-color-content-muted)',
           marginTop: '2px',
         }}>
           {formatFileSize(size)}
@@ -432,7 +432,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       <span style={{
         flexShrink: 0,
         fontSize: '0.75rem',
-        color: isDone ? 'var(--color-success)' : 'var(--color-text-muted)',
+        color: isDone ? 'var(--bf-color-status-success-content)' : 'var(--bf-color-content-muted)',
       }}>
         {isDownloading ? `${Math.round((state as any).progress * 100)}%` : isDone ? '✓' : '↓'}
       </span>
@@ -484,7 +484,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
               },
             }}
             lineNumberStyle={{
-              color: 'var(--color-text-muted)',
+              color: 'var(--bf-color-content-muted)',
               paddingRight: '1em',
               textAlign: 'right' as const,
               userSelect: 'none' as const,
@@ -521,7 +521,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
             type="button"
             style={{
               cursor: 'pointer',
-              color: 'var(--color-accent-500)',
+              color: 'var(--bf-color-accent-default)',
               textDecoration: 'underline',
               background: 'none',
               border: 'none',
@@ -559,7 +559,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--color-accent-500)', textDecoration: 'underline' }}
+              style={{ color: 'var(--bf-color-accent-default)', textDecoration: 'underline' }}
             >
               {children}
             </a>
@@ -729,13 +729,13 @@ const TodoCard: React.FC<{ tool: RemoteToolStatus }> = ({ tool }) => {
   const statusIcon = (s: string) => {
     switch (s) {
       case 'completed':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-status-success-content)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
       case 'in_progress':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="var(--color-accent-500)"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-accent-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="var(--bf-color-accent-default)"/></svg>;
       case 'cancelled':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-status-danger-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
       default:
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-content-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
     }
   };
 
@@ -923,9 +923,9 @@ const TaskToolCard: React.FC<{
                   return (
                     <div key={`sub-tool-${t.id}-${idx}`} className={`chat-task-card__step chat-task-card__step--tool ${isDone ? 'is-done' : isErr ? 'is-error' : 'is-running'}`}>
                       {isDone ? (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--bf-color-status-success-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : isErr ? (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="var(--color-error)" strokeWidth="2" strokeLinecap="round"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="var(--bf-color-status-danger-content)" strokeWidth="2" strokeLinecap="round"/></svg>
                       ) : (
                         <span className="chat-task-card__step-spinner" />
                       )}

@@ -15,7 +15,7 @@
 }
 
 .bitfun-generative-widget-panel__empty-copy {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-sm);
 }
 
@@ -25,9 +25,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
+  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   border-radius: 10px;
-  background: var(--bf-appearance-token-color-bg-secondary);
+  background: var(--bf-color-surface-panel);
 }
 
 .bitfun-generative-widget-panel__toolbar-meta,
@@ -39,20 +39,20 @@
 
 .bitfun-generative-widget-panel__save-state {
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .bitfun-generative-widget-panel__save-state--saved {
-  color: var(--bf-appearance-token-color-success);
+  color: var(--bf-color-status-success-content);
 }
 
 .bitfun-generative-widget-panel__save-state--saving,
 .bitfun-generative-widget-panel__save-state--unsaved {
-  color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
 }
 
 .bitfun-generative-widget-panel__save-state--error {
-  color: var(--bf-appearance-token-color-error);
+  color: var(--bf-color-status-danger-content);
 }
 
 .bitfun-generative-widget-panel__workspace {
@@ -67,10 +67,10 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
+  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   border-radius: 12px;
   overflow: hidden;
-  background: var(--bf-appearance-token-color-bg-secondary);
+  background: var(--bf-color-surface-panel);
 }
 
 .bitfun-generative-widget-panel__pane-header {
@@ -79,7 +79,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
 }
 
 .bitfun-generative-widget-panel__pane-title {
@@ -88,7 +88,7 @@
   gap: 6px;
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .bitfun-generative-widget-panel__editor-field {
@@ -104,7 +104,7 @@
   outline: none;
   padding: 14px 16px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-font-family-mono);
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-regular);
@@ -114,8 +114,8 @@
 .bitfun-generative-widget-panel__error {
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 50%, transparent);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
-  color: var(--bf-appearance-token-color-error);
+  border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 50%, transparent);
+  background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
+  color: var(--bf-color-status-danger-content);
   font-size: var(--bf-font-size-xs);
 }

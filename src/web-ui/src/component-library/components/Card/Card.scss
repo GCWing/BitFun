@@ -1,11 +1,11 @@
 .v-card {
-  --v-card-bg-default: var(--bf-appearance-token-color-overlay-white-04);
-  --v-card-bg-hover: var(--bf-appearance-token-color-overlay-white-08);
-  --v-card-bg-active: var(--bf-appearance-token-color-overlay-white-12);
-  --v-card-bg-accent: var(--bf-appearance-token-color-overlay-white-08);
-  --v-card-bg-accent-hover: var(--bf-appearance-token-color-overlay-white-12);
-  --v-card-bg-purple: var(--bf-appearance-token-color-purple-100);
-  --v-card-bg-purple-hover: var(--bf-appearance-token-color-purple-200);
+  --v-card-bg-default: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  --v-card-bg-hover: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  --v-card-bg-active: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  --v-card-bg-accent: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  --v-card-bg-accent-hover: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  --v-card-bg-purple: color-mix(in srgb, var(--bf-color-accent-secondary) 8%, transparent);
+  --v-card-bg-purple-hover: color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent);
 
   display: flex;
   flex-direction: column;
@@ -13,8 +13,8 @@
 
   background: var(--v-card-bg-default);
   border: none;
-  border-radius: var(--bf-appearance-token-size-radius-base);
-  color: var(--bf-appearance-token-color-text-secondary);
+  border-radius: var(--bf-radius-base);
+  color: var(--bf-color-content-secondary);
 
   &--default {
     background: var(--v-card-bg-default);
@@ -33,7 +33,7 @@
     background: var(--v-card-bg-accent);
 
     .v-card-header__title {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 
@@ -41,7 +41,7 @@
     background: var(--v-card-bg-purple);
 
     .v-card-header__title {
-      color: var(--bf-appearance-token-color-purple-500);
+      color: var(--bf-color-accent-secondary);
     }
   }
 
@@ -49,10 +49,10 @@
   &--interactive {
     cursor: pointer;
     transition:
-      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      scale var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:active {
       background: var(--v-card-bg-active);
@@ -66,28 +66,28 @@
   }
 
   &--padding-small {
-    padding: var(--bf-appearance-token-size-gap-2);
+    padding: var(--bf-space-2);
   }
 
   &--padding-medium {
-    padding: var(--bf-appearance-token-size-gap-4);
+    padding: var(--bf-space-4);
   }
 
   &--padding-large {
-    padding: var(--bf-appearance-token-size-gap-6);
+    padding: var(--bf-space-6);
   }
 
 
   &--radius-small {
-    border-radius: var(--bf-appearance-token-size-radius-sm);
+    border-radius: var(--bf-radius-sm);
   }
 
   &--radius-medium {
-    border-radius: var(--bf-appearance-token-size-radius-base);
+    border-radius: var(--bf-radius-base);
   }
 
   &--radius-large {
-    border-radius: var(--bf-appearance-token-size-radius-lg);
+    border-radius: var(--bf-radius-lg);
   }
 
 
@@ -99,9 +99,9 @@
 @media (prefers-reduced-motion: reduce) {
   .v-card--interactive {
     transition:
-      background-color var(--bf-appearance-token-motion-instant) ease,
-      border-color var(--bf-appearance-token-motion-instant) ease,
-      box-shadow var(--bf-appearance-token-motion-instant) ease;
+      background-color var(--bf-motion-duration-instant) ease,
+      border-color var(--bf-motion-duration-instant) ease,
+      box-shadow var(--bf-motion-duration-instant) ease;
 
     &:active {
       scale: none;
@@ -111,19 +111,19 @@
 
 :root[data-bf-appearance-mode="light"] .v-card,
 [data-bf-appearance-mode="light"] .v-card {
-  --v-card-bg-default: var(--bf-appearance-token-color-overlay-black-08);
-  --v-card-bg-hover: var(--bf-appearance-token-color-overlay-black-12);
-  --v-card-bg-active: var(--bf-appearance-token-color-overlay-black-15);
-  --v-card-bg-accent: var(--bf-appearance-token-color-overlay-slate-08);
-  --v-card-bg-accent-hover: var(--bf-appearance-token-color-overlay-slate-12);
-  --v-card-bg-purple: color-mix(in srgb, var(--bf-appearance-token-color-purple-600) 12%, transparent);
+  --v-card-bg-default: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+  --v-card-bg-hover: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+  --v-card-bg-active: color-mix(in srgb, var(--bf-color-content-on-light) 15%, transparent);
+  --v-card-bg-accent: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+  --v-card-bg-accent-hover: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+  --v-card-bg-purple: color-mix(in srgb, var(--bf-color-accent-secondary-hover) 12%, transparent);
 }
 
 .v-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--bf-appearance-token-size-gap-3);
+  gap: var(--bf-space-3);
 
   &__content {
     flex: 1;
@@ -133,14 +133,14 @@
   &__title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-tight);
-    margin-bottom: var(--bf-appearance-token-size-gap-1);
+    margin-bottom: var(--bf-space-1);
   }
 
   &__subtitle {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     line-height: var(--bf-line-height-base);
   }
 
@@ -148,31 +148,31 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: var(--bf-appearance-token-size-gap-2);
+    gap: var(--bf-space-2);
   }
 }
 
 .v-card-body {
   flex: 1;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-sm);
   line-height: var(--bf-line-height-relaxed);
 
   .v-card-header + & {
-    margin-top: var(--bf-appearance-token-size-gap-3);
-    padding-top: var(--bf-appearance-token-size-gap-3);
-    border-top: 1px dashed var(--bf-appearance-token-border-subtle);
+    margin-top: var(--bf-space-3);
+    padding-top: var(--bf-space-3);
+    border-top: 1px dashed var(--bf-color-border-subtle);
   }
 }
 
 .v-card-footer {
   display: flex;
   align-items: center;
-  gap: var(--bf-appearance-token-size-gap-2);
+  gap: var(--bf-space-2);
 
   .v-card-body + &,
   .v-card-header + & {
-    margin-top: var(--bf-appearance-token-size-gap-4);
+    margin-top: var(--bf-space-4);
   }
 
   &--left {

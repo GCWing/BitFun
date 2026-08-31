@@ -18,13 +18,13 @@ function createAppearance(
     components: {},
     scenes: {},
     renderers: {
-      'css-tokens': {
+      'theme-tokens': {
         tokens: {
-          '--bf-appearance-token-color-bg-primary': '#111111',
-          '--bf-appearance-token-color-text-primary': '#eeeeee',
-          '--bf-appearance-token-scrollbar-thumb': scrollbar?.thumb
+          '--bf-color-surface-canvas': '#111111',
+          '--bf-color-content-primary': '#eeeeee',
+          '--bf-color-scrollbar-thumb': scrollbar?.thumb
             ?? (mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)'),
-          '--bf-appearance-token-scrollbar-thumb-hover': scrollbar?.thumbHover
+          '--bf-color-scrollbar-thumb-hover': scrollbar?.thumbHover
             ?? (mode === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)'),
         },
       },

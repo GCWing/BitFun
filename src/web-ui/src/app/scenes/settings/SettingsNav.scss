@@ -11,7 +11,7 @@
   @include nav-font.nav-panel-text-body;
 
   // Resolve navigation ink inside the host's light, dark, or inverse chrome.
-  --bf-color-content-primary: var(--bf-appearance-token-color-text-primary);
+  --bf-color-content-primary: var(--bf-color-content-primary);
 
   display: flex;
   flex-direction: column;
@@ -121,7 +121,7 @@
   &__search-highlight {
     padding: 0;
     margin: 0;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
     color: inherit;
     font-weight: inherit;
     border-radius: 2px;

@@ -18,11 +18,11 @@ $_section-gap: 12px;
   justify-content: space-between;
   height: $_statusbar-height;
   padding: $_statusbar-padding;
-  background: var(--bf-appearance-token-color-bg-scene);
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-surface-scene);
+  border-top: 1px solid var(--bf-color-border-subtle);
   font-size: var(--bf-font-size-meta);
   font-family: var(--bf-font-family-mono);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   user-select: none;
   flex-shrink: 0;
   
@@ -51,12 +51,12 @@ $_section-gap: 12px;
       cursor: pointer;
       
       &:hover {
-        background: var(--bf-appearance-token-element-bg-subtle);
-        color: var(--bf-appearance-token-color-text-secondary);
+        background: var(--bf-color-surface-subtle);
+        color: var(--bf-color-content-secondary);
       }
       
       &:active {
-        background: var(--bf-appearance-token-element-bg-medium);
+        background: var(--bf-color-action-neutral-surface-hover);
       }
     }
   }
@@ -65,21 +65,21 @@ $_section-gap: 12px;
   &__separator {
     width: 1px;
     height: 12px;
-    background: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-border-subtle);
     flex-shrink: 0;
   }
 
   // Selection Info
   &__selection {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.7;
     margin-left: 4px;
   }
 
   // Read-only Badge
   &__readonly {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
-    color: var(--bf-appearance-token-color-warning);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
+    color: var(--bf-color-status-warning-content);
     padding: 1px 6px;
     border-radius: 3px;
     font-size: var(--bf-font-size-micro);
@@ -113,12 +113,12 @@ $_section-gap: 12px;
     border-top-width: 2px;
     
     &__indicator--modified {
-      fill: var(--bf-appearance-token-color-warning);
-      color: var(--bf-appearance-token-color-warning);
+      fill: var(--bf-color-status-warning-content);
+      color: var(--bf-color-status-warning-content);
     }
     
     &__indicator--saved {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
   }
 }

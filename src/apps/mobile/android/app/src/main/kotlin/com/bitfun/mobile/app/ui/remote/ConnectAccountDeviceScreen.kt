@@ -260,7 +260,7 @@ private fun DeviceListCard(
                                 ),
                                 fontSize = 13.sp,
                                 color = if (device.online) {
-                                    bitFunColors.success
+                                    bitFunColors.statusSuccess
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },

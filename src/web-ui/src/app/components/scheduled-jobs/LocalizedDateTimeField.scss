@@ -38,7 +38,7 @@
     text-align: center;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__weekdays,
@@ -53,7 +53,7 @@
     text-align: center;
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__day {
@@ -65,33 +65,33 @@
     border: 1px solid transparent;
     border-radius: $size-radius-base;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-xs);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
     transition: background $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
 
     &--outside {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       opacity: 0.55;
     }
 
     &--today {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 55%, transparent);
     }
 
     &--selected {
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-static-white);
+      background: var(--bf-color-accent-default);
+      color: var(--bf-color-content-on-dark);
     }
   }
 
@@ -101,6 +101,6 @@
     justify-content: space-between;
     gap: $size-gap-2;
     padding-top: $size-gap-2;
-    border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 70%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 70%, transparent);
   }
 }

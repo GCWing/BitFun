@@ -17,7 +17,7 @@ struct MobileShellView: View {
                 if sessionActionsOpen, let anchor {
                     let frame = proxy[anchor]
                     ZStack(alignment: .topLeading) {
-                        Color.clear
+                        BitFunTheme.transparent
                             .contentShape(Rectangle())
                             .onTapGesture { sessionActionsOpen = false }
                         ConversationActionsPopover(
@@ -45,7 +45,7 @@ struct MobileShellView: View {
                     let frame = proxy[anchor]
                     let remote = model.surface == .remote
                     ZStack(alignment: .topLeading) {
-                        Color.clear
+                        BitFunTheme.transparent
                             .contentShape(Rectangle())
                             .onTapGesture { sidebarActionSession = nil }
                         SessionActionSurface(
@@ -83,10 +83,10 @@ struct MobileShellView: View {
             if let message = model.toastMessage {
                 Text(message)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(BitFunTheme.contentOnAction)
                     .padding(.horizontal, 16)
                     .frame(minHeight: 38)
-                    .background(Color.black.opacity(0.82))
+                    .background(BitFunTheme.toastBackground)
                     .clipShape(Capsule())
                     .padding(.bottom, 86)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -231,7 +231,7 @@ struct MobileShellView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: !sidebarVisible && model.drawerOpen ? 28 : 0))
             .shadow(
-                color: !sidebarVisible && model.drawerOpen ? .black.opacity(0.14) : .clear,
+                color: !sidebarVisible && model.drawerOpen ? BitFunTheme.shellScrim : BitFunTheme.transparent,
                 radius: !sidebarVisible && model.drawerOpen ? 34 : 0,
                 x: !sidebarVisible && model.drawerOpen ? -10 : 0
             )

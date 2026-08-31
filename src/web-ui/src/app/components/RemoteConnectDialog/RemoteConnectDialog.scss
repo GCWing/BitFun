@@ -484,7 +484,7 @@
   padding: 6px;
   border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-lg);
-  background: var(--bf-appearance-token-color-static-white);
+  background: var(--bf-color-content-on-dark);
   cursor: pointer;
   transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
@@ -998,7 +998,7 @@
   margin: 0 auto;
   padding: 8px;
   border-radius: var(--bf-radius-base);
-  background: var(--bf-appearance-token-color-static-white);
+  background: var(--bf-color-content-on-dark);
   box-sizing: border-box;
 
   svg {

@@ -26,7 +26,7 @@ $todos-compact-breakpoint: 720px;
     min-height: 72px;
     padding: $size-gap-3 $size-gap-5;
     box-sizing: border-box;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
   &__head-main {
@@ -41,7 +41,7 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__head-text {
@@ -56,14 +56,14 @@ $todos-compact-breakpoint: 720px;
     font-size: var(--bf-font-size-lg);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__subtitle {
     margin: 0;
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__head-actions,
@@ -89,7 +89,7 @@ $todos-compact-breakpoint: 720px;
     min-width: 112px;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-variant-numeric: tabular-nums;
   }
 
@@ -120,7 +120,7 @@ $todos-compact-breakpoint: 720px;
       gap: $size-gap-4;
       padding: $size-gap-4;
       height: 100%;
-      border-right: 1px solid var(--bf-appearance-token-border-subtle);
+      border-right: 1px solid var(--bf-color-border-subtle);
     }
 
     &--calendar {
@@ -140,7 +140,7 @@ $todos-compact-breakpoint: 720px;
   &__list-title {
     margin: 0;
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__pane-title {
@@ -155,7 +155,7 @@ $todos-compact-breakpoint: 720px;
     margin: 2px 0 0;
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__empty {
@@ -163,8 +163,8 @@ $todos-compact-breakpoint: 720px;
     padding: $size-gap-4 $size-gap-3;
     text-align: center;
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
-    border: 1px dashed var(--bf-appearance-token-border-subtle);
+    color: var(--bf-color-content-muted);
+    border: 1px dashed var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
   }
 
@@ -173,9 +173,9 @@ $todos-compact-breakpoint: 720px;
   &__overview {
     flex: 0 0 auto;
     padding: $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__overview-head {
@@ -184,15 +184,15 @@ $todos-compact-breakpoint: 720px;
     justify-content: space-between;
     gap: $size-gap-2;
     padding-bottom: $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    color: var(--bf-color-content-secondary);
   }
 
   &__overview-title {
     margin: 0;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__overview-metrics {
@@ -210,7 +210,7 @@ $todos-compact-breakpoint: 720px;
     }
 
     & + & {
-      border-left: 1px solid var(--bf-appearance-token-border-subtle);
+      border-left: 1px solid var(--bf-color-border-subtle);
     }
   }
 
@@ -223,7 +223,7 @@ $todos-compact-breakpoint: 720px;
     display: flex;
     align-items: baseline;
     gap: $size-gap-1;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     strong {
       font-size: var(--bf-font-size-xl);
@@ -234,14 +234,14 @@ $todos-compact-breakpoint: 720px;
 
     span {
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
   &__overview-label {
     margin-top: $size-gap-1;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   // ── Task cards ────────────────────────────────────────────────────────────
@@ -260,9 +260,9 @@ $todos-compact-breakpoint: 720px;
     min-height: 76px;
     padding: $size-gap-3;
     box-sizing: border-box;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     cursor: pointer;
     transition:
       background $motion-fast $easing-standard,
@@ -270,34 +270,34 @@ $todos-compact-breakpoint: 720px;
       box-shadow $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      border-color: var(--bf-appearance-token-border-medium);
-      box-shadow: var(--bf-appearance-token-shadow-xs);
+      background: var(--bf-color-action-quiet-hover);
+      border-color: var(--bf-color-field-border-hover);
+      box-shadow: var(--bf-shadow-xs);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 2px;
     }
 
     &--selected {
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-soft);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &--overdue {
       border-color: color-mix(
         in srgb,
-        var(--bf-appearance-token-color-warning) 55%,
-        var(--bf-appearance-token-border-subtle)
+        var(--bf-color-status-warning-content) 55%,
+        var(--bf-color-border-subtle)
       );
     }
 
     &--running {
       border-color: color-mix(
         in srgb,
-        var(--bf-appearance-token-color-success) 55%,
-        var(--bf-appearance-token-border-subtle)
+        var(--bf-color-status-success-content) 55%,
+        var(--bf-color-border-subtle)
       );
     }
 
@@ -314,8 +314,8 @@ $todos-compact-breakpoint: 720px;
     height: 36px;
     flex: 0 0 auto;
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-secondary);
   }
 
   &__row-body {
@@ -337,7 +337,7 @@ $todos-compact-breakpoint: 720px;
     min-width: 0;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -347,21 +347,21 @@ $todos-compact-breakpoint: 720px;
     flex: 0 0 auto;
     padding: 1px 6px;
     border-radius: $size-radius-sm;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
-    color: var(--bf-appearance-token-color-accent-500);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
+    color: var(--bf-color-accent-default);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-medium);
     line-height: var(--bf-line-height-base);
     white-space: nowrap;
 
     &--warn {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 16%, transparent);
-      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 16%, transparent);
+      color: var(--bf-color-status-warning-content);
     }
 
     &--running {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 16%, transparent);
-      color: var(--bf-appearance-token-color-success);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 16%, transparent);
+      color: var(--bf-color-status-success-content);
     }
   }
 
@@ -371,7 +371,7 @@ $todos-compact-breakpoint: 720px;
     gap: $size-gap-1;
     min-width: 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -384,7 +384,7 @@ $todos-compact-breakpoint: 720px;
   &__row-error {
     margin: 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
     word-break: break-word;
   }
 
@@ -410,14 +410,14 @@ $todos-compact-breakpoint: 720px;
     flex-direction: column;
     gap: $size-gap-2;
     padding-top: $size-gap-3;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__inactive-title {
     margin: 0;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   // ── Calendar ──────────────────────────────────────────────────────────────
@@ -458,7 +458,7 @@ $todos-compact-breakpoint: 720px;
     text-align: center;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__calendar-grid {
@@ -481,7 +481,7 @@ $todos-compact-breakpoint: 720px;
     padding: $size-gap-2;
     border: 1px solid transparent;
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     text-align: left;
     cursor: pointer;
     overflow: hidden;
@@ -491,11 +491,11 @@ $todos-compact-breakpoint: 720px;
       box-shadow $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
 
@@ -504,13 +504,13 @@ $todos-compact-breakpoint: 720px;
     }
 
     &--today {
-      border-color: var(--bf-appearance-token-border-strong);
-      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-subtle);
+      border-color: var(--bf-color-border-strong);
+      box-shadow: inset 0 0 0 1px var(--bf-color-border-subtle);
     }
 
     &--selected {
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-soft);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-quiet-hover);
     }
   }
 
@@ -518,7 +518,7 @@ $todos-compact-breakpoint: 720px;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     font-variant-numeric: tabular-nums;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__calendar-chips {
@@ -535,7 +535,7 @@ $todos-compact-breakpoint: 720px;
     min-width: 0;
     padding: 2px 5px;
     border-radius: $size-radius-sm;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-support);
   }
@@ -543,12 +543,12 @@ $todos-compact-breakpoint: 720px;
   &__calendar-chip-time {
     flex: 0 0 auto;
     font-variant-numeric: tabular-nums;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &__calendar-chip-name {
     min-width: 0;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -557,7 +557,7 @@ $todos-compact-breakpoint: 720px;
   &__calendar-more {
     padding-left: 4px;
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   // ── Selected day detail ───────────────────────────────────────────────────
@@ -594,7 +594,7 @@ $todos-compact-breakpoint: 720px;
     min-height: 0;
     overflow: visible;
     padding-top: $size-gap-4;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__day-detail-head {
@@ -608,7 +608,7 @@ $todos-compact-breakpoint: 720px;
     margin: 0;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   // ── Task editor dialog ────────────────────────────────────────────────────
@@ -622,7 +622,7 @@ $todos-compact-breakpoint: 720px;
     min-height: 0;
     flex: 1 1 auto;
     container: todo-editor / inline-size;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__editor-intro {
@@ -632,7 +632,7 @@ $todos-compact-breakpoint: 720px;
     min-width: 0;
     padding: $size-gap-4 $size-gap-6;
     padding-right: $size-gap-12;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
   &__editor-intro-icon {
@@ -643,8 +643,8 @@ $todos-compact-breakpoint: 720px;
     height: 48px;
     flex: 0 0 auto;
     border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-primary);
   }
 
   &__editor-intro-copy {
@@ -659,14 +659,14 @@ $todos-compact-breakpoint: 720px;
     font-size: var(--bf-font-size-xl);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__editor-description {
     margin: 0;
     font-size: var(--bf-font-size-sm);
     line-height: var(--bf-line-height-base);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__editor-body {
@@ -687,11 +687,11 @@ $todos-compact-breakpoint: 720px;
   &__editor-section-title {
     margin: 0;
     padding-left: $size-gap-2;
-    border-left: 3px solid var(--bf-appearance-token-color-text-primary);
+    border-left: 3px solid var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__editor-grid {
@@ -708,7 +708,7 @@ $todos-compact-breakpoint: 720px;
     min-height: 88px;
     padding: $size-gap-3;
     box-sizing: border-box;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-lg;
     background: transparent;
     transition:
@@ -716,10 +716,10 @@ $todos-compact-breakpoint: 720px;
       box-shadow $motion-fast $easing-standard;
 
     &:focus-within {
-      border-color: var(--bf-appearance-token-color-accent-500);
+      border-color: var(--bf-color-accent-default);
       box-shadow: 0 0 0 3px color-mix(
         in srgb,
-        var(--bf-appearance-token-color-accent-500) 10%,
+        var(--bf-color-accent-default) 10%,
         transparent
       );
     }
@@ -728,7 +728,7 @@ $todos-compact-breakpoint: 720px;
       min-height: 36px;
       padding: 0;
       border: 0;
-      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+      border-bottom: 1px solid var(--bf-color-border-subtle);
       border-radius: 0;
       background: transparent;
       box-shadow: none;
@@ -748,27 +748,27 @@ $todos-compact-breakpoint: 720px;
     min-width: 0;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
   &__field-note {
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-ui);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__field-static {
     display: flex;
     align-items: center;
     min-height: 36px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -776,7 +776,7 @@ $todos-compact-breakpoint: 720px;
 
   &__field-control--datetime {
     min-height: 36px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
 
     .bf-datetime-field__input[data-bf-component='input'] {
       border: 0;
@@ -802,12 +802,12 @@ $todos-compact-breakpoint: 720px;
 
   &__workspace-option-label {
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__workspace-option-path {
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -821,9 +821,9 @@ $todos-compact-breakpoint: 720px;
     min-height: 68px;
     padding: $size-gap-3 $size-gap-4;
     box-sizing: border-box;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__editor-enable {
@@ -837,7 +837,7 @@ $todos-compact-breakpoint: 720px;
   &__editor-runtime-divider {
     width: 1px;
     height: 36px;
-    background: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-border-subtle);
   }
 
   &__editor-smart {
@@ -855,8 +855,8 @@ $todos-compact-breakpoint: 720px;
     height: 32px;
     flex: 0 0 auto;
     border-radius: $size-radius-full;
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-primary);
   }
 
   &__editor-enable-copy,
@@ -869,13 +869,13 @@ $todos-compact-breakpoint: 720px;
     strong {
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
 
     span {
       font-size: var(--bf-font-size-xs);
       line-height: var(--bf-line-height-base);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -887,7 +887,7 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__editor-advanced {
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-lg;
     background: transparent;
     overflow: hidden;
@@ -903,7 +903,7 @@ $todos-compact-breakpoint: 720px;
     padding: 0 $size-gap-4;
     border: 0;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font: inherit;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
@@ -911,11 +911,11 @@ $todos-compact-breakpoint: 720px;
     cursor: pointer;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
+      background: var(--bf-color-surface-subtle);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: -2px;
     }
 
@@ -934,7 +934,7 @@ $todos-compact-breakpoint: 720px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: $size-gap-3;
     padding: 0 $size-gap-4 $size-gap-4;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
 
     > * {
       margin-top: $size-gap-4;
@@ -946,17 +946,17 @@ $todos-compact-breakpoint: 720px;
     margin-bottom: 0;
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__warning {
     margin: 0;
     padding: $size-gap-3 $size-gap-4;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 6%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-danger-content) 6%, transparent);
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
   }
 
   &__editor-actions {
@@ -964,7 +964,7 @@ $todos-compact-breakpoint: 720px;
     justify-content: flex-end;
     gap: $size-gap-3;
     padding: $size-gap-4 $size-gap-6;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
     background: transparent;
 
     > [data-bf-component='button'] {
@@ -1044,7 +1044,7 @@ $todos-compact-breakpoint: 720px;
       &--list {
         height: auto;
         border-right: 0;
-        border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+        border-bottom: 1px solid var(--bf-color-border-subtle);
       }
     }
 

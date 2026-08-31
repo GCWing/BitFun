@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const buildScriptPath = fileURLToPath(import.meta.url);
@@ -11,6 +13,18 @@ const repositoryRoot = path.resolve(websiteRoot, '..');
 const sourceRoot = path.join(websiteRoot, 'src');
 const outputRoot = path.join(websiteRoot, 'dist');
 const catalogPath = path.join(repositoryRoot, 'docs/interactive-capabilities/capabilities.json');
+const execFileAsync = promisify(execFile);
+const designTokensRoot = path.join(repositoryRoot, 'design-system/packages/design-tokens');
+const themeRoot = path.join(repositoryRoot, 'design-system/packages/theme-bitfun');
+
+async function buildThemeContracts() {
+  await execFileAsync(process.execPath, [path.join(designTokensRoot, 'scripts/build.mjs')], {
+    cwd: repositoryRoot,
+  });
+  await execFileAsync(process.execPath, [path.join(themeRoot, 'scripts/build.mjs')], {
+    cwd: repositoryRoot,
+  });
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -18,7 +32,7 @@ function escapeHtml(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .replaceAll("'", '&apos;');
 }
 
 function embeddedJson(value) {
@@ -35,11 +49,16 @@ function renderPage(template, { title, description, url, pageData, assetVersion 
 }
 
 async function main() {
+  await buildThemeContracts();
+  const designTokensCssPath = fileURLToPath(import.meta.resolve('@bitfun/design-tokens/tokens.css'));
+  const themeCssPath = fileURLToPath(import.meta.resolve('@bitfun/theme-bitfun/themes.css'));
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
   const template = await readFile(path.join(sourceRoot, 'index.html'), 'utf8');
   const appSource = await readFile(path.join(sourceRoot, 'app.js'), 'utf8');
   const searchSource = await readFile(path.join(sourceRoot, 'search.js'), 'utf8');
   const stylesSource = await readFile(path.join(sourceRoot, 'styles.css'), 'utf8');
+  const designTokensSource = await readFile(designTokensCssPath, 'utf8');
+  const themeSource = await readFile(themeCssPath, 'utf8');
   const buildSource = await readFile(buildScriptPath);
   const logoPath = path.join(repositoryRoot, 'src/apps/desktop/icons/Logo-ICON.png');
   const logoSource = await readFile(logoPath);
@@ -56,6 +75,8 @@ async function main() {
     .update(appSource)
     .update(searchSource)
     .update(stylesSource)
+    .update(designTokensSource)
+    .update(themeSource)
     .update(buildSource)
     .update(logoSource)
     .update(socialSource)
@@ -69,6 +90,8 @@ async function main() {
     appSource.replace("'./search.js'", `'./search.js?v=${assetVersion}'`),
   );
   await writeFile(path.join(outputRoot, 'assets/search.js'), searchSource);
+  await writeFile(path.join(outputRoot, 'assets/design-tokens.css'), designTokensSource);
+  await writeFile(path.join(outputRoot, 'assets/theme.css'), themeSource);
   await cp(path.join(sourceRoot, 'styles.css'), path.join(outputRoot, 'assets/styles.css'));
   await cp(logoPath, path.join(outputRoot, 'assets/bitfun.png'));
 

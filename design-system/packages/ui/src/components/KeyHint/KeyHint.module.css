@@ -10,9 +10,9 @@
     padding-block: calc(var(--bf-space-1) / 2);
     padding-inline: var(--bf-space-1);
     border: 0;
-    border-radius: var(--bf-radius-xs, calc(var(--bf-radius-sm) - 2px));
+    border-radius: var(--bf-radius-xs);
     color: var(--bf-color-content-muted);
-    background: var(--bf-color-key-hint-background, var(--bf-color-action-neutral-surface));
+    background: var(--bf-color-key-hint-background);
     font-family:var(--bf-font-family-sans);
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-regular);

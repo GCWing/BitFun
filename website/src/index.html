@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f6f5f0" />
+    <meta name="theme-color" content="" />
     <meta name="description" content="__PAGE_DESCRIPTION__" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="BitFun Playbook" />
@@ -19,15 +19,20 @@
           const stored = localStorage.getItem('bitfun-playbook-theme');
           if (['light', 'dark'].includes(stored)) theme = stored;
         } catch {}
-        document.documentElement.dataset.theme = theme;
+        const root = document.documentElement;
         const dark = theme === 'dark'
           || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.querySelector('meta[name="theme-color"]')
-          ?.setAttribute('content', dark ? '#131411' : '#f6f5f0');
+        root.setAttribute('data-bf-design-system-root', '');
+        root.dataset.theme = theme;
+        root.dataset.colorScheme = dark ? 'dark' : 'light';
+        root.dataset.contrast = 'standard';
+        root.dataset.density = 'comfortable';
       })();
     </script>
     <link rel="canonical" href="__PAGE_URL__" />
     <link rel="icon" href="/assets/bitfun.png" />
+    <link rel="stylesheet" href="/assets/design-tokens.css?v=__ASSET_VERSION__" />
+    <link rel="stylesheet" href="/assets/theme.css?v=__ASSET_VERSION__" />
     <link rel="stylesheet" href="/assets/styles.css?v=__ASSET_VERSION__" />
     <title>__PAGE_TITLE__</title>
   </head>

@@ -148,10 +148,10 @@ struct RemoteFilePreviewSheet: View {
                         Image(systemName: "checkmark.circle")
                     } else if model.downloadPhase == .failed {
                         Image(systemName: "exclamationmark.triangle")
-                            .foregroundStyle(BitFunTheme.red)
+                            .foregroundStyle(BitFunTheme.statusDanger)
                     }
                     Text(status).font(MobileDesignTypography.labelSmall.font)
-                        .foregroundStyle(model.downloadPhase == .failed ? BitFunTheme.red : BitFunTheme.muted)
+                        .foregroundStyle(model.downloadPhase == .failed ? BitFunTheme.statusDanger : BitFunTheme.muted)
                         .lineLimit(2)
                     if model.downloadPhase == .failed {
                         Button(model.localized("重试")) { model.retryRemoteDownload() }
@@ -222,7 +222,7 @@ struct RemoteFilePreviewSheet: View {
                                         MarkdownMessageView(text: block.text, model: model)
                                             .id(block.startLine)
                                             .background(GeometryReader { geometry in
-                                                Color.clear.preference(
+                                                BitFunTheme.transparent.preference(
                                                     key: FilePreviewVisibleLinePreferenceKey.self,
                                                     value: {
                                                         let frame = geometry.frame(in: .named("file-preview-scroll"))
@@ -253,7 +253,7 @@ struct RemoteFilePreviewSheet: View {
                                             .foregroundStyle(BitFunTheme.ink)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .background(GeometryReader { geometry in
-                                                Color.clear.preference(
+                                                BitFunTheme.transparent.preference(
                                                     key: FilePreviewVisibleLinePreferenceKey.self,
                                                     value: {
                                                         let frame = geometry.frame(in: .named("file-preview-scroll"))

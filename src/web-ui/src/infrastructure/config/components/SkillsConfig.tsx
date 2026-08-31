@@ -722,7 +722,7 @@ const SkillsConfig: React.FC = () => {
         message={
           <>
             <p>{t('deleteModal.message', { name: deleteConfirm.skill?.name })}</p>
-            <p style={{ marginTop: '8px', color: 'var(--bf-appearance-token-color-warning)' }}>{t('deleteModal.warning')}</p>
+            <p style={{ marginTop: '8px', color: 'var(--bf-color-status-warning-content)' }}>{t('deleteModal.warning')}</p>
           </>
         }
         type="warning"

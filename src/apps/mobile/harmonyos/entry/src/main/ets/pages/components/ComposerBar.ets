@@ -11,15 +11,21 @@ import {
 import { ConversationModelPresentationPolicy } from '../policy/ConversationModelPresentationPolicy';
 import {
   CARD,
+  CONTENT_ON_ACTION,
   FLOATING_PANEL_BG,
-  GREEN,
   INK,
   LINE,
+  MEDIA_SCRIM,
   MUTED,
   PRIMARY_ACTION,
-  PRIMARY_ACTION_TEXT,
-  RED,
-  SOFT
+  SCRIM,
+  SHADOW_FAINT,
+  SHADOW_MEDIUM,
+  SHADOW_SUBTLE,
+  SOFT,
+  STATUS_DANGER,
+  STATUS_SUCCESS,
+  TRANSPARENT
 } from './Theme';
 
 export enum ComposerPresentation {
@@ -97,7 +103,7 @@ export struct ComposerBar {
       top: 8,
       bottom: this.presentation === ComposerPresentation.Floating ? 16 : 12
     })
-    .backgroundColor('#00000000')
+    .backgroundColor(TRANSPARENT)
     .bindSheet($$this.showModelSelectorSheet, this.ModelSelector(true), this.modelSelectorSheetOptions())
   }
 
@@ -165,7 +171,7 @@ export struct ComposerBar {
     .borderRadius(this.composerRadius())
     .shadow({
       radius: this.presentation === ComposerPresentation.Floating ? 14 : 8,
-      color: this.presentation === ComposerPresentation.Floating ? '#10000000' : '#08000000',
+      color: this.presentation === ComposerPresentation.Floating ? SHADOW_SUBTLE : SHADOW_FAINT,
       offsetY: this.presentation === ComposerPresentation.Floating ? 4 : 2
     })
     .animation({ duration: MobileDesignMotion.structure, curve: Curve.EaseOut })
@@ -194,14 +200,14 @@ export struct ComposerBar {
     .height(32)
     .constraintSize({ maxWidth: 220 })
     .padding({ left: 4, right: 4 })
-    .backgroundColor('#00000000')
+    .backgroundColor(TRANSPARENT)
     .accessibilityText(`${RemoteI18n.t('chat.selectModel')} · ${this.displaySelectedModel()}`)
     .bindPopup(this.showModelSelectorPopover, {
       builder: () => {
         this.ModelSelector(false)
       },
       placement: Placement.Top,
-      popupColor: '#00000000',
+      popupColor: TRANSPARENT,
       enableArrow: false,
       autoCancel: true,
       mask: false,
@@ -264,8 +270,8 @@ export struct ComposerBar {
     .backgroundColor(asSheet ? CARD : FLOATING_PANEL_BG)
     .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } :
       MobileDesignGeometry.composerModelSelectorRadius)
-    .border({ width: asSheet ? 0 : 1, color: asSheet ? '#00000000' : LINE })
-    .shadow({ radius: asSheet ? 0 : 18, color: asSheet ? '#00000000' : '#18000000', offsetY: 7 })
+    .border({ width: asSheet ? 0 : 1, color: asSheet ? TRANSPARENT : LINE })
+    .shadow({ radius: asSheet ? 0 : 18, color: asSheet ? TRANSPARENT : SHADOW_MEDIUM, offsetY: 7 })
   }
 
   @Builder
@@ -300,7 +306,7 @@ export struct ComposerBar {
     .width('100%')
     .height(MobileDesignGeometry.composerModelSelectorRowHeight)
     .padding({ left: 10, right: 10 })
-    .backgroundColor(this.isSelectedModel(model) ? SOFT : '#00000000')
+    .backgroundColor(this.isSelectedModel(model) ? SOFT : TRANSPARENT)
     .borderRadius(MobileDesignGeometry.composerModelSelectorRowRadius)
     .onClick(() => {
       this.closeModelSelector();
@@ -338,8 +344,8 @@ export struct ComposerBar {
         .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(INK)
-        .placeholderColor(this.isVoiceListening ? GREEN : MUTED)
-        .backgroundColor('#00000000')
+        .placeholderColor(this.isVoiceListening ? STATUS_SUCCESS : MUTED)
+        .backgroundColor(TRANSPARENT)
         .borderRadius(20)
         .padding({
           left: this.isVoiceListening ? 0 : 4,
@@ -369,9 +375,9 @@ export struct ComposerBar {
     .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
     .alignItems(VerticalAlign.Center)
     .padding({ left: this.isVoiceListening ? 12 : 0, right: 0 })
-    .backgroundColor(this.isVoiceListening ? SOFT : '#00000000')
+    .backgroundColor(this.isVoiceListening ? SOFT : TRANSPARENT)
     .borderRadius(20)
-    .border({ width: this.isVoiceListening ? 1 : 0, color: this.isVoiceListening ? GREEN : '#00000000' })
+    .border({ width: this.isVoiceListening ? 1 : 0, color: this.isVoiceListening ? STATUS_SUCCESS : TRANSPARENT })
   }
 
   @Builder
@@ -450,22 +456,22 @@ export struct ComposerBar {
       Text('')
         .width(3)
         .height(10)
-        .backgroundColor(GREEN)
+        .backgroundColor(STATUS_SUCCESS)
         .borderRadius(2)
       Text('')
         .width(3)
         .height(18)
-        .backgroundColor(GREEN)
+        .backgroundColor(STATUS_SUCCESS)
         .borderRadius(2)
       Text('')
         .width(3)
         .height(24)
-        .backgroundColor(GREEN)
+        .backgroundColor(STATUS_SUCCESS)
         .borderRadius(2)
       Text('')
         .width(3)
         .height(14)
-        .backgroundColor(GREEN)
+        .backgroundColor(STATUS_SUCCESS)
         .borderRadius(2)
     }
     .width(22)
@@ -508,7 +514,7 @@ export struct ComposerBar {
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(CARD)
         .textAlign(TextAlign.Center)
-        .backgroundColor('#AA222222')
+        .backgroundColor(MEDIA_SCRIM)
         .borderRadius(16)
         .margin({ top: 0, right: 0 })
         .accessibilityText(RemoteI18n.t('chat.removeImage'))
@@ -659,8 +665,8 @@ export struct ComposerBar {
   private modelSelectorSheetOptions(): SheetOptions {
     return {
       height: Math.min(480, 86 + this.modelListHeight()),
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
+      backgroundColor: TRANSPARENT,
+      maskColor: SCRIM,
       showClose: false,
       dragBar: true
     };
@@ -684,14 +690,14 @@ export struct ComposerBar {
       action === ComposerPrimaryAction.Idle) {
       return SOFT;
     }
-    return this.isVoiceListening ? GREEN : RED;
+    return this.isVoiceListening ? STATUS_SUCCESS : STATUS_DANGER;
   }
 
   private primaryActionForegroundColor(): ResourceColor {
     const action = this.primaryAction();
     if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Voice ||
       action === ComposerPrimaryAction.Stop) {
-      return PRIMARY_ACTION_TEXT;
+      return CONTENT_ON_ACTION;
     }
     return MUTED;
   }

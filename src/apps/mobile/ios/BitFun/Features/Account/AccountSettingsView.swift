@@ -59,7 +59,7 @@ struct AccountSettingsView: View {
                 if let error = model.coreErrorMessage, !error.isEmpty {
                     Text(error)
                         .font(.system(size: 13))
-                        .foregroundStyle(BitFunTheme.red)
+                        .foregroundStyle(BitFunTheme.statusDanger)
                         .padding(.top, 12)
                 }
 
@@ -68,11 +68,11 @@ struct AccountSettingsView: View {
                     password = ""
                 } label: {
                     HStack(spacing: 8) {
-                        if model.accountBusy { ProgressView().tint(.white) }
+                        if model.accountBusy { ProgressView().tint(BitFunTheme.contentOnAction) }
                         Text(model.localized(model.accountBusy ? "正在登录" : "登录"))
                     }
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(BitFunTheme.contentOnAction)
                     .frame(maxWidth: .infinity, minHeight: 56)
                     .background(canLogin ? BitFunTheme.accent : BitFunTheme.muted.opacity(0.35))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -117,11 +117,11 @@ struct AccountSettingsView: View {
 
             Button { model.retryAccountFailure() } label: {
                 HStack(spacing: 8) {
-                    if model.accountBusy { ProgressView().tint(.white) }
+                    if model.accountBusy { ProgressView().tint(BitFunTheme.contentOnAction) }
                     Text(model.localized(model.accountBusy ? "正在重试" : "重试加载设备"))
                 }
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(BitFunTheme.contentOnAction)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .background(BitFunTheme.accent)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -184,7 +184,7 @@ struct AccountSettingsView: View {
                             Spacer()
                             Text(model.localized("已登录"))
                                 .font(.system(size: 14))
-                                .foregroundStyle(BitFunTheme.green)
+                                .foregroundStyle(BitFunTheme.statusSuccess)
                         }
                         Text(model.localizedFormat("当前以 %@ 登录。", model.accountUser ?? ""))
                             .font(.system(size: 14))
@@ -259,7 +259,7 @@ struct AccountSettingsView: View {
                     } label: {
                         Text(model.localized("退出账号"))
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(BitFunTheme.red)
+                            .foregroundStyle(BitFunTheme.statusDanger)
                             .frame(maxWidth: .infinity, minHeight: 54)
                             .background(BitFunTheme.card)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -344,13 +344,13 @@ struct SettingsDeviceRow: View {
                     .lineLimit(1)
                 Text(MobileLocalization.text(device.online ? "在线" : "离线"))
                     .font(.system(size: 12))
-                    .foregroundStyle(device.online ? BitFunTheme.green : BitFunTheme.muted)
+                    .foregroundStyle(device.online ? BitFunTheme.statusSuccess : BitFunTheme.muted)
             }
             Spacer(minLength: 12)
             if device.selected {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(BitFunTheme.green)
+                    .foregroundStyle(BitFunTheme.statusSuccess)
             } else {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))

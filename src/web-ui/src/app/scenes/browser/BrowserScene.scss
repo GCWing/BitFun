@@ -13,8 +13,8 @@
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 70%, transparent);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 70%, transparent);
   }
 
   &__address {
@@ -25,10 +25,10 @@
     align-items: center;
     gap: $size-gap-2;
     padding: 0 $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-primary);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-surface-canvas);
+    color: var(--bf-color-content-muted);
     overflow: hidden;
 
     svg {
@@ -43,7 +43,7 @@
       outline: none;
       box-shadow: none;
       background: transparent;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-sm);
       appearance: none;
       -webkit-appearance: none;
@@ -72,12 +72,12 @@
     margin: $size-gap-2 $size-gap-3 0;
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
 
     svg {
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
       flex-shrink: 0;
     }
   }
@@ -86,7 +86,7 @@
     flex: 1;
     min-height: 0;
     position: relative;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__iframe,
@@ -108,11 +108,11 @@
     align-items: center;
     justify-content: center;
     gap: $size-gap-2;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
     background:
-      radial-gradient(circle at top, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent), transparent 42%),
-      var(--bf-appearance-token-color-bg-primary);
+      radial-gradient(circle at top, color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent), transparent 42%),
+      var(--bf-color-surface-canvas);
 
     span {
       max-width: min(60vw, 520px);

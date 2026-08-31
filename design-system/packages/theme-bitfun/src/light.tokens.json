@@ -5,6 +5,26 @@
       "canvas": { "$type": "color", "$value": "{ref.color.neutral.50}" },
       "panel": { "$type": "color", "$value": "{ref.color.neutral.0}" },
       "raised": { "$type": "color", "$value": "{ref.color.neutral.0}" },
+      "scene": {
+        "$description": "Primary content scene behind editors, terminals, and full-page work areas.",
+        "$type": "color",
+        "$value": "{ref.color.neutral.0}"
+      },
+      "workbench": {
+        "$description": "Application workbench surrounding content scenes and panels.",
+        "$type": "color",
+        "$value": "{color.action.quiet.hover}"
+      },
+      "tertiary": {
+        "$description": "Opaque tertiary surface used when subtle translucent fill is insufficient.",
+        "$type": "color",
+        "$value": "{color.action.quiet.hover}"
+      },
+      "chrome": {
+        "$description": "Structural application chrome surface when it differs from content scenes.",
+        "$type": "color",
+        "$value": "{color.surface.canvas}"
+      },
       "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.03)" }
     },
     "overlay": {
@@ -26,12 +46,50 @@
       "secondary": { "$type": "color", "$value": "{ref.color.neutral.750}" },
       "muted": { "$type": "color", "$value": "{ref.color.neutral.650}" },
       "disabled": { "$type": "color", "$value": "{ref.color.neutral.450}" },
-      "inverse": { "$type": "color", "$value": "{ref.color.neutral.0}" }
+      "inverse": { "$type": "color", "$value": "{ref.color.neutral.0}" },
+      "onDark": {
+        "$description": "Content that must remain legible on a known dark or image-backed surface.",
+        "$type": "color",
+        "$value": "{ref.color.neutral.0}"
+      },
+      "onLight": {
+        "$description": "Content that must remain legible on a known light surface.",
+        "$type": "color",
+        "$value": "{ref.color.neutral.1000}"
+      }
     },
     "accent": {
       "default": { "$type": "color", "$value": "{ref.color.cyan.500}" },
       "hover": { "$type": "color", "$value": "{ref.color.cyan.500}" },
-      "disabled": { "$type": "color", "$value": "rgba(5, 156, 176, 0.30)" }
+      "disabled": { "$type": "color", "$value": "rgba(5, 156, 176, 0.30)" },
+      "surfaceSubtle": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.default} 5%, transparent)" },
+      "surface": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.default} 9%, transparent)" },
+      "surfaceStrong": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.default} 15%, transparent)" },
+      "borderSubtle": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.default} 25%, transparent)" },
+      "border": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.default} 40%, transparent)" },
+      "secondary": {
+        "$description": "Secondary product emphasis for paired accents and identity gradients.",
+        "$type": "color",
+        "$value": "{ref.color.purple.600}"
+      },
+      "secondaryHover": { "$type": "color", "$value": "{ref.color.purple.700}" },
+      "secondarySurface": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.secondary} 9%, transparent)" },
+      "secondarySurfaceStrong": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.secondary} 15%, transparent)" },
+      "secondaryBorder": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.secondary} 25%, transparent)" }
+    },
+    "identity": {
+      "assistant": {
+        "$description": "Named assistant identity used where it must remain distinct from the primary and secondary product accents.",
+        "content": { "$type": "color", "$value": "{ref.color.pink.600}" },
+        "contentHover": { "$type": "color", "$value": "{ref.color.pink.700}" },
+        "surfaceSubtle": { "$type": "color", "$value": "color-mix(in srgb, {color.identity.assistant.content} 5%, transparent)" },
+        "surface": { "$type": "color", "$value": "color-mix(in srgb, {color.identity.assistant.content} 9%, transparent)" },
+        "border": { "$type": "color", "$value": "color-mix(in srgb, {color.identity.assistant.content} 15%, transparent)" }
+      }
+    },
+    "link": {
+      "default": { "$type": "color", "$value": "{ref.color.blue.600}" },
+      "hover": { "$type": "color", "$value": "{ref.color.blue.700}" }
     },
     "border": {
       "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.08)" },
@@ -95,7 +153,7 @@
         "border": { "$type": "color", "$value": "{ref.color.green.700}" }
       },
       "warning": {
-        "content": { "$type": "color", "$value": "{ref.color.amber.700}" },
+        "content": { "$type": "color", "$value": "{ref.color.amber.800}" },
         "surface": { "$type": "color", "$value": "rgba(154, 101, 31, 0.08)" },
         "border": { "$type": "color", "$value": "rgba(154, 101, 31, 0.25)" }
       },
@@ -116,7 +174,13 @@
     "raised": { "$value": "{shadow.sm}" },
     "composer": { "$value": "0 2px 6px rgba(0, 0, 0, 0.08)" },
     "menu": { "$value": "0 4px 10px rgba(0, 0, 0, 0.12)" },
-    "overlay": { "$value": "0 4px 20px rgba(0, 0, 0, 0.12)" }
+    "overlay": { "$value": "0 4px 20px rgba(0, 0, 0, 0.12)" },
+    "accentGlow": {
+      "$description": "Layered emphasis glow derived from the active accent.",
+      "$value": "0 12px 32px color-mix(in srgb, {color.accent.hover} 25%, transparent), 0 6px 16px color-mix(in srgb, {color.accent.default} 18%, transparent), 0 3px 8px rgba(0, 0, 0, 0.12)"
+    },
+    "innerHighlight": { "$value": "inset 0 1px 0 rgba(255, 255, 255, 0.08)" },
+    "innerHighlightHover": { "$value": "inset 0 1px 0 rgba(255, 255, 255, 0.24)" }
   },
   "effect": {
     "blur": {

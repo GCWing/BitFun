@@ -1,181 +1,308 @@
 # 主题与颜色 Token 治理
 
-本文定义 BitFun 各界面的主题所有权、Token 分层、生成边界和防回退规则。它只保留长期有效的架构约束，
-不记录审计数量、迁移批次或阶段历史。当前事实以以下可执行契约及其输出为准：
+本文定义 BitFun 全部前端的颜色所有权、运行时投影和防回退契约。目标不是在旧变量之上再包一层，
+而是让设计系统成为普通 UI 颜色的唯一公共来源：组件只消费 canonical `--bf-*`，产品层只选择、
+组合和投影这些 Token，不再维护第二套别名体系。
 
+当前事实以以下可执行契约及其输出为准：
+
+- `design-system/packages/design-tokens`
+- `design-system/packages/theme-bitfun`
+- `src/web-ui/src/infrastructure/appearance/appearanceTokenContract.ts`
 - `scripts/theme-color-governance-baseline*.json`
 - `scripts/theme-color-near-pair-decisions.json`
 - `scripts/theme-css-var-contract.mjs`
 - `scripts/theme-visual-governance-contract.json`
-- `scripts/audit-theme-colors.mjs` 与 `scripts/audit-cli-theme-colors.mjs`
+- `scripts/frontend-color-surface-registry.json`
+- `scripts/audit-frontend-colors.mjs`
+- `scripts/audit-theme-colors.mjs`
 
-文档与可执行契约冲突时，先核对代码和审计脚本；不得通过修改文档掩盖实际回退。
+文档与代码或审计结果冲突时，应修复 owner、消费方或契约；不得通过提高 baseline、扩充宽泛 allowlist
+或恢复旧变量来掩盖回退。
 
-## 范围
+## 一条正向依赖链
 
-本治理覆盖：
+| 层级 | 唯一职责 | 不拥有的内容 |
+|---|---|---|
+| `@bitfun/design-tokens` | 主题无关的命名、系统尺度和基础 Token 契约 | BitFun 具体 light/dark 值、产品状态、route 或运行时选择 |
+| `@bitfun/theme-bitfun` | BitFun 的 reference/semantic 主题值、canonical CSS 变量映射和 `default.css` | Web UI Appearance 包、产品 store、组件内部状态 |
+| `@bitfun/ui` | 消费 semantic/system Token 的公共组件 anatomy、行为和无障碍契约 | 具体主题值、Appearance schema、旧 Web UI 变量 |
+| Web UI Appearance | 选择和组合主题，生成 schema v2 包，并投影 canonical root/scoped Token 与显式 product domain/component Token | 公共 Token 的第二套命名、兼容双写、组件私有 palette |
+| 产品前端 | 选择主题、设置设计系统 root 属性并消费 canonical Token | 复制 `theme-bitfun` palette、随组件新增 raw color |
 
-- `design-system` 的共享系统 Token、BitFun 默认语义主题和独立组件消费契约。
-- `src/web-ui` 的 Appearance 包、CSS 变量投影、组件样式和专用渲染色板。
-- `src/mobile-web` 的移动端主题与运行时变量。
-- `BitFun-Installer/src` 的安装器主题、首屏静态变量和流程组件。
-- `src/apps/cli` 的 TUI preset、终端颜色映射和降级行为。
-- Desktop 首屏 bootstrap、生成式 UI 主题提示等由主题源生成的只读产物。
-- BitFun GUI 插件的语义色投影，以及 OpenCode TUI 主题的独立兼容边界。
-
-本治理不要求不同产品形态共享完整主题 schema，也不把 Monaco、终端 ANSI、Mermaid、语法高亮、diff、
-语言标识或数据可视化色板强行合并为普通应用 Token。
-
-## 所有权与依赖方向
-
-| 范围 | 权威 owner | 消费或产物路径 | 约束 |
-|---|---|---|---|
-| 共享设计系统 Token | `design-system/packages/design-tokens` 与 `design-system/packages/theme-bitfun` | `@bitfun/ui`、Design Lab、Web UI 的 canonical CSS 变量 | 前者拥有主题无关名称和系统尺度，后者拥有可替换的 BitFun 默认语义值；不得依赖产品 route、store、locale、Tauri 或专用渲染域 |
-| Web UI Appearance | `src/web-ui/src/infrastructure/appearance` | 运行时 CSS、组件/Scene 契约与 renderer adapter | 拥有包 schema、运行时选择、导入导出、历史包兼容、产品/component Token 和专用域投影；默认 light/dark 共享值从 `@bitfun/theme-bitfun` 取得，Rust 不复制 |
-| Desktop 首屏 | Web UI builtin Appearance 与 `scripts/generate-startup-appearance-bootstrap.mjs` | `src/apps/desktop/src/generated/startup_appearance_bootstrap.json` | 只保存 JS 加载前必要字段；生成产物不能反向定义 Appearance |
-| 生成式 UI 提示 | Web UI builtin Appearance 与 `scripts/generate-startup-appearance-bootstrap.mjs` | `src/crates/assembly/core/src/agentic/tools/implementations/generated/appearance_prompt_snapshots.json` | 只读生成产物；Rust 不手写第二套内置 palette |
-| Mobile Web | `src/mobile-web/src/theme` | Mobile 运行时变量与组件 | 不从 Desktop 或 Web UI 运行时偷读内部变量 |
-| Installer | `BitFun-Installer/src/theme` | `BitFun-Installer/src/styles/variables.css` 与流程组件 | Rust 壳不复制完整 palette |
-| CLI/TUI | `src/apps/cli/themes/presets` 与 `src/apps/cli/src/ui/theme.rs` | 终端样式 | 拥有 preset、ANSI/monochrome 降级；不实现 Web `ThemeConfig` |
-| BitFun GUI 插件 | Web UI Appearance owner | `src/web-ui/src/infrastructure/appearance/adapters/PluginAppearanceProjection.ts` | 只投影约定的语义色，不暴露包或内部变量全集 |
-| OpenCode TUI 主题 | CLI/TUI 兼容适配器 | OpenCode 主题来源与终端投影 | 保留来源顺序、稳定字段、引用和 light/dark 变体；不由 GUI 七色投影替代 |
-| 专用渲染域 | 对应 editor、terminal、syntax、diff、Mermaid 等模块 | 各自 namespace | 不得泄漏为普通组件随手可用的色板 |
-
-依赖方向固定为：
+正向依赖固定为：
 
 ```mermaid
 flowchart LR
-  System["@bitfun/design-tokens<br/>共享名称与系统尺度"] --> Theme["@bitfun/theme-bitfun<br/>BitFun 默认语义值"]
-  System --> Components["@bitfun/ui"]
-  Theme --> Source["Web UI builtin Appearance<br/>产品与专用域组合"]
-  Source --> Runtime["AppearanceRuntime"]
-  Source --> Generator["Appearance 生成器"]
-  Generator --> Bootstrap["Desktop 首屏 bootstrap"]
-  Generator --> Prompt["生成式 UI 提示快照"]
-  Runtime --> Canonical["canonical --bf-* 投影"]
-  Runtime --> Compatibility["兼容 --bf-appearance-token-*"]
-  Runtime --> Projection["GUI 插件语义色投影"]
+  System["@bitfun/design-tokens<br/>命名与系统尺度"] --> Theme["@bitfun/theme-bitfun<br/>默认语义值"]
+  System --> UI["@bitfun/ui"]
+  Theme --> UI
+  Theme --> Appearance["Web UI Appearance v2<br/>产品主题组合"]
+  Appearance --> Runtime["theme-tokens adapter"]
+  Runtime --> Root["canonical root --bf-*"]
+  Runtime --> Scope["canonical scoped --bf-*"]
+  Theme --> Surfaces["Web surfaces / Desktop bootstrap / MiniApp projection"]
+  Mobile["Native mobile contract"] --> Native["HarmonyOS / Android / iOS"]
 ```
 
-共享设计系统包不能反向依赖 Appearance；生成产物、Rust bootstrap、插件投影和消费组件也不能反向定义
-Appearance。Desktop 和 Web UI 只持久化并解析 `appearance.selection`。旧 `theme`、`themes` 和 Skin 数据
-不兼容、不迁移。
+这里没有 compatibility projection。共享设计系统包不能反向依赖 Web UI Appearance；组件、生成产物、
+Desktop bootstrap 和产品前端也不能反向定义公共主题值。
 
-## Token 分层
+## Canonical Token 分层
 
-Token 只按职责分四层：
+正向代码只使用以下四类 Token：
 
-1. **Primitive**：颜色原料和必要 alpha ramp，不表达业务含义。
-2. **Semantic**：背景、文本、边框、交互、状态和产品意图，是普通组件的默认消费层。
-3. **Component**：仅在稳定组件契约无法由 semantic token 清楚表达时增加。
-4. **Exception domain**：editor、terminal、syntax、diff、Mermaid、语言标识和其他专用色板。
+1. **System / semantic**：`--bf-color-*`、`--bf-shadow-*`、`--bf-effect-*`、`--bf-opacity-*`
+   等由设计系统发布的公共变量，是普通 UI 的默认消费层。
+2. **Component**：`--bf-component-*`。仅用于跨消费方稳定存在、又无法由 semantic Token 准确表达的
+   组件差异；必须在 `appearanceTokenContract.ts` 中登记。
+3. **Product domain**：`--bf-domain-*`。用于 Git lane、语言身份、syntax、inspector、工具类别等明确的
+   专用语义；不得当作普通 UI 的备用色板。
+4. **Renderer payload**：Monaco、xterm、Mermaid、BitFun Canvas 等第三方或专用渲染器的显式配置。
+   它们有各自格式，不进入普通组件 CSS。
 
-兼容别名不是第五层。它只服务已确认的迁移调用方，必须声明 canonical 目标、owner 和移除条件；新代码不得继续
-读取历史别名。
-
-应用结构层可以使用 `--bf-appearance-token-chrome-*` 这一窄化的 component token 家族，表达导航、标签栏和
-工作台外壳相对于内容面的稳定反相关系。它由 Web UI builtin Appearance 投影拥有，只能在结构层 scope 内重绑定
-普通 semantic token；未声明独立 chrome palette 的内置或导入外观沿用所属 light/dark 基础外观的内容色，不能让
-组件按 Appearance ID 硬编码颜色特例。
-
-共享设置页可以使用 `--bf-appearance-token-config-page-*` 这一窄化的 component token 家族，分别表达 section
-块面、section 边界、行分隔线与 hover 填充。它只由 `ConfigPageLayout` 消费，默认映射回普通 element/border
-semantic token；仅当某个 Appearance 需要让“信息块面”和“表单控件边界”采用不同层级时才覆写，不能扩散成
-通用卡片色板或按 Appearance ID 编写 CSS 特例。
+Primitive/reference 色值只存在于主题 authoring、明确的主题 preset 或专用 renderer owner 中。普通组件
+不得直接消费 reference ramp，也不得自行定义“看起来差不多”的局部颜色。
 
 新增颜色按以下顺序判断：
 
-1. 语义相同：复用现有 Token。
-2. 色值近似且相邻状态不会失去区分：合并并更新审计决策。
-3. 存在独立、稳定且可说明的用户语义：在最窄 owner 中新增 semantic 或 component token。
-4. 属于专用渲染域：进入对应 exception namespace，不扩张普通应用色板。
+1. 语义相同，直接复用现有 semantic Token。
+2. 数值相近且相邻状态仍可区分，合并到已有 Token，并更新 near-pair 决策。
+3. 存在独立、稳定、可说明的组件语义，在最窄 owner 中新增 `--bf-component-*`。
+4. 属于产品或渲染专用域，进入 `--bf-domain-*` 或 renderer payload。
+5. 只有主题本身需要新的基础色时，才修改 `@bitfun/theme-bitfun` 的 authoring source。
 
-不得仅因数值接近就合并颜色。相邻背景/边框、文本层级、成功/警告/错误、diff、语法和数据系列必须结合实际
-同时出现的状态复核。反过来，也不能用“可能有视觉差异”作为每个组件新增近似色的理由。
+数值接近不是唯一判断标准；相邻背景/边框、文本层级、状态色、diff、syntax 和数据系列必须结合同时
+出现时的区分度审查。反过来，也不能以“可能有视觉差异”为理由给每个组件建立近似私有颜色。
 
-## CSS 变量与运行时边界
+## 普通 UI 的硬约束
 
-- 新设计系统组件只消费包生成的 canonical `--bf-*` 变量。`--bf-appearance-token-*` 仍是现有 Appearance
-  包和产品代码的兼容输入，不是新公共组件 API。
-- `CssTokenAppearanceAdapter` 在同一次原子应用中写入历史变量，并通过显式 allowlist 把共享部分投影到
-  canonical 变量。投影表由产品基础设施拥有，不能移入 `@bitfun/ui` 或让独立包识别 Appearance schema。
-- 普通组件优先消费运行时 CSS 变量；不得用 SCSS 编译期颜色复制动态主题语义。
-- `tokens.scss` 可以保留尺寸、字体、动效、root Token 和少量兼容 mixin，不应成为第二套产品颜色源。
-- 动态 CSS 变量族必须在 `theme-css-var-contract.mjs` 登记 owner、前缀和消费范围。
-- fallback 只允许存在于明确的启动、第三方或兼容边界；普通组件不得用 fallback 隐藏缺失 Token。
-- 未解析变量、未登记 key、跨 root 借用和运行时/静态定义漂移必须由审计失败暴露。
-- iframe、MiniApp 或生成式 UI 只接收显式 allowlist 的主题 payload，不接收 Web UI 内部变量全集。
-- 导入 Appearance 由 Web UI 加载和校验。Rust 首屏无法解析导入包时使用系统默认启动色，JS 启动后再原子应用完整包。
+普通应用组件和页面必须满足：
+
+- 颜色、阴影和 blur 只从 canonical Token 取得；允许用 `color-mix()`、gradient 等 CSS 运算组合 Token。
+- 不写 hex、rgb、hsl、命名色等 raw color；静态资产元数据和明确主题/renderer owner 除外。
+- 不使用 `var(--token, fallback)` 隐藏缺失 Token。
+- 不引用未定义、未登记或跨 root 偷借的变量。
+- 不定义 `--color-*`、`--lab-*` 或 `--bf-appearance-token-*` 等局部/历史公共前缀。
+- SVG 图标优先使用 `currentColor`，由外层 semantic Token 控制状态。
+- Component-private 非颜色变量可使用包约定的 `--_` 前缀，但不能借此建立私有颜色系统。
+
+静态 favicon、manifest、SVG metadata 等不参与组件主题切换的值只能计入 `assetMetadata`。它们不能迁回
+`appUi` allowlist，也不能被组件引用。
+
+## Web UI Appearance schema v2
+
+Web UI Appearance 的当前 schema 固定为 v2。颜色入口是 `theme-tokens` renderer：
+
+```ts
+{
+  "theme-tokens": {
+    version: 1,
+    settings: {
+      tokens: { "--bf-color-*": "...", "--bf-component-*": "...", "--bf-domain-*": "..." },
+      scopes: {
+        chrome: { "--bf-color-*": "..." }
+      }
+    }
+  }
+}
+```
+
+其边界如下：
+
+- `tokens` 只能包含 `appearanceTokenContract.ts` 登记的 root Token。
+- `scopes.chrome` 只能重绑定设计系统已有的 canonical theme Token，并应用到
+  `[data-bf-theme-scope="chrome"]`；scope 内不发明另一套 chrome 名称。
+- `ThemeTokenAppearanceAdapter` 在切换时移除上一包写入的 root/scoped Token，再写入新包；不双写任何
+  历史名称。
+- Token 名和 Token 值都经过 allowlist 与安全校验；未登记名称、嵌套 `var()`、URL 或可注入片段直接失败。
+- builtin Appearance 从 `@bitfun/theme-bitfun` 的完整主题值开始，只覆盖产品 theme/preset 真正不同的
+  canonical 值，再补充受治理的 component/domain Token。
+- Widget、Desktop 首屏 bootstrap 和生成式 UI 提示只消费同一 canonical 源生成的 allowlist 产物，
+  不能反向成为主题 owner。
+
+`CssTokenAppearanceAdapter`、`appearanceTokenProjection`、`css-tokens` renderer 和
+`--bf-appearance-token-*` 运行时变量均已退休。不得为第三方包、旧组件或测试重新引入这些接口。
+
+### v1 读取不是兼容运行时
+
+升级兼容只存在于包读取入口：
+
+1. Parser 识别持久化的 schema v1 包。
+2. `migrateAppearancePackage` 将已知 `css-tokens` 字段和旧名称单向映射为 v2 `theme-tokens` root/scoped
+   canonical Token。
+3. 旧 `css-tokens` renderer 被删除，后续校验、运行时和导出只接收 v2。
+4. 已安装的旧包在加载后重新保存为 v2，之后不再依赖旧名称。
+
+因此，旧名称只允许出现在迁移映射、upgrade fixture 和“不得出现”的负向断言中。它们不是可供新代码
+消费的 alias，也不会在 DOM 中生成。未知旧字段不得被猜测或静默投影；应保留原数据并给出明确的不支持状态。
+
+## 全前端 Surface 注册表
+
+`scripts/frontend-color-surface-registry.json` 是前端颜色治理范围的唯一清单。每个可交付或可运行的前端必须
+登记稳定 `id`、源码 root、颜色 owner 和审计引擎；新增目录不能依赖维护者再给 `package.json` 手写一段命令。
+当前注册表覆盖：
+
+- Web UI、`@bitfun/ui`、Design Lab、Website、Mini App Market、Skin Market、Mobile Web 和 Installer。
+- Desktop JavaScript 启动前页面、Native Mobile 比较预览、CLI/TUI。
+- HarmonyOS、Android、iOS 三端原生源码。
+- 全部 builtin/Demo MiniApp 及其内置 Skill reference mirror。
+- `@bitfun/design-tokens` 与 `@bitfun/theme-bitfun` 的 authoring owner。
+
+`scripts/audit-frontend-colors.mjs` 只从该注册表编排检查：普通 Web surface 复用 CSS/Token 审计，CLI 复用终端
+主题审计，Native Mobile 与 MiniApp 使用各自的源码契约检查。MiniApp discovery 会从三个登记的父目录查找
+所有带 `meta.json` 的应用；发现未登记应用、登记路径消失或 reference mirror 不再 byte-equal 都直接失败。
+
+注册表不是兼容表。surface 被下线时删除条目，owner 被迁移时原子更新唯一条目；不得同时登记新旧 root、双写
+变量或用另一个命令继续扫描退休实现。
+
+## 各前端 surface 的 owner
+
+### Design Lab、Website、Market
+
+Design Lab、Website、Mini App Market 与 Skin Market 直接加载 `@bitfun/theme-bitfun/default.css`，通过
+`data-bf-design-system-root`、`data-color-scheme`、`data-contrast` 和 `data-density` 选择已发布主题。
+它们可以拥有布局和产品交互，但不得再维护本地 light/dark palette。
+
+### Mobile Web / Remote Control
+
+Mobile Web 直接消费 `@bitfun/theme-bitfun`。`ThemeProvider` 与首屏 bootstrap 只负责选择 light/dark、
+写设计系统 root 属性和同步浏览器 `theme-color`；已退休的本地 preset/ramp 不得恢复。Relay 中的 Mobile
+静态包必须由这一源码重新构建，不能保留旧 Vite 产物作为隐式第二套主题实现。
+
+### Desktop bootstrap 与 Native Mobile 预览
+
+Desktop 的更新确认页和启动页只消费 `src/apps/desktop/src/generated/bootstrap_theme.css` 发布的 canonical
+`--bf-*`，不得内联另一套启动色。该 CSS 和两个 Appearance manifest 一起由
+`generate-startup-appearance-bootstrap.mjs` 从正式主题/Appearance 源生成；统一颜色审计执行 `--check`，
+生成物漂移直接失败。
+
+Native Mobile 预览的工具 chrome 消费 canonical `--bf-*`；设备画布消费 `--mobile-*` 这一受登记的 scoped
+动态变量族，其值只来自生成的 mobile contract data。二者不互相 alias。预览不得直接解释 ARGB 字符串为 Web
+颜色，必须在投影边界显式转换；generated data 不作为普通 UI 源码重复计数，但必须通过生成物漂移检查。
+
+### HarmonyOS / Android / iOS
+
+原生移动端不加载 Web CSS，也不复制 `@bitfun/theme-bitfun`。它们的唯一跨平台视觉事实 owner 是
+`src/apps/mobile/design-system/tokens/mobile-tokens.json`：
+
+- 颜色名称按语义登记，例如 content、surface、status、scrim、media control 和 shadow；不得使用 `green`、
+  `red`、`white` 之类数值或外观名称充当公共 API。
+- `mobile-ui-design-system.mjs` 从同一 contract 生成 ArkTS/Kotlin/Swift 常量与预览数据；组件契约引用不存在的
+  token 或任一生成物漂移都会失败。
+- 三端非 generated 源码不得出现 `Color.White` / `.black` / `.clear`、颜色构造器、hex 字符串或同类平台
+  raw color。system bar 等平台桥接读取生成的 light/dark pair，不在 entrypoint 重建 palette。
+- Android vector、iOS asset catalog 与 HarmonyOS template media 是可 tint 的平台资产 owner，不是普通 UI
+  颜色来源；渲染时仍必须由 semantic token 控制。
+
+### Installer
+
+Installer 首屏和普通流程组件加载设计系统默认主题并只消费 canonical Token。主题选择器保留六个明确的
+自定义安装器 preset；这些 preset 的身份色是唯一允许的 installer raw-color owner，并由 Installer 专属
+baseline 约束。运行时只把选中 preset 投影到 canonical `--bf-color-*` 子集。
+
+Installer 不再拥有 `src/styles/variables.css`，也不得让页面直接读取 preset 对象或建立页面级变量。新增
+preset 必须同时说明用户可见差异、相邻状态对比、所需 canonical 投影和 baseline 变化，不能借新增 preset
+扩大普通 UI 的 raw-color 预算。
+
+### MiniApp 公共投影
+
+MiniApp 不能读取 Web UI 内部变量全集。公开边界只有 `src/shared/miniapp-appearance/contract.json` 中登记的
+`--bitfun-*`，每一项都投影自 `@bitfun/design-tokens` 或 `@bitfun/theme-bitfun` 的真实 canonical 变量。
+Web UI payload、Rust 首帧 style 和 MiniApp 源码共同遵守以下约束：
+
+- 使用未登记的 `--bitfun-*`、在应用内重新定义宿主变量、或写 `var(--bitfun-*, fallback)` 均直接失败。
+- `default_appearance_style.html` 由公共 contract 生成，不是第三个 palette owner。
+- Demo/builtin 与内置 Skill 中的 reference mirror 必须 byte-equal；修改正式样例时同时更新 mirror，不保留旧版。
+- 普通 MiniApp chrome 的 raw color 为零。专用色不进入通用 baseline，只能登记到下表的最窄 owner；owner
+  条目没有真实 occurrence 时也会因 stale 而失败。
+
+| MiniApp | 允许的专用 owner | 边界 |
+|---|---|---|
+| Coding Selfie | `data-viz` | `LANG_COLORS` 语言数据系列块 |
+| Git Graph | `data-viz` | branch lane 5–7 的三个分类色；其余 lane 使用宿主语义 |
+| Gomoku | `game-renderer` | 黑白棋子填充与对比描边变量 |
+| Daily Divination | `bespoke-theme` | 塔罗场景本身的完整插画 light/dark 主题 |
+| PPT Live | `slide-renderer` | 幻灯片内容、导出器和 renderer fixture；编辑器 chrome 仍为零 raw color |
+| Regex Playground / Icon Design System | 无 | 全部视觉消费宿主投影 |
+
+### 专用 renderer 和资产
+
+Monaco、xterm/ANSI、Mermaid、syntax、diff、语言标识、调试 overlay、Canvas 和数据系列有独立的格式或
+稳定语义。它们必须留在对应 renderer/domain owner 中，并通过明确 payload 或 `--bf-domain-*` 消费；不得
+泄漏成普通组件可随手调用的 palette。
+
+### 显式排除不是 allowlist
+
+Monaco 拷贝产物、Relay static、E2E fixture、诊断报表 HTML、PPT 内容 renderer、native template icons 和
+generated outputs 不属于普通应用 UI 扫描。每个边界都必须在 surface registry 中用现存路径、唯一 owner、
+artifact kind 和具体理由登记；路径消失或只写模糊理由会使 registry contract test 失败。
+
+这些条目不会允许同名颜色进入其他目录，也不能用 glob 把普通组件一起隐藏。PPT、native asset 等专用 owner
+仍由各自的 renderer、生成器或平台 tint 契约验证；“不计入普通 UI raw color”不等于“不受治理”。
 
 ## 防回退契约
 
-主题 baseline 是 no-growth ratchet，不是普通快照。审计失败时，默认修复方式是复用 Token、删除游离 key、收敛
-近似色、修复 owner 或补最小契约，不能直接提高 baseline、扩充 allowlist、放宽测试或关闭检查。
+主题 baseline 是 no-growth ratchet，不是可随实现调整的快照。以下指标对普通 UI 均应保持为零：
 
-baseline 只允许两类变更：
+- raw color occurrences / unique colors
+- fallback occurrences / unique tokens
+- unresolved required variables
+- compatibility alias usage
+- unregistered dynamic families
+- indistinguishable near pairs
+- non-canonical Widget payload fields
 
-- 实际债务下降时同步下调。
-- 确有新的用户语义且无法复用时，在独立治理变更中说明 owner、消费方、相邻状态、无障碍影响、回退方式和复审结论。
-
-治理不预设脱离代码检查的固定 Token 数量。预算由审计维度、现有 baseline 和真实消费关系共同约束；没有 checker
-保护的任意数字会快速失真，不应成为架构承诺。
-
-以下做法视为治理回退：
+审计失败时，默认修复方式是复用 Token、删除游离 key、收敛近似色、修复 owner 或补最小 component/domain
+契约。以下做法均视为治理回退：
 
 - 为通过 CI 上调 baseline 或 fixture 期望。
-- 把普通组件路径加入专用域 allowlist。
-- 新增与现有 Token 等价的字面量或 fallback。
-- 在 Rust、CLI 或安装器中复制 Web UI 的完整主题模型。
-- 用生成文件或产品定制配置绕过主题 owner。
+- 把普通组件路径加入 renderer/asset exception allowlist。
+- 新增与现有 Token 等价的字面量、fallback 或 alias。
+- 在 Mobile、Installer、Website、Market、Rust 或生成产物中复制公共 palette。
+- 同时写 canonical 与旧变量，或保留两个 adapter 让调用方任选。
+- 用生成文件、产品定制或静态 Vite 产物绕过当前主题 owner。
 
-## 产品定制与扩展
+baseline 只允许两类变更：实际债务下降时同步下调；或确有新的稳定语义时，在独立治理变更中给出 owner、
+真实消费方、相邻状态、无障碍影响和复审结论。
 
-产品定制只引用宿主已注册的 Appearance ID，或对应边界明确允许的少量语义色；不得携带任意 CSS、完整
-Appearance 包、renderer 配置、动态代码或源码替换。详细边界见
-[`product-customization-blueprint.md`](product-customization-blueprint.md)。
+## 变更与验证
 
-GUI、Mobile、Installer 和 CLI/TUI 可以选择不同主题集合，但共享规则而不是共享全部数据结构：
+颜色变更应按 owner 完成，而不是逐页面补丁：
 
-- 身份与品牌配置选择已注册 ID。
-- 每个 surface 的 owner 校验该 ID 和能力范围。
-- 未支持的组合在构建期或入口启动时失败，不静默回默认造成品牌错配。
-- OpenCode TUI 主题保持独立格式；BitFun GUI 插件七色投影不构成 OpenCode 兼容承诺。
+1. 确认 surface、用户语义、相邻状态和唯一 owner。
+2. 优先复用现有 semantic Token；确需新增时选择最窄 component/domain/renderer 边界。
+3. 更新 authoring source、运行时 contract 和真实消费方；删除被替代的旧 API、文件和变量。
+4. 若影响首屏、Widget 或静态包，从 canonical 源重新生成/构建产物。
+5. 运行最窄 owner 测试，再运行跨 surface 颜色审计。
 
-## 变更流程
-
-1. 确认变更所属 surface、主题 owner、用户语义和相邻视觉状态。
-2. 优先复用现有 semantic token；新增 Token 时选择最窄层级和 namespace。
-3. 共享名称或默认 BitFun 值更新对应 design-system owner；运行时、导入兼容或产品/专用域更新 Web UI
-   Appearance owner、校验器、compiler、投影和真实消费方。
-4. 仅在 JS 加载前确有需要时重新生成 Desktop bootstrap；生成式 UI 提示按同一 Appearance 源更新。
-5. 涉及动态变量、别名、专用域或跨 root 时，同步更新对应可执行 contract。
-6. 运行自动检查，并对受影响 surface、light/dark/system、交互状态和无障碍对比做 focused review。
-
-主题变更至少运行：
+核心自动门禁为：
 
 ```bash
+pnpm run theme:color-audit:test
+pnpm run theme:color-audit:all
+pnpm run theme:color-audit:miniapps
+pnpm run theme:color-audit:native-mobile
+pnpm run theme:visual-contract
+pnpm run appearance:contract-audit
+pnpm run design-system:check
 pnpm run check:web
-pnpm run generate-startup-appearance-bootstrap
 ```
 
-`check:web` 聚合执行类型检查、Appearance contract、主题颜色审计及其 contract tests，以及主题视觉治理契约，
-与 CI 针对 Web UI 的 Appearance 门禁保持一致。
+另外还应执行被改动 surface 的 type-check/test/build。自动审计、source 检查和 build 只能证明契约与产物
+一致，不能替代真实渲染的视觉与对比度审查；设计验收应在 Design Lab 或真实产品中人工完成，不能把浏览器
+自动化截图或 Mock 当作最终视觉证据。
 
-若 Appearance 源影响生成产物，先运行 `pnpm run generate-startup-appearance-bootstrap`，再确认只有预期的只读产物发生变化。
-跨 surface 视觉变化还应按 `theme-visual-governance-contract.json` 的覆盖项完成 focused review；自动审计不等于视觉
-或对比度已经通过。
+## 完成判据
 
-## 当前判定
+颜色体系只有在以下条件同时满足时才算完成：
 
-普通应用组件的 raw color、等价字面量、fallback 和近似色债务由审计脚本与 baseline 持续守护；本文不复制某次
-扫描数量。专用渲染 palette、兼容别名和各产品形态的独立主题仍然存在，它们只有在缺少 owner、越过作用域或
-重新进入普通组件时才构成债务。
+- 普通 UI 的每个颜色都能追溯到一个 canonical semantic/component Token。
+- 每个专用色值都能追溯到一个 theme preset、domain、renderer 或 asset metadata owner。
+- Web UI 运行时只投影 schema v2 `theme-tokens`，DOM 中没有历史变量。
+- Mobile、Website、Market、Installer 和 Design Lab 不复制公共 palette。
+- v1 只在读取时迁移，正向源码、样式、产物与导出中不存在旧名称。
+- baseline 默认只下降，新增语义必须有真实消费方和明确审查证据。
 
-主题治理完成的判据不是“色值最少”，而是：
-
-- 每个普通组件颜色都能追溯到稳定语义 Token。
-- 每个专用色板都有清楚 owner 和边界。
-- 每层主题事实只有一个权威 owner：共享名称与默认值属于 design-system，运行时选择与产品/专用域组合属于
-  Appearance；生成物不反向定义契约。
-- 新主题和产品定制不需要复制 Rust/React/TUI 实现。
-- 审计 baseline 默认只下降；确需合理增长时，必须经独立评审且有真实消费方。
+完成目标不是“色值数量最少”，而是每个颜色只有一个权威 owner、每个消费方只依赖稳定语义、每次回退都能
+被自动门禁准确阻断。

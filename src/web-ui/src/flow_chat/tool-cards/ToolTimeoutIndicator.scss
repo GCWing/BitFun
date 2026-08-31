@@ -3,14 +3,14 @@
 .tool-timeout-indicator {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  gap: var(--bf-control-flow-chat-inline-gap);
 }
 
 .duration-text {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
-  color: var(--bf-appearance-token-color-text-secondary);
+  gap: var(--bf-control-flow-chat-inline-gap);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-semibold);
   letter-spacing: var(--bf-letter-spacing-subtle);
@@ -23,22 +23,22 @@
 }
 
 .duration-text--live {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-weight: var(--bf-font-weight-medium);
   font-variant-numeric: tabular-nums;
 }
 
 .duration-text--warning {
-  color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
 }
 
 .duration-text--completed-success {
-  color: var(--bf-appearance-token-color-success);
+  color: var(--bf-color-status-success-content);
 }
 
 .duration-text--completed-error,
 .duration-text--completed-cancelled {
-  color: var(--bf-appearance-token-color-error);
+  color: var(--bf-color-status-danger-content);
 }
 
 .duration-elapsed {
@@ -46,14 +46,14 @@
 }
 
 .duration-separator {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   opacity: 0.5;
   font-weight: var(--bf-font-weight-regular);
   margin: 0 1px;
 }
 
 .duration-timeout {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   opacity: 0.7;
   font-weight: var(--bf-font-weight-regular);
   font-variant-numeric: tabular-nums;
@@ -70,7 +70,7 @@
 }
 
 .duration-timeout--warning {
-  color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
   opacity: 1;
 }
 
@@ -84,13 +84,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  gap: var(--bf-control-flow-chat-inline-gap);
   height: 22px;
-  padding: 0 var(--bf-appearance-token-flowchat-inline-gap);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  padding: 0 var(--bf-control-flow-chat-inline-gap);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   flex-shrink: 0;
   font-size: var(--bf-type-flow-support-font-size);
@@ -115,15 +115,15 @@
   }
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-secondary);
-    border-color: var(--bf-appearance-token-border-base);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-secondary);
+    border-color: var(--bf-color-border-default);
   }
 
   &.is-active {
-    color: var(--bf-appearance-token-color-accent-500);
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
+    background: var(--bf-color-surface-subtle);
+    border-color: var(--bf-color-accent-default);
   }
 
   &:disabled {

@@ -19,29 +19,29 @@
   &--success {
     
     .notification-item__icon {
-      color: var(--bf-appearance-token-color-success);
-      background: var(--bf-appearance-token-color-success-bg);
+      color: var(--bf-color-status-success-content);
+      background: var(--bf-color-status-success-surface);
     }
   }
 
   &--error {
     .notification-item__icon {
-      color: var(--bf-appearance-token-color-error);
-      background: var(--bf-appearance-token-color-error-bg);
+      color: var(--bf-color-status-danger-content);
+      background: var(--bf-color-status-danger-surface);
     }
   }
 
   &--warning {
     .notification-item__icon {
-      color: var(--bf-appearance-token-color-warning);
-      background: var(--bf-appearance-token-color-warning-bg);
+      color: var(--bf-color-status-warning-content);
+      background: var(--bf-color-status-warning-surface);
     }
   }
 
   &--info {
     .notification-item__icon {
-      color: var(--bf-appearance-token-color-warning);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
+      color: var(--bf-color-status-warning-content);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
     }
   }
 
@@ -70,13 +70,13 @@
   &__title {
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-snug);
   }
 
   &__message {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-ui);
     word-break: break-word;
   }
@@ -88,14 +88,14 @@
     border: none;
     background: none;
     font: inherit;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     text-decoration: underline;
     text-align: left;
     cursor: pointer;
     word-break: break-all;
 
     &:hover {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 

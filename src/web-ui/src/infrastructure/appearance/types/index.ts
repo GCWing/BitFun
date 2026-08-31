@@ -1,5 +1,5 @@
 export const APPEARANCE_SCHEMA = 'bitfun.appearance' as const;
-export const APPEARANCE_SCHEMA_VERSION = 1 as const;
+export const APPEARANCE_SCHEMA_VERSION = 2 as const;
 export const SYSTEM_APPEARANCE_ID = 'system' as const;
 
 export type AppearanceMode = 'light' | 'dark';
@@ -379,16 +379,29 @@ export interface AppearanceSurfaceDefinition {
 }
 
 export type AppearanceRendererId =
-  | 'css-tokens'
+  | 'theme-tokens'
   | 'monaco'
   | 'xterm'
   | 'mermaid'
   | 'generative-widget'
   | 'bitfun-canvas';
 
-export interface CssTokenAppearanceSettings {
-  tokens: Record<string, string>;
-  background: string;
+export type AppearanceThemeTokenName =
+  | `--bf-color-${string}`
+  | `--bf-shadow-${string}`
+  | `--bf-effect-${string}`
+  | `--bf-opacity-${string}`
+  | `--bf-domain-${string}`
+  | `--bf-component-${string}`;
+
+export type AppearanceThemeScopeId = 'chrome';
+
+export interface ThemeTokenAppearanceSettings {
+  tokens: Partial<Record<AppearanceThemeTokenName, string>>;
+  scopes?: Partial<Record<
+    AppearanceThemeScopeId,
+    Partial<Record<AppearanceThemeTokenName, string>>
+  >>;
 }
 
 export interface MonacoAppearanceTokenRule {
@@ -491,7 +504,7 @@ export interface CanvasAppearanceSettings {
 }
 
 export interface AppearanceRendererSettingsMap {
-  'css-tokens': CssTokenAppearanceSettings;
+  'theme-tokens': ThemeTokenAppearanceSettings;
   monaco: MonacoAppearanceSettings;
   xterm: XtermAppearanceSettings;
   mermaid: MermaidAppearanceSettings;
@@ -699,6 +712,8 @@ export interface AppearanceImportOptions {
 export interface StoredAppearancePackage {
   manifest: AppearancePackage;
   archive: ArrayBuffer;
+  /** Version of the manifest serialized inside archive. Missing on pre-v2 records. */
+  archiveSchemaVersion?: typeof APPEARANCE_SCHEMA_VERSION;
   assets: Record<string, StoredAppearanceAsset>;
   importedAt: string;
   marketOrigin?: AppearanceMarketOrigin;
@@ -715,6 +730,8 @@ export interface StoredAppearanceCatalogEntry {
   importedAt: string;
   marketOrigin?: AppearanceMarketOrigin;
   localOverride?: boolean;
+  schemaVersion?: typeof APPEARANCE_SCHEMA_VERSION;
+  archiveSchemaVersion?: typeof APPEARANCE_SCHEMA_VERSION;
 }
 
 export interface AppearanceCatalogEntry {

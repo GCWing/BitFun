@@ -5,9 +5,9 @@
   width: 100%;
   min-width: 0;
   height: 148px;
-  border: 1px solid var(--bf-appearance-token-border-base);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-color-bg-elevated);
+  background: var(--bf-color-surface-raised);
   box-shadow: $shadow-xs;
   display: flex;
   flex-direction: column;
@@ -24,13 +24,13 @@
 
   &:hover {
     transform: translateY(-1px);
-    border-color: var(--bf-appearance-token-border-medium);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-surface-subtle);
     box-shadow: $shadow-sm;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-text-primary);
+    outline: 2px solid var(--bf-color-content-primary);
     outline-offset: 2px;
   }
 }
@@ -39,7 +39,7 @@
   box-sizing: border-box;
   min-height: 34px;
   border-radius: $size-radius-base;
-  background: var(--bf-appearance-token-element-bg-subtle);
+  background: var(--bf-color-surface-subtle);
   overflow: hidden;
   position: relative;
   z-index: 1;
@@ -53,7 +53,7 @@
   height: 68px;
   background-image: radial-gradient(
     circle,
-    var(--bf-appearance-token-border-base) 0 1px,
+    var(--bf-color-border-default) 0 1px,
     transparent 1.25px
   );
   background-position: center top;
@@ -61,8 +61,8 @@
   opacity: 0.72;
   pointer-events: none;
   transform: translateX(-50%);
-  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);
 }
 
 @keyframes agent-surface-card-in {

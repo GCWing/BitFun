@@ -52,7 +52,7 @@
     align-items: center;
     min-height: 56px;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-config-page-divider);
+    border-bottom: 1px solid var(--bf-component-config-page-divider);
     background: transparent;
 
     &:last-child {
@@ -60,7 +60,7 @@
     }
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
+      background: var(--bf-color-surface-subtle);
     }
   }
 
@@ -78,10 +78,10 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-sm;
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-action-neutral-surface-hover);
+    color: var(--bf-color-content-secondary);
   }
 
   &__registry-copy {
@@ -92,7 +92,7 @@
     display: block;
     min-width: 0;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-dense);
@@ -103,7 +103,7 @@
   &__registry-description {
     margin: 2px 0 0;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-compact);
     text-overflow: ellipsis;
@@ -128,29 +128,29 @@
     gap: 4px;
     min-height: 22px;
     padding: 0 6px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 999px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     line-height: var(--bf-line-height-none);
     white-space: nowrap;
 
     &.is-ok {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
-      color: var(--bf-appearance-token-color-success);
+      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
+      color: var(--bf-color-status-success-content);
     }
 
     &.is-error {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
-      color: var(--bf-appearance-token-color-error);
+      border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
+      color: var(--bf-color-status-danger-content);
     }
 
     &.is-muted {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -178,39 +178,39 @@
     white-space: nowrap;
 
     &.is-enabled {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
-      color: var(--bf-appearance-token-color-success);
+      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
+      color: var(--bf-color-status-success-content);
     }
 
     &.is-ready {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
-      color: var(--bf-appearance-token-color-success);
+      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
+      color: var(--bf-color-status-success-content);
     }
 
     &.is-partial {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, transparent);
-      color: var(--bf-appearance-token-color-warning);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, transparent);
+      color: var(--bf-color-status-warning-content);
     }
 
     &.is-not_installed {
-      border-color: var(--bf-appearance-token-border-subtle);
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-muted);
+      border-color: var(--bf-color-border-subtle);
+      background: var(--bf-color-surface-subtle);
+      color: var(--bf-color-content-muted);
     }
 
     &.is-invalid {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
-      color: var(--bf-appearance-token-color-error);
+      border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
+      color: var(--bf-color-status-danger-content);
     }
 
     &.is-checking {
-      border-color: var(--bf-appearance-token-border-subtle);
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border-color: var(--bf-color-border-subtle);
+      background: var(--bf-color-surface-subtle);
+      color: var(--bf-color-content-secondary);
 
       svg {
         animation: bitfun-acp-spin 0.9s linear infinite;
@@ -228,7 +228,7 @@
 
   &__empty {
     padding: $size-gap-4;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
     text-align: center;
   }
@@ -244,7 +244,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-top: 1px solid var(--bf-appearance-token-config-page-divider);
+    border-top: 1px solid var(--bf-component-config-page-divider);
   }
 
   &__hidden-remote-row {
@@ -254,7 +254,7 @@
     align-items: center;
     min-width: 0;
     padding: $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-config-page-divider);
+    border-bottom: 1px solid var(--bf-component-config-page-divider);
 
     &:last-child {
       border-bottom: 0;
@@ -270,7 +270,7 @@
     // The shared ConfigPageSection body owns the outer surface. Separate saved
     // servers with the same divider used by other settings collections.
     & + & {
-      border-top: 1px solid var(--bf-appearance-token-config-page-divider);
+      border-top: 1px solid var(--bf-component-config-page-divider);
     }
   }
 
@@ -281,7 +281,7 @@
     align-items: center;
     padding: $size-gap-3;
     min-width: 0;
-    border-bottom: 1px solid var(--bf-appearance-token-config-page-divider);
+    border-bottom: 1px solid var(--bf-component-config-page-divider);
     background: transparent;
   }
 
@@ -306,7 +306,7 @@
     align-items: center;
     min-height: 22px;
     padding: 0 8px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 999px;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
@@ -314,15 +314,15 @@
     white-space: nowrap;
 
     &.is-success {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
-      color: var(--bf-appearance-token-color-success);
+      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
+      color: var(--bf-color-status-success-content);
     }
 
     &.is-warning {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
-      color: var(--bf-appearance-token-color-warning);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 24%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
+      color: var(--bf-color-status-warning-content);
     }
   }
 

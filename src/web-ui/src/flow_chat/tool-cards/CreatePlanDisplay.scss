@@ -7,10 +7,10 @@
 .create-plan-display {
   display: flex;
   flex-direction: column;
-  background: var(--bf-appearance-token-color-bg-scene);
-  border: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-color-surface-scene);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: 8px;
-  margin: var(--bf-appearance-token-flowchat-card-gap) 0;
+  margin: var(--bf-control-flow-chat-card-gap) 0;
   overflow: hidden;
   transition:
     border-color 180ms ease,
@@ -19,26 +19,26 @@
   box-sizing: border-box;
 
   &:hover {
-    border-color: var(--bf-appearance-token-border-medium);
+    border-color: var(--bf-color-field-border-hover);
     box-shadow:
-      0 4px 16px var(--bf-appearance-token-color-overlay-black-20),
-      0 2px 8px var(--bf-appearance-token-color-overlay-black-12),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
+      0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent),
+      0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
     transform: translateY(-1px);
   }
 
   &--loading {
-    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+    padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
     /* Same chrome as the filled card when params are not ready yet (streaming start). */
-    border: 1px solid var(--bf-appearance-token-border-base);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: 8px;
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
     box-sizing: border-box;
 
     .create-plan-header {
       justify-content: flex-start;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
-      color: var(--bf-appearance-token-color-text-muted);
+      gap: var(--bf-control-flow-chat-inline-gap);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-type-flow-control-font-size);
       border-bottom: none;
     }
@@ -52,15 +52,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
-    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+    gap: var(--bf-control-flow-chat-inline-gap);
+    padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
     background: linear-gradient(
       90deg,
-      color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-warning) 4%, transparent) 50%,
-      var(--bf-appearance-token-color-overlay-white-04) 100%
+      color-mix(in srgb, var(--bf-color-status-warning-content) 7%, transparent) 0%,
+      color-mix(in srgb, var(--bf-color-status-warning-content) 4%, transparent) 50%,
+      color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 100%
     );
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    border-bottom: 1px solid var(--bf-color-border-default);
     /* Match parent .create-plan-display top corners (8px) */
     border-radius: 8px 8px 0 0;
 
@@ -90,7 +90,7 @@
 
       &:hover {
         .file-name {
-          color: var(--bf-appearance-token-color-text-primary);
+          color: var(--bf-color-content-primary);
         }
       }
     }
@@ -99,7 +99,7 @@
       display: flex;
       align-items: center;
       min-width: 0;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      gap: var(--bf-control-flow-chat-inline-gap);
     }
 
     .file-icon-wrapper {
@@ -110,7 +110,7 @@
       height: 28px;
       background: transparent;
       border-radius: 4px;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
 
       svg {
         width: 18px;
@@ -121,7 +121,7 @@
     .file-name {
       font-size: var(--bf-type-flow-support-font-size);
       font-family:var(--bf-font-family-mono);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -137,7 +137,7 @@
       display: inline-flex;
       align-items: center;
       flex-shrink: 0;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      gap: var(--bf-control-flow-chat-inline-gap);
     }
 
     &--loading-shimmer {
@@ -150,8 +150,8 @@
   .create-plan-content {
     display: flex;
     align-items: flex-start;
-    gap: var(--bf-appearance-token-flowchat-card-gap);
-    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+    gap: var(--bf-control-flow-chat-card-gap);
+    padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
 
     .plan-content-left {
       flex: 1;
@@ -159,30 +159,30 @@
     }
 
     .plan-title {
-      margin: 0 0 var(--bf-appearance-token-flowchat-inline-gap) 0;
+      margin: 0 0 var(--bf-control-flow-chat-inline-gap) 0;
       font-size: var(--bf-type-flow-body-font-size);
       font-weight: var(--bf-font-weight-semibold);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       line-height: var(--bf-type-flow-support-line-height);
     }
 
     .plan-overview {
       margin: 0;
       font-size: var(--bf-type-flow-control-font-size);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       line-height: var(--bf-type-flow-support-line-height);
     }
 
   }
 
   .create-plan-todos {
-    border-top: 1px solid var(--bf-appearance-token-border-base);
-    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+    border-top: 1px solid var(--bf-color-border-default);
+    padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
 
     .todos-list {
       display: flex;
       flex-direction: column;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      gap: var(--bf-control-flow-chat-inline-gap);
       max-height: 200px;
       overflow-x: hidden;
       overflow-y: auto;
@@ -192,7 +192,7 @@
     .todo-item {
       display: flex;
       align-items: flex-start;
-      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      gap: var(--bf-control-flow-chat-inline-gap);
       padding: 5px 0;
       transition: background 0.15s ease;
       border-radius: 4px;
@@ -207,20 +207,20 @@
         height: 12px;
 
         &--pending {
-          color: var(--bf-appearance-token-color-text-muted);
+          color: var(--bf-color-content-muted);
           opacity: 0.5;
         }
 
         &--in-progress {
-          color: var(--bf-appearance-token-color-info);
+          color: var(--bf-color-status-info-content);
         }
 
         &--completed {
-          color: var(--bf-appearance-token-color-success);
+          color: var(--bf-color-status-success-content);
         }
 
         &--cancelled {
-          color: var(--bf-appearance-token-color-error);
+          color: var(--bf-color-status-danger-content);
           opacity: 0.6;
         }
       }
@@ -228,20 +228,20 @@
       .todo-content {
         font-size: var(--bf-type-flow-control-font-size);
         line-height: var(--bf-type-flow-support-line-height);
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
       }
 
       &.status-pending {
         .todo-content {
-          color: var(--bf-appearance-token-color-text-secondary);
+          color: var(--bf-color-content-secondary);
         }
       }
 
       &.status-in_progress {
-        background: var(--bf-appearance-token-glass-blue-subtle);
+        background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
         
         .todo-content {
-          color: var(--bf-appearance-token-color-text-primary);
+          color: var(--bf-color-content-primary);
           font-weight: var(--bf-font-weight-medium);
         }
       }
@@ -249,7 +249,7 @@
       &.status-completed {
         .todo-content {
           text-decoration: line-through;
-          color: var(--bf-appearance-token-color-text-muted);
+          color: var(--bf-color-content-muted);
           opacity: 0.6;
         }
       }
@@ -259,7 +259,7 @@
         
         .todo-content {
           text-decoration: line-through;
-          color: var(--bf-appearance-token-color-text-muted);
+          color: var(--bf-color-content-muted);
         }
       }
     }
@@ -269,9 +269,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
-    border-top: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-color-overlay-white-04);
+    padding: var(--bf-control-flow-chat-card-padding-block) var(--bf-control-flow-chat-card-padding-inline);
+    border-top: 1px solid var(--bf-color-border-default);
+    background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
     /* Match parent .create-plan-display bottom corners (8px) */
     border-radius: 0 0 8px 8px;
 

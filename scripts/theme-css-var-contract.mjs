@@ -41,16 +41,41 @@ export const PACKAGE_CSS_VAR_DEFINITION_CONTRACTS = Object.freeze([
   }),
 ]);
 
-export const DEFAULT_ROOT = 'src/web-ui/src';
+export const PACKAGE_CSS_VAR_IMPORT_CONTRACTS = Object.freeze([
+  Object.freeze({
+    specifier: '@bitfun/design-tokens/tokens.css',
+    packageNames: Object.freeze(['@bitfun/design-tokens']),
+  }),
+  Object.freeze({
+    specifier: '@bitfun/theme-bitfun/default.css',
+    packageNames: Object.freeze(['@bitfun/design-tokens', '@bitfun/theme-bitfun']),
+  }),
+  Object.freeze({
+    specifier: '@bitfun/theme-bitfun/themes.css',
+    packageNames: Object.freeze(['@bitfun/theme-bitfun']),
+  }),
+]);
+
+export const DEFAULT_ROOT = 'src/web-ui';
 export const DEFAULT_BASELINE_PATH = 'scripts/theme-color-governance-baseline.json';
 
-export const COLOR_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.ts', '.tsx', '.js', '.jsx']);
+export const COLOR_EXTENSIONS = new Set([
+  '.css',
+  '.html',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.sass',
+  '.scss',
+  '.svg',
+  '.ts',
+  '.tsx',
+  '.webmanifest',
+]);
 
 export const TOKEN_PATH_PARTS = [
-  'BitFun-Installer/src/styles/variables.css',
   'BitFun-Installer/src/theme',
   'component-library/styles',
-  'theme/presets',
 ];
 
 export const TOKEN_ALIAS_SOURCE_PATH_PARTS = [
@@ -58,18 +83,17 @@ export const TOKEN_ALIAS_SOURCE_PATH_PARTS = [
 ];
 
 export const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'BitFun-Installer/src/styles/variables.css',
   'BitFun-Installer/src/theme/installerThemeRuntime.ts',
   'component-library/styles',
   'infrastructure/appearance',
-  'src/mobile-web/src/theme/presets',
+  'src/mobile-web/src/styles/global.scss',
   'tools/bitfun-canvas/runtime/styles',
   'tools/generative-widget/appearancePayload.ts',
 ];
 
 export const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'BitFun-Installer/src/styles/variables.css',
   'component-library/styles',
+  'src/mobile-web/src/styles/global.scss',
 ];
 
 export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
@@ -86,6 +110,12 @@ export const EXCEPTION_PATH_PARTS = [
 ];
 
 export const COLOR_DOMAIN_RULES = [
+  {
+    key: 'assetMetadata',
+    label: 'Static asset and install metadata',
+    pathParts: ['assets', 'public/favicon', 'site.webmanifest', 'src/assets'],
+    extensions: ['.svg', '.webmanifest'],
+  },
   {
     key: 'appearanceProjection',
     label: 'Appearance projections',
@@ -104,7 +134,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'tokenContract',
     label: 'Token contracts',
-    pathParts: ['BitFun-Installer/src/styles/variables.css', 'component-library/styles'],
+    pathParts: ['component-library/styles'],
   },
   {
     key: 'generatedWidget',
@@ -176,6 +206,12 @@ export const COLOR_DOMAIN_LABELS = Object.fromEntries([
 
 export const COLOR_DOMAIN_CONTRACTS = [
   {
+    key: 'assetMetadata',
+    owner: 'src/web-ui/src/app/components/NavPanel/assets; src/web-ui/public/assets; src/mobile-web/src/assets; src/miniapp-market-web/public; src/skin-market-web/public',
+    reason: 'Favicons, install metadata, and self-contained vector assets cannot consume runtime CSS variables and therefore own their serialized colors at the asset boundary.',
+    mergePolicy: 'Keep only identity or platform metadata colors here; any rendered application UI color must move to a canonical theme token.',
+  },
+  {
     key: 'appearanceProjection',
     owner: 'src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts',
     reason: 'The builtin Appearance projection owns renderer palettes and named product-domain defaults derived from each primitive palette.',
@@ -183,15 +219,15 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'themePreset',
-    owner: 'src/web-ui/src/infrastructure/appearance/builtins',
+    owner: 'src/web-ui/src/infrastructure/appearance/builtins; BitFun-Installer/src/theme',
     reason: 'Builtin appearances own primitive palette mapping and must keep per-appearance personality instead of being folded into shared app tokens.',
     mergePolicy: 'Only merge exact duplicate primitive values after confirming the theme still exposes distinct semantic roles.',
   },
   {
     key: 'themeRuntime',
-    owner: 'src/web-ui/src/infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts',
-    reason: 'AppearanceRuntime applies the registered CSS token projection for static CSS, web preview, and embedded surface payloads.',
-    mergePolicy: 'Keep the runtime projection canonical and reject reintroduction of compatibility aliases or surface-local token owners.',
+    owner: 'src/web-ui/src/infrastructure/appearance/adapters/ThemeTokenAppearanceAdapter.ts',
+    reason: 'AppearanceRuntime applies the registered canonical theme, product-domain, and component token payloads.',
+    mergePolicy: 'Keep runtime payloads canonical and reject compatibility aliases or surface-local token owners.',
   },
   {
     key: 'tokenContract',
@@ -267,20 +303,7 @@ export const TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS = [];
 
 export const FALLBACK_VAR_CONTRACTS = [];
 
-export const SURFACE_TOKEN_RENAME_CONTRACTS = [
-  {
-    key: '--m-editor-highlight-rgb',
-    canonical: '--private-markdown-editor-highlight-rgb',
-    owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
-    reason: 'Markdown editor highlight color should use the component-private markdown-editor helper instead of the abbreviated meditor local key.',
-  },
-  {
-    key: '--m-editor-highlight-border-rgb',
-    canonical: '--private-markdown-editor-highlight-border-rgb',
-    owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
-    reason: 'Markdown editor highlight border color should use the component-private markdown-editor helper instead of the abbreviated meditor local key.',
-  },
-];
+export const SURFACE_TOKEN_RENAME_CONTRACTS = [];
 
 export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   {
@@ -294,24 +317,14 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
     reason: 'BitFun Canvas iframe runtime receives host Appearance values through a scoped CSS variable family that must stay isolated from app root tokens.',
   },
   {
-    prefix: '--color-accent-',
-    owner: 'src/mobile-web/src/theme/presets',
-    reason: 'Mobile presets export the active accent palette scale by numeric stop.',
-  },
-  {
-    prefix: '--color-purple-',
-    owner: 'src/mobile-web/src/theme/presets',
-    reason: 'Mobile presets export the secondary accent palette by numeric stop.',
-  },
-  {
-    prefix: '--color-pink-',
-    owner: 'src/mobile-web/src/theme/presets',
-    reason: 'Mobile presets export assistant-mode identity accents by numeric stop for session and picker states.',
-  },
-  {
     prefix: '--bf-font-size-',
     owner: 'src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
     reason: 'Font preference runtime overrides the canonical design-system font-size primitives so every semantic role follows one global scale.',
+  },
+  {
+    prefix: '--mobile-',
+    owner: 'src/apps/mobile/design-system/preview/preview.js; src/apps/mobile/design-system/preview/preview.css',
+    reason: 'The native comparison preview projects the validated mobile token contract into a scoped device canvas without exposing those values as canonical web theme tokens.',
   },
 ];
 

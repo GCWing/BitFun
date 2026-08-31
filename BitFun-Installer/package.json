@@ -24,6 +24,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@bitfun/theme-bitfun": "workspace:^",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "i18next": "^25.8.0",

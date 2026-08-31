@@ -146,9 +146,9 @@ describe('Remote Connect safety contracts', () => {
     expect(connectedBrandStyle).not.toContain('background:');
     expect(footerMessageBrandStyle).toContain('border: 0');
     expect(footerMessageBrandStyle).toContain('background: transparent');
-    expect(footerMessageBrandStyle).toContain('--bf-appearance-token-color-text-primary');
+    expect(footerMessageBrandStyle).toContain('--bf-color-content-primary');
     expect(overviewMessageBrandStyle).toContain('background: transparent');
-    expect(overviewMessageBrandStyle).toContain('--bf-appearance-token-color-text-primary');
+    expect(overviewMessageBrandStyle).toContain('--bf-color-content-primary');
     expect(dialogSource).not.toContain('<Send size={28} />');
     expect(dialogSource).not.toContain('<MessageSquareText size={28} />');
     expect(dialogSource).not.toContain('<MessagesSquare size={28} />');

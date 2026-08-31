@@ -21,7 +21,7 @@
   border: 0;
   border-radius: 13px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font: inherit;
   font-size: var(--bf-type-flow-control-font-size);
   font-weight: var(--bf-font-weight-medium);
@@ -34,12 +34,12 @@
 
   &:hover,
   &[data-bf-state~='open'] {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: -2px;
   }
 }
@@ -77,7 +77,7 @@
 .bitfun-harness-selector__trigger-current {
   gap: 4px;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-regular);
 }
@@ -89,7 +89,7 @@
 .bitfun-harness-selector__trigger-current-value {
   min-width: 0;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-weight: var(--bf-font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -97,7 +97,7 @@
 
 .bitfun-harness-selector__trigger-chevron {
   flex: none;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 // Inside ChatInput's add menu the current Harness/main-Agent signature becomes
@@ -116,7 +116,7 @@
   flex: none;
   width: 16px;
   height: 16px;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .bitfun-harness-selector__density-frame,
@@ -130,7 +130,7 @@
 }
 
 .bitfun-harness-selector__density-core {
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
 }
 
 // One surface swaps between the fixed-Session summary, Harness profiles, and
@@ -142,7 +142,7 @@
 
 .bitfun-harness-selector__empty {
   padding: 14px 10px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-support-font-size);
   text-align: center;
 }

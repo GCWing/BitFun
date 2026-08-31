@@ -6,7 +6,7 @@ import {
 } from '../../generated/MobilePreviewScenarios';
 import { ComposerBar, ComposerPresentation } from '../components/ComposerBar';
 import { ConversationHeader } from '../components/ConversationHeader';
-import { INK, LINE, MUTED, PAGE_BG, SOFT } from '../components/Theme';
+import { INK, LINE, MUTED, PAGE_BG, SOFT, TRANSPARENT } from '../components/Theme';
 
 @Entry
 @ComponentV2
@@ -104,7 +104,7 @@ struct MobileDesignGallery {
           top: message.role === 'user' ? MobileDesignGeometry.messageBubbleVerticalPadding : 2,
           bottom: message.role === 'user' ? MobileDesignGeometry.messageBubbleVerticalPadding : 2
         })
-        .backgroundColor(message.role === 'user' ? SOFT : '#00000000')
+        .backgroundColor(message.role === 'user' ? SOFT : TRANSPARENT)
         .borderRadius(message.role === 'user' ? MobileDesignGeometry.messageBubbleRadius : 0)
       if (message.role !== 'user') {
         Blank()

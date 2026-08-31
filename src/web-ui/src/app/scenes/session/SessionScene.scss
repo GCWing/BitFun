@@ -7,9 +7,6 @@
 
 
 .bitfun-session-scene {
-  --private-session-pane-resizer-accent-rgb: 88, 166, 255;
-  --private-session-pane-resizer-muted-rgb: 128, 128, 128;
-
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -18,8 +15,8 @@
   height: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
 
   &--dragging {
     user-select: none;
@@ -133,8 +130,8 @@
       inset: 0;
       background: linear-gradient(
         to right,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.25) 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.12) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 25%, transparent) 0%,
+        color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent) 50%,
         transparent 100%
       );
       pointer-events: none;
@@ -148,13 +145,13 @@
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9);
+      color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
       font-size: var(--bf-type-flow-control-font-size);
       font-weight: var(--bf-font-weight-semibold);
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;
-      text-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-30);
+      text-shadow: 0 1px 2px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
       animation: pane-collapse-hint 0.3s ease-out;
     }
   }
@@ -168,7 +165,7 @@
   cursor: col-resize;
   user-select: none;
   z-index: $z-sticky;
-  background: var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-border-subtle);
 
   &::before {
     content: '';
@@ -226,7 +223,7 @@
   }
 
   &__icon {
-    color: rgba(var(--private-session-pane-resizer-muted-rgb), 0.6);
+    color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
     transition: color $motion-base $easing-standard;
   }
 
@@ -235,33 +232,33 @@
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.8) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 80%,
         transparent 100%
       );
       transform: translate(-50%, -50%) scaleY(1);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9); }
+    .bitfun-pane-resizer__icon { color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent); }
   }
 
   &--dragging {
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 1) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 20%,
+        var(--bf-color-accent-default) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px rgba(var(--private-session-pane-resizer-accent-rgb), 0.5);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
       transform: translate(-50%, -50%) scaleY(1.2);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 1); }
+    .bitfun-pane-resizer__icon { color: var(--bf-color-accent-default); }
   }
 
   &:focus {
@@ -269,12 +266,12 @@
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.9) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px rgba(var(--private-session-pane-resizer-accent-rgb), 0.4);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       transform: translate(-50%, -50%) scaleY(1.1);
       opacity: 1;
     }
@@ -283,7 +280,7 @@
 
   &:focus-visible {
     .bitfun-pane-resizer__line {
-      outline: 2px solid rgba(var(--private-session-pane-resizer-accent-rgb), 0.8);
+      outline: 2px solid var(--bf-color-focus-ring);
       outline-offset: 2px;
     }
   }
@@ -298,7 +295,7 @@
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
   transition: height $motion-base $easing-standard,
               opacity $motion-base $easing-standard;
 
@@ -324,7 +321,7 @@
   cursor: row-resize;
   user-select: none;
   z-index: $z-sticky;
-  background: var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-border-subtle);
   transition:
     background-color $motion-base $easing-standard,
     height $motion-base $easing-standard,
@@ -380,7 +377,7 @@
   }
 
   &__icon {
-    color: rgba(var(--private-session-pane-resizer-muted-rgb), 0.6);
+    color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
     transition: color $motion-base $easing-standard;
   }
 
@@ -389,33 +386,33 @@
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.8) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 80%,
         transparent 100%
       );
       transform: translate(-50%, -50%) scaleX(1);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9); }
+    .bitfun-bottom-pane-resizer__icon { color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent); }
   }
 
   &--dragging {
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 1) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 20%,
+        var(--bf-color-accent-default) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px rgba(var(--private-session-pane-resizer-accent-rgb), 0.5);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
       transform: translate(-50%, -50%) scaleX(1.19);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 1); }
+    .bitfun-bottom-pane-resizer__icon { color: var(--bf-color-accent-default); }
   }
 
   &:focus {
@@ -423,12 +420,12 @@
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.9) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px rgba(var(--private-session-pane-resizer-accent-rgb), 0.4);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       transform: translate(-50%, -50%) scaleX(1.11);
       opacity: 1;
     }
@@ -437,7 +434,7 @@
 
   &:focus-visible {
     .bitfun-bottom-pane-resizer__line {
-      outline: 2px solid rgba(var(--private-session-pane-resizer-accent-rgb), 0.8);
+      outline: 2px solid var(--bf-color-focus-ring);
       outline-offset: 2px;
     }
   }

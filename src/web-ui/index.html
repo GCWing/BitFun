@@ -8,9 +8,6 @@
     <title>BitFun - AI Code Assistant</title>
     <script>
       (function () {
-        var dark = '#121214';
-        /* Keep in sync with infrastructure/appearance/builtins/light.ts colors.background.primary */
-        var light = '#fdfdfd';
         var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
         var root = document.documentElement;
         var fallbackMessages = {
@@ -52,8 +49,13 @@
         window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__ = resolveLocale;
         window.__BITFUN_STARTUP_OVERLAY_STARTED_AT__ = performance.now();
         root.setAttribute('lang', resolveLocale());
-        var bg = root.style.backgroundColor || (m && m.matches ? dark : light);
-        root.style.setProperty('--color-bg-primary', bg);
+        root.setAttribute('data-bf-design-system-root', '');
+        if (!root.hasAttribute('data-color-scheme')) {
+          root.setAttribute('data-color-scheme', m && m.matches ? 'dark' : 'light');
+        }
+        root.setAttribute('data-contrast', 'standard');
+        root.setAttribute('data-density', 'compact');
+        var bg = root.style.backgroundColor || 'var(--bf-color-surface-chrome)';
         root.style.backgroundColor = bg;
         function paintBody() {
           if (document.body) document.body.style.backgroundColor = bg;
@@ -66,6 +68,7 @@
         }
       })();
     </script>
+    <link rel="stylesheet" href="/src/design-system-theme.css" />
     <style>
       @layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;
 
@@ -85,14 +88,8 @@
         overflow: hidden;
       }
       
-      /* Fallback before inline script runs; align with dark / light theme primaries */
       html {
-        background-color: #121214;
-      }
-      @media (prefers-color-scheme: light) {
-        html {
-          background-color: #fdfdfd;
-        }
+        background-color: var(--bf-color-surface-chrome);
       }
       
       body {
@@ -129,8 +126,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: var(--color-bg-primary, inherit);
-        color: rgba(143, 143, 153, 0.56);
+        background: var(--bf-color-surface-chrome);
+        color: var(--bf-color-content-muted);
         font-family: "Noto Sans SC", "Inter", "Segoe UI", system-ui, sans-serif;
         font-size: 13px;
         pointer-events: none;
@@ -165,18 +162,18 @@
         border: 1px solid transparent;
         border-radius: 6px;
         background: transparent;
-        color: rgba(143, 143, 153, 0.9);
+        color: var(--bf-color-content-muted);
         cursor: pointer;
         transition: background 0.15s ease, color 0.15s ease;
       }
 
       .bitfun-startup-window-controls__btn:hover {
-        background: rgba(143, 143, 153, 0.12);
-        color: rgba(143, 143, 153, 1);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-content-primary);
       }
 
       .bitfun-startup-window-controls__btn--close:hover {
-        color: #ef4444;
+        color: var(--bf-color-status-danger-content);
       }
 
       .bitfun-startup-window-controls__glyph {
@@ -255,7 +252,7 @@
         left: 50%;
         min-width: 220px;
         max-width: min(360px, calc(100vw - 48px));
-        color: rgba(143, 143, 153, 0.72);
+        color: var(--bf-color-content-muted);
         font-size: 12px;
         line-height: 1.4;
         text-align: center;

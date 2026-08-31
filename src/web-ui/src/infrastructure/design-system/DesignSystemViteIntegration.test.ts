@@ -41,6 +41,10 @@ describe('design-system Vite integration', () => {
       path.resolve(__dirname, '../../../index.html'),
       'utf8',
     );
+    const themeEntry = readFileSync(
+      path.resolve(__dirname, '../../design-system-theme.css'),
+      'utf8',
+    );
     const globalStyles = readFileSync(
       path.resolve(__dirname, '../../app/styles/global.scss'),
       'utf8',
@@ -57,16 +61,14 @@ describe('design-system Vite integration', () => {
       'utf8',
     );
 
-    const themePreludeIndex = mainSource.indexOf(
-      'import "@bitfun/theme-bitfun/default.css"',
-    );
     const layerPreludeIndex = mainSource.indexOf(
       'import "@bitfun/ui/styles.css"',
     );
     const productGraphIndex = mainSource.indexOf('import App from "./app/App"');
 
-    expect(themePreludeIndex).toBeGreaterThanOrEqual(0);
-    expect(layerPreludeIndex).toBeGreaterThan(themePreludeIndex);
+    expect(themeEntry).toContain('@import "@bitfun/theme-bitfun/default.css";');
+    expect(mainSource).not.toContain('import "@bitfun/theme-bitfun/default.css"');
+    expect(layerPreludeIndex).toBeGreaterThanOrEqual(0);
     expect(productGraphIndex).toBeGreaterThan(layerPreludeIndex);
 
     const bootstrapLayerOrder =
@@ -76,9 +78,14 @@ describe('design-system Vite integration', () => {
     const moduleEntryIndex = indexHtml.indexOf(
       '<script type="module" src="/src/main.tsx"></script>',
     );
+    const themeEntryIndex = indexHtml.indexOf(
+      '<link rel="stylesheet" href="/src/design-system-theme.css" />',
+    );
 
     expect(bootstrapLayerOrderIndex).toBeGreaterThanOrEqual(0);
     expect(bootstrapResetIndex).toBeGreaterThan(bootstrapLayerOrderIndex);
+    expect(themeEntryIndex).toBeGreaterThanOrEqual(0);
+    expect(themeEntryIndex).toBeLessThan(moduleEntryIndex);
     expect(moduleEntryIndex).toBeGreaterThan(bootstrapResetIndex);
     expect(indexHtml).toMatch(
       /@layer bf\.reset\s*\{[\s\S]*?\*\s*,\s*\*::before\s*,\s*\*::after\s*\{[\s\S]*?padding:\s*0;/,

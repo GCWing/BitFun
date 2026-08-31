@@ -1158,8 +1158,8 @@ export const Markdown = React.memo<MarkdownProps>(({
         fontWeight: 'var(--bf-type-code-md-font-weight)',
       };
       const gutterColor = isLightRef.current
-        ? 'color-mix(in srgb, var(--bf-appearance-token-color-static-black) 40%, var(--bf-appearance-token-color-static-white))'
-        : 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 40%, var(--bf-appearance-token-color-static-black))';
+        ? 'color-mix(in srgb, var(--bf-color-content-on-light) 40%, var(--bf-color-content-on-dark))'
+        : 'color-mix(in srgb, var(--bf-color-content-on-dark) 40%, var(--bf-color-content-on-light))';
 
       return (
         <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`} data-bf-component="markdown" data-bf-part="codeBlock" data-bf-state={streaming ? 'streaming' : undefined}>

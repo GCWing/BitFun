@@ -26,11 +26,11 @@
     }
     
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-scrollbar-thumb);
+      background: var(--bf-color-scrollbar-thumb);
       border-radius: 3px;
 
       &:hover {
-        background: var(--bf-appearance-token-scrollbar-thumb-hover);
+        background: var(--bf-color-scrollbar-thumb-hover);
       }
     }
   }
@@ -40,22 +40,22 @@
     align-items: center;
     justify-content: center;
     min-height: 60px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-control-font-size);
     font-style: italic;
   }
   
   &__placeholder {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-style: italic;
   }
 
   &__truncation-notice {
     padding: 0.25rem 0.625rem;
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
-    background: var(--bf-appearance-token-color-bg-tertiary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-color-content-muted);
+    background: var(--bf-color-surface-tertiary);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     font-style: italic;
   }
 }
@@ -76,32 +76,32 @@
     background: transparent;
     
     .diff-line__prefix {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
   
   &--added {
-    background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 10%, transparent);
+    background: color-mix(in srgb, var(--bf-domain-git-added) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 15%, transparent);
+      background: color-mix(in srgb, var(--bf-domain-git-added) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--bf-appearance-token-git-color-added);
+      color: var(--bf-domain-git-added);
       font-weight: var(--bf-font-weight-medium);
     }
   }
 
   &--removed {
-    background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 10%, transparent);
+    background: color-mix(in srgb, var(--bf-domain-git-deleted) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 15%, transparent);
+      background: color-mix(in srgb, var(--bf-domain-git-deleted) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--bf-appearance-token-git-color-deleted);
+      color: var(--bf-domain-git-deleted);
       font-weight: var(--bf-font-weight-medium);
     }
     
@@ -112,17 +112,17 @@
   
   // Highlighted row (selected).
   &--highlighted {
-    background: var(--bf-appearance-token-color-accent-200) !important;
+    background: var(--bf-color-action-secondary-hover) !important;
 
     .diff-line__gutter {
-      background: var(--bf-appearance-token-color-accent-300) !important;
+      background: var(--bf-color-action-secondary-pressed) !important;
     }
   }
   
   &--separator {
-    background: var(--bf-appearance-token-color-bg-tertiary);
+    background: var(--bf-color-surface-tertiary);
     justify-content: center;
-    padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
+    padding: var(--bf-control-flow-chat-inline-gap) 0;
     cursor: default;
     
     &:hover {
@@ -134,7 +134,7 @@
     }
     
     .diff-line__content--separator {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-type-flow-support-font-size);
       font-style: italic;
       text-align: center;
@@ -147,9 +147,9 @@
     flex-shrink: 0;
     padding: 0 8px;
     gap: 0.125rem;
-    background: var(--bf-appearance-token-color-bg-secondary);
+    background: var(--bf-color-surface-panel);
     user-select: none;
-    border-right: 1px solid var(--bf-appearance-token-border-subtle);
+    border-right: 1px solid var(--bf-color-border-subtle);
 
     &--single {
       padding: 0 4px;
@@ -166,12 +166,12 @@
     min-width: 32px;
     padding: 0 6px;
     text-align: right;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
     font-size: var(--bf-type-flow-support-font-size);
 
     &--original {
-      border-right: 1px solid var(--bf-appearance-token-border-subtle);
+      border-right: 1px solid var(--bf-color-border-subtle);
       padding-right: 8px;
     }
 
@@ -225,48 +225,48 @@
 .light .inline-diff-preview {
   .diff-line {
     &--added {
-      background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-domain-git-added) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--bf-appearance-token-git-color-added) 18%, transparent);
+        background: color-mix(in srgb, var(--bf-domain-git-added) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--bf-appearance-token-git-color-added);
+        color: var(--bf-domain-git-added);
       }
     }
 
     &--removed {
-      background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-domain-git-deleted) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 18%, transparent);
+        background: color-mix(in srgb, var(--bf-domain-git-deleted) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--bf-appearance-token-git-color-deleted);
+        color: var(--bf-domain-git-deleted);
       }
     }
 
     &--highlighted {
-      background: var(--bf-appearance-token-color-accent-200) !important;
+      background: var(--bf-color-action-secondary-hover) !important;
 
       .diff-line__gutter {
-        background: var(--bf-appearance-token-color-accent-300) !important;
+        background: var(--bf-color-action-secondary-pressed) !important;
       }
     }
   }
 
   .diff-line__gutter {
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-right-color: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-surface-subtle);
+    border-right-color: var(--bf-color-border-subtle);
   }
 
   .diff-line__num {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     &--original {
-      border-right-color: var(--bf-appearance-token-border-subtle);
+      border-right-color: var(--bf-color-border-subtle);
     }
   }
 }

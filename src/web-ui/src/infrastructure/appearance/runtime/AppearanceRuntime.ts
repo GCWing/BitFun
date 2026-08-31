@@ -243,8 +243,8 @@ export class AppearanceRuntime {
     context: AppearanceRendererContext,
   ): void | Promise<void> {
     switch (adapter.id) {
-      case 'css-tokens':
-        return adapter.apply(next?.['css-tokens'], previous?.['css-tokens'], context);
+      case 'theme-tokens':
+        return adapter.apply(next?.['theme-tokens'], previous?.['theme-tokens'], context);
       case 'monaco':
         return adapter.apply(next?.monaco, previous?.monaco, context);
       case 'xterm':

@@ -17,7 +17,7 @@
    max-width: 320px;
    font-size: var(--bf-font-size-xs);
    font-family: var(--bf-font-family-sans);
-   color: var(--bf-appearance-token-color-text-primary);
+   color: var(--bf-color-content-primary);
    transform: translateY(-100%);
    animation: status-bar-popover-enter 0.15s $easing-decelerate forwards;
 
@@ -45,8 +45,8 @@
    &__hint {
      padding: 6px 12px;
      font-size: var(--bf-font-size-meta);
-     color: var(--bf-appearance-token-color-text-muted);
-     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+     color: var(--bf-color-content-muted);
+     border-bottom: 1px solid var(--bf-color-border-subtle);
    }
  }
 

@@ -30,7 +30,8 @@ import {
   LINE,
   MUTED,
   PAGE_BG,
-  SOFT
+  SOFT,
+  TRANSPARENT,
 } from './Theme';
 
 @ComponentV2
@@ -330,7 +331,7 @@ export struct FilePreviewSurface {
             Span(token.text)
               .fontColor(this.syntaxTokenColor(token.kind))
               .textBackgroundStyle({
-                color: this.isTargetLine(token.lineNumber) ? CODE_TARGET_BG : '#00000000'
+                color: this.isTargetLine(token.lineNumber) ? CODE_TARGET_BG : TRANSPARENT
               })
           }, (token: CodeSyntaxToken) => token.id)
         }

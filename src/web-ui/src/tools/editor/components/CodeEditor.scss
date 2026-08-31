@@ -22,7 +22,7 @@ $_editor-padding-desktop: 32px;
   height: 100%;
   width: 100%;
   position: relative;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
   
   > .editor-status-bar {
@@ -37,27 +37,27 @@ $_editor-padding-desktop: 32px;
     align-items: center;
     justify-content: center;
     height: 100%;
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-muted);
   }
   
   &__loading-spinner {
     width: $_editor-loading-spinner-size;
     height: $_editor-loading-spinner-size;
-    border: $_editor-loading-spinner-border solid var(--bf-appearance-token-color-accent-200);
-    border-top-color: var(--bf-appearance-token-color-accent-500);
+    border: $_editor-loading-spinner-border solid var(--bf-color-action-secondary-hover);
+    border-top-color: var(--bf-color-accent-default);
     border-radius: $size-radius-full;
     animation: code-editor-spin $motion-lazy $easing-standard infinite;
     margin-bottom: $size-gap-4;
     box-shadow: 
-      0 0 20px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent),
-      0 0 40px var(--bf-appearance-token-color-accent-200);
+      0 0 20px color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent),
+      0 0 40px var(--bf-color-action-secondary-hover);
   }
   
   &__loading-text {
     margin: 0;
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
     animation: code-editor-pulse $motion-slow ease-in-out infinite;
   }
@@ -70,7 +70,7 @@ $_editor-padding-desktop: 32px;
     align-items: center;
     justify-content: center;
     height: 100%;
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
     text-align: center;
     padding: $_editor-padding-desktop;
   }
@@ -78,7 +78,7 @@ $_editor-padding-desktop: 32px;
   &__error-icon {
     width: 32px;
     height: 32px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin-bottom: $size-gap-3;
     opacity: 0.5;
   }
@@ -86,7 +86,7 @@ $_editor-padding-desktop: 32px;
   &__error-message {
     margin: 0 0 $size-gap-3 0;
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
   }
   
@@ -113,7 +113,7 @@ $_editor-padding-desktop: 32px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 85%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-scene) 85%, transparent);
     backdrop-filter: blur(4px);
     z-index: 100;
     animation: code-editor-fade-in 0.2s ease-out;
@@ -133,8 +133,8 @@ $_editor-padding-desktop: 32px;
     position: absolute;
     top: $size-gap-4;
     right: $size-gap-4;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, transparent);
-    color: var(--bf-appearance-token-color-bg-primary);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
+    color: var(--bf-color-surface-canvas);
     padding: $size-gap-2 $size-gap-4;
     border-radius: $size-radius-base;
     font-size: var(--bf-font-size-xs);
@@ -160,14 +160,14 @@ $_editor-padding-desktop: 32px;
     .monaco-editor {
       .ctrl-hover-underline {
         text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
         text-underline-offset: 2px;
         cursor: pointer !important;
       }
       
       .monaco-cross-file-link {
         text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
         text-decoration-thickness: 1px;
         text-underline-offset: 2px;
         cursor: pointer !important;
@@ -181,17 +181,17 @@ $_editor-padding-desktop: 32px;
       .hover-row,
       .hover-contents {
         font-size: var(--bf-font-size-xs) !important;
-        color: var(--bf-appearance-token-color-static-black) !important;
+        color: var(--bf-color-content-on-light) !important;
       }
       
       p, span, div {
         font-size: var(--bf-font-size-xs) !important;
-        color: var(--bf-appearance-token-color-static-black) !important;
+        color: var(--bf-color-content-on-light) !important;
       }
       
       .markdown-string {
         font-size: var(--bf-font-size-xs) !important;
-        color: var(--bf-appearance-token-color-static-black) !important;
+        color: var(--bf-color-content-on-light) !important;
       }
     }
   }
@@ -279,8 +279,8 @@ $_editor-padding-desktop: 32px;
 @media (prefers-contrast: high) {
   .code-editor-tool {
     &__loading-spinner {
-      border-color: var(--bf-appearance-token-color-text-muted);
-      border-top-color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-content-muted);
+      border-top-color: var(--bf-color-content-primary);
     }
     
     &__error-icon {
@@ -299,7 +299,7 @@ $_editor-padding-desktop: 32px;
     
     * {
       font-size: var(--bf-font-size-xs) !important;
-      color: var(--bf-appearance-token-color-static-black) !important;
+      color: var(--bf-color-content-on-light) !important;
     }
   }
 }

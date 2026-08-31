@@ -43,9 +43,9 @@ These are the only two public popup-card visual contracts. Product styles may de
 @import '../../styles/tokens.scss';
 
 .card {
-  background: var(--bf-appearance-token-element-bg-subtle);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  box-shadow: var(--bf-appearance-token-shadow-sm);
+  background: var(--bf-color-surface-subtle);
+  border: 1px solid var(--bf-color-border-default);
+  box-shadow: var(--bf-shadow-sm);
 }
 ```
 

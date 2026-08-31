@@ -97,21 +97,21 @@ For the default cold cinematic fallback, representative generated values are:
 
 ```json
 {
-  "--bf-appearance-token-color-bg-scene": "rgba(8, 17, 31, 0.08)",
-  "--bf-appearance-token-color-bg-elevated": "rgba(24, 43, 60, 0.72)",
-  "--bf-appearance-token-element-bg-subtle": "rgba(11, 25, 40, 0.52)",
-  "--bf-appearance-token-element-bg-soft": "rgba(16, 34, 53, 0.60)",
-  "--bf-appearance-token-element-bg-base": "rgba(22, 43, 61, 0.66)",
-  "--bf-appearance-token-element-bg-hover": "rgba(23, 54, 74, 0.74)",
-  "--bf-appearance-token-border-subtle": "rgba(82, 229, 245, 0.08)",
-  "--bf-appearance-token-border-base": "rgba(82, 229, 245, 0.12)",
-  "--bf-appearance-token-border-medium": "rgba(82, 229, 245, 0.18)"
+  "--bf-color-surface-scene": "rgba(8, 17, 31, 0.08)",
+  "--bf-color-surface-raised": "rgba(24, 43, 60, 0.72)",
+  "--bf-color-surface-subtle": "rgba(11, 25, 40, 0.52)",
+  "--bf-color-action-quiet-hover": "rgba(16, 34, 53, 0.60)",
+  "--bf-color-action-neutral-surface": "rgba(22, 43, 61, 0.66)",
+  "--bf-color-action-neutral-surface-pressed": "rgba(23, 54, 74, 0.74)",
+  "--bf-color-border-subtle": "rgba(82, 229, 245, 0.08)",
+  "--bf-color-border-default": "rgba(82, 229, 245, 0.12)",
+  "--bf-color-border-strong": "rgba(82, 229, 245, 0.18)"
 }
 ```
 
 Tune the RGB values to the source palette while preserving the alpha hierarchy.
 
-Insights report cards currently derive their local surfaces from `color-bg-elevated` and element/border tokens. They do not expose individual registered Parts. Keep `insights.content` transparent and use these tokens for glass-card behavior.
+Insights report cards currently derive their local surfaces from `--bf-color-surface-raised` and canonical action/border tokens. They do not expose individual registered Parts. Keep `insights.content` transparent and use these tokens for glass-card behavior.
 
 ## Runtime failure diagnosis
 
@@ -121,7 +121,7 @@ Insights report cards currently derive their local surfaces from `color-bg-eleva
 | in-app floating mini-chat has no artwork | host `background` shorthand reset the asset | add override to the panel and transparent inner chat owners |
 | main video is hidden | `workbench.workspace` or another scene owner still paints an opaque background | make the registered workspace and structural scene owners transparent; keep the video only in top-level `backgroundMedia` |
 | main video shows a still image | reduced motion is enabled or video playback/codec validation failed | confirm OS/browser motion preference, inspect import errors, and use WebM VP9 with `preview.webp` as poster |
-| collapsed navigation has an opaque 80x40 block | child `nav-bar.root` paints `color-bg-primary` | force the base root transparent and use a low-alpha collapsed-state glass material |
+| collapsed navigation has an opaque 80x40 block | child `nav-bar.root` paints `--bf-color-surface-canvas` | force the base root transparent and use a low-alpha collapsed-state glass material |
 | collapsed navigation looks like a pasted image tile | `sidebar.webp` was applied to the small `workbench.collapsedNav` owner | remove the image, keep the scene owner transparent, and let the collapsed `nav-bar.root` provide quiet glass contrast |
 | whole Insights history has an image | artwork was applied to `insights.content` | make content transparent; style cards through tokens |
 | archived sessions or shortcuts are opaque | specialized ConfigPage root replaced the generic `config.root` attribute | override the specialized root Part directly |

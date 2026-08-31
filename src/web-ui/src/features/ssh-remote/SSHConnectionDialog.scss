@@ -15,8 +15,8 @@
   &__error-banner {
     flex-shrink: 0;
     padding: 8px 16px 10px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-primary);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__error-alert[data-bf-component='alert'] {
@@ -48,7 +48,7 @@
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
     font-family:var(--bf-font-family-sans);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin: 0;
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
@@ -73,15 +73,15 @@
     gap: 8px;
     padding: 5px 10px;
     border-radius: 6px;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     transition:
-      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     cursor: pointer;
     position: relative;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &:active {
@@ -90,8 +90,8 @@
 
     &--config {
       .ssh-connection-dialog__saved-icon {
-        background: var(--bf-appearance-token-color-success-bg);
-        color: var(--bf-appearance-token-color-success);
+        background: var(--bf-color-status-success-surface);
+        color: var(--bf-color-status-success-content);
       }
 
       .ssh-connection-dialog__saved-actions {
@@ -106,9 +106,9 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: var(--bf-appearance-token-color-accent-100);
+    background: var(--bf-color-action-secondary-background);
     border-radius: 6px;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     flex-shrink: 0;
   }
 
@@ -124,7 +124,7 @@
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     font-family:var(--bf-font-family-sans);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -135,7 +135,7 @@
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
     font-family:var(--bf-font-family-sans);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -154,11 +154,11 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-surface-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 4px;
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
   }
 
@@ -168,7 +168,7 @@
     gap: 4px;
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     .ssh-connection-dialog__saved-item:hover & {
       opacity: 1;
@@ -187,14 +187,14 @@
       content: '';
       flex: 1;
       height: 1px;
-      background: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-border-subtle);
     }
 
     span {
       font-size: var(--bf-font-size-meta);
       font-weight: var(--bf-font-weight-medium);
       font-family:var(--bf-font-family-sans);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       white-space: nowrap;
       text-transform: uppercase;
       letter-spacing: var(--bf-letter-spacing-wider);
@@ -209,7 +209,7 @@
     padding: 8px 16px;
     border-radius: 8px;
     scroll-margin-top: 8px;
-    transition: background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &--highlighted {
       animation: ssh-connection-form-reveal 1.2s ease-out;
@@ -256,9 +256,9 @@
     flex-direction: column;
     gap: 12px;
     padding: 12px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 8px;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__connection-options {
@@ -276,9 +276,9 @@
 
   &__advanced {
     min-width: 0;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 8px;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     overflow: hidden;
   }
 
@@ -292,30 +292,30 @@
     padding: 8px 12px;
     border: 0;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font: inherit;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     text-align: start;
     cursor: pointer;
     transition:
-      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &:focus-visible {
-      outline: 1px solid var(--bf-appearance-token-color-accent-500);
+      outline: 1px solid var(--bf-color-accent-default);
       outline-offset: -1px;
     }
   }
 
   &__advanced-chevron {
     flex-shrink: 0;
-    transition: transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &--expanded {
       transform: rotate(180deg);
@@ -328,8 +328,8 @@
     gap: 12px;
     min-width: 0;
     padding: 12px;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-primary);
+    border-top: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__test-report {
@@ -337,16 +337,16 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 7px;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
 
     &--success {
-      border-color: var(--bf-appearance-token-color-success);
+      border-color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      border-color: var(--bf-appearance-token-color-error);
+      border-color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -357,11 +357,11 @@
     gap: 6px;
     min-width: 0;
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     > span:last-child:not(:nth-child(2)) {
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -371,10 +371,10 @@
     margin-top: 5px;
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-support);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     &--warning {
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
   }
 
@@ -388,7 +388,7 @@
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     font-family:var(--bf-font-family-sans);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin-bottom: 6px;
   }
 
@@ -401,7 +401,7 @@
     flex-shrink: 0;
     margin-top: 0;
     padding: 8px 16px;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
 
   }
 
@@ -453,10 +453,10 @@
 
 @keyframes ssh-connection-form-reveal {
   0% {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 14%, transparent);
   }
   40% {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
   }
   100% {
     background: transparent;
