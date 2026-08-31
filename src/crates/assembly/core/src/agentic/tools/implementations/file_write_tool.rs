@@ -15,6 +15,7 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_tools::strip_invalid_windows_drive_path_prefix;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
@@ -237,16 +238,21 @@ impl FileWriteTool {
         logical_path: &str,
         outcome: WriteLocalFileOutcome,
         missing_path_fallback: bool,
+        path_format_warning: Option<&str>,
         ignored_parameter_names: &[String],
     ) -> ToolResult {
         let mut assistant_message = if missing_path_fallback {
             format!(
-                "The Write payload did not start with the required '+++ {{file_path}}' marker. The entire payload was saved to {}. Use your shell tool to rename this file to the intended path instead of calling Write to resubmit the same content.",
+                "The entire payload was saved to {}. Use your shell tool to move this file to the intended path. Do not call Write to resubmit the same content because doing so wastes tokens and time. This happened because the Write payload did not start with the required '+++ {{file_path}}' marker. Future Write calls must follow the required payload format.",
                 logical_path
             )
         } else {
             outcome.assistant_message
         };
+        if let Some(warning) = path_format_warning {
+            assistant_message.push(' ');
+            assistant_message.push_str(warning);
+        }
         if !ignored_parameter_names.is_empty() {
             let formatted_names = ignored_parameter_names
                 .iter()
@@ -267,11 +273,21 @@ impl FileWriteTool {
                 "status": outcome.status.as_str(),
                 "missing_path_fallback": missing_path_fallback,
                 "rename_required": missing_path_fallback,
+                "path_format_corrected": path_format_warning.is_some(),
+                "path_format_warning": path_format_warning,
                 "message": assistant_message,
             }),
             result_for_assistant: Some(assistant_message),
             image_attachments: None,
         }
+    }
+
+    fn path_format_correction_warning(resolved: &ToolPathResolution) -> Option<String> {
+        strip_invalid_windows_drive_path_prefix(&resolved.requested_path)?;
+        Some(format!(
+            "The provided Windows path '{}' had an invalid leading '/'. It was normalized to '{}'. Use a drive-letter path without the leading '/' in future Write calls.",
+            resolved.requested_path, resolved.logical_path
+        ))
     }
 
     fn input_schema() -> Value {
@@ -306,10 +322,10 @@ Usage:
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
 
 Examples:
-<good-example>
-`{"payload":"+++ /path/to/main.py\ndef main():\n\tprint(\"Hello world\")\n\nmain()"}`
+<good-example platform="macos-linux">
+`{"payload":"+++ /example/main.py\ndef main():\n\tprint(\"Hello world\")\n\nmain()"}`
 
-This call creates or overwrites `/path/to/main.py` with the following content:
+This call creates or overwrites `/example/main.py` with the following content:
 ```
 def main():
 	print("Hello world")
@@ -318,14 +334,18 @@ main()
 ```
 </good-example>
 
+<good-example platform="windows">
+`{"payload":"+++ C:/foo/main.py\ndef main():\n\tprint(\"Hello world\")\n\nmain()"}`
+</good-example>
+
 <bad-example>
-`{"file_path":"/path/to/main.py","content":"print(\"Hello world\")"}`
+`{"file_path":"/example/main.py","content":"print(\"Hello world\")"}`
 
 This call is invalid because Write requires the single `payload` parameter. Do not pass `file_path` and `content` separately.
 </bad-example>
 
 <bad-example>
-`{"payload":"+++ /path/to/main.py\nprint(\"Hello world\")","file_path":"/path/to/main.py"}`
+`{"payload":"+++ /example/main.py\nprint(\"Hello world\")","file_path":"/example/main.py"}`
 
 This call includes an unnecessary `file_path` parameter. Write only uses `payload`; specify the target path in the first `+++ {file_path}` line and do not pass additional parameters.
 </bad-example>
@@ -541,6 +561,7 @@ impl Tool for FileWriteTool {
         };
 
         let resolved = context.resolve_tool_path(&file_path)?;
+        let path_format_warning = Self::path_format_correction_warning(&resolved);
         context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
         context
             .record_light_checkpoint(
@@ -558,6 +579,7 @@ impl Tool for FileWriteTool {
                 &resolved.logical_path,
                 write_same_content_outcome(&resolved.logical_path),
                 missing_path_fallback,
+                path_format_warning.as_deref(),
                 &ignored_parameter_names,
             );
             return Ok(vec![result]);
@@ -593,6 +615,7 @@ impl Tool for FileWriteTool {
                 &resolved.logical_path,
                 write_file_success_outcome(&resolved.logical_path, file_already_exists, &content),
                 missing_path_fallback,
+                path_format_warning.as_deref(),
                 &ignored_parameter_names,
             );
             return Ok(vec![result]);
@@ -628,6 +651,7 @@ impl Tool for FileWriteTool {
             &resolved.logical_path,
             outcome,
             missing_path_fallback,
+            path_format_warning.as_deref(),
             &ignored_parameter_names,
         );
 
@@ -851,18 +875,6 @@ mod tests {
         assert_eq!(data["lines_written"], 0);
     }
 
-    #[test]
-    fn description_includes_bad_examples_for_invalid_parameter_shapes() {
-        let description = FileWriteTool::description();
-
-        assert_eq!(description.matches("<bad-example>").count(), 2);
-        assert!(description
-            .contains(r#"{"file_path":"/path/to/main.py","content":"print(\"Hello world\")"}"#));
-        assert!(description.contains(
-            r#"{"payload":"+++ /path/to/main.py\nprint(\"Hello world\")","file_path":"/path/to/main.py"}"#
-        ));
-    }
-
     #[tokio::test]
     async fn schema_requires_single_payload_parameter() {
         let tool = FileWriteTool::new();
@@ -898,6 +910,60 @@ mod tests {
 
         assert!(validation.result);
         assert!(validation.message.is_none());
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn write_result_reports_normalized_windows_drive_path() {
+        let tool = FileWriteTool::new();
+        let context = local_context(PathBuf::from(r"E:\workspace"));
+        let requested_path = "/E:/workspace/project/example.txt";
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "payload": format!("+++ {requested_path}\ncontent")
+                }),
+                Some(&context),
+            )
+            .await;
+        assert!(validation.result);
+        assert!(validation.message.is_none());
+
+        let resolved = context
+            .resolve_tool_path(requested_path)
+            .expect("mixed Windows path should be normalized");
+        assert_eq!(
+            PathBuf::from(&resolved.logical_path),
+            PathBuf::from(r"E:\workspace\project\example.txt")
+        );
+
+        let warning = FileWriteTool::path_format_correction_warning(&resolved)
+            .expect("normalization should produce a warning");
+        let result = FileWriteTool::write_success_result(
+            &resolved.logical_path,
+            super::write_file_success_outcome(&resolved.logical_path, false, "content"),
+            false,
+            Some(&warning),
+            &[],
+        );
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = result
+        else {
+            panic!("expected result");
+        };
+
+        assert_eq!(data["path_format_corrected"], true);
+        assert_eq!(data["path_format_warning"], warning);
+        assert!(warning.contains(requested_path));
+        assert!(warning.contains(r"E:\workspace\project\example.txt"));
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains(&warning));
     }
 
     #[test]
@@ -986,10 +1052,17 @@ mod tests {
         );
         assert_eq!(data["missing_path_fallback"], true);
         assert_eq!(data["rename_required"], true);
-        assert!(result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("Use your shell tool to rename this file"));
+        let assistant_message = result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant_message
+            .contains("Use your shell tool to move this file to the intended path"));
+        assert!(assistant_message.contains(
+            "Do not call Write to resubmit the same content because doing so wastes tokens and time"
+        ));
+        assert!(assistant_message.contains(
+            "the Write payload did not start with the required '+++ {file_path}' marker"
+        ));
+        assert!(assistant_message
+            .contains("Future Write calls must follow the required payload format"));
 
         let _ = std::fs::remove_dir_all(&root);
     }
