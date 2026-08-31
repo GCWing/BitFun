@@ -4,7 +4,7 @@ export const mcpToolDisplayAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'mcp-tool-display',
   parts: [
     { id: 'root' }, { id: 'info' }, { id: 'expanded' },
-    { id: 'item' }, { id: 'text' }, { id: 'image' }, { id: 'resource' },
+    { id: 'item' }, { id: 'input' }, { id: 'text' }, { id: 'image' }, { id: 'resource' },
     { id: 'iframe' }, { id: 'loading' }, { id: 'error' },
   ],
   states: [
