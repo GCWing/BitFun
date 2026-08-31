@@ -456,6 +456,8 @@ function renderMcpPromptMessages(messages: MCPPromptMessage[]): string {
     .join('\n\n');
 }
 
+type BoostSubmenuId = 'harness' | 'additional-modes' | 'skills';
+
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
   onSendMessage,
@@ -469,6 +471,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const [inputState, dispatchLocalInput] = useReducer(inputReducer, initialInputState);
   const [modeState, dispatchMode] = useReducer(modeReducer, initialModeState);
+  const [activeBoostSubmenu, setActiveBoostSubmenu] = useState<BoostSubmenuId | null>(null);
+  const setBoostSubmenuOpen = useCallback((id: BoostSubmenuId, open: boolean) => {
+    // A late dismissal from one flyout must not close its newly opened sibling.
+    setActiveBoostSubmenu(current => open ? id : current === id ? null : current);
+  }, []);
+
+  useEffect(() => {
+    if (!modeState.dropdownOpen) setActiveBoostSubmenu(null);
+  }, [modeState.dropdownOpen]);
   
   const richTextInputRef = useRef<RichTextInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -6128,6 +6139,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <HarnessProfileSelector
                             {...harnessProfileSelectorProps}
                             presentation="menu-item"
+                            open={activeBoostSubmenu === 'harness'}
+                            onOpenChange={open => setBoostSubmenuOpen('harness', open)}
                             onSelectionComplete={() => dispatchMode({ type: 'CLOSE_DROPDOWN' })}
                           />
                           <MenuSeparator data-bf-component="chat-input" data-bf-part="boostDivider" />
@@ -6140,6 +6153,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             label={t('chatInput.boostAdditionalModes')}
                             icon={<Sparkles size={14} aria-hidden />}
                             testId="chat-input-additional-modes"
+                            open={activeBoostSubmenu === 'additional-modes'}
+                            onOpenChange={open => setBoostSubmenuOpen('additional-modes', open)}
                           >
                             {additionalModeItems.map(item => (
                               <MenuItem
@@ -6190,6 +6205,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             label={t('chatInput.boostSkills')}
                             icon={<Sparkles size={14} aria-hidden />}
                             testId="chat-input-skills"
+                            open={activeBoostSubmenu === 'skills'}
+                            onOpenChange={open => setBoostSubmenuOpen('skills', open)}
                           >
                             {resolvedModeSkillsLoading ? (
                               <div className="bitfun-chat-input__boost-submenu-loading" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="loading">
