@@ -3,6 +3,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ConnectAccountDevicePage } from './ConnectAccountDevicePage';
 import { ConnectManualPairingOverlay } from './ConnectManualPairingOverlay';
+import { AppActionButton, AppActionStyle } from './AppActionButton';
 import { NavigationBackButton } from './NavigationBackButton';
 import { SheetActionFooter } from './SheetActionFooter';
 import { SheetCloseHeader } from './SheetCloseHeader';
@@ -20,8 +21,8 @@ import {
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { InlineQrScanner } from './platform/InlineQrScanner';
 import { CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
-  CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION,
-  PRIMARY_ACTION_TEXT, RED, SOFT, SUBTLE } from './Theme';
+  CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT,
+  SUBTLE } from './Theme';
 
 const SCAN_FRAME_SIZE: number = 248;
 const SCAN_CORNER_SIZE: number = 56;
@@ -123,30 +124,25 @@ export struct ConnectView {
           .textAlign(TextAlign.Center)
           .width('100%')
 
-        Button(RemoteI18n.t('sidebar.scanToConnect'))
-          .width('82%')
-          .height(58)
-          .fontSize(MobileDesignTypography.labelLarge.size)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(PRIMARY_ACTION_TEXT)
-          .backgroundColor(PRIMARY_ACTION)
-          .borderRadius(29)
-          .onClick(() => {
+        AppActionButton({
+          label: RemoteI18n.t('sidebar.scanToConnect'),
+          style: AppActionStyle.Primary,
+          actionHeight: 58,
+          onAction: (): void => {
             this.openScannerAfterPermission();
-          })
-
-        Button(RemoteI18n.t('sidebar.signInBitFunAccount'))
+          }
+        })
           .width('82%')
-          .height(58)
-          .fontSize(MobileDesignTypography.labelLarge.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-          .backgroundColor(CARD)
-          .border({ width: 1.5, color: LINE })
-          .borderRadius(29)
-          .onClick(() => {
+
+        AppActionButton({
+          label: RemoteI18n.t('sidebar.signInBitFunAccount'),
+          style: AppActionStyle.Secondary,
+          actionHeight: 58,
+          onAction: (): void => {
             this.onOpenAccount();
-          })
+          }
+        })
+          .width('82%')
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Center)
@@ -160,20 +156,17 @@ export struct ConnectView {
           .textAlign(TextAlign.Center)
           .width('78%')
           .margin({ bottom: 10 })
-        Button(RemoteI18n.t('connect.switchManualPair'))
-          .width('78%')
-          .height(52)
-          .fontSize(MobileDesignTypography.labelLarge.size)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(INK)
-          .backgroundColor(CARD)
-          .borderRadius(28)
-          .border({ width: 1.5, color: LINE })
-          .margin({ bottom: 10 })
-          .onClick(() => {
+        AppActionButton({
+          label: RemoteI18n.t('connect.switchManualPair'),
+          style: AppActionStyle.Secondary,
+          actionHeight: 52,
+          onAction: (): void => {
             this.showManualPairing = true;
             this.onRemoteUrlInputVisibleChange(true);
-          })
+          }
+        })
+          .width('78%')
+          .margin({ bottom: 10 })
       }
       if (this.shouldShowStatusStrip()) {
         this.StatusStrip()

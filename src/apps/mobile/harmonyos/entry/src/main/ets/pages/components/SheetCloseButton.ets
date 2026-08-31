@@ -1,30 +1,27 @@
+import { MobileDesignGeometry } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE } from './Theme';
+import { INK } from './Theme';
 
-/** Prominent top-right close affordance for modal sheets. */
+/** Quiet top-right close affordance with a full-size touch target. */
 @ComponentV2
 export struct SheetCloseButton {
-  @Param touchSize: number = 44;
-  @Param visualSize: number = 36;
+  @Param touchSize: number = MobileDesignGeometry.controlTouchSize;
   @Param isEnabled: boolean = true;
   @Event onClose: () => void = () => {};
 
   build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor([INK])
-      }
-      .width(this.visualSize)
-      .height(this.visualSize)
-      .backgroundColor(CARD)
-      .borderRadius(this.visualSize / 2)
-      .shadow({ radius: 8, color: LINE, offsetY: 3 })
+    Button() {
+      SymbolGlyph($r('sys.symbol.xmark'))
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor([INK])
     }
     .width(this.touchSize)
     .height(this.touchSize)
+    .padding(0)
+    .backgroundColor('#00000000')
+    .borderRadius(12)
+    .stateEffect(true)
     .opacity(this.isEnabled ? 1 : 0.4)
     .enabled(this.isEnabled)
     .accessibilityText(RemoteI18n.t('common.close'))

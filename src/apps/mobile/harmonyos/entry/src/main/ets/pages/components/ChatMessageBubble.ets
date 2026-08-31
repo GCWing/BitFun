@@ -112,7 +112,7 @@ export struct ChatMessageBubble {
     }
     .width('100%')
     .alignItems(VerticalAlign.Top)
-    .padding({ top: 2, bottom: 10 })
+    .padding({ top: 2, bottom: 2 })
   }
 
   @Builder

@@ -2,11 +2,18 @@
   "version": 1,
   "components": {
     "circle_control": {
-      "purpose": "A floating primary navigation or overflow control.",
-      "anatomy": ["touch_target", "centered_glyph", "hairline_border", "soft_shadow"],
+      "purpose": "A compact navigation or overflow control with a full-size touch target.",
+      "anatomy": ["touch_target", "centered_glyph", "optional_pressed_surface"],
       "states": ["enabled", "pressed", "disabled", "focused"],
       "tokens": ["control_touch_size", "card", "line", "ink"],
-      "platformNotes": "Keep the glyph's optical box separate from the touch target."
+      "platformNotes": "Keep the glyph's optical box separate from the touch target. Header and sidebar controls stay visually transparent at rest; reserve borders and elevation for the containing surface."
+    },
+    "action_button": {
+      "purpose": "Expresses one primary, secondary, quiet, or destructive workflow action with consistent emphasis.",
+      "anatomy": ["touch_target", "action_label", "semantic_surface", "optional_hairline_border"],
+      "states": ["primary", "secondary", "quiet", "destructive", "disabled", "busy"],
+      "tokens": ["sheet_action_height", "primary_action", "primary_action_text", "card", "soft", "line", "red", "label_large"],
+      "platformNotes": "The semantic style is shared; a workflow may override height when its context requires a larger target, while preserving typography, radius, color, and disabled treatment."
     },
     "conversation_header": {
       "purpose": "Identifies the active conversation and the device or workspace answering it.",
@@ -27,7 +34,7 @@
       "anatomy": ["attachment_action", "text_input", "model_control", "primary_action"],
       "states": ["empty", "draft", "focused", "streaming", "disconnected", "with_attachments"],
       "tokens": ["composer_action_size", "composer_collapsed_height", "composer_expanded_height", "composer_collapsed_radius", "composer_expanded_radius"],
-      "platformNotes": "Keyboard, dictation, and attachment pickers remain native adapters."
+      "platformNotes": "Keyboard, dictation, and attachment pickers remain native adapters. The focused two-row form stays compact and exists to expose message context controls; multiline content and attachments may grow it further. The trailing action is the single filled action for Send, Dictate, or Stop."
     },
     "composer_model_selector": {
       "purpose": "Changes the model for the message being composed without leaving the conversation or creation flow.",

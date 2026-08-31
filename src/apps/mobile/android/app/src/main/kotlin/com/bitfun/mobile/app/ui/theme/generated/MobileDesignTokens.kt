@@ -10,8 +10,8 @@ import androidx.compose.ui.unit.sp
 internal object MobileDesignColors {
     object Light {
         val StartWindowBackground = Color(0xFFFFFFFF)
-        val PageBg = Color(0xFFFDFDFB)
-        val PageBgFade = Color(0x00FDFDFB)
+        val PageBg = Color(0xFFFFFFFF)
+        val PageBgFade = Color(0x00FFFFFF)
         val Ink = Color(0xFF171717)
         val Muted = Color(0xFF706F6A)
         val Subtle = Color(0xFFA5A39B)
@@ -87,7 +87,7 @@ internal object MobileDesignTypography {
     val HeadlineMedium = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold)
     val HeadlineSmall = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
     val TitleLarge = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold)
-    val ConversationHeaderTitle = TextStyle(fontSize = 18.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+    val ConversationHeaderTitle = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
     val TitleMedium = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
     val TitleSmall = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
     val BodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal)
@@ -101,34 +101,34 @@ internal object MobileDesignTypography {
 internal object MobileDesignGeometry {
     val ConversationHeaderHeight = 76.dp
     val ConversationHeaderCompactHeight = 64.dp
-    val ControlTouchSize = 44.dp
+    val ControlTouchSize = 48.dp
     val ContentGutter = 16.dp
     val ConnectionStripHeight = 48.dp
     val TimelineTopPadding = 22.dp
-    val MessageSpacing = 12.dp
+    val MessageSpacing = 18.dp
     val MessageBubbleMaxWidth = 276.dp
     val MessageBubbleHorizontalPadding = 14.dp
     val MessageBubbleVerticalPadding = 11.dp
     val MessageBubbleRadius = 17.dp
-    val ComposerActionSize = 40.dp
-    val ComposerInputHeight = 42.dp
-    val ComposerExpandedInputHeight = 74.dp
-    val ComposerCollapsedHeight = 52.dp
-    val ComposerExpandedInputRowHeight = 76.dp
-    val ComposerExpandedActionRowHeight = 44.dp
-    val ComposerExpandedHeight = 126.dp
-    val ComposerCollapsedRadius = 26.dp
+    val ComposerActionSize = 44.dp
+    val ComposerInputHeight = 44.dp
+    val ComposerExpandedInputHeight = 58.dp
+    val ComposerCollapsedHeight = 56.dp
+    val ComposerExpandedInputRowHeight = 60.dp
+    val ComposerExpandedActionRowHeight = 40.dp
+    val ComposerExpandedHeight = 108.dp
+    val ComposerCollapsedRadius = 28.dp
     val ComposerExpandedRadius = 18.dp
     val ComposerModelSelectorWidth = 330.dp
     val ComposerModelSelectorRadius = 14.dp
     val ComposerModelSelectorRowHeight = 48.dp
     val ComposerModelSelectorRowRadius = 9.dp
     val ComposerModelSelectorRowGap = 6.dp
-    val SheetTopRadius = 34.dp
-    val SheetSideRadius = 34.dp
+    val SheetTopRadius = 28.dp
+    val SheetSideRadius = 28.dp
     val SheetHorizontalPadding = 20.dp
     val SheetHeaderHeight = 56.dp
-    val SheetActionHeight = 46.dp
+    val SheetActionHeight = 48.dp
     val SelectionTopRadius = 20.dp
     val SelectionRowHeight = 64.dp
     val SelectionCloseSize = 32.dp
@@ -141,9 +141,9 @@ internal object MobileDesignGeometry {
     val CompactPopoverWidth = 150.dp
     val CompactPopoverRadius = 14.dp
     val CompactPopoverActionHeight = 42.dp
-    val SettingsCompactCardRadius = 8.dp
-    val SettingsCardRadius = 24.dp
-    val SettingsProminentCardRadius = 28.dp
+    val SettingsCompactCardRadius = 12.dp
+    val SettingsCardRadius = 16.dp
+    val SettingsProminentCardRadius = 20.dp
     val ModelCurrentRowHeight = 64.dp
     val ModelSourceRowHeight = 62.dp
     val ModelAccountRowHeight = 56.dp

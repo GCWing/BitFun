@@ -52,6 +52,15 @@ export class DeviceDirectoryState {
     this.selectedDeviceId = deviceId.trim();
   }
 
+  /** Collapses the disclosed device without changing the live control target. */
+  collapseIfSelected(deviceId: string): boolean {
+    if (this.selectedDeviceId !== deviceId.trim()) {
+      return false;
+    }
+    this.selectedDeviceId = '';
+    return true;
+  }
+
   find(deviceId: string): DeviceDirectoryEntry | undefined {
     return this.devices.find((item: DeviceDirectoryEntry): boolean => item.deviceId === deviceId);
   }

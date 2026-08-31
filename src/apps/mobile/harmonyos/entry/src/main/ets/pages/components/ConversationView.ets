@@ -114,7 +114,7 @@ export struct ConversationView {
         .height('100%')
         if (this.isLoadingConversation) {
           ConversationLoadingState({
-            maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0
+            maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 760 : 0
           })
             .width('100%')
             .height('100%')
@@ -195,7 +195,7 @@ export struct ConversationView {
       fileDownloadStatus: this.fileDownloadStatus,
       activeFilePreviewPath: this.activeFilePreviewPath,
       activeFilePreviewLoading: this.activeFilePreviewLoading,
-      maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0,
+      maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 760 : 0,
       onLoadOlder: () => {
         this.onLoadOlder();
       },

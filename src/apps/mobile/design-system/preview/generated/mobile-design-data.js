@@ -11,11 +11,11 @@ export const mobileTokens = {
       "dark": "#000000"
     },
     "page_bg": {
-      "light": "#FDFDFB",
+      "light": "#FFFFFF",
       "dark": "#151514"
     },
     "page_bg_fade": {
-      "light": "#00FDFDFB",
+      "light": "#00FFFFFF",
       "dark": "#00151514"
     },
     "ink": {
@@ -172,9 +172,9 @@ export const mobileTokens = {
       "weight": 700
     },
     "conversation_header_title": {
-      "size": 18,
+      "size": 17,
       "lineHeight": 22,
-      "weight": 500
+      "weight": 600
     },
     "title_medium": {
       "size": 17,
@@ -220,34 +220,34 @@ export const mobileTokens = {
   "geometry": {
     "conversation_header_height": 76,
     "conversation_header_compact_height": 64,
-    "control_touch_size": 44,
+    "control_touch_size": 48,
     "content_gutter": 16,
     "connection_strip_height": 48,
     "timeline_top_padding": 22,
-    "message_spacing": 12,
+    "message_spacing": 18,
     "message_bubble_max_width": 276,
     "message_bubble_horizontal_padding": 14,
     "message_bubble_vertical_padding": 11,
     "message_bubble_radius": 17,
-    "composer_action_size": 40,
-    "composer_input_height": 42,
-    "composer_expanded_input_height": 74,
-    "composer_collapsed_height": 52,
-    "composer_expanded_input_row_height": 76,
-    "composer_expanded_action_row_height": 44,
-    "composer_expanded_height": 126,
-    "composer_collapsed_radius": 26,
+    "composer_action_size": 44,
+    "composer_input_height": 44,
+    "composer_expanded_input_height": 58,
+    "composer_collapsed_height": 56,
+    "composer_expanded_input_row_height": 60,
+    "composer_expanded_action_row_height": 40,
+    "composer_expanded_height": 108,
+    "composer_collapsed_radius": 28,
     "composer_expanded_radius": 18,
     "composer_model_selector_width": 330,
     "composer_model_selector_radius": 14,
     "composer_model_selector_row_height": 48,
     "composer_model_selector_row_radius": 9,
     "composer_model_selector_row_gap": 6,
-    "sheet_top_radius": 34,
-    "sheet_side_radius": 34,
+    "sheet_top_radius": 28,
+    "sheet_side_radius": 28,
     "sheet_horizontal_padding": 20,
     "sheet_header_height": 56,
-    "sheet_action_height": 46,
+    "sheet_action_height": 48,
     "selection_top_radius": 20,
     "selection_row_height": 64,
     "selection_close_size": 32,
@@ -260,9 +260,9 @@ export const mobileTokens = {
     "compact_popover_width": 150,
     "compact_popover_radius": 14,
     "compact_popover_action_height": 42,
-    "settings_compact_card_radius": 8,
-    "settings_card_radius": 24,
-    "settings_prominent_card_radius": 28,
+    "settings_compact_card_radius": 12,
+    "settings_card_radius": 16,
+    "settings_prominent_card_radius": 20,
     "model_current_row_height": 64,
     "model_source_row_height": 62,
     "model_account_row_height": 56,
@@ -289,12 +289,11 @@ export const mobileComponents = {
   "version": 1,
   "components": {
     "circle_control": {
-      "purpose": "A floating primary navigation or overflow control.",
+      "purpose": "A compact navigation or overflow control with a full-size touch target.",
       "anatomy": [
         "touch_target",
         "centered_glyph",
-        "hairline_border",
-        "soft_shadow"
+        "optional_pressed_surface"
       ],
       "states": [
         "enabled",
@@ -308,7 +307,35 @@ export const mobileComponents = {
         "line",
         "ink"
       ],
-      "platformNotes": "Keep the glyph's optical box separate from the touch target."
+      "platformNotes": "Keep the glyph's optical box separate from the touch target. Header and sidebar controls stay visually transparent at rest; reserve borders and elevation for the containing surface."
+    },
+    "action_button": {
+      "purpose": "Expresses one primary, secondary, quiet, or destructive workflow action with consistent emphasis.",
+      "anatomy": [
+        "touch_target",
+        "action_label",
+        "semantic_surface",
+        "optional_hairline_border"
+      ],
+      "states": [
+        "primary",
+        "secondary",
+        "quiet",
+        "destructive",
+        "disabled",
+        "busy"
+      ],
+      "tokens": [
+        "sheet_action_height",
+        "primary_action",
+        "primary_action_text",
+        "card",
+        "soft",
+        "line",
+        "red",
+        "label_large"
+      ],
+      "platformNotes": "The semantic style is shared; a workflow may override height when its context requires a larger target, while preserving typography, radius, color, and disabled treatment."
     },
     "conversation_header": {
       "purpose": "Identifies the active conversation and the device or workspace answering it.",
@@ -378,7 +405,7 @@ export const mobileComponents = {
         "composer_collapsed_radius",
         "composer_expanded_radius"
       ],
-      "platformNotes": "Keyboard, dictation, and attachment pickers remain native adapters."
+      "platformNotes": "Keyboard, dictation, and attachment pickers remain native adapters. The focused two-row form stays compact and exists to expose message context controls; multiline content and attachments may grow it further. The trailing action is the single filled action for Send, Dictate, or Stop."
     },
     "composer_model_selector": {
       "purpose": "Changes the model for the message being composed without leaving the conversation or creation flow.",

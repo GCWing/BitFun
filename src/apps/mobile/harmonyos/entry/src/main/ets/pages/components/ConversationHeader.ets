@@ -124,7 +124,7 @@ export struct ConversationHeader {
   @Builder
   private TrailingControl() {
     if (this.showActions) {
-      Stack({ alignContent: Alignment.Center }) {
+      Button() {
         TemplateIcon({
           src: $r('app.media.remote_ref_more'),
           iconWidth: 23,
@@ -133,10 +133,10 @@ export struct ConversationHeader {
       }
       .width(MobileDesignGeometry.controlTouchSize)
       .height(MobileDesignGeometry.controlTouchSize)
-      .backgroundColor(CARD)
-      .border({ width: 1, color: LINE })
-      .borderRadius(MobileDesignGeometry.controlTouchSize / 2)
-      .shadow({ radius: 10, color: LINE, offsetY: 3 })
+      .padding(0)
+      .backgroundColor('#00000000')
+      .borderRadius(12)
+      .stateEffect(true)
       .accessibilityText(RemoteI18n.t('sidebar.more'))
       .bindPopup(this.showActionsMenu, {
         builder: () => {

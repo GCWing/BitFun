@@ -202,6 +202,16 @@ const conversationViewSource = fs.readFileSync(conversationViewPath, 'utf8');
 const conversationViewInputCount = [...conversationViewSource.matchAll(/^\s+@(Param|Event)\b/gm)].length;
 const wideConversationViewContract = conversationViewInputCount > 10 ?
   [`${relative(conversationViewPath)}:${conversationViewInputCount}`] : [];
+// SheetLayout may adapt cross-platform geometry for ArkUI, but it must not
+// become a second numeric source of truth for geometry already in the mobile
+// design contract. This deliberately checks ownership, not page-level sizes.
+const sheetLayoutPath = path.join(pagesRoot, 'components/SheetLayout.ets');
+const sheetLayoutSource = fs.readFileSync(sheetLayoutPath, 'utf8');
+const duplicateSheetGeometry =
+  !sheetLayoutSource.includes("from '../../generated/MobileDesignTokens'") ||
+  /export\s+const\s+SHEET_(?:HORIZONTAL_PADDING|HEADER_HEIGHT|ACTION_HEIGHT|TOP_RADIUS|SIDE_RADIUS)\s*:\s*number\s*=\s*\d/.test(
+    sheetLayoutSource
+  ) ? [relative(sheetLayoutPath)] : [];
 const cryptoDeclarationPath = path.join(
   repoRoot,
   'src/apps/mobile/harmonyos/entry/src/main/cpp/types/libbitfun_crypto/index.d.ts'
@@ -402,6 +412,7 @@ const expected = {
   snapshottedMessageBuilderInput: [],
   missingObservableTimelineRows: [],
   wideConversationViewContract: [],
+  duplicateSheetGeometry: [],
   synchronousArgon2Declaration: [],
   synchronousNativeArgon2: [],
   misplacedPresentationPolicies: []
@@ -440,6 +451,7 @@ const actual = {
   snapshottedMessageBuilderInput,
   missingObservableTimelineRows,
   wideConversationViewContract,
+  duplicateSheetGeometry,
   synchronousArgon2Declaration,
   synchronousNativeArgon2,
   misplacedPresentationPolicies

@@ -1,6 +1,7 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MODAL_SCRIM, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, SOFT, SUBTLE } from './Theme';
+import { CARD, INK, LINE, MODAL_SCRIM, MUTED, SOFT } from './Theme';
+import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 @ComponentV2
 export struct ConnectManualPairingOverlay {
@@ -73,25 +74,21 @@ export struct ConnectManualPairingOverlay {
             .width('100%')
         }
         Row({ space: 12 }) {
-          Button(RemoteI18n.t('common.cancel'))
+          AppActionButton({
+            label: RemoteI18n.t('common.cancel'),
+            style: AppActionStyle.Quiet,
+            actionHeight: 58,
+            onAction: this.onCancel
+          })
             .layoutWeight(1)
-            .height(58)
-            .fontSize(MobileDesignTypography.labelLarge.size)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(INK)
-            .backgroundColor(SOFT)
-            .borderRadius(29)
-            .onClick(this.onCancel)
-          Button(RemoteI18n.t('connect.pair'))
+          AppActionButton({
+            label: RemoteI18n.t('connect.pair'),
+            style: AppActionStyle.Primary,
+            actionHeight: 58,
+            isEnabled: this.canSubmit,
+            onAction: this.onSubmit
+          })
             .layoutWeight(1)
-            .height(58)
-            .fontSize(MobileDesignTypography.labelLarge.size)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.canSubmit ? PRIMARY_ACTION_TEXT : SUBTLE)
-            .backgroundColor(this.canSubmit ? PRIMARY_ACTION : SOFT)
-            .borderRadius(29)
-            .enabled(this.canSubmit)
-            .onClick(this.onSubmit)
         }
         .width('100%')
       }

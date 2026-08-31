@@ -1,8 +1,9 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { AppLocale } from '../../i18n/AppLocale';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
-import { CARD, INK, LINE, MUTED } from './Theme';
+import { CARD, INK } from './Theme';
+import { SheetCloseHeader } from './SheetCloseHeader';
 
 @ComponentV2
 export struct LanguageSettingsPanel {
@@ -23,36 +24,24 @@ export struct LanguageSettingsPanel {
     .width('100%')
     .height('100%')
     .backgroundColor(CARD)
-    .borderRadius({ topLeft: 20, topRight: 20 })
+    .borderRadius({
+      topLeft: MobileDesignGeometry.sheetTopRadius,
+      topRight: MobileDesignGeometry.sheetTopRadius
+    })
   }
 
   @Builder
   Header() {
-    Row() {
-      Text(RemoteI18n.t('settings.language.choose'))
-        .fontSize(MobileDesignTypography.headlineSmall.size)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(INK)
-      Blank()
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(18)
-          .fontColor([MUTED])
-      }
-      .width(32)
-      .height(32)
-      .accessibilityText(RemoteI18n.t('common.close'))
-      .onClick(() => {
+    SheetCloseHeader({
+      title: RemoteI18n.t('settings.language.choose'),
+      showDivider: true,
+      isEnabled: this.pendingLanguage.length === 0,
+      onClose: (): void => {
         if (this.pendingLanguage.length === 0) {
           this.onClose();
         }
-      })
-    }
-    .width('100%')
-    .height(ModelServiceSettingsPolicy.HEADER_HEIGHT)
-    .padding({ left: 16, right: 16 })
-    .border({ width: { bottom: 1 }, color: LINE })
-    .alignItems(VerticalAlign.Center)
+      }
+    })
   }
 
   @Builder

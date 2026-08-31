@@ -1,4 +1,4 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import {
   ConversationUiMessage,
   ConversationUiMessageItem,
@@ -162,7 +162,7 @@ export struct ChatTimeline {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      List({ space: 12, scroller: this.listScroller }) {
+      List({ space: MobileDesignGeometry.messageSpacing, scroller: this.listScroller }) {
         if (this.hasMoreMessages) {
           ListItem() {
             Text(this.isBusy ? RemoteI18n.t('common.loading') : RemoteI18n.t('chat.loadOlder'))
@@ -284,7 +284,12 @@ export struct ChatTimeline {
       }
       .width('100%')
       .height('100%')
-      .padding({ left: 20, right: 20, top: 0, bottom: 12 })
+      .padding({
+        left: MobileDesignGeometry.contentGutter,
+        right: MobileDesignGeometry.contentGutter,
+        top: 0,
+        bottom: 12
+      })
       // A streaming reply grows in place rather than arriving as a new item, so
       // the bottom of the list has to be the anchor — otherwise the text the
       // agent is writing right now renders below the fold and never comes back.

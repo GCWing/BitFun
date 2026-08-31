@@ -1,4 +1,4 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SOFT, SUBTLE } from './Theme';
@@ -202,37 +202,37 @@ export struct AppSidebar {
     Row() {
       Text('BitFun')
         .fontSize(MobileDesignTypography.headlineMedium.size)
-        .fontWeight(FontWeight.Bold)
+        .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Blank()
       // Right-aligned so the search and collapse controls keep the same
       // position whether or not the source-specific view-settings entry shows.
       Row({ space: 6 }) {
         if (this.showViewSettingsButton) {
-          Stack({ alignContent: Alignment.Center }) {
+          Button() {
             SidebarGlyph({ kind: 'session_more' })
           }
-          .width(38)
-          .height(38)
-          .backgroundColor(CARD)
-          .border({ width: 1, color: LINE })
-          .borderRadius(19)
-          .shadow({ radius: 14, color: '#16000000', offsetY: 6 })
+          .width(MobileDesignGeometry.controlTouchSize)
+          .height(MobileDesignGeometry.controlTouchSize)
+          .padding(0)
+          .backgroundColor('#00000000')
+          .borderRadius(12)
+          .stateEffect(true)
           .accessibilityText(RemoteI18n.t('remote.actions'))
           .onClick(() => {
             this.onOpenViewSettings();
           })
         }
 
-        Stack({ alignContent: Alignment.Center }) {
+        Button() {
           SidebarGlyph({ kind: 'search' })
         }
-        .width(38)
-        .height(38)
-        .backgroundColor(CARD)
-        .border({ width: 1, color: LINE })
-        .borderRadius(19)
-        .shadow({ radius: 14, color: '#16000000', offsetY: 6 })
+        .width(MobileDesignGeometry.controlTouchSize)
+        .height(MobileDesignGeometry.controlTouchSize)
+        .padding(0)
+        .backgroundColor('#00000000')
+        .borderRadius(12)
+        .stateEffect(true)
         .accessibilityText(RemoteI18n.t('common.search'))
         .onClick(() => {
           this.showSearch = !this.showSearch;
@@ -243,7 +243,7 @@ export struct AppSidebar {
 
         if (this.showCollapseButton) {
           SidebarToggleButton({
-            controlSize: 38,
+            controlSize: MobileDesignGeometry.controlTouchSize,
             onToggle: this.onCollapse
           })
         }
@@ -298,7 +298,7 @@ export struct AppSidebar {
 
       if (this.showCollapseButton) {
         SidebarToggleButton({
-          controlSize: 38,
+          controlSize: MobileDesignGeometry.controlTouchSize,
           onToggle: this.onCollapse
         })
       }
@@ -311,35 +311,36 @@ export struct AppSidebar {
   @Builder
   private AuthenticatedFooter() {
     Row() {
-      Row({ space: 9 }) {
-        SidebarGlyph({ kind: 'edit' })
-        Text(RemoteI18n.t('sidebar.newChat'))
-          .fontSize(MobileDesignTypography.titleSmall.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
+      Button() {
+        Row({ space: 9 }) {
+          SidebarGlyph({ kind: 'edit' })
+          Text(RemoteI18n.t('sidebar.newChat'))
+            .fontSize(MobileDesignTypography.titleSmall.size)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(INK)
+        }
       }
       .width(116)
-      .height(46)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(CARD)
-      .border({ width: 1, color: LINE })
-      .borderRadius(23)
-      .shadow({ radius: 14, color: '#16000000', offsetY: 6 })
+      .height(48)
+      .padding(0)
+      .backgroundColor(SOFT)
+      .borderRadius(16)
+      .stateEffect(true)
       .onClick(() => {
         this.onNewChat();
       })
 
       Blank()
 
-      Stack({ alignContent: Alignment.Center }) {
+      Button() {
         SidebarGlyph({ kind: 'settings' })
       }
-        .width(46)
-        .height(46)
-        .backgroundColor(CARD)
-        .borderRadius(23)
-        .shadow({ radius: 14, color: '#16000000', offsetY: 6 })
+        .width(48)
+        .height(48)
+        .padding(0)
+        .backgroundColor('#00000000')
+        .borderRadius(12)
+        .stateEffect(true)
         .onClick(() => {
           this.onOpenSettings();
         })
