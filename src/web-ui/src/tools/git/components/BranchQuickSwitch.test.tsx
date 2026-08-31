@@ -59,23 +59,6 @@ vi.mock('@bitfun/ui', async importOriginal => ({
   ScrollArea: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ children, ...props }, ref) => <div ref={ref} {...props}>{children}</div>,
   ),
-  SearchField: forwardRef<HTMLInputElement, {
-    inputClassName?: string;
-    leadingIcon?: React.ReactNode;
-    value: string;
-    onValueChange: (value: string) => void;
-    placeholder?: string;
-  } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'>>(
-    ({ inputClassName, leadingIcon: _leadingIcon, onValueChange, value, ...props }, ref) => (
-      <input
-        ref={ref}
-        className={inputClassName}
-        value={value}
-        onChange={event => onValueChange(event.target.value)}
-        {...props}
-      />
-    ),
-  ),
 }));
 
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({
@@ -99,6 +82,7 @@ vi.mock('@/infrastructure/i18n', () => ({
         'quickSwitch.conflict.retrySwitchAction': 'Retry switch',
         'quickSwitch.conflict.title': 'Commit changes to switch branch',
         'quickSwitch.menuLabel': 'Switch branch',
+        'quickSwitch.searchLabel': 'Search branches',
       };
       return labels[key] ?? key;
     },
@@ -181,6 +165,21 @@ describe('BranchQuickSwitch', () => {
     container.remove();
     document.querySelectorAll('[data-testid="branch-quick-switch"], [data-testid="branch-switch-conflict-dialog"], [data-testid="branch-switch-commit-dialog"]')
       .forEach(node => node.remove());
+  });
+
+  it('keeps the design-system search field as one labeled visual surface', async () => {
+    await act(async () => {
+      root.render(<Harness onSwitchSuccess={vi.fn()} />);
+    });
+
+    const searchField = document.querySelector('[data-bf-component="search-field"]');
+    const fieldSurface = searchField?.querySelector('[data-bf-component="input"]');
+    const input = searchField?.querySelector<HTMLInputElement>('input[type="search"]');
+
+    expect(searchField).not.toBeNull();
+    expect(fieldSurface).not.toBeNull();
+    expect(input?.getAttribute('aria-label')).toBe('Search branches');
+    expect(input?.classList.contains('branch-quick-switch__input')).toBe(false);
   });
 
   it('checks out a selected branch and publishes the shared branch-change event', async () => {

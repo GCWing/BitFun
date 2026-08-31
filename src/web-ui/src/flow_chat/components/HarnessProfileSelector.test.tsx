@@ -23,6 +23,12 @@ vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({
   getAppearanceOverlayHost: () => document.body,
 }));
 
+const confirmation = vi.hoisted(() => ({ dialog: vi.fn(async () => true) }));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
+  confirmDialog: confirmation.dialog,
+}));
+
 const notify = vi.hoisted(() => ({ info: vi.fn() }));
 
 vi.mock('@/shared/notification-system', () => ({
@@ -369,7 +375,7 @@ describe('HarnessProfileSelector', () => {
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
-  it('opens new-Session profile choices directly for a started Session', async () => {
+  it('confirms a new Session after a profile choice in a started Session', async () => {
     const onSelectProfile = vi.fn();
     const onStartNewSession = vi.fn();
     await act(async () => {
@@ -398,9 +404,7 @@ describe('HarnessProfileSelector', () => {
     const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
     expect(menu).not.toBeNull();
     expect(menu?.dataset.bfPage).toBe('profiles');
-    expect(
-      menu?.querySelector('[data-testid="harness-new-session-notice"]')?.textContent,
-    ).toBe('chatInput.harness.selectionCreatesNewSession');
+    expect(menu?.querySelector('[data-testid="harness-new-session-notice"]')).toBeNull();
     expect(menu?.querySelector('[data-testid="harness-session-summary"]')).toBeNull();
     expect(menu?.querySelector('[data-testid="harness-start-new-session"]')).toBeNull();
     expect(
@@ -417,6 +421,11 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).not.toHaveBeenCalled();
+    expect(confirmation.dialog).toHaveBeenCalledWith({
+      title: 'chatInput.harness.newSessionConfirmation.title',
+      message: 'chatInput.harness.newSessionConfirmation.message',
+      confirmText: 'chatInput.harness.newSessionConfirmation.confirm',
+    });
     expect(onStartNewSession).toHaveBeenCalledWith(
       { kind: 'profile', id: 'minimal' },
     );
@@ -464,9 +473,43 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectAgent).not.toHaveBeenCalled();
+    expect(confirmation.dialog).toHaveBeenCalledWith({
+      title: 'chatInput.harness.newSessionConfirmation.title',
+      message: 'chatInput.harness.newSessionConfirmation.message',
+      confirmText: 'chatInput.harness.newSessionConfirmation.confirm',
+    });
     expect(onStartNewSession).toHaveBeenCalledWith(
       { kind: 'agent', id: 'Cowork' },
     );
+  });
+
+  it('keeps the current Session unchanged when new-Session confirmation is cancelled', async () => {
+    confirmation.dialog.mockResolvedValueOnce(false);
+    const onStartNewSession = vi.fn();
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          sessionStarted
+          selectedProfile="balanced"
+          onSelectProfile={vi.fn()}
+          onStartNewSession={onStartNewSession}
+        />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(confirmation.dialog).toHaveBeenCalledTimes(1);
+    expect(onStartNewSession).not.toHaveBeenCalled();
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
   it.each(['creative'] as const)(

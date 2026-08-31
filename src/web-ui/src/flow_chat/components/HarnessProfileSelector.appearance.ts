@@ -8,7 +8,6 @@ export const harnessProfileSelectorAppearanceDescriptor: AppearanceSurfaceDescri
     { id: 'menu' },
     { id: 'profile' },
     { id: 'agent' },
-    { id: 'newSessionNotice' },
   ],
   facets: [
     {

@@ -54,6 +54,7 @@ test("NavigationPanel styling reuses shared action and scrollbar contracts", asy
 
   assert.match(styles, /--bf-layout-navigation-panel-inline-size/);
   assert.match(styles, /--bf-layout-navigation-panel-footer-height/);
+  assert.match(styles, /\.items\s*\{[^}]*gap: calc\(var\(--bf-space-1\) \/ 2\)/);
   assert.match(styles, /--bf-color-surface-subtle/);
   assert.match(styles, /--bf-color-action-neutral-surface-pressed/);
   assert.match(styles, /aria-current/);

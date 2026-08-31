@@ -266,10 +266,6 @@
     }
   }
 
-  &__settings-list {
-    width: 100%;
-  }
-
   &__settings-value {
     display: block;
     max-width: 112px;
@@ -280,10 +276,6 @@
 
   &__settings-reset {
     color: var(--bf-color-content-muted);
-  }
-
-  &__settings-separator {
-    margin-block: var(--bf-space-1);
   }
 
   &__option-main {

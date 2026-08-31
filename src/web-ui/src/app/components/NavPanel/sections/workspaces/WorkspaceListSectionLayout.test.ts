@@ -65,6 +65,7 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceGroup).toContain('min-width: 0;');
     expect(workspaceItem).toContain('min-width: 0;');
     expect(workspaceItem).toContain('max-width: 100%;');
+    expect(workspaceItem).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(workspaceCard).toContain('max-width: 100%;');
     expect(workspaceCard).toContain('overflow: hidden;');
     expect(workspaceIcon).toContain('width: 16px;');
@@ -88,6 +89,7 @@ describe('WorkspaceListSection layout styles', () => {
 
     expect(assistantItem).toContain('min-width: 0;');
     expect(assistantItem).toContain('max-width: 100%;');
+    expect(assistantItem).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(assistantCard).toContain('max-width: 100%;');
     expect(assistantCard).toContain('min-height: 30px;');
     expect(assistantCard).toContain('overflow: hidden;');

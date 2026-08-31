@@ -98,7 +98,7 @@
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    gap: 2px;
+    gap: calc(var(--bf-space-1) / 2);
     min-width: 0;
     max-width: 100%;
     padding: 2px $size-gap-1;
@@ -1074,7 +1074,7 @@
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    gap: 2px;
+    gap: calc(var(--bf-space-1) / 2);
     min-width: 0;
     max-width: 100%;
     padding: $size-gap-1;
@@ -1373,7 +1373,7 @@
   }
 
   &__workspace-group {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
   }
 
   &__workspace-group-title {
@@ -1397,7 +1397,7 @@
 
   &__workspace-item,
   &__assistant-item {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
     padding: 0;
     border-radius: $size-radius-base;
     transition:

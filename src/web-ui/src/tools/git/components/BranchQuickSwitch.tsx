@@ -436,8 +436,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
         <SearchField
           ref={inputRef}
           className="branch-quick-switch__input-field"
-          inputClassName="branch-quick-switch__input"
           leadingIcon={<Icon name="search" size="sm" aria-hidden />}
+          aria-label={t('quickSwitch.searchLabel')}
           placeholder={t('quickSwitch.searchPlaceholder')}
           value={searchTerm}
           onValueChange={setSearchTerm}
