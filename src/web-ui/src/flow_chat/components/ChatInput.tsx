@@ -241,9 +241,10 @@ import {
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
-import { IconButton, Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import {
   ChatComposer,
+  ChatComposerActionButton,
   ChatComposerContent,
   ChatComposerEndActions,
   ChatComposerStartActions,
@@ -5350,12 +5351,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   });
 
   const renderActionButton = () => {
-    if (!derivedState) return <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state="disabled"><IconButton
+    if (!derivedState) return <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state="disabled"><ChatComposerActionButton
       aria-label={t('input.sendShortcut')}
       className="bitfun-chat-input__send-button"
       disabled
-      size="sm"
-      icon={<ArrowUp size={11} />}
+      icon={<ArrowUp />}
+      variant="primary"
     /></span>;
 
     const { sendButtonMode, hasQueuedInput } = derivedState;
@@ -5370,16 +5371,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           data-bf-state={isInterruptedTurnRecoveryInFlight ? 'disabled' : undefined}
         >
           <Tooltip content={t('input.continueInterrupted')}>
-            <IconButton
+            <ChatComposerActionButton
               aria-label={t('input.continueInterrupted')}
               className="bitfun-chat-input__send-button"
               onClick={() => void handleRecoverInterruptedTurn()}
               disabled={isInterruptedTurnRecoveryInFlight}
               data-testid="chat-input-continue-interrupted-btn"
-              size="sm"
               icon={isInterruptedTurnRecoveryInFlight
-                ? <Loader2 size={11} className="bitfun-spin" />
-                : <Play size={11} fill="currentColor" />}
+                ? <Loader2 className="bitfun-spin" />
+                : <Play fill="currentColor" />}
+              variant="primary"
             />
           </Tooltip>
         </span>
@@ -5407,13 +5408,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return (
         <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="retry" data-bf-state={isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
           <Tooltip content={t('input.retry')}>
-            <IconButton
+            <ChatComposerActionButton
               aria-label={t('input.retry')}
               className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
               onClick={() => void handleSendOrCancel()}
               disabled={isModelSwitching || isModeChangePending || caps.transferInFlight}
-              size="sm"
-              icon={<RotateCcw size={11} />}
+              icon={<RotateCcw />}
+              variant="primary"
             />
           </Tooltip>
         </span>
@@ -5438,14 +5439,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </span>
           <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
             <Tooltip content={t('input.sendShortcut')}>
-              <IconButton
+              <ChatComposerActionButton
                 aria-label={t('input.sendShortcut')}
                 className="bitfun-chat-input__send-button"
                 onClick={() => void handleSendOrCancel()}
                 disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
                 data-testid="chat-input-send-btn"
-                size="sm"
-                icon={<ArrowUp size={11} />}
+                icon={<ArrowUp />}
+                variant="primary"
               />
             </Tooltip>
           </span>
@@ -5456,14 +5457,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return (
       <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
         <Tooltip content={t('input.sendShortcut')}>
-          <IconButton
+          <ChatComposerActionButton
             aria-label={t('input.sendShortcut')}
             className="bitfun-chat-input__send-button"
             onClick={() => void handleSendOrCancel()}
             disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
             data-testid="chat-input-send-btn"
-            size="sm"
-            icon={<ArrowUp size={11} />}
+            icon={<ArrowUp />}
+            variant="primary"
           />
         </Tooltip>
       </span>
@@ -6027,11 +6028,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   {!isAcpTargetSession && (
                     <span className="bitfun-chat-input__agent-boost-trigger" ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
                       <Tooltip content={t('chatInput.addBoostTooltip')}>
-                        <IconButton
+                        <ChatComposerActionButton
                           aria-label={t('chatInput.addBoostTooltip')}
                           className="bitfun-chat-input__agent-boost-add"
                           data-testid="chat-input-agent-boost-trigger"
-                          size="sm"
                           aria-haspopup="menu"
                           aria-expanded={modeState.dropdownOpen}
                           onClick={e => {
@@ -6041,7 +6041,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             }
                             dispatchMode({ type: 'TOGGLE_DROPDOWN' });
                           }}
-                          icon={<Plus size={14} strokeWidth={2.25} />}
+                          icon={<Plus strokeWidth={2.25} />}
+                          variant="fill"
                         />
                       </Tooltip>
                     </span>

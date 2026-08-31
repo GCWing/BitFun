@@ -462,7 +462,7 @@ $_section-header-height: 22px;
     }
 
     &.is-active {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--bf-color-selection-surface);
       color: var(--bf-color-content-primary);
     }
 
@@ -2662,7 +2662,7 @@ $_section-header-height: 22px;
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
-      @include shell-surfaces.navigation-feedback;
+      @include shell-surfaces.navigation-selection-feedback;
     }
 
     &:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {
@@ -2782,7 +2782,7 @@ $_section-header-height: 22px;
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
-      @include shell-surfaces.navigation-feedback;
+      @include shell-surfaces.navigation-selection-feedback;
 
       &::before {
         left: 3px;
@@ -2838,7 +2838,7 @@ $_section-header-height: 22px;
   &__miniapp-entry.is-active {
     border-color: transparent;
     @include nav-font.nav-panel-text-row-active;
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-selection-feedback;
   }
 
   &__miniapp-bubble {
@@ -2963,7 +2963,7 @@ $_section-header-height: 22px;
   .bitfun-nav-panel__top-action-btn:hover,
   .bitfun-nav-panel__item:hover,
   .bitfun-nav-panel__footer-btn--icon:hover {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-hover-feedback;
   }
 
   .bitfun-nav-panel__section-header--interactive:hover,
@@ -3074,7 +3074,7 @@ $_section-header-height: 22px;
   &__pages-entry:hover,
   &__assistant-entry:hover,
   &__miniapp-entry:hover {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-hover-feedback;
   }
 
   &__assistant-entry-label,
@@ -3097,7 +3097,6 @@ $_section-header-height: 22px;
   flex: 1 1 auto;
   min-block-size: 0;
   height: 100%;
-  background: transparent;
 
 }
 

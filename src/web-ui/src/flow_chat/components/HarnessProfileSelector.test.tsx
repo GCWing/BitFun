@@ -15,7 +15,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@bitfun/ui', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -153,6 +154,7 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(selectorRoot?.dataset.bfPresentation).toBe('menu-item');
+    expect(selectorRoot?.dataset.bfProfile).toBe('balanced');
     expect(trigger?.querySelector('.bitfun-harness-selector__trigger-chevron')).not.toBeNull();
     const triggerMark = trigger?.querySelector<HTMLElement>(
       '.bitfun-harness-selector__density-mark',

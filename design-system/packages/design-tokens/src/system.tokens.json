@@ -374,6 +374,7 @@
     },
     "chatComposer": {
       "$type": "dimension",
+      "actionIconSize": { "$value": "14px" },
       "compactGap": { "$value": "9px" },
       "compactHeight": { "$value": "45px" },
       "compactPaddingBlock": { "$value": "9px" },

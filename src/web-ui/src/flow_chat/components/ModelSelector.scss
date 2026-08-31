@@ -112,27 +112,6 @@
     line-height: var(--bf-line-height-none);
   }
 
-  &__ctx-usage {
-    font-size: var(--bf-type-flow-meta-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    color: var(--bf-color-content-muted);
-    opacity: 0.55;
-    letter-spacing: var(--bf-letter-spacing-subtle);
-    transition: opacity 160ms ease;
-    flex-shrink: 0;
-
-    &--warning {
-      color: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, transparent);
-      opacity: 0.9;
-    }
-
-    &--critical {
-      color: color-mix(in srgb, var(--bf-color-status-danger-content) 95%, var(--bf-color-content-primary));
-      opacity: 1;
-      animation: bitfun-ctx-critical-pulse 2s ease-in-out infinite;
-    }
-  }
-
   &__tooltip {
     display: grid;
     gap: 4px;
@@ -341,11 +320,6 @@
 
 }
 
-@keyframes bitfun-ctx-critical-pulse {
-  0%, 100% { opacity: 0.8; }
-  50%       { opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .bitfun-model-selector__trigger,
   .bitfun-model-selector__chevron,
@@ -353,8 +327,7 @@
     transition-duration: 0ms;
   }
 
-  .bitfun-model-selector__dropdown,
-  .bitfun-model-selector__ctx-usage--critical {
+  .bitfun-model-selector__dropdown {
     animation: none;
   }
 }

@@ -1418,7 +1418,7 @@
 
   &__workspace-item.is-active &__workspace-item-card,
   &__assistant-item.is-active &__assistant-item-card {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-selection-feedback;
     box-shadow: none;
   }
 
@@ -1490,12 +1490,12 @@
 
   .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item-card:hover {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-hover-feedback;
   }
 
   .bitfun-nav-panel__workspace-item.is-active .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item.is-active .bitfun-nav-panel__assistant-item-card:hover {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-selection-feedback;
   }
 
   .bitfun-nav-panel__workspace-item.is-active:has(.bitfun-nav-panel__workspace-item-sessions .bitfun-nav-panel__inline-item.is-active) .bitfun-nav-panel__workspace-item-card:hover,

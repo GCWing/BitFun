@@ -1508,17 +1508,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
   }, [dropdownOpen, keyboardNavigationOpen]);
   
-  const tokenPercentage = useMemo(() => {
-    if (!maxTokens || maxTokens <= 0 || !currentTokens) return 0;
-    return Math.min(Math.round((currentTokens / maxTokens) * 100), 100);
-  }, [currentTokens, maxTokens]);
-
-  const tokenStatusClass = useMemo(() => {
-    if (tokenPercentage >= 90) return 'critical';
-    if (tokenPercentage >= 70) return 'warning';
-    return '';
-  }, [tokenPercentage]);
-
   const resolvedContextUsageSource: ContextUsageSource =
     contextUsageSource ?? (isAcpSession ? 'acp_context' : 'agent_prompt');
   if (externalSelection) {
@@ -1657,18 +1646,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       },
       t,
     });
-    // Whichever trigger is on screen carries the context readout; with no model
-    // trigger it rides along on the mode one instead of disappearing.
-    const contextUsageBadge = tokenPercentage > 0 ? (
-      <span
-        className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}
-        data-bf-component="model-selector"
-        data-bf-part="contextUsage"
-      >
-        · {tokenPercentage}%
-      </span>
-    ) : null;
-
     return (
       <div data-bf-component="model-selector" data-bf-part="root" data-bf-state={dropdownOpen ? 'open' : undefined}
         ref={dropdownRef}
@@ -1707,7 +1684,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             {acpFastMode?.enabled && (
               <Zap size={9} className="bitfun-model-selector__fast-icon" />
             )}
-            {contextUsageBadge}
             <ChevronDown size={10} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>
@@ -1721,7 +1697,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             loading={loading}
             dropdownPlacement={dropdownPlacement}
             onSelect={handleSelectAcpMode}
-            {...(showModelTrigger ? {} : { tooltip: acpTooltip, trailing: contextUsageBadge })}
+            {...(showModelTrigger ? {} : { tooltip: acpTooltip })}
           />
         )}
 
@@ -1898,14 +1874,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           />
         </button>
       </Tooltip>
-
-      {tokenPercentage > 0 && (
-        <Tooltip content={tooltipContent}>
-          <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`} data-bf-component="model-selector" data-bf-part="contextUsage">
-            · {tokenPercentage}%
-          </span>
-        </Tooltip>
-      )}
 
       <RetainedMountBoundary present={dropdownOpen}>
         {createPortal(

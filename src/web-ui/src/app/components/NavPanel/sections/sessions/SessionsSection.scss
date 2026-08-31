@@ -814,13 +814,13 @@
       @include nav-font.nav-panel-text-heading;
     }
 
-    &:hover,
-    &.is-active {
-      @include shell-surfaces.navigation-feedback;
+    &:hover {
+      @include shell-surfaces.navigation-hover-feedback;
     }
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
+      @include shell-surfaces.navigation-selection-feedback;
     }
 
     &.is-child {

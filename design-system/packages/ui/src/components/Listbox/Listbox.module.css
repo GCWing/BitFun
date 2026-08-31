@@ -82,7 +82,7 @@
   }
 
   .option[data-selected="true"] {
-    background: var(--bf-color-action-neutral-surface);
+    background: var(--bf-color-selection-surface);
   }
 
   .option:not(:disabled):active {

@@ -112,11 +112,6 @@
 
 .bitfun-config-page-section__body {
   min-width: 0;
-  background: var(--bf-component-config-page-section-background);
-  border: 0;
-  border-radius: var(--bf-radius-md);
-  overflow: visible;
-  box-shadow: none;
 }
 
 // Sections whose children own their own cards should not render a second surface.
@@ -124,6 +119,7 @@
   background: transparent;
   border: 0;
   border-radius: 0;
+  overflow: visible;
   box-shadow: none;
 }
 
@@ -207,11 +203,50 @@
   justify-content: flex-end;
   justify-self: stretch;
 
-  // Form controls render span/div roots; buttons and switch/checkbox labels
-  // keep their intrinsic width while fields and product wrappers fill the row.
-  > :where(span, div) {
-    width: 100%;
-    min-width: 0;
+  // Only field-like controls consume the full control column. Intrinsic
+  // controls such as Switch, Button, Checkbox, and StatusPill keep the
+  // geometry owned by their design-system component.
+  > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='textarea'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select'],
+    [data-bf-component='select'],
+    [data-bf-component='number-input']
+  ),
+  > div:has(
+    > :where(
+      [data-bf-component='input'],
+      [data-bf-component='search-field'],
+      [data-bf-component='textarea'],
+      [data-bf-component='combobox'],
+      [data-bf-component='multi-select'],
+      [data-bf-component='select'],
+      [data-bf-component='number-input']
+    )
+  ),
+  > div:has(
+    > :where(
+      [data-bf-component='input'],
+      [data-bf-component='search-field'],
+      [data-bf-component='textarea'],
+      [data-bf-component='combobox'],
+      [data-bf-component='multi-select'],
+      [data-bf-component='select'],
+      [data-bf-component='number-input']
+    )
+  ) > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='textarea'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select'],
+    [data-bf-component='select'],
+    [data-bf-component='number-input']
+  ) {
+    inline-size: 100%;
+    min-inline-size: 0;
   }
 }
 

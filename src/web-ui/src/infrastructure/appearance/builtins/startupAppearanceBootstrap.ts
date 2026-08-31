@@ -27,7 +27,10 @@ export function createStartupAppearanceBootstrapEntry(
   const chrome = palette.colors.chrome;
   return {
     id: palette.id,
-    bgPrimary: chrome?.background.primary ?? palette.colors.background.primary,
+    bgPrimary: chrome?.background.chrome
+      ?? chrome?.background.primary
+      ?? palette.colors.background.chrome
+      ?? palette.colors.background.primary,
     bgSecondary: chrome?.background.secondary ?? palette.colors.background.secondary,
     bgScene: palette.colors.background.scene,
     isLight: palette.type === 'light',

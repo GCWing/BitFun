@@ -32,8 +32,6 @@ interface AcpModeSelectorProps {
    * only one on screen and therefore also carries the context-usage readout.
    */
   tooltip?: React.ReactNode;
-  /** Extra trigger content before the chevron — the context-usage badge. */
-  trailing?: React.ReactNode;
   onSelect: (value: string) => void | Promise<void>;
 }
 
@@ -44,7 +42,6 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
   loading = false,
   dropdownPlacement = 'top',
   tooltip,
-  trailing,
   onSelect,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -176,7 +173,6 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
           >
             {currentLabel}
           </span>
-          {trailing}
           <ChevronDown size={10} aria-hidden="true" />
         </button>
       </Tooltip>

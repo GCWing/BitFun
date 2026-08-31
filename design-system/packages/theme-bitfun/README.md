@@ -25,3 +25,11 @@ import {
 ```
 
 The same data is available as `@bitfun/theme-bitfun/reference-colors.json`. Reference colors deliberately do not emit runtime CSS variables; application and component CSS must continue to use semantic theme variables.
+
+## Surface and state roles
+
+- `color.surface.scene`, `panel`, and `raised` own primary content and elevated planes.
+- `color.surface.chrome` owns persistent application structure such as navigation and window-control regions.
+- `color.surface.tertiary` is an opaque low-emphasis fill for persistent grouped content such as cards and field groups.
+- `color.surface.subtle` is a translucent local tint for transient feedback and small inset details. It must not define a persistent application plane.
+- `color.selection.surface` owns persistent neutral selection. Hover and pressed colors remain action feedback and are not substitutes for selection.

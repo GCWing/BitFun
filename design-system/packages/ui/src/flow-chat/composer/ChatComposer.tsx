@@ -5,6 +5,10 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import {
+  IconButton,
+  type IconButtonProps,
+} from "../../components/IconButton";
 import { classNames } from "../../internal/classNames";
 import styles from "./ChatComposer.module.css";
 
@@ -25,6 +29,28 @@ export interface ChatComposerProps
 export interface ChatComposerSlotProps {
   children: ReactNode;
 }
+
+export type ChatComposerActionButtonProps = Omit<
+  IconButtonProps,
+  "shape" | "size"
+>;
+
+/** Stable icon action for ChatComposer start and end action tracks. */
+export const ChatComposerActionButton = forwardRef<
+  HTMLButtonElement,
+  ChatComposerActionButtonProps
+>(function ChatComposerActionButton({ className, ...props }, ref) {
+  return (
+    <IconButton
+      {...props}
+      className={classNames(styles.actionButton, className)}
+      data-bf-role="composer-action"
+      ref={ref}
+      shape="circle"
+      size="sm"
+    />
+  );
+});
 
 /** Compound slot for complex consumers that keep content and actions adjacent. */
 export function ChatComposerContent({ children }: ChatComposerSlotProps) {

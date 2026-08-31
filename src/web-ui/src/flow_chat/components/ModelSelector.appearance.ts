@@ -7,7 +7,6 @@ export const modelSelectorAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'trigger' },
     { id: 'name' },
     { id: 'reasoningSummary' },
-    { id: 'contextUsage' },
     { id: 'dropdown' },
     { id: 'level' },
     { id: 'back' },

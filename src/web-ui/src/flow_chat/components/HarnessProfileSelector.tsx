@@ -326,6 +326,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       data-bf-component="harness-selector"
       data-bf-part="root"
       data-bf-presentation={presentation}
+      data-bf-profile={knownSelectedProfile}
     >
       <Tooltip content={triggerTooltip}>
         {presentation === 'menu-item' ? (

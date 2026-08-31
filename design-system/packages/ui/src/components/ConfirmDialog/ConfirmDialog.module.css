@@ -81,7 +81,7 @@
     border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
     border-radius: var(--bf-layout-confirm-dialog-preview-radius);
     color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-surface-tertiary);
     scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
     scrollbar-width: thin;
   }

@@ -108,7 +108,10 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.surface.scene': colors.background.scene,
     'color.surface.workbench': colors.background.workbench,
     'color.surface.tertiary': colors.background.tertiary,
-    'color.surface.chrome': colors.chrome?.background.primary ?? colors.background.primary,
+    'color.surface.chrome': colors.background.chrome
+      ?? colors.chrome?.background.chrome
+      ?? colors.chrome?.background.primary
+      ?? colors.background.primary,
     'color.surface.subtle': colors.element.subtle,
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
@@ -141,6 +144,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.quiet.hover': colors.element.soft,
     'color.action.quiet.pressed': colors.element.base,
     'color.action.quiet.content': colors.text.secondary,
+    'color.selection.surface': colors.element.medium,
     'color.field.background': colors.background.secondary,
     'color.field.backgroundHover': colors.element.subtle,
     'color.field.border': colors.border.base,
@@ -194,7 +198,7 @@ function createChromeThemeTokens(
     'color.surface.scene': chrome.background.scene,
     'color.surface.workbench': chrome.background.workbench,
     'color.surface.tertiary': chrome.background.tertiary,
-    'color.surface.chrome': chrome.background.primary,
+    'color.surface.chrome': chrome.background.chrome ?? chrome.background.primary,
     'color.surface.subtle': chrome.element.subtle,
     'color.content.primary': chrome.text.primary,
     'color.content.secondary': chrome.text.secondary,
@@ -219,6 +223,7 @@ function createChromeThemeTokens(
     'color.action.quiet.hover': chrome.element.soft,
     'color.action.quiet.pressed': chrome.element.base,
     'color.action.quiet.content': chrome.text.secondary,
+    'color.selection.surface': chrome.element.medium,
     'color.field.background': chrome.background.secondary,
     'color.field.backgroundHover': chrome.element.subtle,
     'color.field.border': chrome.border.base,
@@ -245,13 +250,13 @@ function createAppearanceOwnedTokens(
   const configPage = palette.components?.configPage;
   return {
     ...themeValuesToCssTokens(createThemeTokenValues(palette)),
-    '--bf-component-config-page-section-background': configPage?.section.background ?? colors.element.subtle,
+    '--bf-component-config-page-section-background': configPage?.section.background ?? colors.background.tertiary,
     '--bf-component-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
     '--bf-component-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',
     '--bf-component-config-page-section-shadow': configPage?.section.shadow
       ?? `inset 0 1px 0 ${OVERLAY_WHITE_04}`,
     '--bf-component-config-page-divider': configPage?.divider ?? colors.border.subtle,
-    '--bf-component-config-page-row-hover-background': configPage?.rowHover ?? OVERLAY_WHITE_04,
+    '--bf-component-config-page-row-hover-background': configPage?.rowHover ?? colors.element.soft,
     '--bf-component-scene-viewport-border-width': palette.layout?.sceneViewportBorder === false ? '0' : '1px',
     '--bf-component-badge-padding-block': '2px',
     '--bf-domain-context-compression': purple[500],

@@ -56,7 +56,12 @@ const server = await createServer({
   root: webUiRoot,
   logLevel: 'error',
   appType: 'custom',
-  server: { middlewareMode: true },
+  server: {
+    middlewareMode: true,
+    // This generator only loads modules in-process. Do not inherit the Web UI
+    // HMR socket, which may already belong to an active desktop dev server.
+    hmr: false,
+  },
   optimizeDeps: {
     entries: [],
     noDiscovery: true,

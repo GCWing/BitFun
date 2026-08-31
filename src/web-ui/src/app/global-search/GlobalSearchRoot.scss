@@ -658,12 +658,6 @@
 .global-search--modal {
   --global-search-surface: var(--bf-color-surface-raised);
   --global-search-raised-surface: var(--bf-color-action-neutral-surface);
-  --_global-search-command-red: var(--bf-color-status-danger-content);
-  --_global-search-command-orange: var(--bf-color-status-warning-content);
-  --_global-search-command-green: var(--bf-color-status-success-content);
-  --_global-search-command-cyan: var(--bf-color-status-info-content);
-  --_global-search-command-blue: var(--bf-color-accent-default);
-  --_global-search-command-purple: var(--bf-color-accent-secondary);
 
   width: 100%;
   flex: 1 1 auto;
@@ -844,34 +838,34 @@
     gap: var(--bf-space-2);
   }
 
-  // Command colors belong to this modal presentation only. ActionCard, the
-  // product action catalog, and embedded search remain neutral.
+  // Action identities belong to Global Search. ActionCard, the product action
+  // catalog, and embedded search remain neutral.
   .global-search__action-icon {
     display: inline-flex;
     color: inherit;
 
-    &[data-icon-tone='red'] {
-      color: var(--_global-search-command-red);
+    &[data-icon-role='new-session'] {
+      color: var(--bf-color-identity-global-search-new-session);
     }
 
-    &[data-icon-tone='orange'] {
-      color: var(--_global-search-command-orange);
+    &[data-icon-role='open-browser'] {
+      color: var(--bf-color-identity-global-search-open-browser);
     }
 
-    &[data-icon-tone='green'] {
-      color: var(--_global-search-command-green);
+    &[data-icon-role='open-terminal'] {
+      color: var(--bf-color-identity-global-search-open-terminal);
     }
 
-    &[data-icon-tone='cyan'] {
-      color: var(--_global-search-command-cyan);
+    &[data-icon-role='open-project'] {
+      color: var(--bf-color-identity-global-search-open-project);
     }
 
-    &[data-icon-tone='blue'] {
-      color: var(--_global-search-command-blue);
+    &[data-icon-role='new-project'] {
+      color: var(--bf-color-identity-global-search-new-project);
     }
 
-    &[data-icon-tone='purple'] {
-      color: var(--_global-search-command-purple);
+    &[data-icon-role='open-files'] {
+      color: var(--bf-color-identity-global-search-open-files);
     }
   }
 

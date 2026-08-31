@@ -94,19 +94,25 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   network: Network,
 };
 
-type ModalActionIconTone = 'red' | 'orange' | 'green' | 'cyan' | 'blue' | 'purple';
+type ModalActionIconRole =
+  | 'new-session'
+  | 'open-browser'
+  | 'open-terminal'
+  | 'open-project'
+  | 'new-project'
+  | 'open-files';
 
 /**
- * The reference uses color to distinguish the primary commands in this modal.
- * Keep that presentation local: the same actions stay neutral in other hosts.
+ * Global Search uses color to distinguish its six primary actions. Role names
+ * keep the mapping stable without leaking the current hues into product data.
  */
-const MODAL_ACTION_ICON_TONES: Partial<Record<ProductActionId, ModalActionIconTone>> = {
-  'session.new': 'red',
-  'surface.browser.open': 'orange',
-  'surface.terminal.open': 'green',
-  'project.open': 'cyan',
-  'project.new': 'blue',
-  'surface.files.open': 'purple',
+const MODAL_ACTION_ICON_ROLES: Partial<Record<ProductActionId, ModalActionIconRole>> = {
+  'session.new': 'new-session',
+  'surface.browser.open': 'open-browser',
+  'surface.terminal.open': 'open-terminal',
+  'project.open': 'open-project',
+  'project.new': 'new-project',
+  'surface.files.open': 'open-files',
 };
 
 const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> = {
@@ -572,8 +578,8 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     const selected = item.id === activeId;
                     const itemVariant = resultVariant(item.group);
                     const entity = itemVariant === 'entity';
-                    const modalActionIconTone = item.target.kind === 'action'
-                      ? MODAL_ACTION_ICON_TONES[item.target.actionId]
+                    const modalActionIconRole = item.target.kind === 'action'
+                      ? MODAL_ACTION_ICON_ROLES[item.target.actionId]
                       : undefined;
                     const resultCopy = (
                       <span className="global-search__result-copy">
@@ -602,7 +608,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                           leading={(
                             <span
                               className="global-search__action-icon"
-                              data-icon-tone={modalActionIconTone}
+                              data-icon-role={modalActionIconRole}
                               aria-hidden="true"
                             >
                               <ItemIcon size={20} strokeWidth={1.75} />
