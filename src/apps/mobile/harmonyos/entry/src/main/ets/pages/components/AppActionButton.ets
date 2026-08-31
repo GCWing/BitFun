@@ -1,5 +1,15 @@
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
-import { CARD, CONTENT_ON_ACTION, INK, LINE, PRIMARY_ACTION, SOFT, STATUS_DANGER } from './Theme';
+import {
+  CARD,
+  CONTENT_ON_ACTION,
+  INK,
+  LINE,
+  PRIMARY_ACTION,
+  SHADOW_FAINT,
+  SHADOW_SUBTLE,
+  SOFT,
+  STATUS_DANGER
+} from './Theme';
 
 /** Visual intent for a product action. Layout may still choose its own width and height. */
 export enum AppActionStyle {
@@ -28,6 +38,11 @@ export struct AppActionButton {
       .backgroundColor(this.actionBackgroundColor())
       .border({ width: this.style === AppActionStyle.Secondary ? 1 : 0, color: LINE })
       .borderRadius(this.actionHeight / 2)
+      .shadow({
+        radius: this.hasElevation() ? 14 : 0,
+        color: this.isFilled() ? SHADOW_SUBTLE : SHADOW_FAINT,
+        offsetY: this.hasElevation() ? 5 : 0
+      })
       .opacity(this.isEnabled ? 1 : 0.32)
       .enabled(this.isEnabled)
       .onClick(() => {
@@ -37,6 +52,10 @@ export struct AppActionButton {
 
   private isFilled(): boolean {
     return this.style === AppActionStyle.Primary || this.style === AppActionStyle.Destructive;
+  }
+
+  private hasElevation(): boolean {
+    return this.isEnabled && this.style !== AppActionStyle.Quiet;
   }
 
   private actionBackgroundColor(): ResourceColor {

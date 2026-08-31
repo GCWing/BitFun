@@ -1,6 +1,6 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, SHADOW_MEDIUM, STATUS_DANGER, TRANSPARENT } from './Theme';
+import { CARD, INK, LINE, MUTED, SHADOW_SUBTLE, STATUS_DANGER, TRANSPARENT } from './Theme';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 export enum SessionActionPresentation {
@@ -104,11 +104,11 @@ export struct SessionActionSurface {
     .width(this.presentation === SessionActionPresentation.Popover ? 300 : '100%')
     .padding({ left: 16, right: 16, top: 10, bottom: 18 })
     .backgroundColor(CARD)
-    .border({ width: 1, color: LINE })
+    .border({ width: this.presentation === SessionActionPresentation.Popover ? 0.5 : 1, color: LINE })
     .borderRadius(16)
     .shadow({
       radius: this.presentation === SessionActionPresentation.Popover ? 20 : 0,
-      color: this.presentation === SessionActionPresentation.Popover ? SHADOW_MEDIUM : TRANSPARENT,
+      color: this.presentation === SessionActionPresentation.Popover ? SHADOW_SUBTLE : TRANSPARENT,
       offsetY: this.presentation === SessionActionPresentation.Popover ? 8 : 0
     })
     .alignItems(HorizontalAlign.Center)

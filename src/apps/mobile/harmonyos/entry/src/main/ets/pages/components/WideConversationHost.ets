@@ -27,7 +27,7 @@ import {
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SidebarWorkspaceSection } from './SidebarWorkspaceSection';
 import {
-  FLOATING_PANEL_BG,
+  CARD,
   LINE,
   PAGE_BG,
   SHADOW_SUBTLE,
@@ -174,7 +174,7 @@ export struct WideConversationHost {
           onDeleteSession: this.actions.onSidebar.deleteSession
         })
       }
-      .width('100%').height('100%').backgroundColor(FLOATING_PANEL_BG)
+      .width('100%').height('100%').backgroundColor(CARD)
       .borderRadius(18).clip(true)
       .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetX: 4, offsetY: 8 })
     }

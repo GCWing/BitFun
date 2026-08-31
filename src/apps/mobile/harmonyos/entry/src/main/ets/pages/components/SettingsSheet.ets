@@ -202,7 +202,7 @@ export struct SettingsSheet {
         .width('84%')
         .height(1)
         .backgroundColor(LINE)
-      this.StaticRow(RemoteI18n.t('settings.about.version'), '1.0.0')
+      this.StaticRow(RemoteI18n.t('settings.about.version'), '0.0.1')
     }
     .width('100%')
     .backgroundColor(CARD)
