@@ -30,6 +30,7 @@ dunce = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 fs2 = { workspace = true, optional = true }
+filetime = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 ignore = { workspace = true, optional = true }
 globset = { workspace = true, optional = true }
@@ -135,6 +136,7 @@ workspace-runtime = [
     "bitfun-runtime-ports/runtime-event-port",
     "bitfun-runtime-ports/workspace-ports",
     "dep:dunce",
+    "dep:filetime",
     "process-runtime",
     "tokio/fs",
     "tokio/io-util",

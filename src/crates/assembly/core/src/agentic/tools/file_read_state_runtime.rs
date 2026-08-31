@@ -15,9 +15,7 @@ use bitfun_agent_runtime::file_read_state::{
     validate_write_mtime_freshness_against_read_state, FileMutationKind,
 };
 use sha2::{Digest, Sha256};
-use std::io::Read as _;
-use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 use tool_runtime::fs::read_file::ReadFileResult;
 use tool_runtime::util::read_line_prefix::read_tool_output_to_file_content;
 
@@ -57,12 +55,13 @@ pub fn record_file_read_state(
     // `is_partial_view` is reserved for auto-injected content the model has not
     // explicitly read (see Claude Code's FileState.isPartialView). Normal Read
     // tool calls with offset/limit still count as a valid read for Edit/Write.
-    let state = FileReadState::from_read_tool_content(
+    let state = FileReadState::from_read_tool_content_with_truncation(
         read_tool_output_to_file_content(&read_result.content),
         timestamp_ms,
         read_result.start_line,
         read_result.end_line,
         read_result.total_lines,
+        read_result.content_truncated,
     );
 
     coordinator.get_session_manager().set_file_read_state(
@@ -82,27 +81,48 @@ pub fn review_read_receipts_enabled(context: &ToolUseContext) -> bool {
         })
 }
 
-pub fn local_file_revision(path: &Path) -> Option<FileRevision> {
-    let mut file = std::fs::File::open(path).ok()?;
-    let metadata = file.metadata().ok()?;
-    let modified_ns = metadata
-        .modified()
-        .ok()?
-        .duration_since(UNIX_EPOCH)
-        .ok()?
-        .as_nanos();
+/// Capture the same revision facts from either workspace provider. The hash
+/// is streamed and the metadata is checked again so a detected concurrent
+/// change never becomes a reusable review receipt.
+pub async fn file_revision(
+    context: &ToolUseContext,
+    resolved: &ToolPathResolution,
+) -> Option<FileRevision> {
+    use tokio::io::AsyncReadExt;
+    let file_system = context.file_system_for_path(resolved).ok()?;
+    let before = file_system
+        .metadata(&resolved.resolved_path, true)
+        .await
+        .ok()??;
+    if before.kind != bitfun_runtime_ports::WorkspacePathKind::File {
+        return None;
+    }
+    let modified_ns = before.modified?.duration_since(UNIX_EPOCH).ok()?.as_nanos();
+    let mut reader = file_system.open_read(&resolved.resolved_path).await.ok()?;
     let mut hasher = Sha256::new();
+    let mut byte_len = 0_u64;
     let mut buffer = [0_u8; 64 * 1024];
     loop {
-        let read = file.read(&mut buffer).ok()?;
-        if read == 0 {
+        let count = reader.read(&mut buffer).await.ok()?;
+        if count == 0 {
             break;
         }
-        hasher.update(&buffer[..read]);
+        byte_len = byte_len.checked_add(count as u64)?;
+        hasher.update(&buffer[..count]);
+    }
+    let after = file_system
+        .metadata(&resolved.resolved_path, true)
+        .await
+        .ok()??;
+    if before.kind != after.kind || before.size != after.size || before.modified != after.modified {
+        return None;
+    }
+    if after.size.is_some_and(|size| size != byte_len) {
+        return None;
     }
     Some(FileRevision {
         modified_ns,
-        byte_len: metadata.len(),
+        byte_len,
         content_sha256: hasher.finalize().into(),
     })
 }
@@ -114,7 +134,7 @@ pub fn get_review_read_coverage(
     start_line: usize,
     limit: usize,
 ) -> Option<ReviewReadCoverage> {
-    if resolved.uses_remote_workspace_backend() || !review_read_receipts_enabled(context) {
+    if !review_read_receipts_enabled(context) {
         return None;
     }
     let session_id = context.session_id.as_deref()?;
@@ -134,7 +154,7 @@ pub fn record_review_read_receipt(
     revision: FileRevision,
     read_result: &ReadFileResult,
 ) {
-    if resolved.uses_remote_workspace_backend() || !review_read_receipts_enabled(context) {
+    if read_result.content_truncated || !review_read_receipts_enabled(context) {
         return;
     }
     let Some(session_id) = context.session_id.as_deref() else {
@@ -268,39 +288,30 @@ pub async fn read_current_file_content(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
 ) -> BitFunResult<String> {
-    if resolved.uses_remote_workspace_backend() {
-        let ws_fs = context.ws_fs().ok_or_else(|| {
-            crate::util::errors::BitFunError::tool(
-                "Remote workspace file system is unavailable".to_string(),
-            )
-        })?;
-        ws_fs
-            .read_file_text(&resolved.resolved_path)
-            .await
-            .map_err(|error| {
-                crate::util::errors::BitFunError::tool(format!("Failed to read file: {}", error))
-            })
-    } else {
-        std::fs::read_to_string(&resolved.resolved_path).map_err(|error| {
+    context
+        .file_system_for_path(resolved)?
+        .read_file_text(&resolved.resolved_path)
+        .await
+        .map_err(|error| {
             crate::util::errors::BitFunError::tool(format!(
-                "Failed to read file {}: {}",
+                "Failed to read file {}: {:#}",
                 resolved.logical_path, error
             ))
         })
-    }
 }
 
-async fn file_modification_time_ms(
-    _context: &ToolUseContext,
+pub async fn file_modification_time_ms(
+    context: &ToolUseContext,
     resolved: &ToolPathResolution,
 ) -> Option<u64> {
-    if resolved.uses_remote_workspace_backend() {
-        return None;
-    }
-
-    let metadata = std::fs::metadata(&resolved.resolved_path).ok()?;
-    let modified = metadata.modified().ok()?;
-    modified
+    let metadata = context
+        .file_system_for_path(resolved)
+        .ok()?
+        .metadata(&resolved.resolved_path, true)
+        .await
+        .ok()??;
+    metadata
+        .modified?
         .duration_since(UNIX_EPOCH)
         .ok()
         .map(|duration| duration.as_millis() as u64)
@@ -310,28 +321,11 @@ pub async fn file_mutation_timestamp_ms(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
 ) -> u64 {
-    if let Some(timestamp_ms) = file_modification_time_ms(context, resolved).await {
-        return timestamp_ms;
-    }
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
+    // Unknown workspace mtime is not the controller's wall clock. A zero
+    // timestamp keeps the same unknown-fact representation used by Read.
+    file_modification_time_ms(context, resolved)
+        .await
         .unwrap_or(0)
-}
-
-pub fn local_file_modification_time_ms(path: &Path) -> u64 {
-    std::fs::metadata(path)
-        .ok()
-        .and_then(|metadata| metadata.modified().ok())
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or_else(|| {
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|duration| duration.as_millis() as u64)
-                .unwrap_or(0)
-        })
 }
 
 #[cfg(test)]
@@ -411,19 +405,27 @@ mod tests {
         assert!(validate_edit_has_prior_read(&context, &resolution).is_none());
     }
 
-    #[test]
-    fn local_file_revision_detects_same_size_content_changes_with_restored_mtime() {
+    #[tokio::test]
+    async fn file_revision_detects_same_size_content_changes_with_restored_mtime() {
         let temp = tempfile::tempdir().expect("temp dir");
         let path = temp.path().join("review.txt");
         std::fs::write(&path, b"alpha").expect("write original");
         let original_mtime = filetime::FileTime::from_last_modification_time(
             &std::fs::metadata(&path).expect("original metadata"),
         );
-        let original = local_file_revision(&path).expect("original revision");
+        let context = test_context(None, temp.path().to_path_buf());
+        let resolved = context
+            .resolve_tool_path("review.txt")
+            .expect("resolve file");
+        let original = file_revision(&context, &resolved)
+            .await
+            .expect("original revision");
 
         std::fs::write(&path, b"bravo").expect("write replacement");
         filetime::set_file_mtime(&path, original_mtime).expect("restore mtime");
-        let replacement = local_file_revision(&path).expect("replacement revision");
+        let replacement = file_revision(&context, &resolved)
+            .await
+            .expect("replacement revision");
 
         assert_eq!(original.modified_ns, replacement.modified_ns);
         assert_eq!(original.byte_len, replacement.byte_len);

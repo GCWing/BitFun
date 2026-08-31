@@ -652,7 +652,12 @@ impl Tool for ExecCommandTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Runs a shell command in a separate process.
+        Ok(r#"Runs the supplied shell command in a separate process in the Session's workspace environment.
+
+Command availability:
+- The command is passed as supplied to the target environment's shell and uses its PATH and installed programs. ExecCommand does not translate commands or install missing programs.
+- Built-in tools such as Grep are separate APIs; Grep can search workspace content even when the shell has no `rg` executable.
+- If a command is not found, inspect the actual output and exit status. Choose a built-in tool or a command verified to be available in the target environment for the next step. Do not automatically rewrite an explicitly requested command or install software to retry it.
 
 TTY modes:
 - `tty=false` (Default): 
@@ -681,7 +686,7 @@ Output:
     }
 
     fn short_description(&self) -> String {
-        "Run a command in a fresh process.".to_string()
+        "Run a shell command in the Session's workspace environment.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -690,7 +695,7 @@ Output:
             "properties": {
                 "cmd": {
                     "type": "string",
-                    "description": "Shell command to execute."
+                    "description": "Shell command to execute as supplied, using the target environment's shell, PATH, and installed programs."
                 },
                 "workdir": {
                     "type": "string",

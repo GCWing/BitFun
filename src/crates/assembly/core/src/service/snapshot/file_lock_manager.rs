@@ -3,6 +3,7 @@ use crate::service::workspace_runtime::WorkspaceRuntimeContext;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::sync::RwLock;
@@ -33,8 +34,10 @@ pub struct FileLockStatus {
 
 /// File lock manager - provides a minimal file locking mechanism for the snapshot system.
 pub struct FileLockManager {
-    locks: RwLock<HashMap<PathBuf, FileLock>>,
-    waiting_queue: RwLock<HashMap<PathBuf, Vec<WaitingQueueItem>>>,
+    // Workspace paths can be POSIX even on Windows; do not interpret them via
+    // host Path hashing/equality. Persisted lock keys remain plain strings.
+    locks: RwLock<HashMap<OsString, FileLock>>,
+    waiting_queue: RwLock<HashMap<OsString, Vec<WaitingQueueItem>>>,
     runtime_context: WorkspaceRuntimeContext,
 }
 
@@ -67,7 +70,7 @@ impl FileLockManager {
     ) -> SnapshotResult<bool> {
         let mut locks = self.locks.write().await;
 
-        if let Some(existing_lock) = locks.get(file_path) {
+        if let Some(existing_lock) = locks.get(file_path.as_os_str()) {
             if existing_lock.session_id == session_id {
                 debug!(
                     "Session re-acquiring file lock: session_id={} file_path={}",
@@ -90,7 +93,8 @@ impl FileLockManager {
             tool_name: tool_name.to_string(),
         };
 
-        locks.insert(file_path.clone(), lock);
+        locks.insert(file_path.as_os_str().to_os_string(), lock);
+        drop(locks);
 
         self.save_lock_state().await?;
 
@@ -106,7 +110,7 @@ impl FileLockManager {
     pub async fn release_lock(&self, file_path: &PathBuf, session_id: &str) -> SnapshotResult<()> {
         let mut locks = self.locks.write().await;
 
-        if let Some(existing_lock) = locks.get(file_path) {
+        if let Some(existing_lock) = locks.get(file_path.as_os_str()) {
             if existing_lock.session_id != session_id {
                 return Err(SnapshotError::ConfigError(format!(
                     "Attempt to release lock not belonging to current session: {} vs {}",
@@ -121,7 +125,8 @@ impl FileLockManager {
             return Ok(());
         }
 
-        locks.remove(file_path);
+        locks.remove(file_path.as_os_str());
+        drop(locks);
 
         self.process_waiting_queue(file_path).await?;
 
@@ -138,7 +143,7 @@ impl FileLockManager {
     /// Returns the file lock status.
     pub async fn get_lock_status(&self, file_path: &PathBuf) -> Option<FileLock> {
         let locks = self.locks.read().await;
-        locks.get(file_path).cloned()
+        locks.get(file_path.as_os_str()).cloned()
     }
 
     /// Returns all locks held by a session.
@@ -147,7 +152,7 @@ impl FileLockManager {
         locks
             .iter()
             .filter(|(_, lock)| lock.session_id == session_id)
-            .map(|(path, lock)| (path.clone(), lock.clone()))
+            .map(|(path, lock)| (PathBuf::from(path), lock.clone()))
             .collect()
     }
 
@@ -158,7 +163,7 @@ impl FileLockManager {
             locks
                 .iter()
                 .filter(|(_, lock)| lock.session_id == session_id)
-                .map(|(path, _)| path.clone())
+                .map(|(path, _)| PathBuf::from(path))
                 .collect()
         };
 
@@ -212,7 +217,7 @@ impl FileLockManager {
         };
 
         waiting_queue
-            .entry(file_path.to_path_buf())
+            .entry(file_path.as_os_str().to_os_string())
             .or_insert_with(Vec::new)
             .push(queue_item);
 
@@ -223,7 +228,7 @@ impl FileLockManager {
     async fn process_waiting_queue(&self, file_path: &PathBuf) -> SnapshotResult<()> {
         let mut waiting_queue = self.waiting_queue.write().await;
 
-        if let Some(queue) = waiting_queue.get_mut(file_path) {
+        if let Some(queue) = waiting_queue.get_mut(file_path.as_os_str()) {
             if let Some(next_item) = queue.first() {
                 debug!(
                     "Notifying next session in waiting queue: session_id={}",
@@ -232,7 +237,7 @@ impl FileLockManager {
             }
 
             if queue.is_empty() {
-                waiting_queue.remove(file_path);
+                waiting_queue.remove(file_path.as_os_str());
             }
         }
 
@@ -254,11 +259,11 @@ impl FileLockManager {
         let mut waiting_queue = self.waiting_queue.write().await;
 
         for (path_str, lock) in lock_status.locks {
-            locks.insert(PathBuf::from(path_str), lock);
+            locks.insert(OsString::from(path_str), lock);
         }
 
         for (path_str, items) in lock_status.waiting_queue {
-            waiting_queue.insert(PathBuf::from(path_str), items);
+            waiting_queue.insert(OsString::from(path_str), items);
         }
 
         debug!("Loaded {} file locks", locks.len());

@@ -1,18 +1,17 @@
-use crate::util::string::{shell_single_quote, truncate_string_by_chars};
+use crate::util::string::truncate_string_by_chars;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-const REMOTE_TOTAL_LINES_MARKER: &str = "__BITFUN_TOTAL_LINES__=";
-const REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER: &str = "__BITFUN_HIT_TOTAL_CHAR_LIMIT__=";
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ReadFileResult {
     pub start_line: usize,
     pub end_line: usize,
     pub total_lines: usize,
     pub content: String,
     pub hit_total_char_limit: bool,
+    /// True when the returned view omits characters from selected lines.
+    pub content_truncated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,156 +83,68 @@ pub fn read_file_bytes_bounded(
     Ok((bytes.len() <= max_bytes).then_some(bytes))
 }
 
-pub fn build_remote_read_command(
-    resolved_path: &str,
+/// Read a file through the provider's byte stream using the same parser as
+/// local files and converted documents. No seek or remote text command is needed.
+pub async fn read_file_from_reader<R: tokio::io::AsyncRead + Unpin>(
+    reader: R,
+    source: &str,
     start_line: usize,
     limit: usize,
     max_line_chars: usize,
     max_total_chars: usize,
-) -> Result<String, String> {
-    let end_line = start_line
-        .checked_add(limit.saturating_sub(1))
-        .ok_or_else(|| "Requested line range is too large".to_string())?;
-    let escaped_path = shell_single_quote(resolved_path);
-
-    Ok(format!(
-        "if [ ! -f {path} ]; then exit 3; fi; awk -v start={start} -v end={end} -v max={max} -v budget={budget} 'BEGIN {{ total = 0; used = 0; hit = 0; }} {{ total = NR; if (!hit && NR >= start && NR <= end) {{ line = $0; if (length(line) > max) {{ line = substr(line, 1, max) \" [truncated]\"; }} rendered = sprintf(\"%6d\\t%s\", NR, line); extra = (used > 0 ? 1 : 0); next_used = used + extra + length(rendered); if (next_used > budget) {{ hit = 1; next; }} print rendered; used = next_used; }} }} END {{ printf(\"{marker}%d\\n\", total) > \"/dev/stderr\"; printf(\"{hit_marker}%d\\n\", hit) > \"/dev/stderr\"; }}' {path}",
-        path = escaped_path,
-        start = start_line,
-        end = end_line,
-        max = max_line_chars,
-        budget = max_total_chars,
-        marker = REMOTE_TOTAL_LINES_MARKER,
-        hit_marker = REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER,
-    ))
-}
-
-pub fn build_remote_tail_read_command(
-    resolved_path: &str,
-    limit: usize,
-    max_line_chars: usize,
-    max_total_chars: usize,
-) -> Result<String, String> {
-    if limit == 0 {
-        return Err("`limit` can't be 0".to_string());
-    }
-
-    let escaped_path = shell_single_quote(resolved_path);
-
-    Ok(format!(
-        "if [ ! -f {path} ]; then exit 3; fi; awk -v limit={limit} -v max={max} -v budget={budget} 'BEGIN {{ total = 0; used = 0; hit = 0; }} {{ total = NR; slot = ((NR - 1) % limit) + 1; lines[slot] = $0; nums[slot] = NR; }} END {{ start = total - limit + 1; if (start < 1) start = 1; for (nr = start; nr <= total; nr++) {{ slot = ((nr - 1) % limit) + 1; line = lines[slot]; if (length(line) > max) {{ line = substr(line, 1, max) \" [truncated]\"; }} rendered = sprintf(\"%6d\\t%s\", nums[slot], line); extra = (used > 0 ? 1 : 0); next_used = used + extra + length(rendered); if (next_used > budget) {{ hit = 1; break; }} print rendered; used = next_used; }} printf(\"{marker}%d\\n\", total) > \"/dev/stderr\"; printf(\"{hit_marker}%d\\n\", hit) > \"/dev/stderr\"; }}' {path}",
-        path = escaped_path,
-        limit = limit,
-        max = max_line_chars,
-        budget = max_total_chars,
-        marker = REMOTE_TOTAL_LINES_MARKER,
-        hit_marker = REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER,
-    ))
-}
-
-pub fn parse_remote_read_output(
-    stdout: &str,
-    stderr: &str,
-    status: i32,
-    resolved_path: &str,
-    start_line: usize,
 ) -> Result<ReadFileResult, String> {
-    let mut total_lines = None;
-    let mut hit_total_char_limit = false;
-    let mut stderr_messages = Vec::new();
-    for line in stderr.lines() {
-        if let Some(rest) = line.strip_prefix(REMOTE_TOTAL_LINES_MARKER) {
-            total_lines = rest.trim().parse::<usize>().ok();
-        } else if let Some(rest) = line.strip_prefix(REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER) {
-            hit_total_char_limit = rest.trim() == "1";
-        } else if !line.trim().is_empty() {
-            stderr_messages.push(line.to_string());
-        }
-    }
-
-    if status != 0 {
-        let message = if status == 3 {
-            format!("File not found or not a regular file: {}", resolved_path)
-        } else if !stderr_messages.is_empty() {
-            stderr_messages.join("\n")
-        } else {
-            format!(
-                "Failed to read file: remote command exited with status {}",
-                status
-            )
-        };
-        return Err(message);
-    }
-
-    let total_lines = total_lines.ok_or_else(|| {
-        "Failed to read file: remote command did not return line-count markers".to_string()
-    })?;
-
-    if total_lines == 0 {
-        return Ok(ReadFileResult {
-            start_line: 0,
-            end_line: 0,
-            total_lines: 0,
-            content: String::new(),
-            hit_total_char_limit,
-        });
-    }
-
-    if start_line > total_lines {
-        return Err(format!(
-            "`start_line` {} is larger than the number of lines in the file: {}",
-            start_line, total_lines
-        ));
-    }
-
-    let content = stdout.trim_end_matches('\n').to_string();
-    let lines_read = if content.is_empty() {
-        0
-    } else {
-        content.lines().count()
-    };
-    let end_line = if lines_read == 0 {
-        start_line
-    } else {
-        (start_line + lines_read).saturating_sub(1)
-    };
-
-    Ok(ReadFileResult {
+    read_async_text(
+        reader,
+        source,
         start_line,
-        end_line,
-        total_lines,
-        content,
-        hit_total_char_limit,
-    })
+        limit,
+        max_line_chars,
+        max_total_chars,
+        false,
+    )
+    .await
 }
 
-pub fn parse_remote_tail_read_output(
-    stdout: &str,
-    stderr: &str,
-    status: i32,
-    resolved_path: &str,
+pub async fn read_file_tail_from_reader<R: tokio::io::AsyncRead + Unpin>(
+    reader: R,
+    source: &str,
     limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
 ) -> Result<ReadFileResult, String> {
-    let mut result = parse_remote_read_output(stdout, stderr, status, resolved_path, 1)?;
+    read_async_text(
+        reader,
+        source,
+        1,
+        limit,
+        max_line_chars,
+        max_total_chars,
+        true,
+    )
+    .await
+}
 
-    if result.total_lines == 0 {
-        return Ok(result);
+async fn read_async_text<R: tokio::io::AsyncRead + Unpin>(
+    reader: R,
+    source: &str,
+    start_line: usize,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+    tail: bool,
+) -> Result<ReadFileResult, String> {
+    use tokio::io::AsyncBufReadExt;
+    let mut selection =
+        ReadLineSelection::new(start_line, limit, max_line_chars, max_total_chars, tail)?;
+    let mut lines = tokio::io::BufReader::new(reader).lines();
+    while let Some(line) = lines
+        .next_line()
+        .await
+        .map_err(|error| format!("Failed to read {source}: {error}"))?
+    {
+        selection.push(line);
     }
-
-    let start_line = result.total_lines.saturating_sub(limit).saturating_add(1);
-    let lines_read = if result.content.is_empty() {
-        0
-    } else {
-        result.content.lines().count()
-    };
-    result.start_line = start_line;
-    result.end_line = if lines_read == 0 {
-        start_line
-    } else {
-        start_line.saturating_add(lines_read).saturating_sub(1)
-    };
-
-    Ok(result)
+    selection.finish()
 }
 
 /// start_line: starts from 1
@@ -244,20 +155,20 @@ pub fn read_file(
     max_line_chars: usize,
     max_total_chars: usize,
 ) -> Result<ReadFileResult, String> {
-    let file =
-        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
-    let source = format!("file {file_path}");
+    let file = File::open(file_path)
+        .map_err(|error| format!("Failed to read file {file_path}: {error}"))?;
     read_buffered_text(
         BufReader::new(file),
-        &source,
+        &format!("file {file_path}"),
         start_line,
         limit,
         max_line_chars,
         max_total_chars,
+        false,
     )
 }
 
-/// Page already-decoded text with the same line numbering and budgets as [`read_file`].
+/// Page decoded text with the same line numbering and budgets as file streams.
 pub fn read_text(
     text: &str,
     start_line: usize,
@@ -272,6 +183,43 @@ pub fn read_text(
         limit,
         max_line_chars,
         max_total_chars,
+        false,
+    )
+}
+
+pub fn read_file_tail(
+    file_path: &str,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
+    let file = File::open(file_path)
+        .map_err(|error| format!("Failed to read file {file_path}: {error}"))?;
+    read_buffered_text(
+        BufReader::new(file),
+        &format!("file {file_path}"),
+        1,
+        limit,
+        max_line_chars,
+        max_total_chars,
+        true,
+    )
+}
+
+pub fn read_text_tail(
+    text: &str,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
+    read_buffered_text(
+        BufReader::new(text.as_bytes()),
+        "converted document",
+        1,
+        limit,
+        max_line_chars,
+        max_total_chars,
+        true,
     )
 }
 
@@ -282,205 +230,156 @@ fn read_buffered_text<R: BufRead>(
     limit: usize,
     max_line_chars: usize,
     max_total_chars: usize,
+    tail: bool,
 ) -> Result<ReadFileResult, String> {
-    if start_line == 0 {
-        return Err("`start_line` should start from 1".to_string());
+    let mut selection =
+        ReadLineSelection::new(start_line, limit, max_line_chars, max_total_chars, tail)?;
+    for line in reader.lines() {
+        selection.push(line.map_err(|error| format!("Failed to read {source}: {error}"))?);
     }
-    if limit == 0 {
-        return Err("`limit` can't be 0".to_string());
-    }
-    if max_total_chars == 0 {
-        return Err("`max_total_chars` can't be 0".to_string());
-    }
-    let end_line_inclusive = start_line
-        .checked_add(limit.saturating_sub(1))
-        .ok_or_else(|| "Requested line range is too large".to_string())?;
+    selection.finish()
+}
 
-    let mut total_lines = 0usize;
-    let mut selected_lines = Vec::new();
-    let mut selected_chars = 0usize;
-    let mut hit_total_char_limit = false;
+/// Shared line selection, Unicode truncation, numbering and output budget.
+/// Tail buffering retains truncated lines rather than the entire original lines.
+struct ReadLineSelection {
+    start_line: usize,
+    end_line: usize,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+    total_lines: usize,
+    selected_lines: Vec<String>,
+    selected_chars: usize,
+    hit_total_char_limit: bool,
+    content_truncated: bool,
+    tail_lines: Option<VecDeque<(usize, String, bool)>>,
+}
 
-    for line_result in reader.lines() {
-        let line = line_result.map_err(|e| format!("Failed to read {source}: {e}"))?;
-        total_lines += 1;
-
-        if total_lines < start_line || total_lines > end_line_inclusive || hit_total_char_limit {
-            continue;
+impl ReadLineSelection {
+    fn new(
+        start_line: usize,
+        limit: usize,
+        max_line_chars: usize,
+        max_total_chars: usize,
+        tail: bool,
+    ) -> Result<Self, String> {
+        if start_line == 0 {
+            return Err("`start_line` should start from 1".to_string());
         }
-
-        let line_content = if line.chars().count() > max_line_chars {
-            format!(
-                "{} [truncated]",
-                truncate_string_by_chars(&line, max_line_chars)
-            )
-        } else {
-            line
-        };
-
-        let rendered_line = format!("{:>6}\t{}", total_lines, line_content);
-        let separator_chars = usize::from(!selected_lines.is_empty());
-        let next_total_chars = selected_chars
-            .saturating_add(separator_chars)
-            .saturating_add(rendered_line.chars().count());
-
-        if next_total_chars > max_total_chars {
-            hit_total_char_limit = true;
-            continue;
+        if limit == 0 {
+            return Err("`limit` can't be 0".to_string());
         }
-
-        selected_chars = next_total_chars;
-        selected_lines.push(rendered_line);
-    }
-
-    if total_lines == 0 {
-        return Ok(ReadFileResult {
-            start_line: 0,
-            end_line: 0,
+        if max_total_chars == 0 {
+            return Err("`max_total_chars` can't be 0".to_string());
+        }
+        let end_line = start_line
+            .checked_add(limit.saturating_sub(1))
+            .ok_or_else(|| "Requested line range is too large".to_string())?;
+        Ok(Self {
+            start_line,
+            end_line,
+            limit,
+            max_line_chars,
+            max_total_chars,
             total_lines: 0,
-            content: String::new(),
-            hit_total_char_limit,
-        });
-    }
-
-    if start_line > total_lines {
-        return Err(format!(
-            "`start_line` {} is larger than the number of lines in the file: {}",
-            start_line, total_lines
-        ));
-    }
-
-    let end_line = if selected_lines.is_empty() {
-        start_line
-    } else {
-        (start_line + selected_lines.len()).saturating_sub(1)
-    };
-
-    Ok(ReadFileResult {
-        start_line,
-        end_line,
-        total_lines,
-        content: selected_lines.join("\n"),
-        hit_total_char_limit,
-    })
-}
-
-pub fn read_file_tail(
-    file_path: &str,
-    limit: usize,
-    max_line_chars: usize,
-    max_total_chars: usize,
-) -> Result<ReadFileResult, String> {
-    let file =
-        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
-    let source = format!("file {file_path}");
-    read_buffered_text_tail(
-        BufReader::new(file),
-        &source,
-        limit,
-        max_line_chars,
-        max_total_chars,
-    )
-}
-
-/// Read the last lines of already-decoded text with the same budgets as [`read_file_tail`].
-pub fn read_text_tail(
-    text: &str,
-    limit: usize,
-    max_line_chars: usize,
-    max_total_chars: usize,
-) -> Result<ReadFileResult, String> {
-    read_buffered_text_tail(
-        BufReader::new(text.as_bytes()),
-        "converted document",
-        limit,
-        max_line_chars,
-        max_total_chars,
-    )
-}
-
-fn read_buffered_text_tail<R: BufRead>(
-    reader: R,
-    source: &str,
-    limit: usize,
-    max_line_chars: usize,
-    max_total_chars: usize,
-) -> Result<ReadFileResult, String> {
-    if limit == 0 {
-        return Err("`limit` can't be 0".to_string());
-    }
-    if max_total_chars == 0 {
-        return Err("`max_total_chars` can't be 0".to_string());
-    }
-
-    let mut total_lines = 0usize;
-    let mut tail_lines = VecDeque::with_capacity(limit);
-
-    for line_result in reader.lines() {
-        let line = line_result.map_err(|e| format!("Failed to read {source}: {e}"))?;
-        total_lines += 1;
-
-        if tail_lines.len() == limit {
-            tail_lines.pop_front();
-        }
-        tail_lines.push_back((total_lines, line));
-    }
-
-    if total_lines == 0 {
-        return Ok(ReadFileResult {
-            start_line: 0,
-            end_line: 0,
-            total_lines: 0,
-            content: String::new(),
+            selected_lines: Vec::new(),
+            selected_chars: 0,
             hit_total_char_limit: false,
-        });
+            content_truncated: false,
+            tail_lines: tail.then(VecDeque::new),
+        })
     }
 
-    let start_line = total_lines.saturating_sub(limit).saturating_add(1);
-    let mut selected_lines = Vec::new();
-    let mut selected_chars = 0usize;
-    let mut hit_total_char_limit = false;
-
-    for (line_number, line) in tail_lines {
-        let line_content = if line.chars().count() > max_line_chars {
+    fn push(&mut self, line: String) {
+        self.total_lines += 1;
+        if self.tail_lines.is_none()
+            && (self.total_lines < self.start_line
+                || self.total_lines > self.end_line
+                || self.hit_total_char_limit)
+        {
+            return;
+        }
+        let truncated = line.chars().count() > self.max_line_chars;
+        let line = if truncated {
             format!(
                 "{} [truncated]",
-                truncate_string_by_chars(&line, max_line_chars)
+                truncate_string_by_chars(&line, self.max_line_chars)
             )
         } else {
             line
         };
-
-        let rendered_line = format!("{:>6}\t{}", line_number, line_content);
-        let separator_chars = usize::from(!selected_lines.is_empty());
-        let next_total_chars = selected_chars
-            .saturating_add(separator_chars)
-            .saturating_add(rendered_line.chars().count());
-
-        if next_total_chars > max_total_chars {
-            hit_total_char_limit = true;
-            break;
+        if let Some(tail_lines) = &mut self.tail_lines {
+            if tail_lines.len() == self.limit {
+                tail_lines.pop_front();
+            }
+            tail_lines.push_back((self.total_lines, line, truncated));
+        } else {
+            self.select(self.total_lines, line, truncated);
         }
-
-        selected_chars = next_total_chars;
-        selected_lines.push(rendered_line);
     }
 
-    let end_line = if selected_lines.is_empty() {
-        start_line
-    } else {
-        start_line
-            .saturating_add(selected_lines.len())
-            .saturating_sub(1)
-    };
+    fn select(&mut self, line_number: usize, line: String, truncated: bool) {
+        let rendered = format!("{line_number:>6}\t{line}");
+        let next_chars = self
+            .selected_chars
+            .saturating_add(usize::from(!self.selected_lines.is_empty()))
+            .saturating_add(rendered.chars().count());
+        if next_chars > self.max_total_chars {
+            self.hit_total_char_limit = true;
+            self.content_truncated = true;
+        } else {
+            self.content_truncated |= truncated;
+            self.selected_chars = next_chars;
+            self.selected_lines.push(rendered);
+        }
+    }
 
-    Ok(ReadFileResult {
-        start_line,
-        end_line,
-        total_lines,
-        content: selected_lines.join("\n"),
-        hit_total_char_limit,
-    })
+    fn finish(mut self) -> Result<ReadFileResult, String> {
+        if self.total_lines == 0 {
+            return Ok(ReadFileResult {
+                start_line: 0,
+                end_line: 0,
+                total_lines: 0,
+                content: String::new(),
+                hit_total_char_limit: false,
+                content_truncated: false,
+            });
+        }
+        if let Some(tail_lines) = self.tail_lines.take() {
+            self.start_line = self
+                .total_lines
+                .saturating_sub(self.limit)
+                .saturating_add(1);
+            for (number, line, truncated) in tail_lines {
+                self.select(number, line, truncated);
+                if self.hit_total_char_limit {
+                    break;
+                }
+            }
+        }
+        if self.start_line > self.total_lines {
+            return Err(format!(
+                "`start_line` {} is larger than the number of lines in the file: {}",
+                self.start_line, self.total_lines
+            ));
+        }
+        let end_line = if self.selected_lines.is_empty() {
+            self.start_line
+        } else {
+            self.start_line
+                .saturating_add(self.selected_lines.len())
+                .saturating_sub(1)
+        };
+        Ok(ReadFileResult {
+            start_line: self.start_line,
+            end_line,
+            total_lines: self.total_lines,
+            content: self.selected_lines.join("\n"),
+            hit_total_char_limit: self.hit_total_char_limit,
+            content_truncated: self.content_truncated,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -493,6 +392,92 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn truncation_facts_describe_only_the_returned_view() {
+        let text = "abcdef\nlast\n";
+        let truncated = read_text(text, 1, 2, 4, 100).unwrap();
+        assert!(truncated.content_truncated);
+        assert!(!truncated.hit_total_char_limit);
+        let tail = read_text_tail(text, 1, 4, 100).unwrap();
+        assert!(
+            !tail.content_truncated,
+            "an evicted long line does not truncate the tail view"
+        );
+        let offset = read_text(text, 2, 1, 4, 100).unwrap();
+        assert!(!offset.content_truncated);
+        let budget = read_text(text, 1, 2, 50, 14).unwrap();
+        assert!(budget.hit_total_char_limit);
+        assert!(budget.content_truncated);
+        assert!(
+            !read_text("literal [truncated]", 1, 1, 100, 100)
+                .unwrap()
+                .content_truncated
+        );
+    }
+
+    #[tokio::test]
+    async fn async_streams_preserve_unicode_crlf_windows_and_tail() {
+        use tokio::io::AsyncWriteExt;
+        let source = "first\r\n中😀文\r\nlast";
+        let (reader, mut writer) = tokio::io::duplex(1);
+        let producer = tokio::spawn(async move {
+            for byte in source.as_bytes() {
+                writer.write_all(&[*byte]).await.unwrap();
+            }
+        });
+        let result = super::read_file_from_reader(reader, "stream", 2, 1, 2, 100)
+            .await
+            .unwrap();
+        producer.await.unwrap();
+        assert_eq!(result.content, "     2\t中😀 [truncated]");
+        assert_eq!(result.total_lines, 3);
+        assert_eq!(result, read_text(source, 2, 1, 2, 100).unwrap());
+        let tail = super::read_file_tail_from_reader(source.as_bytes(), "stream", 2, 50, 100)
+            .await
+            .unwrap();
+        assert_eq!(tail.content, "     2\t中😀文\n     3\tlast");
+        assert_eq!(tail, read_text_tail(source, 2, 50, 100).unwrap());
+        let empty = super::read_file_from_reader(&b""[..], "stream", 1, 3, 50, 100)
+            .await
+            .unwrap();
+        assert_eq!(empty.total_lines, 0);
+    }
+
+    #[tokio::test]
+    async fn async_streams_reject_invalid_utf8_outside_the_selected_window() {
+        let error =
+            super::read_file_from_reader(&b"visible\n\xffhidden"[..], "stream", 1, 1, 50, 100)
+                .await
+                .unwrap_err();
+        assert!(error.contains("Failed to read stream"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn async_stream_failure_after_a_complete_visible_line_is_not_success() {
+        struct FailingReader(bool);
+        impl tokio::io::AsyncRead for FailingReader {
+            fn poll_read(
+                mut self: std::pin::Pin<&mut Self>,
+                _cx: &mut std::task::Context<'_>,
+                buf: &mut tokio::io::ReadBuf<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                if self.0 {
+                    return std::task::Poll::Ready(Err(std::io::Error::new(
+                        std::io::ErrorKind::ConnectionReset,
+                        "connection lost",
+                    )));
+                }
+                self.0 = true;
+                buf.put_slice(b"visible\n");
+                std::task::Poll::Ready(Ok(()))
+            }
+        }
+        let error = super::read_file_from_reader(FailingReader(false), "stream", 1, 1, 50, 100)
+            .await
+            .unwrap_err();
+        assert!(error.contains("connection lost"), "{error}");
+    }
 
     static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -578,6 +563,7 @@ mod tests {
             total_lines: 4,
             content: "     1\tone\n     2\ttwo".to_string(),
             hit_total_char_limit: false,
+            content_truncated: false,
         };
 
         let presentation = build_read_file_presentation("src/lib.rs", &result);
@@ -614,6 +600,7 @@ mod tests {
             total_lines: 0,
             content: String::new(),
             hit_total_char_limit: false,
+            content_truncated: false,
         };
 
         assert_eq!(read_file_lines_read(&result), 0);

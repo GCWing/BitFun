@@ -1,10 +1,14 @@
+use crate::service::snapshot::isolation_manager::IsolationManager;
 use crate::service::snapshot::types::{
     FileMetadata, FileSnapshot, OptimizedContent, SnapshotError, SnapshotResult, SnapshotType,
     StorageStats,
 };
-use crate::service::workspace_runtime::WorkspaceRuntimeContext;
+use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
+use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspaceMetadata, WorkspacePathKind};
+use bitfun_services_core::workspace::LocalWorkspaceFs;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,9 +18,10 @@ use uuid::Uuid;
 
 /// Baseline snapshot cache
 pub struct BaselineCache {
-    /// In-memory cache: file_path -> snapshot_id
+    /// In-memory cache: exact path spelling -> snapshot_id. Raw OS strings
+    /// preserve POSIX backslashes on a Windows controller; Path equality does not.
     /// `None` indicates it has been queried but does not exist.
-    cache: Arc<RwLock<HashMap<PathBuf, Option<String>>>>,
+    cache: Arc<RwLock<HashMap<OsString, Option<String>>>>,
 
     /// Baseline metadata directory
     baseline_dir: PathBuf,
@@ -42,7 +47,7 @@ impl BaselineCache {
     pub async fn get(&self, file_path: &Path) -> Option<String> {
         {
             let cache = self.cache.read().await;
-            if let Some(cached) = cache.get(file_path) {
+            if let Some(cached) = cache.get(file_path.as_os_str()) {
                 debug!("Baseline cache hit: file_path={:?}", file_path);
                 return cached.clone();
             }
@@ -57,7 +62,10 @@ impl BaselineCache {
 
             {
                 let mut cache = self.cache.write().await;
-                cache.insert(file_path.to_path_buf(), Some(snapshot_id.clone()));
+                cache.insert(
+                    file_path.as_os_str().to_os_string(),
+                    Some(snapshot_id.clone()),
+                );
             }
 
             return Some(snapshot_id);
@@ -66,7 +74,7 @@ impl BaselineCache {
         debug!("Baseline snapshot not found: file_path={:?}", file_path);
         {
             let mut cache = self.cache.write().await;
-            cache.insert(file_path.to_path_buf(), None);
+            cache.insert(file_path.as_os_str().to_os_string(), None);
         }
         None
     }
@@ -87,7 +95,9 @@ impl BaselineCache {
             let content = fs::read_to_string(&path).ok()?;
             let metadata: FileSnapshot = serde_json::from_str(&content).ok()?;
 
-            if metadata.snapshot_type == SnapshotType::Baseline && metadata.file_path == file_path {
+            if metadata.snapshot_type == SnapshotType::Baseline
+                && metadata.file_path.as_os_str() == file_path.as_os_str()
+            {
                 found_snapshots.push((metadata.timestamp, metadata.snapshot_id));
             }
         }
@@ -150,7 +160,10 @@ impl BaselineCache {
 
         {
             let mut cache = self.cache.write().await;
-            cache.insert(file_path.to_path_buf(), Some(baseline_id.clone()));
+            cache.insert(
+                file_path.as_os_str().to_os_string(),
+                Some(baseline_id.clone()),
+            );
         }
 
         Ok(baseline_id)
@@ -190,7 +203,10 @@ impl BaselineCache {
 
         {
             let mut cache = self.cache.write().await;
-            cache.insert(file_path.to_path_buf(), Some(baseline_id.clone()));
+            cache.insert(
+                file_path.as_os_str().to_os_string(),
+                Some(baseline_id.clone()),
+            );
         }
 
         Ok(baseline_id)
@@ -201,6 +217,8 @@ impl BaselineCache {
 ///
 /// Only stores snapshots of file content; does not manage a change queue.
 pub struct FileSnapshotSystem {
+    workspace_fs: Option<Arc<dyn WorkspaceFileSystem>>,
+    remote_isolation: Option<IsolationManager>,
     snapshot_dir: PathBuf,
     snapshot_by_hash_dir: PathBuf,
     snapshot_metadata_dir: PathBuf,
@@ -214,9 +232,36 @@ pub struct FileSnapshotSystem {
 impl FileSnapshotSystem {
     /// Creates a new file snapshot system.
     pub fn new(runtime_context: WorkspaceRuntimeContext) -> Self {
+        let workspace_fs = matches!(
+            runtime_context.target,
+            WorkspaceRuntimeTarget::LocalWorkspace { .. }
+        )
+        .then(|| Arc::new(LocalWorkspaceFs) as Arc<dyn WorkspaceFileSystem>);
+        Self::build(runtime_context, workspace_fs)
+    }
+
+    pub fn with_workspace_fs(
+        runtime_context: WorkspaceRuntimeContext,
+        workspace_fs: Arc<dyn WorkspaceFileSystem>,
+    ) -> Self {
+        Self::build(runtime_context, Some(workspace_fs))
+    }
+
+    fn build(
+        runtime_context: WorkspaceRuntimeContext,
+        workspace_fs: Option<Arc<dyn WorkspaceFileSystem>>,
+    ) -> Self {
         let snapshot_dir = runtime_context.snapshots_dir.clone();
+        let remote_isolation = match &runtime_context.target {
+            WorkspaceRuntimeTarget::RemoteWorkspaceMirror { remote_root, .. } => Some(
+                IsolationManager::new(PathBuf::from(remote_root), runtime_context.clone()),
+            ),
+            WorkspaceRuntimeTarget::LocalWorkspace { .. } => None,
+        };
 
         Self {
+            workspace_fs,
+            remote_isolation,
             snapshot_by_hash_dir: runtime_context.snapshot_by_hash_dir.clone(),
             snapshot_metadata_dir: runtime_context.snapshot_metadata_dir.clone(),
             snapshot_dir,
@@ -226,6 +271,57 @@ impl FileSnapshotSystem {
             dedup_enabled: true,
             baseline_cache: BaselineCache::new(runtime_context.snapshot_baselines_dir.clone()),
         }
+    }
+
+    pub(crate) fn workspace_fs(&self) -> SnapshotResult<&dyn WorkspaceFileSystem> {
+        self.workspace_fs.as_deref().ok_or_else(|| {
+            SnapshotError::ConfigError(
+                "Remote snapshot workspace filesystem was not explicitly bound".into(),
+            )
+        })
+    }
+
+    async fn validate_workspace_path(&self, path: &Path) -> SnapshotResult<()> {
+        if let Some(isolation) = &self.remote_isolation {
+            isolation
+                .validate_workspace_path(path, self.workspace_fs()?)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn workspace_metadata(
+        &self,
+        path: &Path,
+    ) -> SnapshotResult<Option<WorkspaceMetadata>> {
+        self.validate_workspace_path(path).await?;
+        Ok(self
+            .workspace_fs()?
+            .metadata(path.to_string_lossy().as_ref(), true)
+            .await?)
+    }
+
+    pub(crate) async fn workspace_exists(&self, path: &Path) -> SnapshotResult<bool> {
+        Ok(self.workspace_metadata(path).await?.is_some())
+    }
+
+    pub(crate) async fn read_workspace_text(&self, path: &Path) -> SnapshotResult<String> {
+        self.validate_workspace_path(path).await?;
+        let bytes = self
+            .workspace_fs()?
+            .read_file(path.to_string_lossy().as_ref())
+            .await?;
+        String::from_utf8(bytes).map_err(|error| {
+            SnapshotError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+        })
+    }
+
+    pub(crate) async fn remove_workspace_file(&self, path: &Path) -> SnapshotResult<()> {
+        self.validate_workspace_path(path).await?;
+        Ok(self
+            .workspace_fs()?
+            .remove_file(path.to_string_lossy().as_ref())
+            .await?)
     }
 
     /// Initializes the snapshot system.
@@ -383,27 +479,24 @@ impl FileSnapshotSystem {
     ) -> SnapshotResult<String> {
         debug!("Creating snapshot: file_path={}", file_path.display());
 
-        if !file_path.exists() {
+        let Some(workspace_metadata) = self.workspace_metadata(file_path).await? else {
             error!(
                 "File not found for snapshot: file_path={}",
                 file_path.display()
             );
             return Err(SnapshotError::FileNotFound(file_path.to_path_buf()));
-        }
-
-        let content = match fs::read(file_path) {
-            Ok(data) => data,
-            Err(e) => {
-                error!(
-                    "Failed to read file for snapshot: file_path={} error={}",
-                    file_path.display(),
-                    e
-                );
-                return Err(SnapshotError::Io(e));
-            }
         };
-
-        let metadata = self.extract_file_metadata(file_path).await?;
+        if workspace_metadata.kind != WorkspacePathKind::File {
+            return Err(SnapshotError::ConfigError(format!(
+                "Snapshot target is not a regular file: {}",
+                file_path.display()
+            )));
+        }
+        let content = self
+            .workspace_fs()?
+            .read_file(file_path.to_string_lossy().as_ref())
+            .await?;
+        let metadata = Self::extract_file_metadata(&workspace_metadata, &content)?;
 
         let content_hash = self.calculate_content_hash(&content);
 
@@ -453,48 +546,27 @@ impl FileSnapshotSystem {
     }
 
     /// Extracts file metadata.
-    async fn extract_file_metadata(&self, file_path: &Path) -> SnapshotResult<FileMetadata> {
-        let metadata = fs::metadata(file_path)?;
-
-        let permissions = {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                Some(metadata.permissions().mode())
-            }
-            #[cfg(not(unix))]
-            {
-                None
-            }
-        };
-
-        let encoding = self
-            .detect_file_encoding(file_path)
-            .await
-            .unwrap_or_else(|| "utf-8".to_string());
-
+    fn extract_file_metadata(
+        metadata: &WorkspaceMetadata,
+        content: &[u8],
+    ) -> SnapshotResult<FileMetadata> {
         Ok(FileMetadata {
-            size: metadata.len(),
-            permissions,
-            last_modified: metadata.modified()?,
-            encoding,
-        })
-    }
-
-    /// Detects file encoding.
-    async fn detect_file_encoding(&self, file_path: &Path) -> Option<String> {
-        match fs::read(file_path) {
-            Ok(bytes) => {
-                if bytes.is_ascii() {
-                    Some("ascii".to_string())
-                } else if String::from_utf8(bytes).is_ok() {
-                    Some("utf-8".to_string())
-                } else {
-                    Some("binary".to_string())
-                }
+            size: content.len() as u64,
+            permissions: metadata.permissions,
+            last_modified: metadata.modified.ok_or_else(|| {
+                SnapshotError::ConfigError(
+                    "Workspace provider did not supply a modification time for the snapshot".into(),
+                )
+            })?,
+            encoding: if content.is_ascii() {
+                "ascii"
+            } else if std::str::from_utf8(content).is_ok() {
+                "utf-8"
+            } else {
+                "binary"
             }
-            Err(_) => None,
-        }
+            .into(),
+        })
     }
 
     /// Computes content hash.
@@ -677,16 +749,16 @@ impl FileSnapshotSystem {
             target_path.display()
         );
 
+        self.validate_workspace_path(target_path).await?;
         let snapshot = self.load_snapshot_from_disk(snapshot_id).await?;
         let metadata = snapshot.metadata.clone();
 
         let content = self.restore_snapshot_content(snapshot_id).await?;
 
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        fs::write(target_path, content)?;
+        // Provider write_file owns parent creation using its path semantics.
+        self.workspace_fs()?
+            .write_file(target_path.to_string_lossy().as_ref(), &content)
+            .await?;
 
         self.restore_file_metadata(target_path, &metadata).await?;
 
@@ -703,20 +775,14 @@ impl FileSnapshotSystem {
         file_path: &Path,
         metadata: &FileMetadata,
     ) -> SnapshotResult<()> {
-        #[cfg(unix)]
-        {
-            if let Some(permissions) = metadata.permissions {
-                use std::os::unix::fs::PermissionsExt;
-                let perms = std::fs::Permissions::from_mode(permissions);
-                fs::set_permissions(file_path, perms)?;
-            }
+        let workspace_fs = self.workspace_fs()?;
+        let path = file_path.to_string_lossy();
+        if let Some(permissions) = metadata.permissions {
+            workspace_fs.set_permissions(&path, permissions).await?;
         }
-
-        let filetime = filetime::FileTime::from_system_time(metadata.last_modified);
-        if let Err(e) = filetime::set_file_mtime(file_path, filetime) {
-            warn!("Failed to restore file modification time: error={}", e);
-        }
-
+        workspace_fs
+            .set_modified(&path, metadata.last_modified)
+            .await?;
         Ok(())
     }
 

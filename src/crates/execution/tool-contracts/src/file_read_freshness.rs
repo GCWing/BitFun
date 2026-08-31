@@ -16,8 +16,7 @@ pub struct FileReadFreshnessFacts<'a> {
 /// (local `fs::read_to_string` or remote SFTP `read_file_text`) preserves it.
 /// Without normalizing this away, every full-file Edit/Write on a file that
 /// ends with a newline (the common case) would look "changed" purely from
-/// that reconstruction gap. This is most visible on remote workspaces, where
-/// there is no mtime to short-circuit the content comparison.
+/// that reconstruction gap. This applies equally to local and remote reads.
 pub fn normalize_tool_file_content(content: &str) -> String {
     let normalized = if content.contains("\r\n") {
         content.replace("\r\n", "\n")
@@ -41,16 +40,14 @@ pub fn file_read_facts_are_fresh(
     current_content: &str,
     current_mtime_ms: Option<u64>,
 ) -> bool {
-    if let Some(current_mtime_ms) = current_mtime_ms {
-        if current_mtime_ms <= read_facts.timestamp_ms {
-            return true;
-        }
-        return file_read_facts_content_matches(read_facts, current_content);
-    }
-
+    // A known content difference is stronger evidence than timestamps: SFTP
+    // timestamps can have second precision, and any filesystem can restore an
+    // older mtime while changing the bytes.
     if read_facts.is_full_file_read {
         return file_read_facts_content_matches(read_facts, current_content);
     }
 
-    true
+    // Partial reads retain their existing weaker guarantee; the unobserved
+    // portion cannot be compared with the cached content.
+    current_mtime_ms.is_none_or(|mtime| mtime <= read_facts.timestamp_ms)
 }

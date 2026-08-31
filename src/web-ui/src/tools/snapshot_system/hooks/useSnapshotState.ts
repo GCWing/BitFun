@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SnapshotStateManager, SessionState, SnapshotFile } from '../core/SnapshotStateManager';
 import { SnapshotEventBus, SNAPSHOT_EVENTS } from '../core/SnapshotEventBus';
@@ -6,11 +6,12 @@ import { DiffDisplayEngine, CompactDiffResult, FullDiffResult } from '../core/Di
 import SnapshotLazyLoader from '../core/SnapshotLazyLoader';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
-import { shouldRefreshSnapshotForSession } from './snapshotRefreshPolicy';
+import { hasSessionFileSnapshots, shouldRefreshSnapshotForSession } from './snapshotRefreshPolicy';
 
 const log = createLogger('useSnapshotState');
 
 interface UseSnapshotStateReturn {
+  snapshotsAvailable: boolean;
   sessionState: SessionState | null;
   files: SnapshotFile[];
   loading: boolean;
@@ -32,8 +33,14 @@ interface UseSnapshotStateReturn {
 
 export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => {
   const { t } = useTranslation('flow-chat');
+  const snapshotsAvailable = useSyncExternalStore(
+    (callback) => flowChatStore.subscribe(() => callback()),
+    () => hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined),
+    () => false,
+  );
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
   const [files, setFiles] = useState<SnapshotFile[]>([]);
+  const unavailableFiles = useMemo<SnapshotFile[]>(() => [], []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -203,18 +210,20 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
   }, [sessionId, eventBus, stateManager, t]);
 
   const getCompactDiff = useCallback((filePath: string): CompactDiffResult | null => {
+    if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined)) return null;
     const file = stateManager.getFileState(filePath);
     if (!file) return null;
     
     return diffEngine.generateCompactDiff(file);
-  }, [stateManager, diffEngine]);
+  }, [sessionId, stateManager, diffEngine]);
 
   const getFullDiff = useCallback((filePath: string): FullDiffResult | null => {
+    if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined)) return null;
     const file = stateManager.getFileState(filePath);
     if (!file) return null;
     
     return diffEngine.generateFullDiff(file);
-  }, [stateManager, diffEngine]);
+  }, [sessionId, stateManager, diffEngine]);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -234,7 +243,8 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     setSessionState(null);
 
     const unsubscribeSession = stateManager.onSessionStateChange((newSessionState) => {
-      if (newSessionState.sessionId === activeSessionIdRef.current) {
+      if (newSessionState.sessionId === activeSessionIdRef.current &&
+        shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))) {
         setSessionState(newSessionState);
         setFiles(Array.from(newSessionState.files.values()));
       } else {
@@ -243,7 +253,8 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     });
 
     const unsubscribeFile = stateManager.onFileStateChange((file) => {
-      if (file.sessionId === activeSessionIdRef.current) {
+      if (file.sessionId === activeSessionIdRef.current &&
+        shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))) {
         setFiles(prev => {
           const newFiles = [...prev];
           const index = newFiles.findIndex(f => f.filePath === file.filePath);
@@ -279,6 +290,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
         canRefresh = false;
         refreshGenerationRef.current += 1;
         setLoading(false);
+        setError(null);
         setFiles([]);
         setSessionState(null);
       }
@@ -293,10 +305,11 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
   }, [sessionId, stateManager, refreshSession]);
 
   return {
-    sessionState,
-    files,
-    loading,
-    error,
+    snapshotsAvailable,
+    sessionState: snapshotsAvailable ? sessionState : null,
+    files: snapshotsAvailable ? files : unavailableFiles,
+    loading: snapshotsAvailable && loading,
+    error: snapshotsAvailable ? error : null,
     refreshSession,
     acceptFile,
     rejectFile,

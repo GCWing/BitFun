@@ -291,6 +291,7 @@ mod tests {
                     path: entry.path().to_string_lossy().to_string(),
                     is_dir: metadata.is_dir(),
                     is_symlink: metadata.file_type().is_symlink(),
+                    modified: metadata.modified().ok(),
                 });
             }
             Ok(entries)

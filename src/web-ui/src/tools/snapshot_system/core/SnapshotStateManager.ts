@@ -1,6 +1,9 @@
 import { SnapshotEventBus, SNAPSHOT_EVENTS } from './SnapshotEventBus';
 import { SnapshotSystemService } from '../services/SnapshotSystemService';
 import { createLogger } from '@/shared/utils/logger';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { shouldRefreshSnapshotForSession } from '../hooks/snapshotRefreshPolicy';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('SnapshotStateManager');
 
@@ -139,8 +142,14 @@ export class SnapshotStateManager {
   }
 
   async refreshSessionState(sessionId: string): Promise<void> {
+    const scope = getActiveSurfaceScope();
+    const canRefresh = () => scope.isCurrent() &&
+      shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId));
+    if (!canRefresh()) return;
+
     try {
       const stats = await this.snapshotService.getSessionStats(sessionId);
+      if (!canRefresh()) return;
       
       const sessionState: SessionState = {
         sessionId,
@@ -156,7 +165,9 @@ export class SnapshotStateManager {
       // NOTE: `getSessionStats` does not include file lists. Fetch files separately when available.
       try {
         const { snapshotAPI } = await import('@/infrastructure/api');
+        if (!canRefresh()) return;
         const files = await snapshotAPI.getSessionFiles(sessionId);
+        if (!canRefresh()) return;
 
         for (const filePath of files) {
           const snapshotFile: SnapshotFile = {
@@ -172,19 +183,27 @@ export class SnapshotStateManager {
           this.files.set(filePath, snapshotFile);
         }
       } catch (fileListError) {
+        if (!canRefresh()) return;
         log.warn('Failed to get file list, using basic stats', { sessionId, error: fileListError });
       }
 
       this.sessions.set(sessionId, sessionState);
       this.eventBus.emit(SNAPSHOT_EVENTS.SESSION_STATE_CHANGED, sessionState, sessionId);
     } catch (error) {
+      if (!canRefresh()) return;
       log.error('Failed to refresh session state', { sessionId, error });
     }
   }
 
   async refreshFileState(sessionId: string, filePath: string): Promise<void> {
+    const scope = getActiveSurfaceScope();
+    const canRefresh = () => scope.isCurrent() &&
+      shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId));
+    if (!canRefresh()) return;
+
     try {
       const response = await this.snapshotService.getOperationDiff(sessionId, filePath);
+      if (!canRefresh()) return;
       
       const existingFile = this.files.get(filePath);
       const snapshotFile: SnapshotFile = {
@@ -207,6 +226,7 @@ export class SnapshotStateManager {
       this.eventBus.emit(SNAPSHOT_EVENTS.FILE_STATE_CHANGED, snapshotFile, sessionId, filePath);
       
     } catch (error) {
+      if (!canRefresh()) return;
       log.error('Failed to refresh file state', { sessionId, filePath, error });
     }
   }

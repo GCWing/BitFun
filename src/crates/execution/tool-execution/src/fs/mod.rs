@@ -2,7 +2,7 @@ pub mod backend;
 pub mod delete_path;
 pub mod document;
 pub mod edit_file;
-pub mod list_dir;
+pub mod listing;
 pub mod read_file;
 pub mod write_file;
 
@@ -15,9 +15,6 @@ pub use edit_file::{
     edit_local_file, edit_local_file_with_content, edit_success_message,
     is_edit_content_guardrail_error, EditLocalFileOutcome, EditLocalFileRequest,
     EditLocalFileWithContentRequest,
-};
-pub use list_dir::{
-    build_remote_list_commands, parse_remote_list_entries, RemoteListCommandPlan, RemoteListEntry,
 };
 pub use write_file::{
     write_file_success_outcome, write_local_file, write_same_content_outcome,

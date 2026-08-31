@@ -8,9 +8,8 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
-use tool_runtime::fs::{
-    build_remote_delete_command, delete_local_path, delete_path_success_message,
-    inspect_local_delete_target, DeleteLocalPathRequest,
+use tool_runtime::fs::delete_path::{
+    delete_path_success_message, delete_workspace_path, inspect_workspace_delete_target,
 };
 
 /// File deletion tool - provides safe file/directory deletion functionality
@@ -237,9 +236,25 @@ Important notes:
             }
         }
 
-        if !resolved.uses_remote_workspace_backend() {
-            let local_path = Path::new(&resolved.resolved_path).to_path_buf();
-            if !local_path.exists() {
+        if let Some(context) = context {
+            let target = match context.file_system_for_path(&resolved) {
+                Ok(fs) => {
+                    inspect_workspace_delete_target(fs.as_ref(), &resolved.resolved_path).await
+                }
+                Err(error) => Err(error.to_string()),
+            };
+            let target = match target {
+                Ok(target) => target,
+                Err(error) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(error),
+                        error_code: Some(400),
+                        meta: None,
+                    }
+                }
+            };
+            if !target.exists {
                 return ValidationResult {
                     result: false,
                     message: Some(format!("Path does not exist: {}", resolved.logical_path)),
@@ -247,33 +262,17 @@ Important notes:
                     meta: None,
                 };
             }
-
-            if local_path.is_dir() {
-                let recursive = input
-                    .get("recursive")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-
-                let is_empty =
-                    tokio::task::spawn_blocking(move || inspect_local_delete_target(&local_path))
-                        .await
-                        .ok()
-                        .and_then(Result::ok)
-                        .map(|target| target.is_empty)
-                        .unwrap_or(false);
-
-                if !is_empty && !recursive {
-                    return ValidationResult {
-                            result: false,
-                            message: Some(format!("Directory is not empty: {}. Set recursive=true to delete non-empty directories", resolved.logical_path)),
-                            error_code: Some(400),
-                            meta: Some(json!({
-                                "is_directory": true,
-                            "is_empty": false,
-                            "requires_recursive": true
-                        })),
-                    };
-                }
+            if target.is_directory && !target.is_empty && !recursive {
+                return ValidationResult {
+                    result: false,
+                    message: Some(format!("Directory is not empty: {}. Set recursive=true to delete non-empty directories", resolved.logical_path)),
+                    error_code: Some(400),
+                    meta: Some(json!({
+                        "is_directory": true,
+                        "is_empty": false,
+                        "requires_recursive": true,
+                    })),
+                };
             }
         }
 
@@ -340,65 +339,15 @@ Important notes:
             )
             .await?;
 
-        // Remote workspace path: delete via shell command
-        if resolved.uses_remote_workspace_backend() {
-            let ws_shell = context.ws_shell().ok_or_else(|| {
-                BitFunError::tool("Workspace shell not available for remote Delete".to_string())
-            })?;
-
-            let rm_cmd = build_remote_delete_command(&resolved.resolved_path, recursive);
-
-            let (_stdout, stderr, exit_code) = ws_shell
-                .exec(&rm_cmd, Some(15_000))
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to delete on remote: {}", e)))?;
-
-            if exit_code != 0 && !stderr.is_empty() {
-                return Err(BitFunError::tool(format!(
-                    "Remote delete failed: {}",
-                    stderr
-                )));
-            }
-            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
-                context,
-                "Delete",
-                if recursive {
-                    "recursive_delete"
-                } else {
-                    "delete"
-                },
-                &resolved.logical_path,
-            );
-            crate::agentic::execution::edit_constraint_guard::forget_agent_created_file(
-                context,
-                &resolved.logical_path,
-            )
-            .await;
-
-            let result_data = json!({
-                "success": true,
-                "path": resolved.logical_path,
-                "is_directory": recursive,
-                "recursive": recursive,
-                "is_remote": true
-            });
-            let result_text = self.render_result_for_assistant(&result_data);
-            return Ok(vec![ToolResult::Result {
-                data: result_data,
-                result_for_assistant: Some(result_text),
-                image_attachments: None,
-            }]);
-        }
-
-        let delete_request = DeleteLocalPathRequest {
-            logical_path: resolved.logical_path.clone(),
-            resolved_path: Path::new(&resolved.resolved_path).to_path_buf(),
+        let fs = context.file_system_for_path(&resolved)?;
+        let outcome = delete_workspace_path(
+            fs.as_ref(),
+            &resolved.logical_path,
+            &resolved.resolved_path,
             recursive,
-        };
-        let outcome = tokio::task::spawn_blocking(move || delete_local_path(delete_request))
-            .await
-            .map_err(|error| BitFunError::tool(format!("Delete task failed: {}", error)))?
-            .map_err(BitFunError::tool)?;
+        )
+        .await
+        .map_err(BitFunError::tool)?;
 
         let result_data = json!({
             "success": true,
@@ -436,6 +385,96 @@ Important notes:
 mod tests {
     use super::DeleteFileTool;
     use crate::agentic::tools::framework::Tool;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn local_and_remote_delete_use_the_same_filesystem_contract() {
+        use crate::agentic::{tools::framework::ToolUseContext, WorkspaceBinding};
+        use bitfun_runtime_ports::ToolRuntimeHandles;
+        use serde_json::json;
+        use std::os::unix::fs::symlink;
+        use std::path::PathBuf;
+
+        // Run the real provider against separate fixture roots through both Session bindings.
+        // These are routing/behavior tests, not evidence of a live SSH connection.
+        for remote in [false, true] {
+            let root = std::env::temp_dir().join(format!("bitfun-delete-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(root.join("empty")).unwrap();
+            std::fs::create_dir_all(root.join("nonempty")).unwrap();
+            std::fs::write(root.join("nonempty/keep.txt"), "keep").unwrap();
+            symlink(root.join("nonempty"), root.join("link")).unwrap();
+            symlink(root.join("missing"), root.join("dangling")).unwrap();
+            let root_str = root.to_string_lossy().to_string();
+            let workspace = if remote {
+                let identity =
+                    crate::service::remote_ssh::workspace_state::workspace_session_identity(
+                        &root_str,
+                        Some("delete-fixture"),
+                        Some("delete-host"),
+                    )
+                    .unwrap();
+                WorkspaceBinding::new_remote(
+                    None,
+                    PathBuf::from(&root_str),
+                    "delete-fixture".into(),
+                    "delete-host".into(),
+                    identity,
+                )
+            } else {
+                WorkspaceBinding::new(None, root.clone())
+            };
+            let context = ToolUseContext {
+                tool_call_id: None,
+                agent_type: None,
+                session_id: None,
+                dialog_turn_id: None,
+                workspace: Some(workspace),
+                loaded_deferred_tool_specs: Vec::new(),
+                primary_model_facts: Default::default(),
+                custom_data: Default::default(),
+                computer_use_host: None,
+                runtime_tool_restrictions: Default::default(),
+                runtime_handles: ToolRuntimeHandles::new(
+                    Some(crate::agentic::workspace::local_workspace_services(
+                        root_str,
+                    )),
+                    None,
+                ),
+            };
+            let tool = DeleteFileTool::new();
+            let result = tool
+                .call_impl(&json!({"path":"empty"}), &context)
+                .await
+                .unwrap();
+            assert_eq!(result[0].content()["is_directory"], true);
+            assert!(!root.join("empty").exists());
+            let nonempty = json!({"path":"nonempty"});
+            assert!(!tool.validate_input(&nonempty, Some(&context)).await.result);
+            assert!(tool.call_impl(&nonempty, &context).await.is_err());
+            assert_eq!(
+                std::fs::read_to_string(root.join("nonempty/keep.txt")).unwrap(),
+                "keep"
+            );
+            for path in ["link", "dangling"] {
+                let result = tool
+                    .call_impl(&json!({"path":path,"recursive":true}), &context)
+                    .await
+                    .unwrap();
+                assert_eq!(result[0].content()["is_directory"], false);
+                assert!(std::fs::symlink_metadata(root.join(path)).is_err());
+            }
+            assert!(root.join("nonempty/keep.txt").exists());
+            tool.call_impl(&json!({"path":"nonempty","recursive":true}), &context)
+                .await
+                .unwrap();
+            assert!(!root.join("nonempty").exists());
+            assert!(tool
+                .call_impl(&json!({"path":"missing"}), &context)
+                .await
+                .is_err());
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
 
     #[test]
     fn schema_does_not_expose_force_override() {

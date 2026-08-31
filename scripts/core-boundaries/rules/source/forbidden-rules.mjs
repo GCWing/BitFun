@@ -8,6 +8,17 @@ const agentRuntimeRootUnexpectedLine = new RegExp(
 );
 
 export const forbiddenContentRules = [
+  ...[
+    'file_read_tool', 'file_write_tool', 'file_edit_tool', 'delete_file_tool', 'ls_tool',
+  ].map((tool) => ({
+    path: `src/crates/assembly/core/src/agentic/tools/implementations/${tool}.rs`,
+    reason: 'workspace file tools share one implementation; transport selection belongs to the bound WorkspaceFileSystem provider',
+    patterns: [{
+      regex: /\b(?:uses_remote_workspace_backend|is_remote|ws_shell|build_remote_\w+|read_local_file|write_local_file|edit_local_file|delete_local_path)\s*\(/,
+      message: 'workspace file tool must not reintroduce a local/SSH execution fork or a transport-specific helper',
+      ignoreRustComments: true,
+    }],
+  })),
   {
     path: 'src/crates/assembly/core/src/plugin_capability_publication.rs',
     reason:

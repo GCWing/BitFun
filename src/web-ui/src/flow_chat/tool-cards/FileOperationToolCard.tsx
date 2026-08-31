@@ -35,6 +35,7 @@ import {
 import { extractFilePathFromJsonBuffer, splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 import { i18nService } from '@/infrastructure/i18n';
 import { WritePlanDisplay } from './WritePlanDisplay';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('FileOperationToolCard');
 const FILE_OPERATION_STREAMING_MAX_HEIGHT = 4 * 22; // 88px – compact while streaming
@@ -158,9 +159,13 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   });
   
   const {
+    snapshotsAvailable,
     error,
     clearError
   } = useSnapshotState(sessionId);
+  // A recorded operation is viewable even when older Session history has no
+  // complete snapshot coverage. Absence preserves compatibility with old hosts.
+  const operationSnapshotAvailable = snapshotsAvailable || toolResult?.result?.snapshot_recorded === true;
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
 
@@ -327,6 +332,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
 
     const shouldEmitCompletionEvent =
+      snapshotsAvailable &&
       isCompletedSuccess &&
       completionEndTime !== null &&
       previousCompletionEndTimeRef.current !== completionEndTime &&
@@ -343,7 +349,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       toolName: toolItem.toolName,
       toolResult
     }, sessionId, currentFilePath);
-  }, [status, toolResult, sessionId, currentFilePath, toolItem.toolName, toolItem.endTime, eventBus]);
+  }, [snapshotsAvailable, status, toolResult, sessionId, currentFilePath, toolItem.toolName, toolItem.endTime, eventBus]);
 
   const toolDisplayName = {
     Write: t('toolCards.file.write'),
@@ -429,7 +435,9 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [operationDiffStats, localDiffStats]);
 
   useEffect(() => {
-    if (!sessionId || !toolCall?.id || status !== 'completed' || isFailed) return;
+    setOperationDiffStats(null);
+    if (!operationSnapshotAvailable || !sessionId || !toolCall?.id || status !== 'completed' || isFailed) return;
+    const scope = getActiveSurfaceScope();
     let cancelled = false;
 
     (async () => {
@@ -437,13 +445,15 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         // The snapshot service persists this summary with the operation. Keep
         // the chat-history payload small and resolve that static value lazily.
         const { snapshotAPI } = await import('../../infrastructure/api');
+        if (cancelled || !scope.isCurrent()) return;
         const summary = await snapshotAPI.getOperationSummary(sessionId, toolCall.id);
-        if (cancelled) return;
+        if (cancelled || !scope.isCurrent()) return;
         setOperationDiffStats({
           additions: summary.linesAdded ? Number(summary.linesAdded) : 0,
           deletions: summary.linesRemoved ? Number(summary.linesRemoved) : 0
         });
       } catch (error) {
+        if (cancelled || !scope.isCurrent()) return;
         log.warn('Failed to load operation summary', { sessionId, toolCallId: toolCall.id, error });
       }
     })();
@@ -451,7 +461,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, toolCall?.id, status, isFailed]);
+  }, [operationSnapshotAvailable, sessionId, toolCall?.id, status, isFailed]);
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
   /*
@@ -566,8 +576,9 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const handleOpenInCodeEditor = useCallback(async () => {
     if (!currentFilePath) return;
+    const scope = getActiveSurfaceScope();
 
-    if (!sessionId || !openFilePath || hasNonFileUriScheme(openFilePath)) {
+    if (!operationSnapshotAvailable || !sessionId || !openFilePath || hasNonFileUriScheme(openFilePath)) {
       fileTabManager.openFile({
         filePath: openFilePath,
         fileName,
@@ -578,12 +589,15 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
     try {
       const { snapshotAPI } = await import('../../infrastructure/api');
+      if (!scope.isCurrent()) return;
       const diffData = await snapshotAPI.getOperationDiff(sessionId, openFilePath, toolCall?.id);
+      if (!scope.isCurrent()) return;
       const jumpToLine = diffData.anchorLine ? Number(diffData.anchorLine) : undefined;
 
-      if (toolItem.toolName === 'Delete') {
+      if (toolItem.toolName === 'Delete' || !snapshotsAvailable) {
         window.dispatchEvent(new CustomEvent('expand-right-panel'));
         setTimeout(() => {
+          if (!scope.isCurrent()) return;
           createDiffEditorTab(
             openFilePath,
             fileName,
@@ -605,10 +619,12 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         mode: 'agent',
       });
     } catch (error) {
+      if (!scope.isCurrent()) return;
       log.error('Failed to open in CodeEditor', { sessionId, filePath: openFilePath, error });
       if (toolItem.toolName === 'Delete') {
         window.dispatchEvent(new CustomEvent('expand-right-panel'));
         setTimeout(() => {
+          if (!scope.isCurrent()) return;
           createDiffEditorTab(
             openFilePath,
             fileName,
@@ -627,7 +643,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         mode: 'agent',
       });
     }
-  }, [sessionId, currentFilePath, openFilePath, toolCall?.id, fileName, toolItem.toolName]);
+  }, [snapshotsAvailable, operationSnapshotAvailable, sessionId, currentFilePath, openFilePath, toolCall?.id, fileName, toolItem.toolName]);
 
   const canOpenFullCode =
     !isFailed &&

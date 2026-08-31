@@ -8,6 +8,12 @@ Agent Runtime 的模块职责见 [`agent-runtime-services-design.md`](agent-runt
 和 Shared transport 提案见 [`app-server-architecture.md`](app-server-architecture.md)。Embedded interactive TUI 已完成 direct-runtime
 迁移；Shared transport 未通过独立评审前继续使用 v17。
 
+SSH/容器工作区保留轻量 SSH 部署：同一 Agent Runtime 和会话状态仍由 BitFun 主机持有，
+只在工作区文件与进程 I/O 边界选择本地或 SSH provider，不要求目标安装 BitFun CLI 或 daemon。
+具体收敛范围和验收见
+[`remote-workspace-transport.md`](remote-workspace-transport.md#agent-runtime-convergence)。
+共用主循环仍不代表所有工具、快照与本地行为已经等价，完成状态以实际接线和测试为准。
+
 ## 1. 决策与当前状态
 
 BitFun 只有一套 Agent Runtime 行为。`Embedded` 和 `Shared` 只描述同一套 Runtime 的物理部署方式，不是两套实现。
