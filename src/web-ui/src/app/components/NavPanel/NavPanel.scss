@@ -1132,7 +1132,7 @@ $_section-header-height: 22px;
     min-width: 0;
     max-width: 100%;
     padding: 2px $size-gap-1;
-    gap: 2px;
+    gap: calc(var(--bf-space-1) / 2);
 
     // Multiple SessionsSection siblings: match vertical rhythm of __workspace-list (gap 0 + 2px row padding).
     &--session-blocks {
@@ -2373,7 +2373,7 @@ $_section-header-height: 22px;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(var(--bf-space-1) / 2);
   padding: $size-gap-2 $size-gap-2 calc(#{$size-gap-4} * 0.75);
   flex-shrink: 0;
 
@@ -2392,7 +2392,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__top-action-expand {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(var(--bf-space-1) / 2);
   width: 100%;
   min-width: 0;
 }
@@ -2400,7 +2400,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__top-action-sublist {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(var(--bf-space-1) / 2);
   overflow: hidden;
   max-height: 0;
   opacity: 0;
@@ -2596,7 +2596,7 @@ $_section-header-height: 22px;
   }
 
   &__top-actions {
-    gap: 2px;
+    gap: calc(var(--bf-space-1) / 2);
     padding: 5px 6px $size-gap-3;
     margin-bottom: $size-gap-3;
   }
@@ -2648,11 +2648,11 @@ $_section-header-height: 22px;
   }
 
   &__top-action-expand {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
   }
 
   &__top-action-sublist {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
     transition: none;
   }
 
@@ -2772,7 +2772,7 @@ $_section-header-height: 22px;
   }
 
   &__items {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
     padding: 2px 6px;
   }
 

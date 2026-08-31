@@ -68,6 +68,10 @@
     gap: var(--bf-layout-navigation-panel-section-gap);
   }
 
+  .items {
+    gap: calc(var(--bf-space-1) / 2);
+  }
+
   .heading {
     display: flex;
     align-items: center;

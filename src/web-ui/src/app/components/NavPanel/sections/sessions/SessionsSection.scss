@@ -22,9 +22,8 @@
     min-width: 0;
     max-width: 100%;
     padding: 2px $size-gap-1 2px;
-    gap: 0;
-    // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
-    // (see .bitfun-nav-panel__items--session-blocks gap: 0), aligned with __workspace-item padding.
+    gap: calc(var(--bf-space-1) / 2);
+    // No vertical margin: the list owns the separation between adjacent row surfaces.
     margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);
 
     &.is-flat-workspace-view {
@@ -147,7 +146,7 @@
     }
 
     &.is-child {
-      margin-top: -2px;
+      margin-top: 0;
       min-height: 24px;
       font-size: var(--bf-font-size-xs);
       padding-left: calc(var(--bf-nav-session-rail) + 14px);

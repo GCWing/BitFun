@@ -42,9 +42,9 @@ describe('SessionsSection layout styles', () => {
 
     expect(inlineListBlock).toContain('padding: 2px $size-gap-1 2px;');
     expect(inlineListBlock).toContain('margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);');
-    expect(inlineListBlock).toContain('gap: 0;');
+    expect(inlineListBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(inlineItemBlock).toContain('height: 26px;');
-    expect(stylesheet).toContain('margin-top: -2px;');
+    expect(stylesheet).toContain('margin-top: 0;');
   });
 
   it('keeps hidden session row actions from reserving title width', () => {

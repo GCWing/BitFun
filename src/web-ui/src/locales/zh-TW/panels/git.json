@@ -189,6 +189,7 @@
   },
   "quickSwitch": {
     "menuLabel": "切換分支",
+    "searchLabel": "搜尋分支",
     "searchPlaceholder": "搜尋分支...",
     "loading": "載入中...",
     "conflict": {

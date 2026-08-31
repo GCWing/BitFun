@@ -43,7 +43,7 @@
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-overlay-menu-section-gap);
+    gap: calc(var(--bf-space-1) / 2);
     /* Keep item focus rings inside the scroll viewport on every edge. */
     padding: var(--bf-focus-width);
   }
@@ -54,6 +54,14 @@
     inline-size: 100%;
     min-inline-size: 0;
     flex-direction: column;
+  }
+
+  .section {
+    gap: var(--bf-overlay-menu-section-gap);
+  }
+
+  .items {
+    gap: calc(var(--bf-space-1) / 2);
   }
 
   .heading {
@@ -115,6 +123,10 @@
     flex: 0 0 auto;
     inline-size: 100%;
     block-size: var(--bf-border-width-default);
+    margin-block: calc(
+      var(--bf-overlay-menu-section-gap)
+      - calc(var(--bf-space-1) / 2)
+    );
     background: var(--bf-color-border-subtle);
   }
 

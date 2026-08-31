@@ -148,6 +148,10 @@ describe('ModelSelector provider levels', () => {
     '[data-testid="chat-model-selector-submenu"]',
   );
 
+  const sharedSubmenuItems = () => nativeSubmenu()?.querySelector<HTMLElement>(
+    '[data-bf-part="section-items"]',
+  ) ?? null;
+
   const renderSelector = async (
     models: unknown[] = CATALOG_MODELS,
     modeModel = 'primary',
@@ -310,6 +314,8 @@ describe('ModelSelector provider levels', () => {
     const options = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
       '[data-testid="chat-model-selector-reasoning-option"]',
     ));
+    expect(sharedSubmenuItems()).not.toBeNull();
+    expect(options.every(option => sharedSubmenuItems()?.contains(option))).toBe(true);
     expect(options.map(option => option.dataset.presetId))
       .toEqual(['auto', 'medium', 'high']);
     expect(options.every(option => (
@@ -328,6 +334,10 @@ describe('ModelSelector provider levels', () => {
       '[data-testid="chat-model-selector-settings"]',
     )).not.toBeNull();
     expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
+    expect(sharedSubmenuItems()).not.toBeNull();
+    expect(providerRows().every(row => sharedSubmenuItems()?.contains(row))).toBe(true);
+    expect(sharedSubmenuItems()?.contains(modelOption('primary'))).toBe(true);
+    expect(sharedSubmenuItems()?.contains(modelOption('fast'))).toBe(true);
     expect(providerRows().map(row => row.dataset.providerKey))
       .toEqual(['provider-acme', 'provider-umbra']);
     expect(modelOption('primary')).not.toBeNull();
@@ -350,6 +360,9 @@ describe('ModelSelector provider levels', () => {
     expect(modelOption('acme-fast')).not.toBeNull();
     expect(modelOption('acme-deep')).not.toBeNull();
     expect(modelOption('umbra-main')).toBeNull();
+    expect(sharedSubmenuItems()).not.toBeNull();
+    expect(sharedSubmenuItems()?.contains(modelOption('acme-fast'))).toBe(true);
+    expect(sharedSubmenuItems()?.contains(modelOption('acme-deep'))).toBe(true);
     // The symbolic selectors belong to the provider level and are not repeated.
     expect(modelOption('primary')).toBeNull();
 

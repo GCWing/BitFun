@@ -43,8 +43,13 @@ describe('NavPanel layout styles', () => {
     const stylesheet = readNavPanelStylesheet();
     const sectionHeaderBlock = extractBlock(stylesheet, '&__section-header');
     const itemsBlock = extractBlock(stylesheet, '&__items');
+    const topActionExpandBlock = extractBlock(stylesheet, '&__top-action-expand');
+    const topActionSublistBlock = extractBlock(stylesheet, '&__top-action-sublist');
 
     expect(itemsBlock).toContain('padding: 2px $size-gap-1;');
+    expect(itemsBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
+    expect(topActionExpandBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
+    expect(topActionSublistBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(sectionHeaderBlock).toContain('margin: 0 $size-gap-1;');
   });
 

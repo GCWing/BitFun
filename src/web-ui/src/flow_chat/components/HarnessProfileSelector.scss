@@ -85,8 +85,7 @@
   color: currentColor;
 }
 
-// One surface swaps between the fixed-Session summary, Harness profiles, and
-// the second-level Agent list.
+// One surface swaps between Harness profiles and the second-level Agent list.
 .bitfun-harness-selector__menu {
   position: fixed;
   z-index: tokens.$z-popover;
