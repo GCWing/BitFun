@@ -49,7 +49,7 @@ describe('ACP Agent settings presentation', () => {
     expect(remoteServer).not.toContain('border: 1px solid');
     expect(remoteServer).not.toContain('border-radius:');
     expect(remoteServer).toContain(
-      'border-top: 1px solid var(--bf-appearance-token-config-page-divider);',
+      'border-top: 1px solid var(--bf-component-config-page-divider);',
     );
     expect(remoteAgentList).not.toContain('gap:');
     expect(remoteAgentList).not.toContain('padding:');

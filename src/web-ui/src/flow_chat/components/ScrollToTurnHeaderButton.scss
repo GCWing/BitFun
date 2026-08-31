@@ -31,9 +31,9 @@
 
     background: linear-gradient(
       to bottom,
-      var(--bf-appearance-token-color-bg-scene) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 80%, transparent) 40%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 40%, transparent) 70%,
+      var(--bf-color-surface-scene) 0%,
+      color-mix(in srgb, var(--bf-color-surface-scene) 80%, transparent) 40%,
+      color-mix(in srgb, var(--bf-color-surface-scene) 40%, transparent) 70%,
       transparent 100%
     );
   }
@@ -59,9 +59,9 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 1.5px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-muted);
+    border: 1.5px solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     padding: 0;
 
@@ -70,8 +70,8 @@
       opacity 120ms ease;
 
     &:hover {
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-field-border-hover);
+      color: var(--bf-color-content-primary);
       transform: translateY(-1px);
     }
 
@@ -81,8 +81,8 @@
 
     &:focus-visible {
       outline: none;
-      border-color: var(--bf-appearance-token-border-strong);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-border-strong);
+      color: var(--bf-color-content-primary);
     }
   }
 }

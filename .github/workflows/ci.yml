@@ -529,6 +529,9 @@ jobs:
       - name: Check repository hygiene
         run: pnpm run check:repo-hygiene
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Validate interactive capability contract
         run: pnpm run capabilities:check && pnpm run capabilities:test && pnpm run website:test && pnpm run website:build
 
@@ -537,9 +540,6 @@ jobs:
 
       - name: Check core boundaries
         run: pnpm run check:core-boundaries
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Setup Bun for package resource preflight
         if: needs.build-impact.outputs.frontend_required != 'false'

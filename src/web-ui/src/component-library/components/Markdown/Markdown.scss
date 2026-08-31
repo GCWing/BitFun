@@ -16,18 +16,16 @@
   --markdown-code-block-pad-x: #{markdown.$code-block-pad-x};
   --markdown-table-cell-pad-y: #{markdown.$table-cell-pad-y};
   --markdown-table-cell-pad-x: #{markdown.$table-cell-pad-x};
-  --markdown-primary-color: var(--bf-appearance-token-color-accent-600);
-  --private-markdown-inline-code-tint-rgb: 168, 180, 200;
-  --private-markdown-inline-code-hover-tint-rgb: 197, 208, 226;
-  --private-markdown-inline-code-text-light: var(--bf-appearance-token-color-text-primary);
-  --private-markdown-inline-code-hover-text-light: var(--bf-appearance-token-color-text-primary);
-  --private-markdown-code-bg-light: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 92%, var(--bf-appearance-token-color-bg-primary));
-  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 86%, var(--bf-appearance-token-color-bg-primary));
-  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 92%, var(--bf-appearance-token-color-static-white) 8%);
-  --markdown-inline-code-bg: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.045);
-  --markdown-inline-code-border: var(--bf-appearance-token-color-overlay-white-08);
-  --markdown-pre-bg: var(--bf-appearance-token-color-bg-primary);
-  --markdown-pre-border: var(--bf-appearance-token-border-subtle);
+  --markdown-primary-color: var(--bf-color-accent-hover);
+  --private-markdown-inline-code-text-light: var(--bf-color-content-primary);
+  --private-markdown-inline-code-hover-text-light: var(--bf-color-content-primary);
+  --private-markdown-code-bg-light: color-mix(in srgb, var(--bf-color-content-on-dark) 92%, var(--bf-color-surface-canvas));
+  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--bf-color-content-on-dark) 86%, var(--bf-color-surface-canvas));
+  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-color-surface-canvas) 92%, var(--bf-color-content-on-dark) 8%);
+  --markdown-inline-code-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 4.5%, transparent);
+  --markdown-inline-code-border: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  --markdown-pre-bg: var(--bf-color-surface-canvas);
+  --markdown-pre-border: var(--bf-color-border-subtle);
   --markdown-blockquote-bg: #{markdownCode.$bq-bg};
   --markdown-blockquote-border: #{markdownCode.$bq-border};
   --markdown-table-border: #{markdownTable.$border};
@@ -45,7 +43,7 @@
   max-width: 100%;
   margin: 0;
   padding: 0;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-type-flow-body-font-family);
   font-size: var(--bf-type-flow-body-font-size);
   line-height: var(--bf-type-flow-body-line-height);
@@ -74,7 +72,7 @@
 
 .markdown-renderer p {
   display: block;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: inherit;
   line-height: inherit;
 }
@@ -92,7 +90,7 @@
   margin: var(--markdown-heading-gap-before) 0 var(--markdown-heading-gap-after);
   padding: 0;
   border: 0;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-type-flow-title-font-family);
   font-weight: var(--bf-type-flow-title-font-weight);
   letter-spacing: var(--bf-type-flow-title-letter-spacing);
@@ -119,11 +117,11 @@
 
 .markdown-renderer h4,
 .markdown-renderer h5 {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .markdown-renderer h6 {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .markdown-renderer p + h1,
@@ -145,7 +143,7 @@
 .markdown-renderer ol {
   margin: 0;
   padding-left: 1.35rem;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: inherit;
   line-height: inherit;
 }
@@ -186,7 +184,7 @@
 
 .markdown-renderer ul > li::marker,
 .markdown-renderer ol > li::marker {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-base);
   font-weight: var(--bf-font-weight-regular);
 }
@@ -202,7 +200,7 @@
   border: 1px solid var(--markdown-inline-code-border);
   border-radius: 5px;
   background: var(--markdown-inline-code-bg);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 88%, rgb(var(--private-markdown-inline-code-tint-rgb)) 12%);
+  color: var(--bf-color-content-secondary);
   font-family: var(--bf-type-flow-code-font-family);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-medium);
@@ -216,9 +214,9 @@
 }
 
 .markdown-renderer .inline-code:hover {
-  background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.075);
-  border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.14);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 92%, rgb(var(--private-markdown-inline-code-hover-tint-rgb)) 8%);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 7.5%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-content-on-dark) 14%, transparent);
+  color: var(--bf-color-content-primary);
 }
 
 .markdown-renderer pre {
@@ -226,10 +224,10 @@
   padding: var(--markdown-code-block-pad-y) var(--markdown-code-block-pad-x);
   overflow: auto;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  border-radius: var(--bf-control-flow-chat-card-radius);
   background: var(--markdown-pre-bg);
   box-shadow: none;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-code-font-size);
   line-height: var(--bf-type-flow-code-line-height);
   transition: border-color 0.2s ease;
@@ -269,7 +267,7 @@
   margin: var(--markdown-code-block-gap) 0;
   overflow: hidden;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  border-radius: var(--bf-control-flow-chat-card-radius);
   background: var(--markdown-code-bg-elevated);
   box-shadow: none;
   transition: border-color 0.2s ease;
@@ -283,16 +281,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--bf-appearance-token-flowchat-control-gap);
+  gap: var(--bf-control-flow-chat-control-gap);
   min-height: 1.86rem;
   padding: 0.26rem 0.45rem 0.26rem 0.62rem;
   flex-shrink: 0;
   border-bottom: 1px solid var(--markdown-pre-border);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 94%, var(--bf-appearance-token-color-static-white) 6%);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 94%, var(--bf-color-content-on-dark) 6%);
 }
 
 .markdown-renderer .code-block-lang {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-family: var(--bf-type-flow-micro-font-family);
   font-size: var(--bf-type-flow-micro-font-size);
   font-weight: var(--bf-font-weight-semibold);
@@ -342,7 +340,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   opacity: 0.9;
   transition: color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
@@ -353,7 +351,7 @@
 }
 
 .markdown-renderer .copy-button:hover {
-  background: var(--bf-appearance-token-color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   color: var(--markdown-primary-color);
 }
 
@@ -362,7 +360,7 @@
 }
 
 .markdown-renderer .copy-button.copy-success {
-  color: var(--bf-appearance-token-color-success);
+  color: var(--bf-color-status-success-content);
 }
 
 .markdown-renderer pre:has(.code-block-wrapper),
@@ -389,7 +387,7 @@
   border-left: 3px solid var(--markdown-blockquote-border);
   border-radius: 0 6px 6px 0;
   background: var(--markdown-blockquote-bg);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-style: normal;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
@@ -407,13 +405,13 @@
 .markdown-renderer details {
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   padding: 0.62rem 0.72rem;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
-  background: var(--bf-appearance-token-color-overlay-white-04);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-control-flow-chat-card-radius);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
 }
 
 .markdown-renderer summary {
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   cursor: pointer;
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-type-flow-support-line-height);
@@ -429,7 +427,7 @@
   padding: 0;
   border: 0;
   border-radius: 1px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 26%, transparent);
+  background: color-mix(in srgb, var(--bf-color-content-muted) 26%, transparent);
 }
 
 /* inline-block so multiple badges / linked images can sit on one row (shields, etc.) */
@@ -440,7 +438,7 @@
   height: auto;
   margin: 0.35rem 0.25rem;
   vertical-align: middle;
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  border-radius: var(--bf-control-flow-chat-card-radius);
 }
 
 /* README-style centered badge rows: each badge is often its own <p> inside a div */
@@ -476,9 +474,9 @@
   box-sizing: border-box;
   margin: 0.35rem 0.25rem;
   padding: 0 0.3em;
-  border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 35%, transparent);
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
-  color: var(--bf-appearance-token-color-text-muted);
+  border: 1px dashed color-mix(in srgb, var(--bf-color-content-muted) 35%, transparent);
+  border-radius: var(--bf-control-flow-chat-card-radius);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-control-font-size);
   line-height: var(--bf-type-flow-support-line-height);
   overflow-wrap: anywhere;
@@ -495,7 +493,7 @@
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   overflow: auto;
   border: 1px solid var(--markdown-table-border);
-  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  border-radius: var(--bf-control-flow-chat-card-radius);
   background: var(--markdown-table-surface);
   box-shadow: var(--markdown-table-shadow);
 }
@@ -512,7 +510,7 @@
 .markdown-renderer .table-wrapper td {
   padding: var(--markdown-table-cell-pad-y) var(--markdown-table-cell-pad-x);
   border-bottom: 1px solid var(--markdown-table-cell-border);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   text-align: left;
   vertical-align: top;
 }
@@ -553,7 +551,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--bf-appearance-token-flowchat-link-color);
+  color: var(--bf-color-link-default);
   cursor: pointer;
   font: inherit;
   text-decoration: underline;
@@ -565,7 +563,7 @@
 .markdown-renderer .file-link:hover,
 .markdown-renderer .visualization-link:hover,
 .markdown-renderer .tab-link:hover {
-  color: var(--bf-appearance-token-flowchat-link-hover-color);
+  color: var(--bf-color-link-hover);
   text-decoration-thickness: 1.5px;
 }
 
@@ -587,12 +585,12 @@
 }
 
 .markdown-renderer strong {
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-weight: var(--bf-font-weight-semibold);
 }
 
 .markdown-renderer em {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-style: italic;
 }
 
@@ -616,10 +614,10 @@
 [data-bf-appearance-mode="light"] .markdown-renderer,
 .light .markdown-renderer {
   --markdown-code-bg-elevated: var(--private-markdown-code-bg-light);
-  --markdown-inline-code-bg: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.05);
-  --markdown-inline-code-border: var(--bf-appearance-token-color-overlay-black-12);
+  --markdown-inline-code-bg: color-mix(in srgb, var(--bf-color-content-on-light) 5%, transparent);
+  --markdown-inline-code-border: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
   --markdown-pre-bg: var(--private-markdown-code-bg-light);
-  --markdown-pre-border: var(--bf-appearance-token-color-overlay-slate-12);
+  --markdown-pre-border: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
   --markdown-blockquote-bg: #{markdownCode.$bq-bg-light};
   --markdown-blockquote-border: #{markdownCode.$bq-border-light};
   --markdown-table-border: #{markdownTable.$border-light};
@@ -638,27 +636,27 @@
   }
 
   .inline-code:hover {
-    background: var(--bf-appearance-token-color-overlay-black-08);
-    border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.18);
+    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+    border-color: color-mix(in srgb, var(--bf-color-content-on-light) 18%, transparent);
     color: var(--private-markdown-inline-code-hover-text-light);
   }
 
   .code-block-toolbar {
     background: var(--private-markdown-code-toolbar-bg-light);
-    border-bottom-color: var(--bf-appearance-token-color-overlay-slate-12);
+    border-bottom-color: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
   }
 
   .copy-button {
-    color: var(--bf-appearance-token-color-overlay-black-50);
+    color: var(--bf-color-overlay-scrim);
   }
 
   .copy-button:hover {
-    background: var(--bf-appearance-token-color-overlay-slate-08);
-    color: var(--bf-appearance-token-flowchat-link-color);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+    color: var(--bf-color-link-default);
   }
 
   .copy-button.copy-success {
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-color-status-success-content);
   }
 
   blockquote,
@@ -668,6 +666,6 @@
 }
 
 :root[data-bf-appearance-mode='dark'] .markdown-renderer {
-  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 94%, var(--bf-appearance-token-color-static-white) 6%);
-  --markdown-pre-border: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.09);
+  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-color-surface-canvas) 94%, var(--bf-color-content-on-dark) 6%);
+  --markdown-pre-border: color-mix(in srgb, var(--bf-color-content-on-dark) 9%, transparent);
 }

@@ -2,7 +2,12 @@ import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { SessionActionPresentation } from './SessionActionSurface';
-import { INK, MUTED, SOFT } from './Theme';
+import {
+  INK,
+  MUTED,
+  SOFT,
+  TRANSPARENT,
+} from './Theme';
 
 @ComponentV2
 export struct RemoteSessionRow {
@@ -55,7 +60,7 @@ export struct RemoteSessionRow {
     .height(this.metadata.length > 0 ? 56 : 46)
     .padding({ left: this.nested ? 0 : 10, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.selected ? SOFT : '#00000000')
+    .backgroundColor(this.selected ? SOFT : TRANSPARENT)
     .borderRadius(10)
     .onTouch((event: TouchEvent) => {
       if (this.busy) return;
@@ -69,7 +74,7 @@ export struct RemoteSessionRow {
     .bindPopup(this.actionPresentation === SessionActionPresentation.Popover && this.showActionPopover, {
       builder: () => { this.actionsPopup() },
       placement: Placement.Right,
-      popupColor: '#00000000',
+      popupColor: TRANSPARENT,
       enableArrow: false,
       autoCancel: true,
       mask: false,

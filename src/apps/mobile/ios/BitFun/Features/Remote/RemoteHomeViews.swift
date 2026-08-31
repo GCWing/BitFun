@@ -28,7 +28,7 @@ struct RemoteHomeView: View {
                 .padding(.horizontal, 20)
             Button(model.localized("连接")) { model.connectRemote() }
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(BitFunTheme.contentOnAction)
                 .frame(width: 136, height: 44)
                 .background(BitFunTheme.accent)
                 .clipShape(Capsule())
@@ -74,7 +74,7 @@ struct RemoteConnectedHomeView: View {
                 .multilineTextAlignment(.center)
             Button { model.remoteCreateOpen = true } label: {
                 Label(model.localized("新建远程会话"), systemImage: "plus")
-                    .font(MobileDesignTypography.labelMedium.font).foregroundStyle(.white)
+                    .font(MobileDesignTypography.labelMedium.font).foregroundStyle(BitFunTheme.contentOnAction)
                     .frame(minWidth: 176, minHeight: 44).background(BitFunTheme.accent).clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -104,7 +104,7 @@ struct ConnectionStatusBar: View {
     let onRetry: () -> Void
     var body: some View {
         HStack(spacing: 8) {
-            Circle().fill(phase == .reconnecting ? BitFunTheme.muted : BitFunTheme.red).frame(width: 8, height: 8)
+            Circle().fill(phase == .reconnecting ? BitFunTheme.muted : BitFunTheme.statusDanger).frame(width: 8, height: 8)
             Text(MobileLocalization.text(phase == .reconnecting ? "正在恢复连接" : "连接不可用"))
                 .font(.system(size: 13, weight: .medium))
             Text(

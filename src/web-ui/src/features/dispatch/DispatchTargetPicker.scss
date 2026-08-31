@@ -16,10 +16,10 @@
     height: 18px;
     padding: 0 5px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
     border-radius: $size-radius-sm;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 7%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 7%, transparent);
+    color: var(--bf-color-content-secondary);
     font: inherit;
     font-size: var(--bf-type-flow-micro-font-size);
     line-height: var(--bf-line-height-none);
@@ -32,13 +32,13 @@
 
     &:hover:not(:disabled),
     &[aria-expanded='true'] {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 52%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 52%, transparent);
+      background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
+      color: var(--bf-color-content-primary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
 
@@ -92,7 +92,7 @@
     }
 
     small {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-micro);
     }
   }
@@ -102,7 +102,7 @@
     align-items: center;
     gap: $size-gap-2;
     padding: 9px 8px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
 

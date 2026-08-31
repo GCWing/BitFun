@@ -38,13 +38,6 @@ function cssBlock(selector) {
   return match[1];
 }
 
-function customProperties(block) {
-  return Object.fromEntries(
-    [...block.matchAll(/(--[a-z-]+)\s*:\s*([^;]+);/gu)]
-      .map(([, key, value]) => [key, value.trim()]),
-  );
-}
-
 test('theme contract defaults to system and exposes all three choices', () => {
   assert.match(templateSource, /localStorage\.getItem\('bitfun-playbook-theme'\)/u);
   assert.match(templateSource, /let theme = 'system'/u);
@@ -52,12 +45,12 @@ test('theme contract defaults to system and exposes all three choices', () => {
   assert.match(appSource, /const THEME_CHOICES = \['system', 'light', 'dark'\]/u);
   assert.match(appSource, /data-theme-choice="\$\{theme\}"/u);
   assert.match(appSource, /addEventListener\('change'/u);
-  assert.match(stylesSource, /html\[data-theme='dark'\]/u);
-  assert.match(stylesSource, /html\[data-theme='system'\]/u);
-
-  const explicitDark = customProperties(cssBlock("html[data-theme='dark']"));
-  const systemDark = customProperties(cssBlock("html[data-theme='system']"));
-  assert.deepEqual(systemDark, explicitDark, 'system-dark tokens must match explicit dark mode');
+  assert.match(templateSource, /data-bf-design-system-root/u);
+  assert.match(templateSource, /root\.dataset\.colorScheme/u);
+  assert.match(templateSource, /\/assets\/design-tokens\.css/u);
+  assert.match(templateSource, /\/assets\/theme\.css/u);
+  assert.match(appSource, /--bf-color-surface-canvas/u);
+  assert.match(appSource, /documentElement\.dataset\.colorScheme = resolvedTheme\(\)/u);
 });
 
 test('hero title, search, and statistics remain in layout flow', () => {
@@ -136,17 +129,12 @@ test('sidebar navigation preserves its scroll position across page loads', () =>
   assert.match(appSource, /sidebarNav\.querySelector\('\[aria-current="page"\]'\)/u);
 });
 
-test('dark mode gives the agent callout its own subdued surface tokens', () => {
-  const light = customProperties(cssBlock(':root'));
-  const dark = customProperties(cssBlock("html[data-theme='dark']"));
-  assert.notEqual(dark['--agent-panel'], light['--agent-panel']);
-  assert.equal(dark['--agent-panel'], '#20271a');
-  assert.match(cssBlock('.detail-aside'), /background:\s*var\(--agent-panel\)/u);
-  assert.match(cssBlock('.detail-aside'), /color:\s*var\(--agent-panel-ink\)/u);
-  assert.notEqual(dark['--danger'], light['--danger']);
-  assert.match(cssBlock('.control-unsupported'), /color:\s*var\(--danger\)/u);
-  assert.doesNotMatch(cssBlock('.control-unsupported'), /#[0-9a-f]{3,8}/iu);
-  assert.doesNotMatch(stylesSource, /var\(--lime(?:-ink)?\)/u);
+test('callouts and ordinary UI consume canonical semantic color tokens only', () => {
+  assert.match(cssBlock('.detail-aside'), /background:\s*var\(--bf-color-status-success-surface\)/u);
+  assert.match(cssBlock('.detail-aside'), /color:\s*var\(--bf-color-status-success-content\)/u);
+  assert.match(cssBlock('.control-unsupported'), /color:\s*var\(--bf-color-status-danger-content\)/u);
+  assert.doesNotMatch(stylesSource, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/iu);
+  assert.doesNotMatch(stylesSource, /var\(--(?:paper|ink|muted|line|panel|accent|danger|shadow)\)/u);
 });
 
 test('build emits a source-sensitive immutable release id', () => {
@@ -155,6 +143,8 @@ test('build emits a source-sensitive immutable release id', () => {
   assert.equal(release.releaseId, release.assetVersion);
   assert.match(release.catalogDigest, /^[0-9a-f]{64}$/u);
   assert.match(builtIndex, new RegExp(`/assets/styles\\.css\\?v=${release.releaseId}`, 'u'));
+  assert.match(builtIndex, new RegExp(`/assets/design-tokens\\.css\\?v=${release.releaseId}`, 'u'));
+  assert.match(builtIndex, new RegExp(`/assets/theme\\.css\\?v=${release.releaseId}`, 'u'));
   assert.match(builtIndex, new RegExp(`/assets/app\\.js\\?v=${release.releaseId}`, 'u'));
   assert.match(builtApp, new RegExp(`\\./search\\.js\\?v=${release.releaseId}`, 'u'));
 });

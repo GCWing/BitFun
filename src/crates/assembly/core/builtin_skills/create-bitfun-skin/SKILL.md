@@ -29,7 +29,7 @@ python scripts/bitfun_appearance.py contract list renderers
 python scripts/bitfun_appearance.py contract show components <component-id>
 python scripts/bitfun_appearance.py contract show scenes <scene-id>
 python scripts/bitfun_appearance.py contract properties
-python scripts/bitfun_appearance.py contract tokens css
+python scripts/bitfun_appearance.py contract tokens theme
 python scripts/bitfun_appearance.py contract tokens widget
 ```
 

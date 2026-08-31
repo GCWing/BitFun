@@ -50,7 +50,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -72,6 +71,7 @@ import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
 import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
 import com.bitfun.mobile.app.ui.theme.MotionStructureMillis
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 import com.bitfun.mobile.app.ui.theme.generated.MobileDesignBreakpoints
 import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
@@ -602,7 +602,7 @@ private fun ModelSelectorContent(
                             )
                             .background(
                                 if (option.selected) MaterialTheme.colorScheme.surfaceVariant
-                                else Color.Transparent,
+                                else bitFunColors.transparent,
                             )
                             .clickable { onSelect(option.id) }
                             .semantics {
@@ -688,7 +688,7 @@ private fun PrimaryActionButton(
         modifier = Modifier
             .size(ActionSize)
             .clip(CircleShape)
-            .background(if (action == ComposerPrimaryAction.STOP) colors.error else Color.Transparent)
+            .background(if (action == ComposerPrimaryAction.STOP) colors.error else bitFunColors.transparent)
             .clickable(enabled = enabled) {
                 when (action) {
                     ComposerPrimaryAction.STOP -> onStop()
@@ -775,9 +775,8 @@ private fun AttachmentStrip(
                         )
                     }
                 }
-                // The badge carries its own scrim rather than borrowing the
-                // theme's: it sits on whatever the photo happens to be, and a
-                // pale photo would swallow a surface-coloured control.
+                // Media controls sit over arbitrary photo content, so their
+                // scrim is a dedicated mobile design token.
                 val removeLabel = stringResource(R.string.message_remove_image)
                 Box(
                     contentAlignment = Alignment.Center,
@@ -785,20 +784,17 @@ private fun AttachmentStrip(
                         .align(Alignment.TopEnd)
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(BadgeScrim)
+                        .background(bitFunColors.mediaScrim)
                         .clickable(role = Role.Button, enabled = enabled) { onRemove(image.id) }
                         .semantics { contentDescription = removeLabel },
                 ) {
                     Text(
                         "×",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
             }
         }
     }
 }
-
-/** `#AA222222` from the other client — a scrim, so it is not a theme role. */
-private val BadgeScrim = Color(0xAA222222)

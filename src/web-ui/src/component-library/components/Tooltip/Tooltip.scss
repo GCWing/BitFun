@@ -16,8 +16,8 @@
     translate3d(var(--tooltip-enter-x), var(--tooltip-enter-y), 0)
     scale(0.98);
   transition:
-    opacity var(--bf-appearance-token-motion-fast) ease,
-    transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    opacity var(--bf-motion-duration-fast) ease,
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &--visible {
     opacity: 1;
@@ -38,17 +38,17 @@
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-ui);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 96%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-raised) 96%, transparent);
 
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: var(--bf-appearance-token-size-radius-sm);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-sm);
 
     backdrop-filter: blur(8px) saturate(1.1);
     -webkit-backdrop-filter: blur(8px) saturate(1.1);
 
-    box-shadow: var(--bf-appearance-token-shadow-sm);
+    box-shadow: var(--bf-shadow-sm);
 
     max-width: 280px;
     max-height: min(320px, calc(100vh - 24px));
@@ -66,7 +66,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-medium);
+      background: var(--bf-color-field-border-hover);
       border-radius: 2px;
     }
   }
@@ -76,8 +76,8 @@
     z-index: 0;
     width: 8px;
     height: 8px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 96%, transparent);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: color-mix(in srgb, var(--bf-color-surface-raised) 96%, transparent);
+    border: 1px solid var(--bf-color-border-default);
     transform: rotate(45deg);
   }
 
@@ -145,8 +145,8 @@
   .bitfun-tooltip {
     &__content {
       border-width: 1px;
-      border-color: var(--bf-appearance-token-border-prominent);
-      box-shadow: 0 2px 8px var(--bf-appearance-token-color-overlay-black-30);
+      border-color: var(--bf-color-border-strong);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
     }
   }
 }

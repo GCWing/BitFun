@@ -4,8 +4,8 @@
 
 .bitfun-smart-recommendations {
   position: relative;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  border: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-color-surface-panel);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 12px;
@@ -23,7 +23,7 @@
   &__title {
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__close {

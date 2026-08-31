@@ -2,6 +2,10 @@
   "name": "bitfun-playbook",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@bitfun/design-tokens": "workspace:^",
+    "@bitfun/theme-bitfun": "workspace:^"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/serve.mjs --watch --port 4174",

@@ -148,7 +148,7 @@
   }
 }
 
-@mixin ripple-effect($color: rgba(255, 255, 255, 0.3)) {
+@mixin ripple-effect($color: color-mix(in srgb, var(--bf-color-content-on-dark) 30%, transparent)) {
   position: relative;
   overflow: hidden;
   
@@ -215,7 +215,7 @@
 
 // ==================== Visual effects mixins ====================
 
-@mixin glass-effect($bg: var(--bf-appearance-token-color-overlay-white-12), $blur: 10px, $opacity: 0.8) {
+@mixin glass-effect($bg: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent), $blur: 10px, $opacity: 0.8) {
   background: $bg;
   backdrop-filter: blur($blur) saturate(1.2);
   -webkit-backdrop-filter: blur($blur) saturate(1.2);
@@ -237,18 +237,18 @@
     padding: $width;
     background: $gradient;
     -webkit-mask: 
-      linear-gradient(#ffffff 0 0) content-box,
-      linear-gradient(#ffffff 0 0);
+      linear-gradient(currentColor 0 0) content-box,
+      linear-gradient(currentColor 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
   }
 }
 
-@mixin inner-glow($color: var(--bf-appearance-token-color-overlay-white-20), $size: 2px) {
+@mixin inner-glow($color: color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent), $size: 2px) {
   box-shadow: inset 0 0 $size $color;
 }
 
-@mixin outer-glow($color: rgba(96, 165, 250, 0.3), $size: 8px) {
+@mixin outer-glow($color: color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent), $size: 8px) {
   box-shadow: 0 0 $size $color;
 }
 
@@ -311,8 +311,8 @@
 
 @mixin custom-scrollbar(
   $width: 8px,
-  $track-color: var(--bf-appearance-token-color-overlay-white-08),
-  $thumb-color: var(--bf-appearance-token-color-overlay-white-12),
+  $track-color: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
+  $thumb-color: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
   $thumb-hover-color: $overlay-white-24
 ) {
   &::-webkit-scrollbar {
@@ -349,7 +349,7 @@
 
 @mixin hover-scrollbar(
   $width: 6px,
-  $thumb-color: var(--bf-appearance-token-color-overlay-white-12),
+  $thumb-color: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
   $thumb-hover-color: $overlay-white-24
 ) {
   &::-webkit-scrollbar {
@@ -385,7 +385,7 @@
 
 @mixin hover-scrollbar-with-activity(
   $width: 6px,
-  $thumb-color: var(--bf-appearance-token-color-overlay-white-12),
+  $thumb-color: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
   $thumb-hover-color: $overlay-white-24
 ) {
   @include hover-scrollbar($width, $thumb-color, $thumb-hover-color);

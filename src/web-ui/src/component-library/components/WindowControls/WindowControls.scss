@@ -16,8 +16,8 @@
     padding: 0;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    color: var(--bf-appearance-token-btn-ghost-color);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-action-quiet-content);
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     position: relative;
@@ -44,9 +44,9 @@
     }
 
     &:hover {
-      background: var(--bf-appearance-token-btn-ghost-hover-bg);
-      color: var(--bf-appearance-token-btn-ghost-hover-color);
-      border-color: var(--bf-appearance-token-btn-ghost-hover-border);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-primary);
+      border-color: var(--bf-color-border-subtle);
     }
 
     &:active {
@@ -54,55 +54,55 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-400);
+      outline: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       outline-offset: 2px;
     }
 
     &--minimize {
       &:hover {
-        background: var(--bf-appearance-token-btn-ghost-hover-bg);
-        color: var(--bf-appearance-token-btn-ghost-hover-color);
-        border-color: var(--bf-appearance-token-btn-ghost-hover-border);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-content-primary);
+        border-color: var(--bf-color-border-subtle);
       }
 
       &:focus-visible {
-        outline-color: var(--bf-appearance-token-color-accent-400);
+        outline-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       }
     }
 
     &--maximize {
       &:hover {
-        background: var(--bf-appearance-token-btn-ghost-hover-bg);
-        color: var(--bf-appearance-token-btn-ghost-hover-color);
-        border-color: var(--bf-appearance-token-btn-ghost-hover-border);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-content-primary);
+        border-color: var(--bf-color-border-subtle);
       }
 
       &:focus-visible {
-        outline-color: var(--bf-appearance-token-color-accent-400);
+        outline-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       }
     }
 
     &--close {
       &:hover {
-        background: var(--bf-appearance-token-btn-ghost-hover-bg);
-        color: var(--bf-appearance-token-color-error);
-        border-color: var(--bf-appearance-token-btn-ghost-hover-border);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-status-danger-content);
+        border-color: var(--bf-color-border-subtle);
 
       }
 
       &:focus-visible {
-        outline-color: var(--bf-appearance-token-color-error);
+        outline-color: var(--bf-color-status-danger-content);
       }
     }
 
     &:disabled {
-      opacity: var(--bf-appearance-token-opacity-disabled);
+      opacity: var(--bf-opacity-disabled);
       cursor: default;
       pointer-events: none;
 
       &:hover {
         background: transparent;
-        color: var(--bf-appearance-token-btn-ghost-color);
+        color: var(--bf-color-action-quiet-content);
         border-color: transparent;
       }
     }
@@ -116,7 +116,7 @@
     &__btn {
       width: 28px;
       height: 28px;
-      border-radius: var(--bf-appearance-token-size-radius-sm);
+      border-radius: var(--bf-radius-sm);
 
       svg {
         width: 12px;

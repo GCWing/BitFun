@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
   padding: 0;
   margin: 0;
   
@@ -26,8 +26,8 @@
     height: 300px;
     background: radial-gradient(
       ellipse at center,
-      var(--bf-appearance-token-color-accent-50) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 4%, transparent) 40%,
+      color-mix(in srgb, var(--bf-color-accent-default) 4%, transparent) 0%,
+      color-mix(in srgb, var(--bf-color-accent-secondary) 4%, transparent) 40%,
       transparent 70%
     );
     filter: blur(60px);
@@ -60,14 +60,14 @@
     p {
       margin: 0;
       font-size: var(--bf-type-flow-section-title-font-size);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-weight: var(--bf-font-weight-regular);
       line-height: var(--bf-line-height-relaxed);
       
       &:first-child {
         font-size: var(--bf-type-flow-page-title-font-size);
         font-weight: var(--bf-font-weight-semibold);
-        color: var(--bf-appearance-token-color-text-primary);
+        color: var(--bf-color-content-primary);
         letter-spacing: var(--bf-letter-spacing-tight);
       }
     }
@@ -80,9 +80,9 @@
     font-family: var(--bf-font-family-mono);
     font-weight: var(--bf-font-weight-medium);
     font-size: inherit;
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
-    border: 1px solid var(--bf-appearance-token-border-medium);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-quiet-hover);
+    border: 1px solid var(--bf-color-field-border-hover);
     border-radius: $size-radius-sm;
     line-height: var(--bf-type-flow-support-line-height);
     transition:
@@ -90,8 +90,8 @@
       border-color $motion-base $easing-standard;
     
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      border-color: var(--bf-appearance-token-border-strong);
+      background: var(--bf-color-action-neutral-surface-hover);
+      border-color: var(--bf-color-border-strong);
     }
   }
   
@@ -102,9 +102,9 @@
     font-family: var(--bf-font-family-mono);
     font-weight: var(--bf-font-weight-medium);
     font-size: inherit;
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
-    border: 1px solid var(--bf-appearance-token-border-medium);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-quiet-hover);
+    border: 1px solid var(--bf-color-field-border-hover);
     border-radius: $size-radius-sm;
     line-height: var(--bf-type-flow-support-line-height);
     transition:
@@ -112,8 +112,8 @@
       border-color $motion-base $easing-standard;
     
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      border-color: var(--bf-appearance-token-border-strong);
+      background: var(--bf-color-action-neutral-surface-hover);
+      border-color: var(--bf-color-border-strong);
     }
   }
   
@@ -124,9 +124,9 @@
     margin: $size-gap-2 0;
     background: linear-gradient(
       90deg,
-      var(--bf-appearance-token-border-strong) 0%,
-      var(--bf-appearance-token-border-medium) 40%,
-      var(--bf-appearance-token-border-base) 70%,
+      var(--bf-color-border-strong) 0%,
+      var(--bf-color-field-border-hover) 40%,
+      var(--bf-color-border-default) 70%,
       transparent 100%
     );
   }
@@ -139,7 +139,7 @@
     p {
       margin: 0 0 $size-gap-3;
       font-size: var(--bf-type-flow-section-title-font-size);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       line-height: var(--bf-line-height-relaxed);
       font-weight: var(--bf-font-weight-regular);
       
@@ -151,7 +151,7 @@
   
   &__hint {
     font-size: var(--bf-type-flow-title-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-style: italic;
   }
   
@@ -165,7 +165,7 @@
     p {
       margin: 0;
       font-size: var(--bf-type-flow-title-font-size);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       line-height: var(--bf-type-flow-body-line-height);
       font-weight: var(--bf-font-weight-regular);
     }
@@ -174,18 +174,18 @@
       margin-top: $size-gap-4;
       padding: $size-gap-3 $size-gap-4;
       font-size: var(--bf-type-flow-lead-font-size);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-style: italic;
-      background: var(--bf-appearance-token-element-bg-subtle);
-      border-left: 2px solid var(--bf-appearance-token-border-strong);
+      background: var(--bf-color-surface-subtle);
+      border-left: 2px solid var(--bf-color-border-strong);
       border-radius: 0 $size-radius-sm $size-radius-sm 0;
       transition:
         background-color $motion-base $easing-standard,
         border-left-color $motion-base $easing-standard;
       
       &:hover {
-        background: var(--bf-appearance-token-element-bg-soft);
-        border-left-color: var(--bf-appearance-token-color-text-muted);
+        background: var(--bf-color-action-quiet-hover);
+        border-left-color: var(--bf-color-content-muted);
       }
     }
   }

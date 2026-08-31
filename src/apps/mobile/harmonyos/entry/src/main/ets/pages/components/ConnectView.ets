@@ -21,8 +21,8 @@ import {
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { InlineQrScanner } from './platform/InlineQrScanner';
 import { CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
-  CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT,
-  SUBTLE } from './Theme';
+  CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, INK, LINE, MUTED, PAGE_BG, SHADOW_MEDIUM, SOFT,
+  STATUS_DANGER, STATUS_SUCCESS, SUBTLE } from './Theme';
 
 const SCAN_FRAME_SIZE: number = 248;
 const SCAN_CORNER_SIZE: number = 56;
@@ -342,7 +342,7 @@ export struct ConnectView {
       Text('')
         .width(SCAN_FRAME_SIZE)
         .height(SCAN_FRAME_SIZE)
-        .backgroundColor('#18000000')
+        .backgroundColor(SHADOW_MEDIUM)
         .borderRadius(28)
       this.ScanCorner(SCAN_CORNER_INSET, SCAN_CORNER_INSET, true, true)
       this.ScanCorner(
@@ -447,10 +447,10 @@ export struct ConnectView {
 
   private statusDotColor(): ResourceColor {
     if (this.isConnected) {
-      return GREEN;
+      return STATUS_SUCCESS;
     }
     if (this.isConnectError()) {
-      return RED;
+      return STATUS_DANGER;
     }
     if (this.isBusy || this.connectionState === 'parsing' || this.connectionState === 'pairing' || this.connectionState === 'reconnecting') {
       return INK;

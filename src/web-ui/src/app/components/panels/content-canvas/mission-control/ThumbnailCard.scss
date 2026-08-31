@@ -10,7 +10,7 @@
   min-height: 100px;
   background: transparent;
   // Default dashed border - use border-base for cross-theme visibility
-  border: 1px dashed var(--bf-appearance-token-border-base);
+  border: 1px dashed var(--bf-color-border-default);
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
@@ -23,7 +23,7 @@
   // Switch to solid border on hover
   &:hover {
     border-style: solid;
-    border-color: var(--bf-appearance-token-border-medium);
+    border-color: var(--bf-color-field-border-hover);
 
     .canvas-thumbnail-card__actions {
       opacity: 1;
@@ -33,21 +33,21 @@
   // Active state - solid border
   &.is-active {
     border-style: solid;
-    border-color: var(--bf-appearance-token-color-accent-500);
+    border-color: var(--bf-color-accent-default);
 
     .canvas-thumbnail-card__header {
-      border-color: var(--bf-appearance-token-color-accent-200);
+      border-color: var(--bf-color-action-secondary-hover);
     }
 
     .canvas-thumbnail-card__icon {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 
   // Pinned state - dashed border with stronger color
   &.is-pinned {
     border-style: dashed;
-    border-color: var(--bf-appearance-token-color-accent-300);
+    border-color: var(--bf-color-action-secondary-pressed);
 
     .canvas-thumbnail-card__pin-badge {
       display: flex;
@@ -67,13 +67,13 @@
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
-    border-bottom: 1px dashed var(--bf-appearance-token-border-base);
+    border-bottom: 1px dashed var(--bf-color-border-default);
     flex-shrink: 0;
   }
 
   &__icon {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transition: color 0.15s ease;
   }
 
@@ -90,7 +90,7 @@
       white-space: nowrap;
       font-size: var(--bf-font-size-meta);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
 
       &.is-preview {
         font-style: italic;
@@ -108,7 +108,7 @@
     display: none;
     flex-shrink: 0;
     font-size: var(--bf-font-size-3xs);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 
   &__actions {
@@ -127,7 +127,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     border-radius: 3px;
     transition:
@@ -137,18 +137,18 @@
       opacity 100ms ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
     }
 
     &.is-active {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 
   &__close-btn:hover {
-    background: var(--bf-appearance-token-color-error-bg);
-    color: var(--bf-appearance-token-color-error);
+    background: var(--bf-color-status-danger-surface);
+    color: var(--bf-color-status-danger-content);
   }
 
   // Preview area
@@ -157,7 +157,7 @@
     min-height: 50px;
     padding: 8px;
     overflow: hidden;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     border-radius: 0 0 5px 5px;
   }
 
@@ -170,7 +170,7 @@
     font-size: var(--bf-font-size-micro);
     line-height: var(--bf-line-height-base);
     letter-spacing: var(--bf-letter-spacing-tight);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     tab-size: 2;
   }
 
@@ -183,7 +183,7 @@
     opacity: 0.7;
     transition: opacity 0.1s ease;
 
-    &:nth-child(1) { opacity: 1; color: var(--bf-appearance-token-color-text-primary); }
+    &:nth-child(1) { opacity: 1; color: var(--bf-color-content-primary); }
     &:nth-child(2) { opacity: 0.85; }
     &:nth-child(3) { opacity: 0.7; }
     &:nth-child(4) { opacity: 0.55; }
@@ -192,7 +192,7 @@
 
   &:hover &__code-line {
     opacity: 1;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__placeholder {
@@ -202,7 +202,7 @@
     justify-content: center;
     height: 100%;
     gap: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
 
     svg {
@@ -226,9 +226,9 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    background: var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-color-accent-default);
     border-radius: 2px;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     svg {
       width: 8px;
@@ -238,7 +238,7 @@
 
   // Editor group badge
   &__group-badge {
-    --private-thumbnail-group-color: var(--bf-appearance-token-color-accent-500);
+    --private-thumbnail-group-color: var(--bf-color-accent-default);
 
     position: absolute;
     bottom: 6px;
@@ -246,24 +246,24 @@
     padding: 2px 6px;
     font-size: var(--bf-font-size-2xs);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 82%, var(--private-thumbnail-group-color) 18%);
+    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--bf-color-surface-canvas) 82%, var(--private-thumbnail-group-color) 18%);
     border: 1px solid var(--private-thumbnail-group-color);
     border-radius: 3px;
     z-index: 1;
-    box-shadow: 0 1px 3px var(--bf-appearance-token-color-overlay-black-30);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
     backdrop-filter: blur(4px);
 
     &--primary {
-      --private-thumbnail-group-color: var(--bf-appearance-token-color-accent-500);
+      --private-thumbnail-group-color: var(--bf-color-accent-default);
     }
 
     &--secondary {
-      --private-thumbnail-group-color: var(--bf-appearance-token-color-success);
+      --private-thumbnail-group-color: var(--bf-color-status-success-content);
     }
 
     &--tertiary {
-      --private-thumbnail-group-color: var(--bf-appearance-token-color-warning);
+      --private-thumbnail-group-color: var(--bf-color-status-warning-content);
     }
   }
 }

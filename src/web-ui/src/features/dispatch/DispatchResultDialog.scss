@@ -7,7 +7,7 @@
   min-height: 0;
   max-height: min(78vh, 720px);
   flex-direction: column;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-sm);
 
   &__header {
@@ -25,7 +25,7 @@
   }
 
   &__subtitle {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -48,7 +48,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -59,20 +59,20 @@
 
     code {
       overflow-wrap: anywhere;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-font-size-xs);
     }
   }
 
   &__field-label {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
   }
 
   &__details {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
 
     summary {
@@ -82,7 +82,7 @@
 
       &:hover,
       &:focus-visible {
-        color: var(--bf-appearance-token-color-text-primary);
+        color: var(--bf-color-content-primary);
       }
     }
   }
@@ -92,20 +92,20 @@
     gap: $size-gap-2;
     margin-top: $size-gap-2;
     padding: $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__group {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
     overflow: hidden;
 
     &[data-conflict='true'] {
-      border-color: var(--bf-appearance-token-color-warning-border);
+      border-color: var(--bf-color-status-warning-border);
     }
   }
 
@@ -114,17 +114,17 @@
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-subtle);
     font-size: var(--bf-font-size-sm);
 
     > svg {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     > span {
       margin-left: auto;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
       font-variant-numeric: tabular-nums;
     }
@@ -145,13 +145,13 @@
       gap: $size-gap-2;
       padding: 2px 0;
       overflow-wrap: anywhere;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-font-size-xs);
 
       > strong {
         min-width: 2ch;
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         font-weight: var(--bf-font-weight-semibold);
       }
 
@@ -163,12 +163,12 @@
     // Deletions read as removals, not as ordinary paths.
     &[data-kind='deleted'] li {
       text-decoration: line-through;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     em {
       margin-left: auto;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
       // The list is monospaced for paths; this annotation is prose.
       font-family:var(--bf-font-family-sans);
       font-size: var(--bf-font-size-xs);
@@ -179,7 +179,7 @@
 
   &__empty {
     padding: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -188,8 +188,8 @@
     justify-content: flex-end;
     gap: $size-gap-2;
     padding: $size-gap-3 $size-gap-4;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-primary);
+    border-top: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__spin {

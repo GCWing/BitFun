@@ -13,19 +13,19 @@
   &-frontmatter {
     margin: 0 0 $size-gap-4;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-base);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-soft);
+    background: var(--bf-color-action-quiet-hover);
 
     &__header {
       display: flex;
       align-items: center;
       padding: $size-gap-2 $size-gap-3;
-      border-bottom: 1px solid var(--bf-appearance-token-border-base);
+      border-bottom: 1px solid var(--bf-color-border-default);
     }
 
     &__label {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-semibold);
     }
@@ -34,7 +34,7 @@
       margin: 0;
       padding: $size-gap-3;
       overflow-x: auto;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-font-size-sm);
       line-height: var(--bf-line-height-comfortable);

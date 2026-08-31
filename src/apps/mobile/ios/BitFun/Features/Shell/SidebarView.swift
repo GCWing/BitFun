@@ -127,7 +127,7 @@ struct SidebarView: View {
                     let frame = proxy[anchor]
                     let menuHeight = MobileDesignGeometry.compactPopoverActionHeight * 2 + 16
                     ZStack(alignment: .topLeading) {
-                        Color.clear
+                        BitFunTheme.transparent
                             .contentShape(Rectangle())
                             .onTapGesture { workspaceCreatePath = nil }
                         workspaceCreateMenu(workspace)
@@ -199,7 +199,7 @@ struct SidebarView: View {
                     .background(BitFunTheme.card)
                     .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
                     .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+                    .shadow(color: BitFunTheme.shadowMedium, radius: 10, y: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(model.localized("搜索")))
@@ -368,8 +368,8 @@ struct SidebarView: View {
                     Text(device.name).font(.system(size: 15, weight: current ? .medium : .regular))
                         .foregroundStyle(BitFunTheme.ink).lineLimit(1)
                     Spacer(minLength: 0)
-                    Circle().fill(device.online ? BitFunTheme.green : BitFunTheme.muted).frame(width: 7, height: 7)
-                    if current { Text(model.localized("当前控制")).font(.system(size: 11)).foregroundStyle(BitFunTheme.green) }
+                    Circle().fill(device.online ? BitFunTheme.statusSuccess : BitFunTheme.muted).frame(width: 7, height: 7)
+                    if current { Text(model.localized("当前控制")).font(.system(size: 11)).foregroundStyle(BitFunTheme.statusSuccess) }
                     if device.status == "LOADING" { ProgressView().controlSize(.small) }
                     Image(systemName: device.expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(BitFunTheme.muted)
@@ -391,7 +391,7 @@ struct SidebarView: View {
                 .padding(.horizontal, 18).frame(height: 42)
         } else if device.status == "FAILED" {
             Button { model.retryDeviceDirectory(device) } label: {
-                Text(model.localized("工作区加载失败，点按重试")).font(.system(size: 13)).foregroundStyle(BitFunTheme.red)
+                Text(model.localized("工作区加载失败，点按重试")).font(.system(size: 13)).foregroundStyle(BitFunTheme.statusDanger)
                     .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading).padding(.leading, 18)
             }.buttonStyle(.plain)
         } else if device.status == "READY" && device.online && device.workspaces.isEmpty && device.sessions.isEmpty {
@@ -459,7 +459,7 @@ struct SidebarView: View {
                 Button { model.retryRemoteWorkspaces() } label: {
                     Text(model.localized("工作区加载失败，点按重试"))
                         .font(.system(size: 13))
-                        .foregroundStyle(BitFunTheme.red)
+                        .foregroundStyle(BitFunTheme.statusDanger)
                         .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                         .padding(.horizontal, 10)
                 }
@@ -723,7 +723,7 @@ struct SidebarView: View {
                     .foregroundStyle(BitFunTheme.ink)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Circle().fill(BitFunTheme.green).frame(width: 7, height: 7)
+                Circle().fill(BitFunTheme.statusSuccess).frame(width: 7, height: 7)
                 ReferenceImage(assetName: "SidebarDownGlyph", width: 14, height: 14)
             }
             .padding(.horizontal, 10)
@@ -787,7 +787,7 @@ struct SidebarView: View {
                 .background(BitFunTheme.card)
                 .overlay(RoundedRectangle(cornerRadius: 23).stroke(BitFunTheme.line, lineWidth: 1))
                 .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+                .shadow(color: BitFunTheme.shadowMedium, radius: 10, y: 4)
             }
             .buttonStyle(.plain)
             Spacer(minLength: 0)
@@ -796,7 +796,7 @@ struct SidebarView: View {
                     .frame(width: 46, height: 46)
                     .background(BitFunTheme.card)
                     .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+                    .shadow(color: BitFunTheme.shadowMedium, radius: 10, y: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(model.localized("设置")))
@@ -861,7 +861,7 @@ private struct SidebarRecentRow: View {
         .padding(.leading, 12)
         .padding(.trailing, 4)
         .frame(minHeight: metadata == nil ? 44 : 56)
-        .background(selected ? BitFunTheme.soft : .clear)
+        .background(selected ? BitFunTheme.soft : BitFunTheme.transparent)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -939,7 +939,7 @@ private struct SidebarWorkspaceRow: View {
             }
             .padding(.horizontal, 10)
             .frame(height: 46)
-            .background(workspace.selected ? BitFunTheme.soft.opacity(0.75) : Color.clear)
+            .background(workspace.selected ? BitFunTheme.soft.opacity(0.75) : BitFunTheme.transparent)
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
             if expanded {
@@ -955,7 +955,7 @@ private struct SidebarWorkspaceRow: View {
                         Button { onOpenSession(session) } label: {
                             HStack(spacing: 10) {
                             if ["running", "active", "in_progress"].contains(session.status.lowercased()) {
-                                Circle().fill(BitFunTheme.green).frame(width: 7, height: 7)
+                                Circle().fill(BitFunTheme.statusSuccess).frame(width: 7, height: 7)
                             }
                             Image(systemName: "doc")
                                 .font(.system(size: 18, weight: .regular))
@@ -999,7 +999,7 @@ private struct SidebarWorkspaceRow: View {
                     .padding(.leading, 32)
                     .padding(.trailing, 4)
                     .frame(minHeight: metadata(session) == nil ? 44 : 56)
-                    .background(isSelected(session) ? BitFunTheme.soft : Color.clear)
+                    .background(isSelected(session) ? BitFunTheme.soft : BitFunTheme.transparent)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                 }
                 if workspace.sessions.count > sessionLimit {

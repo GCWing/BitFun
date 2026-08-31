@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { themes } from "@bitfun/theme-bitfun";
 import {
   Check,
   Clipboard,
@@ -142,7 +143,9 @@ function TokenValueControl({
           className="token-color-picker"
           onChange={(event) => onChange(event.target.value)}
           type="color"
-          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#000000"}
+          value={/^#[0-9a-f]{6}$/i.test(value)
+            ? value
+            : String(themes.light["color.content.onLight"])}
         />
       )}
       <input

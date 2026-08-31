@@ -13,7 +13,7 @@
 
 .subagent-projection-container--expanded {
   max-height: min(48vh, 640px);
-  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+  padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
 }
 
 .subagent-projection-container--collapsed {
@@ -41,7 +41,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .subagent-projection-text__message {

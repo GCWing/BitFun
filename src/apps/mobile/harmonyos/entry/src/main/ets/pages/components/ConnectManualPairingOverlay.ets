@@ -1,6 +1,6 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MODAL_SCRIM, MUTED, SOFT } from './Theme';
+import { CARD, INK, LINE, MUTED, SCRIM, SOFT } from './Theme';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 @ComponentV2
@@ -21,7 +21,7 @@ export struct ConnectManualPairingOverlay {
       Text('')
         .width('100%')
         .height('100%')
-        .backgroundColor(MODAL_SCRIM)
+        .backgroundColor(SCRIM)
         .onClick(this.onCancel)
 
       Column({ space: 20 }) {

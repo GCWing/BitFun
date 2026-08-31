@@ -1,7 +1,16 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, MUTED, SOFT } from './Theme';
+import {
+  CARD,
+  FLOATING_BORDER,
+  INK,
+  MUTED,
+  SCRIM,
+  SHADOW_MEDIUM,
+  SOFT,
+  TRANSPARENT,
+} from './Theme';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
 import {
@@ -271,7 +280,7 @@ export struct RemoteSessionList {
                     this.ProjectCreateMenu(project.path)
                   },
                   placement: Placement.Top,
-                  popupColor: '#00000000',
+                  popupColor: TRANSPARENT,
                   enableArrow: false,
                   autoCancel: true,
                   mask: false,
@@ -325,8 +334,8 @@ export struct RemoteSessionList {
     .padding({ top: 8, bottom: 8 })
     .backgroundColor(CARD)
     .borderRadius(14)
-    .border({ width: 1, color: '#18000000' })
-    .shadow({ radius: 20, color: '#1A000000', offsetY: 8 })
+    .border({ width: 1, color: FLOATING_BORDER })
+    .shadow({ radius: 20, color: SHADOW_MEDIUM, offsetY: 8 })
   }
 
   @Builder
@@ -690,8 +699,8 @@ export struct RemoteSessionList {
   private sessionActionSheetOptions(): SheetOptions {
     return {
       height: 300,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
+      backgroundColor: TRANSPARENT,
+      maskColor: SCRIM,
       showClose: false,
       dragBar: false
     };

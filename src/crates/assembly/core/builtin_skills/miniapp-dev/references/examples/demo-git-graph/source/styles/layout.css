@@ -23,7 +23,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 280px;
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
 }
 .toolbar__branch-filter { position: relative; }
 .toolbar__branch-filter .chevron { margin-left: 4px; opacity: .8; }
@@ -38,7 +38,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  box-shadow: var(--bitfun-shadow-overlay);
   z-index: 200;
   padding: 4px 0;
 }
@@ -74,8 +74,8 @@
 }
 .btn--primary {
   background: var(--accent-dim);
-  color: #fff;
-  border-color: rgba(88,166,255,.4);
+  color: var(--bitfun-text-on-accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .btn--primary:hover { background: var(--accent); }
 .btn--primary:active { background: var(--accent-dim); }
@@ -130,19 +130,19 @@
   line-height: 1.4;
 }
 .badge--branch {
-  background: rgba(88,166,255,.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
-  border: 1px solid rgba(88,166,255,.25);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .badge--status {
-  background: rgba(63,185,80,.12);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
   color: var(--green);
-  border: 1px solid rgba(63,185,80,.2);
+  border: 1px solid color-mix(in srgb, var(--green) 20%, transparent);
 }
 .badge--status.has-changes {
-  background: rgba(210,153,34,.12);
+  background: color-mix(in srgb, var(--orange) 12%, transparent);
   color: var(--orange);
-  border-color: rgba(210,153,34,.2);
+  border-color: color-mix(in srgb, var(--orange) 20%, transparent);
 }
 
 /* ── Empty state ─────────────────── */
@@ -213,7 +213,7 @@
 }
 .commit-row:hover { background: var(--bg-hover); }
 .commit-row.selected { background: var(--bg-active); }
-.commit-row.find-highlight { background: rgba(88,166,255,.15); }
+.commit-row.find-highlight { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .commit-row.compare-selected { box-shadow: inset 0 0 0 2px var(--accent); }
 .commit-row.commit-row--stash .graph-node--stash-outer {
   fill: none;
@@ -242,7 +242,7 @@
 }
 .commit-row__hash {
   flex-shrink: 0;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bitfun-font-mono);
   font-size: 11px;
   color: var(--accent);
   width: 56px;
@@ -271,19 +271,19 @@
   white-space: nowrap;
 }
 .ref-tag--head {
-  background: rgba(88,166,255,.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
 }
 .ref-tag--branch {
-  background: rgba(63,185,80,.14);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
   color: var(--green);
 }
 .ref-tag--tag {
-  background: rgba(210,153,34,.14);
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
   color: var(--orange);
 }
 .ref-tag--remote {
-  background: rgba(188,140,255,.14);
+  background: color-mix(in srgb, var(--purple) 14%, transparent);
   color: var(--purple);
 }
 
@@ -303,5 +303,5 @@
   font-size: 11px;
   color: var(--text-dim);
   text-align: right;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bitfun-font-mono);
 }

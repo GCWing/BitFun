@@ -14,6 +14,7 @@ import {
 } from '../sync/AppearanceSync';
 import {
   SYSTEM_APPEARANCE_ID,
+  APPEARANCE_SCHEMA_VERSION,
   type AppearanceCatalogEntry,
   type AppearanceImportOptions,
   type AppearanceMarketOrigin,
@@ -67,7 +68,12 @@ function consumeBootstrapAppearance(): {
 }
 
 function importedCatalogEntry(value: StoredAppearanceCatalogEntry): AppearanceCatalogEntry {
-  return { ...value, source: 'imported' };
+  const {
+    schemaVersion: _schemaVersion,
+    archiveSchemaVersion: _archiveSchemaVersion,
+    ...entry
+  } = value;
+  return { ...entry, source: 'imported' };
 }
 
 function errorMessage(error: unknown): string {
@@ -345,7 +351,7 @@ export class AppearanceService {
   }
 
   async exportPackage(id: string): Promise<ArrayBuffer> {
-    const stored = await this.storage.get(id);
+    const stored = await this.getCanonicalStoredPackage(id);
     if (!stored) throw new Error(`Imported appearance package not found: ${id}`);
     return stored.archive.slice(0);
   }
@@ -582,7 +588,7 @@ export class AppearanceService {
   private async resolvePackage(id: string): Promise<AppearanceSource | null> {
     const builtin = getBuiltinAppearance(id);
     if (builtin) return { pkg: builtin, assets: {} };
-    const stored = await this.storage.get(id);
+    const stored = await this.getCanonicalStoredPackage(id);
     return stored ? {
       pkg: composeAppearancePackage(stored.manifest),
       assets: stored.assets,
@@ -591,8 +597,46 @@ export class AppearanceService {
   }
 
   private async loadCatalog(): Promise<readonly AppearanceCatalogEntry[]> {
-    const imported = (await this.storage.listCatalog()).map(importedCatalogEntry);
+    let entries = await this.storage.listCatalog();
+    for (const entry of entries) {
+      if (entry.schemaVersion === APPEARANCE_SCHEMA_VERSION
+        && entry.archiveSchemaVersion === APPEARANCE_SCHEMA_VERSION) continue;
+      try {
+        await this.getCanonicalStoredPackage(entry.id);
+      } catch (error) {
+        log.warn('Stored Appearance migration failed; package was preserved', {
+          appearanceId: entry.id,
+          error,
+        });
+      }
+    }
+    entries = await this.storage.listCatalog();
+    const imported = entries.map(importedCatalogEntry);
     return [...builtinAppearanceCatalog, ...imported];
+  }
+
+  private async getCanonicalStoredPackage(id: string): Promise<StoredAppearancePackage | null> {
+    const stored = await this.storage.get(id);
+    if (!stored) return null;
+    if (stored.manifest.schemaVersion === APPEARANCE_SCHEMA_VERSION
+      && stored.archiveSchemaVersion === APPEARANCE_SCHEMA_VERSION) {
+      return stored;
+    }
+
+    const parsed = await this.parser.parse(stored.archive);
+    if (parsed.manifest.id !== stored.manifest.id) {
+      throw new Error(
+        `Stored Appearance archive id ${parsed.manifest.id} does not match record ${stored.manifest.id}`,
+      );
+    }
+    const migrated: StoredAppearancePackage = {
+      ...parsed,
+      importedAt: stored.importedAt,
+      marketOrigin: stored.marketOrigin,
+      localOverride: stored.localOverride,
+    };
+    await this.storage.put(migrated);
+    return migrated;
   }
 
   private attachSystemListener(): void {

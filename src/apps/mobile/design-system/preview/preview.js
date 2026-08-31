@@ -125,13 +125,13 @@ function platformCard(platform, scenario, appearance) {
 
 function applyTokens(element, appearance) {
   for (const [name, pair] of Object.entries(mobileTokens.colors)) {
-    element.style.setProperty(`--${name.replaceAll('_', '-')}`, pair[appearance]);
+    element.style.setProperty(`--mobile-${name.replaceAll('_', '-')}`, mobileColorToCss(pair[appearance]));
   }
   for (const [name, value] of Object.entries(mobileTokens.geometry)) {
-    element.style.setProperty(`--${name.replaceAll('_', '-')}`, String(value));
+    element.style.setProperty(`--mobile-${name.replaceAll('_', '-')}`, String(value));
   }
   for (const [name, token] of Object.entries(mobileTokens.typography)) {
-    const prefix = `--${name.replaceAll('_', '-')}`;
+    const prefix = `--mobile-${name.replaceAll('_', '-')}`;
     element.style.setProperty(`${prefix}-size`, String(token.size));
     element.style.setProperty(`${prefix}-line-height`, String(token.lineHeight));
     element.style.setProperty(`${prefix}-weight`, String(token.weight));
@@ -203,11 +203,18 @@ function containedPixels(image, width, height) {
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  context.fillStyle = '#111111';
+  context.fillStyle = mobileColorToCss(mobileTokens.colors.media_background.dark);
   context.fillRect(0, 0, width, height);
   const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
   return context.getImageData(0, 0, width, height).data;
+}
+
+function mobileColorToCss(value) {
+  if (!/^#[0-9A-F]{8}$/i.test(value)) return value;
+  const alpha = value.slice(1, 3);
+  const rgb = value.slice(3);
+  return `#${rgb}${alpha}`;
 }

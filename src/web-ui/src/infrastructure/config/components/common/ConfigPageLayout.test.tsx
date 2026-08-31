@@ -79,7 +79,7 @@ describe('ConfigPageLayout', () => {
     expect(layout).toContain('--config-page-section-gap: 36px;');
     expect(layout).toContain('--row-grid-cols: minmax(0, 1fr) minmax(0, 150px);');
     expect(layout).toContain('gap: 40px;');
-    expect(layout).toContain('background: var(--bf-appearance-token-config-page-section-bg);\n  border: 0;');
+    expect(layout).toContain('background: var(--bf-component-config-page-section-background);\n  border: 0;');
     expect(layout).toContain('overflow: visible;\n  box-shadow: none;');
     expect(header).toContain('margin-bottom: 36px;');
     expect(header).toContain('font-size: var(--bf-font-size-4xl);');

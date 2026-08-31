@@ -17,6 +17,7 @@ import {
   EXCEPTION_PATH_PARTS,
   FALLBACK_VAR_CONTRACTS,
   PACKAGE_CSS_VAR_DEFINITION_CONTRACTS,
+  PACKAGE_CSS_VAR_IMPORT_CONTRACTS,
   REGISTERED_DYNAMIC_VAR_PREFIXES,
   RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS,
   STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS,
@@ -30,6 +31,68 @@ import { writeReportJson } from './theme-color-audit-utils.mjs';
 
 const COLOR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)|hsla?\(\s*[-+]?\d*\.?\d+(?:deg|rad|turn)?\s*,\s*[-+]?\d*\.?\d+%\s*,\s*[-+]?\d*\.?\d+%(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)/g;
+const CSS_NAMED_COLORS = new Set(`
+  aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue
+  blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson
+  cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta
+  darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray
+  darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick
+  floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey
+  honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon
+  lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink
+  lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime
+  limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen
+  mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose
+  moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen
+  paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red
+  rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue
+  slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white
+  whitesmoke yellow yellowgreen
+`.trim().split(/\s+/));
+const CSS_NAMED_COLOR_PATTERN = new RegExp(
+  `(?:^|[^\\w-])(${Array.from(CSS_NAMED_COLORS).sort((a, b) => b.length - a.length).join('|')})(?![\\w-])`,
+  'gi',
+);
+const COMMON_NAMED_COLOR_RGB = new Map([
+  ['black', [0, 0, 0]],
+  ['silver', [192, 192, 192]],
+  ['gray', [128, 128, 128]],
+  ['grey', [128, 128, 128]],
+  ['white', [255, 255, 255]],
+  ['maroon', [128, 0, 0]],
+  ['red', [255, 0, 0]],
+  ['purple', [128, 0, 128]],
+  ['fuchsia', [255, 0, 255]],
+  ['magenta', [255, 0, 255]],
+  ['green', [0, 128, 0]],
+  ['lime', [0, 255, 0]],
+  ['olive', [128, 128, 0]],
+  ['yellow', [255, 255, 0]],
+  ['navy', [0, 0, 128]],
+  ['blue', [0, 0, 255]],
+  ['teal', [0, 128, 128]],
+  ['aqua', [0, 255, 255]],
+  ['cyan', [0, 255, 255]],
+  ['orange', [255, 165, 0]],
+  ['rebeccapurple', [102, 51, 153]],
+]);
+const STYLE_SOURCE_EXTENSIONS = new Set(['.css', '.less', '.sass', '.scss']);
+const MARKUP_SOURCE_EXTENSIONS = new Set(['.html', '.svg']);
+const CSS_DECLARATION_PATTERN =
+  /(?:^|[;{])\s*((?:--|\$)?[a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s*([^;{}]+)/gm;
+const CSS_COLOR_ATTRIBUTE_PATTERN = new RegExp(
+  `(?:^|[^\\w-])(?:color|fill|stroke|stop-color|flood-color|lighting-color)\\s*=\\s*['"](${Array.from(CSS_NAMED_COLORS).join('|')})['"]`,
+  'gi',
+);
+const SCRIPT_COLOR_VALUE_PATTERN = new RegExp(
+  `(?:^|[,{;\\s])(?:color|backgroundColor|borderColor|outlineColor|caretColor|textDecorationColor|fill|stroke)\\s*:\\s*['"\\x60](${Array.from(CSS_NAMED_COLORS).join('|')})['"\\x60]`,
+  'gi',
+);
+const RGB_CHANNEL_SOURCE = '(?:25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)';
+const RAW_RGB_CHANNEL_DEFINITION_PATTERN = new RegExp(
+  `(?:^|[;{])\\s*(?:--|\\$)[a-zA-Z_][a-zA-Z0-9_-]*\\s*:\\s*(${RGB_CHANNEL_SOURCE}\\s*,\\s*${RGB_CHANNEL_SOURCE}\\s*,\\s*${RGB_CHANNEL_SOURCE})\\s*(?=;|})`,
+  'gm',
+);
 const TOKEN_ALIAS_DEFINITION_PATTERN =
   /(?:^|[;{\s])(\$[a-zA-Z0-9_-]+|--[a-zA-Z0-9_-]+)\s*:\s*(#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)|hsla?\(\s*[-+]?\d*\.?\d+(?:deg|rad|turn)?\s*,\s*[-+]?\d*\.?\d+%\s*,\s*[-+]?\d*\.?\d+%(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\))/gm;
 const CSS_VAR_USAGE_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)/g;
@@ -80,6 +143,8 @@ function parseArgs(argv) {
     reportJson: null,
     baselinePath: undefined,
     noBaseline: false,
+    packageContracts: [],
+    excludePaths: [],
     top: 15,
     budget: 120,
   };
@@ -110,6 +175,30 @@ function parseArgs(argv) {
       }
     } else if (arg === '--no-baseline') {
       options.noBaseline = true;
+    } else if (arg === '--package-contract') {
+      const packageName = argv[++index];
+      if (!packageName) {
+        throw new Error('--package-contract requires a package name');
+      }
+      options.packageContracts.push(packageName);
+    } else if (arg.startsWith('--package-contract=')) {
+      const packageName = arg.slice('--package-contract='.length);
+      if (!packageName) {
+        throw new Error('--package-contract requires a package name');
+      }
+      options.packageContracts.push(packageName);
+    } else if (arg === '--exclude') {
+      const excludePath = argv[++index];
+      if (!excludePath) {
+        throw new Error('--exclude requires a root-relative path');
+      }
+      options.excludePaths.push(excludePath);
+    } else if (arg.startsWith('--exclude=')) {
+      const excludePath = arg.slice('--exclude='.length);
+      if (!excludePath) {
+        throw new Error('--exclude requires a root-relative path');
+      }
+      options.excludePaths.push(excludePath);
     } else if (arg === '--root') {
       options.root = argv[++index] ?? DEFAULT_ROOT;
     } else if (arg === '--top') {
@@ -136,6 +225,9 @@ Options:
   --budget <number>      Unique app color budget for the summary. Default: 120
   --baseline <path>      Enforce a theme color governance baseline.
   --no-baseline          Disable baseline enforcement.
+  --package-contract <name>
+                         Treat a declared design-system package as an external CSS variable owner.
+  --exclude <path>       Exclude an explicit root-relative file or directory. Repeatable.
   --json                 Print machine-readable JSON instead of text.
   --report-json <path>   Write the machine-readable report to a file.
 `);
@@ -170,6 +262,20 @@ function normalizePath(filePath) {
   return filePath.split(path.sep).join('/');
 }
 
+function normalizeRootRelativePath(filePath) {
+  return normalizePath(path.normalize(filePath))
+    .replace(/^\.\//, '')
+    .replace(/\/$/, '');
+}
+
+function isExplicitlyExcluded(rootRelativePath, excludePaths) {
+  const normalizedPath = normalizeRootRelativePath(rootRelativePath);
+  return excludePaths.some((excludePath) => {
+    const normalizedExclude = normalizeRootRelativePath(excludePath);
+    return normalizedPath === normalizedExclude || normalizedPath.startsWith(`${normalizedExclude}/`);
+  });
+}
+
 function isAuditTestFile(relativePath) {
   return (
     /(^|\/)__tests__\//.test(relativePath)
@@ -181,6 +287,7 @@ function isGeneratedBuildArtifact(rootRelativePath) {
   return (
     rootRelativePath === 'generated/version.ts'
     || rootRelativePath === 'generated/version-injection.html'
+    || rootRelativePath.startsWith('public/monaco-editor/')
   );
 }
 
@@ -214,14 +321,22 @@ function isGeneratedWidgetAppearancePayloadFile(relativePath) {
 
 function collectGeneratedWidgetPayloadVarNames(content) {
   const namesBlock = /export const WIDGET_APPEARANCE_VARIABLE_NAMES = \[([\s\S]*?)\] as const;/.exec(content)?.[1];
-  if (!namesBlock) {
-    throw new Error('Unable to parse WIDGET_APPEARANCE_VARIABLE_NAMES; refusing to audit a partial payload contract.');
+  if (namesBlock) {
+    const names = collectMatches(namesBlock, CSS_VAR_LITERAL_PATTERN).map(match => match[1]);
+    if (names.length === 0) {
+      throw new Error('WIDGET_APPEARANCE_VARIABLE_NAMES must not be empty.');
+    }
+    return names;
   }
-  const names = collectMatches(namesBlock, CSS_VAR_LITERAL_PATTERN).map(match => match[1]);
-  if (names.length === 0) {
-    throw new Error('WIDGET_APPEARANCE_VARIABLE_NAMES must not be empty.');
+
+  if (/Object\.values\(themeCssVariables\)/.test(content)) {
+    const themeContract = PACKAGE_CSS_VAR_DEFINITION_CONTRACTS.find(
+      contract => contract.packageName === '@bitfun/theme-bitfun',
+    );
+    if (themeContract?.variables.length) return [...themeContract.variables];
   }
-  return names;
+
+  throw new Error('Unable to parse WIDGET_APPEARANCE_VARIABLE_NAMES or resolve it from the canonical theme contract.');
 }
 
 function pathMatchesPart(relativePath, pathPart) {
@@ -229,6 +344,7 @@ function pathMatchesPart(relativePath, pathPart) {
   const normalizedPart = pathPart.toLowerCase();
   return (
     normalizedPath === normalizedPart
+    || normalizedPath.endsWith(`/${normalizedPart}`)
     || normalizedPath.startsWith(`${normalizedPart}/`)
     || normalizedPath.startsWith(`${normalizedPart}.`)
     || normalizedPath.includes(`/${normalizedPart}/`)
@@ -238,7 +354,8 @@ function pathMatchesPart(relativePath, pathPart) {
 
 function getColorDomain(relativePath) {
   const rule = COLOR_DOMAIN_RULES.find(entry => (
-    entry.pathParts.some(part => pathMatchesPart(relativePath, part))
+    (!entry.extensions || entry.extensions.includes(path.extname(relativePath).toLowerCase()))
+    && entry.pathParts.some(part => pathMatchesPart(relativePath, part))
   ));
   return rule?.key ?? 'appUi';
 }
@@ -256,6 +373,65 @@ function addToSetMap(map, key, value) {
 function collectMatches(content, pattern) {
   pattern.lastIndex = 0;
   return Array.from(content.matchAll(pattern));
+}
+
+function collectNamedColorValues(content, relativePath) {
+  const colors = [];
+  const extension = path.extname(relativePath).toLowerCase();
+
+  if (STYLE_SOURCE_EXTENSIONS.has(extension)) {
+    for (const declaration of collectMatches(content, CSS_DECLARATION_PATTERN)) {
+      if (declaration[1].toLowerCase() === 'content') continue;
+      const valueWithoutUrls = declaration[2].replace(/url\((?:"[^"]*"|'[^']*'|[^)]*)\)/gi, ' ');
+      for (const match of collectMatches(valueWithoutUrls, CSS_NAMED_COLOR_PATTERN)) {
+        colors.push(match[1].toLowerCase());
+      }
+    }
+  }
+
+  if (STYLE_SOURCE_EXTENSIONS.has(extension) || MARKUP_SOURCE_EXTENSIONS.has(extension)) {
+    for (const match of collectMatches(content, CSS_COLOR_ATTRIBUTE_PATTERN)) {
+      colors.push(match[1].toLowerCase());
+    }
+  }
+
+  if (!STYLE_SOURCE_EXTENSIONS.has(extension) && !MARKUP_SOURCE_EXTENSIONS.has(extension)) {
+    for (const match of collectMatches(content, SCRIPT_COLOR_VALUE_PATTERN)) {
+      colors.push(match[1].toLowerCase());
+    }
+  }
+
+  return colors;
+}
+
+function collectRawRgbChannelValues(content) {
+  return collectMatches(content, RAW_RGB_CHANNEL_DEFINITION_PATTERN).map((match) => {
+    const channels = match[1].split(',').map(channel => Number(channel.trim()));
+    return `rgb(${channels.join(', ')})`;
+  });
+}
+
+function collectColorValues(content, relativePath) {
+  return [
+    ...collectMatches(content, COLOR_PATTERN).map(match => match[0]),
+    ...collectNamedColorValues(content, relativePath),
+    ...collectRawRgbChannelValues(content),
+  ];
+}
+
+function collectImportedPackageNames(files, cwd) {
+  const packageNames = new Set();
+  for (const file of files) {
+    const relativePath = normalizePath(path.relative(cwd, file));
+    const content = createAuditContent(fs.readFileSync(file, 'utf8'), relativePath);
+    for (const contract of PACKAGE_CSS_VAR_IMPORT_CONTRACTS) {
+      if (!content.includes(contract.specifier)) continue;
+      for (const packageName of contract.packageNames) {
+        packageNames.add(packageName);
+      }
+    }
+  }
+  return packageNames;
 }
 
 function contractOwnerMatchesRoot(contract, rootRelativePath) {
@@ -442,13 +618,19 @@ function stripCommentsForAudit(content, { stripLineComments = true } = {}) {
 }
 
 function createAuditContent(content, relativePath) {
-  return stripCommentsForAudit(content, {
+  const withoutComments = stripCommentsForAudit(content, {
     stripLineComments: !relativePath.endsWith('.css'),
   });
+  return withoutComments.replace(/&#(?:x[0-9a-f]+|\d+);/gi, match => ' '.repeat(match.length));
 }
 
 function parseColor(color) {
   const trimmed = color.trim().toLowerCase();
+  const named = COMMON_NAMED_COLOR_RGB.get(trimmed);
+  if (named) {
+    return { r: named[0], g: named[1], b: named[2], a: 1 };
+  }
+
   const hex = /^#([0-9a-f]{3,8})$/.exec(trimmed);
   if (hex) {
     const raw = hex[1];
@@ -782,12 +964,25 @@ function audit(options) {
     !isAuditTestFile(entry.relativePath)
     && isGeneratedBuildArtifact(entry.rootRelativePath)
   ));
+  const ignoredExplicitFiles = fileEntries.filter(entry => (
+    !isAuditTestFile(entry.relativePath)
+    && !isGeneratedBuildArtifact(entry.rootRelativePath)
+    && isExplicitlyExcluded(entry.rootRelativePath, options.excludePaths)
+  ));
   const auditedFiles = fileEntries
     .filter(entry => (
       !isAuditTestFile(entry.relativePath)
       && !isGeneratedBuildArtifact(entry.rootRelativePath)
+      && !isExplicitlyExcluded(entry.rootRelativePath, options.excludePaths)
     ))
     .map(entry => entry.file);
+  const importedPackageNames = collectImportedPackageNames(auditedFiles, cwd);
+  for (const packageName of options.packageContracts) {
+    if (!PACKAGE_CSS_VAR_DEFINITION_CONTRACTS.some(contract => contract.packageName === packageName)) {
+      throw new Error(`Unknown package CSS variable contract: ${packageName}`);
+    }
+    importedPackageNames.add(packageName);
+  }
   const tokenAliasDefinitionsByColorKey = collectTokenAliasDefinitions(auditedFiles, cwd);
 
   const colorCounts = new Map();
@@ -829,7 +1024,7 @@ function audit(options) {
     const tokenFile = isTokenFile(relativePath);
     const exceptionFile = isExceptionFile(relativePath);
     const colorDomain = getColorDomain(relativePath);
-    const colors = collectMatches(content, COLOR_PATTERN).map(match => match[0]);
+    const colors = collectColorValues(content, relativePath);
 
     if (colors.length > 0) {
       fileColorCounts.set(relativePath, colors.length);
@@ -934,14 +1129,13 @@ function audit(options) {
     }
   }
 
-  if (checksFullThemeSourceRoot) {
-    for (const contract of PACKAGE_CSS_VAR_DEFINITION_CONTRACTS) {
-      for (const name of contract.variables) {
-        incrementMap(varDefinitionCounts, name);
-        addToSetMap(varDefinitionKinds, name, 'package-contract');
-        addToSetMap(varDefinitionFiles, name, contract.owner);
-        contractVarDefinitions.add(name);
-      }
+  for (const contract of PACKAGE_CSS_VAR_DEFINITION_CONTRACTS) {
+    if (!importedPackageNames.has(contract.packageName)) continue;
+    for (const name of contract.variables) {
+      incrementMap(varDefinitionCounts, name);
+      addToSetMap(varDefinitionKinds, name, 'package-contract');
+      addToSetMap(varDefinitionFiles, name, contract.owner);
+      contractVarDefinitions.add(name);
     }
   }
 
@@ -1043,6 +1237,7 @@ function audit(options) {
     .filter(([name]) => (
       runtimeContractVarDefinitions.has(name)
       && !staticContractVarDefinitions.has(name)
+      && !getDefinitionKinds(name).includes('package-contract')
       && !fallbackTokenCounts.has(name)
     ))
     .map(([key, count]) => ({
@@ -1205,6 +1400,7 @@ function audit(options) {
       definitionKind: getExplicitDefinitionKind(key),
       files: Array.from(generatedWidgetPayloadVarFiles.get(key) ?? []).sort().slice(0, 5),
     }));
+  const hasGeneratedWidgetPayloadContract = generatedWidgetPayloadVars.length > 0;
   const generatedWidgetPayloadCompatibilityAliases = generatedWidgetPayloadVars
     .map(entry => {
       const contract = resolveCompatibilityAliasContract(entry.key);
@@ -1266,6 +1462,21 @@ function audit(options) {
     .filter(entry => !entry.definitionKind)
     .sort((a, b) => a.key.localeCompare(b.key));
   const generatedWidgetPayloadVarNames = new Set(generatedWidgetPayloadVars.map(entry => entry.key));
+  const canonicalThemeVariableNames = new Set(
+    PACKAGE_CSS_VAR_DEFINITION_CONTRACTS.find(
+      contract => contract.packageName === '@bitfun/theme-bitfun',
+    )?.variables ?? [],
+  );
+  const generatedWidgetPayloadMissingCanonicalThemeVars = hasGeneratedWidgetPayloadContract
+    ? [...canonicalThemeVariableNames]
+      .filter(name => !generatedWidgetPayloadVarNames.has(name))
+      .sort()
+    : [];
+  const generatedWidgetPayloadNonCanonicalVars = hasGeneratedWidgetPayloadContract
+    ? [...generatedWidgetPayloadVarNames]
+      .filter(name => !canonicalThemeVariableNames.has(name))
+      .sort()
+    : [];
   const generatedWidgetPayloadMissingCompatibilityCanonicals = [
     ...generatedWidgetPayloadCompatibilityAliases,
     ...generatedWidgetPayloadCompatibilityFamilies,
@@ -1360,8 +1571,14 @@ function audit(options) {
     filesScanned: auditedFiles.length,
     ignoredTestFiles: ignoredTestFiles.length,
     ignoredGeneratedFiles: ignoredGeneratedFiles.length,
+    ignoredExplicitFiles: ignoredExplicitFiles.length,
+    explicitExclusions: options.excludePaths.map(normalizeRootRelativePath).sort(),
     filesWithColors: fileColorCounts.size,
     colorOccurrences,
+    packageCssContracts: {
+      importedPackages: [...importedPackageNames].sort(),
+      importedPackageUnique: importedPackageNames.size,
+    },
     uniqueColors: colorCounts.size,
     colorScopes: {
       appUi: {
@@ -1418,8 +1635,11 @@ function audit(options) {
       families: compatibilityAliasFamilyEntries,
     },
     generatedWidgetPayload: {
+      present: hasGeneratedWidgetPayloadContract,
       varUnique: generatedWidgetPayloadVars.length,
       occurrences: generatedWidgetPayloadVars.reduce((total, entry) => total + entry.count, 0),
+      missingCanonicalThemeUnique: generatedWidgetPayloadMissingCanonicalThemeVars.length,
+      nonCanonicalUnique: generatedWidgetPayloadNonCanonicalVars.length,
       undefinedUnique: generatedWidgetPayloadUndefinedVars.length,
       compatibilityAliasUnique: generatedWidgetPayloadCompatibilityAliases.length,
       compatibilityAliasOccurrences: generatedWidgetPayloadCompatibilityAliases.reduce(
@@ -1442,6 +1662,8 @@ function audit(options) {
       topCompatibilityFamilies: generatedWidgetPayloadCompatibilityFamilies.slice(0, options.top),
       externalOnlyCompatibility: generatedWidgetPayloadExternalOnlyCompatibility.slice(0, REPORT_ROW_LIMIT),
       undefinedVars: generatedWidgetPayloadUndefinedVars.slice(0, REPORT_ROW_LIMIT),
+      missingCanonicalThemeVars: generatedWidgetPayloadMissingCanonicalThemeVars.slice(0, REPORT_ROW_LIMIT),
+      nonCanonicalVars: generatedWidgetPayloadNonCanonicalVars.slice(0, REPORT_ROW_LIMIT),
       missingCompatibilityCanonicals: generatedWidgetPayloadMissingCompatibilityCanonicals.slice(0, REPORT_ROW_LIMIT),
       unexportedCompatibilityCanonicals: generatedWidgetPayloadUnexportedCompatibilityCanonicals.slice(
         0,
@@ -1524,6 +1746,7 @@ function printText(report) {
   console.log(`Files scanned: ${report.filesScanned}`);
   console.log(`Ignored test files: ${report.ignoredTestFiles}`);
   console.log(`Ignored generated files: ${report.ignoredGeneratedFiles}`);
+  console.log(`Ignored explicitly excluded files: ${report.ignoredExplicitFiles}`);
   console.log(`Files with colors: ${report.filesWithColors}`);
   console.log(`Color occurrences: ${report.colorOccurrences}`);
   console.log(`Unique colors: ${report.uniqueColors}`);
@@ -1547,6 +1770,8 @@ function printText(report) {
   );
   console.log(
     `Generated widget payload: vars=${report.generatedWidgetPayload.varUnique}, ` +
+    `missingCanonicalTheme=${report.generatedWidgetPayload.missingCanonicalThemeUnique}, ` +
+    `nonCanonical=${report.generatedWidgetPayload.nonCanonicalUnique}, ` +
     `undefined=${report.generatedWidgetPayload.undefinedUnique}, ` +
     `compatAliases=${report.generatedWidgetPayload.compatibilityAliasUnique}, ` +
     `compatAliasFamilies=${report.generatedWidgetPayload.compatibilityAliasFamilyUnique}, ` +

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { Icon, iconNames } from "../dist/index.js";
 
@@ -49,4 +49,20 @@ test("Icon styles consume only public geometry and semantic color tokens", async
   assert.match(styles, /--bf-color-content-primary/);
   assert.match(styles, /--bf-color-status-success-content/);
   assert.match(styles, /mask-size:contain/);
+});
+
+test("Icon mask assets are color-agnostic", async () => {
+  const assetDirectory = new URL("../src/components/Icon/assets/", import.meta.url);
+  const assetNames = (await readdir(assetDirectory)).filter((name) => name.endsWith(".svg"));
+
+  assert.equal(assetNames.length, iconNames.length);
+  for (const assetName of assetNames) {
+    const source = await readFile(new URL(assetName, assetDirectory), "utf8");
+    assert.match(source, /(?:fill|stroke)="currentColor"/i, `${assetName} must use currentColor`);
+    assert.doesNotMatch(
+      source,
+      /\b(?:fill|stroke)="(?:black|white|#[0-9a-f]{3,8}|rgba?\()/i,
+      `${assetName} must not own a color`,
+    );
+  }
 });

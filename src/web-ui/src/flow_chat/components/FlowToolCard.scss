@@ -1,6 +1,6 @@
 .flowchat-flow-item,
 .flowchat-tool-wrapper {
-  margin: 0 0 var(--bf-appearance-token-flowchat-card-gap) 0;
+  margin: 0 0 var(--bf-control-flow-chat-card-gap) 0;
   font-size: var(--bf-type-flow-body-font-size);
   line-height: var(--bf-type-flow-support-line-height);
 }
@@ -8,7 +8,7 @@
 .flow-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  gap: var(--bf-control-flow-chat-inline-gap);
 }
 
 .flow-tool-card-note {

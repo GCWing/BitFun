@@ -14,7 +14,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 
 SCHEMA = "bitfun.appearance"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 REGISTRY_PATH = Path(__file__).resolve().parent.parent / "references" / "appearance-registry.json"
 MANIFEST_NAME = "appearance.json"
 MAX_ARCHIVE_BYTES = 96 * 1024 * 1024
@@ -225,7 +225,7 @@ def load_registry() -> dict[str, Any]:
         registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise AppearanceError(f"Could not load bundled Appearance registry: {error}") from error
-    if registry.get("schema") != "bitfun.appearance.registry" or registry.get("schemaVersion") != 1:
+    if registry.get("schema") != "bitfun.appearance.registry" or registry.get("schemaVersion") != 2:
         raise AppearanceError("Bundled Appearance registry has an unsupported schema")
     return registry
 
@@ -243,7 +243,9 @@ class ManifestValidator:
         self.components = {item["id"]: item for item in registry.get("components", [])}
         self.scenes = {item["id"]: item for item in registry.get("scenes", [])}
         self.renderers = set(registry.get("renderers", []))
-        self.css_tokens = set(registry.get("cssTokenNames", []))
+        self.theme_tokens = set(registry.get("themeTokenNames", []))
+        self.scoped_theme_tokens = set(registry.get("scopedThemeTokenNames", []))
+        self.theme_scope_ids = set(registry.get("themeScopeIds", []))
         self.widget_vars = set(registry.get("widgetVariableNames", []))
         self.errors: list[dict[str, str]] = []
         self.warnings: list[dict[str, str]] = []
@@ -798,8 +800,8 @@ class ManifestValidator:
                 self.scan_renderer_text(item, f"{path}.{key}")
 
     def validate_renderer_settings(self, renderer_id: str, settings: Mapping[str, Any]) -> list[str]:
-        if renderer_id == "css-tokens":
-            return self.validate_css_tokens(settings)
+        if renderer_id == "theme-tokens":
+            return self.validate_theme_tokens(settings)
         if renderer_id == "monaco":
             return self.validate_monaco(settings)
         if renderer_id == "xterm":
@@ -812,21 +814,45 @@ class ManifestValidator:
             return self.validate_canvas(settings)
         return [f"Unsupported renderer: {renderer_id}"]
 
-    def validate_css_tokens(self, settings: Mapping[str, Any]) -> list[str]:
+    def validate_theme_token_map(
+        self,
+        tokens: Any,
+        allowed_names: set[str],
+        path: str,
+    ) -> list[str]:
         errors: list[str] = []
-        tokens = settings.get("tokens")
-        background = settings.get("background")
-        if not is_record(tokens) or not isinstance(background, str):
-            return ["css-tokens settings must contain tokens and background"]
+        if not is_record(tokens):
+            return [f"{path} must be an object"]
         for name, value in tokens.items():
-            if name not in self.css_tokens:
-                errors.append(f"Unsupported CSS token name: {name}")
+            if name not in allowed_names:
+                errors.append(f"Unsupported {path} token name: {name}")
             if not isinstance(value, str) or not value or len(value) > 512:
-                errors.append(f"CSS token {name} must be a non-empty string of at most 512 characters")
+                errors.append(f"{path} token {name} must be a non-empty string of at most 512 characters")
             elif CSS_TOKEN_FORBIDDEN.search(value):
-                errors.append(f"CSS token {name} contains a forbidden value")
-        if CSS_TOKEN_FORBIDDEN.search(background):
-            errors.append("css-tokens background contains a forbidden value")
+                errors.append(f"{path} token {name} contains a forbidden value")
+        return errors
+
+    def validate_theme_tokens(self, settings: Mapping[str, Any]) -> list[str]:
+        errors: list[str] = []
+        for key in settings:
+            if key not in ("tokens", "scopes"):
+                errors.append(f"Unknown setting: {key}")
+        errors.extend(self.validate_theme_token_map(settings.get("tokens"), self.theme_tokens, "root"))
+        scopes = settings.get("scopes")
+        if scopes is None:
+            return errors
+        if not is_record(scopes):
+            errors.append("scopes must be an object")
+            return errors
+        for scope_id, tokens in scopes.items():
+            if scope_id not in self.theme_scope_ids:
+                errors.append(f"Unknown theme token scope: {scope_id}")
+                continue
+            errors.extend(self.validate_theme_token_map(
+                tokens,
+                self.scoped_theme_tokens,
+                f"scope {scope_id}",
+            ))
         return errors
 
     def validate_monaco(self, settings: Mapping[str, Any]) -> list[str]:
@@ -1680,7 +1706,7 @@ def command_contract(args: argparse.Namespace, registry: Mapping[str, Any]) -> N
         print(json.dumps(sorted(STYLE_PROPERTIES), indent=2))
         return
     if args.action == "tokens":
-        key = "cssTokenNames" if args.token_kind == "css" else "widgetVariableNames"
+        key = "themeTokenNames" if args.token_kind == "theme" else "widgetVariableNames"
         print("\n".join(registry.get(key, [])))
         return
     if args.kind == "renderers":
@@ -1733,7 +1759,7 @@ def create_parser() -> argparse.ArgumentParser:
     contract_show.add_argument("kind", choices=("components", "scenes"))
     contract_show.add_argument("id")
     contract_tokens = contract_sub.add_parser("tokens")
-    contract_tokens.add_argument("token_kind", choices=("css", "widget"))
+    contract_tokens.add_argument("token_kind", choices=("theme", "widget"))
     contract_sub.add_parser("properties")
     return parser
 

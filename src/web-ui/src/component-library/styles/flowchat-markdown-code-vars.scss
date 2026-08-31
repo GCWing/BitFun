@@ -4,45 +4,45 @@
  */
 @use './markdown-layout' as markdown;
 
-$inline-code-bg: var(--bf-appearance-token-color-overlay-white-08);
-$inline-code-border: var(--bf-appearance-token-color-overlay-white-12);
-$inline-code-fg: #a8b4c8;
-$inline-code-hover-bg: var(--bf-appearance-token-color-overlay-white-08);
-$inline-code-hover-border: var(--bf-appearance-token-color-overlay-white-15);
-$inline-code-hover-fg: #c5d0e2;
+$inline-code-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+$inline-code-border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+$inline-code-fg: var(--bf-color-content-secondary);
+$inline-code-hover-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+$inline-code-hover-border: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+$inline-code-hover-fg: var(--bf-color-content-primary);
 
-$pre-bg: var(--bf-appearance-token-color-bg-primary);
-$pre-border: var(--bf-appearance-token-color-overlay-white-12);
+$pre-bg: var(--bf-color-surface-canvas);
+$pre-border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
 $pre-shadow: none;
 $pre-padding: markdown.$code-block-pad-y markdown.$code-block-pad-x;
-$pre-hover-border: var(--bf-appearance-token-color-overlay-white-15);
+$pre-hover-border: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
 $pre-hover-shadow:
-  0 8px 24px var(--bf-appearance-token-color-overlay-black-40),
-  inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12),
-  inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-08);
-$pre-code-fg: var(--bf-appearance-token-color-text-secondary);
+  0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent),
+  inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
+  inset 0 -1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+$pre-code-fg: var(--bf-color-content-secondary);
 
-$bq-bg: var(--bf-appearance-token-color-overlay-white-04);
-$bq-border: var(--bf-appearance-token-color-overlay-white-15);
+$bq-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+$bq-border: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
 $bq-radius: 0 6px 6px 0;
-$bq-fg: var(--bf-appearance-token-color-overlay-white-70);
+$bq-fg: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
 $bq-padding: 0.58rem 0.72rem;
 $bq-margin: markdown.$blockquote-margin-y 0;
 
-$inline-code-bg-light: var(--bf-appearance-token-color-overlay-black-08);
-$inline-code-border-light: var(--bf-appearance-token-color-overlay-black-12);
-$inline-code-fg-light: var(--bf-appearance-token-color-text-primary);
-$inline-code-hover-bg-light: var(--bf-appearance-token-color-overlay-black-08);
-$inline-code-hover-border-light: var(--bf-appearance-token-color-overlay-black-20);
+$inline-code-bg-light: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+$inline-code-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+$inline-code-fg-light: var(--bf-color-content-primary);
+$inline-code-hover-bg-light: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+$inline-code-hover-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
 $inline-code-hover-fg-light: $inline-code-fg-light;
 
-$pre-bg-light: #f6f8fa;
-$pre-border-light: var(--bf-appearance-token-color-overlay-black-12);
+$pre-bg-light: var(--bf-color-surface-tertiary);
+$pre-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
 $pre-shadow-light: none;
-$pre-hover-border-light: var(--bf-appearance-token-color-overlay-black-15);
-$pre-hover-shadow-light: 0 6px 20px var(--bf-appearance-token-color-overlay-slate-08);
-$pre-code-fg-light: var(--bf-appearance-token-color-text-primary);
+$pre-hover-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 15%, transparent);
+$pre-hover-shadow-light: 0 6px 20px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+$pre-code-fg-light: var(--bf-color-content-primary);
 
-$bq-bg-light: var(--bf-appearance-token-color-overlay-slate-08);
-$bq-border-light: rgba(15, 23, 42, 0.24);
-$bq-fg-light: var(--bf-appearance-token-color-text-secondary);
+$bq-bg-light: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+$bq-border-light: var(--bf-color-border-strong);
+$bq-fg-light: var(--bf-color-content-secondary);

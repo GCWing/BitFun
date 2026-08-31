@@ -113,17 +113,23 @@ function mergeRenderers(
   override: AppearanceRendererDefinitions | undefined,
 ): AppearanceRendererDefinitions {
   return {
-    'css-tokens': override?.['css-tokens'] ? {
+    'theme-tokens': override?.['theme-tokens'] ? {
       version: 1,
       settings: {
-        ...base?.['css-tokens']?.settings,
-        ...override['css-tokens'].settings,
+        ...base?.['theme-tokens']?.settings,
+        ...override['theme-tokens'].settings,
         tokens: {
-          ...(base?.['css-tokens']?.settings.tokens ?? {}),
-          ...override['css-tokens'].settings.tokens,
+          ...(base?.['theme-tokens']?.settings.tokens ?? {}),
+          ...override['theme-tokens'].settings.tokens,
+        },
+        scopes: {
+          chrome: {
+            ...(base?.['theme-tokens']?.settings.scopes?.chrome ?? {}),
+            ...(override['theme-tokens'].settings.scopes?.chrome ?? {}),
+          },
         },
       },
-    } : base?.['css-tokens'],
+    } : base?.['theme-tokens'],
     monaco: override?.monaco ? {
       version: 1,
       settings: {

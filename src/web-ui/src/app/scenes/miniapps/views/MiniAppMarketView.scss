@@ -37,9 +37,9 @@
   min-width: 0;
   overflow: hidden;
   padding: 0;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: $size-radius-xl;
-  background: var(--bf-appearance-token-color-bg-secondary);
+  background: var(--bf-color-surface-panel);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -50,12 +50,12 @@
 
   &:hover {
     transform: translateY(-2px);
-    border-color: var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-element-bg-soft);
+    border-color: var(--bf-color-border-default);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 2px;
   }
 
@@ -64,8 +64,8 @@
     place-items: center;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-tertiary);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-tertiary);
 
     img {
       width: 100%;
@@ -79,7 +79,7 @@
     place-items: center;
     width: 100%;
     height: 100%;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__body {
@@ -89,7 +89,7 @@
 
     strong {
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-base);
       font-weight: var(--bf-font-weight-semibold);
       text-overflow: ellipsis;
@@ -101,7 +101,7 @@
       min-height: 2.9em;
       margin: 0;
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
       line-height: var(--bf-line-height-support);
       -webkit-box-orient: vertical;
@@ -113,7 +113,7 @@
   &__stats {
     display: flex;
     align-items: center;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -149,14 +149,14 @@
 
     // Same scale as the submission workspace: 13px/600 titles over 13px body.
     h4 {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-semibold);
     }
 
     p,
     li {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
       line-height: var(--bf-line-height-relaxed);
     }
@@ -167,7 +167,7 @@
     display: inline-flex;
     align-items: center;
     gap: $size-gap-1;
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-color-status-success-content);
     font-size: var(--bf-font-size-sm);
   }
 
@@ -180,7 +180,7 @@
     img {
       width: min(360px, 80%);
       flex: 0 0 auto;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border: 1px solid var(--bf-color-border-subtle);
       border-radius: $size-radius-lg;
       scroll-snap-align: start;
     }
@@ -191,10 +191,10 @@
     align-items: flex-start;
     gap: $size-gap-2;
     padding: $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-color-warning-border);
+    border: 1px solid var(--bf-color-status-warning-border);
     border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-color-warning-bg);
-    color: var(--bf-appearance-token-color-warning);
+    background: var(--bf-color-status-warning-surface);
+    color: var(--bf-color-status-warning-content);
     font-size: var(--bf-font-size-sm);
   }
 
@@ -209,13 +209,13 @@
       padding: 2px;
       border: 0;
       background: transparent;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
       cursor: pointer;
     }
 
     span {
       margin-left: $size-gap-2;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
     }
   }
@@ -229,9 +229,9 @@
       grid-template-columns: 72px 1fr auto;
       align-items: center;
       padding: $size-gap-2 $size-gap-3;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border: 1px solid var(--bf-color-border-subtle);
       border-radius: $size-radius-base;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
     }
   }
@@ -244,12 +244,12 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     cursor: pointer;
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 }

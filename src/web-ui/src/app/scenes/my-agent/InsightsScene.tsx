@@ -1038,9 +1038,9 @@ const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) 
 
 // Bar chart palette (default + semantic roles)
 const CHART_COLORS = {
-  blue: 'var(--bf-appearance-token-color-accent-500)',      // default / primary series
+  blue: 'var(--bf-color-accent-default)',      // default / primary series
   green: APPEARANCE_DOMAIN_TOKENS.insights.positive,     // positive / success
-  purple: 'var(--bf-appearance-token-color-purple-500)',    // distribution / category
+  purple: 'var(--bf-color-accent-secondary)',    // distribution / category
   indigo: APPEARANCE_DOMAIN_TOKENS.insights.time,    // time-related
   orange: APPEARANCE_DOMAIN_TOKENS.insights.neutral,    // time-of-day / neutral
   red: APPEARANCE_DOMAIN_TOKENS.insights.issue,       // issues / errors

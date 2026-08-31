@@ -60,16 +60,16 @@
 
     &:not(:disabled):hover,
     &--active {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
     }
 
     &--has-activity {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-success) 86%, var(--bf-appearance-token-color-text-primary));
+      color: color-mix(in srgb, var(--bf-color-status-success-content) 86%, var(--bf-color-content-primary));
 
       &:not(:disabled):hover,
       &.session-tree-popover__trigger--active {
-        color: var(--bf-appearance-token-color-success);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
+        color: var(--bf-color-status-success-content);
+        background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
       }
     }
   }
@@ -88,8 +88,8 @@
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 92%, white 8%);
-    box-shadow: 0 0 0 1px var(--bf-appearance-token-color-bg-elevated);
+    background: color-mix(in srgb, var(--bf-color-status-success-content) 92%, var(--bf-color-content-on-dark) 8%);
+    box-shadow: 0 0 0 1px var(--bf-color-surface-raised);
   }
 
   &__panel {
@@ -104,7 +104,7 @@
     flex-direction: column;
     overflow: hidden;
     z-index: $z-popover;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
     transform-origin: center top;
     transition:
@@ -140,8 +140,8 @@
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    color: var(--bf-appearance-token-color-text-secondary);
+    border-bottom: 1px solid var(--bf-color-border-default);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
   }
 
@@ -160,7 +160,7 @@
     border-radius: $size-radius-base;
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
     }
 
     &--root {
@@ -190,11 +190,11 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 
@@ -208,13 +208,13 @@
     padding: 3px $size-gap-2 3px 0;
     border: 0;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     text-align: left;
     cursor: pointer;
 
     > svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
 
     > .subagent-avatar {
@@ -238,11 +238,11 @@
 
   &__action-menu-button {
     flex: 0 0 auto;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     &:not(:disabled):hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      color: var(--bf-color-content-primary);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
     }
   }
 
@@ -273,7 +273,7 @@
   }
 
   &__node-meta {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-regular);
   }
@@ -283,24 +283,24 @@
     height: 7px;
     flex: 0 0 7px;
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-content-muted);
 
     &--running,
     &--finishing {
-      background: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-content);
     }
 
     &--waiting {
-      background: var(--bf-appearance-token-color-warning);
+      background: var(--bf-color-status-warning-content);
     }
 
     &--error,
     &--cancelled {
-      background: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-content);
     }
 
     &--completed {
-      background: var(--bf-appearance-token-color-info);
+      background: var(--bf-color-status-info-content);
     }
   }
 
@@ -311,11 +311,11 @@
     justify-content: center;
     gap: $size-gap-2;
     padding: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
 
     &--error {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 }

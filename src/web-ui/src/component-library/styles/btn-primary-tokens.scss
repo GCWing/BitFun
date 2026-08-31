@@ -1,20 +1,20 @@
 // Surfaces that must match theme `components.button.primary`.
-// AppearanceRuntime owns --bf-appearance-token-btn-primary-* through the CSS token renderer.
+// The theme package owns the canonical action and shadow tokens used here.
 
 @mixin btn-primary-surface-default {
-  background: var(--bf-appearance-token-btn-primary-bg);
-  color: var(--bf-appearance-token-btn-primary-color);
-  box-shadow: var(--bf-appearance-token-btn-primary-shadow);
+  background: var(--bf-color-action-primary-background);
+  color: var(--bf-color-action-primary-content);
+  box-shadow: var(--bf-shadow-sm);
 }
 
 @mixin btn-primary-surface-hover {
-  background: var(--bf-appearance-token-btn-primary-hover-bg);
-  color: var(--bf-appearance-token-btn-primary-hover-color);
-  box-shadow: var(--bf-appearance-token-btn-primary-hover-shadow);
+  background: var(--bf-color-action-primary-hover);
+  color: var(--bf-color-action-primary-content);
+  box-shadow: var(--bf-shadow-base);
 }
 
 @mixin btn-primary-surface-active {
-  background: var(--bf-appearance-token-btn-primary-active-bg);
-  color: var(--bf-appearance-token-btn-primary-active-color);
-  box-shadow: var(--bf-appearance-token-btn-primary-active-shadow);
+  background: var(--bf-color-action-primary-pressed);
+  color: var(--bf-color-action-primary-content);
+  box-shadow: var(--bf-shadow-xs);
 }

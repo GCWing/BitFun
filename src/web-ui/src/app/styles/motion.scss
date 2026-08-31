@@ -105,14 +105,14 @@
   ) {
     transform-origin: center;
     transition:
-      translate var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      translate var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      scale var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   :where(
@@ -220,12 +220,12 @@
   ):where(:not([data-motion='none'])) {
     transform-origin: center;
     transition:
-      translate var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+      translate var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      scale var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     transition-property:
       translate,
       scale,

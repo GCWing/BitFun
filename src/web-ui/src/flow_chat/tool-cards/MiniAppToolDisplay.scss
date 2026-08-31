@@ -15,26 +15,26 @@
 }
 
 .miniapp-tool-display[data-bf-attention='prominent'] .miniapp-result-footer {
-  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));
-  margin-right: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));
-  margin-bottom: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-y));
-  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-  border-radius: 0 0 var(--bf-appearance-token-flowchat-card-radius) var(--bf-appearance-token-flowchat-card-radius);
+  margin-left: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-inline));
+  margin-right: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-inline));
+  margin-bottom: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-block));
+  padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
+  border-radius: 0 0 var(--bf-control-flow-chat-card-radius) var(--bf-control-flow-chat-card-radius);
 }
 
 .miniapp-tool-display {
   .miniapp-icon {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   [data-bf-part='iconGraphic'].miniapp-icon {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   .miniapp-tool-info {
     display: flex;
     align-items: center;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
+    gap: var(--bf-control-flow-chat-control-gap);
     flex-wrap: nowrap;
     min-width: 0;
     flex: 1;
@@ -46,14 +46,14 @@
       font-weight: var(--bf-font-weight-medium);
       flex-shrink: 0;
       white-space: nowrap;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
 
     .command-text {
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-type-flow-control-font-size);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -63,7 +63,7 @@
 
   .output-summary {
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -77,7 +77,7 @@
 
     .error-text {
       font-size: var(--bf-type-flow-control-font-size);
-      color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
+      color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
       font-weight: var(--bf-font-weight-semibold);
     }
   }
@@ -89,16 +89,16 @@
   }
 
   .miniapp-result-rows {
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) 0;
+    padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline) 0;
     display: flex;
     flex-direction: column;
-    gap: var(--bf-appearance-token-flowchat-flow-item-gap);
+    gap: var(--bf-control-flow-chat-flow-item-gap);
   }
 
   .miniapp-result-row {
     display: flex;
     align-items: baseline;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
+    gap: var(--bf-control-flow-chat-control-gap);
     flex-wrap: wrap;
     line-height: var(--bf-type-flow-support-line-height);
   }
@@ -106,7 +106,7 @@
   .miniapp-result-label {
     font-size: var(--bf-type-flow-micro-font-size);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
     flex-shrink: 0;
@@ -115,7 +115,7 @@
   .miniapp-result-value {
     font-family:var(--bf-font-family-mono);
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -128,24 +128,24 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
+    gap: var(--bf-control-flow-chat-control-gap);
     flex-wrap: wrap;
     line-height: var(--bf-type-flow-meta-line-height);
-    margin-top: var(--bf-appearance-token-flowchat-card-gap);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    margin-top: var(--bf-control-flow-chat-card-gap);
+    background: var(--bf-color-surface-subtle);
     box-sizing: border-box;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   .error-content {
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-size-gap-4);
-    background: var(--bf-appearance-token-glass-red-subtle);
-    border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
+    padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-space-4);
+    background: color-mix(in srgb, var(--bf-color-status-danger-content) 5%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
 
     .error-message {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
+      color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
       font-size: var(--bf-type-flow-control-font-size);
-      margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
+      margin-bottom: var(--bf-control-flow-chat-card-gap);
       font-family:var(--bf-font-family-mono);
       white-space: pre-wrap;
       word-break: break-word;
@@ -154,12 +154,12 @@
     .error-meta {
       display: flex;
       align-items: center;
-      gap: var(--bf-appearance-token-flowchat-control-gap);
+      gap: var(--bf-control-flow-chat-control-gap);
       font-size: var(--bf-type-flow-control-font-size);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
 
       .error-operation {
-        color: color-mix(in srgb, var(--bf-appearance-token-color-error) 70%, transparent);
+        color: color-mix(in srgb, var(--bf-color-status-danger-content) 70%, transparent);
         font-family:var(--bf-font-family-mono);
       }
     }

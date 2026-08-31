@@ -4,7 +4,7 @@
   gap: 16px;
   min-width: 0;
   padding-block: 4px 16px;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 
   &__modal {
     overflow-x: hidden;
@@ -15,17 +15,17 @@
     align-items: flex-start;
     gap: 8px;
     padding: 8px 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 6px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
 
     svg {
       flex-shrink: 0;
       margin-top: 1px;
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
 
     p {
@@ -37,7 +37,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 8px;
     overflow: hidden;
   }
@@ -49,10 +49,10 @@
     gap: 12px;
     min-height: 44px;
     padding: 8px 12px;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__grants,
@@ -71,7 +71,7 @@
     padding: 10px 12px;
 
     + .workspace-project-permissions-dialog__grant-row {
-      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+      border-top: 1px solid var(--bf-color-border-subtle);
     }
   }
 
@@ -85,14 +85,14 @@
     code {
       min-width: 0;
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-xs);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     span {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
       white-space: nowrap;
     }
@@ -110,17 +110,17 @@
 
   &__rule-heading {
     min-height: 32px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-surface-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
   &__rule-row {
     padding-block: 10px;
 
     + .workspace-project-permissions-dialog__rule-row {
-      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+      border-top: 1px solid var(--bf-color-border-subtle);
     }
   }
 
@@ -136,13 +136,13 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 12px;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__empty {
     padding: 18px 12px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     text-align: center;

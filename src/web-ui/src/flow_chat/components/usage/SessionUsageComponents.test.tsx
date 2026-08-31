@@ -1744,10 +1744,10 @@ describe('Session usage report i18n and theme guards', () => {
       .map(stylePath => fs.readFileSync(path.resolve(stylePath), 'utf8'))
       .join('\n');
 
-    expect(styleText).toContain('var(--bf-appearance-token-color-text-primary)');
+    expect(styleText).toContain('var(--bf-color-content-primary)');
     expect(styleText).toContain('width: auto;');
     expect(styleText).toContain('margin: 0.12rem 3rem');
-    expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base)');
+    expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--bf-color-border-default)');
     expect(styleText).toContain('grid-template-columns: repeat(3, minmax(116px, 1fr));');
     expect(styleText).toContain('width: clamp(180px, 26vw, 280px);');
     expect(styleText).toContain('max-width: 280px;');

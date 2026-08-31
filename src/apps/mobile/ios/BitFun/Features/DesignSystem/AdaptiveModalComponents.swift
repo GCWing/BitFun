@@ -80,7 +80,7 @@ struct BitFunModalCard<Content: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
-                    .stroke(bordered ? BitFunTheme.line : Color.clear, lineWidth: 1)
+                    .stroke(bordered ? BitFunTheme.line : BitFunTheme.transparent, lineWidth: 1)
             )
     }
 }
@@ -117,7 +117,7 @@ struct SignedOutConnectionActions: View {
             Button(action: onOpenAccount) {
                 Text(accountTitle)
                     .font(.system(size: fontSize, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(BitFunTheme.contentOnAction)
                     .frame(maxWidth: .infinity, minHeight: buttonHeight)
                     .background(BitFunTheme.accent)
                     .clipShape(Capsule())
@@ -240,7 +240,7 @@ private struct BitFunAdaptiveModalModifier<ModalContent: View>: ViewModifier {
     @ViewBuilder
     private var sideCover: some View {
         let cover = ZStack(alignment: .trailing) {
-            MobileDesignColors.modalScrim
+            BitFunTheme.scrim
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { isPresented = false }
@@ -264,11 +264,11 @@ private struct BitFunAdaptiveModalModifier<ModalContent: View>: ViewModifier {
                     )
                     .stroke(BitFunTheme.line, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.14), radius: 18, x: -5, y: 8)
+                .shadow(color: BitFunTheme.shadowStrong, radius: 18, x: -5, y: 8)
                 .accessibilityAddTraits(.isModal)
         }
         if #available(iOS 16.4, *) {
-            cover.presentationBackground(.clear)
+            cover.presentationBackground(BitFunTheme.transparent)
         } else {
             cover
         }

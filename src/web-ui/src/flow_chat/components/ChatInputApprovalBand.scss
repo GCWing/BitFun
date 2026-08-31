@@ -8,10 +8,10 @@
   box-sizing: border-box;
   margin-bottom: 6px;
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 52%, var(--bf-appearance-token-border-base));
+  border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 52%, var(--bf-color-border-default));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-color-warning));
-  color: var(--bf-appearance-token-color-text-primary);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-status-warning-content));
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-control-font-size);
   animation: bitfun-chat-input-approval-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
@@ -24,7 +24,7 @@
 
   &__icon {
     flex: none;
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 
   &__action {
@@ -34,7 +34,7 @@
 
   &__separator {
     flex: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   // The resource is the part worth the remaining width: which file, which
@@ -50,7 +50,7 @@
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -61,8 +61,8 @@
     margin-left: auto;
     padding: 1px 6px;
     border-radius: 8px;
-    color: var(--bf-appearance-token-color-static-white);
-    background: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-content-on-dark);
+    background: var(--bf-color-status-warning-content);
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-bold);
     cursor: default;
@@ -70,11 +70,11 @@
 
   &__note {
     margin: 0;
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     font-size: var(--bf-type-flow-support-font-size);
 
     &--error {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -94,9 +94,9 @@
     flex: none;
     align-items: center;
     padding: 2px;
-    border: 1px solid var(--bf-appearance-token-border-base);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: 7px;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__scope-option {
@@ -104,18 +104,18 @@
     padding: 1px 7px;
     border: none;
     border-radius: 5px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     background: transparent;
     font-size: var(--bf-type-flow-support-font-size);
     cursor: pointer;
 
     &--active {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
+      color: var(--bf-color-content-primary);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-warning);
+      outline: 2px solid var(--bf-color-status-warning-content);
       outline-offset: 1px;
     }
   }

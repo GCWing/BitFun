@@ -3,16 +3,14 @@
  */
 
 .image-analysis-card {
-  --image-analysis-surface: var(--bf-appearance-token-element-bg-soft);
-  --image-analysis-background: var(--bf-appearance-token-color-bg-primary);
-  --image-analysis-border: var(--bf-appearance-token-border-base);
-  --image-analysis-text: var(--bf-appearance-token-color-text-primary);
-  --image-analysis-text-secondary: var(--bf-appearance-token-color-text-secondary);
-  --image-analysis-primary: var(--bf-appearance-token-color-accent-500);
-  --image-analysis-success: var(--bf-appearance-token-color-success);
-  --image-analysis-error: var(--bf-appearance-token-color-error);
-  --image-analysis-primary-rgb: var(--bf-appearance-token-color-accent-500-rgb);
-  --image-analysis-error-rgb: 239 68 68;
+  --image-analysis-surface: var(--bf-color-action-quiet-hover);
+  --image-analysis-background: var(--bf-color-surface-canvas);
+  --image-analysis-border: var(--bf-color-border-default);
+  --image-analysis-text: var(--bf-color-content-primary);
+  --image-analysis-text-secondary: var(--bf-color-content-secondary);
+  --image-analysis-primary: var(--bf-color-accent-default);
+  --image-analysis-success: var(--bf-color-status-success-content);
+  --image-analysis-error: var(--bf-color-status-danger-content);
 
   background: var(--image-analysis-surface);
   border: 1px solid var(--image-analysis-border);
@@ -28,7 +26,7 @@
     background: linear-gradient(
       90deg,
       var(--image-analysis-surface) 0%,
-      rgba(var(--image-analysis-primary-rgb) / 0.05) 50%,
+      color-mix(in srgb, var(--image-analysis-primary) 5%, transparent) 50%,
       var(--image-analysis-surface) 100%
     );
     background-size: 200% 100%;
@@ -238,19 +236,19 @@
   gap: 8px;
   margin-top: 12px;
   padding: 8px 12px;
-  background: rgba(var(--image-analysis-error-rgb) / 0.1);
+  background: color-mix(in srgb, var(--image-analysis-error) 10%, transparent);
   border-radius: 6px;
   font-size: var(--bf-type-flow-control-font-size);
   color: var(--image-analysis-error);
 }
 
 :root[data-bf-appearance-mode='dark'] .image-analysis-card {
-  --image-analysis-surface: var(--bf-appearance-token-color-bg-elevated);
-  --image-analysis-background: var(--bf-appearance-token-color-bg-primary);
-  --image-analysis-border: var(--bf-appearance-token-border-base);
-  --image-analysis-text: var(--bf-appearance-token-color-text-primary);
-  --image-analysis-text-secondary: var(--bf-appearance-token-color-text-muted);
-  --image-analysis-primary: var(--bf-appearance-token-color-accent-500);
-  --image-analysis-success: var(--bf-appearance-token-color-success);
-  --image-analysis-error: var(--bf-appearance-token-color-error);
+  --image-analysis-surface: var(--bf-color-surface-raised);
+  --image-analysis-background: var(--bf-color-surface-canvas);
+  --image-analysis-border: var(--bf-color-border-default);
+  --image-analysis-text: var(--bf-color-content-primary);
+  --image-analysis-text-secondary: var(--bf-color-content-muted);
+  --image-analysis-primary: var(--bf-color-accent-default);
+  --image-analysis-success: var(--bf-color-status-success-content);
+  --image-analysis-error: var(--bf-color-status-danger-content);
 }

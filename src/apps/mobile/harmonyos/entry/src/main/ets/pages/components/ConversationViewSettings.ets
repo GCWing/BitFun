@@ -3,7 +3,14 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
-import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  PAGE_BG,
+  TRANSPARENT,
+} from './Theme';
 
 @ComponentV2
 struct WorkspaceFilterSection {
@@ -31,7 +38,7 @@ struct WorkspaceFilterSection {
       .width('100%')
       .height(46)
       .padding({ left: 10, right: 10 })
-      .backgroundColor(this.currentValue.length === 0 ? CARD : '#00000000')
+      .backgroundColor(this.currentValue.length === 0 ? CARD : TRANSPARENT)
       .border({ width: { bottom: 1 }, color: LINE })
       .onClick(() => this.selectWorkspace(''))
       ForEach(this.options, (item: RecentWorkspaceEntry) => {
@@ -52,7 +59,7 @@ struct WorkspaceFilterSection {
         .height(46)
         .padding({ left: 10, right: 10 })
         .backgroundColor(ConversationSessionFilterPolicy.workspacePathsEqual(this.currentValue, item.path)
-          ? CARD : '#00000000')
+          ? CARD : TRANSPARENT)
         .border({ width: { bottom: 1 }, color: LINE })
         .onClick(() => this.selectWorkspace(item.path))
       }, (item: RecentWorkspaceEntry): string => item.path)
@@ -216,7 +223,7 @@ export struct ConversationViewSettings {
     .width('100%')
     .height(48)
     .padding({ left: 10, right: 10 })
-    .backgroundColor(this.selectedSortMode === mode ? CARD : '#00000000')
+    .backgroundColor(this.selectedSortMode === mode ? CARD : TRANSPARENT)
     .opacity(_revision % 2 === 0 ? 1 : 0.999)
     .border({ width: { bottom: 1 }, color: LINE })
     .onClick(() => this.selectSortMode(mode))
@@ -240,7 +247,7 @@ export struct ConversationViewSettings {
     .width('100%')
     .height(46)
     .padding({ left: 10, right: 10 })
-    .backgroundColor(selected ? CARD : '#00000000')
+    .backgroundColor(selected ? CARD : TRANSPARENT)
     .opacity(_revision % 2 === 0 ? 1 : 0.999)
     .border({ width: { bottom: 1 }, color: LINE })
     .onClick(() => action(value))

@@ -19,15 +19,15 @@
   &--completed {
     
     .progress-notification__icon {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
   }
 
   &--failed {
     .progress-notification__icon {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -44,8 +44,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
-    color: var(--bf-appearance-token-color-warning);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+    color: var(--bf-color-status-warning-content);
   }
 
   &__spinner {
@@ -63,13 +63,13 @@
     font-weight: var(--bf-font-weight-semibold);
 
     &--success {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -92,21 +92,21 @@
   &__title {
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-snug);
   }
 
   &__percentage {
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     font-variant-numeric: tabular-nums;
     font-family: var(--bf-font-family-mono);
   }
 
   &__message {
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-snug);
     word-break: break-word;
   }
@@ -115,7 +115,7 @@
   &__progress-bar {
     width: 100%;
     height: 3px;
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-color-action-neutral-surface);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -123,7 +123,7 @@
   &__progress-fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, var(--bf-appearance-token-color-accent-600), var(--bf-appearance-token-color-purple-500));
+    background: linear-gradient(90deg, var(--bf-color-accent-hover), var(--bf-color-accent-secondary));
     border-radius: 2px;
     transform-origin: left center;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -131,12 +131,12 @@
 
   
   &--completed &__progress-fill {
-    background: var(--bf-appearance-token-color-success);
+    background: var(--bf-color-status-success-content);
   }
 
   
   &--failed &__progress-fill {
-    background: var(--bf-appearance-token-color-error);
+    background: var(--bf-color-status-danger-content);
   }
 
   

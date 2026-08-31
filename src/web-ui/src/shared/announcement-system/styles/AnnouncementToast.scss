@@ -114,7 +114,7 @@ $toast-width: 320px;
     margin: 0;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-support);
     letter-spacing: var(--bf-letter-spacing-snug);
     display: -webkit-box;
@@ -147,13 +147,13 @@ $toast-width: 320px;
 
   &__ring-track {
     fill: none;
-    stroke: var(--bf-appearance-token-border-base);
+    stroke: var(--bf-color-border-default);
     stroke-width: 1.5;
   }
 
   &__ring-fill {
     fill: none;
-    stroke: var(--bf-appearance-token-color-accent-500);
+    stroke: var(--bf-color-accent-default);
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-dasharray: $ring-circumference;
@@ -174,7 +174,7 @@ $toast-width: 320px;
     background: transparent;
     border: none;
     border-radius: 50%;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     transition:
       background-color $motion-base $easing-standard,
@@ -187,8 +187,8 @@ $toast-width: 320px;
 
     @media (hover: hover) and (pointer: fine) {
       &:hover {
-        background: var(--bf-appearance-token-color-bg-secondary);
-        color: var(--bf-appearance-token-color-text-primary);
+        background: var(--bf-color-surface-panel);
+        color: var(--bf-color-content-primary);
       }
     }
   }
@@ -198,7 +198,7 @@ $toast-width: 320px;
     margin: 0;
     padding: 8px 16px 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-comfortable);
     display: -webkit-box;
     -webkit-line-clamp: 3;

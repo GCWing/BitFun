@@ -37,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +56,7 @@ import com.bitfun.mobile.app.viewmodel.AccountViewModel
 import com.bitfun.mobile.core.feature.account.AccountFailureReason
 import com.bitfun.mobile.core.feature.account.AccountIntent
 import com.bitfun.mobile.core.feature.account.AccountUiState
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 
 private val AccountCardShape = RoundedCornerShape(24.dp)
 
@@ -177,8 +177,8 @@ private fun AccountInput(
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
             disabledContainerColor = MaterialTheme.colorScheme.surface,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
+            focusedIndicatorColor = bitFunColors.transparent,
+            unfocusedIndicatorColor = bitFunColors.transparent,
             cursorColor = MaterialTheme.colorScheme.onSurface,
             focusedTextColor = MaterialTheme.colorScheme.onSurface,
             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -222,7 +222,7 @@ private fun AccountProfilePage(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.account_bitfun_account), fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
-                    Text(stringResource(R.string.remote_settings_account_signed_in), fontSize = 14.sp, color = com.bitfun.mobile.app.ui.theme.bitFunColors.success)
+                    Text(stringResource(R.string.remote_settings_account_signed_in), fontSize = 14.sp, color = com.bitfun.mobile.app.ui.theme.bitFunColors.statusSuccess)
                 }
                 Text(stringResource(R.string.account_signed_in_body, state.username), fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -254,7 +254,7 @@ private fun AccountProfilePage(
                                         },
                                     ),
                                     fontSize = 13.sp,
-                                    color = if (device.online) com.bitfun.mobile.app.ui.theme.bitFunColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (device.online) com.bitfun.mobile.app.ui.theme.bitFunColors.statusSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             if (reconnectable) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {

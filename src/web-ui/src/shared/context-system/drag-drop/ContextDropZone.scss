@@ -26,11 +26,11 @@
     align-items: center;
     justify-content: center;
     
-    background: var(--bf-appearance-token-color-overlay-black-80);
+    background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     
-    border: 3px dashed var(--bf-appearance-token-border-accent);
+    border: 3px dashed color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
     border-radius: $size-radius-lg;
     
     pointer-events: none;
@@ -47,11 +47,11 @@
   }
   
   &__icon {
-    color: var(--bf-appearance-token-color-accent-500);
-    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent));
+    color: var(--bf-color-accent-default);
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent));
     
     &--disabled {
-      color: var(--bf-appearance-token-color-text-disabled);
+      color: var(--bf-color-content-disabled);
       filter: none;
     }
   }
@@ -59,12 +59,12 @@
   &__text {
     font-size: var(--bf-font-size-lg);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     text-align: center;
-    text-shadow: 0 2px 8px var(--bf-appearance-token-color-accent-400);
+    text-shadow: 0 2px 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
     
     &--disabled {
-      color: var(--bf-appearance-token-color-text-disabled);
+      color: var(--bf-color-content-disabled);
       text-shadow: none;
     }
   }

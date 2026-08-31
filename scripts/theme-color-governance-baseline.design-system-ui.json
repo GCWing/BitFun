@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "Public @bitfun/ui color governance baseline. Component CSS and mask assets consume only canonical peer-owned variables and remain free of literals and fallbacks.",
+  "budgets": {
+    "fallbackOccurrences": { "max": 0 },
+    "fallbackUniqueTokens": { "max": 0 },
+    "colorScopes.appUi.occurrences": { "max": 0 },
+    "colorScopes.appUi.uniqueColors": { "max": 0 },
+    "colorDomainScopes.assetMetadata.occurrences": { "max": 0 },
+    "colorDomainScopes.assetMetadata.uniqueColors": { "max": 0 },
+    "cssVarDefinitions.unresolvedUnique": { "max": 0 },
+    "cssVarDefinitions.unresolvedRequiredUnique": { "max": 0 },
+    "cssVarDefinitions.fallbackOnlyUnique": { "max": 0 },
+    "cssVarDefinitions.nonContractCrossFileUnique": { "max": 0 },
+    "cssVarDefinitions.nonContractDynamicInputUnique": { "max": 0 },
+    "cssVarDefinitions.nonContractCssPrivateUnique": { "max": 0 },
+    "tokenAliasLiterals.occurrences": { "max": 0 },
+    "tokenAliasLiterals.uniqueColors": { "max": 0 },
+    "nearPairs.indistinguishableTotal": { "max": 0 },
+    "nearPairs.nearTotal": { "max": 0 }
+  }
+}

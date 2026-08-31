@@ -18,9 +18,9 @@
 }
 
 .grid-card {
-  background: var(--bf-appearance-token-color-bg-secondary);
+  background: var(--bf-color-surface-panel);
   border-radius: 12px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   overflow: hidden;
   transition: all 0.3s ease;
   display: flex;
@@ -28,26 +28,26 @@
 }
 
 .grid-card:hover {
-  border-color: var(--bf-appearance-token-border-accent-subtle);
-  box-shadow: var(--bf-appearance-token-shadow-base), var(--bf-appearance-token-glow-shadow-blue);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 15%, transparent);
+  box-shadow: var(--bf-shadow-base), var(--bf-shadow-accent-glow);
 }
 
 .grid-card-header {
   padding: 20px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .grid-card-title {
   margin: 0 0 8px 0;
   font-size: var(--bf-font-size-2xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .grid-card-description {
   margin: 0;
   font-size: var(--bf-font-size-sm);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   line-height: var(--bf-line-height-base);
 }
 
@@ -62,16 +62,16 @@
   font-size: var(--bf-font-size-meta);
   font-weight: var(--bf-font-weight-semibold);
   text-transform: uppercase;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   margin-bottom: 12px;
   letter-spacing: var(--bf-letter-spacing-wider);
 }
 
 .preview-canvas {
   padding: 32px;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
   border-radius: 8px;
-  border: 1px dashed var(--bf-appearance-token-border-base);
+  border: 1px dashed var(--bf-color-border-default);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -84,7 +84,7 @@
 
 .grid-card-info {
   padding: 20px;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
 }
 
 .info-list {
@@ -97,11 +97,11 @@
 
 .info-list dt {
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .info-list dd {
   margin: 0;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-family:var(--bf-font-family-mono);
 }

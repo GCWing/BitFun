@@ -27,7 +27,7 @@
     border-radius: 10px;
     border: none;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-regular);
     cursor: pointer;
@@ -48,8 +48,8 @@
     }
     
     &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
       opacity: 1;
     }
 
@@ -58,14 +58,14 @@
     }
 
     &:focus-visible {
-      border-color: var(--bf-appearance-token-border-accent);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
       opacity: 1;
     }
     
     &--open {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
+      color: var(--bf-color-content-primary);
       opacity: 1;
     }
     
@@ -88,7 +88,7 @@
     min-width: 0;
     max-width: 72px;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-none);
@@ -97,7 +97,7 @@
   }
 
   &__fast-icon {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     flex-shrink: 0;
   }
   
@@ -107,8 +107,8 @@
     justify-content: center;
     padding: 1px 4px;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
+    background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
+    color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
     font-size: var(--bf-type-flow-meta-font-size);
     font-weight: var(--bf-font-weight-semibold);
     letter-spacing: var(--bf-letter-spacing-wider);
@@ -118,19 +118,19 @@
   &__ctx-usage {
     font-size: var(--bf-type-flow-meta-font-size);
     font-weight: var(--bf-font-weight-regular);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.55;
     letter-spacing: var(--bf-letter-spacing-subtle);
     transition: opacity 160ms ease;
     flex-shrink: 0;
 
     &--warning {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, transparent);
+      color: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, transparent);
       opacity: 0.9;
     }
 
     &--critical {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-error) 95%, var(--bf-appearance-token-color-text-primary));
+      color: color-mix(in srgb, var(--bf-color-status-danger-content) 95%, var(--bf-color-content-primary));
       opacity: 1;
       animation: bitfun-ctx-critical-pulse 2s ease-in-out infinite;
     }
@@ -150,13 +150,13 @@
   }
 
   &__tooltip-label {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
   }
 
   &__tooltip-value {
     min-width: 0;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     text-align: right;
     overflow-wrap: anywhere;
   }
@@ -164,12 +164,12 @@
   &__tooltip-warning {
     margin-top: 3px;
     padding-top: 6px;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    color: var(--bf-appearance-token-color-warning);
+    border-top: 1px solid var(--bf-color-border-subtle);
+    color: var(--bf-color-status-warning-content);
   }
 
   &__chevron {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     flex-shrink: 0;
     transition: transform 0.2s ease;
     
@@ -273,7 +273,7 @@
     gap: 4px;
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -281,7 +281,7 @@
   
   &__option-desc {
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -305,7 +305,7 @@
   }
 
   &__option-provider {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__option-meta {
@@ -317,7 +317,7 @@
 
   &__option-subdesc {
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

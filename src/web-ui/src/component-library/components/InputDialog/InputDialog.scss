@@ -25,7 +25,7 @@
     margin: 0 0 12px 0;
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__actions {
@@ -34,7 +34,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px 12px;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
 
     [data-bf-component='button'] {
       min-width: 68px;

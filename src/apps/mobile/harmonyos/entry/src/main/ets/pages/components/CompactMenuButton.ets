@@ -1,5 +1,6 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { TemplateIcon } from './TemplateIcon';
+import { TRANSPARENT } from './Theme';
 
 @ComponentV2
 export struct CompactMenuButton {
@@ -17,7 +18,7 @@ export struct CompactMenuButton {
     .width(this.controlSize)
     .height(this.controlSize)
     .padding(0)
-    .backgroundColor('#00000000')
+    .backgroundColor(TRANSPARENT)
     .borderRadius(12)
     .stateEffect(true)
     .accessibilityText(RemoteI18n.t('sidebar.more'))

@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -45,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.shell.SidebarSections
 import com.bitfun.mobile.core.feature.shell.SidebarSessionRow
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 
 internal const val SIDEBAR_PINNED_TEST_TAG: String = "app-sidebar-pinned"
 internal const val SIDEBAR_ARCHIVED_TEST_TAG: String = "app-sidebar-archived"
@@ -186,7 +186,7 @@ private fun SessionRow(
             .fillMaxWidth()
             .height(44.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else bitFunColors.transparent)
             .onGloballyPositioned { coordinates ->
                 anchorBounds = coordinates.boundsInWindow().toIntRect()
             }
@@ -252,7 +252,7 @@ private fun ArchivedDisclosureRow(count: Int, expanded: Boolean, onToggle: () ->
             .padding(top = 8.dp)
             .height(46.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (expanded) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .background(if (expanded) MaterialTheme.colorScheme.surfaceVariant else bitFunColors.transparent)
             .clickable(role = Role.Button, onClick = onToggle)
             .semantics(mergeDescendants = true) {
                 contentDescription = archivedLabel

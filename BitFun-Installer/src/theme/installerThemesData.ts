@@ -1,3 +1,4 @@
+import { themes, type ThemeDataName, type ThemeTokenName } from '@bitfun/theme-bitfun';
 import type { ThemeId } from '../types/installer';
 
 type BackgroundColors = InstallerTheme['colors']['background'];
@@ -38,14 +39,13 @@ export type InstallerTheme = {
   };
 };
 
-const DEFAULT_BLUE = '#60a5fa';
-const DARK_CARD_BACKGROUND = '#121214';
-const DARK_CARD_SURFACE = '#1a1c1e';
-const MIDNIGHT_CARD_BACKGROUND = '#2b2d30';
-
-function alpha(rgb: string, opacity: string): string {
-  return `rgba(${rgb}, ${opacity})`;
+function themeValue(theme: ThemeDataName, token: ThemeTokenName): string {
+  return String(themes[theme][token]);
 }
+
+const DEFAULT_BLUE = themeValue('dark', 'color.accent.default');
+const DARK_CARD_SURFACE = themeValue('dark', 'color.surface.panel');
+const MIDNIGHT_CARD_BACKGROUND = '#2b2d30';
 
 type TonePreset = {
   text: TextColors;
@@ -74,42 +74,56 @@ function createBackground(seed: ThemeSeed['background']): BackgroundColors {
   };
 }
 
-function createBorderRamp(rgb: string, alphas: readonly [string, string]): BorderColors {
+function createTone(theme: Extract<ThemeDataName, 'dark' | 'light'>): TonePreset {
   return {
-    subtle: alpha(rgb, alphas[0]),
-    base: alpha(rgb, alphas[1]),
+    text: {
+      primary: themeValue(theme, 'color.content.primary'),
+      secondary: themeValue(theme, 'color.content.secondary'),
+      muted: themeValue(theme, 'color.content.muted'),
+    },
+    semantic: {
+      success: themeValue(theme, 'color.status.success.content'),
+      warning: themeValue(theme, 'color.status.warning.content'),
+      error: themeValue(theme, 'color.status.danger.content'),
+    },
+    border: {
+      subtle: themeValue(theme, 'color.border.subtle'),
+      base: themeValue(theme, 'color.border.default'),
+    },
+    element: {
+      subtle: themeValue(theme, 'color.surface.subtle'),
+      soft: themeValue(theme, 'color.action.neutral.surface'),
+      medium: themeValue(theme, 'color.action.neutral.surfacePressed'),
+    },
   };
 }
 
-function createElementRamp(rgb: string): ElementColors {
+const DARK_TONE = createTone('dark');
+const LIGHT_TONE = createTone('light');
+
+function createBuiltinInstallerTheme(
+  id: Extract<ThemeId, 'bitfun-dark' | 'bitfun-light'>,
+  name: string,
+  type: Extract<ThemeDataName, 'dark' | 'light'>,
+): InstallerTheme {
+  const tone = type === 'light' ? LIGHT_TONE : DARK_TONE;
   return {
-    subtle: alpha(rgb, '0.06'),
-    soft: alpha(rgb, '0.12'),
-    medium: alpha(rgb, '0.18'),
+    id,
+    name,
+    type,
+    colors: {
+      background: {
+        primary: themeValue(type, 'color.surface.canvas'),
+        secondary: themeValue(type, 'color.surface.panel'),
+      },
+      text: { ...tone.text },
+      accent: themeValue(type, 'color.accent.default'),
+      semantic: { ...tone.semantic },
+      border: { ...tone.border },
+      element: { ...tone.element },
+    },
   };
 }
-
-const DARK_TONE: TonePreset = {
-  text: { primary: '#e8e8e8', secondary: '#b0b0b0', muted: '#858585' },
-  semantic: {
-    success: '#34d399',
-    warning: '#f59e0b',
-    error: '#ef4444',
-  },
-  border: createBorderRamp('255, 255, 255', ['0.12', '0.18']),
-  element: createElementRamp('255, 255, 255'),
-};
-
-const LIGHT_TONE: TonePreset = {
-  text: { primary: '#1e293b', secondary: '#3d4f66', muted: '#64748b' },
-  semantic: {
-    success: '#5b9a6f',
-    warning: '#c08c42',
-    error: '#c26565',
-  },
-  border: createBorderRamp('100, 116, 139', ['0.15', '0.22']),
-  element: createElementRamp('71, 102, 143'),
-};
 
 function createInstallerTheme(seed: ThemeSeed): InstallerTheme {
   const tone = seed.type === 'light' ? LIGHT_TONE : DARK_TONE;
@@ -135,23 +149,8 @@ function createInstallerTheme(seed: ThemeSeed): InstallerTheme {
 }
 
 export const THEMES: InstallerTheme[] = [
-  createInstallerTheme({
-    id: 'bitfun-dark',
-    name: 'Dark',
-    type: 'dark',
-    background: {
-      primary: DARK_CARD_BACKGROUND,
-      secondary: DARK_CARD_SURFACE,
-    },
-    accent: DEFAULT_BLUE,
-  }),
-  createInstallerTheme({
-    id: 'bitfun-light',
-    name: 'Light',
-    type: 'light',
-    background: { primary: '#f7f8fa', secondary: '#ffffff' },
-    accent: '#5a7bb2',
-  }),
+  createBuiltinInstallerTheme('bitfun-dark', 'Dark', 'dark'),
+  createBuiltinInstallerTheme('bitfun-light', 'Light', 'light'),
   createInstallerTheme({
     id: 'bitfun-midnight',
     name: 'Midnight',

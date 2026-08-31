@@ -392,14 +392,20 @@ impl AppearanceConfig {
                     
                     root.setAttribute('data-bf-appearance', '{id}');
                     root.setAttribute('data-bf-appearance-mode', '{appearance_mode}');
+                    root.setAttribute('data-bf-design-system-root', '');
+                    root.setAttribute('data-color-scheme', '{appearance_mode}');
+                    root.setAttribute('data-contrast', 'standard');
+                    root.setAttribute('data-density', 'compact');
                     
-                    root.style.setProperty('--bf-appearance-token-color-bg-primary', '{bg_primary}');
-                    root.style.setProperty('--bf-appearance-token-color-bg-secondary', '{bg_secondary}');
-                    root.style.setProperty('--bf-appearance-token-color-bg-tertiary', '{bg_primary}');
-                    root.style.setProperty('--bf-appearance-token-color-bg-workbench', '{bg_primary}');
-                    root.style.setProperty('--bf-appearance-token-color-bg-scene', '{bg_scene}');
-                    root.style.setProperty('--bf-appearance-token-color-text-primary', '{text_primary}');
-                    root.style.setProperty('--bf-appearance-token-color-accent-500', '{accent_color}');
+                    root.style.setProperty('--bf-color-surface-canvas', '{bg_primary}');
+                    root.style.setProperty('--bf-color-surface-panel', '{bg_secondary}');
+                    root.style.setProperty('--bf-color-surface-tertiary', '{bg_primary}');
+                    root.style.setProperty('--bf-color-surface-workbench', '{bg_primary}');
+                    root.style.setProperty('--bf-color-surface-scene', '{bg_scene}');
+                    root.style.setProperty('--bf-color-surface-chrome', '{bg_primary}');
+                    root.style.setProperty('--bf-color-content-primary', '{text_primary}');
+                    root.style.setProperty('--bf-color-content-muted', '{text_muted}');
+                    root.style.setProperty('--bf-color-accent-default', '{accent_color}');
                     root.style.backgroundColor = '{bg_primary}';
                     
                     if (document.body) {{
@@ -428,6 +434,7 @@ impl AppearanceConfig {
             bg_secondary = self.bg_secondary,
             bg_scene = self.bg_scene,
             text_primary = self.text_primary,
+            text_muted = self.text_muted,
             accent_color = self.accent_color,
             startup_trace_id_json = startup_trace_id_json,
             perf_trace_enabled = perf_trace_enabled,
@@ -479,10 +486,14 @@ mod startup_appearance_tests {
         assert!(script.contains("__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__"));
         assert!(script.contains("data-bf-appearance"));
         assert!(script.contains("data-bf-appearance-mode"));
-        assert!(script.contains("--bf-appearance-token-color-bg-primary"));
-        assert!(script.contains("--bf-appearance-token-color-bg-scene"));
-        assert!(script.contains("--bf-appearance-token-color-text-primary"));
-        assert!(script.contains("--bf-appearance-token-color-accent-500"));
+        assert!(script.contains("data-bf-design-system-root"));
+        assert!(script.contains("data-color-scheme"));
+        assert!(script.contains("--bf-color-surface-canvas"));
+        assert!(script.contains("--bf-color-surface-scene"));
+        assert!(script.contains("--bf-color-content-primary"));
+        assert!(script.contains("--bf-color-content-muted"));
+        assert!(script.contains("--bf-color-accent-default"));
+        assert!(!script.contains("--bf-appearance-token-"));
         let retired_bootstrap_global = ["__BITFUN_BOOTSTRAP", "THEME"].join("_");
         let retired_background_token = ["--", "color-bg-"].concat();
         let retired_text_token = ["--", "color-text-"].concat();

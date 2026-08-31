@@ -15,10 +15,10 @@
 @use './tokens' as tokens;
 
 @mixin -popup-card-chrome($background, $backdrop-blur: false) {
-  border: 1px solid var(--bf-appearance-token-border-base);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: tokens.$size-radius-lg;
   background: $background;
-  box-shadow: var(--bf-appearance-token-shadow-lg);
+  box-shadow: var(--bf-shadow-lg);
   @if $backdrop-blur {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -29,7 +29,7 @@
   @include -popup-card-chrome(
     $background: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-bg-elevated) 94%,
+      var(--bf-color-surface-raised) 94%,
       transparent
     ),
     $backdrop-blur: $backdrop-blur
@@ -38,6 +38,6 @@
 
 @mixin dialog-surface {
   @include -popup-card-chrome(
-    $background: var(--bf-appearance-token-color-bg-elevated)
+    $background: var(--bf-color-surface-raised)
   );
 }

@@ -27,6 +27,7 @@ describe('DesignSystemThemeBridge', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.unstubAllGlobals();
   });
 
   it('maps product appearance and desktop density onto the global package token root', () => {
@@ -53,5 +54,32 @@ describe('DesignSystemThemeBridge', () => {
     });
 
     expect(document.documentElement.getAttribute('data-color-scheme')).toBe('light');
+  });
+
+  it('tracks the operating system high-contrast preference', () => {
+    let matches = true;
+    let changeListener: (() => void) | undefined;
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      get matches() {
+        return matches;
+      },
+      addEventListener: vi.fn((type: string, listener: () => void) => {
+        if (type === 'change') changeListener = listener;
+      }),
+      removeEventListener: vi.fn(),
+    })));
+
+    act(() => {
+      root.render(
+        <DesignSystemThemeBridge>
+          <span>content</span>
+        </DesignSystemThemeBridge>,
+      );
+    });
+    expect(document.documentElement.getAttribute('data-contrast')).toBe('high');
+
+    matches = false;
+    act(() => changeListener?.());
+    expect(document.documentElement.getAttribute('data-contrast')).toBe('standard');
   });
 });

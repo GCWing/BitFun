@@ -64,7 +64,7 @@ struct RemoteCreateSessionView: View {
                    let anchor = anchors[kind] {
                     let frame = proxy[anchor]
                     ZStack(alignment: .topLeading) {
-                        Color.clear
+                        BitFunTheme.transparent
                             .contentShape(Rectangle())
                             .onTapGesture { pickerKind = nil }
                         selectionContent(kind: kind, includeHeader: false)
@@ -171,7 +171,7 @@ struct RemoteCreateSessionView: View {
                 "",
                 text: $instruction,
                 prompt: Text(model.localized(speech.isListening ? "正在聆听" : "告诉 BitFun 要做什么"))
-                    .foregroundColor(speech.isListening ? BitFunTheme.green : BitFunTheme.muted),
+                    .foregroundColor(speech.isListening ? BitFunTheme.statusSuccess : BitFunTheme.muted),
                 axis: .vertical
             )
             .font(MobileDesignTypography.bodyLarge.font)
@@ -206,13 +206,13 @@ struct RemoteCreateSessionView: View {
                     Group {
                         if model.remoteCreateSubmitting {
                             ProgressView()
-                                .tint(Color.white)
+                                .tint(BitFunTheme.contentOnAction)
                         } else {
                             Image(systemName: instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                 ? (speech.isListening ? "stop.fill" : "mic.fill")
                                 : "arrow.up")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(canSubmit ? Color.white : BitFunTheme.ink)
+                            .foregroundStyle(canSubmit ? BitFunTheme.contentOnAction : BitFunTheme.ink)
                         }
                     }
                     .frame(
@@ -235,7 +235,7 @@ struct RemoteCreateSessionView: View {
         .frame(minHeight: MobileDesignGeometry.composerExpandedHeight)
         .background(BitFunTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.composerExpandedRadius))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 2)
+        .shadow(color: BitFunTheme.shadowSubtle, radius: 10, y: 2)
         .padding(.horizontal, MobileDesignGeometry.contentGutter)
         .padding(.top, 8)
         .padding(.bottom, 14)
@@ -249,7 +249,7 @@ struct RemoteCreateSessionView: View {
     private func createStatus(message: String, retryTitle: String, action: @escaping () -> Void) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(BitFunTheme.red)
+                .foregroundStyle(BitFunTheme.statusDanger)
             Text(message)
                 .font(.system(size: 13))
                 .foregroundStyle(BitFunTheme.ink)
@@ -410,7 +410,7 @@ struct RemoteCreateSessionView: View {
             HStack(spacing: 12) {
                 Image(systemName: selected ? "checkmark.circle" : "circle")
                     .font(.system(size: 19))
-                    .foregroundStyle(selected ? BitFunTheme.ink : Color.clear)
+                    .foregroundStyle(selected ? BitFunTheme.ink : BitFunTheme.transparent)
                     .frame(width: 20)
                 Image(systemName: icon)
                     .font(.system(size: 19, weight: .medium))

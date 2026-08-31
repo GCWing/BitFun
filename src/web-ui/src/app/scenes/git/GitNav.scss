@@ -36,7 +36,7 @@
   &__title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -50,7 +50,7 @@
   &__status {
     flex-shrink: 0;
     padding: 0 $size-gap-3 $size-gap-2;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     margin-bottom: $size-gap-2;
   }
 
@@ -59,13 +59,13 @@
     align-items: center;
     gap: $size-gap-2;
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     margin-bottom: $size-gap-1;
   }
 
   &__branch-name {
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -76,7 +76,7 @@
     align-items: center;
     gap: $size-gap-1;
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__actions-row {
@@ -95,7 +95,7 @@
     border: none;
     border-radius: $size-radius-base;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     text-align: left;
     font-size: var(--bf-font-size-sm);
@@ -106,17 +106,17 @@
                 background $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-color-content-primary);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &:active {
-      background: var(--bf-appearance-token-element-bg-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &.is-active {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-color-content-primary);
+      background: var(--bf-color-action-quiet-hover);
       font-weight: var(--bf-font-weight-medium);
 
       &::before {
@@ -127,20 +127,20 @@
         transform: translateY(-50%);
         width: 2px;
         height: 16px;
-        background: var(--bf-appearance-token-color-accent-500);
+        background: var(--bf-color-accent-default);
         border-radius: 0 2px 2px 0;
       }
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: -1px;
     }
   }
 
   &__item-badge {
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin-left: $size-gap-1;
   }
 }

@@ -311,7 +311,7 @@ describe('L0 Navigation Panel', () => {
         const cardRect = card.getBoundingClientRect();
         const sessionRect = session.getBoundingClientRect();
         const selectedBackgroundProbe = document.createElement('span');
-        selectedBackgroundProbe.style.backgroundColor = 'var(--bf-appearance-token-element-bg-soft)';
+        selectedBackgroundProbe.style.backgroundColor = 'var(--bf-color-action-quiet-hover)';
         session.append(selectedBackgroundProbe);
         const selectedBackground = window.getComputedStyle(selectedBackgroundProbe).backgroundColor;
         selectedBackgroundProbe.remove();

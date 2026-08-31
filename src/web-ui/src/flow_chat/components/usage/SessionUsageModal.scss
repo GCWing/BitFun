@@ -43,7 +43,7 @@
   > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
     > [data-bf-component='modal'][data-bf-part='headerShell']
     [data-bf-component='modal'][data-bf-part='title'] {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-3xl);
     font-weight: var(--bf-font-weight-bold);
     letter-spacing: var(--bf-letter-spacing-tight);
@@ -54,7 +54,7 @@
     > [data-bf-component='modal'][data-bf-part='content'] {
     padding: 0 24px 16px;
     overflow: hidden;
-    background: var(--bf-appearance-token-color-bg-secondary);
+    background: var(--bf-color-surface-panel);
   }
 }
 

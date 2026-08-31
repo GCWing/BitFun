@@ -55,7 +55,7 @@ internal fun ChatStatusBar(
     val stopLabel = stringResource(R.string.message_stop)
     val statusLabel = if (detail != title) "$title · $detail" else title
     val statusColor = when (ConnectionStatusPresenter.tone(phase)) {
-        ConnectionTone.OK -> bitFunColors.success
+        ConnectionTone.OK -> bitFunColors.statusSuccess
         ConnectionTone.BUSY -> MaterialTheme.colorScheme.onSurfaceVariant
         ConnectionTone.ERROR -> MaterialTheme.colorScheme.error
         ConnectionTone.MUTED -> MaterialTheme.colorScheme.onSurfaceVariant

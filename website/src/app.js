@@ -59,7 +59,7 @@ function escapeHtml(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .replaceAll("'", '&apos;');
 }
 
 function text(zh, en) {
@@ -99,6 +99,15 @@ function resolvedTheme(theme = state.theme) {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+function syncThemeColor() {
+  const surface = getComputedStyle(document.documentElement)
+    .getPropertyValue('--bf-color-surface-canvas')
+    .trim();
+  if (surface) {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', surface);
+  }
+}
+
 function syncThemeControls() {
   document.querySelectorAll('[data-theme-choice]').forEach((button) => {
     const active = button.dataset.themeChoice === state.theme;
@@ -110,10 +119,8 @@ function syncThemeControls() {
 function applyTheme(theme, persist = true) {
   state.theme = THEME_CHOICES.includes(theme) ? theme : 'system';
   document.documentElement.dataset.theme = state.theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute(
-    'content',
-    resolvedTheme() === 'dark' ? '#131411' : '#f6f5f0',
-  );
+  document.documentElement.dataset.colorScheme = resolvedTheme();
+  syncThemeColor();
   if (persist) writePreference(THEME_STORAGE_KEY, state.theme);
   syncThemeControls();
 }

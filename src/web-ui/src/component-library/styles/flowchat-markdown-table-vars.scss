@@ -3,24 +3,24 @@
  * These are Sass-only to avoid turning editor table internals into theme keys.
  */
 
-$border: var(--bf-appearance-token-color-overlay-white-12);
+$border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
 $shadow: none;
 $surface: transparent;
-$cell-border: var(--bf-appearance-token-color-overlay-white-12);
+$cell-border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
 $col-divider: transparent;
-$th-bg: var(--bf-appearance-token-color-overlay-white-04);
-$th-fg: var(--bf-appearance-token-color-text-primary);
+$th-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+$th-fg: var(--bf-color-content-primary);
 $row-base: transparent;
-$row-stripe: var(--bf-appearance-token-color-overlay-white-04);
-$hover: var(--bf-appearance-token-color-overlay-white-08);
+$row-stripe: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+$hover: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
 
-$border-light: var(--bf-appearance-token-color-overlay-slate-12);
-$shadow-light: 0 4px 14px var(--bf-appearance-token-color-overlay-slate-08);
-$surface-light: var(--bf-appearance-token-color-static-white);
-$cell-border-light: var(--bf-appearance-token-color-overlay-slate-12);
-$col-divider-light: var(--bf-appearance-token-color-overlay-slate-08);
-$th-bg-light: #f6f8fa;
-$th-fg-light: #0f172a;
-$row-base-light: var(--bf-appearance-token-color-static-white);
-$row-stripe-light: var(--bf-appearance-token-color-overlay-slate-04);
-$hover-light: #eef4ff;
+$border-light: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+$shadow-light: 0 4px 14px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+$surface-light: var(--bf-color-content-on-dark);
+$cell-border-light: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+$col-divider-light: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+$th-bg-light: var(--bf-color-surface-tertiary);
+$th-fg-light: var(--bf-color-content-primary);
+$row-base-light: var(--bf-color-content-on-dark);
+$row-stripe-light: color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent);
+$hover-light: var(--bf-color-action-neutral-surface-hover);

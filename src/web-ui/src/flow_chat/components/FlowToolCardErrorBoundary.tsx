@@ -87,7 +87,7 @@ function RenderFallback({
           >
             <div
               style={{
-                color: 'var(--bf-appearance-token-color-text-secondary)',
+                color: 'var(--bf-color-content-secondary)',
                 fontSize: 'var(--bf-type-flow-support-font-size)',
                 lineHeight: 'var(--bf-type-flow-support-line-height)',
               }}

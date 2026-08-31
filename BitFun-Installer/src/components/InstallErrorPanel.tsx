@@ -23,9 +23,9 @@ export function InstallErrorPanel({ message, variant = 'options' }: InstallError
         marginTop: 10,
         padding: '10px 12px',
         borderRadius: 10,
-        border: '1px solid color-mix(in srgb, var(--border-base) 70%, transparent)',
-        background: 'color-mix(in srgb, var(--element-bg-subtle) 80%, transparent)',
-        color: 'var(--color-text-secondary)',
+        border: '1px solid color-mix(in srgb, var(--bf-color-border-default) 70%, transparent)',
+        background: 'color-mix(in srgb, var(--bf-color-surface-subtle) 80%, transparent)',
+        color: 'var(--bf-color-content-secondary)',
         fontSize: 11,
         lineHeight: 1.55,
         textAlign: variant === 'bare' ? 'center' : 'left',
@@ -40,7 +40,7 @@ export function InstallErrorPanel({ message, variant = 'options' }: InstallError
       <>
         <div
           style={{
-            color: 'var(--color-text-muted)',
+            color: 'var(--bf-color-content-muted)',
             fontSize: 12,
             lineHeight: 1.6,
             textAlign: 'center',
@@ -60,9 +60,9 @@ export function InstallErrorPanel({ message, variant = 'options' }: InstallError
         marginTop: 10,
         padding: '10px 12px',
         borderRadius: 10,
-        border: '1px solid color-mix(in srgb, var(--color-error) 55%, transparent)',
-        background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
-        color: 'var(--color-text-primary)',
+        border: '1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 55%, transparent)',
+        background: 'color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent)',
+        color: 'var(--bf-color-content-primary)',
         fontSize: 12,
         lineHeight: 1.5,
       }}

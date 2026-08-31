@@ -383,10 +383,12 @@ export function App() {
     || Boolean(activeComponent && activeComponent.category !== "flow-chat");
 
   return (
-    <div
+    <ThemeRoot
       className="lab-shell"
-      data-lab-scheme={colorScheme}
       data-sidebar-open={sidebarOpen || undefined}
+      colorScheme={colorScheme}
+      contrast={contrast}
+      density={density}
     >
       <button
         aria-label={t("app.closeNavigation")}
@@ -798,6 +800,6 @@ export function App() {
           {route.page === "resources" && <ResourcesPage />}
         </div>
       </div>
-    </div>
+    </ThemeRoot>
   );
 }

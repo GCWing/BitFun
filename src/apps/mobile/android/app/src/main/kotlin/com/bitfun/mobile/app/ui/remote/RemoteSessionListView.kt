@@ -39,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -73,6 +72,7 @@ import com.bitfun.mobile.core.feature.session.SessionWorkspaceContext
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import kotlinx.coroutines.delay
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 
 internal const val SESSION_LIST_TEST_TAG: String = "session-list"
 internal const val SESSION_PROJECTS_TEST_TAG: String = "session-projects"
@@ -786,7 +786,7 @@ private fun SessionRow(
             .heightIn(min = if (metadata.isEmpty()) 46.dp else 56.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(
-                if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                if (selected) MaterialTheme.colorScheme.secondaryContainer else bitFunColors.transparent,
             )
             .onGloballyPositioned { coordinates ->
                 anchorBounds = coordinates.boundsInWindow().toIntRect()

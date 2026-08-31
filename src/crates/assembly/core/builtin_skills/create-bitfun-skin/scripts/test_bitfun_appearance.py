@@ -11,7 +11,7 @@ import sync_registry as registry_sync
 def base_manifest() -> dict[str, object]:
     return {
         "schema": "bitfun.appearance",
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "id": "validator-test",
         "name": "Validator Test",
         "version": "1.0.0",
@@ -101,6 +101,21 @@ class ManifestValidatorTests(unittest.TestCase):
         self.assertIn("Unknown setting: fontWeight", errors)
         self.assertIn("Unknown setting: fontWeightBold", errors)
 
+    def test_theme_token_renderer_accepts_only_canonical_root_and_scope_tokens(self) -> None:
+        validator = appearance.ManifestValidator(self.registry)
+        self.assertEqual([], validator.validate_theme_tokens({
+            "tokens": {"--bf-color-surface-canvas": "#101820"},
+            "scopes": {"chrome": {"--bf-color-content-primary": "#f5f7fa"}},
+        }))
+
+        errors = validator.validate_theme_tokens({
+            "tokens": {"--bf-appearance-token-color-bg-primary": "#101820"},
+        })
+        self.assertIn(
+            "Unsupported root token name: --bf-appearance-token-color-bg-primary",
+            errors,
+        )
+
     def test_normalization_and_visual_semantic_warnings_are_reported(self) -> None:
         manifest = base_manifest()
         manifest["components"] = {
@@ -156,7 +171,7 @@ class ManifestValidatorTests(unittest.TestCase):
     def test_registry_contract_comparison_ignores_provenance_only_changes(self) -> None:
         current = {
             "schema": "bitfun.appearance.registry",
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "sourceRevision": "old-revision",
             "generatedAt": "old-time",
             **{key: [] for key in registry_sync.CONTRACT_KEYS},

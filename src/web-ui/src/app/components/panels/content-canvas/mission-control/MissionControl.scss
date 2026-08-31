@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   // Use same background variable as left panel
-  background: var(--bf-appearance-token-color-bg-workbench);
+  background: var(--bf-color-surface-workbench);
   backdrop-filter: blur(20px);
   animation: missionControlFadeIn 0.15s ease-out;
 
@@ -35,14 +35,14 @@
     height: 36px;
     padding: 0 16px;
     flex-shrink: 0;
-    border-bottom: 1px dashed var(--bf-appearance-token-border-base);
+    border-bottom: 1px dashed var(--bf-color-border-default);
   }
 
   &__title {
     margin: 0;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__header-actions {
@@ -55,7 +55,7 @@
   &__filters {
     padding: 8px 16px;
     flex-shrink: 0;
-    border-bottom: 1px dashed var(--bf-appearance-token-border-base);
+    border-bottom: 1px dashed var(--bf-color-border-default);
   }
 
   &__filters-row {
@@ -76,13 +76,13 @@
     gap: 4px;
     flex-shrink: 0;
     padding: 2px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-subtle);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: 4px;
   }
 
   &__group-filter {
-    --private-mission-control-filter-color: var(--bf-appearance-token-color-accent-600);
+    --private-mission-control-filter-color: var(--bf-color-accent-hover);
 
     position: relative;
     display: flex;
@@ -93,7 +93,7 @@
     padding: 0;
     background: transparent;
     border: none;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     border-radius: 3px;
     font-size: var(--bf-font-size-meta);
@@ -105,16 +105,16 @@
       color 140ms ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-secondary);
     }
 
     &.is-active {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 84%, var(--private-mission-control-filter-color) 16%);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 84%, var(--private-mission-control-filter-color) 16%);
+      color: var(--bf-color-content-primary);
       box-shadow:
         inset 0 0 0 1px var(--private-mission-control-filter-color),
-        0 1px 3px var(--bf-appearance-token-color-overlay-black-20);
+        0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
 
       .canvas-mission-control__group-filter-indicator {
         opacity: 1;
@@ -122,11 +122,11 @@
     }
 
     &--secondary {
-      --private-mission-control-filter-color: var(--bf-appearance-token-color-success);
+      --private-mission-control-filter-color: var(--bf-color-status-success-content);
     }
 
     &--tertiary {
-      --private-mission-control-filter-color: var(--bf-appearance-token-color-warning);
+      --private-mission-control-filter-color: var(--bf-color-status-warning-content);
     }
 
     &-indicator {
@@ -166,11 +166,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-scrollbar-thumb);
+      background: var(--bf-color-scrollbar-thumb);
       border-radius: 3px;
       
       &:hover {
-        background: var(--bf-appearance-token-element-bg-strong);
+        background: var(--bf-color-action-neutral-surface-pressed);
       }
     }
   }
@@ -183,9 +183,9 @@
     align-items: center;
     justify-content: center;
     padding: 40px 30px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
-    border: 1px dashed var(--bf-appearance-token-border-base);
+    border: 1px dashed var(--bf-color-border-default);
     border-radius: 6px;
   }
 
@@ -197,14 +197,14 @@
     gap: 12px;
     padding: 6px 16px;
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
-    border-top: 1px dashed var(--bf-appearance-token-border-base);
+    color: var(--bf-color-content-muted);
+    border-top: 1px dashed var(--bf-color-border-default);
     flex-shrink: 0;
   }
 
   &__separator {
     width: 1px;
     height: 10px;
-    background: var(--bf-appearance-token-border-base);
+    background: var(--bf-color-border-default);
   }
 }

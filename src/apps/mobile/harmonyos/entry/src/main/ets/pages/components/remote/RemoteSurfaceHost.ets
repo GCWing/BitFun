@@ -20,7 +20,7 @@ import {
   SettingsPlacementPolicy,
   SettingsSheetKind
 } from '../../policy/SettingsPlacementPolicy';
-import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED } from '../Theme';
+import { CARD, STATUS_SUCCESS, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, CONTENT_ON_ACTION, STATUS_DANGER } from '../Theme';
 
 export enum RemoteSurfaceMode {
   Master = 'master',
@@ -150,7 +150,7 @@ export struct RemoteSurfaceHost {
         Text(RemoteI18n.t('remote.settings.reconnect'))
           .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
-          .fontColor(PRIMARY_ACTION_TEXT)
+          .fontColor(CONTENT_ON_ACTION)
           .height(28)
           .padding({ left: 12, right: 12 })
           .backgroundColor(PRIMARY_ACTION)
@@ -194,7 +194,7 @@ export struct RemoteSurfaceHost {
       Text(RemoteI18n.t('remote.connectText'))
         .fontSize(MobileDesignTypography.bodySmall.size).lineHeight(MobileDesignTypography.bodySmall.lineHeight).fontColor(MUTED).textAlign(TextAlign.Center)
       Text(RemoteI18n.t('connect.connect'))
-        .width(136).height(44).fontSize(MobileDesignTypography.titleSmall.size).fontColor(PRIMARY_ACTION_TEXT)
+        .width(136).height(44).fontSize(MobileDesignTypography.titleSmall.size).fontColor(CONTENT_ON_ACTION)
         .backgroundColor(PRIMARY_ACTION).textAlign(TextAlign.Center).borderRadius(22)
         .onClick(() => this.actions.onRemoteHome.connectWorkspace())
     }
@@ -244,13 +244,13 @@ export struct RemoteSurfaceHost {
       if (this.canReconnect()) {
         Text(RemoteI18n.t('remote.settings.reconnect'))
           .width(148).height(46).fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium)
-          .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
+          .fontColor(CONTENT_ON_ACTION).backgroundColor(PRIMARY_ACTION)
           .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
           .onClick(() => this.actions.onRemoteHome.reconnect())
       } else {
         Text(RemoteI18n.t('remote.startSession'))
           .width(148).height(46).fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium)
-          .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
+          .fontColor(CONTENT_ON_ACTION).backgroundColor(PRIMARY_ACTION)
           .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
           .onClick(() => this.createSession('code'))
       }
@@ -401,9 +401,9 @@ export struct RemoteSurfaceHost {
   }
 
   private statusColor(): ResourceColor {
-    if (this.remotePageState.connectionState === 'connected') return GREEN;
+    if (this.remotePageState.connectionState === 'connected') return STATUS_SUCCESS;
     if (this.remotePageState.connectionState === 'failed' || this.remotePageState.connectionState === 'disconnected') {
-      return RED;
+      return STATUS_DANGER;
     }
     return MUTED;
   }

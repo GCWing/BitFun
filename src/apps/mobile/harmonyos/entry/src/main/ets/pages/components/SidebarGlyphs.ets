@@ -1,4 +1,4 @@
-import { CARD, GREEN, INK, MUTED } from './Theme';
+import { CARD, STATUS_SUCCESS, INK, MUTED } from './Theme';
 import { TemplateIcon } from './TemplateIcon';
 
 @ComponentV2
@@ -46,7 +46,7 @@ export struct SidebarGlyph {
     Stack({ alignContent: Alignment.Center }) {
       if (this.connectionState === 'connected' || this.connectionState === 'reconnecting') {
         TemplateIcon({ src: $r('app.media.remote_ref_sidebar_connected'), iconWidth: 35, iconHeight: 34 })
-        Text('').width(8).height(8).backgroundColor(GREEN).borderRadius(4)
+        Text('').width(8).height(8).backgroundColor(STATUS_SUCCESS).borderRadius(4)
           .position({ x: 24, y: 22 })
       } else {
         TemplateIcon({ src: $r('app.media.remote_logo'), iconWidth: 34, iconHeight: 34, tint: MUTED })

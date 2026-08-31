@@ -21,15 +21,15 @@
   border-bottom: 1px solid transparent;
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-hover);
+    background: var(--bf-color-action-neutral-surface-hover);
   }
 
   // ==================== State styles ====================
 
   // Active state - match canvas-tab-bar is-active-group background
   &.is-active {
-    background: var(--bf-appearance-token-color-bg-scene);
-    border-bottom: 1px solid var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-color-surface-scene);
+    border-bottom: 1px solid var(--bf-color-accent-default);
   }
 
   // Preview state - italic title
@@ -57,7 +57,7 @@
 
   &.is-file-deleted {
     .canvas-tab__title {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -71,7 +71,7 @@
   // Type icon (e.g. task-detail)
   &__type-icon {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     display: flex;
     align-items: center;
   }
@@ -85,14 +85,14 @@
     white-space: nowrap;
     font-size: var(--bf-font-size-xs);
     // Inactive state: lighter text color
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-ui);
     transition: color 0.15s ease;
   }
 
   // Active state title color is brighter
   &.is-active &__title {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   // Dirty indicator
@@ -100,7 +100,7 @@
     display: none;
     flex-shrink: 0;
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     margin-left: 2px;
   }
 
@@ -114,7 +114,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     border-radius: 2px;
     flex-shrink: 0;
@@ -123,8 +123,8 @@
     transition: opacity 0.15s ease, background-color 0.15s ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
   }
 
@@ -143,7 +143,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     border-radius: 2px;
     flex-shrink: 0;
@@ -152,8 +152,8 @@
     transition: opacity 0.15s ease, background-color 0.15s ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
   }
 
@@ -164,7 +164,7 @@
   }
 
   &__close-btn--pin {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     opacity: 1;
     pointer-events: auto;
   }
@@ -179,7 +179,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--bf-appearance-token-color-accent-500);
+  background: var(--bf-color-accent-default);
   border-radius: 1px;
   z-index: 10;
   pointer-events: none;

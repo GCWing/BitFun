@@ -1,5 +1,6 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { TemplateIcon } from './TemplateIcon';
+import { TRANSPARENT } from './Theme';
 
 /** App-wide floating page return affordance. */
 @ComponentV2
@@ -19,7 +20,7 @@ export struct NavigationBackButton {
     .width(this.controlSize)
     .height(this.controlSize)
     .padding(0)
-    .backgroundColor('#00000000')
+    .backgroundColor(TRANSPARENT)
     .borderRadius(12)
     .stateEffect(true)
     .opacity(this.isEnabled ? 1 : 0.4)

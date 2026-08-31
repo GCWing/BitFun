@@ -303,8 +303,8 @@ describeWithJsdom('AgentsScene', () => {
     expect(coreCardSurfaceStyles).toContain('height: 148px;');
     expect(agentCardStyles).toContain('border-radius: $size-radius-lg;');
     expect(coreCardSurfaceStyles).toContain('border-radius: $size-radius-lg;');
-    expect(agentCardStyles).toContain('background: var(--bf-appearance-token-color-bg-elevated);');
-    expect(coreCardSurfaceStyles).toContain('background: var(--bf-appearance-token-color-bg-elevated);');
+    expect(agentCardStyles).toContain('background: var(--bf-color-surface-raised);');
+    expect(coreCardSurfaceStyles).toContain('background: var(--bf-color-surface-raised);');
     expect(agentCardStyles).toContain('box-shadow: $shadow-xs;');
     expect(coreCardSurfaceStyles).toContain('box-shadow: $shadow-xs;');
     expect(agentCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
@@ -323,11 +323,11 @@ describeWithJsdom('AgentsScene', () => {
     expect(agentCardSource).not.toContain('--agent-card-gradient');
     expect(coreCardSource).not.toContain('getAlphaColor');
     expect(coreCardSource).not.toContain('--core-card-gradient');
-    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-appearance-token-color-text-primary\);[\s\S]*?\[data-bf-component="icon"\] \{[\s\S]*?color: var\(--bf-appearance-token-color-success\);/);
+    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-color-content-primary\);[\s\S]*?\[data-bf-component="icon"\] \{[\s\S]*?color: var\(--bf-color-status-success-content\);/);
     expect(coreCardSurfaceStyles).not.toContain('$gradient');
     expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
     expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');
-    expect(coreCardSurfaceStyles).toContain('mask-image: linear-gradient(to bottom, black 0%, transparent 100%);');
+    expect(coreCardSurfaceStyles).toContain('mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);');
     expect(agentCardStyles).not.toContain('width: 360px;');
     expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
   });

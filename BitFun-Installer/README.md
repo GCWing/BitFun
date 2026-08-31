@@ -77,9 +77,9 @@ BitFun-Installer/
 │   ├── hooks/
 │   │   └── useInstaller.ts    # Core installer state machine
 │   ├── styles/
-│   │   ├── global.css         # Base styles
-│   │   ├── variables.css      # Design tokens
+│   │   ├── global.css         # Base styles consuming canonical tokens
 │   │   └── animations.css     # Keyframe animations
+│   ├── theme/                 # Canonical theme projection + installer presets
 │   ├── types/
 │   │   └── installer.ts       # TypeScript types
 │   ├── App.tsx
@@ -202,7 +202,9 @@ src-tauri/target/release-fast/bitfun-installer.exe
 
 ### Changing the UI Theme
 
-Edit [variables.css](src/styles/variables.css). Colors, spacing, and animations are controlled by CSS custom properties.
+Shared light/dark values come from `@bitfun/theme-bitfun`. Installer-only named presets live in
+[installerThemesData.ts](src/theme/installerThemesData.ts), and components consume only canonical
+`--bf-*` variables projected by [installerThemeRuntime.ts](src/theme/installerThemeRuntime.ts).
 
 ### Adding Install Steps
 

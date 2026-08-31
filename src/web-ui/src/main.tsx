@@ -1,7 +1,6 @@
 import ReactDOM from "react-dom/client";
 // Register the design-system layer order before any product module can import
 // component CSS. CSS layers keep their first-seen order for the document.
-import "@bitfun/theme-bitfun/default.css";
 import "@bitfun/ui/styles.css";
 import App from "./app/App";
 import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet";

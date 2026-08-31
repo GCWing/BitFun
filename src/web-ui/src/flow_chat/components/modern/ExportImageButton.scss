@@ -11,7 +11,7 @@
      Padding matches ModelRoundItem (3rem ≈ 48px each side) so the
      effective content width is identical to the live chat. */
   padding: 24px 48px;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
   box-sizing: border-box;
   font-family:var(--bf-font-family-sans);
   /* Use a fixed 800px layout context so text wraps at exactly the same
@@ -62,7 +62,7 @@
     gap: 12px;
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    border-bottom: 1px solid var(--bf-color-border-default);
   }
 
   &__logo {
@@ -92,20 +92,20 @@
   &__title {
     font-size: var(--bf-font-size-xl);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     display: inline-block;
   }
 
   &__subtitle {
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     display: inline-block;
   }
 
   &__timestamp {
     margin-left: auto;
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     display: inline-block;
     flex-shrink: 0;
   }
@@ -116,13 +116,13 @@
   }
 
   &__user-bubble {
-    background: var(--bf-appearance-token-element-bg-medium);
-    border: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-action-neutral-surface-hover);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: 12px;
     padding: 14px 16px;
     font-size: var(--bf-font-size-base);
     line-height: var(--bf-type-flow-body-line-height);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: pre-wrap !important;
     word-break: break-word;
     word-wrap: break-word;
@@ -184,13 +184,13 @@
   &__footer {
     margin-top: 20px;
     padding-top: 14px;
-    border-top: 1px solid var(--bf-appearance-token-border-base);
+    border-top: 1px solid var(--bf-color-border-default);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
     
     span {
@@ -202,7 +202,7 @@
 
   &__footer-brand {
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
   }
 }

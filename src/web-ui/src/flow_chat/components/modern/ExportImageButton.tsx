@@ -16,7 +16,7 @@ import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '.
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { getBuiltinAppearanceCssToken } from '@/infrastructure/appearance/builtins/catalog';
+import { getBuiltinAppearanceThemeToken } from '@/infrastructure/appearance/builtins/catalog';
 import { withTimeout } from '@/shared/utils/timing';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -221,8 +221,8 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       
       // Read the resolved appearance background color.
       const computedStyle = getComputedStyle(document.documentElement);
-      const bgColor = computedStyle.getPropertyValue('--bf-appearance-token-color-bg-scene').trim()
-        || getBuiltinAppearanceCssToken('--bf-appearance-token-color-bg-scene');
+      const bgColor = computedStyle.getPropertyValue('--bf-color-surface-scene').trim()
+        || getBuiltinAppearanceThemeToken('--bf-color-surface-scene');
 
       // Pre-load the logo as an HTMLImageElement. We do NOT try to embed it
       // inside the captured DOM (unreliable with <img>/data URLs inside an

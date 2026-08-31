@@ -1,7 +1,7 @@
 /** Shared semantic text roles for navigation surfaces. */
 
 @mixin nav-panel-text-heading {
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 
   // A light content appearance may still place navigation inside inverse
   // structural chrome. Only force the crisp light-mode treatment when the
@@ -9,7 +9,7 @@
   :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-static-black) 92%,
+      var(--bf-color-content-on-light) 92%,
       transparent
     );
   }
@@ -18,26 +18,26 @@
 @mixin nav-panel-text-body {
   color: color-mix(
     in srgb,
-    var(--bf-appearance-token-color-text-primary) 88%,
-    var(--bf-appearance-token-color-text-secondary)
+    var(--bf-color-content-primary) 88%,
+    var(--bf-color-content-secondary)
   );
 
   :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-static-black) 86%,
+      var(--bf-color-content-on-light) 86%,
       transparent
     );
   }
 }
 
 @mixin nav-panel-text-meta {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 
   :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-static-black) 48%,
+      var(--bf-color-content-on-light) 48%,
       transparent
     );
   }
@@ -46,14 +46,14 @@
 @mixin nav-panel-text-icon {
   color: color-mix(
     in srgb,
-    var(--bf-appearance-token-color-text-secondary) 78%,
-    var(--bf-appearance-token-color-text-muted)
+    var(--bf-color-content-secondary) 78%,
+    var(--bf-color-content-muted)
   );
 
   :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-static-black) 70%,
+      var(--bf-color-content-on-light) 70%,
       transparent
     );
   }

@@ -21,14 +21,14 @@
       margin: 0 0 $size-gap-1;
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-semibold);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 
   &__json-hint {
     margin: 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     line-height: var(--bf-line-height-relaxed);
   }
 
@@ -46,13 +46,13 @@
 
   &__json-examples {
     padding-top: $size-gap-3;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
 
     h4 {
       margin: 0 0 $size-gap-2;
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-semibold);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       text-transform: uppercase;
       letter-spacing: var(--bf-letter-spacing-wider);
     }
@@ -67,18 +67,18 @@
       margin: 0 0 $size-gap-1;
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
 
     pre {
       margin: 0;
       padding: $size-gap-2 $size-gap-3;
-      background: var(--bf-appearance-token-element-bg-medium);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-action-neutral-surface-hover);
+      border: 1px solid var(--bf-color-border-subtle);
       border-radius: $size-radius-sm;
       font-family: var(--bf-font-family-mono);
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       line-height: var(--bf-line-height-relaxed);
       white-space: pre-wrap;
       overflow-x: auto;
@@ -99,34 +99,34 @@
     border: 1px solid transparent;
 
     &.is-healthy {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
-      color: var(--bf-appearance-token-color-success);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 10%, transparent);
+      color: var(--bf-color-status-success-content);
+      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 25%, transparent);
     }
 
     &.is-pending {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, transparent);
-      color: var(--bf-appearance-token-color-warning);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, transparent);
+      color: var(--bf-color-status-warning-content);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent);
     }
 
     &.is-error {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
-      color: var(--bf-appearance-token-color-error);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
+      color: var(--bf-color-status-danger-content);
+      border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 25%, transparent);
     }
 
     &.is-muted {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-muted);
-      border-color: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-muted);
+      border-color: var(--bf-color-border-subtle);
     }
   }
 
   &__external-source-badge {
-    color: var(--bf-appearance-token-color-accent-500);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+    color: var(--bf-color-accent-default);
+    border-color: color-mix(in srgb, var(--bf-color-accent-default) 24%, transparent);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
   }
 
   &__external-summary {
@@ -141,15 +141,15 @@
   }
 
   &__runtime-badge--ok {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
-    color: var(--bf-appearance-token-color-success);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-success-content) 10%, transparent);
+    color: var(--bf-color-status-success-content);
+    border-color: color-mix(in srgb, var(--bf-color-status-success-content) 25%, transparent);
   }
 
   &__runtime-badge--error {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
-    color: var(--bf-appearance-token-color-error);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
+    color: var(--bf-color-status-danger-content);
+    border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 25%, transparent);
   }
 
   &__server-details {
@@ -167,13 +167,13 @@
 
   &__server-detail-label {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__server-detail-value {
     font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     word-break: break-all;
   }
 }
@@ -197,7 +197,7 @@
   padding: 10px 12px;
   /* Inset callout: keeps the import prompt clear of the section card border. */
   margin: $size-gap-3 $size-gap-4;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 8px;
 
   p {

@@ -126,7 +126,7 @@ over afterwards — each one replaying whatever its stylesheet attached to mount
 when the typewriter finishes, which is not when the reader is looking.
 
 The one that shipped was `.markdown-renderer`, from the shared component
-library: `animation: fadeIn var(--bf-appearance-token-motion-base) ease-out`,
+library: `animation: fadeIn var(--bf-motion-duration-base) ease-out`,
 350ms from `opacity: 0`. Once the junction displacement was down to tens of
 pixels that fade was the entire remaining complaint — most of the screen
 dimming and coming back on every page up. `VirtualItemRenderer.scss` cancels it

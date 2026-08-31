@@ -100,7 +100,7 @@ describe('composer context track layout', () => {
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?border-radius: 999px;/);
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?cursor: default;/);
     expect(stylesheet).toMatch(
-      /&__workspace--switchable \{[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-appearance-token-element-bg-soft\);/,
+      /&__workspace--switchable \{[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-color-action-quiet-hover\);/,
     );
 
     // Branch wears the same pill so the three left-rail segments keep one
@@ -120,7 +120,7 @@ describe('composer context track layout', () => {
     expect(staticBranch).toContain('padding: 0 7px;');
     expect(staticBranch).toContain('border-radius: 999px;');
     expect(chip).toMatch(
-      /&--branch-switchable \{[\s\S]*?cursor: pointer;[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-appearance-token-element-bg-soft\);/,
+      /&--branch-switchable \{[\s\S]*?cursor: pointer;[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-color-action-quiet-hover\);/,
     );
 
     // A hairline parts the segments; inside a segment spacing is the only
@@ -352,7 +352,7 @@ describe('composer context track layout', () => {
 
     expect(modelPair).toContain('border: 0;');
     expect(modelPair).toMatch(
-      /&:hover,\s*&\[data-bf-state='open'\] \{\s*background: var\(--bf-appearance-token-element-bg-soft\);/,
+      /&:hover,\s*&\[data-bf-state='open'\] \{\s*background: var\(--bf-color-action-quiet-hover\);/,
     );
     expect(modelPair).not.toContain('border-color:');
   });
@@ -372,10 +372,10 @@ describe('composer context track layout', () => {
     );
     expect(addControl).toContain('border: 0 !important;');
     expect(addControl).toContain(
-      'background: var(--bf-appearance-token-element-bg-subtle) !important;',
+      'background: var(--bf-color-surface-subtle) !important;',
     );
     expect(addControl).toMatch(
-      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?element-bg-soft/,
+      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?color-action-quiet-hover/,
     );
     expect(addControl).not.toContain('border-color:');
   });
@@ -446,15 +446,15 @@ describe('composer context track layout', () => {
       stylesheet.indexOf('&__permission-label {'),
     );
     expect(riskRamp).toContain('permission-trigger--ask &');
-    expect(riskRamp).toContain('var(--bf-appearance-token-color-success)');
+    expect(riskRamp).toContain('var(--bf-color-status-success-content)');
     expect(riskRamp).toContain('permission-trigger--auto &');
-    expect(riskRamp).toContain('var(--bf-appearance-token-color-warning)');
+    expect(riskRamp).toContain('var(--bf-color-status-warning-content)');
     expect(riskRamp).toContain('permission-trigger--full_access &');
-    expect(riskRamp).toContain('var(--bf-appearance-token-color-error)');
+    expect(riskRamp).toContain('var(--bf-color-status-danger-content)');
     // Full access keeps a body of its own so the risk survives the label being
     // dropped on a narrow composer.
     expect(stylesheet).toMatch(
-      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-error\) 10%/,
+      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-status-danger-content\) 10%/,
     );
   });
 
@@ -496,7 +496,7 @@ describe('composer context track layout', () => {
     // On/off is a colour, not an outline: one bordered item in a borderless
     // row reads as an error state rather than a mode.
     expect(stylesheet).toMatch(
-      /&--on \{\n\s*color: var\(--bf-appearance-token-color-accent-500\);/,
+      /&--on \{\n\s*color: var\(--bf-color-accent-default\);/,
     );
     expect(stylesheet).not.toMatch(/&__worktree-toggle \{[\s\S]*?border: 1px/);
   });

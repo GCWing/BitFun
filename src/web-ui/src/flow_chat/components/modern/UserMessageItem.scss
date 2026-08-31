@@ -22,17 +22,17 @@
    */
   width: auto;
   padding: 0.46rem 0.68rem;
-  background: var(--bf-appearance-token-element-bg-soft);
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
-  border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 2px);
+  background: var(--bf-color-action-quiet-hover);
+  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 72%, transparent);
+  border-radius: calc(var(--bf-control-flow-chat-card-radius) + 2px);
   margin:
     0.06rem
-    var(--bf-appearance-token-flowchat-content-inline-pad)
-    var(--bf-appearance-token-flowchat-turn-gap)
-    var(--bf-appearance-token-flowchat-content-inline-pad);
+    var(--bf-control-flow-chat-content-padding-inline)
+    var(--bf-control-flow-chat-turn-gap)
+    var(--bf-control-flow-chat-content-padding-inline);
   box-shadow:
-    0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 5%, transparent) inset,
-    0 2px 8px var(--bf-appearance-token-color-overlay-black-08);
+    0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 5%, transparent) inset,
+    0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
   transition: opacity 140ms ease;
   /*
    * No enter animation: the message list is virtualized, so a mount-triggered
@@ -42,8 +42,8 @@
   position: relative;
   
   &:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 56%, transparent);
+    background: var(--bf-color-action-quiet-hover);
+    border-color: color-mix(in srgb, var(--bf-color-border-subtle) 56%, transparent);
 
     .user-message-item__actions {
       opacity: 1;
@@ -51,7 +51,7 @@
   }
 
   &:focus-within {
-    border-color: color-mix(in srgb, var(--bf-appearance-token-border-accent) 68%, var(--bf-appearance-token-border-base));
+    border-color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent) 68%, var(--bf-color-border-default));
 
     .user-message-item__actions {
       opacity: 1;
@@ -60,14 +60,14 @@
   
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
-    margin-left: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
-    margin-right: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
+    margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
   }
 }
 
 .user-message-item__timestamp {
   font-size: var(--bf-type-flow-meta-font-size);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-weight: var(--bf-font-weight-regular);
   margin-bottom: 0.12rem;
   line-height: var(--bf-type-flow-meta-line-height);
@@ -76,7 +76,7 @@
 .user-message-item__main {
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  gap: var(--bf-control-flow-chat-inline-gap);
 }
 
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
@@ -99,9 +99,9 @@
 }
 
 .user-message-item__steering-tag--pending {
-  color: var(--bf-appearance-token-color-warning);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 28%, transparent);
+  color: var(--bf-color-status-warning-content);
+  background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 28%, transparent);
 }
 
 .user-message-item__actions {
@@ -126,7 +126,7 @@
 }
 
 .user-message-item__blocks {
-  margin-top: var(--bf-appearance-token-flowchat-flow-item-gap);
+  margin-top: var(--bf-control-flow-chat-flow-item-gap);
 }
 
 .user-message-item__content {
@@ -134,7 +134,7 @@
   font-size: var(--bf-type-flow-body-font-size);
   font-weight: var(--bf-font-weight-medium);
   line-height: var(--bf-type-flow-body-line-height);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -157,10 +157,10 @@
   margin: 0.08rem 0.14rem;
   padding: 0.08rem 0.38rem;
   vertical-align: text-bottom;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  background: var(--bf-appearance-token-element-bg-hover);
-  color: var(--bf-appearance-token-color-text-secondary);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-sm);
+  background: var(--bf-color-action-neutral-surface-hover);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-control-font-size);
   font-weight: var(--bf-font-weight-medium);
   line-height: var(--bf-line-height-compact);
@@ -173,7 +173,7 @@
 }
 
 .user-message-item__reference--session-reference {
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .user-message-item__reference-label {
@@ -205,7 +205,7 @@
 
   .user-message-item__main {
     align-items: flex-start;
-    gap: var(--bf-appearance-token-flowchat-flow-item-gap);
+    gap: var(--bf-control-flow-chat-flow-item-gap);
   }
 
   // Text column + actions row: actions sit beside text; optional vertical nudge vs first line.
@@ -213,7 +213,7 @@
     display: flex;
     flex-flow: row wrap;
     align-items: flex-start;
-    column-gap: var(--bf-appearance-token-flowchat-inline-gap);
+    column-gap: var(--bf-control-flow-chat-inline-gap);
     row-gap: 0.28em;
     flex: 1;
     min-width: 0;
@@ -225,7 +225,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    gap: var(--bf-control-flow-chat-inline-gap);
   }
 
   .user-message-item__failed-avatar {
@@ -237,7 +237,7 @@
     box-sizing: border-box;
     height: var(--_failed-line-box);
     min-height: var(--_failed-line-box);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.9;
 
     svg {
@@ -251,13 +251,13 @@
     flex: 0 1 auto;
     width: max-content;
     max-width: 100%;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--_failed-font-size);
     font-weight: var(--bf-font-weight-regular);
     font-style: italic;
     line-height: var(--_failed-line-height);
     text-decoration: line-through;
-    text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 72%, transparent);
+    text-decoration-color: color-mix(in srgb, var(--bf-color-content-muted) 72%, transparent);
   }
 
   .user-message-item__actions {
@@ -298,8 +298,8 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  color: var(--bf-appearance-token-color-text-secondary);
+  border-radius: var(--bf-radius-sm);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   flex-shrink: 0;
@@ -309,7 +309,7 @@
   
   &:hover:not(:disabled) {
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     box-shadow: none;
   }
   
@@ -318,7 +318,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-border-accent);
+    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
   }
 
@@ -336,8 +336,8 @@
 }
 
 .user-message-item__copy-btn.copied {
-  color: var(--bf-appearance-token-color-success);
-  background: var(--bf-appearance-token-color-success-bg);
+  color: var(--bf-color-status-success-content);
+  background: var(--bf-color-status-success-surface);
 }
 
 .user-message-edit-composer {
@@ -406,12 +406,12 @@
   border-radius: 5px;
   overflow: hidden;
   cursor: pointer;
-  border: 1px solid var(--bf-appearance-token-border-base);
+  border: 1px solid var(--bf-color-border-default);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
   }
 
   img {
@@ -427,7 +427,7 @@
   position: fixed;
   inset: 0;
   z-index: tokens.$z-fullscreen;
-  background: var(--bf-appearance-token-color-overlay-black-80);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -437,7 +437,7 @@
     max-width: 90vw;
     max-height: 85vh;
     border-radius: 8px;
-    box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50);
+    box-shadow: 0 8px 32px var(--bf-color-overlay-scrim);
     object-fit: contain;
   }
 }
@@ -446,7 +446,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  background: var(--bf-appearance-token-color-overlay-white-15);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
   border: none;
   border-radius: 50%;
   width: 36px;
@@ -454,12 +454,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--bf-appearance-token-color-static-white);
+  color: var(--bf-color-content-on-dark);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
-    background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.3);
+    background: color-mix(in srgb, var(--bf-color-content-on-dark) 30%, transparent);
   }
 
   &:active {
@@ -467,7 +467,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-static-white);
+    outline: 2px solid var(--bf-color-content-on-dark);
     outline-offset: 2px;
   }
 }

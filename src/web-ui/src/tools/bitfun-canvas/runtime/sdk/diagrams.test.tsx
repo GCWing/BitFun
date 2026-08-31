@@ -131,7 +131,7 @@ describe('Canvas diagram helpers', () => {
 
     expect(markup).toContain('bf-diagram');
     expect(markup).toContain('aria-label="Runtime"');
-    expect(markup).toContain('var(--bf-appearance-token-element-bg-subtle)');
+    expect(markup).toContain('var(--bf-color-surface-subtle)');
     expect(markup).toContain('<path');
     expect(markup).toContain('width="4"');
     expect(markup).toContain('Shell');

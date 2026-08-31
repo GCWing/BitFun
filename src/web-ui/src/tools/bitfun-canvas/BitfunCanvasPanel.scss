@@ -4,14 +4,14 @@
   flex: 1;
   min-height: 0;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 }
 
 .bitfun-canvas-panel__frame {
   width: 100%;
   height: 100%;
   border: 0;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 }
 
 .bitfun-canvas-panel__toolbar {
@@ -29,12 +29,12 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 6px;
-  background: var(--bf-appearance-token-color-bg-elevated);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-surface-raised);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
-  box-shadow: var(--bf-appearance-token-shadow-sm);
+  box-shadow: var(--bf-shadow-sm);
 
   &:disabled {
     opacity: 0.58;
@@ -43,9 +43,9 @@
 }
 
 .bitfun-canvas-panel__toolbar-button--active {
-  border-color: var(--bf-appearance-token-color-accent-500);
-  color: var(--bf-appearance-token-color-accent-500);
-  background: var(--bf-appearance-token-color-accent-50);
+  border-color: var(--bf-color-accent-default);
+  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--bf-color-accent-default) 4%, transparent);
 }
 
 .bitfun-canvas-panel__toolbar-icon--spin {
@@ -70,33 +70,33 @@
 
 .bitfun-canvas-panel--empty {
   flex-direction: column;
-  gap: var(--bf-appearance-token-size-gap-4);
-  padding: var(--bf-appearance-token-size-gap-5);
+  gap: var(--bf-space-4);
+  padding: var(--bf-space-5);
   overflow: auto;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .bitfun-canvas-panel__message {
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-appearance-token-size-gap-3);
+  gap: var(--bf-space-3);
   max-width: 720px;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 
   svg {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     flex: 0 0 auto;
     margin-top: 2px;
   }
 
   h3 {
-    margin: 0 0 var(--bf-appearance-token-size-gap-1);
+    margin: 0 0 var(--bf-space-1);
     font-size: var(--bf-font-size-lg);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   p {
-    margin: 0 0 var(--bf-appearance-token-size-gap-1);
+    margin: 0 0 var(--bf-space-1);
   }
 
   span {
@@ -108,17 +108,17 @@
 .bitfun-canvas-panel__diagnostics {
   max-width: 760px;
   margin: 0;
-  padding-left: var(--bf-appearance-token-size-gap-5);
-  color: var(--bf-appearance-token-color-text-secondary);
+  padding-left: var(--bf-space-5);
+  color: var(--bf-color-content-secondary);
 }
 
 .bitfun-canvas-panel__source {
   margin: 0;
-  padding: var(--bf-appearance-token-size-gap-3);
+  padding: var(--bf-space-3);
   max-width: 960px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  background: var(--bf-appearance-token-color-bg-secondary);
-  color: var(--bf-appearance-token-color-text-primary);
+  border: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-panel);
+  color: var(--bf-color-content-primary);
   overflow: auto;
   white-space: pre-wrap;
   font-family:var(--bf-font-family-mono);
@@ -131,7 +131,7 @@
   display: flex;
   align-items: stretch;
   justify-content: stretch;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 72%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 72%, transparent);
   z-index: 2;
 }
 
@@ -141,8 +141,8 @@
   width: 100%;
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--bf-appearance-token-border-subtle);
-  background: var(--bf-appearance-token-color-bg-primary);
+  border-left: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-canvas);
   box-shadow: none;
 }
 
@@ -156,12 +156,12 @@
 .bitfun-canvas-panel__source-editor {
   flex: 1;
   min-height: 0;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 }
 
 .bitfun-canvas-panel__source-code-editor {
   height: 100% !important;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 }
 
 .bitfun-canvas-panel__source-loading {
@@ -169,6 +169,6 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-sm);
 }

@@ -11,8 +11,8 @@
   display: flex;
   gap: 8px;
   padding: 24px 32px;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-surface-panel);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   overflow-x: auto;
   flex-shrink: 0;
 }
@@ -20,9 +20,9 @@
 .full-page-tab {
   padding: 12px 20px;
   background: transparent;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 8px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -34,15 +34,15 @@
 }
 
 .full-page-tab:hover {
-  background: var(--bf-appearance-token-element-bg-base);
-  border-color: var(--bf-appearance-token-border-base);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-action-neutral-surface);
+  border-color: var(--bf-color-border-default);
+  color: var(--bf-color-content-secondary);
 }
 
 .full-page-tab.active {
-  background: var(--bf-appearance-token-element-bg-medium);
-  border-color: var(--bf-appearance-token-border-accent-subtle);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-action-neutral-surface-hover);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 15%, transparent);
+  color: var(--bf-color-content-primary);
 }
 
 .tab-name {

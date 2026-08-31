@@ -1,7 +1,7 @@
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SOFT, SUBTLE } from './Theme';
+import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SCRIM, SOFT, SUBTLE, TRANSPARENT } from './Theme';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
@@ -215,7 +215,7 @@ export struct AppSidebar {
           .width(MobileDesignGeometry.controlTouchSize)
           .height(MobileDesignGeometry.controlTouchSize)
           .padding(0)
-          .backgroundColor('#00000000')
+          .backgroundColor(TRANSPARENT)
           .borderRadius(12)
           .stateEffect(true)
           .accessibilityText(RemoteI18n.t('remote.actions'))
@@ -230,7 +230,7 @@ export struct AppSidebar {
         .width(MobileDesignGeometry.controlTouchSize)
         .height(MobileDesignGeometry.controlTouchSize)
         .padding(0)
-        .backgroundColor('#00000000')
+        .backgroundColor(TRANSPARENT)
         .borderRadius(12)
         .stateEffect(true)
         .accessibilityText(RemoteI18n.t('common.search'))
@@ -338,7 +338,7 @@ export struct AppSidebar {
         .width(48)
         .height(48)
         .padding(0)
-        .backgroundColor('#00000000')
+        .backgroundColor(TRANSPARENT)
         .borderRadius(12)
         .stateEffect(true)
         .onClick(() => {
@@ -440,7 +440,7 @@ export struct AppSidebar {
     .height(46)
     .padding({ left: 12, right: 68 })
     .margin({ top: 8 })
-    .backgroundColor(this.archivedSessionsExpanded ? SOFT : '#00000000')
+    .backgroundColor(this.archivedSessionsExpanded ? SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => {
       this.archivedSessionsExpanded = !this.archivedSessionsExpanded;
@@ -460,14 +460,14 @@ export struct AppSidebar {
     }
     .width('100%').height(44)
     .padding({ left: 12, right: 4 })
-    .backgroundColor(this.selectedSessionId === session.id ? SOFT : '#00000000')
+    .backgroundColor(this.selectedSessionId === session.id ? SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => this.openSession(session))
     .gesture(LongPressGesture({ repeat: false }).onAction(() => this.openSessionActions(session)))
     .bindPopup(this.showCollapseButton && this.activeActionSessionId === session.id, {
       builder: () => { this.SessionActionPopover() },
       placement: Placement.Right,
-      popupColor: '#00000000',
+      popupColor: TRANSPARENT,
       enableArrow: false,
       autoCancel: true,
       mask: false,
@@ -496,7 +496,7 @@ export struct AppSidebar {
     .height(44)
     .padding({ left: 12, right: 4 })
     .backgroundColor(this.selectedSessionId === item.id || this.activeActionSessionId === item.id ?
-      SOFT : '#00000000')
+      SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => {
       this.openSession(item);
@@ -505,7 +505,7 @@ export struct AppSidebar {
     .bindPopup(this.showCollapseButton && this.activeActionSessionId === item.id, {
       builder: () => { this.SessionActionPopover() },
       placement: Placement.Right,
-      popupColor: '#00000000',
+      popupColor: TRANSPARENT,
       enableArrow: false,
       autoCancel: true,
       mask: false,
@@ -711,8 +711,8 @@ export struct AppSidebar {
   private sessionActionSheetOptions(): SheetOptions {
     return {
       height: this.actionSessionIsGeneralChat() ? 380 : 300,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
+      backgroundColor: TRANSPARENT,
+      maskColor: SCRIM,
       showClose: false,
       dragBar: false
     };

@@ -324,7 +324,7 @@ function FrameworkPreview({
             actions={actions}
             content={(
               <code className="flow-chat-tool-card-preview__command">
-                curl -s -o /dev/null -w "HTTP %&#123;http_code&#125;" https://openbitfun.com
+                {'curl -s -o /dev/null -w "HTTP %{http_code}" https://openbitfun.com'}
               </code>
             )}
             extra={(

@@ -1,11 +1,11 @@
 {
   "schema": "bitfun.appearance.registry",
-  "schemaVersion": 1,
-  "generatedFrom": "19b5c2f96bb9f9eb7b83f6c9c7df0568dae4b153",
-  "generatedAt": "2026-08-30T08:27:29.571207+00:00",
-  "sourceRevision": "19b5c2f96bb9f9eb7b83f6c9c7df0568dae4b153",
-  "sourceDirty": true,
-  "sourceTreeHash": "36781423bb7063ddcd5a6e21ef0244599d39955b45e79d0c183dee3e41fdb3ac",
+  "schemaVersion": 2,
+  "generatedFrom": "68a853e10a3e2c18d85a3f5fca29bc09b4e8313d",
+  "generatedAt": "2026-08-30T22:40:41.595382+00:00",
+  "sourceRevision": "68a853e10a3e2c18d85a3f5fca29bc09b4e8313d",
+  "sourceDirty": false,
+  "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
     {
       "id": "card",
@@ -225,196 +225,6 @@
           "selector": {
             "kind": "self",
             "suffix": ":disabled"
-          }
-        }
-      ]
-    },
-    {
-      "id": "select",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "trigger",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "value",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "suffix",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "loading",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "clear",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "arrow",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "dropdown",
-          "propertyProfile": "overlay",
-          "visualRole": "popup"
-        },
-        {
-          "id": "search",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "searchInput",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "options",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "option",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "optionIcon",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "optionLabel",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "optionDescription",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "group",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "groupLabel",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        }
-      ],
-      "facets": [
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        },
-        {
-          "id": "placement",
-          "attribute": "data-bf-placement",
-          "values": [
-            "top",
-            "bottom"
-          ]
-        },
-        {
-          "id": "multiple",
-          "attribute": "data-bf-multiple",
-          "values": [
-            "true",
-            "false"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-within"
-          }
-        },
-        {
-          "id": "open",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"open\"]"
-          }
-        },
-        {
-          "id": "selected",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"selected\"]"
-          }
-        },
-        {
-          "id": "highlighted",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"highlighted\"]"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
           }
         }
       ]
@@ -10314,35 +10124,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "back",
-          "propertyProfile": "container"
-        },
-        {
           "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "loading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemName",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemDetail",
           "propertyProfile": "container"
         },
         {
@@ -10360,13 +10142,6 @@
       ],
       "facets": [],
       "states": [
-        {
-          "id": "selected",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"selected\"]"
-          }
-        },
         {
           "id": "loading",
           "selector": {
@@ -10651,31 +10426,11 @@
           "propertyProfile": "container"
         },
         {
-          "id": "menuHeader",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "menuBack",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "menuTitle",
-          "propertyProfile": "container"
-        },
-        {
           "id": "loading",
           "propertyProfile": "container"
         },
         {
           "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "listItem",
           "propertyProfile": "container"
         }
       ],
@@ -10686,13 +10441,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"active\"]"
-          }
-        },
-        {
-          "id": "selected",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"selected\"]"
           }
         }
       ]
@@ -11041,18 +10789,6 @@
         {
           "id": "input",
           "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemIcon",
-          "propertyProfile": "container"
         }
       ],
       "facets": [
@@ -11067,15 +10803,7 @@
           ]
         }
       ],
-      "states": [
-        {
-          "id": "selected",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"selected\"]"
-          }
-        }
-      ]
+      "states": []
     },
     {
       "id": "m-editor",
@@ -12834,33 +12562,10 @@
         {
           "id": "empty",
           "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemName",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
-      "states": [
-        {
-          "id": "selected",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"selected\"]"
-          }
-        },
-        {
-          "id": "current",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"current\"]"
-          }
-        }
-      ]
+      "states": []
     },
     {
       "id": "workspace-list-section",
@@ -13247,27 +12952,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "menu",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "missionControl",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "divider",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
           "id": "itemTitle",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemClose",
           "propertyProfile": "container"
         }
       ],
@@ -16071,7 +15756,7 @@
     }
   ],
   "renderers": [
-    "css-tokens",
+    "theme-tokens",
     "monaco",
     "xterm",
     "mermaid",
@@ -16134,354 +15819,402 @@
     "mixBlendMode",
     "isolation"
   ],
-  "cssTokenNames": [
-    "--bf-appearance-token-badge-padding-y",
-    "--bf-appearance-token-blur-base",
-    "--bf-appearance-token-blur-medium",
-    "--bf-appearance-token-blur-subtle",
-    "--bf-appearance-token-border-accent",
-    "--bf-appearance-token-border-accent-soft",
-    "--bf-appearance-token-border-accent-strong",
-    "--bf-appearance-token-border-accent-subtle",
-    "--bf-appearance-token-border-base",
-    "--bf-appearance-token-border-medium",
-    "--bf-appearance-token-border-prominent",
-    "--bf-appearance-token-border-strong",
-    "--bf-appearance-token-border-subtle",
-    "--bf-appearance-token-btn-ghost-color",
-    "--bf-appearance-token-btn-ghost-hover-bg",
-    "--bf-appearance-token-btn-ghost-hover-border",
-    "--bf-appearance-token-btn-ghost-hover-color",
-    "--bf-appearance-token-btn-primary-active-bg",
-    "--bf-appearance-token-btn-primary-active-border",
-    "--bf-appearance-token-btn-primary-active-color",
-    "--bf-appearance-token-btn-primary-active-shadow",
-    "--bf-appearance-token-btn-primary-active-transform",
-    "--bf-appearance-token-btn-primary-bg",
-    "--bf-appearance-token-btn-primary-border",
-    "--bf-appearance-token-btn-primary-color",
-    "--bf-appearance-token-btn-primary-hover-bg",
-    "--bf-appearance-token-btn-primary-hover-border",
-    "--bf-appearance-token-btn-primary-hover-color",
-    "--bf-appearance-token-btn-primary-hover-shadow",
-    "--bf-appearance-token-btn-primary-hover-transform",
-    "--bf-appearance-token-btn-primary-shadow",
-    "--bf-appearance-token-chrome-accent-100",
-    "--bf-appearance-token-chrome-accent-200",
-    "--bf-appearance-token-chrome-accent-300",
-    "--bf-appearance-token-chrome-accent-400",
-    "--bf-appearance-token-chrome-accent-50",
-    "--bf-appearance-token-chrome-accent-500",
-    "--bf-appearance-token-chrome-accent-600",
-    "--bf-appearance-token-chrome-accent-700",
-    "--bf-appearance-token-chrome-bg-elevated",
-    "--bf-appearance-token-chrome-bg-primary",
-    "--bf-appearance-token-chrome-bg-scene",
-    "--bf-appearance-token-chrome-bg-secondary",
-    "--bf-appearance-token-chrome-bg-tertiary",
-    "--bf-appearance-token-chrome-bg-workbench",
-    "--bf-appearance-token-chrome-border-accent",
-    "--bf-appearance-token-chrome-border-accent-soft",
-    "--bf-appearance-token-chrome-border-accent-strong",
-    "--bf-appearance-token-chrome-border-accent-subtle",
-    "--bf-appearance-token-chrome-border-base",
-    "--bf-appearance-token-chrome-border-medium",
-    "--bf-appearance-token-chrome-border-prominent",
-    "--bf-appearance-token-chrome-border-strong",
-    "--bf-appearance-token-chrome-border-subtle",
-    "--bf-appearance-token-chrome-element-bg-base",
-    "--bf-appearance-token-chrome-element-bg-medium",
-    "--bf-appearance-token-chrome-element-bg-soft",
-    "--bf-appearance-token-chrome-element-bg-strong",
-    "--bf-appearance-token-chrome-element-bg-subtle",
-    "--bf-appearance-token-chrome-scrollbar-thumb",
-    "--bf-appearance-token-chrome-scrollbar-thumb-hover",
-    "--bf-appearance-token-chrome-text-disabled",
-    "--bf-appearance-token-chrome-text-muted",
-    "--bf-appearance-token-chrome-text-primary",
-    "--bf-appearance-token-chrome-text-secondary",
-    "--bf-appearance-token-color-accent-100",
-    "--bf-appearance-token-color-accent-200",
-    "--bf-appearance-token-color-accent-300",
-    "--bf-appearance-token-color-accent-400",
-    "--bf-appearance-token-color-accent-50",
-    "--bf-appearance-token-color-accent-500",
-    "--bf-appearance-token-color-accent-500-rgb",
-    "--bf-appearance-token-color-accent-600",
-    "--bf-appearance-token-color-accent-700",
-    "--bf-appearance-token-color-bg-elevated",
-    "--bf-appearance-token-color-bg-primary",
-    "--bf-appearance-token-color-bg-scene",
-    "--bf-appearance-token-color-bg-secondary",
-    "--bf-appearance-token-color-bg-tertiary",
-    "--bf-appearance-token-color-bg-workbench",
-    "--bf-appearance-token-color-cyan-500",
-    "--bf-appearance-token-color-error",
-    "--bf-appearance-token-color-error-bg",
-    "--bf-appearance-token-color-error-border",
-    "--bf-appearance-token-color-indigo-500",
-    "--bf-appearance-token-color-info",
-    "--bf-appearance-token-color-info-bg",
-    "--bf-appearance-token-color-info-border",
-    "--bf-appearance-token-color-overlay-black-08",
-    "--bf-appearance-token-color-overlay-black-12",
-    "--bf-appearance-token-color-overlay-black-15",
-    "--bf-appearance-token-color-overlay-black-20",
-    "--bf-appearance-token-color-overlay-black-30",
-    "--bf-appearance-token-color-overlay-black-40",
-    "--bf-appearance-token-color-overlay-black-50",
-    "--bf-appearance-token-color-overlay-black-80",
-    "--bf-appearance-token-color-overlay-slate-04",
-    "--bf-appearance-token-color-overlay-slate-08",
-    "--bf-appearance-token-color-overlay-slate-12",
-    "--bf-appearance-token-color-overlay-slate-rgb",
-    "--bf-appearance-token-color-overlay-white-04",
-    "--bf-appearance-token-color-overlay-white-08",
-    "--bf-appearance-token-color-overlay-white-12",
-    "--bf-appearance-token-color-overlay-white-15",
-    "--bf-appearance-token-color-overlay-white-20",
-    "--bf-appearance-token-color-overlay-white-24",
-    "--bf-appearance-token-color-overlay-white-60",
-    "--bf-appearance-token-color-overlay-white-70",
-    "--bf-appearance-token-color-overlay-white-80",
-    "--bf-appearance-token-color-overlay-white-90",
-    "--bf-appearance-token-color-overlay-white-95",
-    "--bf-appearance-token-color-purple-100",
-    "--bf-appearance-token-color-purple-200",
-    "--bf-appearance-token-color-purple-500",
-    "--bf-appearance-token-color-purple-600",
-    "--bf-appearance-token-color-static-black",
-    "--bf-appearance-token-color-static-black-rgb",
-    "--bf-appearance-token-color-static-white",
-    "--bf-appearance-token-color-static-white-rgb",
-    "--bf-appearance-token-color-success",
-    "--bf-appearance-token-color-success-bg",
-    "--bf-appearance-token-color-success-border",
-    "--bf-appearance-token-color-text-disabled",
-    "--bf-appearance-token-color-text-muted",
-    "--bf-appearance-token-color-text-primary",
-    "--bf-appearance-token-color-text-secondary",
-    "--bf-appearance-token-color-warning",
-    "--bf-appearance-token-color-warning-bg",
-    "--bf-appearance-token-color-warning-border",
-    "--bf-appearance-token-config-page-divider",
-    "--bf-appearance-token-config-page-row-hover-bg",
-    "--bf-appearance-token-config-page-section-bg",
-    "--bf-appearance-token-config-page-section-border",
-    "--bf-appearance-token-config-page-section-border-width",
-    "--bf-appearance-token-config-page-section-shadow",
-    "--bf-appearance-token-domain-capability-creative",
-    "--bf-appearance-token-domain-capability-docs",
-    "--bf-appearance-token-domain-capability-ops",
-    "--bf-appearance-token-domain-capability-testing",
-    "--bf-appearance-token-domain-context-compression",
-    "--bf-appearance-token-domain-generative-ui",
-    "--bf-appearance-token-domain-git-lane-0",
-    "--bf-appearance-token-domain-git-lane-1",
-    "--bf-appearance-token-domain-git-lane-2",
-    "--bf-appearance-token-domain-git-lane-3",
-    "--bf-appearance-token-domain-git-lane-4",
-    "--bf-appearance-token-domain-git-lane-5",
-    "--bf-appearance-token-domain-git-lane-6",
-    "--bf-appearance-token-domain-git-lane-7",
-    "--bf-appearance-token-domain-insights-issue",
-    "--bf-appearance-token-domain-insights-neutral",
-    "--bf-appearance-token-domain-insights-positive",
-    "--bf-appearance-token-domain-insights-time",
-    "--bf-appearance-token-domain-inspector-active-background",
-    "--bf-appearance-token-domain-inspector-active-border",
-    "--bf-appearance-token-domain-inspector-active-border-subtle",
-    "--bf-appearance-token-domain-inspector-browser-tooltip-background",
-    "--bf-appearance-token-domain-inspector-main-tooltip-background",
-    "--bf-appearance-token-domain-inspector-selected-background",
-    "--bf-appearance-token-domain-inspector-selected-border",
-    "--bf-appearance-token-domain-inspector-tooltip-shadow",
-    "--bf-appearance-token-domain-inspector-tooltip-text",
-    "--bf-appearance-token-domain-mermaid-diagram",
-    "--bf-appearance-token-domain-mini-app",
-    "--bf-appearance-token-domain-progress-compacting",
-    "--bf-appearance-token-domain-review-judge",
-    "--bf-appearance-token-domain-review-member-default",
-    "--bf-appearance-token-domain-review-worker",
-    "--bf-appearance-token-domain-teal-action",
-    "--bf-appearance-token-domain-template-memories",
-    "--bf-appearance-token-domain-text-stroke-0",
-    "--bf-appearance-token-domain-text-stroke-1",
-    "--bf-appearance-token-domain-text-stroke-2",
-    "--bf-appearance-token-domain-text-stroke-3",
-    "--bf-appearance-token-domain-text-stroke-4",
-    "--bf-appearance-token-domain-todo",
-    "--bf-appearance-token-domain-tool-assistant-action",
-    "--bf-appearance-token-domain-tool-git",
-    "--bf-appearance-token-domain-tool-mcp",
-    "--bf-appearance-token-domain-tool-review-summary",
-    "--bf-appearance-token-domain-tool-search",
-    "--bf-appearance-token-domain-tool-terminal",
-    "--bf-appearance-token-domain-tool-web-search",
-    "--bf-appearance-token-easing-accelerate",
-    "--bf-appearance-token-easing-decelerate",
-    "--bf-appearance-token-easing-smooth",
-    "--bf-appearance-token-easing-standard",
-    "--bf-appearance-token-element-bg-base",
-    "--bf-appearance-token-element-bg-hover",
-    "--bf-appearance-token-element-bg-medium",
-    "--bf-appearance-token-element-bg-soft",
-    "--bf-appearance-token-element-bg-strong",
-    "--bf-appearance-token-element-bg-subtle",
-    "--bf-appearance-token-flowchat-card-expanded-pad-x",
-    "--bf-appearance-token-flowchat-card-expanded-pad-y",
-    "--bf-appearance-token-flowchat-card-gap",
-    "--bf-appearance-token-flowchat-card-pad-x",
-    "--bf-appearance-token-flowchat-card-pad-y",
-    "--bf-appearance-token-flowchat-card-radius",
-    "--bf-appearance-token-flowchat-code-block-pad-x",
-    "--bf-appearance-token-flowchat-code-block-pad-y",
-    "--bf-appearance-token-flowchat-content-inline-pad",
-    "--bf-appearance-token-flowchat-content-inline-pad-mobile",
-    "--bf-appearance-token-flowchat-control-gap",
-    "--bf-appearance-token-flowchat-control-pad-x",
-    "--bf-appearance-token-flowchat-control-pad-y",
-    "--bf-appearance-token-flowchat-flow-item-gap",
-    "--bf-appearance-token-flowchat-inline-gap",
-    "--bf-appearance-token-flowchat-link-color",
-    "--bf-appearance-token-flowchat-link-hover-color",
-    "--bf-appearance-token-flowchat-turn-gap",
-    "--bf-appearance-token-git-color-added",
-    "--bf-appearance-token-git-color-branch",
-    "--bf-appearance-token-git-color-branch-bg",
-    "--bf-appearance-token-git-color-branch-bg-hover",
-    "--bf-appearance-token-git-color-changes",
-    "--bf-appearance-token-git-color-deleted",
-    "--bf-appearance-token-git-color-staged",
-    "--bf-appearance-token-glass-bg-active",
-    "--bf-appearance-token-glass-bg-base",
-    "--bf-appearance-token-glass-bg-hover",
-    "--bf-appearance-token-glass-blue-subtle",
-    "--bf-appearance-token-glass-border-base",
-    "--bf-appearance-token-glass-border-hover",
-    "--bf-appearance-token-glass-red-base",
-    "--bf-appearance-token-glass-red-hover",
-    "--bf-appearance-token-glass-red-subtle",
-    "--bf-appearance-token-glow-shadow-blue",
-    "--bf-appearance-token-inner-glow-top",
-    "--bf-appearance-token-inner-glow-top-hover",
-    "--bf-appearance-token-language-blue",
-    "--bf-appearance-token-language-cyan",
-    "--bf-appearance-token-language-green",
-    "--bf-appearance-token-language-orange",
-    "--bf-appearance-token-language-purple",
-    "--bf-appearance-token-language-red",
-    "--bf-appearance-token-language-slate",
-    "--bf-appearance-token-language-yellow",
-    "--bf-appearance-token-motion-base",
-    "--bf-appearance-token-motion-fast",
-    "--bf-appearance-token-motion-instant",
-    "--bf-appearance-token-motion-lazy",
-    "--bf-appearance-token-motion-slow",
-    "--bf-appearance-token-opacity-disabled",
-    "--bf-appearance-token-opacity-hover",
-    "--bf-appearance-token-prism-dark-comment",
-    "--bf-appearance-token-prism-dark-foreground",
-    "--bf-appearance-token-prism-dark-function",
-    "--bf-appearance-token-prism-dark-keyword",
-    "--bf-appearance-token-prism-dark-number",
-    "--bf-appearance-token-prism-dark-property",
-    "--bf-appearance-token-prism-dark-punctuation",
-    "--bf-appearance-token-prism-dark-string",
-    "--bf-appearance-token-prism-dark-tag",
-    "--bf-appearance-token-prism-light-comment",
-    "--bf-appearance-token-prism-light-foreground",
-    "--bf-appearance-token-prism-light-function",
-    "--bf-appearance-token-prism-light-keyword",
-    "--bf-appearance-token-prism-light-number",
-    "--bf-appearance-token-prism-light-property",
-    "--bf-appearance-token-prism-light-punctuation",
-    "--bf-appearance-token-prism-light-string",
-    "--bf-appearance-token-prism-light-tag",
-    "--bf-appearance-token-scene-viewport-border-width",
-    "--bf-appearance-token-scrollbar-thumb",
-    "--bf-appearance-token-scrollbar-thumb-hover",
-    "--bf-appearance-token-shadow-base",
-    "--bf-appearance-token-shadow-lg",
-    "--bf-appearance-token-shadow-sm",
-    "--bf-appearance-token-shadow-xl",
-    "--bf-appearance-token-shadow-xs",
-    "--bf-appearance-token-size-gap-1",
-    "--bf-appearance-token-size-gap-10",
-    "--bf-appearance-token-size-gap-12",
-    "--bf-appearance-token-size-gap-16",
-    "--bf-appearance-token-size-gap-2",
-    "--bf-appearance-token-size-gap-3",
-    "--bf-appearance-token-size-gap-4",
-    "--bf-appearance-token-size-gap-5",
-    "--bf-appearance-token-size-gap-6",
-    "--bf-appearance-token-size-gap-8",
-    "--bf-appearance-token-size-radius-2xl",
-    "--bf-appearance-token-size-radius-base",
-    "--bf-appearance-token-size-radius-full",
-    "--bf-appearance-token-size-radius-lg",
-    "--bf-appearance-token-size-radius-md",
-    "--bf-appearance-token-size-radius-sm",
-    "--bf-appearance-token-size-radius-xl",
-    "--bf-appearance-token-tool-card-expanded-pad-x",
-    "--bf-appearance-token-tool-card-header-icon-slot",
-    "--bf-appearance-token-tool-card-header-pad-right",
-    "--bf-appearance-token-tool-card-header-pad-y"
+  "themeTokenNames": [
+    "--bf-color-accent-border",
+    "--bf-color-accent-border-subtle",
+    "--bf-color-accent-default",
+    "--bf-color-accent-disabled",
+    "--bf-color-accent-hover",
+    "--bf-color-accent-secondary",
+    "--bf-color-accent-secondary-border",
+    "--bf-color-accent-secondary-hover",
+    "--bf-color-accent-secondary-surface",
+    "--bf-color-accent-secondary-surface-strong",
+    "--bf-color-accent-surface",
+    "--bf-color-accent-surface-strong",
+    "--bf-color-accent-surface-subtle",
+    "--bf-color-action-neutral-border",
+    "--bf-color-action-neutral-content",
+    "--bf-color-action-neutral-content-disabled",
+    "--bf-color-action-neutral-fill-border",
+    "--bf-color-action-neutral-surface",
+    "--bf-color-action-neutral-surface-hover",
+    "--bf-color-action-neutral-surface-pressed",
+    "--bf-color-action-primary-background",
+    "--bf-color-action-primary-content",
+    "--bf-color-action-primary-hover",
+    "--bf-color-action-primary-pressed",
+    "--bf-color-action-quiet-content",
+    "--bf-color-action-quiet-hover",
+    "--bf-color-action-quiet-pressed",
+    "--bf-color-action-secondary-background",
+    "--bf-color-action-secondary-content",
+    "--bf-color-action-secondary-hover",
+    "--bf-color-action-secondary-pressed",
+    "--bf-color-border-default",
+    "--bf-color-border-strong",
+    "--bf-color-border-subtle",
+    "--bf-color-content-disabled",
+    "--bf-color-content-inverse",
+    "--bf-color-content-muted",
+    "--bf-color-content-on-dark",
+    "--bf-color-content-on-light",
+    "--bf-color-content-primary",
+    "--bf-color-content-secondary",
+    "--bf-color-control-switch-thumb",
+    "--bf-color-control-switch-track",
+    "--bf-color-control-switch-track-checked",
+    "--bf-color-field-background",
+    "--bf-color-field-background-hover",
+    "--bf-color-field-border",
+    "--bf-color-field-border-focus",
+    "--bf-color-field-border-hover",
+    "--bf-color-focus-ring",
+    "--bf-color-identity-assistant-border",
+    "--bf-color-identity-assistant-content",
+    "--bf-color-identity-assistant-content-hover",
+    "--bf-color-identity-assistant-surface",
+    "--bf-color-identity-assistant-surface-subtle",
+    "--bf-color-key-hint-background",
+    "--bf-color-link-default",
+    "--bf-color-link-hover",
+    "--bf-color-overlay-scrim",
+    "--bf-color-scrollbar-thumb",
+    "--bf-color-scrollbar-thumb-hover",
+    "--bf-color-status-danger-border",
+    "--bf-color-status-danger-content",
+    "--bf-color-status-danger-surface",
+    "--bf-color-status-info-border",
+    "--bf-color-status-info-content",
+    "--bf-color-status-info-surface",
+    "--bf-color-status-success-border",
+    "--bf-color-status-success-content",
+    "--bf-color-status-success-surface",
+    "--bf-color-status-warning-border",
+    "--bf-color-status-warning-content",
+    "--bf-color-status-warning-surface",
+    "--bf-color-surface-canvas",
+    "--bf-color-surface-chrome",
+    "--bf-color-surface-panel",
+    "--bf-color-surface-raised",
+    "--bf-color-surface-scene",
+    "--bf-color-surface-subtle",
+    "--bf-color-surface-tertiary",
+    "--bf-color-surface-workbench",
+    "--bf-effect-blur-base",
+    "--bf-effect-blur-medium",
+    "--bf-effect-blur-subtle",
+    "--bf-opacity-disabled",
+    "--bf-opacity-focus",
+    "--bf-opacity-hover",
+    "--bf-opacity-muted",
+    "--bf-shadow-accent-glow",
+    "--bf-shadow-base",
+    "--bf-shadow-composer",
+    "--bf-shadow-inner-highlight",
+    "--bf-shadow-inner-highlight-hover",
+    "--bf-shadow-lg",
+    "--bf-shadow-menu",
+    "--bf-shadow-overlay",
+    "--bf-shadow-raised",
+    "--bf-shadow-sm",
+    "--bf-shadow-xl",
+    "--bf-shadow-xs",
+    "--bf-domain-context-compression",
+    "--bf-domain-generative-ui",
+    "--bf-domain-mini-app",
+    "--bf-domain-mermaid-diagram",
+    "--bf-domain-tool-search",
+    "--bf-domain-tool-web-search",
+    "--bf-domain-tool-git",
+    "--bf-domain-tool-terminal",
+    "--bf-domain-tool-mcp",
+    "--bf-domain-tool-assistant-action",
+    "--bf-domain-tool-review-summary",
+    "--bf-domain-capability-docs",
+    "--bf-domain-capability-testing",
+    "--bf-domain-capability-creative",
+    "--bf-domain-capability-ops",
+    "--bf-domain-insights-positive",
+    "--bf-domain-insights-time",
+    "--bf-domain-insights-neutral",
+    "--bf-domain-insights-issue",
+    "--bf-domain-progress-compacting",
+    "--bf-domain-template-memories",
+    "--bf-domain-review-member-default",
+    "--bf-domain-review-worker",
+    "--bf-domain-review-judge",
+    "--bf-domain-teal-action",
+    "--bf-domain-todo",
+    "--bf-domain-git-branch",
+    "--bf-domain-git-branch-background",
+    "--bf-domain-git-branch-background-hover",
+    "--bf-domain-git-changes",
+    "--bf-domain-git-added",
+    "--bf-domain-git-deleted",
+    "--bf-domain-git-staged",
+    "--bf-domain-git-lane-0",
+    "--bf-domain-git-lane-1",
+    "--bf-domain-git-lane-2",
+    "--bf-domain-git-lane-3",
+    "--bf-domain-git-lane-4",
+    "--bf-domain-git-lane-5",
+    "--bf-domain-git-lane-6",
+    "--bf-domain-git-lane-7",
+    "--bf-domain-text-stroke-0",
+    "--bf-domain-text-stroke-1",
+    "--bf-domain-text-stroke-2",
+    "--bf-domain-text-stroke-3",
+    "--bf-domain-text-stroke-4",
+    "--bf-domain-inspector-active-border",
+    "--bf-domain-inspector-active-background",
+    "--bf-domain-inspector-active-border-subtle",
+    "--bf-domain-inspector-selected-border",
+    "--bf-domain-inspector-selected-background",
+    "--bf-domain-inspector-browser-tooltip-background",
+    "--bf-domain-inspector-main-tooltip-background",
+    "--bf-domain-inspector-tooltip-text",
+    "--bf-domain-inspector-tooltip-shadow",
+    "--bf-domain-language-blue",
+    "--bf-domain-language-cyan",
+    "--bf-domain-language-yellow",
+    "--bf-domain-language-orange",
+    "--bf-domain-language-red",
+    "--bf-domain-language-green",
+    "--bf-domain-language-purple",
+    "--bf-domain-language-slate",
+    "--bf-domain-prism-light-foreground",
+    "--bf-domain-prism-light-comment",
+    "--bf-domain-prism-light-keyword",
+    "--bf-domain-prism-light-string",
+    "--bf-domain-prism-light-function",
+    "--bf-domain-prism-light-number",
+    "--bf-domain-prism-light-tag",
+    "--bf-domain-prism-light-punctuation",
+    "--bf-domain-prism-light-property",
+    "--bf-domain-prism-dark-foreground",
+    "--bf-domain-prism-dark-comment",
+    "--bf-domain-prism-dark-keyword",
+    "--bf-domain-prism-dark-string",
+    "--bf-domain-prism-dark-function",
+    "--bf-domain-prism-dark-number",
+    "--bf-domain-prism-dark-tag",
+    "--bf-domain-prism-dark-punctuation",
+    "--bf-domain-prism-dark-property",
+    "--bf-component-config-page-section-background",
+    "--bf-component-config-page-section-border",
+    "--bf-component-config-page-section-border-width",
+    "--bf-component-config-page-section-shadow",
+    "--bf-component-config-page-divider",
+    "--bf-component-config-page-row-hover-background",
+    "--bf-component-scene-viewport-border-width",
+    "--bf-component-badge-padding-block"
+  ],
+  "scopedThemeTokenNames": [
+    "--bf-color-accent-border",
+    "--bf-color-accent-border-subtle",
+    "--bf-color-accent-default",
+    "--bf-color-accent-disabled",
+    "--bf-color-accent-hover",
+    "--bf-color-accent-secondary",
+    "--bf-color-accent-secondary-border",
+    "--bf-color-accent-secondary-hover",
+    "--bf-color-accent-secondary-surface",
+    "--bf-color-accent-secondary-surface-strong",
+    "--bf-color-accent-surface",
+    "--bf-color-accent-surface-strong",
+    "--bf-color-accent-surface-subtle",
+    "--bf-color-action-neutral-border",
+    "--bf-color-action-neutral-content",
+    "--bf-color-action-neutral-content-disabled",
+    "--bf-color-action-neutral-fill-border",
+    "--bf-color-action-neutral-surface",
+    "--bf-color-action-neutral-surface-hover",
+    "--bf-color-action-neutral-surface-pressed",
+    "--bf-color-action-primary-background",
+    "--bf-color-action-primary-content",
+    "--bf-color-action-primary-hover",
+    "--bf-color-action-primary-pressed",
+    "--bf-color-action-quiet-content",
+    "--bf-color-action-quiet-hover",
+    "--bf-color-action-quiet-pressed",
+    "--bf-color-action-secondary-background",
+    "--bf-color-action-secondary-content",
+    "--bf-color-action-secondary-hover",
+    "--bf-color-action-secondary-pressed",
+    "--bf-color-border-default",
+    "--bf-color-border-strong",
+    "--bf-color-border-subtle",
+    "--bf-color-content-disabled",
+    "--bf-color-content-inverse",
+    "--bf-color-content-muted",
+    "--bf-color-content-on-dark",
+    "--bf-color-content-on-light",
+    "--bf-color-content-primary",
+    "--bf-color-content-secondary",
+    "--bf-color-control-switch-thumb",
+    "--bf-color-control-switch-track",
+    "--bf-color-control-switch-track-checked",
+    "--bf-color-field-background",
+    "--bf-color-field-background-hover",
+    "--bf-color-field-border",
+    "--bf-color-field-border-focus",
+    "--bf-color-field-border-hover",
+    "--bf-color-focus-ring",
+    "--bf-color-identity-assistant-border",
+    "--bf-color-identity-assistant-content",
+    "--bf-color-identity-assistant-content-hover",
+    "--bf-color-identity-assistant-surface",
+    "--bf-color-identity-assistant-surface-subtle",
+    "--bf-color-key-hint-background",
+    "--bf-color-link-default",
+    "--bf-color-link-hover",
+    "--bf-color-overlay-scrim",
+    "--bf-color-scrollbar-thumb",
+    "--bf-color-scrollbar-thumb-hover",
+    "--bf-color-status-danger-border",
+    "--bf-color-status-danger-content",
+    "--bf-color-status-danger-surface",
+    "--bf-color-status-info-border",
+    "--bf-color-status-info-content",
+    "--bf-color-status-info-surface",
+    "--bf-color-status-success-border",
+    "--bf-color-status-success-content",
+    "--bf-color-status-success-surface",
+    "--bf-color-status-warning-border",
+    "--bf-color-status-warning-content",
+    "--bf-color-status-warning-surface",
+    "--bf-color-surface-canvas",
+    "--bf-color-surface-chrome",
+    "--bf-color-surface-panel",
+    "--bf-color-surface-raised",
+    "--bf-color-surface-scene",
+    "--bf-color-surface-subtle",
+    "--bf-color-surface-tertiary",
+    "--bf-color-surface-workbench",
+    "--bf-effect-blur-base",
+    "--bf-effect-blur-medium",
+    "--bf-effect-blur-subtle",
+    "--bf-opacity-disabled",
+    "--bf-opacity-focus",
+    "--bf-opacity-hover",
+    "--bf-opacity-muted",
+    "--bf-shadow-accent-glow",
+    "--bf-shadow-base",
+    "--bf-shadow-composer",
+    "--bf-shadow-inner-highlight",
+    "--bf-shadow-inner-highlight-hover",
+    "--bf-shadow-lg",
+    "--bf-shadow-menu",
+    "--bf-shadow-overlay",
+    "--bf-shadow-raised",
+    "--bf-shadow-sm",
+    "--bf-shadow-xl",
+    "--bf-shadow-xs"
+  ],
+  "themeScopeIds": [
+    "chrome"
   ],
   "widgetVariableNames": [
-    "--bf-appearance-token-color-bg-primary",
-    "--bf-appearance-token-color-static-white",
-    "--bf-appearance-token-color-static-black",
-    "--bf-appearance-token-color-bg-secondary",
-    "--bf-appearance-token-color-bg-tertiary",
-    "--bf-appearance-token-color-bg-elevated",
-    "--bf-appearance-token-color-bg-scene",
-    "--bf-appearance-token-color-text-primary",
-    "--bf-appearance-token-color-text-secondary",
-    "--bf-appearance-token-color-text-muted",
-    "--bf-appearance-token-color-text-disabled",
-    "--bf-appearance-token-color-accent-500",
-    "--bf-appearance-token-color-accent-500-rgb",
-    "--bf-appearance-token-color-accent-600",
-    "--bf-appearance-token-color-success",
-    "--bf-appearance-token-color-success-bg",
-    "--bf-appearance-token-color-warning",
-    "--bf-appearance-token-color-warning-bg",
-    "--bf-appearance-token-color-error",
-    "--bf-appearance-token-color-error-bg",
-    "--bf-appearance-token-color-info",
-    "--bf-appearance-token-color-info-bg",
-    "--bf-appearance-token-color-info-border",
-    "--bf-appearance-token-border-subtle",
-    "--bf-appearance-token-border-base",
-    "--bf-appearance-token-border-medium",
-    "--bf-appearance-token-element-bg-subtle",
-    "--bf-appearance-token-element-bg-soft",
-    "--bf-appearance-token-element-bg-base",
-    "--bf-appearance-token-element-bg-medium",
-    "--bf-appearance-token-element-bg-hover",
-    "--bf-appearance-token-shadow-xs",
-    "--bf-appearance-token-shadow-sm",
-    "--bf-appearance-token-motion-fast",
-    "--bf-appearance-token-motion-base",
-    "--bf-appearance-token-easing-standard",
-    "--bf-appearance-token-btn-primary-bg",
-    "--bf-appearance-token-btn-primary-color",
-    "--bf-appearance-token-btn-primary-border",
-    "--bf-appearance-token-btn-primary-shadow",
-    "--bf-appearance-token-btn-primary-hover-bg",
-    "--bf-appearance-token-btn-primary-hover-color",
-    "--bf-appearance-token-btn-primary-hover-border",
-    "--bf-appearance-token-btn-primary-hover-shadow",
-    "--bf-appearance-token-btn-primary-hover-transform",
-    "--bf-appearance-token-btn-primary-active-bg",
-    "--bf-appearance-token-btn-primary-active-color",
-    "--bf-appearance-token-btn-primary-active-border",
-    "--bf-appearance-token-btn-primary-active-shadow",
-    "--bf-appearance-token-btn-primary-active-transform",
-    "--bf-appearance-token-btn-ghost-color",
-    "--bf-appearance-token-btn-ghost-hover-bg",
-    "--bf-appearance-token-btn-ghost-hover-color",
-    "--bf-appearance-token-btn-ghost-hover-border"
+    "--bf-color-accent-border",
+    "--bf-color-accent-border-subtle",
+    "--bf-color-accent-default",
+    "--bf-color-accent-disabled",
+    "--bf-color-accent-hover",
+    "--bf-color-accent-secondary",
+    "--bf-color-accent-secondary-border",
+    "--bf-color-accent-secondary-hover",
+    "--bf-color-accent-secondary-surface",
+    "--bf-color-accent-secondary-surface-strong",
+    "--bf-color-accent-surface",
+    "--bf-color-accent-surface-strong",
+    "--bf-color-accent-surface-subtle",
+    "--bf-color-action-neutral-border",
+    "--bf-color-action-neutral-content",
+    "--bf-color-action-neutral-content-disabled",
+    "--bf-color-action-neutral-fill-border",
+    "--bf-color-action-neutral-surface",
+    "--bf-color-action-neutral-surface-hover",
+    "--bf-color-action-neutral-surface-pressed",
+    "--bf-color-action-primary-background",
+    "--bf-color-action-primary-content",
+    "--bf-color-action-primary-hover",
+    "--bf-color-action-primary-pressed",
+    "--bf-color-action-quiet-content",
+    "--bf-color-action-quiet-hover",
+    "--bf-color-action-quiet-pressed",
+    "--bf-color-action-secondary-background",
+    "--bf-color-action-secondary-content",
+    "--bf-color-action-secondary-hover",
+    "--bf-color-action-secondary-pressed",
+    "--bf-color-border-default",
+    "--bf-color-border-strong",
+    "--bf-color-border-subtle",
+    "--bf-color-content-disabled",
+    "--bf-color-content-inverse",
+    "--bf-color-content-muted",
+    "--bf-color-content-on-dark",
+    "--bf-color-content-on-light",
+    "--bf-color-content-primary",
+    "--bf-color-content-secondary",
+    "--bf-color-control-switch-thumb",
+    "--bf-color-control-switch-track",
+    "--bf-color-control-switch-track-checked",
+    "--bf-color-field-background",
+    "--bf-color-field-background-hover",
+    "--bf-color-field-border",
+    "--bf-color-field-border-focus",
+    "--bf-color-field-border-hover",
+    "--bf-color-focus-ring",
+    "--bf-color-identity-assistant-border",
+    "--bf-color-identity-assistant-content",
+    "--bf-color-identity-assistant-content-hover",
+    "--bf-color-identity-assistant-surface",
+    "--bf-color-identity-assistant-surface-subtle",
+    "--bf-color-key-hint-background",
+    "--bf-color-link-default",
+    "--bf-color-link-hover",
+    "--bf-color-overlay-scrim",
+    "--bf-color-scrollbar-thumb",
+    "--bf-color-scrollbar-thumb-hover",
+    "--bf-color-status-danger-border",
+    "--bf-color-status-danger-content",
+    "--bf-color-status-danger-surface",
+    "--bf-color-status-info-border",
+    "--bf-color-status-info-content",
+    "--bf-color-status-info-surface",
+    "--bf-color-status-success-border",
+    "--bf-color-status-success-content",
+    "--bf-color-status-success-surface",
+    "--bf-color-status-warning-border",
+    "--bf-color-status-warning-content",
+    "--bf-color-status-warning-surface",
+    "--bf-color-surface-canvas",
+    "--bf-color-surface-chrome",
+    "--bf-color-surface-panel",
+    "--bf-color-surface-raised",
+    "--bf-color-surface-scene",
+    "--bf-color-surface-subtle",
+    "--bf-color-surface-tertiary",
+    "--bf-color-surface-workbench",
+    "--bf-effect-blur-base",
+    "--bf-effect-blur-medium",
+    "--bf-effect-blur-subtle",
+    "--bf-opacity-disabled",
+    "--bf-opacity-focus",
+    "--bf-opacity-hover",
+    "--bf-opacity-muted",
+    "--bf-shadow-accent-glow",
+    "--bf-shadow-base",
+    "--bf-shadow-composer",
+    "--bf-shadow-inner-highlight",
+    "--bf-shadow-inner-highlight-hover",
+    "--bf-shadow-lg",
+    "--bf-shadow-menu",
+    "--bf-shadow-overlay",
+    "--bf-shadow-raised",
+    "--bf-shadow-sm",
+    "--bf-shadow-xl",
+    "--bf-shadow-xs"
   ]
 }

@@ -2,11 +2,11 @@
  * Design system reference:
  *   palette  ─ Inherits BitFun host theme (--bitfun-* tokens) so it reads
  *              as a native panel under both bitfun-dark and bitfun-light.
- *              Local --rx-* tokens are derived from the host vars with
- *              standalone-safe fallbacks matching the default dark theme.
+ *              Local --rx-* tokens are derived from the required host vars;
+ *              the host contract owns first-paint defaults.
  *   accent   ─ host primary (cool blue / slate) for focus & active states;
  *              warning amber as the secondary "match" highlight.
- *   type     ─ system mono (code) + system sans (UI), follows --bitfun-font-*
+ *   type     ─ system mono (code) + system sans (UI), follows the two registered host font variables
  *   pattern  ─ bento-style cards on calm host surfaces
  *   motion   ─ 150-300ms color-shift micro-interactions, no scale jumps
  */
@@ -20,67 +20,52 @@ body, html { margin: 0; padding: 0; height: 100%; }
 [hidden] { display: none !important; }
 
 :root {
+  color-scheme: dark;
   /* Surfaces — drive everything off host bg tokens so the playground tracks
    * BitFun light/dark automatically. Fallbacks mirror the default dark theme. */
-  --rx-bg:        var(--bitfun-bg,            #0e0e10);
-  --rx-bg-2:      var(--bitfun-bg-tertiary,   #121214);
-  --rx-surface:   var(--bitfun-bg-secondary,  #1c1c1f);
-  --rx-surface-2: var(--bitfun-element-bg,    rgba(255,255,255,0.06));
-  --rx-surface-3: var(--bitfun-element-hover, rgba(255,255,255,0.10));
+  --rx-bg:        var(--bitfun-bg);
+  --rx-bg-2:      var(--bitfun-bg-tertiary);
+  --rx-surface:   var(--bitfun-bg-secondary);
+  --rx-surface-2: var(--bitfun-element-bg);
+  --rx-surface-3: var(--bitfun-element-hover);
 
-  --rx-border:        var(--bitfun-border-subtle, rgba(255,255,255,0.10));
-  --rx-border-strong: var(--bitfun-border,        rgba(255,255,255,0.18));
-  --rx-border-bright: var(--bitfun-border,        rgba(255,255,255,0.28));
+  --rx-border:        var(--bitfun-border-subtle);
+  --rx-border-strong: var(--bitfun-border);
+  --rx-border-bright: var(--bitfun-border);
 
-  --rx-text:      var(--bitfun-text,           #e8e8e8);
-  --rx-text-soft: var(--bitfun-text-secondary, #b0b0b0);
-  --rx-text-mute: var(--bitfun-text-muted,     #858585);
-  --rx-text-dim:  var(--bitfun-text-muted,     #6a6a6a);
+  --rx-text:      var(--bitfun-text);
+  --rx-text-soft: var(--bitfun-text-secondary);
+  --rx-text-mute: var(--bitfun-text-muted);
+  --rx-text-dim:  var(--bitfun-text-muted);
 
   /* Accent — follows host primary (blue in dark, slate in light) instead of
    * the previous saturated "run green" which clashed with BitFun's neutral palette. */
-  --rx-accent:        var(--bitfun-accent,       #60a5fa);
-  --rx-accent-strong: var(--bitfun-accent-hover, #3b82f6);
-  --rx-accent-soft:   rgba(96,165,250,0.14);
+  --rx-accent:        var(--bitfun-accent);
+  --rx-accent-strong: var(--bitfun-accent-hover);
+  --rx-accent-soft:   color-mix(in srgb, var(--rx-accent) 14%, transparent);
 
   /* Semantic colors — pulled from host so they harmonize with the rest of BitFun. */
-  --rx-match:      var(--bitfun-warning, #f59e0b);            /* warm match highlight */
-  --rx-match-soft: rgba(245,158,11,0.18);
-  --rx-error:      var(--bitfun-error,   #ef4444);
-  --rx-info:       var(--bitfun-info,    #E1AB80);
-  --rx-group:      #b39dff;                                    /* capture-group accent */
-  --rx-string:     var(--bitfun-success, #34d399);
+  --rx-match:      var(--bitfun-warning);            /* warm match highlight */
+  --rx-match-soft: color-mix(in srgb, var(--rx-match) 18%, transparent);
+  --rx-error:      var(--bitfun-error);
+  --rx-info:       var(--bitfun-info);
+  --rx-group:      var(--bitfun-accent-secondary);              /* capture-group accent */
+  --rx-string:     var(--bitfun-success);
 
-  --rx-radius:    var(--bitfun-radius,    8px);
+  --rx-radius:    var(--bitfun-radius);
   --rx-radius-sm: 6px;
-  --rx-shadow-card: 0 1px 0 rgba(255,255,255,0.025) inset, 0 4px 14px -8px rgba(0,0,0,0.55);
-  --rx-shadow-elevated: 0 1px 0 rgba(255,255,255,0.035) inset, 0 16px 32px -18px rgba(0,0,0,0.7);
+  --rx-shadow-card: var(--bitfun-shadow-card);
+  --rx-shadow-elevated: var(--bitfun-shadow-overlay);
 
-  --rx-mono: var(--bitfun-font-mono, "JetBrains Mono", "FiraCode", ui-monospace, "SFMono-Regular",
-              "SF Mono", Menlo, Monaco, "Cascadia Mono", "Cascadia Code", Consolas,
-              "Liberation Mono", "Courier New", monospace);
-  --rx-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-              "PingFang SC", "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI",
-              "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif);
+  --rx-mono: var(--bitfun-font-mono);
+  --rx-sans: var(--bitfun-font-sans);
 
   --rx-dur: 200ms;
   --rx-ease: cubic-bezier(.2,.8,.2,1);
 }
 
-/* Light-theme local overrides — host already swaps --bitfun-* tokens, but a
- * few decorative pieces (rgba accent washes, capture-group badge, code chips)
- * benefit from sturdier alpha / hue picks against a near-white surface. */
 [data-bf-appearance-mode="light"] {
-  --rx-accent-soft: rgba(71,85,105,0.10);
-  --rx-match-soft:  rgba(192,140,66,0.18);
-  --rx-group:       #6b5a89;
-  --rx-shadow-card:
-    0 1px 0 rgba(255,255,255,0.6) inset,
-    0 1px 2px rgba(15,23,42,0.06),
-    0 4px 14px -8px rgba(15,23,42,0.10);
-  --rx-shadow-elevated:
-    0 1px 0 rgba(255,255,255,0.6) inset,
-    0 12px 32px -18px rgba(15,23,42,0.20);
+  color-scheme: light;
 }
 
 body {
@@ -98,8 +83,8 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   /* Page wash: very faint accent halos on the host background — keeps the
    * surface feeling alive without introducing a competing hue. */
   background:
-    radial-gradient(1000px 500px at 90% -10%, rgba(96,165,250,0.05), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(139,92,246,0.035), transparent 55%),
+    radial-gradient(1000px 500px at 90% -10%, color-mix(in srgb, var(--rx-accent) 5%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--rx-group) 4%, transparent), transparent 55%),
     var(--rx-bg);
 }
 
@@ -666,11 +651,11 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--bitfun-scrollbar-thumb, rgba(255,255,255,0.14));
+  background: var(--bitfun-scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bitfun-scrollbar-thumb-hover, rgba(255,255,255,0.26));
+  background: var(--bitfun-scrollbar-thumb-hover);
 }
 
 /* ── Reduced motion ─────────────────────────────────── */
@@ -710,22 +695,10 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   .match__groups { margin-left: 40px; }
 }
 
-/* ── Light theme adaptation ─────────────────────────────────────────────
- * The host (see bridge_builder.rs) writes [data-bf-appearance-mode="light"] on <html>
- * AND repaints all --bitfun-* CSS variables. Because every --rx-* token above
- * already proxies through var(--bitfun-…), most of the playground re-tints
- * automatically. Only a handful of decorative pieces — page wash, frosted
- * topbar tint — need an explicit ivory pass. */
-[data-bf-appearance-mode="light"] .rx {
-  background:
-    radial-gradient(1000px 500px at 90% -10%, rgba(71,85,105,0.05), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(124,58,237,0.04), transparent 55%),
-    var(--rx-bg);
-}
 [data-bf-appearance-mode="light"] .topbar {
   background: color-mix(in srgb, var(--rx-bg) 85%, transparent);
   border-bottom-color: var(--rx-border);
 }
 [data-bf-appearance-mode="light"] .pattern-error {
-  color: #b91c1c;
+  color: var(--rx-error);
 }

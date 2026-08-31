@@ -13,7 +13,7 @@
     
     .language-selector__loading {
       margin-left: 8px;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
     }
   }
@@ -66,13 +66,13 @@
       width: 100%;
 
       &--active {
-        color: var(--bf-appearance-token-color-accent-500);
+        color: var(--bf-color-accent-default);
         font-weight: var(--bf-font-weight-medium);
       }
     }
     
     .language-selector__check {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
       font-size: var(--bf-font-size-base);
     }
   }

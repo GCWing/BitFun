@@ -67,12 +67,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bf-appearance-token-color-bg-scene); /* FlowChat background. */
+    background: var(--bf-color-surface-scene); /* FlowChat background. */
   }
   
   .empty-state {
     text-align: center;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     padding: 2rem;
   }
   
@@ -94,10 +94,10 @@
     max-width: calc(100% - 32px);
     margin: 0 auto 8px;
     padding: 4px 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 6px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     text-align: center;
@@ -113,7 +113,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     pointer-events: none;

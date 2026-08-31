@@ -26,7 +26,12 @@ import {
 } from './remote/RemoteSurfaceHost';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SidebarWorkspaceSection } from './SidebarWorkspaceSection';
-import { FLOATING_PANEL_BG, LINE, PAGE_BG } from './Theme';
+import {
+  FLOATING_PANEL_BG,
+  LINE,
+  PAGE_BG,
+  SHADOW_SUBTLE,
+} from './Theme';
 
 const WIDE_DETAIL_CONTENT_MAX_WIDTH: number = 920;
 
@@ -171,7 +176,7 @@ export struct WideConversationHost {
       }
       .width('100%').height('100%').backgroundColor(FLOATING_PANEL_BG)
       .borderRadius(18).clip(true)
-      .shadow({ radius: 24, color: '#14000000', offsetX: 4, offsetY: 8 })
+      .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetX: 4, offsetY: 8 })
     }
     .width(WideLayoutGeometry.masterPaneWidth(this.filePreviewLayout, this.wideMasterPaneWidth))
     .height('100%').padding({ left: 10, right: 6, top: 10, bottom: 10 }).backgroundColor(PAGE_BG)

@@ -20,15 +20,13 @@
 
 .bitfun-chat-input-pixel-pet {
   /* FIXED panda body palette — never inverted. */
-  --bitfun-pet-color-rgb: 32, 32, 36;
-  --bitfun-pet-cream-rgb: 250, 250, 249;
-  --bitfun-pet-color: rgb(var(--bitfun-pet-color-rgb));
-  --bitfun-pet-cream: rgb(var(--bitfun-pet-cream-rgb));
+  --bitfun-pet-color: var(--bf-color-content-on-light);
+  --bitfun-pet-cream: var(--bf-color-content-on-dark);
 
   /* Decorative palette — inverts between light/dark themes so overlays
      stay readable on either chat background. */
-  --bitfun-pet-decor: rgb(var(--bitfun-pet-color-rgb));
-  --bitfun-pet-decor-soft: rgba(var(--bitfun-pet-color-rgb), 0.55);
+  --bitfun-pet-decor: var(--bitfun-pet-color);
+  --bitfun-pet-decor-soft: color-mix(in srgb, var(--bitfun-pet-color) 55%, transparent);
   --bitfun-petdex-width: 42px;
   --bitfun-petdex-height: 46px;
   --bitfun-petdex-margin-top: -8px;
@@ -107,8 +105,8 @@
    outlines on every internal element. */
 :root[data-bf-appearance-mode='dark'] .bitfun-chat-input-pixel-pet,
 [data-bf-appearance-mode='dark'] .bitfun-chat-input-pixel-pet {
-  --bitfun-pet-decor: rgb(var(--bitfun-pet-cream-rgb));
-  --bitfun-pet-decor-soft: rgba(var(--bitfun-pet-cream-rgb), 0.6);
+  --bitfun-pet-decor: var(--bitfun-pet-cream);
+  --bitfun-pet-decor-soft: color-mix(in srgb, var(--bitfun-pet-cream) 60%, transparent);
 
   .bitfun-panda-head__silhouette {
     filter: url(#bitfun-panda-outline);

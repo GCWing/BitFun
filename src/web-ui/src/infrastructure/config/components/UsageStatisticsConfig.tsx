@@ -31,22 +31,22 @@ import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@bitfun/ui
 // ---------------------------------------------------------------------------
 
 const SERIES_COLORS = {
-  input: 'var(--bf-appearance-token-color-accent-500)',
-  output: 'var(--bf-appearance-token-color-success)',
-  cacheRead: 'var(--bf-appearance-token-color-cyan-500)',
-  cacheHitRate: 'var(--bf-appearance-token-color-purple-500)',
+  input: 'var(--bf-color-accent-default)',
+  output: 'var(--bf-color-status-success-content)',
+  cacheRead: 'var(--bf-color-status-info-content)',
+  cacheHitRate: 'var(--bf-color-accent-secondary)',
 } as const;
 
 const DONUT_PALETTE = [
-  'var(--bf-appearance-token-color-accent-500)',
-  'var(--bf-appearance-token-color-purple-500)',
-  'var(--bf-appearance-token-color-cyan-500)',
-  'var(--bf-appearance-token-color-success)',
-  'var(--bf-appearance-token-color-warning)',
-  'var(--bf-appearance-token-color-indigo-500)',
-  'var(--bf-appearance-token-color-error)',
-  'var(--bf-appearance-token-color-accent-300)',
-  'var(--bf-appearance-token-color-purple-200)',
+  'var(--bf-color-accent-default)',
+  'var(--bf-color-accent-secondary)',
+  'var(--bf-color-status-info-content)',
+  'var(--bf-color-status-success-content)',
+  'var(--bf-color-status-warning-content)',
+  'var(--bf-color-accent-default)',
+  'var(--bf-color-status-danger-content)',
+  'var(--bf-color-action-secondary-pressed)',
+  'color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent)',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ const DonutChart: React.FC<{
           cy="70"
           r={radius}
           fill="none"
-          stroke="var(--bf-appearance-token-element-bg-soft)"
+          stroke="var(--bf-color-action-quiet-hover)"
           strokeWidth="16"
         />
         {entries.map((entry, index) => {
@@ -213,7 +213,7 @@ const DonutChart: React.FC<{
             cy="70"
             r={radius}
             fill="none"
-            stroke="var(--bf-appearance-token-element-bg-soft)"
+            stroke="var(--bf-color-action-quiet-hover)"
             strokeWidth="16"
           />
         )}
@@ -633,7 +633,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 cy={yFor(hovered[series.key])}
                 r="3.5"
                 fill={series.color}
-                stroke="var(--bf-appearance-token-element-bg-soft)"
+                stroke="var(--bf-color-action-quiet-hover)"
                 strokeWidth="1"
               />
             ))}
@@ -643,7 +643,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 cy={rateFor(hoveredHitRate)}
                 r="3.5"
                 fill={SERIES_COLORS.cacheHitRate}
-                stroke="var(--bf-appearance-token-element-bg-soft)"
+                stroke="var(--bf-color-action-quiet-hover)"
                 strokeWidth="1"
               />
             )}

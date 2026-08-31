@@ -61,7 +61,7 @@ describe('SettingsNav typography and layout ownership', () => {
 
   it('resolves shared navigation text against the current chrome instead of secondary action ink', () => {
     const root = declarations('.bitfun-settings-nav');
-    expect(root.getPropertyValue('--bf-color-content-primary')).toBe('var(--bf-appearance-token-color-text-primary)');
+    expect(root.getPropertyValue('--bf-color-content-primary')).toBe('var(--bf-color-content-primary)');
     expect(root.getPropertyValue('--bf-color-action-neutral-content')).toBe('');
   });
 

@@ -16,9 +16,9 @@
   margin: 0;
   padding: $size-gap-2 $size-gap-3;
   border: none;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
   background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
   font-family:var(--bf-font-family-sans);
   font-size: var(--bf-font-size-xs);
@@ -32,20 +32,20 @@
   }
 
   &:hover {
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &.is-remote {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, transparent);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
+    color: var(--bf-color-content-primary);
 
     .bitfun-device-switcher__icon {
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
     }
   }
 
@@ -72,8 +72,8 @@
     flex-shrink: 0;
     padding: 1px 5px;
     border-radius: $size-radius-sm;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
-    color: var(--bf-appearance-token-color-success);
+    background: color-mix(in srgb, var(--bf-color-status-success-content) 18%, transparent);
+    color: var(--bf-color-status-success-content);
     font-size: var(--bf-font-size-micro);
     font-variant-numeric: tabular-nums;
   }
@@ -105,15 +105,15 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-success);
+    background: var(--bf-color-status-success-content);
 
     &.is-busy {
-      background: var(--bf-appearance-token-color-warning);
+      background: var(--bf-color-status-warning-content);
       animation: bitfun-device-switcher-pulse 1.6s $easing-standard infinite;
     }
 
     &.is-offline {
-      background: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-color-content-muted);
       animation: none;
     }
   }
@@ -122,21 +122,21 @@
     flex-shrink: 0;
     padding: 1px 5px;
     border-radius: $size-radius-sm;
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
     white-space: nowrap;
 
     &.is-busy {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
-      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+      color: var(--bf-color-status-warning-content);
     }
   }
 
   &__empty,
   &__hint {
     padding: $size-gap-1 $size-gap-2;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-ui);
   }

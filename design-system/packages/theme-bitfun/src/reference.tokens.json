@@ -93,6 +93,34 @@
         "900": { "$value": "#0e4853" },
         "950": { "$value": "#072f38" }
       },
+      "purple": {
+        "$description": "Purple scale for secondary product emphasis and named product-domain identities.",
+        "50": { "$value": "#f7f2fc" },
+        "100": { "$value": "#eee5f7" },
+        "200": { "$value": "#dfceec" },
+        "300": { "$value": "#c8aedb" },
+        "400": { "$value": "#a98ac4" },
+        "500": { "$value": "#8b5cf6" },
+        "600": { "$value": "#7c6b99" },
+        "700": { "$value": "#655680" },
+        "800": { "$value": "#504464" },
+        "900": { "$value": "#3c334b" },
+        "950": { "$value": "#282132" }
+      },
+      "pink": {
+        "$description": "Pink scale for named assistant identity without borrowing product accent or status semantics.",
+        "50": { "$value": "#fdf2f8" },
+        "100": { "$value": "#fce7f3" },
+        "200": { "$value": "#fbcfe8" },
+        "300": { "$value": "#f9a8d4" },
+        "400": { "$value": "#f472b6" },
+        "500": { "$value": "#ec4899" },
+        "600": { "$value": "#db2777" },
+        "700": { "$value": "#be185d" },
+        "800": { "$value": "#9d174d" },
+        "900": { "$value": "#831843" },
+        "950": { "$value": "#500724" }
+      },
       "green": {
         "$description": "Green scale for affirmative status and the BitFun switch accent.",
         "50": { "$value": "#effcf6" },

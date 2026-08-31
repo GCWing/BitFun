@@ -4,6 +4,19 @@ import styles from "./Stack.module.css";
 
 type StackGap = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "8" | "10" | "12";
 
+const stackGapVariables = {
+  "0": "var(--bf-space-0)",
+  "1": "var(--bf-space-1)",
+  "2": "var(--bf-space-2)",
+  "3": "var(--bf-space-3)",
+  "4": "var(--bf-space-4)",
+  "5": "var(--bf-space-5)",
+  "6": "var(--bf-space-6)",
+  "8": "var(--bf-space-8)",
+  "10": "var(--bf-space-10)",
+  "12": "var(--bf-space-12)",
+} as const satisfies Record<StackGap, string>;
+
 export interface StackProps extends HTMLAttributes<HTMLDivElement> {
   align?: "start" | "center" | "end" | "stretch";
   direction?: "horizontal" | "vertical";
@@ -24,7 +37,7 @@ export function Stack({
 }: StackProps) {
   const stackStyle = {
     ...style,
-    "--_stack-gap": `var(--bf-space-${gap})`,
+    "--_stack-gap": stackGapVariables[gap],
   } as CSSProperties;
 
   return (

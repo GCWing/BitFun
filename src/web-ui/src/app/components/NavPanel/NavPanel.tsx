@@ -120,6 +120,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
       data-bf-component="nav-panel"
       data-bf-part="root"
       data-bf-state={appearanceState}
+      data-bf-theme-scope="chrome"
       className={`bitfun-nav-panel ${className}`}
       aria-label={t('nav.aria.mainNav')}
       data-testid="nav-panel"

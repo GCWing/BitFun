@@ -175,13 +175,13 @@
 /* ========== Animation utilities ========== */
 
 /* Base animation classes */
-.anim-fade-in { animation: bitfun-utility-fade-in var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
-.anim-fade-in-slow { animation: bitfun-utility-fade-in var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-fade-in-up { animation: bitfun-utility-fade-in-up var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-slide-in-up { animation: bitfun-utility-slide-in-up var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-slide-in-left { animation: bitfun-utility-slide-in-left var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-slide-in-right { animation: bitfun-utility-slide-in-right var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard); }
-.anim-scale-in { animation: bitfun-utility-scale-in var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard); }
+.anim-fade-in { animation: bitfun-utility-fade-in var(--bf-motion-duration-fast) var(--bf-motion-easing-standard); }
+.anim-fade-in-slow { animation: bitfun-utility-fade-in var(--bf-motion-duration-base) var(--bf-motion-easing-standard); }
+.anim-fade-in-up { animation: bitfun-utility-fade-in-up var(--bf-motion-duration-base) var(--bf-motion-easing-standard); }
+.anim-slide-in-up { animation: bitfun-utility-slide-in-up var(--bf-motion-duration-base) var(--bf-motion-easing-standard); }
+.anim-slide-in-left { animation: bitfun-utility-slide-in-left var(--bf-motion-duration-base) var(--bf-motion-easing-standard); }
+.anim-slide-in-right { animation: bitfun-utility-slide-in-right var(--bf-motion-duration-base) var(--bf-motion-easing-standard); }
+.anim-scale-in { animation: bitfun-utility-scale-in var(--bf-motion-duration-fast) var(--bf-motion-easing-standard); }
 
 /* Interaction animation classes */
 .anim-pulse { animation: bitfun-utility-pulse 2s ease-in-out infinite; }
@@ -197,24 +197,24 @@
 /* ========== Hover effect classes ========== */
 
 .hover-lift {
-  transition: transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 }
 .hover-lift:hover {
   transform: translateY(-2px);
 }
 
 .hover-scale {
-  transition: transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 }
 .hover-scale:hover {
   transform: scale(1.05);
 }
 
 .hover-glow {
-  transition: box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition: box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 }
 .hover-glow:hover {
-  box-shadow: var(--bf-appearance-token-shadow-lg);
+  box-shadow: var(--bf-shadow-lg);
 }
 
 /* Glow sweep effect */
@@ -231,7 +231,7 @@
   height: 100%;
   background: linear-gradient(90deg,
     transparent,
-    var(--bf-appearance-token-color-overlay-white-20),
+    color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent),
     transparent);
   transition: left 0.5s ease;
   pointer-events: none;
@@ -246,33 +246,33 @@
 /* Static utility effect; themed components should use their owning surface tokens. */
 /* Base glass effect */
 .glass-base {
-  background: var(--bf-appearance-token-glass-bg-base);
-  border: 1px solid var(--bf-appearance-token-glass-border-base);
+  background: var(--bf-color-surface-subtle);
+  border: 1px solid var(--bf-color-border-default);
   backdrop-filter: blur(8px) saturate(1.1);
   -webkit-backdrop-filter: blur(8px) saturate(1.1);
-  box-shadow: var(--bf-appearance-token-shadow-base);
+  box-shadow: var(--bf-shadow-base);
 }
 
 /* Enhanced glass effect on hover */
 .glass-hover {
   transition:
-    background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
-    transform var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 }
 .glass-hover:hover {
-  background: var(--bf-appearance-token-glass-bg-hover);
-  border-color: var(--bf-appearance-token-glass-border-hover);
-  box-shadow: var(--bf-appearance-token-shadow-lg);
+  background: var(--bf-color-action-neutral-surface-hover);
+  border-color: var(--bf-color-field-border-hover);
+  box-shadow: var(--bf-shadow-lg);
   transform: translateY(-1px);
 }
 
 /* Active glass effect */
 .glass-active {
-  background: var(--bf-appearance-token-glass-bg-active);
-  border-color: var(--bf-appearance-token-border-strong);
-  box-shadow: var(--bf-appearance-token-shadow-xl);
+  background: var(--bf-color-action-neutral-surface-pressed);
+  border-color: var(--bf-color-border-strong);
+  box-shadow: var(--bf-shadow-xl);
 }
 
 /* ========== Decorative effects ========== */
@@ -288,9 +288,9 @@
   height: 2px;
   background: linear-gradient(90deg,
     transparent 0%,
-    var(--bf-appearance-token-color-overlay-white-20) 20%,
-    rgba(var(--bf-appearance-token-color-static-white-rgb), 0.3) 50%,
-    var(--bf-appearance-token-color-overlay-white-20) 80%,
+    color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent) 20%,
+    color-mix(in srgb, var(--bf-color-content-on-dark) 30%, transparent) 50%,
+    color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent) 80%,
     transparent 100%);
   border-radius: 2px;
   opacity: 0.4;
@@ -308,9 +308,9 @@
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-overlay-white-04) 0%,
+    color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 0%,
     transparent 50%,
-    color-mix(in srgb, var(--bf-appearance-token-color-static-white) 1%, transparent) 100%);
+    color-mix(in srgb, var(--bf-color-content-on-dark) 1%, transparent) 100%);
   pointer-events: none;
   z-index: 1;
   border-radius: inherit;
@@ -351,8 +351,8 @@
 /* High-performance mode - mobile optimization */
 @media (max-width: 768px) {
   .glass-base {
-    backdrop-filter: var(--bf-appearance-token-blur-subtle);
-    -webkit-backdrop-filter: var(--bf-appearance-token-blur-subtle);
+    backdrop-filter: var(--bf-effect-blur-subtle);
+    -webkit-backdrop-filter: var(--bf-effect-blur-subtle);
   }
 
   .anim-glass-shine,

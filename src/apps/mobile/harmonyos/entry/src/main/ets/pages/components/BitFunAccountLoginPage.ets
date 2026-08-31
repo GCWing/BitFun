@@ -7,7 +7,7 @@ import {
   LINE,
   MUTED,
   PAGE_BG_FADE,
-  RED,
+  STATUS_DANGER,
   SUBTLE
 } from './Theme';
 import { SheetActionFooter } from './SheetActionFooter';
@@ -94,7 +94,7 @@ export struct BitFunAccountLoginPage {
         Text(this.errorText)
           .fontSize(MobileDesignTypography.bodySmall.size)
           .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-          .fontColor(RED)
+          .fontColor(STATUS_DANGER)
           .width('100%')
           .margin({ top: 12, left: 4, right: 4 })
       }

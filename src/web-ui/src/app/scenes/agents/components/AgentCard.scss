@@ -6,9 +6,9 @@
   width: 100%;
   min-width: 0;
   height: 148px;
-  border: 1px solid var(--bf-appearance-token-border-base);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-color-bg-elevated);
+  background: var(--bf-color-surface-raised);
   box-shadow: $shadow-xs;
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -27,13 +27,13 @@
 
   &:hover {
     transform: translateY(-1px);
-    border-color: var(--bf-appearance-token-border-medium);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-surface-subtle);
     box-shadow: $shadow-sm;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-text-primary);
+    outline: 2px solid var(--bf-color-content-primary);
     outline-offset: 2px;
   }
 
@@ -53,7 +53,7 @@
       inset-block: 12px;
       inset-inline-end: 0;
       width: 1px;
-      background: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-border-subtle);
     }
   }
 
@@ -64,7 +64,7 @@
     width: 38px;
     height: 38px;
     border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     box-shadow: $shadow-xs;
     position: relative;
     z-index: 1;
@@ -75,7 +75,7 @@
   }
 
   &__icon {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__content {
@@ -117,7 +117,7 @@
   &__name {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-base);
     white-space: nowrap;
     overflow: hidden;
@@ -136,8 +136,8 @@
     padding: 1px 6px;
     overflow: hidden;
     border-color: transparent;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-micro);
     text-overflow: ellipsis;
   }
@@ -154,7 +154,7 @@
     margin: 0;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-relaxed);
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -183,7 +183,7 @@
     strong {
       min-width: 0;
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-meta);
       font-variant-numeric: tabular-nums;
       line-height: var(--bf-line-height-none);
@@ -203,13 +203,13 @@
     place-items: center;
     flex: none;
     border-radius: 5px;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-secondary);
   }
 
   &__meta-label {
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-2xs);
     line-height: var(--bf-line-height-none);
     text-overflow: ellipsis;
@@ -232,8 +232,8 @@
     padding: 1px 6px;
     border-radius: $size-radius-full;
     border: 1px solid transparent;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-medium);
     white-space: nowrap;
@@ -281,9 +281,9 @@
   // ── Detail information architecture ─────────────────────────────────────
   &__config-panel {
     padding: 14px 16px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-color-bg-elevated);
+    background: var(--bf-color-surface-raised);
   }
 
   &__configuration {
@@ -315,7 +315,7 @@
     border: 0;
     border-radius: $size-radius-base;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-meta);
     text-align: start;
     cursor: pointer;
@@ -330,13 +330,13 @@
     }
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-surface-subtle);
+      color: var(--bf-color-content-primary);
     }
 
     &.is-active {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
       font-weight: var(--bf-font-weight-semibold);
     }
   }
@@ -344,10 +344,10 @@
   &__config-nav-count {
     min-width: 20px;
     padding: 1px 5px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-full;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-2xs);
     font-variant-numeric: tabular-nums;
     text-align: center;
@@ -356,7 +356,7 @@
   &__config-nav-divider {
     height: 1px;
     margin: 4px 8px;
-    background: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-border-subtle);
   }
 
   &__config-main {
@@ -382,7 +382,7 @@
 
   &__config-panel-head {
     padding-bottom: 10px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
 
     h3,
     p {
@@ -390,14 +390,14 @@
     }
 
     h3 {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-semibold);
     }
 
     p {
       margin-top: 3px;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-micro);
       line-height: var(--bf-line-height-relaxed);
     }
@@ -415,9 +415,9 @@
     min-width: 0;
     min-height: 52px;
     padding: 8px 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
 
     > span,
     > strong {
@@ -428,14 +428,14 @@
     }
 
     > span {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-2xs);
     }
 
     > strong,
     > p {
       margin: 5px 0 0;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-meta);
       font-weight: var(--bf-font-weight-medium);
       line-height: var(--bf-line-height-relaxed);
@@ -481,7 +481,7 @@
     width: 100%;
     height: 5px;
     border-radius: 2px;
-    background: var(--bf-appearance-token-element-bg-medium);
+    background: var(--bf-color-action-neutral-surface-hover);
     transition: background $motion-fast $easing-standard;
   }
 
@@ -490,7 +490,7 @@
     width: 28px;
     text-align: right;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-variant-numeric: tabular-nums;
   }
 
@@ -500,12 +500,12 @@
     flex-direction: column;
     gap: $size-gap-2;
     padding: 10px 12px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-color-bg-elevated);
+    background: var(--bf-color-surface-raised);
 
     &--capabilities {
-      background: var(--bf-appearance-token-element-bg-subtle);
+      background: var(--bf-color-surface-subtle);
     }
   }
 
@@ -529,7 +529,7 @@
     gap: $size-gap-2;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__section-count {
@@ -539,10 +539,10 @@
     padding: 1px 6px;
     border-radius: $size-radius-full;
     min-width: 20px;
-    background: var(--bf-appearance-token-color-bg-elevated);
+    background: var(--bf-color-surface-raised);
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-variant-numeric: tabular-nums;
     text-transform: none;
     letter-spacing: var(--bf-letter-spacing-normal);
@@ -558,7 +558,7 @@
   &__section-note {
     margin: 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-base);
   }
 
@@ -570,9 +570,9 @@
     flex-wrap: wrap;
     min-width: 0;
     padding: 3px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__tab {
@@ -587,7 +587,7 @@
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
     letter-spacing: var(--bf-letter-spacing-wide);
@@ -606,14 +606,14 @@
     }
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-secondary);
     }
 
     &.is-active {
-      border-color: var(--bf-appearance-token-border-subtle);
-      background: var(--bf-appearance-token-color-bg-elevated);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-border-subtle);
+      background: var(--bf-color-surface-raised);
+      color: var(--bf-color-content-primary);
       box-shadow: $shadow-xs;
     }
   }
@@ -625,13 +625,13 @@
     min-width: 20px;
     padding: 0 5px;
     border-radius: 999px;
-    background: var(--bf-appearance-token-element-bg-medium);
+    background: var(--bf-color-action-neutral-surface-hover);
     color: inherit;
     font-size: var(--bf-font-size-2xs);
     line-height: var(--bf-line-height-ui);
     font-weight: var(--bf-font-weight-semibold);
     font-variant-numeric: tabular-nums;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
   }
 
   &__skill-groups {
@@ -645,9 +645,9 @@
     flex-direction: column;
     gap: $size-gap-1;
     padding: $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__skill-group-head {
@@ -668,7 +668,7 @@
   &__skill-group-title {
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wide);
   }
@@ -680,9 +680,9 @@
     min-width: 22px;
     padding: 1px 6px;
     border-radius: $size-radius-full;
-    background: var(--bf-appearance-token-element-bg-medium);
+    background: var(--bf-color-action-neutral-surface-hover);
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-variant-numeric: tabular-nums;
   }
 
@@ -706,18 +706,18 @@
     align-items: center;
     padding: 3px 9px;
     border-radius: $size-radius-full;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-subtle);
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
 
     &.is-covered {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 32%, var(--bf-appearance-token-border-subtle));
-      color: var(--bf-appearance-token-color-text-muted);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 32%, var(--bf-color-border-subtle));
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -728,12 +728,12 @@
     font-family: var(--bf-font-family-sans);
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__chip.is-covered &__chip-state,
   &__token.is-covered &__token-state {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 
   // ── Editable token grid ──────────────────────────────────────────────────
@@ -757,7 +757,7 @@
     background: transparent;
     font-size: var(--bf-font-size-meta);
     font-family: var(--bf-font-family-mono);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     transition:
       border-color $motion-fast $easing-standard,
@@ -765,25 +765,25 @@
       color $motion-fast $easing-standard;
 
     &:hover:not(.is-on) {
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border-color: var(--bf-color-field-border-hover);
+      color: var(--bf-color-content-secondary);
     }
 
     &.is-on {
-      border: 1px solid var(--bf-appearance-token-color-accent-400);
-      background: var(--bf-appearance-token-color-accent-100);
-      color: var(--bf-appearance-token-color-accent-500);
+      border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      background: var(--bf-color-action-secondary-background);
+      color: var(--bf-color-accent-default);
 
       &:hover {
-        border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+        border-color: color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent);
+        background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
       }
     }
 
     &.is-covered {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 32%, var(--bf-appearance-token-border-subtle));
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
-      color: var(--bf-appearance-token-color-text-muted);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 32%, var(--bf-color-border-subtle));
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
+      color: var(--bf-color-content-muted);
     }
 
     &.is-readonly,
@@ -793,12 +793,12 @@
 
       &:hover:not(.is-on) {
         border-color: transparent;
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
       }
 
       &.is-on:hover {
-        border-color: var(--bf-appearance-token-color-accent-400);
-        background: var(--bf-appearance-token-color-accent-100);
+        border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+        background: var(--bf-color-action-secondary-background);
       }
     }
   }
@@ -813,7 +813,7 @@
   // ── Empty inline state ───────────────────────────────────────────────────
   &__empty-inline {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-style: italic;
   }
 }

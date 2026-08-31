@@ -127,7 +127,7 @@ import { xtermAppearanceAdapter } from '../adapters/XtermAppearanceAdapter';
 import { mermaidAppearanceAdapter } from '../adapters/MermaidAppearanceAdapter';
 import { widgetAppearanceAdapter } from '../adapters/WidgetAppearanceAdapter';
 import { canvasAppearanceAdapter } from '../adapters/CanvasAppearanceAdapter';
-import { cssTokenAppearanceAdapter } from '../adapters/CssTokenAppearanceAdapter';
+import { themeTokenAppearanceAdapter } from '../adapters/ThemeTokenAppearanceAdapter';
 import { tiptapEditorAppearanceDescriptor } from '@/tools/editor/meditor/components/TiptapEditor.appearance';
 import { workspaceProjectPermissionsDialogAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceProjectPermissionsDialog.appearance';
 import { workspaceSessionBatchModalAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceSessionBatchModal.appearance';
@@ -505,7 +505,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerScene(skillsAppearanceDescriptor)
     .registerScene(terminalAppearanceDescriptor)
     .registerScene(todosSceneAppearanceDescriptor)
-    .registerRenderer(cssTokenAppearanceAdapter)
+    .registerRenderer(themeTokenAppearanceAdapter)
     .registerRenderer(monacoAppearanceAdapter)
     .registerRenderer(xtermAppearanceAdapter)
     .registerRenderer(mermaidAppearanceAdapter)

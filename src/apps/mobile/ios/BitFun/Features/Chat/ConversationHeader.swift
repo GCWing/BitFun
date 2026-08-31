@@ -31,12 +31,12 @@ struct ConversationHeader: View {
                             .background(BitFunTheme.card)
                             .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
                             .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.07), radius: 8, y: 3)
+                            .shadow(color: BitFunTheme.shadowMedium, radius: 8, y: 3)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(MobileLocalization.text(sidebarActionLabel))
                 } else {
-                    Color.clear
+                    BitFunTheme.transparent
                         .frame(
                             width: MobileDesignGeometry.controlTouchSize,
                             height: MobileDesignGeometry.controlTouchSize
@@ -70,7 +70,7 @@ struct ConversationHeader: View {
                 if model.selectedSession != nil {
                     actionsMenu
                 } else {
-                    Color.clear
+                    BitFunTheme.transparent
                         .frame(
                             width: MobileDesignGeometry.controlTouchSize,
                             height: MobileDesignGeometry.controlTouchSize
@@ -109,7 +109,7 @@ struct ConversationHeader: View {
                 .background(BitFunTheme.card)
                 .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
                 .clipShape(Circle())
-                .shadow(color: .black.opacity(0.07), radius: 8, y: 3)
+                .shadow(color: BitFunTheme.shadowMedium, radius: 8, y: 3)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(model.localized("会话操作"))
@@ -153,7 +153,7 @@ struct ConversationHeader: View {
         Button(action: action) {
             Text(model.localized(title))
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(primary && enabled ? Color.white : BitFunTheme.ink)
+                .foregroundStyle(primary && enabled ? BitFunTheme.contentOnAction : BitFunTheme.ink)
                 .frame(width: 52, height: 42)
                 .background(primary && enabled ? BitFunTheme.accent : BitFunTheme.soft)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -230,7 +230,7 @@ struct ConversationActionsPopover: View {
             }
             .padding(.horizontal, 8)
             .frame(height: MobileDesignGeometry.popoverActionHeight)
-            .background(selected ? BitFunTheme.soft : Color.clear)
+            .background(selected ? BitFunTheme.soft : BitFunTheme.transparent)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)

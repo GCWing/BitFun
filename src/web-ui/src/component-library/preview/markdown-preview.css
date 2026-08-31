@@ -1,19 +1,19 @@
 /* Markdown preview page styles */
 
 .markdown-preview-page {
-  --private-markdown-preview-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-indigo-500) 18%, var(--bf-appearance-token-color-static-black)) 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 18%, var(--bf-appearance-token-color-static-black)) 100%);
-  --private-markdown-preview-header-border: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 16%, var(--bf-appearance-token-color-static-black));
-  --private-markdown-preview-badge-bg: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
-  --private-markdown-preview-badge-border: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 40%, transparent);
-  --private-markdown-preview-badge-text: var(--bf-appearance-token-color-accent-500);
-  --private-preview-panel-bg: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 96%, var(--bf-appearance-token-color-static-white));
-  --private-preview-border: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, var(--bf-appearance-token-color-static-white));
-  --private-preview-text-primary: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 88%, var(--bf-appearance-token-color-static-black));
-  --private-preview-text-disabled: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 40%, var(--bf-appearance-token-color-static-black));
+  --private-markdown-preview-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--bf-color-accent-secondary) 18%, var(--bf-color-content-on-light)) 0%, color-mix(in srgb, var(--bf-color-accent-hover) 18%, var(--bf-color-content-on-light)) 100%);
+  --private-markdown-preview-header-border: color-mix(in srgb, var(--bf-color-content-on-dark) 16%, var(--bf-color-content-on-light));
+  --private-markdown-preview-badge-bg: color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
+  --private-markdown-preview-badge-border: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+  --private-markdown-preview-badge-text: var(--bf-color-accent-default);
+  --private-preview-panel-bg: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
+  --private-preview-border: color-mix(in srgb, var(--bf-color-content-on-light) 90%, var(--bf-color-content-on-dark));
+  --private-preview-text-primary: color-mix(in srgb, var(--bf-color-content-on-dark) 88%, var(--bf-color-content-on-light));
+  --private-preview-text-disabled: color-mix(in srgb, var(--bf-color-content-on-dark) 40%, var(--bf-color-content-on-light));
 
   min-height: 100vh;
   height: 100vh;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
   color: var(--private-preview-text-primary);
   display: flex;
   flex-direction: column;
@@ -27,7 +27,7 @@
   padding: 20px 32px;
   background: var(--private-markdown-preview-header-bg);
   border-bottom: 1px solid var(--private-markdown-preview-header-border);
-  box-shadow: 0 2px 8px var(--bf-appearance-token-color-overlay-black-50);
+  box-shadow: 0 2px 8px var(--bf-color-overlay-scrim);
 }
 
 .header-left {
@@ -40,7 +40,7 @@
   margin: 0;
   font-size: var(--bf-font-size-4xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-static-white);
+  color: var(--bf-color-content-on-dark);
 }
 
 .markdown-preview-page .badge {
@@ -75,7 +75,7 @@
 
 .control-group label {
   font-size: var(--bf-font-size-base);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-weight: var(--bf-font-weight-medium);
 }
 
@@ -89,7 +89,7 @@
   padding: 32px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
   min-height: 0;
 }
 
@@ -107,8 +107,8 @@
   width: 100%;
   min-height: 500px;
   padding: 20px;
-  background: var(--bf-appearance-token-color-overlay-white-04);
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   border-radius: 8px;
   color: var(--private-preview-text-primary);
   font-family: var(--bf-font-family-mono);
@@ -121,8 +121,8 @@
 }
 
 .markdown-editor:focus {
-  border-color: var(--bf-appearance-token-border-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-hover) 10%, transparent);
 }
 
 .markdown-editor::placeholder {
@@ -142,5 +142,5 @@
   margin: 0 0 16px 0;
   font-size: var(--bf-font-size-3xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-static-white);
+  color: var(--bf-color-content-on-dark);
 }

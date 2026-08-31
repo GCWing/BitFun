@@ -29,7 +29,7 @@ struct ChatTimelineView: View {
                     if model.timelineRows.isEmpty && model.isSending {
                         TypingIndicator().frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Color.clear.frame(height: 1).id("timeline-bottom")
+                    BitFunTheme.transparent.frame(height: 1).id("timeline-bottom")
                 }
                 .padding(.horizontal, MobileDesignGeometry.contentGutter)
                 .padding(.top, MobileDesignGeometry.timelineTopPadding)
@@ -61,7 +61,7 @@ struct ChatTimelineView: View {
                             .background(BitFunTheme.card)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
-                            .shadow(color: .black.opacity(0.09), radius: 8, y: 3)
+                            .shadow(color: BitFunTheme.shadowMedium, radius: 8, y: 3)
                     }
                     .buttonStyle(.plain)
                     .padding(18)
@@ -112,7 +112,7 @@ private struct ConversationRowView: View {
                 Button { model.retryMessage(row.text) } label: {
                     Label(model.localized("重新发送"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
-                        .foregroundStyle(BitFunTheme.red)
+                        .foregroundStyle(BitFunTheme.statusDanger)
                 }
                 .buttonStyle(.plain)
             }
@@ -143,7 +143,7 @@ private struct ConversationRowView: View {
                 Button { model.retryMessage(row.text) } label: {
                     Label(model.localized("重试"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
-                        .foregroundStyle(BitFunTheme.red)
+                        .foregroundStyle(BitFunTheme.statusDanger)
                 }
                 .buttonStyle(.plain)
             }
@@ -415,7 +415,7 @@ private struct FileReferenceCard: View {
                             .foregroundStyle(BitFunTheme.muted).lineLimit(1)
                         if let status = model.downloadStatus(for: reference.remotePath) {
                             Text(status).font(MobileDesignTypography.labelSmall.font)
-                                .foregroundStyle(model.downloadPhase == .failed ? BitFunTheme.red : BitFunTheme.muted)
+                                .foregroundStyle(model.downloadPhase == .failed ? BitFunTheme.statusDanger : BitFunTheme.muted)
                                 .lineLimit(1)
                         }
                     }
@@ -478,11 +478,11 @@ private struct FullScreenTimelineImage: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            BitFunTheme.mediaBackground.ignoresSafeArea()
             if let uiImage = image.uiImage { Image(uiImage: uiImage).resizable().scaledToFit().ignoresSafeArea() }
             Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                    .frame(width: 44, height: 44).background(Color.black.opacity(0.55)).clipShape(Circle())
+                Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(BitFunTheme.contentOnAction)
+                    .frame(width: 44, height: 44).background(BitFunTheme.mediaControlBackground).clipShape(Circle())
             }
             .buttonStyle(.plain).padding(20)
         }
@@ -624,14 +624,14 @@ private struct ToolStatusRow: View {
             if tool.actions.contains("CANCEL") {
                 Button { model.cancelTool(tool.id) } label: {
                     Text(model.localized("停止执行"))
-                        .font(MobileDesignTypography.labelMedium.font).foregroundStyle(BitFunTheme.red)
+                        .font(MobileDesignTypography.labelMedium.font).foregroundStyle(BitFunTheme.statusDanger)
                         .frame(maxWidth: .infinity, minHeight: 40).background(BitFunTheme.card).clipShape(Capsule())
-                        .overlay(Capsule().stroke(BitFunTheme.red.opacity(0.5), lineWidth: 1))
+                        .overlay(Capsule().stroke(BitFunTheme.statusDanger.opacity(0.5), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(emphasized ? 10 : 0).background(emphasized ? BitFunTheme.soft : Color.clear)
+        .padding(emphasized ? 10 : 0).background(emphasized ? BitFunTheme.soft : BitFunTheme.transparent)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay { if emphasized { RoundedRectangle(cornerRadius: 14).stroke(BitFunTheme.line, lineWidth: 1) } }
     }
@@ -646,7 +646,7 @@ private struct ToolStatusRow: View {
                 .overlay(RoundedRectangle(cornerRadius: 11).stroke(BitFunTheme.line, lineWidth: 1))
             Button { model.answerTool(tool.id, answer: answer); answer = "" } label: {
                 Text(model.localized("发送回复"))
-                    .font(MobileDesignTypography.labelMedium.font).foregroundStyle(.white)
+                    .font(MobileDesignTypography.labelMedium.font).foregroundStyle(BitFunTheme.contentOnAction)
                     .frame(maxWidth: .infinity, minHeight: 40)
                     .background(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.busy ? BitFunTheme.muted : BitFunTheme.accent)
                     .clipShape(Capsule())
@@ -696,10 +696,10 @@ private struct ToolStatusRow: View {
             }
             Button { submitStructuredAnswers() } label: {
                 HStack {
-                    if model.busy { ProgressView().controlSize(.small).tint(.white) }
+                    if model.busy { ProgressView().controlSize(.small).tint(BitFunTheme.contentOnAction) }
                     Text(model.localized("发送回复"))
                 }
-                .font(MobileDesignTypography.labelMedium.font).foregroundStyle(.white)
+                .font(MobileDesignTypography.labelMedium.font).foregroundStyle(BitFunTheme.contentOnAction)
                 .frame(maxWidth: .infinity, minHeight: 40)
                 .background(structuredAnswersValid && !model.busy ? BitFunTheme.accent : BitFunTheme.muted)
                 .clipShape(Capsule())
@@ -770,7 +770,7 @@ private struct ToolStatusRow: View {
     private func toolAction(_ label: String, primary: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label).font(MobileDesignTypography.labelMedium.font)
-                .foregroundStyle(primary ? Color.white : BitFunTheme.ink)
+                .foregroundStyle(primary ? BitFunTheme.contentOnAction : BitFunTheme.ink)
                 .frame(maxWidth: .infinity, minHeight: 40).background(primary ? BitFunTheme.accent : BitFunTheme.card)
                 .clipShape(Capsule()).overlay { if !primary { Capsule().stroke(BitFunTheme.line, lineWidth: 1) } }
         }
@@ -826,7 +826,7 @@ private struct ToolStatusRow: View {
     }
 
     private var statusColor: Color {
-        switch tool.phase { case "FAILED": BitFunTheme.red; case "COMPLETED": BitFunTheme.green; default: BitFunTheme.muted }
+        switch tool.phase { case "FAILED": BitFunTheme.statusDanger; case "COMPLETED": BitFunTheme.statusSuccess; default: BitFunTheme.muted }
     }
 
     private var statusMark: String {

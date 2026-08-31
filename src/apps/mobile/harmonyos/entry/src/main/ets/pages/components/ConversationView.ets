@@ -24,7 +24,17 @@ import {
 import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationHeaderPolicy, ConversationHeaderPresentation } from '../policy/ConversationHeaderPolicy';
-import { FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import {
+  FLOATING_PANEL_BG,
+  INK,
+  LINE,
+  MUTED,
+  PAGE_BG,
+  SOFT,
+  STATUS_DANGER,
+  STATUS_SUCCESS,
+  TRANSPARENT,
+} from './Theme';
 
 @ComponentV2
 export struct ConversationView {
@@ -334,7 +344,7 @@ export struct ConversationView {
     .width('100%').height(48)
     .padding({ left: 8, right: 8 })
     .borderRadius(10)
-    .backgroundColor(selected ? SOFT : '#00000000')
+    .backgroundColor(selected ? SOFT : TRANSPARENT)
     .onClick(() => {
       action()
       this.showHeaderActions = false
@@ -375,7 +385,7 @@ export struct ConversationView {
 
   private statusColor(): ResourceColor {
     if (this.canStop && this.connectionState === 'connected') {
-      return GREEN;
+      return STATUS_SUCCESS;
     }
     return this.connectionColor();
   }
@@ -440,10 +450,10 @@ export struct ConversationView {
   private connectionColor(): ResourceColor {
     const tone = ConnectionStatusPresenter.tone(this.connectionState);
     if (tone === 'ok') {
-      return GREEN;
+      return STATUS_SUCCESS;
     }
     if (tone === 'error') {
-      return RED;
+      return STATUS_DANGER;
     }
     return MUTED;
   }

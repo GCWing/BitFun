@@ -145,18 +145,18 @@ describe('overlay surface contracts', () => {
     expect(source).toContain('@mixin dialog-surface');
     expect(source.match(/@include -popup-card-chrome\(/g)).toHaveLength(2);
 
-    expect(source.match(/border: 1px solid var\(--bf-appearance-token-border-base\)/g))
+    expect(source.match(/border: 1px solid var\(--bf-color-border-default\)/g))
       .toHaveLength(1);
     expect(source.match(/border-radius: tokens\.\$size-radius-lg/g)).toHaveLength(1);
     expect(source.match(/background: \$background/g)).toHaveLength(1);
-    expect(source.match(/box-shadow: var\(--bf-appearance-token-shadow-lg\)/g)).toHaveLength(1);
-    expect(source).toContain('border: 1px solid var(--bf-appearance-token-border-base)');
+    expect(source.match(/box-shadow: var\(--bf-shadow-lg\)/g)).toHaveLength(1);
+    expect(source).toContain('border: 1px solid var(--bf-color-border-default)');
     expect(source).toContain('border-radius: tokens.$size-radius-lg');
-    expect(source).toContain('var(--bf-appearance-token-color-bg-elevated) 94%');
+    expect(source).toContain('var(--bf-color-surface-raised) 94%');
     expect(source).toContain(
-      '$background: var(--bf-appearance-token-color-bg-elevated)',
+      '$background: var(--bf-color-surface-raised)',
     );
-    expect(source).toContain('box-shadow: var(--bf-appearance-token-shadow-lg)');
+    expect(source).toContain('box-shadow: var(--bf-shadow-lg)');
     expect(source).toContain('backdrop-filter: blur(16px)');
     expect(source).not.toContain('border-medium');
     expect(source).not.toContain('0 14px 42px -12px');
@@ -375,7 +375,7 @@ describe('overlay surface contracts', () => {
       'box-shadow: 0 12px 28px var(--bf-appearance-token-color-overlay-black-30)',
     );
     expect(readSource('app/components/panels/content-canvas/quick-look/QuickLook.scss'))
-      .not.toContain('box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50)');
+      .not.toContain('box-shadow: 0 8px 32px var(--bf-color-overlay-scrim)');
     expect(readSource('shared/announcement-system/styles/AnnouncementToast.scss'))
       .not.toContain('box-shadow: 0 6px 24px');
 

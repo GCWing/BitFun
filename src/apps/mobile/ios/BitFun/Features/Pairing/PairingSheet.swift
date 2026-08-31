@@ -104,7 +104,7 @@ struct PairingSheet: View {
                 Text(model.localized("扫描二维码"))
                     .font(.system(size: 24, weight: .bold)).foregroundStyle(BitFunTheme.ink)
                 if let error = model.pairingError {
-                    Text(error).font(.system(size: 13)).foregroundStyle(BitFunTheme.red)
+                    Text(error).font(.system(size: 13)).foregroundStyle(BitFunTheme.statusDanger)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -158,7 +158,7 @@ struct PairingSheet: View {
             (!hints.requiresAccount || (!effectiveUserID.isEmpty && !pairingPassword.isEmpty))
 
         return ZStack {
-            MobileDesignColors.modalScrim
+            BitFunTheme.scrim
                 .ignoresSafeArea()
                 .onTapGesture {
                     if !model.pairingBusy {
@@ -210,7 +210,7 @@ struct PairingSheet: View {
                         .lineSpacing(3)
                 }
                 if let error = model.pairingError {
-                    Text(error).font(.system(size: 13)).foregroundStyle(BitFunTheme.red)
+                    Text(error).font(.system(size: 13)).foregroundStyle(BitFunTheme.statusDanger)
                 }
                 HStack(spacing: 12) {
                     pairingButton("取消", primary: false) {
@@ -247,7 +247,7 @@ struct PairingSheet: View {
         Button(action: action) {
             Text(model.localized(title))
                 .font(.system(size: 19, weight: .bold))
-                .foregroundStyle(primary ? Color.white : BitFunTheme.ink)
+                .foregroundStyle(primary ? BitFunTheme.contentOnAction : BitFunTheme.ink)
                 .frame(maxWidth: .infinity, minHeight: 58)
                 .background(primary ? BitFunTheme.accent : BitFunTheme.soft)
                 .clipShape(Capsule())

@@ -12,7 +12,7 @@
 
   // Opaque bar stacked above the transcript, so transcript geometry stays
   // independent of the header.
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
   height: 36px;
   min-height: 36px;
@@ -48,7 +48,7 @@
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
     }
   }
 
@@ -63,16 +63,16 @@
 
     &:not(:disabled):hover,
     &--active {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
     }
 
     &--has-activity {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-success) 86%, var(--bf-appearance-token-color-text-primary));
+      color: color-mix(in srgb, var(--bf-color-status-success-content) 86%, var(--bf-color-content-primary));
 
       &:not(:disabled):hover,
       &.flowchat-header__session-overview-trigger--active {
-        color: var(--bf-appearance-token-color-success);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
+        color: var(--bf-color-status-success-content);
+        background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
       }
     }
   }
@@ -82,7 +82,7 @@
 
     &:not(:disabled):hover,
     &--active {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
     }
   }
 
@@ -100,10 +100,10 @@
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 92%, white 8%);
+    background: color-mix(in srgb, var(--bf-color-status-success-content) 92%, var(--bf-color-content-on-dark) 8%);
     box-shadow:
-      0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
-      0 0 0 0 color-mix(in srgb, var(--bf-appearance-token-color-success) 42%, transparent);
+      0 0 0 1px var(--bf-color-surface-raised),
+      0 0 0 0 color-mix(in srgb, var(--bf-color-status-success-content) 42%, transparent);
     animation: flowchat-header-session-overview-pulse 1.45s ease-out infinite;
   }
 
@@ -113,16 +113,16 @@
       transform: scale(1);
       opacity: 0.9;
       box-shadow:
-        0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
-        0 0 0 0 color-mix(in srgb, var(--bf-appearance-token-color-success) 40%, transparent);
+        0 0 0 1px var(--bf-color-surface-raised),
+        0 0 0 0 color-mix(in srgb, var(--bf-color-status-success-content) 40%, transparent);
     }
 
     50% {
       transform: scale(1.22);
       opacity: 1;
       box-shadow:
-        0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
-        0 0 0 5px color-mix(in srgb, var(--bf-appearance-token-color-success) 0%, transparent);
+        0 0 0 1px var(--bf-color-surface-raised),
+        0 0 0 5px color-mix(in srgb, var(--bf-color-status-success-content) 0%, transparent);
     }
   }
 
@@ -137,7 +137,7 @@
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
     }
   }
 
@@ -167,7 +167,7 @@
 
   &__search-prefix-icon {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     opacity: 0.75;
   }
 
@@ -177,13 +177,13 @@
     gap: 0;
     padding-left: 2px;
     margin-left: 2px;
-    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+    border-left: 1px solid var(--bf-color-border-subtle);
   }
 
   &__search-count {
     flex-shrink: 0;
     padding: 0 3px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
     white-space: nowrap;
 
@@ -209,7 +209,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     opacity: 0.8;
     transition: opacity $motion-base $easing-standard, background $motion-base $easing-standard;
@@ -217,7 +217,7 @@
 
     &:hover:not(:disabled) {
       opacity: 1;
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &:disabled {
@@ -236,7 +236,7 @@
     flex-direction: column;
     overflow: hidden;
     z-index: $z-popover;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
   }
 
@@ -246,9 +246,9 @@
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    border-bottom: 1px solid var(--bf-color-border-default);
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__session-overview-panel-heading {
@@ -281,7 +281,7 @@
   &__session-overview-section {
     min-width: 0;
     padding: 2px 0 $size-gap-1;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
 
     &:last-child {
       border-bottom: 0;
@@ -309,11 +309,11 @@
       &:hover:not(:disabled),
       &:focus-visible {
         outline: none;
-        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+        background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
       }
 
       &:focus-visible {
-        box-shadow: 0 0 0 1.5px var(--bf-appearance-token-border-strong);
+        box-shadow: 0 0 0 1.5px var(--bf-color-border-strong);
       }
 
       &:disabled {
@@ -329,7 +329,7 @@
     gap: $size-gap-1;
     flex: 1;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-medium);
     text-overflow: ellipsis;
@@ -338,7 +338,7 @@
 
   &__session-overview-section-count {
     flex: 0 0 auto;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
     font-variant-numeric: tabular-nums;
   }
@@ -348,7 +348,7 @@
     height: 5px;
     flex: 0 0 5px;
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-success);
+    background: var(--bf-color-status-success-content);
   }
 
   &__session-overview-section-actions {
@@ -368,7 +368,7 @@
     padding: $size-gap-2 $size-gap-3;
     border: 0;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
     text-align: center;
 
@@ -381,12 +381,12 @@
       &:hover,
       &:focus-visible {
         outline: none;
-        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+        background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
       }
     }
 
     &--error {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -406,7 +406,7 @@
     border: 0;
     border-radius: $size-radius-base;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
     font-size: var(--bf-type-flow-control-font-size);
     text-align: left;
@@ -424,17 +424,17 @@
 
     > svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     &:hover,
     &:focus-visible {
       outline: none;
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
     }
 
     &:focus-visible {
-      box-shadow: 0 0 0 1.5px var(--bf-appearance-token-border-strong);
+      box-shadow: 0 0 0 1.5px var(--bf-color-border-strong);
     }
   }
 
@@ -454,13 +454,13 @@
     border: 0;
     border-radius: $size-radius-base;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     text-align: left;
     cursor: pointer;
     transition: background $motion-base $easing-standard;
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
     }
   }
 
@@ -473,7 +473,7 @@
     transition: background $motion-base $easing-standard;
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
     }
   }
 
@@ -507,11 +507,11 @@
 
   &__background-command-menu-button {
     flex: 0 0 auto;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     &:not(:disabled):hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
+      color: var(--bf-color-content-primary);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
     }
   }
 
@@ -538,7 +538,7 @@
 
     svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       opacity: 0.82;
     }
 
@@ -552,7 +552,7 @@
   &__background-command-list-meta {
     width: 100%;
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

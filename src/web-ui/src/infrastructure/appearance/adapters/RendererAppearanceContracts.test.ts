@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { builtinAppearancePackages } from '../builtins/catalog';
-import { cssTokenAppearanceAdapter } from './CssTokenAppearanceAdapter';
+import { themeTokenAppearanceAdapter } from './ThemeTokenAppearanceAdapter';
 import { MonacoAppearanceAdapter } from './MonacoAppearanceAdapter';
 import { widgetAppearanceAdapter } from './WidgetAppearanceAdapter';
 
 describe('renderer appearance contracts', () => {
-  it('accepts every built-in CSS token payload and rejects unregistered token names', () => {
+  it('accepts every built-in theme token payload and rejects unregistered token names', () => {
     builtinAppearancePackages.forEach(pkg => {
-      expect(cssTokenAppearanceAdapter.validate(pkg.renderers?.['css-tokens']?.settings)).toEqual([]);
+      expect(themeTokenAppearanceAdapter.validate(pkg.renderers?.['theme-tokens']?.settings)).toEqual([]);
     });
 
-    const settings = builtinAppearancePackages[0].renderers?.['css-tokens']?.settings;
+    const settings = builtinAppearancePackages[0].renderers?.['theme-tokens']?.settings;
     expect(settings).toBeDefined();
-    expect(cssTokenAppearanceAdapter.validate({
+    expect(themeTokenAppearanceAdapter.validate({
       ...settings,
-      tokens: { ...settings?.tokens, '--bf-appearance-token-unregistered': '#ffffff' },
-    })).toContain('Unsupported CSS token name: --bf-appearance-token-unregistered');
+      tokens: { ...settings?.tokens, '--bf-color-unregistered': '#ffffff' },
+    })).toContain('Unsupported root token name: --bf-color-unregistered');
   });
 
   it('accepts every built-in Widget payload and rejects unregistered variables', () => {

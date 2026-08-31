@@ -24,6 +24,7 @@ const TRANSACTION_WAIT_GRACE: Duration = Duration::from_secs(3);
 const STATE_SCHEMA_VERSION: u32 = 2;
 const RECOVERY_HTML: &[u8] = include_bytes!("../bootstrap-ui/index.html");
 const CONFIRMATION_HTML: &[u8] = include_bytes!("../bootstrap-ui/frontend-update-confirm.html");
+const BOOTSTRAP_THEME_CSS: &[u8] = include_bytes!("generated/bootstrap_theme.css");
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -755,6 +756,17 @@ impl FrontendWorkbenchManager {
         request: tauri::http::Request<Vec<u8>>,
     ) -> tauri::http::Response<Vec<u8>> {
         let request_path = request.uri().path();
+        if request_path == "/bootstrap-theme.css" {
+            return tauri::http::Response::builder()
+                .status(tauri::http::StatusCode::OK)
+                .header(
+                    tauri::http::header::CONTENT_TYPE,
+                    "text/css; charset=utf-8",
+                )
+                .header(tauri::http::header::CACHE_CONTROL, "no-store, max-age=0")
+                .body(BOOTSTRAP_THEME_CSS.to_vec())
+                .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
+        }
         if request_path == "/frontend-update-confirm.html" {
             return tauri::http::Response::builder()
                 .status(tauri::http::StatusCode::OK)
@@ -1768,5 +1780,27 @@ mod tests {
         assert!(body.contains("get_frontend_update_status"));
         assert!(body.contains("confirm_frontend_update"));
         assert!(body.contains("rollback_frontend_update"));
+    }
+
+    #[test]
+    fn protocol_serves_the_generated_bootstrap_theme_without_an_active_revision() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let manager = FrontendWorkbenchManager::new(temp.path());
+        let request = tauri::http::Request::builder()
+            .uri("bitfun-ui://localhost/bootstrap-theme.css")
+            .body(Vec::new())
+            .expect("request");
+
+        let response = manager.protocol_response(request);
+        let body = String::from_utf8_lossy(response.body());
+
+        assert_eq!(response.status(), tauri::http::StatusCode::OK);
+        assert_eq!(
+            response.headers().get(tauri::http::header::CONTENT_TYPE),
+            Some(&tauri::http::HeaderValue::from_static("text/css; charset=utf-8"))
+        );
+        assert!(body.contains("--bf-color-surface-canvas"));
+        assert!(body.contains("--bf-color-status-danger-content"));
+        assert!(!body.contains("--bf-appearance-token-"));
     }
 }

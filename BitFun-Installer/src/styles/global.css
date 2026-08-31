@@ -1,14 +1,13 @@
-@import './variables.css';
 @import './animations.css';
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body, #root {
   width: 100%; height: 100%; overflow: hidden;
-  font-family: var(--font-sans);
+  font-family: var(--bf-font-family-sans);
   font-size: 14px; line-height: 1.5;
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
+  color: var(--bf-color-content-primary);
+  background: var(--bf-color-surface-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
@@ -17,7 +16,7 @@ html, body, #root {
 
 .installer-app {
   width: 100vw; height: 100vh;
-  background: var(--color-bg-primary);
+  background: var(--bf-color-surface-canvas);
   display: flex; flex-direction: column;
   overflow: hidden;
 }
@@ -26,8 +25,8 @@ html, body, #root {
   height: 36px;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 16px;
-  background: var(--color-bg-primary);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bf-color-surface-canvas);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   -webkit-app-region: drag;
   flex-shrink: 0; position: relative; z-index: 10;
 }
@@ -36,16 +35,16 @@ html, body, #root {
   content: '';
   position: absolute; top: 0; left: 0; right: 0; height: 1px;
   background: linear-gradient(90deg,
-    transparent 0%, var(--border-base) 25%,
-    color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary)) 50%,
-    var(--border-base) 75%,
+    transparent 0%, var(--bf-color-border-default) 25%,
+    color-mix(in srgb, var(--bf-color-border-default) 70%, var(--bf-color-content-primary)) 50%,
+    var(--bf-color-border-default) 75%,
     transparent 100%);
   pointer-events: none; z-index: 1;
 }
 
 .titlebar-title {
   font-size: 12px; font-weight: 500;
-  color: var(--color-text-muted); opacity: 0.6;
+  color: var(--bf-color-content-muted); opacity: 0.6;
   letter-spacing: 0.3px;
 }
 
@@ -59,20 +58,20 @@ html, body, #root {
   width: 32px; height: 32px; padding: 0;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--size-radius-sm);
-  color: var(--color-text-muted);
+  border-radius: var(--bf-radius-sm);
+  color: var(--bf-color-content-muted);
   cursor: pointer; outline: none;
   transition: background 0.15s ease,
               color 0.15s ease;
 }
 .window-controls__btn:hover {
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-secondary);
 }
 .window-controls__btn:active { opacity: 0.8; }
 .window-controls__btn--close:hover {
-  background: var(--element-bg-subtle);
-  color: var(--color-error);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-status-danger-content);
 }
 
 .installer-content {
@@ -116,8 +115,8 @@ html, body, #root {
   gap: 10px;
   flex-wrap: wrap;
   padding: 10px 22px 12px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--color-bg-primary);
+  border-top: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-canvas);
   flex-shrink: 0;
 }
 
@@ -135,11 +134,11 @@ html, body, #root {
   padding: 6px 10px;
   min-height: 28px;
   background: transparent;
-  border: 1px dashed var(--border-base);
-  border-radius: var(--size-radius-sm);
-  font-family: var(--font-sans);
+  border: 1px dashed var(--bf-color-border-default);
+  border-radius: var(--bf-radius-sm);
+  font-family: var(--bf-font-family-sans);
   font-size: 13px; font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   box-shadow: none;
   transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -148,56 +147,56 @@ html, body, #root {
               border-style 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .btn svg {
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   transition: color 0.2s ease;
 }
 .btn:hover:not(:disabled) {
-  background: var(--element-bg-subtle);
-  color: var(--color-text-primary);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-primary);
   border-style: solid;
-  border-color: color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
+  border-color: color-mix(in srgb, var(--bf-color-border-default) 70%, var(--bf-color-content-primary));
   box-shadow: none;
 }
-.btn:hover:not(:disabled) svg { color: var(--color-accent-500); }
+.btn:hover:not(:disabled) svg { color: var(--bf-color-accent-default); }
 .btn:focus-visible {
   outline: none;
-  background: var(--element-bg-subtle);
+  background: var(--bf-color-surface-subtle);
   border-style: solid;
-  border-color: color-mix(in srgb, var(--border-base) 55%, var(--color-accent-500));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 32%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-border-default) 55%, var(--bf-color-accent-default));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 32%, transparent);
 }
 .btn:disabled { opacity: 0.46; cursor: default; box-shadow: none; }
 
 .btn-primary {
-  color: var(--color-accent-500);
+  color: var(--bf-color-accent-default);
 }
-.btn-primary svg { color: var(--color-accent-500); }
+.btn-primary svg { color: var(--bf-color-accent-default); }
 .btn-primary:hover:not(:disabled) {
-  background: var(--element-bg-subtle);
-  color: var(--color-accent-500);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-accent-default);
 }
 
 .btn-success {
-  color: var(--color-success);
+  color: var(--bf-color-status-success-content);
 }
-.btn-success svg { color: var(--color-success); }
+.btn-success svg { color: var(--bf-color-status-success-content); }
 .btn-success:hover:not(:disabled) {
-  background: var(--element-bg-subtle);
-  color: var(--color-success);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-status-success-content);
 }
 .btn-success:hover:not(:disabled) svg {
-  color: var(--color-success);
+  color: var(--bf-color-status-success-content);
 }
 
 .btn-ghost {
   min-height: 28px;
   padding: 6px 10px;
   box-shadow: none;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 .btn-ghost:hover:not(:disabled) {
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-secondary);
 }
 
 .card-btn {
@@ -206,47 +205,47 @@ html, body, #root {
   min-height: 68px;
   width: 100%;
   background: transparent;
-  border: 1px dashed var(--border-base);
-  border-radius: var(--size-radius-sm);
+  border: 1px dashed var(--bf-color-border-default);
+  border-radius: var(--bf-radius-sm);
   cursor: pointer; text-align: left;
   box-shadow: none;
   transition: background 0.25s ease, transform 0.2s ease, border-color 0.25s ease, border-style 0.25s ease;
   position: relative; overflow: hidden;
 }
 .card-btn:hover {
-  background: var(--element-bg-subtle);
+  background: var(--bf-color-surface-subtle);
   border-style: solid;
-  border-color: color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
+  border-color: color-mix(in srgb, var(--bf-color-border-default) 70%, var(--bf-color-content-primary));
   transform: translateY(-1px);
   box-shadow: none;
 }
 .card-btn:active { transform: translateY(0); }
 .card-btn:focus-visible {
   outline: none;
-  background: var(--element-bg-soft);
+  background: var(--bf-color-action-neutral-surface);
   border-style: solid;
-  border-color: color-mix(in srgb, var(--border-base) 55%, var(--color-accent-500));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 32%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-border-default) 55%, var(--bf-color-accent-default));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 32%, transparent);
 }
-.card-btn:hover .card-btn__icon { background: var(--element-bg-soft); }
-.card-btn:hover .card-btn__icon svg { color: var(--color-accent-500); }
+.card-btn:hover .card-btn__icon { background: var(--bf-color-action-neutral-surface); }
+.card-btn:hover .card-btn__icon svg { color: var(--bf-color-accent-default); }
 .card-btn:hover .card-btn__arrow { opacity: 0.8; transform: translateX(0); }
 
 .card-btn__icon {
   flex-shrink: 0; width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--element-bg-subtle);
+  background: var(--bf-color-surface-subtle);
   border-radius: 10px;
   transition: all 0.25s ease;
 }
-.card-btn__icon svg { color: var(--color-accent-500); transition: color 0.25s ease; }
+.card-btn__icon svg { color: var(--bf-color-accent-default); transition: color 0.25s ease; }
 
 .card-btn__content { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.card-btn__title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
-.card-btn__subtitle { font-size: 12px; color: var(--color-text-muted); opacity: 0.7; }
+.card-btn__title { font-size: 14px; font-weight: 500; color: var(--bf-color-content-primary); }
+.card-btn__subtitle { font-size: 12px; color: var(--bf-color-content-muted); opacity: 0.7; }
 
 .card-btn__arrow {
-  flex-shrink: 0; color: var(--color-text-muted);
+  flex-shrink: 0; color: var(--bf-color-content-muted);
   opacity: 0.3; transform: translateX(-6px);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -255,18 +254,18 @@ html, body, #root {
 
 .input {
   flex: 1; padding: 10px 14px;
-  background: var(--element-bg-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 12px; font-family: var(--font-mono);
+  background: var(--bf-color-surface-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-sm);
+  color: var(--bf-color-content-primary);
+  font-size: 12px; font-family: var(--bf-font-family-mono);
   outline: none; transition: all 0.25s ease;
 }
 .input:focus {
-  border-color: color-mix(in srgb, var(--color-accent-500) 40%, transparent);
-  background: var(--element-bg-soft);
+  border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+  background: var(--bf-color-action-neutral-surface);
 }
-.input::placeholder { color: var(--color-text-muted); }
+.input::placeholder { color: var(--bf-color-content-muted); }
 
 .bf-select {
   position: relative;
@@ -281,22 +280,22 @@ html, body, #root {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--element-bg-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-sm);
-  color: var(--color-text-primary);
+  background: var(--bf-color-surface-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-sm);
+  color: var(--bf-color-content-primary);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .bf-select-trigger:hover {
-  border-color: color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
-  background: var(--element-bg-soft);
+  border-color: color-mix(in srgb, var(--bf-color-border-default) 70%, var(--bf-color-content-primary));
+  background: var(--bf-color-action-neutral-surface);
 }
 
 .bf-select-trigger--open {
-  border-color: color-mix(in srgb, var(--color-accent-500) 40%, transparent);
+  border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
 }
 
 .bf-select-value {
@@ -305,17 +304,17 @@ html, body, #root {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--color-text-primary);
+  font-family: var(--bf-font-family-mono);
+  color: var(--bf-color-content-primary);
 }
 
 .bf-select-value--placeholder {
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .bf-select-caret {
   flex-shrink: 0;
-  color: var(--color-text-secondary);
+  color: var(--bf-color-content-secondary);
   transition: transform 0.15s ease;
 }
 
@@ -332,9 +331,9 @@ html, body, #root {
   max-height: 176px;
   overflow-y: auto;
   padding: 4px;
-  background: var(--color-bg-secondary);
-  border: 1px solid color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
-  border-radius: var(--size-radius-sm);
+  background: var(--bf-color-surface-panel);
+  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 70%, var(--bf-color-content-primary));
+  border-radius: var(--bf-radius-sm);
   box-shadow: none;
 }
 
@@ -343,38 +342,38 @@ html, body, #root {
   top: 0;
   z-index: 1;
   padding: 2px 2px 6px;
-  background: var(--color-bg-secondary);
+  background: var(--bf-color-surface-panel);
 }
 
 .bf-select-search-input {
   width: 100%;
   min-height: 30px;
   padding: 6px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-sm);
-  background: var(--element-bg-subtle);
-  color: var(--color-text-primary);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-sm);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-primary);
   font-size: 12px;
-  font-family: var(--font-mono);
+  font-family: var(--bf-font-family-mono);
   outline: none;
 }
 
 .bf-select-search-input:focus {
-  border-color: color-mix(in srgb, var(--color-accent-500) 40%, transparent);
-  background: var(--element-bg-soft);
+  border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+  background: var(--bf-color-action-neutral-surface);
 }
 
 .bf-select-search-input::placeholder {
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .bf-select-option {
   width: 100%;
   border: 0;
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
   padding: 8px;
-  border-radius: var(--size-radius-sm);
+  border-radius: var(--bf-radius-sm);
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -383,28 +382,28 @@ html, body, #root {
 }
 
 .bf-select-option:hover {
-  background: var(--element-bg-subtle);
+  background: var(--bf-color-surface-subtle);
 }
 
 .bf-select-option--active {
-  background: var(--element-bg-soft);
+  background: var(--bf-color-action-neutral-surface);
 }
 
 .bf-select-option-label {
   font-size: 12px;
   line-height: 1.2;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .bf-select-option-desc {
   font-size: 11px;
   line-height: 1.2;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .bf-select-empty {
   padding: 8px;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: 12px;
 }
 
@@ -431,13 +430,13 @@ html, body, #root {
 .model-setup-intro {
   margin-bottom: 2px;
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .model-setup-desc {
   margin-bottom: 8px;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .model-setup-provider-desc {
@@ -445,7 +444,7 @@ html, body, #root {
   margin-bottom: 2px;
   font-size: 11px;
   line-height: 1.35;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .model-setup-row {
@@ -459,7 +458,7 @@ html, body, #root {
 .model-setup-row__label {
   font-size: 12px;
   line-height: 1.25;
-  color: var(--color-text-secondary);
+  color: var(--bf-color-content-secondary);
   text-align: end;
   padding-right: 2px;
   word-break: break-word;
@@ -504,7 +503,7 @@ html, body, #root {
 .model-setup-fetch-hint {
   font-size: 11px;
   line-height: 1.35;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   margin-top: 4px;
   padding-left: calc(34% + 10px);
 }
@@ -523,12 +522,12 @@ html, body, #root {
 
 .model-setup-test-msg--ok {
   font-size: 12px;
-  color: var(--color-success);
+  color: var(--bf-color-status-success-content);
 }
 
 .model-setup-test-msg--err {
   font-size: 12px;
-  color: var(--color-error);
+  color: var(--bf-color-status-danger-content);
 }
 
 .model-setup-test-row {
@@ -546,8 +545,8 @@ html, body, #root {
   gap: 10px;
   flex-wrap: wrap;
   padding: 10px 22px 12px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--color-bg-primary);
+  border-top: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-canvas);
   flex-shrink: 0;
 }
 
@@ -566,39 +565,39 @@ html, body, #root {
 .checkbox-item {
   display: flex; align-items: center; gap: 10px;
   cursor: pointer; padding: 8px 10px;
-  border-radius: var(--size-radius-sm);
+  border-radius: var(--bf-radius-sm);
   transition: background 0.15s ease;
 }
-.checkbox-item:hover { background: var(--element-bg-subtle); }
+.checkbox-item:hover { background: var(--bf-color-surface-subtle); }
 
 .checkbox-box {
   width: 16px; height: 16px; border-radius: 4px;
-  border: 1.5px solid color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
+  border: 1.5px solid color-mix(in srgb, var(--bf-color-border-default) 70%, var(--bf-color-content-primary));
   background: transparent;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.15s ease; flex-shrink: 0;
 }
-.checkbox-box.checked { background: var(--color-accent-500); border-color: var(--color-accent-500); }
-.checkbox-box svg { width: 10px; height: 10px; color: var(--color-bg-secondary); opacity: 0; transition: opacity 0.15s ease; }
+.checkbox-box.checked { background: var(--bf-color-accent-default); border-color: var(--bf-color-accent-default); }
+.checkbox-box svg { width: 10px; height: 10px; color: var(--bf-color-surface-panel); opacity: 0; transition: opacity 0.15s ease; }
 .checkbox-box.checked svg { opacity: 1; }
 
-.checkbox-label { font-size: 13px; color: var(--color-text-secondary); transition: color 0.15s ease; }
-.checkbox-item:hover .checkbox-label { color: var(--color-text-primary); }
+.checkbox-label { font-size: 13px; color: var(--bf-color-content-secondary); transition: color 0.15s ease; }
+.checkbox-item:hover .checkbox-label { color: var(--bf-color-content-primary); }
 
 .progress-bar-container {
   width: 100%; height: 4px;
-  background: var(--element-bg-soft);
+  background: var(--bf-color-action-neutral-surface);
   border-radius: 2px; overflow: hidden;
 }
 .progress-bar-fill {
   height: 100%; border-radius: 2px;
-  background: var(--color-accent-500);
+  background: var(--bf-color-accent-default);
   transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 .progress-bar-fill::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-accent-500) 15%, transparent), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent), transparent);
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
 }
@@ -607,22 +606,22 @@ html, body, #root {
 .step-dot-wrapper { display: flex; align-items: center; }
 .step-dot {
   width: 6px; height: 6px; border-radius: 50%;
-  background: color-mix(in srgb, var(--element-bg-medium) 75%, var(--color-text-primary));
+  background: color-mix(in srgb, var(--bf-color-action-neutral-surface-pressed) 75%, var(--bf-color-content-primary));
   transition: all 0.25s ease;
 }
 .step-dot.active {
   width: 8px; height: 8px;
-  background: var(--color-accent-500);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent-500) 25%, transparent);
+  background: var(--bf-color-accent-default);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 25%, transparent);
 }
-.step-dot.completed { background: var(--color-success); }
-.step-line { width: 40px; height: 1px; background: color-mix(in srgb, var(--element-bg-medium) 75%, var(--color-text-primary)); transition: background 0.25s ease; }
-.step-line.completed { background: var(--color-success); }
+.step-dot.completed { background: var(--bf-color-status-success-content); }
+.step-line { width: 40px; height: 1px; background: color-mix(in srgb, var(--bf-color-action-neutral-surface-pressed) 75%, var(--bf-color-content-primary)); transition: background 0.25s ease; }
+.step-line.completed { background: var(--bf-color-status-success-content); }
 
 .section-label {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   text-transform: uppercase;
   letter-spacing: 0.8px;
   margin-bottom: 12px;
@@ -636,8 +635,8 @@ html, body, #root {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--element-bg-medium) 75%, var(--color-text-primary)); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--bf-color-action-neutral-surface-pressed) 75%, var(--bf-color-content-primary)); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--bf-color-content-muted); }
 
 .uninstall-page {
   flex: 1;
@@ -660,7 +659,7 @@ html, body, #root {
   margin-bottom: 22px;
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
   text-align: center;
   letter-spacing: 0.2px;
 }
@@ -668,7 +667,7 @@ html, body, #root {
 .uninstall-subtitle {
   margin-bottom: 8px;
   font-size: 12px;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
   text-align: left;
   opacity: 0.86;
 }
@@ -680,7 +679,7 @@ html, body, #root {
   margin-bottom: 14px;
   padding: 4px 0 6px;
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   border: none;
   min-width: 0;
 }
@@ -688,14 +687,14 @@ html, body, #root {
 .uninstall-inline-label {
   white-space: nowrap;
   flex-shrink: 0;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  color: var(--bf-color-content-secondary);
+  font-family: var(--bf-font-family-mono);
   opacity: 1;
 }
 
 .uninstall-inline-path {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
+  color: var(--bf-color-content-muted);
+  font-family: var(--bf-font-family-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -707,13 +706,13 @@ html, body, #root {
 
 .uninstall-error {
   margin-bottom: 10px;
-  color: var(--color-error);
+  color: var(--bf-color-status-danger-content);
   font-size: 12px;
 }
 
 .uninstall-success {
   margin-bottom: 10px;
-  color: var(--color-success);
+  color: var(--bf-color-status-success-content);
   font-size: 12px;
 }
 
@@ -730,7 +729,7 @@ html, body, #root {
 
 .uninstall-progress-text {
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   min-width: 34px;
   text-align: right;
 }

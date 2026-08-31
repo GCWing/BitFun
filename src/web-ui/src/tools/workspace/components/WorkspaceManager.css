@@ -10,29 +10,29 @@
 .error-message {
   padding: 12px 16px;
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-error-bg) 0%,
-    var(--bf-appearance-token-glass-red-subtle) 100%);
-  color: var(--bf-appearance-token-color-error);
+    var(--bf-color-status-danger-surface) 0%,
+    color-mix(in srgb, var(--bf-color-status-danger-content) 5%, transparent) 100%);
+  color: var(--bf-color-status-danger-content);
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow:
-    0 8px 32px color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent),
-    0 4px 16px var(--bf-appearance-token-color-overlay-black-08),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12);
+    0 8px 32px color-mix(in srgb, var(--bf-color-status-danger-content) 12%, transparent),
+    0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
 }
 
 .workspace-manager h3 {
   margin: 0 0 16px 0;
   font-size: var(--bf-font-size-2xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-base);
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-line-height-tight);
@@ -40,20 +40,20 @@
 
 .workspace-card {
   position: relative;
-  border: 1px solid var(--bf-appearance-token-color-accent-200);
+  border: 1px solid var(--bf-color-action-secondary-hover);
   border-radius: 16px;
   padding: 20px 24px;
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-accent-100) 0%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 4%, transparent) 50%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 6%, transparent) 100%);
+    var(--bf-color-action-secondary-background) 0%,
+    color-mix(in srgb, var(--bf-color-accent-hover) 4%, transparent) 50%,
+    color-mix(in srgb, var(--bf-color-accent-default) 6%, transparent) 100%);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow:
-    0 8px 32px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent),
-    0 4px 16px var(--bf-appearance-token-color-overlay-black-08),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12),
-    inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-08);
+    0 8px 32px color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent),
+    0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   transition:
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -70,26 +70,26 @@
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-overlay-white-04) 0%,
+    color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 0%,
     transparent 50%,
-    color-mix(in srgb, var(--bf-appearance-token-color-static-white) 1%, transparent) 100%);
+    color-mix(in srgb, var(--bf-color-content-on-dark) 1%, transparent) 100%);
   pointer-events: none;
   border-radius: 16px;
   z-index: 1;
 }
 
 .workspace-card.current {
-  border-color: var(--bf-appearance-token-color-accent-300);
+  border-color: var(--bf-color-action-secondary-pressed);
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-accent-200) 0%,
-    var(--bf-appearance-token-glass-blue-subtle) 50%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent) 100%);
+    var(--bf-color-action-secondary-hover) 0%,
+    color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent) 50%,
+    color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent) 100%);
   box-shadow:
-    0 8px 32px var(--bf-appearance-token-color-accent-200),
-    0 4px 16px var(--bf-appearance-token-color-overlay-black-08),
-    0 2px 8px var(--bf-appearance-token-color-overlay-black-08),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-15),
-    inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-08);
+    0 8px 32px var(--bf-color-action-secondary-hover),
+    0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
+    0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
 }
 
 .workspace-card.recent {
@@ -97,17 +97,17 @@
 }
 
 .workspace-card.recent:hover {
-  border-color: var(--bf-appearance-token-color-accent-300);
+  border-color: var(--bf-color-action-secondary-pressed);
   background: linear-gradient(135deg,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent) 0%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 6%, transparent) 50%,
-    var(--bf-appearance-token-color-accent-100) 100%);
+    color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent) 0%,
+    color-mix(in srgb, var(--bf-color-accent-hover) 6%, transparent) 50%,
+    var(--bf-color-action-secondary-background) 100%);
   transform: translateY(-2px);
   box-shadow:
-    0 12px 40px var(--bf-appearance-token-color-accent-200),
-    0 6px 20px var(--bf-appearance-token-color-overlay-black-08),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-15),
-    inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-08);
+    0 12px 40px var(--bf-color-action-secondary-hover),
+    0 6px 20px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
 }
 
 .workspace-header {
@@ -123,13 +123,13 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, var(--bf-appearance-token-color-accent-500) 0%, var(--bf-appearance-token-color-accent-600) 100%);
-  color: var(--bf-appearance-token-color-static-white);
+  background: linear-gradient(135deg, var(--bf-color-accent-default) 0%, var(--bf-color-accent-hover) 100%);
+  color: var(--bf-color-content-on-dark);
   border-radius: 12px;
   flex-shrink: 0;
   box-shadow:
-    0 4px 16px var(--bf-appearance-token-color-accent-300),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-20);
+    0 4px 16px var(--bf-color-action-secondary-pressed),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
   transition:
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -138,8 +138,8 @@
 .workspace-icon:hover {
   transform: scale(1.05);
   box-shadow:
-    0 6px 20px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 25%, transparent);
+    0 6px 20px color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 25%, transparent);
 }
 
 .workspace-icon.is-assistant {
@@ -160,7 +160,7 @@
 .workspace-name {
   font-size: var(--bf-font-size-2xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
   margin-bottom: 6px;
   word-break: break-all;
   line-height: var(--bf-line-height-snug);
@@ -168,22 +168,22 @@
 
 .workspace-name__ssh-host {
   font-weight: var(--bf-font-weight-medium);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 55%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 55%, transparent);
   margin-right: 2px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-weight: var(--bf-font-weight-medium);
 }
 
 .workspace-path {
   font-size: var(--bf-font-size-base);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 70%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
   margin-bottom: 12px;
   word-break: break-all;
   font-family: var(--bf-font-family-mono);
-  background: var(--bf-appearance-token-color-overlay-black-20);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid var(--bf-appearance-token-color-accent-100);
+  border: 1px solid var(--bf-color-action-secondary-background);
 }
 
 .workspace-meta {
@@ -201,13 +201,13 @@
   gap: 5px;
   min-height: 22px;
   padding: 2px 7px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  background: var(--bf-appearance-token-element-bg-soft);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-sm);
+  background: var(--bf-color-action-quiet-hover);
 }
 
 .workspace-type {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-xs);
   text-transform: capitalize;
 }
@@ -216,7 +216,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
 }
 
@@ -226,20 +226,20 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--bf-appearance-token-color-accent-100);
-  border: 1px solid var(--bf-appearance-token-color-accent-200);
+  background: var(--bf-color-action-secondary-background);
+  border: 1px solid var(--bf-color-action-secondary-hover);
 }
 
 .workspace-identity__label {
   font-size: var(--bf-font-size-meta);
   text-transform: uppercase;
   letter-spacing: var(--bf-letter-spacing-wide);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 55%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 55%, transparent);
 }
 
 .workspace-identity__value {
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
 }
 
 .workspace-related-paths {
@@ -253,7 +253,7 @@
   font-size: var(--bf-font-size-meta);
   text-transform: uppercase;
   letter-spacing: var(--bf-letter-spacing-wide);
-  color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.55);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 55%, transparent);
 }
 
 .workspace-related-paths__list {
@@ -266,15 +266,15 @@
 .workspace-related-paths__more {
   padding: 8px 10px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 6%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+  background: color-mix(in srgb, var(--bf-color-accent-default) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
 }
 
 .workspace-related-paths__path {
   display: block;
   font-size: var(--bf-font-size-xs);
   font-family: var(--bf-font-family-mono);
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
   word-break: break-all;
 }
 
@@ -282,20 +282,20 @@
   display: block;
   margin-top: 4px;
   font-size: var(--bf-font-size-xs);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 72%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 72%, transparent);
   line-height: var(--bf-line-height-support);
 }
 
 .workspace-related-paths__more {
   font-size: var(--bf-font-size-xs);
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 62%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 62%, transparent);
 }
 
 .workspace-type {
   font-size: var(--bf-font-size-xs);
   padding: 2px 8px;
-  background-color: var(--bf-appearance-token-color-bg-secondary);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background-color: var(--bf-color-surface-panel);
+  color: var(--bf-color-content-secondary);
   border-radius: 4px;
   text-transform: capitalize;
 }
@@ -305,7 +305,7 @@
   align-items: center;
   gap: 4px;
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .workspace-actions {
@@ -323,7 +323,7 @@
   gap: 16px;
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid var(--bf-appearance-token-color-accent-200);
+  border-top: 1px solid var(--bf-color-action-secondary-hover);
   position: relative;
 }
 
@@ -333,10 +333,10 @@
   gap: 6px;
   padding: 12px 16px;
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-accent-50) 0%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 2%, transparent) 100%);
+    color-mix(in srgb, var(--bf-color-accent-default) 4%, transparent) 0%,
+    color-mix(in srgb, var(--bf-color-accent-hover) 2%, transparent) 100%);
   border-radius: 8px;
-  border: 1px solid var(--bf-appearance-token-color-accent-100);
+  border: 1px solid var(--bf-color-action-secondary-background);
   transition:
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -345,15 +345,15 @@
 
 .stat-item:hover {
   background: linear-gradient(135deg,
-    var(--bf-appearance-token-color-accent-100) 0%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 4%, transparent) 100%);
-  border-color: var(--bf-appearance-token-color-accent-200);
+    var(--bf-color-action-secondary-background) 0%,
+    color-mix(in srgb, var(--bf-color-accent-hover) 4%, transparent) 100%);
+  border-color: var(--bf-color-action-secondary-hover);
   transform: translateY(-1px);
 }
 
 .stat-label {
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-overlay-white-60);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
   font-weight: var(--bf-font-weight-medium);
   text-transform: uppercase;
   letter-spacing: var(--bf-letter-spacing-wider);
@@ -362,7 +362,7 @@
 .stat-value {
   font-size: var(--bf-font-size-xl);
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
 }
 
 .no-workspace,
@@ -373,22 +373,22 @@
   justify-content: center;
   min-height: 112px;
   padding: 24px 18px;
-  border: 1px dashed var(--bf-appearance-token-border-subtle);
-  border-radius: var(--bf-appearance-token-size-radius-lg);
-  background: var(--bf-appearance-token-color-overlay-white-04);
-  color: var(--bf-appearance-token-color-text-muted);
+  border: 1px dashed var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  color: var(--bf-color-content-muted);
   text-align: center;
-  color: var(--bf-appearance-token-color-overlay-white-60);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
   background: linear-gradient(135deg,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 3%, transparent) 0%,
-    color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 1%, transparent) 100%);
+    color-mix(in srgb, var(--bf-color-accent-default) 3%, transparent) 0%,
+    color-mix(in srgb, var(--bf-color-accent-hover) 1%, transparent) 100%);
   border-radius: 12px;
-  border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
 }
 
 .no-workspace svg {
   margin-bottom: 20px;
-  color: var(--bf-appearance-token-color-accent-400);
+  color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
   opacity: 0.8;
 }
 
@@ -424,7 +424,7 @@
   }
 
   .stat-item + .stat-item {
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
     border-left: 0;
   }
 }
