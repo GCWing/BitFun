@@ -270,9 +270,8 @@ impl FileWriteTool {
                 assistant_message.push_str("\n- ");
                 assistant_message.push_str(&issue.message);
             }
-            assistant_message.push_str(
-                "\nUse Edit on the written file to fix these issues before finishing.",
-            );
+            assistant_message
+                .push_str("\nUse Edit on the written file to fix these issues before finishing.");
         }
         let mut data = json!({
             "file_path": logical_path,
@@ -673,6 +672,7 @@ mod tests {
     }
 
     struct RemoteWriteFs {
+        expected_path: String,
         read_error: Option<&'static str>,
         exists: Result<bool, &'static str>,
         writes: AtomicUsize,
@@ -680,25 +680,27 @@ mod tests {
 
     #[async_trait]
     impl WorkspaceFileSystem for RemoteWriteFs {
-        async fn read_file(&self, _path: &str) -> anyhow::Result<Vec<u8>> {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            assert_eq!(path, self.expected_path);
             if let Some(error) = self.read_error {
                 anyhow::bail!(error);
             }
             Ok(b"original content".to_vec())
         }
 
-        async fn read_file_text(&self, _path: &str) -> anyhow::Result<String> {
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            assert_eq!(path, self.expected_path);
             Ok("original content".to_string())
         }
 
         async fn write_file(&self, path: &str, _contents: &[u8]) -> anyhow::Result<()> {
-            assert_eq!(path, "/remote/workspace/result.txt");
+            assert_eq!(path, self.expected_path);
             self.writes.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
         async fn exists(&self, path: &str) -> anyhow::Result<bool> {
-            assert_eq!(path, "/remote/workspace/result.txt");
+            assert_eq!(path, self.expected_path);
             self.exists.map_err(anyhow::Error::msg)
         }
 
@@ -761,6 +763,7 @@ mod tests {
         let mut outcomes = Vec::new();
         for remote in [false, true] {
             let fs = Arc::new(RemoteWriteFs {
+                expected_path: "/remote/workspace/result.txt".into(),
                 read_error: None,
                 exists: Ok(false),
                 writes: AtomicUsize::new(0),
@@ -789,17 +792,25 @@ mod tests {
     #[tokio::test]
     async fn write_never_overwrites_an_unreadable_existing_file_without_read_state() {
         for remote in [false, true] {
+            let root = if remote {
+                PathBuf::from("/remote/workspace")
+            } else {
+                std::env::temp_dir().join("bitfun-write-unreadable-fixture")
+            };
+            let expected_path = if remote {
+                "/remote/workspace/result.txt".to_string()
+            } else {
+                root.join("result.txt").to_string_lossy().into_owned()
+            };
             let fs = Arc::new(RemoteWriteFs {
+                expected_path,
                 exists: Ok(true),
                 read_error: Some("Permission denied"),
                 writes: AtomicUsize::new(0),
             });
             let mut context = remote_context(fs.clone());
             if !remote {
-                context.workspace = Some(WorkspaceBinding::new(
-                    None,
-                    PathBuf::from("/remote/workspace"),
-                ));
+                context.workspace = Some(WorkspaceBinding::new(None, root));
             }
             let result = FileWriteTool::new()
                 .call_impl(&json!({"payload":"+++ result.txt\nreplacement"}), &context)
@@ -816,6 +827,7 @@ mod tests {
     async fn remote_write_does_not_treat_probe_failures_as_new_files() {
         for error in ["Permission denied", "SSH connection lost"] {
             let fs = Arc::new(RemoteWriteFs {
+                expected_path: "/remote/workspace/result.txt".into(),
                 read_error: None,
                 exists: Err(error),
                 writes: AtomicUsize::new(0),
@@ -841,6 +853,7 @@ mod tests {
             [(false, "new content", 1), (true, "original content", 0)]
         {
             let fs = Arc::new(RemoteWriteFs {
+                expected_path: "/remote/workspace/result.txt".into(),
                 read_error: None,
                 exists: Ok(exists),
                 writes: AtomicUsize::new(0),
@@ -860,6 +873,7 @@ mod tests {
     #[tokio::test]
     async fn remote_write_requires_its_workspace_filesystem() {
         let mut context = remote_context(Arc::new(RemoteWriteFs {
+            expected_path: "/remote/workspace/result.txt".into(),
             read_error: None,
             exists: Ok(false),
             writes: AtomicUsize::new(0),

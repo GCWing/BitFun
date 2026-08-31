@@ -426,7 +426,6 @@ mod tests {
         assert_eq!(metadata.kind, WorkspacePathKind::File);
         assert_eq!(metadata.size, Some(7));
         assert_eq!(metadata.modified, Some(modified));
-        assert!(fs.metadata(&format!("{path}/child"), true).await.is_err());
         assert!(fs.remove_dir(&directory, false).await.is_err());
         fs.rename(&path, &renamed).await.unwrap();
         assert!(fs.metadata(&path, false).await.unwrap().is_none());
@@ -435,6 +434,62 @@ mod tests {
         fs.write_file(&path, b"nested again").await.unwrap();
         fs.remove_dir(&directory, true).await.unwrap();
         assert!(!fs.exists(&directory).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn local_workspace_metadata_preserves_native_path_error_semantics() {
+        use std::io::ErrorKind;
+
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("file.bin");
+        std::fs::write(&file, b"file").unwrap();
+        let below_file = file.join("child");
+        let missing_leaf = temp.path().join("missing.bin");
+        let missing_parent = temp.path().join("missing/child");
+        let invalid_path = format!("{}\0child", file.to_str().unwrap());
+        let fs = LocalWorkspaceFs;
+
+        for follow in [false, true] {
+            for missing in [&missing_leaf, &missing_parent] {
+                assert!(fs
+                    .metadata(missing.to_str().unwrap(), follow)
+                    .await
+                    .unwrap()
+                    .is_none());
+            }
+
+            let native_error = if follow {
+                std::fs::metadata(&below_file)
+            } else {
+                std::fs::symlink_metadata(&below_file)
+            }
+            .unwrap_err();
+            let result = fs.metadata(below_file.to_str().unwrap(), follow).await;
+            // Windows reports a nonexistent pathname below a file; Unix
+            // reports ENOTDIR. The port maps native NotFound to None without
+            // inventing an errno through separate, racy ancestor probes.
+            #[cfg(windows)]
+            {
+                assert_eq!(native_error.kind(), ErrorKind::NotFound);
+                assert!(result.unwrap().is_none());
+            }
+            #[cfg(unix)]
+            {
+                assert_eq!(native_error.kind(), ErrorKind::NotADirectory);
+                let error = result.unwrap_err();
+                let error = error.downcast_ref::<std::io::Error>().unwrap();
+                assert_eq!(error.kind(), ErrorKind::NotADirectory);
+                assert_eq!(error.raw_os_error(), native_error.raw_os_error());
+            }
+
+            // A malformed pathname is reliably an error on every supported
+            // platform and must never be misreported as a missing file.
+            let error = fs.metadata(&invalid_path, follow).await.unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                ErrorKind::InvalidInput
+            );
+        }
     }
 
     #[cfg(unix)]

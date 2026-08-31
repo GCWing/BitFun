@@ -316,6 +316,7 @@ mod tests {
 
     #[derive(Default)]
     struct ListingFs {
+        root: Option<String>,
         entries: Vec<WorkspaceDirEntry>,
         children: HashMap<String, Vec<WorkspaceDirEntry>>,
         files: HashMap<String, String>,
@@ -357,7 +358,7 @@ mod tests {
             if let Some(error) = self.error {
                 anyhow::bail!(error);
             }
-            if path == "/remote/workspace" {
+            if path == self.root.as_deref().unwrap_or("/remote/workspace") {
                 Ok(self.entries.clone())
             } else {
                 Ok(self.children.get(path).cloned().unwrap_or_default())
@@ -385,7 +386,7 @@ mod tests {
     }
 
     fn context(fs: Arc<ListingFs>, remote: bool) -> ToolUseContext {
-        let root = "/remote/workspace";
+        let root = fs.root.as_deref().unwrap_or("/remote/workspace");
         let workspace = if remote {
             let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
                 root,
@@ -448,47 +449,88 @@ mod tests {
 
     #[tokio::test]
     async fn listing_uses_same_traversal_and_result_for_local_and_remote_providers() {
+        let mut outcomes = Vec::new();
+        for remote in [false, true] {
+            let root = if remote {
+                "/remote/workspace".to_string()
+            } else {
+                std::env::temp_dir()
+                    .join("bitfun-ls-fixture")
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            let path = |name: &str| {
+                if remote {
+                    format!("{root}/{name}")
+                } else {
+                    Path::new(&root).join(name).to_string_lossy().into_owned()
+                }
+            };
+            let fixture_entry = |name: &str, is_dir, modified| WorkspaceDirEntry {
+                path: path(name),
+                ..entry(name, is_dir, modified)
+            };
+            let fs = Arc::new(ListingFs {
+                root: Some(root.clone()),
+                entries: vec![
+                    fixture_entry("file.txt", false, 1),
+                    fixture_entry("目录", true, 2),
+                    fixture_entry(".hidden", false, 3),
+                ],
+                children: HashMap::from([(
+                    path("目录"),
+                    vec![fixture_entry("目录/child.rs", false, 4)],
+                )]),
+                ..Default::default()
+            });
+            let result = LSTool::new()
+                .call_impl(
+                    &json!({"path": ".", "limit": 10}),
+                    &context(fs.clone(), remote),
+                )
+                .await
+                .unwrap();
+            let (data, text) = result_parts(&result);
+            assert_eq!(data["path"], root);
+            assert_eq!(data["total"], 3);
+            assert_eq!(data["truncated"], false);
+            assert_eq!(data["entries"][0]["name"], "目录");
+            assert_eq!(data["entries"][1]["name"], "file.txt");
+            assert!(text.contains("child.rs"));
+            assert_eq!(fs.reads.load(Ordering::SeqCst), 2);
+
+            // Native and POSIX providers preserve their own absolute path spelling.
+            // Compare the listing facts after checking those paths independently.
+            let mut comparable = data.clone();
+            comparable["path"] = json!("<workspace>");
+            for item in comparable["entries"].as_array_mut().unwrap() {
+                let name = item["name"].as_str().unwrap().to_string();
+                assert_eq!(item["path"], path(&name));
+                item["path"] = json!(name);
+            }
+            outcomes.push((comparable, text.strip_prefix(&root).unwrap().to_string()));
+        }
+        assert_eq!(outcomes[0], outcomes[1]);
+    }
+
+    #[tokio::test]
+    async fn remote_listing_preserves_literal_backslashes_and_escapes_control_characters() {
         let fs = Arc::new(ListingFs {
-            entries: vec![
-                entry("line\nname\\file.txt", false, 1),
-                entry("目录", true, 2),
-                entry(".hidden", false, 3),
-            ],
-            children: HashMap::from([(
-                "/remote/workspace/目录".to_string(),
-                vec![entry("目录/child.rs", false, 4)],
-            )]),
+            entries: vec![entry("line\nname\\file.txt", false, 1)],
             ..Default::default()
         });
-        let local = LSTool::new()
-            .call_impl(
-                &json!({"path": ".", "limit": 10}),
-                &context(fs.clone(), false),
-            )
+        let results = LSTool::new()
+            .call_impl(&json!({"path": "."}), &context(fs, true))
             .await
             .unwrap();
-        let remote = LSTool::new()
-            .call_impl(
-                &json!({"path": ".", "limit": 10}),
-                &context(fs.clone(), true),
-            )
-            .await
-            .unwrap();
-        let (local_data, local_text) = result_parts(&local);
-        let (data, text) = result_parts(&remote);
-        assert_eq!(local_data, data);
-        assert_eq!(local_text, text);
-        assert_eq!(data["total"], 3);
-        assert_eq!(data["truncated"], false);
-        assert_eq!(data["entries"][0]["name"], "目录");
-        assert_eq!(data["entries"][1]["name"], "line\nname\\file.txt");
+        let (data, text) = result_parts(&results);
+        assert_eq!(data["total"], 1);
+        assert_eq!(data["entries"][0]["name"], "line\nname\\file.txt");
         assert_eq!(
-            data["entries"][1]["path"],
+            data["entries"][0]["path"],
             "/remote/workspace/line\nname\\file.txt"
         );
-        assert!(text.contains("child.rs"));
         assert!(text.contains("line\\nname\\\\file.txt"));
-        assert_eq!(fs.reads.load(Ordering::SeqCst), 4);
     }
 
     #[tokio::test]
