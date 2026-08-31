@@ -93,7 +93,7 @@ export const SessionTitleConfig: React.FC = () => {
     const next = { ...settings, enable_session_title_generation: checked };
     setSettings(next);
     try {
-      await aiExperienceConfigService.saveSettings(next);
+      await aiExperienceConfigService.saveSettings({ enable_session_title_generation: checked });
       notifySuccess(t('sessionTitle.messages.saveSuccess'));
     } catch (error) {
       log.error('Failed to save session title enable setting', error);

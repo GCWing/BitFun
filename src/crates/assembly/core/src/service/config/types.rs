@@ -463,8 +463,27 @@ pub struct AIExperienceConfig {
     /// Local speech-to-text settings for the chat composer.
     pub voice_input: VoiceInputConfig,
     /// User-defined quick actions (post-coding menu); persisted for the web UI.
-    #[serde(default)]
+    #[serde(default = "default_quick_actions")]
     pub quick_actions: Vec<AiExperienceQuickAction>,
+}
+
+fn default_quick_actions() -> Vec<AiExperienceQuickAction> {
+    [
+        ("commit", "Commit", "Commit all current code changes"),
+        (
+            "create_pr",
+            "Create PR",
+            "Create a Pull Request for the current branch",
+        ),
+    ]
+    .into_iter()
+    .map(|(id, label, prompt)| AiExperienceQuickAction {
+        id: id.to_string(),
+        label: label.to_string(),
+        prompt: prompt.to_string(),
+        enabled: true,
+    })
+    .collect()
 }
 
 /// User-selected Agent companion pet package.
@@ -1708,7 +1727,7 @@ impl Default for AIExperienceConfig {
             agent_companion_pet: default_agent_companion_pet(),
             enable_workspace_search: false,
             voice_input: VoiceInputConfig::default(),
-            quick_actions: Vec::new(),
+            quick_actions: default_quick_actions(),
         }
     }
 }
@@ -2501,6 +2520,20 @@ mod tests {
             serialized["agent_companion_pet"]["spritesheetPath"],
             "/agent-companion-pets/boxcat/spritesheet.webp"
         );
+    }
+
+    #[test]
+    fn quick_action_defaults_do_not_replace_an_explicit_legacy_empty_list() {
+        let absent: AIExperienceConfig = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(absent.quick_actions.len(), 2);
+        let cleared: AIExperienceConfig = serde_json::from_value(serde_json::json!({
+            "quick_actions": []
+        }))
+        .unwrap();
+        assert!(cleared.quick_actions.is_empty());
+        let round_trip: AIExperienceConfig =
+            serde_json::from_value(serde_json::to_value(cleared).unwrap()).unwrap();
+        assert!(round_trip.quick_actions.is_empty());
     }
 
     #[test]

@@ -108,27 +108,23 @@ pub async fn set_global_user_skill_disabled(
     }
 
     let config_service = GlobalConfigManager::get_service().await?;
-    let mut settings: SkillSettingsConfig = config_service
-        .get_config(Some("ai.skill_settings"))
-        .await
-        .unwrap_or_default();
-
-    if disabled {
-        settings
-            .globally_disabled_user_skills
-            .push(skill_key.to_string());
-    } else {
-        settings
-            .globally_disabled_user_skills
-            .retain(|key| key != skill_key);
-    }
-    settings.globally_disabled_user_skills =
-        normalize_skill_keys(settings.globally_disabled_user_skills);
-
     config_service
-        .set_config("ai.skill_settings", &settings)
-        .await?;
-    Ok(settings.globally_disabled_user_skills)
+        .update_config("ai.skill_settings", |settings: &mut SkillSettingsConfig| {
+            if disabled {
+                settings
+                    .globally_disabled_user_skills
+                    .push(skill_key.to_string());
+            } else {
+                settings
+                    .globally_disabled_user_skills
+                    .retain(|key| key != skill_key);
+            }
+            settings.globally_disabled_user_skills =
+                normalize_skill_keys(std::mem::take(&mut settings.globally_disabled_user_skills));
+
+            Ok(settings.globally_disabled_user_skills.clone())
+        })
+        .await
 }
 
 pub fn project_mode_skills_path_for_remote(remote_root: &str) -> String {

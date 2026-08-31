@@ -197,3 +197,19 @@ feature boundary changed, and the third for behavior. Run
 or test-target layout. Workspace checks and product-wide tests are CI-backed and
 are not the default Core precheck. For documentation-only changes, run
 `git diff --check`.
+
+Configuration persistence, account settings import, backup restore, legacy
+field/deletion compatibility, local-change notifications, and save/reload/model
+concurrency regressions have feature-free fixtures:
+
+```bash
+cargo test -p bitfun-core --no-default-features --lib service::config::
+```
+
+The account sync adapter requires `remote-connect`, which also covers
+Agent-profile canonicalization in the focused configuration suite:
+
+```bash
+cargo test -p bitfun-core --no-default-features --features remote-connect --lib service::config::
+cargo test -p bitfun-core --no-default-features --features remote-connect --lib service::remote_connect::settings_sync::tests
+```

@@ -72,7 +72,6 @@ describe('handleAgentCompanionPetCommand', () => {
 
     expect(saveSettingsMock).toHaveBeenCalledWith({
       enable_agent_companion: false,
-      agent_companion_display_mode: 'desktop',
     });
   });
 

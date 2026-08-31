@@ -191,11 +191,15 @@ export class ConfigAPI {
    
   async importConfig(configData: any): Promise<void> {
     try {
-      await api.invoke('import_config', { 
+      const result = await api.invoke<{ success: boolean; errors: string[] }>('import_config', {
         request: { configData } 
       });
+      if (!result?.success) {
+        throw new Error(result?.errors?.join('; ') || 'Configuration import was not confirmed');
+      }
     } catch (error) {
-      throw createTauriCommandError('import_config', error, { configData });
+      // Imported documents can contain credentials; never attach them to errors.
+      throw createTauriCommandError('import_config', error);
     }
   }
 

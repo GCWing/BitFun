@@ -394,36 +394,25 @@ pub async fn delete_custom_agent(
 
     let config_service = &state.config_service;
 
-    let mut agent_profiles: serde_json::Map<String, serde_json::Value> = config_service
-        .get_config(Some("ai.agent_profiles"))
+    if let Err(error) = config_service
+        .update_config(
+            "",
+            |config: &mut bitfun_core::service::config::GlobalConfig| {
+                config.ai.agent_profiles.remove(&agent_id);
+                if config.app.flow_chat.default_mode_id.as_deref() == Some(agent_id.as_str()) {
+                    config.app.flow_chat.default_mode_id = None;
+                }
+                Ok(())
+            },
+        )
         .await
-        .unwrap_or_default();
-    if agent_profiles.remove(&agent_id).is_some() {
-        if let Err(error) = config_service
-            .set_config("ai.agent_profiles", &agent_profiles)
-            .await
-        {
-            warn!(
-                "Failed to clean up ai.agent_profiles after custom agent deletion: agent_id={}, error={}",
-                agent_id, error
-            );
-        }
-    }
-
-    let default_mode_id: Option<String> = config_service
-        .get_config(Some("app.flow_chat.default_mode_id"))
-        .await
-        .unwrap_or_default();
-    if default_mode_id.as_deref() == Some(agent_id.as_str()) {
-        if let Err(error) = config_service
-            .set_config("app.flow_chat.default_mode_id", Option::<String>::None)
-            .await
-        {
-            warn!(
-                "Failed to clear default chat input mode after custom agent deletion: agent_id={}, error={}",
-                agent_id, error
-            );
-        }
+    {
+        warn!(
+            "Failed to clean up config after custom agent deletion: agent_id={}, error={}",
+            agent_id, error
+        );
+    } else {
+        crate::api::remote_connect_api::notify_settings_changed();
     }
 
     if let Err(error) = bitfun_core::service::config::reload_global_config().await {

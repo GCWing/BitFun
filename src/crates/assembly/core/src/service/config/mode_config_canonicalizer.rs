@@ -379,153 +379,160 @@ pub async fn get_agent_profile_view(agent_id: &str) -> BitFunResult<AgentProfile
 
 pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> BitFunResult<()> {
     let config_service = GlobalConfigManager::get_service().await?;
-    let mut stored_configs = get_agent_profile_configs().await?;
     let agent_defaults = get_agent_defaults().await;
     let default_tools = agent_defaults
         .get(agent_id)
         .ok_or_else(|| BitFunError::config(format!("Agent does not exist: {}", agent_id)))?;
     let valid_tools = get_valid_tool_names().await;
     let profile_id = resolve_profile_id(agent_id);
-    let current = stored_configs.get(&profile_id);
-
-    let enabled_tools = if let Some(tools) = config.get("enabled_tools") {
-        serde_json::from_value::<Vec<String>>(tools.clone()).map_err(|error| {
-            BitFunError::config(format!(
-                "Invalid enabled_tools for mode '{}': {}",
-                agent_id, error
-            ))
-        })?
-    } else {
-        resolve_effective_tools(default_tools, current, &valid_tools)
-    };
-
-    let disabled_user_skills = if config
-        .as_object()
-        .map(|obj| obj.contains_key("disabled_user_skills"))
-        .unwrap_or(false)
-    {
-        match config.get("disabled_user_skills") {
-            Some(Value::Null) | None => Vec::new(),
-            Some(value) => {
-                serde_json::from_value::<Vec<String>>(value.clone()).map_err(|error| {
-                    BitFunError::config(format!(
-                        "Invalid disabled_user_skills for mode '{}': {}",
-                        agent_id, error
-                    ))
-                })?
-            }
-        }
-    } else {
-        current
-            .map(|item| item.disabled_user_skills.clone())
-            .unwrap_or_default()
-    };
-
-    let enabled_user_skills = if config
-        .as_object()
-        .map(|obj| obj.contains_key("enabled_user_skills"))
-        .unwrap_or(false)
-    {
-        match config.get("enabled_user_skills") {
-            Some(Value::Null) | None => Vec::new(),
-            Some(value) => {
-                serde_json::from_value::<Vec<String>>(value.clone()).map_err(|error| {
-                    BitFunError::config(format!(
-                        "Invalid enabled_user_skills for mode '{}': {}",
-                        agent_id, error
-                    ))
-                })?
-            }
-        }
-    } else {
-        current
-            .map(|item| item.enabled_user_skills.clone())
-            .unwrap_or_default()
-    };
-
-    let subagent_overrides = if config
-        .as_object()
-        .map(|obj| obj.contains_key("subagent_overrides"))
-        .unwrap_or(false)
-    {
-        match config.get("subagent_overrides") {
-            Some(Value::Null) | None => ParentSubagentOverrideConfig::new(),
-            Some(value) => serde_json::from_value::<ParentSubagentOverrideConfig>(value.clone())
-                .map_err(|error| {
-                    BitFunError::config(format!(
-                        "Invalid subagent_overrides for mode '{}': {}",
-                        agent_id, error
-                    ))
-                })?,
-        }
-    } else {
-        current
-            .map(|item| item.subagent_overrides.clone())
-            .unwrap_or_default()
-    };
-
-    let tool_permission_rules = if config
-        .as_object()
-        .map(|obj| obj.contains_key("tool_permission_rules"))
-        .unwrap_or(false)
-    {
-        match config.get("tool_permission_rules") {
-            Some(Value::Null) | None => Vec::new(),
-            Some(value) => {
-                serde_json::from_value::<Vec<PermissionRule>>(value.clone()).map_err(|error| {
-                    BitFunError::config(format!(
-                        "Invalid tool_permission_rules for mode '{}': {}",
-                        agent_id, error
-                    ))
-                })?
-            }
-        }
-    } else {
-        current
-            .map(|item| item.tool_permission_rules.clone())
-            .unwrap_or_default()
-    };
-
-    if let Some(canonical) = stored_agent_profile_from_tool_selection(
-        agent_id,
-        enabled_tools,
-        disabled_user_skills,
-        enabled_user_skills,
-        subagent_overrides,
-        tool_permission_rules,
-        default_tools,
-        &valid_tools,
-    ) {
-        stored_configs.insert(profile_id, canonical);
-    } else {
-        stored_configs.remove(&profile_id);
-    }
-
     config_service
-        .set_config("ai.agent_profiles", stored_configs)
+        .update_config(
+            "ai.agent_profiles",
+            |stored_configs: &mut HashMap<String, AgentProfileConfig>| {
+                let current = stored_configs.get(&profile_id);
+
+                let enabled_tools = if let Some(tools) = config.get("enabled_tools") {
+                    serde_json::from_value::<Vec<String>>(tools.clone()).map_err(|error| {
+                        BitFunError::config(format!(
+                            "Invalid enabled_tools for mode '{}': {}",
+                            agent_id, error
+                        ))
+                    })?
+                } else {
+                    resolve_effective_tools(default_tools, current, &valid_tools)
+                };
+
+                let disabled_user_skills = if config
+                    .as_object()
+                    .map(|obj| obj.contains_key("disabled_user_skills"))
+                    .unwrap_or(false)
+                {
+                    match config.get("disabled_user_skills") {
+                        Some(Value::Null) | None => Vec::new(),
+                        Some(value) => serde_json::from_value::<Vec<String>>(value.clone())
+                            .map_err(|error| {
+                                BitFunError::config(format!(
+                                    "Invalid disabled_user_skills for mode '{}': {}",
+                                    agent_id, error
+                                ))
+                            })?,
+                    }
+                } else {
+                    current
+                        .map(|item| item.disabled_user_skills.clone())
+                        .unwrap_or_default()
+                };
+
+                let enabled_user_skills = if config
+                    .as_object()
+                    .map(|obj| obj.contains_key("enabled_user_skills"))
+                    .unwrap_or(false)
+                {
+                    match config.get("enabled_user_skills") {
+                        Some(Value::Null) | None => Vec::new(),
+                        Some(value) => serde_json::from_value::<Vec<String>>(value.clone())
+                            .map_err(|error| {
+                                BitFunError::config(format!(
+                                    "Invalid enabled_user_skills for mode '{}': {}",
+                                    agent_id, error
+                                ))
+                            })?,
+                    }
+                } else {
+                    current
+                        .map(|item| item.enabled_user_skills.clone())
+                        .unwrap_or_default()
+                };
+
+                let subagent_overrides = if config
+                    .as_object()
+                    .map(|obj| obj.contains_key("subagent_overrides"))
+                    .unwrap_or(false)
+                {
+                    match config.get("subagent_overrides") {
+                        Some(Value::Null) | None => ParentSubagentOverrideConfig::new(),
+                        Some(value) => {
+                            serde_json::from_value::<ParentSubagentOverrideConfig>(value.clone())
+                                .map_err(|error| {
+                                    BitFunError::config(format!(
+                                        "Invalid subagent_overrides for mode '{}': {}",
+                                        agent_id, error
+                                    ))
+                                })?
+                        }
+                    }
+                } else {
+                    current
+                        .map(|item| item.subagent_overrides.clone())
+                        .unwrap_or_default()
+                };
+
+                let tool_permission_rules = if config
+                    .as_object()
+                    .map(|obj| obj.contains_key("tool_permission_rules"))
+                    .unwrap_or(false)
+                {
+                    match config.get("tool_permission_rules") {
+                        Some(Value::Null) | None => Vec::new(),
+                        Some(value) => serde_json::from_value::<Vec<PermissionRule>>(value.clone())
+                            .map_err(|error| {
+                                BitFunError::config(format!(
+                                    "Invalid tool_permission_rules for mode '{}': {}",
+                                    agent_id, error
+                                ))
+                            })?,
+                    }
+                } else {
+                    current
+                        .map(|item| item.tool_permission_rules.clone())
+                        .unwrap_or_default()
+                };
+
+                if let Some(canonical) = stored_agent_profile_from_tool_selection(
+                    agent_id,
+                    enabled_tools,
+                    disabled_user_skills,
+                    enabled_user_skills,
+                    subagent_overrides,
+                    tool_permission_rules,
+                    default_tools,
+                    &valid_tools,
+                ) {
+                    stored_configs.insert(profile_id, canonical);
+                } else {
+                    stored_configs.remove(&profile_id);
+                }
+
+                Ok(())
+            },
+        )
         .await
 }
 
 pub async fn reset_agent_profile_to_default(agent_id: &str) -> BitFunResult<()> {
     let config_service = GlobalConfigManager::get_service().await?;
-    let mut stored_configs = get_agent_profile_configs().await?;
     let profile_id = resolve_profile_id(agent_id);
 
-    if let Some(current) = stored_configs.get_mut(&profile_id) {
-        current.added_tools.clear();
-        current.removed_tools.clear();
-
-        if current.disabled_user_skills.is_empty()
-            && current.enabled_user_skills.is_empty()
-            && current.subagent_overrides.is_empty()
-            && current.tool_permission_rules.is_empty()
-        {
-            stored_configs.remove(&profile_id);
-        }
-    }
-
     config_service
-        .set_config("ai.agent_profiles", stored_configs)
+        .update_config(
+            "ai.agent_profiles",
+            |stored_configs: &mut HashMap<String, AgentProfileConfig>| {
+                if let Some(current) = stored_configs.get_mut(&profile_id) {
+                    current.added_tools.clear();
+                    current.removed_tools.clear();
+
+                    if current.disabled_user_skills.is_empty()
+                        && current.enabled_user_skills.is_empty()
+                        && current.subagent_overrides.is_empty()
+                        && current.tool_permission_rules.is_empty()
+                    {
+                        stored_configs.remove(&profile_id);
+                    }
+                }
+
+                Ok(())
+            },
+        )
         .await
 }
 
@@ -535,70 +542,64 @@ pub async fn canonicalize_agent_profile_configs(
     let config_service = GlobalConfigManager::get_service().await?;
     let valid_tools = get_valid_tool_names().await;
     let profile_defaults = get_profile_defaults().await;
-    let mut ai_value: Value = config_service.get_config(Some("ai")).await?;
-    let original_ai_value = ai_value.clone();
-    let ai_object = ai_value
-        .as_object_mut()
-        .ok_or_else(|| BitFunError::config("AI config must be a JSON object".to_string()))?;
+    config_service
+        .update_config(
+            "ai.agent_profiles",
+            |raw_agent_profiles: &mut Map<String, Value>| {
+                let mut rewritten_agent_profiles = Map::new();
+                let mut updated_profiles = Vec::new();
+                let mut removed_profile_configs = Vec::new();
 
-    let raw_agent_profiles = ai_object
-        .get("agent_profiles")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+                for (profile_id, default_tools) in &profile_defaults {
+                    let raw_profile = raw_agent_profiles.get(profile_id);
+                    let canonical = canonicalize_agent_profile(
+                        profile_id,
+                        raw_profile,
+                        default_tools,
+                        &valid_tools,
+                    )?;
+                    if let Some(config) = canonical {
+                        if raw_profile.is_some() {
+                            updated_profiles.push(AgentProfileConfigUpdateInfo {
+                                profile_id: profile_id.clone(),
+                                added_tools: config.added_tools.clone(),
+                                removed_tools: config.removed_tools.clone(),
+                            });
+                        }
+                        rewritten_agent_profiles
+                            .insert(profile_id.clone(), serde_json::to_value(config)?);
+                    } else if raw_profile.is_some() {
+                        removed_profile_configs.push(profile_id.clone());
+                    }
+                }
 
-    let mut rewritten_agent_profiles = Map::new();
-    let mut updated_profiles = Vec::new();
-    let mut removed_profile_configs = Vec::new();
+                // Profiles we cannot resolve defaults for are kept, not dropped. Canonicalization
+                // runs at startup with no workspace, so project-scoped sub-agents are invisible
+                // here; pruning them would silently discard the user's stored selection every
+                // launch. Records that no longer deserialize are still removed, so one bad entry
+                // cannot take the whole map down when it is read back.
+                for (profile_id, raw_profile) in raw_agent_profiles.iter() {
+                    if profile_defaults.contains_key(profile_id) {
+                        continue;
+                    }
+                    match serde_json::from_value::<AgentProfileConfig>(raw_profile.clone()) {
+                        Ok(config) => {
+                            rewritten_agent_profiles
+                                .insert(profile_id.clone(), serde_json::to_value(config)?);
+                        }
+                        Err(_) => removed_profile_configs.push(profile_id.clone()),
+                    }
+                }
 
-    for (profile_id, default_tools) in &profile_defaults {
-        let raw_profile = raw_agent_profiles.get(profile_id);
-        let canonical =
-            canonicalize_agent_profile(profile_id, raw_profile, default_tools, &valid_tools)?;
-        if let Some(config) = canonical {
-            if raw_profile.is_some() {
-                updated_profiles.push(AgentProfileConfigUpdateInfo {
-                    profile_id: profile_id.clone(),
-                    added_tools: config.added_tools.clone(),
-                    removed_tools: config.removed_tools.clone(),
-                });
-            }
-            rewritten_agent_profiles.insert(profile_id.clone(), serde_json::to_value(config)?);
-        } else if raw_profile.is_some() {
-            removed_profile_configs.push(profile_id.clone());
-        }
-    }
+                *raw_agent_profiles = rewritten_agent_profiles;
 
-    // Profiles we cannot resolve defaults for are kept, not dropped. Canonicalization
-    // runs at startup with no workspace, so project-scoped sub-agents are invisible
-    // here; pruning them would silently discard the user's stored selection every
-    // launch. Records that no longer deserialize are still removed, so one bad entry
-    // cannot take the whole map down when it is read back.
-    for (profile_id, raw_profile) in &raw_agent_profiles {
-        if profile_defaults.contains_key(profile_id) {
-            continue;
-        }
-        match serde_json::from_value::<AgentProfileConfig>(raw_profile.clone()) {
-            Ok(config) => {
-                rewritten_agent_profiles.insert(profile_id.clone(), serde_json::to_value(config)?);
-            }
-            Err(_) => removed_profile_configs.push(profile_id.clone()),
-        }
-    }
-
-    ai_object.insert(
-        "agent_profiles".to_string(),
-        Value::Object(rewritten_agent_profiles),
-    );
-
-    if ai_value != original_ai_value {
-        config_service.set_config("ai", ai_value).await?;
-    }
-
-    Ok(AgentProfileConfigCanonicalizationReport {
-        removed_profile_configs,
-        updated_profiles,
-    })
+                Ok(AgentProfileConfigCanonicalizationReport {
+                    removed_profile_configs,
+                    updated_profiles,
+                })
+            },
+        )
+        .await
 }
 
 pub fn agent_profile_member_mode_ids_for(agent_id: &str) -> Vec<String> {

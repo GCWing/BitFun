@@ -91,7 +91,7 @@ class ConfigManagerImpl implements IConfigManager {
     log.info('Initializing config manager (proxy mode)');
   }
 
-  private async migrateLegacyAiModelsIfNeeded(config: unknown): Promise<unknown> {
+  private async resolveLegacyAiModels(config: unknown): Promise<unknown> {
     if (!Array.isArray(config)) {
       return config;
     }
@@ -145,8 +145,10 @@ class ConfigManagerImpl implements IConfigManager {
       return config;
     }
 
-    await configAPI.setConfig('ai.models', migratedModels);
-    log.info('Migrated legacy ai.models', {
+    // Reading is a compatibility projection, not permission to replace the
+    // model list. An asynchronous startup read may already be stale by now.
+    // These deterministic IDs are persisted by the next explicit model edit.
+    log.info('Resolved legacy model metadata for display', {
       migratedNameCount,
       migratedProviderInstanceCount,
     });
@@ -311,7 +313,7 @@ class ConfigManagerImpl implements IConfigManager {
     const readVersion = path ? this.getPathMutationVersion(path) : 0;
     const config = await configAPI.getConfig(path);
     const resolvedConfig = path === 'ai.models'
-      ? await this.migrateLegacyAiModelsIfNeeded(config)
+      ? await this.resolveLegacyAiModels(config)
       : config;
 
     if (path) {
@@ -338,7 +340,7 @@ class ConfigManagerImpl implements IConfigManager {
     const readVersion = this.getPathMutationVersion(path);
     const config = await configAPI.getConfig(path, { skipRetryOnNotFound: true });
     const resolvedConfig = path === 'ai.models'
-      ? await this.migrateLegacyAiModelsIfNeeded(config)
+      ? await this.resolveLegacyAiModels(config)
       : config;
 
     if (readVersion !== this.getPathMutationVersion(path)) {
@@ -364,7 +366,7 @@ class ConfigManagerImpl implements IConfigManager {
 
     for (const path of paths) {
       const resolvedConfig = path === 'ai.models'
-        ? await this.migrateLegacyAiModelsIfNeeded(configs[path])
+        ? await this.resolveLegacyAiModels(configs[path])
         : configs[path];
 
       resolvedConfigs[path] = await this.resolveReadValue(
@@ -613,6 +615,34 @@ class ConfigManagerImpl implements IConfigManager {
       log.error('Failed to set config', { path, error });
       throw error;
     }
+  }
+
+  /** Apply an edit to a fresh host value inside the client mutation queue. */
+  async updateConfig<T>(path: string, update: (current: T) => T): Promise<T> {
+    // Model writes also reconcile default selectors on the host. Invalidate
+    // their cached siblings and serialize edits to the whole AI section.
+    const mutationPath = path === 'ai.models' ? 'ai' : path;
+    let previous!: T;
+    let next!: T;
+    await this.runMutation(mutationPath, async () => {
+      // Deliberately bypass cached/read-failure defaults: an unavailable host
+      // must not turn a partial edit into replacement of its config with [].
+      const value = await configAPI.getConfig(path);
+      previous = (path === 'ai.models' ? await this.resolveLegacyAiModels(value) : value) as T;
+      if (previous === undefined || previous === null) {
+        throw new Error(`Cannot update unavailable config: ${path}`);
+      }
+      next = update(previous);
+      await configAPI.setConfig(path, next);
+    }, () => {
+      this.configCache.set(path, next);
+      if (mutationPath === path) {
+        this.notifyConfigChange(path, previous, next);
+      } else {
+        this.notifyConfigChange(mutationPath, undefined, undefined);
+      }
+    });
+    return next;
   }
 
   async saveCloudSpeechConfig(

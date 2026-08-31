@@ -122,7 +122,7 @@ vi.mock('../../hooks/useSessionStateMachine', () => ({
 }));
 
 vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({
-  DEFAULT_QUICK_ACTIONS: [],
+  DEFAULT_QUICK_ACTIONS: [{ id: 'fixture-default', label: 'Default fixture action', prompt: 'fixture', enabled: true }],
   aiExperienceConfigService: {
     getSettings: () => ({ quick_actions: [] }),
     addChangeListener: (listener: (settings: { quick_actions: unknown[] }) => void) => {
@@ -254,6 +254,8 @@ describe('SessionFilesBadge', () => {
     expect(dom.window.document.body.textContent).toContain('Review');
     expect(dom.window.document.body.textContent).not.toContain('Review: Strict');
     expect(dom.window.document.body.textContent).not.toContain('Deep review');
+    // The persisted [] means the user removed all quick actions.
+    expect(dom.window.document.body.textContent).not.toContain('Default fixture action');
   });
 
   it('shows a localized error when Review cannot be prepared', async () => {
