@@ -215,6 +215,33 @@
     }
 
   }
+
+  &__submenu {
+    position: fixed;
+    min-width: clamp(0px, 220px, calc(100vw - 16px));
+    max-width: clamp(0px, 280px, calc(100vw - 16px));
+    overflow-y: auto;
+    z-index: $z-popover;
+    transform-origin: left top;
+    transition:
+      opacity 100ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &[data-placement='left'] {
+      transform-origin: right top;
+    }
+
+    @starting-style {
+      opacity: 0;
+      transform: translateX(-4px) scale(0.98);
+    }
+
+    &[data-placement='left'] {
+      @starting-style {
+        transform: translateX(4px) scale(0.98);
+      }
+    }
+  }
   
   // One menu level. It is remounted on every step, so its entry animation is
   // what makes the height change read as a step in a direction rather than as

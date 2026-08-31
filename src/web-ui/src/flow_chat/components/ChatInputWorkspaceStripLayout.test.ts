@@ -280,6 +280,14 @@ describe('composer context track layout', () => {
     expect(chatInput).not.toContain("selectSlashCommandAction('review')");
   });
 
+  it('keeps custom Agent creation out of the add menu', () => {
+    const chatInput = readLocalFile('ChatInput.tsx');
+
+    expect(chatInput).not.toContain('handleOpenCreateCustomMode');
+    expect(chatInput).not.toContain("t('chatInput.createCustomMode')");
+    expect(chatInput).not.toContain('BotMessageSquare');
+  });
+
   it('moves Harness beside add in expanded layout and keeps the model pair trailing', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
@@ -406,7 +414,7 @@ describe('composer context track layout', () => {
     );
   });
 
-  it('keeps Harness profile icons in the list instead of the ChatInput trigger', () => {
+  it('shows the current mode icon in the compact add menu while keeping profile icons in the list', () => {
     const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
@@ -416,8 +424,8 @@ describe('composer context track layout', () => {
     );
     expect(component).toContain('className="bitfun-harness-selector__density-core"');
     expect(component).toContain('<HarnessProfileMark profile={id} />');
-    expect(component).not.toContain('<HarnessProfileMark profile={knownSelectedProfile}');
-    expect(component).not.toContain('compact');
+    expect(component).toContain('<HarnessProfileMark profile={knownSelectedProfile} />');
+    expect(component).not.toContain('compact=');
     expect(stylesheet).not.toMatch(/__trigger-value \{[\s\S]*?display: none;/);
   });
 

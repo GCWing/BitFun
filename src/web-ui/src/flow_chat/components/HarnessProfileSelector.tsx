@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bot,
@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -53,8 +53,8 @@ interface HarnessProfileSelectorProps {
   disabled?: boolean;
   /**
    * `standalone` anchors the picker to its own floating trigger. `menu-item`
-   * turns that trigger into a row inside a parent action menu and keeps the
-   * secondary picker inside the same DOM boundary.
+   * turns that trigger into a row inside a parent action menu and opens the
+   * secondary picker beside it in the shared overlay layer.
    */
   presentation?: HarnessProfileSelectorPresentation;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
@@ -101,7 +101,7 @@ function sameAgent(left: string | null | undefined, right: string | null | undef
   return left?.trim().toLowerCase() === right?.trim().toLowerCase();
 }
 
-/** Icons stay in the menu; the ChatInput trigger remains text-only. */
+/** Menu rows and the compact add-menu trigger share one mode mark. */
 function HarnessProfileMark({
   profile,
 }: {
@@ -149,10 +149,9 @@ function HarnessProfileMark({
 
 /**
  * Before the first Turn this is the Session execution picker. Afterwards it
- * becomes a lightweight Session signature; alternative choices are disclosed only
- * through the explicit new-Session action. ChatInput presents the signature as
- * a disclosure row inside its add menu; other consumers may keep the standalone
- * trigger.
+ * becomes a lightweight Session signature whose menu choices start a new
+ * Session directly. ChatInput presents the signature as a disclosure row
+ * inside its add menu; other consumers may keep the standalone trigger.
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
@@ -170,11 +169,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   const { t } = useTranslation('flow-chat');
   const fixedSession = legacySession || sessionStarted;
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState<'summary' | 'profiles' | 'agents'>(
-    fixedSession ? 'summary' : 'profiles',
-  );
-  const previousFixedSessionRef = useRef(fixedSession);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState<'profiles' | 'agents'>('profiles');
+  const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuLayout = useAnchoredPopoverPosition({
@@ -195,21 +191,13 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
 
   const close = useCallback(() => {
     setOpen(false);
-    setPage(fixedSession ? 'summary' : 'profiles');
-  }, [fixedSession]);
+    setPage('profiles');
+  }, []);
 
   const finishSelection = useCallback(() => {
     close();
     onSelectionComplete?.();
   }, [close, onSelectionComplete]);
-
-  useEffect(() => {
-    const becameFixed = fixedSession && !previousFixedSessionRef.current;
-    previousFixedSessionRef.current = fixedSession;
-    if (becameFixed) {
-      setPage('summary');
-    }
-  }, [fixedSession]);
 
   useEffect(() => {
     if (!open) return;
@@ -305,18 +293,33 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   const triggerState = [open ? 'open' : '', fixedSession ? 'fixed' : '']
     .filter(Boolean)
     .join(' ') || undefined;
-  const creatingNewSession = fixedSession && page !== 'summary';
+  const creatingNewSession = fixedSession;
   const handleTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     setOpen(value => {
-      if (!value) setPage(fixedSession ? 'summary' : 'profiles');
+      if (!value) setPage('profiles');
       return !value;
     });
+  };
+  const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (presentation !== 'menu-item' || event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!open) setPage('profiles');
+    setOpen(true);
+  };
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape' && !(presentation === 'menu-item' && event.key === 'ArrowLeft')) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+    requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   return (
     <div
-      ref={rootRef}
       className={`bitfun-harness-selector bitfun-harness-selector--${presentation}`}
       data-bf-component="harness-selector"
       data-bf-part="root"
@@ -334,33 +337,25 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
             data-harness-fixed={fixedSession ? 'true' : undefined}
             aria-haspopup="menu"
             aria-expanded={open}
+            aria-controls={menuId}
             aria-label={triggerTooltip}
             disabled={disabled}
             onClick={handleTriggerClick}
+            onKeyDown={handleTriggerKeyDown}
+            leading={knownSelectedProfile
+              ? <HarnessProfileMark profile={knownSelectedProfile} />
+              : <Bot size={15} strokeWidth={1.45} aria-hidden />}
             metadata={(
-              <span className="bitfun-harness-selector__trigger-meta">
-                <span className="bitfun-harness-selector__trigger-current">
-                  <span>{t('chatInput.current')}</span>
-                  <span className="bitfun-harness-selector__trigger-current-separator" aria-hidden>
-                    ·
-                  </span>
-                  <span className="bitfun-harness-selector__trigger-current-value">
-                    {triggerLabel}
-                  </span>
-                </span>
-                <ChevronRight
-                  className="bitfun-harness-selector__trigger-chevron"
-                  size={14}
-                  strokeWidth={1.8}
-                  aria-hidden
-                />
-              </span>
+              <ChevronRight
+                className="bitfun-harness-selector__trigger-chevron"
+                size={14}
+                strokeWidth={1.8}
+                aria-hidden
+              />
             )}
             data-testid="harness-profile-selector"
           >
-            <span className="bitfun-harness-selector__trigger-label">
-              {t('chatInput.harness.menuLabel')}
-            </span>
+            {triggerLabel}
           </MenuItem>
         ) : (
           <button
@@ -388,6 +383,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       {open && createPortal(
         <Menu
           ref={menuRef}
+          id={menuId}
           className="bitfun-harness-selector__menu"
           data-bf-component="harness-selector"
           data-bf-part="menu"
@@ -411,154 +407,125 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
               }}
           autoFocusFirstItem
           onMouseDown={event => event.stopPropagation()}
+          onKeyDown={handleMenuKeyDown}
         >
-          {page === 'summary' ? (
-            <>
-              <MenuItem
+          <MenuSection
+            title={fixedSession ? (
+              <span
                 data-bf-component="harness-selector"
-                data-bf-part="sessionSummary"
-                data-testid="harness-session-summary"
-                role="menuitemradio"
-                checked
-                aria-disabled="true"
-                metadata={<Check size={13} strokeWidth={2.4} aria-hidden />}
+                data-bf-part="newSessionNotice"
+                data-testid="harness-new-session-notice"
               >
-                {primaryLabel}
-              </MenuItem>
-              {onStartNewSession ? (
-                <>
-                  <MenuSeparator />
-                  <MenuItem
-                    data-bf-component="harness-selector"
-                    data-bf-part="newSession"
-                    metadata={<ChevronRight size={14} strokeWidth={1.8} aria-hidden />}
-                    onClick={() => setPage('profiles')}
-                    data-testid="harness-start-new-session"
-                  >
-                    {t('chatInput.harness.startNewSession')}
-                  </MenuItem>
-                </>
-              ) : null}
-            </>
-          ) : page === 'profiles' ? (
-            <>
-              {fixedSession ? (
-                <>
-                  <MenuItem
-                    leading={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />}
-                    onClick={() => setPage('summary')}
-                    data-testid="harness-new-session-back"
-                  >
-                    {t('chatInput.harness.newSessionModesTitle')}
-                  </MenuItem>
-                  <MenuSeparator />
-                </>
-              ) : null}
-              {PROFILE_IDS.map((id) => {
-                const name = t(`chatInput.harness.profiles.${id}.name`);
-                const connected = !creatingNewSession
-                  && id === selectedProfile
-                  && !legacySession;
-                const state = connected
-                  ? 'current'
-                  : 'available';
-                return (
-                  <span
-                    key={id}
-                    className="bitfun-harness-selector__row-contract"
-                    data-bf-component="harness-selector"
-                    data-bf-part="profile"
-                    data-bf-profile={id}
-                    data-bf-state={state}
-                  >
-                    <MenuItem
-                      role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
-                      checked={!creatingNewSession && connected}
+                {t('chatInput.harness.selectionCreatesNewSession')}
+              </span>
+            ) : undefined}
+          >
+            {page === 'profiles' ? (
+              <>
+                {PROFILE_IDS.map((id) => {
+                  const name = t(`chatInput.harness.profiles.${id}.name`);
+                  const connected = !creatingNewSession
+                    && id === selectedProfile
+                    && !legacySession;
+                  const state = connected
+                    ? 'current'
+                    : 'available';
+                  return (
+                    <span
+                      key={id}
+                      className="bitfun-harness-selector__row-contract"
+                      data-bf-component="harness-selector"
+                      data-bf-part="profile"
                       data-bf-profile={id}
                       data-bf-state={state}
-                      leading={<HarnessProfileMark profile={id} />}
-                      metadata={(
-                        <span className="bitfun-harness-selector__profile-status">
-                          {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
-                          {id === 'other' ? (
-                            <>
-                              <span className="bitfun-harness-selector__agent-count">
-                                {otherAgents.length}
-                              </span>
-                              <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
-                            </>
-                          ) : null}
-                        </span>
-                      )}
-                      onClick={() => handleSelectProfile(id)}
-                      data-testid={`harness-profile-${id}`}
                     >
-                      {name}
-                    </MenuItem>
-                  </span>
-                );
-              })}
-            </>
-          ) : (
-            <>
-              <MenuItem
-                leading={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />}
-                onClick={() => setPage('profiles')}
-                data-testid="harness-agent-back"
-              >
-                {t('chatInput.harness.otherAgentsTitle')}
-              </MenuItem>
-              <MenuSeparator />
-              {otherAgents.length === 0 ? (
-                <div className="bitfun-harness-selector__empty">
-                  {t('chatInput.harness.otherAgentsEmpty')}
-                </div>
-              ) : otherAgents.map(agent => {
-                const connected = !creatingNewSession
-                  && selectedProfile === 'other'
-                  && sameAgent(agent.id, selectedAgentId);
-                const state = connected
-                  ? 'current'
-                  : agent.available === false
-                    ? 'unavailable'
-                    : 'available';
-                return (
-                  <span
-                    key={agent.id}
-                    className="bitfun-harness-selector__row-contract"
-                    data-bf-component="harness-selector"
-                    data-bf-part="agent"
-                    data-bf-agent-id={agent.id}
-                    data-bf-state={state}
-                  >
-                    <MenuItem
-                      role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
-                      checked={!creatingNewSession && connected}
+                      <MenuItem
+                        role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
+                        checked={!creatingNewSession && connected}
+                        data-bf-profile={id}
+                        data-bf-state={state}
+                        leading={<HarnessProfileMark profile={id} />}
+                        metadata={(
+                          <span className="bitfun-harness-selector__profile-status">
+                            {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                            {id === 'other' ? (
+                              <>
+                                <span className="bitfun-harness-selector__agent-count">
+                                  {otherAgents.length}
+                                </span>
+                                <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
+                              </>
+                            ) : null}
+                          </span>
+                        )}
+                        onClick={() => handleSelectProfile(id)}
+                        data-testid={`harness-profile-${id}`}
+                      >
+                        {name}
+                      </MenuItem>
+                    </span>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <MenuItem
+                  leading={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />}
+                  onClick={() => setPage('profiles')}
+                  data-testid="harness-agent-back"
+                >
+                  {t('chatInput.harness.otherAgentsTitle')}
+                </MenuItem>
+                <MenuSeparator />
+                {otherAgents.length === 0 ? (
+                  <div className="bitfun-harness-selector__empty">
+                    {t('chatInput.harness.otherAgentsEmpty')}
+                  </div>
+                ) : otherAgents.map(agent => {
+                  const connected = !creatingNewSession
+                    && selectedProfile === 'other'
+                    && sameAgent(agent.id, selectedAgentId);
+                  const state = connected
+                    ? 'current'
+                    : agent.available === false
+                      ? 'unavailable'
+                      : 'available';
+                  return (
+                    <span
+                      key={agent.id}
+                      className="bitfun-harness-selector__row-contract"
+                      data-bf-component="harness-selector"
+                      data-bf-part="agent"
                       data-bf-agent-id={agent.id}
                       data-bf-state={state}
-                      leading={<Bot size={15} strokeWidth={1.55} aria-hidden />}
-                      metadata={(
-                        <span className="bitfun-harness-selector__profile-status">
-                          {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
-                          {agent.available === false
-                            ? t('chatInput.harness.unavailable')
-                            : null}
-                        </span>
-                      )}
-                      onClick={() => handleSelectAgent(agent)}
-                      data-testid={`harness-agent-${agent.id}`}
                     >
-                      {agent.name}
-                    </MenuItem>
-                  </span>
-                );
-              })}
-            </>
-          )}
+                      <MenuItem
+                        role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
+                        checked={!creatingNewSession && connected}
+                        data-bf-agent-id={agent.id}
+                        data-bf-state={state}
+                        leading={<Bot size={15} strokeWidth={1.55} aria-hidden />}
+                        metadata={(
+                          <span className="bitfun-harness-selector__profile-status">
+                            {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                            {agent.available === false
+                              ? t('chatInput.harness.unavailable')
+                              : null}
+                          </span>
+                        )}
+                        onClick={() => handleSelectAgent(agent)}
+                        data-testid={`harness-agent-${agent.id}`}
+                      >
+                        {agent.name}
+                      </MenuItem>
+                    </span>
+                  );
+                })}
+              </>
+            )}
+          </MenuSection>
         </Menu>,
-        presentation === 'menu-item'
-          ? rootRef.current ?? getAppearanceOverlayHost()
-          : getAppearanceOverlayHost(),
+        getAppearanceOverlayHost(),
       )}
     </div>
   );
