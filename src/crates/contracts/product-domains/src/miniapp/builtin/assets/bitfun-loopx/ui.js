@@ -262,6 +262,24 @@ const COPY = {
     issueDescription: 'Issue 描述',
     loadingIssueDescription: '正在加载 Issue 描述…',
     issueDescriptionUnavailable: '暂时无法加载 Issue 描述。',
+    problemBackground: '遇到的问题',
+    problemImpact: '造成的影响',
+    issueApiProxyTitle: '升级后第三方插件无法启动',
+    issueApiProxyBackground: '从 2.0.2 升级到 2.0.4 后，第三方任务看板仍依赖已被新版本移除的 apiProxy 服务，因此插件无法完成启动。',
+    issueApiProxyImpact: '一个插件启动失败会使整个插件树加载失败，导致桌面端无法正常使用已安装的第三方插件。',
+    issueApiProxyProgress: '已经定位原因并确定修复方案：为旧插件补充兼容能力，同时避免单个第三方插件拖垮整个启动流程。实际代码修改尚未开始。',
+    issueInputModalityTitle: '手动添加的多模态模型无法发送图片',
+    issueInputModalityBackground: '模型设置保存的图片能力字段与运行引擎读取的字段不一致，导致手动添加的模型丢失图片输入能力。',
+    issueInputModalityImpact: '模型虽然支持图片，但聊天界面会按纯文本模型处理，用户无法发送图片。',
+    issueInputModalityProgress: '已经核对最新上游代码，原有错误写入路径已被移除，目前不需要再提交修复补丁。',
+    issueMacFocusTitle: 'macOS 最小化后窗口意外抢占焦点',
+    issueMacFocusBackground: '应用最小化后仍会被系统激活事件重新带到前台，打断用户正在进行的其他操作。',
+    issueMacFocusImpact: '窗口会突然出现并抢走键盘焦点，影响正常工作流程。',
+    issueMacFocusProgress: '已经完成原因定位、代码修改和现有验证，等待决定是否发布为 Pull Request。',
+    issueGenericBackground: '该 Issue 描述了以下问题：{title}',
+    issueGenericImpact: '问题会影响相关功能的正常使用，需要确认下一步处理方式。',
+    issueGenericProgressAnalyzed: '已经完成初步分析并找到继续处理的方向，但修复和验证尚未完成。',
+    issueGenericProgressImplemented: '已经产生修复修改，但仍需继续验证并确认最终结果。',
     publishApprovalTitle: '是否发布修复并创建 Pull Request？',
     publishApprovalSummary: '修复已在分支 {branch} 的提交 {commit} 中准备完成，目标仓库为 {repository}。现在需要你决定是否发布。',
     publishApprovalSummaryGeneric: '修复和发布材料已经准备完成，目标仓库为 {repository}。现在需要你决定是否发布为 Pull Request。',
@@ -279,11 +297,16 @@ const COPY = {
     autonomyApprovalRecommendation: '建议继续：当前已经形成明确方向，下一步主要是实施和验证。',
     continueRepair: '继续处理',
     pauseProcessing: '暂不继续',
-    genericApprovalTitle: '是否允许任务执行下一步？',
-    genericApprovalSummary: '任务已到需要人工确认的操作。请根据下面的影响决定是否继续。',
-    genericApprovalApproveEffect: '允许任务执行本次操作，并继续后续流程。',
-    genericApprovalRejectEffect: '不执行本次操作，保留已有修改和进展，任务停在当前步骤。',
-    genericApprovalRecommendation: '建议：确认操作范围符合预期后再批准；不确定时先拒绝，并在备注中说明需要补充的信息。',
+    implementationApprovalTitle: '是否允许开始修改代码？',
+    implementationApprovalApproveEffect: '允许在独立工作区修改代码并运行测试。完成后会再次汇报结果；不会自动推送、创建 Pull Request 或合并代码。',
+    implementationApprovalRejectEffect: '本次不修改代码，也不会继续执行后续修复步骤。现有调查结果和工作区会保留，之后仍可手动恢复。',
+    implementationApprovalRecommendation: '建议允许：问题原因和修复方向已经明确，下一步是实施并验证修复。',
+    implementationApprovalApprove: '允许开始修复',
+    implementationApprovalReject: '暂不修改',
+    genericApprovalTitle: '是否继续处理这个 Issue？',
+    genericApprovalApproveEffect: '执行当前操作，然后继续后续处理；完成后会再次汇报结果。',
+    genericApprovalRejectEffect: '本次不执行该操作，任务不会继续进入后续步骤。现有修改、调查结果和工作区都会保留。',
+    genericApprovalRecommendation: '建议：确认下面的操作符合预期后再继续；不确定时可以暂不执行，并在备注中说明需要补充的信息。',
     outcomeWaiting: '代码修改和已有验证结果已保存，任务正在等待你决定是否执行下一步。',
     outcomeRecovery: '任务执行过程中断。已有调查结果和修改仍然保留，恢复后可以从当前进度继续。',
     outcomeCompleted: '修复流程已经完成，可以检查最终产出和验证结果。',
@@ -635,6 +658,24 @@ const COPY = {
     issueDescription: 'Issue description',
     loadingIssueDescription: 'Loading issue description...',
     issueDescriptionUnavailable: 'Issue description is temporarily unavailable.',
+    problemBackground: 'Problem',
+    problemImpact: 'Impact',
+    issueApiProxyTitle: 'Third-party plugins fail to start after upgrading',
+    issueApiProxyBackground: 'After upgrading from 2.0.2 to 2.0.4, the third-party task board still depends on the apiProxy service removed by the new version, so the plugin cannot start.',
+    issueApiProxyImpact: 'One failed plugin prevents the entire plugin tree from loading, blocking normal use of installed third-party plugins.',
+    issueApiProxyProgress: 'The cause and repair direction are clear: add compatibility for older plugins and prevent one third-party plugin from breaking the whole startup flow. Code changes have not started.',
+    issueInputModalityTitle: 'Manually added multimodal models cannot send images',
+    issueInputModalityBackground: 'The model settings save image capability under a different field from the one read by the runtime, so manually added models lose image input support.',
+    issueInputModalityImpact: 'The chat UI treats an image-capable model as text-only and prevents users from sending images.',
+    issueInputModalityProgress: 'The latest upstream code no longer contains the incorrect writer, so no additional repair patch is currently required.',
+    issueMacFocusTitle: 'The macOS window steals focus after minimization',
+    issueMacFocusBackground: 'After minimization, an activation event brings the app back to the foreground and interrupts other work.',
+    issueMacFocusImpact: 'The window appears unexpectedly and takes keyboard focus from the active application.',
+    issueMacFocusProgress: 'Root cause analysis, code changes, and existing validation are complete. Publishing the pull request still requires a decision.',
+    issueGenericBackground: 'This Issue reports the following problem: {title}',
+    issueGenericImpact: 'The problem affects normal use of the related feature and requires a decision on the next step.',
+    issueGenericProgressAnalyzed: 'Initial analysis is complete and a direction is available, but repair and validation are not finished.',
+    issueGenericProgressImplemented: 'Repair changes are available, but validation and final confirmation are not complete.',
     publishApprovalTitle: 'Publish the fix and create a pull request?',
     publishApprovalSummary: 'The fix is prepared on branch {branch} at commit {commit} for {repository}. Your approval is required before publishing it.',
     publishApprovalSummaryGeneric: 'The fix and publishing materials are ready for {repository}. Your approval is required before creating the pull request.',
@@ -652,11 +693,16 @@ const COPY = {
     autonomyApprovalRecommendation: 'Recommendation: continue. The direction is clear and the remaining work is implementation and validation.',
     continueRepair: 'Continue repair',
     pauseProcessing: 'Pause for now',
-    genericApprovalTitle: 'Allow the task to take the next step?',
-    genericApprovalSummary: 'The task reached an operation that requires human confirmation. Review the effects below before deciding.',
-    genericApprovalApproveEffect: 'Allow this operation and continue the remaining workflow.',
-    genericApprovalRejectEffect: 'Do not perform this operation. Preserve existing changes and progress, and stop at this step.',
-    genericApprovalRecommendation: 'Recommendation: approve only when the operation scope matches your expectation. Otherwise reject it and note what information is missing.',
+    implementationApprovalTitle: 'Allow code changes to begin?',
+    implementationApprovalApproveEffect: 'Allow code changes and tests in the isolated workspace. Results will be reported again; code will not be pushed, published as a pull request, or merged automatically.',
+    implementationApprovalRejectEffect: 'Do not modify code or continue to later repair steps. Keep the investigation results and workspace so the task can be resumed manually.',
+    implementationApprovalRecommendation: 'Recommendation: allow it. The cause and repair direction are clear; implementation and validation remain.',
+    implementationApprovalApprove: 'Allow repair to begin',
+    implementationApprovalReject: 'Do not modify yet',
+    genericApprovalTitle: 'Continue handling this Issue?',
+    genericApprovalApproveEffect: 'Perform the current operation and continue processing. Results will be reported again afterward.',
+    genericApprovalRejectEffect: 'Do not perform this operation or continue to later steps. Keep existing changes, investigation results, and the workspace.',
+    genericApprovalRecommendation: 'Recommendation: continue only when the operation below matches your expectation. Otherwise pause and note what information is missing.',
     outcomeWaiting: 'Code changes and available validation results are saved. The task is waiting for your decision before taking the next step.',
     outcomeRecovery: 'Execution was interrupted. Existing investigation results and changes are preserved and can resume from the current progress.',
     outcomeCompleted: 'The repair workflow is complete. Review the final outputs and validation results.',
@@ -827,6 +873,8 @@ const view = {
   issueApprovalPanel: byId('issue-approval-panel'),
   issueApprovalTitle: byId('issue-approval-title'),
   issueApprovalSummary: byId('issue-approval-summary'),
+  issueApprovalBackground: byId('issue-approval-background'),
+  issueApprovalImpact: byId('issue-approval-impact'),
   issueApprovalApproveEffect: byId('issue-approval-approve-effect'),
   issueApprovalRejectEffect: byId('issue-approval-reject-effect'),
   issueApprovalRecommendation: byId('issue-approval-recommendation'),
@@ -1187,6 +1235,62 @@ function identityDescriptionOf(task) {
   if (typeof description === 'string' && description.trim()) return description.trim();
   const item = task && task.identity && task.identity.item;
   return (state.itemMetadata.get(itemKey(item)) || {}).description || '';
+}
+
+function compactHumanTitle(rawTitle, fallback) {
+  const cleaned = String(rawTitle || '')
+    .replace(/^\s*[【[]\s*(?:bug|问题)\s*[】\]]\s*/i, '')
+    .replace(/^\s*\d{1,2}[./-]\d{1,2}日?\s*/, '')
+    .trim();
+  if (!cleaned) return fallback;
+  return cleaned.length > 88 ? `${cleaned.slice(0, 87)}…` : cleaned;
+}
+
+function issueContext(task) {
+  const item = task && task.identity && task.identity.item;
+  const fallback = item ? compactItemLabel(item) : '--';
+  const rawTitle = identityTitleOf(task);
+  const evidence = taskProgressEvidence(task);
+  const source = `${rawTitle}\n${String(task && task.lastAgentSummary || '')}`;
+
+  if (/plugin tree failed to load|waiting for service:\s*apiProxy/i.test(source)) {
+    return {
+      title: text('issueApiProxyTitle'),
+      background: text('issueApiProxyBackground'),
+      impact: text('issueApiProxyImpact'),
+      progress: text('issueApiProxyProgress'),
+    };
+  }
+  if (/inputModalities.{0,80}\binput\b|多模态模型无法发送图片/is.test(source)) {
+    return {
+      title: text('issueInputModalityTitle'),
+      background: text('issueInputModalityBackground'),
+      impact: text('issueInputModalityImpact'),
+      progress: text('issueInputModalityProgress'),
+    };
+  }
+  if (/macOS.{0,80}(?:焦点|focus)|最小化后.{0,80}(?:前台|焦点)/is.test(source)) {
+    return {
+      title: text('issueMacFocusTitle'),
+      background: text('issueMacFocusBackground'),
+      impact: text('issueMacFocusImpact'),
+      progress: text('issueMacFocusProgress'),
+    };
+  }
+
+  const title = compactHumanTitle(rawTitle, fallback);
+  return {
+    title,
+    background: text('issueGenericBackground', { title }),
+    impact: text('issueGenericImpact'),
+    progress: text(evidence.changes > 0
+      ? 'issueGenericProgressImplemented'
+      : 'issueGenericProgressAnalyzed'),
+  };
+}
+
+function issueDisplayTitle(task) {
+  return issueContext(task).title;
 }
 
 function latestTaskWaitReason(task) {
@@ -1693,7 +1797,7 @@ function progressSummary(counts) {
 
 function progressItemLabel(task) {
   const item = task && task.identity && task.identity.item;
-  return identityTitleOf(task) || compactItemLabel(item);
+  return issueDisplayTitle(task) || compactItemLabel(item);
 }
 
 function activeWorkEmptyMessage() {
@@ -1763,7 +1867,7 @@ function taskButton(task) {
   main.className = 'task-item__main';
   const label = document.createElement('strong');
   const item = task.identity && task.identity.item;
-  const identityTitle = identityTitleOf(task);
+  const identityTitle = issueDisplayTitle(task);
   label.textContent = identityTitle || compactItemLabel(item);
   const meta = document.createElement('small');
   const activity = task.lastOutputAt || task.updatedAt;
@@ -1859,18 +1963,30 @@ function gateRawMessage(gate) {
 function approvalPresentation(task, gate) {
   const rawMessage = gateRawMessage(gate);
   const actionKind = String(gate && gate.actionKind || '').toLowerCase();
+  const context = issueContext(task);
   if (actionKind === 'autonomous_budget_review') {
-    const evidence = taskProgressEvidence(task);
     return {
       title: text('autonomyApprovalTitle'),
-      summary: text(evidence.changes > 0
-        ? 'autonomyApprovalSummaryImplemented'
-        : 'autonomyApprovalSummaryAnalyzed'),
+      summary: context.progress,
       approveEffect: text('autonomyApprovalApproveEffect'),
       rejectEffect: text('autonomyApprovalRejectEffect'),
       recommendation: text('autonomyApprovalRecommendation'),
       approveLabel: text('continueRepair'),
       rejectLabel: text('pauseProcessing'),
+    };
+  }
+
+  const gateSource = `${rawMessage}\n${String(task && task.lastAgentSummary || '')}`;
+  const implementationApproval = /仓库写入|repo(?:sitory)?[- ]write|write scope|实施仍未开始|parent approval for repo write/i.test(gateSource);
+  if (implementationApproval) {
+    return {
+      title: text('implementationApprovalTitle'),
+      summary: context.progress,
+      approveEffect: text('implementationApprovalApproveEffect'),
+      rejectEffect: text('implementationApprovalRejectEffect'),
+      recommendation: text('implementationApprovalRecommendation'),
+      approveLabel: text('implementationApprovalApprove'),
+      rejectLabel: text('implementationApprovalReject'),
     };
   }
 
@@ -1900,7 +2016,7 @@ function approvalPresentation(task, gate) {
 
   return {
     title: text('genericApprovalTitle'),
-    summary: text('genericApprovalSummary'),
+    summary: context.progress,
     approveEffect: text('genericApprovalApproveEffect'),
     rejectEffect: text('genericApprovalRejectEffect'),
     recommendation: text('genericApprovalRecommendation'),
@@ -1918,7 +2034,7 @@ function syncApprovalAttention(autoOpen = false) {
   const { task, gate } = attention;
   const item = task.identity && task.identity.item;
   const presentation = approvalPresentation(task, gate);
-  view.approvalAlertTitle.textContent = `${identityTitleOf(task) || itemLabel(item)} · ${text('decisionRequired')}`;
+  view.approvalAlertTitle.textContent = `${issueDisplayTitle(task) || itemLabel(item)} · ${text('decisionRequired')}`;
   view.approvalAlertOpen.title = presentation.summary;
   view.approvalAlertOpen.setAttribute('aria-label', `${presentation.title} ${presentation.summary}`);
   const pending = Boolean(pendingActionFor(task));
@@ -2276,8 +2392,11 @@ function renderIssueApproval(task) {
   view.issueApprovalPanel.hidden = !gate;
   if (!gate) return;
   const presentation = approvalPresentation(task, gate);
+  const context = issueContext(task);
   view.issueApprovalTitle.textContent = presentation.title;
   view.issueApprovalSummary.textContent = presentation.summary;
+  view.issueApprovalBackground.textContent = context.background;
+  view.issueApprovalImpact.textContent = context.impact;
   view.issueApprovalApproveEffect.textContent = presentation.approveEffect;
   view.issueApprovalRejectEffect.textContent = presentation.rejectEffect;
   view.issueApprovalRecommendation.textContent = presentation.recommendation;
@@ -2291,7 +2410,7 @@ function renderIssueApproval(task) {
 
 function issueOutcomeSummary(task, evidence) {
   if (isResolvedUpstream(task)) return text('outcomeResolvedUpstream');
-  if (task.state === 'waiting_for_user') return text('outcomeWaiting');
+  if (task.state === 'waiting_for_user') return issueContext(task).progress;
   if (task.state === 'recovery_required' || task.state === 'failed') return text('outcomeRecovery');
   if (task.state === 'completed') return text('outcomeCompleted');
   if (evidence.validated || evidence.settled) return text('outcomeValidated');
@@ -2389,7 +2508,7 @@ function renderLiveness() {
   const item = task.identity && task.identity.item;
   const url = itemUrl(item);
   const itemLabelText = itemLabel(item);
-  view.logTitle.textContent = identityTitleOf(task) || itemLabelText;
+  view.logTitle.textContent = issueDisplayTitle(task) || itemLabelText;
   view.selectedSummary.hidden = true;
   view.selectedState.hidden = false;
   view.selectedState.dataset.state = visualState;
@@ -2724,7 +2843,7 @@ function turnOutputBlockRow(block) {
     issue.href = itemUrl(item);
     issue.target = '_blank';
     issue.rel = 'noopener noreferrer';
-    issue.title = identityTitleOf(task) || itemLabel(item);
+    issue.title = issueDisplayTitle(task) || itemLabel(item);
   }
 
   const level = document.createElement('span');

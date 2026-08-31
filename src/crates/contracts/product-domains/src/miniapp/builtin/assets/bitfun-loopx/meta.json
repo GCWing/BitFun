@@ -5,7 +5,7 @@
   "icon": "rocket",
   "category": "developer",
   "tags": ["loopx", "agent", "scheduler", "monitor"],
-  "version": 14,
+  "version": 15,
   "created_at": 0,
   "updated_at": 0,
   "permissions": {

@@ -164,6 +164,8 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
   assert.match(html, /\bid\s*=\s*(['"])issue-detail-dialog\1/i);
   assert.match(html, /\bid\s*=\s*(['"])approval-alert\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-panel\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-approval-background\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-approval-impact\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-approve\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-reject\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-description-panel\1/i);
@@ -199,6 +201,7 @@ test('LoopX keeps intake history and renders one flat repository task list', asy
   assert.doesNotMatch(ui, /makeActionButton\([^)]*['"]resume['"]/s);
   assert.match(ui, /task\.lastAgentSummary/);
   assert.match(ui, /function isResolvedUpstream\(task\)/);
+  assert.match(ui, /function issueContext\(task\)/);
   assert.match(ui, /autonomyApprovalSummaryAnalyzed/);
   assert.doesNotMatch(ui, /Several investigation stages have completed/);
   assert.match(ui, /resumeDetected:\s*true/);

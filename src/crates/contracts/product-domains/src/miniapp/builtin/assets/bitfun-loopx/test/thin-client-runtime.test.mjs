@@ -506,10 +506,16 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     ...overrides,
   });
   const waiting = makeTask('task-waiting', 42, 'waiting_for_user', 'waiting_for_approval', {
+    identity: {
+      item: issueKey(42),
+      attempt: 1,
+      title: '8.29 upgrade from 2.0.2 to 2.0.4: plugin tree failed to load, waiting for service: apiProxy',
+      description: '',
+    },
     pendingGateId: 'todo_release_approval',
-    pendingGateMessage: 'Approve creating the draft pull request',
+    pendingGateMessage: 'Approve repository write scope for the issue repair',
     pendingGateActionKind: 'gate',
-    lastAgentSummary: '## Root cause\nThe focus behavior is caused by the current restore path.\n\n## Output\nA bounded implementation plan is ready.',
+    lastAgentSummary: 'Implementation has not started because repository write requires parent approval. The repair will add an apiProxy compatibility shim and resilient plugin startup.',
     lastAgentSummaryAt: now - 2000,
   });
   const failed = makeTask('task-failed', 43, 'recovery_required', 'recovering', {
@@ -536,7 +542,7 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     level: 'warning',
     source: 'controller',
     phase: 'waiting_for_approval',
-    message: 'Approve creating the draft pull request',
+    message: 'Approve repository write scope for the issue repair',
     important: true,
     details: { gateId: 'todo_release_approval', actionKind: 'gate' },
     occurredAt: now - 1000,
@@ -622,7 +628,7 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     window.document.querySelector('[data-task-id="task-waiting"]').click();
     assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
     assert.equal(window.document.querySelectorAll('#issue-stage-list > li').length, 5);
-    assert.match(window.document.querySelector('#issue-outcome').textContent, /waiting for your decision/i);
+    assert.match(window.document.querySelector('#issue-outcome').textContent, /code changes have not started/i);
     assert.equal(window.document.querySelector('#issue-description-panel').hidden, false);
     await waitFor(
       () => /temporarily unavailable/.test(window.document.querySelector('#issue-description').textContent),
@@ -630,12 +636,16 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     );
     assert.equal(window.document.querySelector('#task-actions button'), null);
     assert.equal(window.document.querySelector('#issue-approval-panel').hidden, false);
+    assert.match(window.document.querySelector('#log-title').textContent, /third-party plugins fail to start after upgrading/i);
     assert.match(
       window.document.querySelector('#issue-approval-title').textContent,
-      /publish the fix and create a pull request/i,
+      /allow code changes to begin/i,
     );
-    assert.match(window.document.querySelector('#issue-approval-approve-effect').textContent, /does not merge/i);
-    assert.doesNotMatch(window.document.querySelector('#issue-detail-dialog').textContent, /Root cause|todo_|settlement_result|durable_writeback/i);
+    assert.match(window.document.querySelector('#issue-approval-background').textContent, /2\.0\.4.*apiProxy/i);
+    assert.match(window.document.querySelector('#issue-approval-impact').textContent, /entire plugin tree/i);
+    assert.match(window.document.querySelector('#issue-approval-approve-effect').textContent, /will not be pushed.*pull request.*merged/i);
+    assert.match(window.document.querySelector('#issue-approval-reject-effect').textContent, /do not modify code or continue/i);
+    assert.doesNotMatch(window.document.querySelector('#issue-detail-dialog').textContent, /Root cause|todo_|settlement_result|durable_writeback|bounded stage/i);
 
     const resolvedButton = window.document.querySelector('[data-task-id="task-resolved-upstream"]');
     assert.match(resolvedButton.textContent, /Resolved upstream/);
