@@ -36,6 +36,9 @@ pub struct FileReadState {
     /// True when this entry was populated by auto-injection and the model has
     /// not explicitly read the file. Range reads from the Read tool do not set this.
     pub is_partial_view: bool,
+    /// The explicit Read view omitted characters because of its output budget.
+    /// This is still a valid prior Read, but cannot prove full-content equality.
+    pub content_truncated: bool,
 }
 
 impl FileReadState {
@@ -46,6 +49,24 @@ impl FileReadState {
         end_line: usize,
         total_lines: usize,
     ) -> Self {
+        Self::from_read_tool_content_with_truncation(
+            content,
+            timestamp_ms,
+            start_line,
+            end_line,
+            total_lines,
+            false,
+        )
+    }
+
+    pub fn from_read_tool_content_with_truncation(
+        content: String,
+        timestamp_ms: u64,
+        start_line: usize,
+        end_line: usize,
+        total_lines: usize,
+        content_truncated: bool,
+    ) -> Self {
         Self {
             content,
             timestamp_ms,
@@ -53,6 +74,7 @@ impl FileReadState {
             end_line,
             total_lines,
             is_partial_view: false,
+            content_truncated,
         }
     }
 
@@ -71,11 +93,12 @@ impl FileReadState {
             end_line,
             total_lines: line_count,
             is_partial_view: false,
+            content_truncated: false,
         }
     }
 
     pub fn is_full_file_read(&self) -> bool {
-        if self.is_partial_view {
+        if self.is_partial_view || self.content_truncated {
             return false;
         }
 
@@ -369,6 +392,7 @@ mod tests {
             end_line,
             total_lines,
             is_partial_view,
+            content_truncated: false,
         }
     }
 
@@ -528,6 +552,7 @@ mod tests {
             end_line: 100,
             total_lines: 556,
             is_partial_view: false,
+            content_truncated: false,
         };
 
         assert!(validate_edit_content_freshness_against_read_state(
@@ -562,6 +587,7 @@ mod tests {
             end_line: 100,
             total_lines: 556,
             is_partial_view: false,
+            content_truncated: false,
         };
 
         assert!(
@@ -577,6 +603,7 @@ mod tests {
             end_line: 1,
             total_lines: 1,
             is_partial_view: false,
+            content_truncated: false,
         }
     }
 
@@ -656,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_edit_content_freshness_ignores_older_mtime_even_when_content_differs() {
+    fn validate_edit_content_freshness_rejects_changed_content_with_older_mtime() {
         let state = read_state("alpha\n", 200);
 
         assert!(validate_edit_content_freshness_against_read_state(
@@ -665,7 +692,7 @@ mod tests {
             "beta\n",
             Some(100),
         )
-        .is_none());
+        .is_some());
     }
 
     #[test]

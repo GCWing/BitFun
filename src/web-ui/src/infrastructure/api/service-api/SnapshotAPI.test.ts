@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SnapshotAPI } from './SnapshotAPI';
+import { activateSurface } from '@/infrastructure/peer-device/deviceSurface';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const sessionsMock = vi.hoisted(() => new Map<string, any>());
@@ -20,6 +21,7 @@ describe('SnapshotAPI request dedupe', () => {
   let snapshotAPI: SnapshotAPI;
 
   beforeEach(() => {
+    activateSurface('local');
     snapshotAPI = new SnapshotAPI();
     invokeMock.mockReset();
     sessionsMock.clear();
@@ -118,6 +120,52 @@ describe('SnapshotAPI request dedupe', () => {
         remoteSshHost: 'example.com',
       },
     });
+  });
+
+  it('never reuses a pending snapshot response across device surface activations', async () => {
+    let resolveFirst!: (value: unknown) => void;
+    invokeMock.mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }));
+    invokeMock.mockResolvedValueOnce({ operationId: 'operation-1', linesAdded: 2 });
+    const first = snapshotAPI.getOperationSummary('same-session', 'operation-1', '/same/path');
+    activateSurface('peer-b');
+    const second = snapshotAPI.getOperationSummary('same-session', 'operation-1', '/same/path');
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+    await expect(second).resolves.toMatchObject({ linesAdded: 2 });
+    resolveFirst({ operationId: 'operation-1', linesAdded: 1 });
+    await expect(first).resolves.toMatchObject({ linesAdded: 1 });
+    activateSurface('local');
+  });
+
+  it('keeps host-only legacy remote identity instead of querying colliding local history', async () => {
+    sessionsMock.set('legacy-remote', {
+      workspacePath: '/srv/shared',
+      config: { remoteSshHost: 'legacy.example' },
+    });
+    invokeMock.mockResolvedValue({});
+    await snapshotAPI.getOperationSummary('legacy-remote', 'operation-1');
+    expect(invokeMock).toHaveBeenCalledWith('get_operation_summary', {
+      request: {
+        sessionId: 'legacy-remote', operationId: 'operation-1',
+        workspacePath: '/srv/shared', remoteSshHost: 'legacy.example',
+      },
+    });
+  });
+
+  it('scopes persisted operation diff and summary to the Session connection', async () => {
+    sessionsMock.set('remote-operation', {
+      workspacePath: '/srv/shared',
+      remoteConnectionId: 'ssh:user-a@host:22', remoteSshHost: 'host', config: {},
+    });
+    invokeMock.mockResolvedValue({});
+    await snapshotAPI.getOperationDiff('remote-operation', '/srv/shared/file.txt', 'operation-1');
+    await snapshotAPI.getOperationSummary('remote-operation', 'operation-1');
+    for (const [command, args] of invokeMock.mock.calls) {
+      expect(['get_operation_diff', 'get_operation_summary']).toContain(command);
+      expect(args.request).toMatchObject({
+        workspacePath: '/srv/shared', remoteConnectionId: 'ssh:user-a@host:22', remoteSshHost: 'host',
+        sessionId: 'remote-operation', operationId: 'operation-1',
+      });
+    }
   });
 
   it('does not treat a persisted localhost hostname as a remote session binding', async () => {

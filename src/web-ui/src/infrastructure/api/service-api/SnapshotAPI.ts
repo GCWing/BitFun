@@ -3,7 +3,9 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import { createLogger } from '@/shared/utils/logger';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 
 const log = createLogger('SnapshotAPI');
 
@@ -37,19 +39,17 @@ const requireSessionSnapshotScope = (
   workspacePath?: string,
 ): SnapshotSessionScope => {
   const session = flowChatStore.getState().sessions.get(sessionId);
-  const remoteConnectionId = session?.remoteConnectionId || session?.config?.remoteConnectionId;
-  const remoteSshHost = remoteConnectionId
-    ? session?.remoteSshHost || session?.config?.remoteSshHost
-    : undefined;
   return {
     workspacePath: requireSessionWorkspacePath(sessionId, workspacePath),
-    ...(remoteConnectionId ? { remoteConnectionId } : {}),
-    ...(remoteSshHost ? { remoteSshHost } : {}),
+    ...normalizeRemoteSessionScope(
+      session?.remoteConnectionId || session?.config?.remoteConnectionId,
+      session?.remoteSshHost || session?.config?.remoteSshHost,
+    ),
   };
 };
 
 const snapshotScopeKey = (scope: SnapshotSessionScope): string =>
-  `${scope.workspacePath}:${scope.remoteConnectionId || ''}:${scope.remoteSshHost || ''}`;
+  JSON.stringify([scope.workspacePath, scope.remoteConnectionId || '', scope.remoteSshHost || '']);
 
 
 export interface SandboxSessionModifications {
@@ -166,7 +166,9 @@ export interface CleanupSandboxDataRequest {
 export class SnapshotAPI {
   private readonly inFlightRequests = new Map<string, Promise<unknown>>();
 
-  private dedupeInFlight<T>(key: string, load: () => Promise<T>): Promise<T> {
+  private dedupeInFlight<T>(requestKey: string, load: () => Promise<T>): Promise<T> {
+    const scope = getActiveSurfaceScope();
+    const key = scope.key(scope.epoch, requestKey);
     const existing = this.inFlightRequests.get(key) as Promise<T> | undefined;
     if (existing) {
       return existing;

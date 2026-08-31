@@ -20,9 +20,8 @@ use std::time::Instant;
 #[cfg(feature = "tools-miniapp")]
 use tool_runtime::search::grep_search::grep_search_virtual_files;
 use tool_runtime::search::grep_search::{
-    apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches, grep_search,
-    relativize_result_text, render_remote_grep_result_text, GrepOptions, GrepSearchResult,
-    OutputMode, ProgressCallback, RemoteGrepCommandRequest,
+    apply_offset_and_limit, grep_search, grep_search_workspace, relativize_result_text,
+    GrepOptions, GrepSearchResult, OutputMode, ProgressCallback,
 };
 
 const DEFAULT_HEAD_LIMIT: usize = 250;
@@ -125,85 +124,53 @@ impl GrepTool {
             .map(|workspace| workspace.root_path_string())
     }
 
-    async fn call_remote(
+    async fn call_workspace_io(
         &self,
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let ws_shell = context
-            .ws_shell()
-            .ok_or_else(|| BitFunError::tool("Workspace shell not available".to_string()))?;
-
-        let pattern = input
-            .get("pattern")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
-
-        let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let resolved = context.resolve_tool_path(search_path)?;
-        let resolved_path = resolved.resolved_path.clone();
-
-        let case_insensitive = input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false);
-        let head_limit = Self::resolve_head_limit(input);
-        let offset = Self::resolve_offset(input);
-        let output_mode = input
-            .get("output_mode")
-            .and_then(|v| v.as_str())
-            .unwrap_or("files_with_matches");
-        let output_mode_enum =
-            OutputMode::from_str(output_mode).map_err(|e| BitFunError::tool(e.to_string()))?;
-        let show_line_numbers = input
-            .get("-n")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(output_mode == "content");
-        let context_c = input
-            .get("context")
-            .or_else(|| input.get("-C"))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize);
-        let before_context = input.get("-B").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let after_context = input.get("-A").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let glob_patterns = Self::parse_glob_patterns(input.get("glob").and_then(|v| v.as_str()));
-        let file_type = input
-            .get("type")
-            .and_then(|v| v.as_str())
-            .map(|value| value.to_string());
-
-        let full_cmd = build_remote_grep_command(&RemoteGrepCommandRequest {
-            pattern: pattern.to_string(),
-            path: resolved_path,
-            case_insensitive,
-            output_mode: output_mode_enum,
-            show_line_numbers,
-            context: context_c,
-            before_context,
-            after_context,
-            glob_patterns,
-            file_type,
-            head_limit,
-            offset,
-        });
-
-        let (stdout, _stderr, _exit_code) = ws_shell
-            .exec(&full_cmd, Some(30_000))
-            .await
-            .map_err(|e| BitFunError::tool(format!("Remote grep failed: {}", e)))?;
-
-        let total_matches = count_remote_grep_matches(&stdout);
-        let display_base = Self::display_base(context);
-        let result_text = render_remote_grep_result_text(&stdout, pattern, display_base.as_deref());
-
+        let resolved =
+            context.resolve_tool_path(input.get("path").and_then(Value::as_str).unwrap_or("."))?;
+        let fs = context.file_system_for_path(&resolved)?;
+        let options = self.build_grep_options(input, context)?;
+        let pattern = options.pattern.clone();
+        let output_mode = options.output_mode.to_string();
+        let search = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            grep_search_workspace(options, fs.as_ref(), context.ws_shell()),
+        )
+        .await
+        .map_err(|_| {
+            BitFunError::tool(
+                "Workspace search timed out after 30000ms; narrow the search path".to_string(),
+            )
+        })?
+        .map_err(BitFunError::tool)?;
+        let result = search.result;
+        let mut assistant_text = result.result_text.clone();
+        if !search.used_rg_candidates && !search.used_grep_candidates {
+            assistant_text.push_str(&format!(
+                "\nSearch used workspace file streams without a compatible target prefilter ({} files, {} bytes read).",
+                search.scanned_file_count, search.scanned_bytes,
+            ));
+        }
+        assistant_text.push_str("\nIgnore rules are limited to .gitignore/.ignore files under the search path; other target Git/global excludes are not applied.");
         Ok(vec![ToolResult::Result {
             data: json!({
                 "pattern": pattern,
                 "path": resolved.logical_path,
                 "output_mode": output_mode,
-                "total_matches": total_matches,
-                "applied_limit": head_limit,
-                "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
-                "result": result_text,
+                "file_count": result.file_count,
+                "total_matches": result.total_matches,
+                "applied_limit": result.applied_limit,
+                "applied_offset": result.applied_offset,
+                "result": result.result_text,
+                "search_backend": if search.used_rg_candidates { "rg_candidates_workspace_io" } else if search.used_grep_candidates { "grep_candidates_workspace_io" } else { "workspace_io" },
+                "scanned_file_count": search.scanned_file_count,
+                "scanned_bytes": search.scanned_bytes,
+                "ignore_scope": "search_path",
             }),
-            result_for_assistant: Some(result_text),
+            result_for_assistant: Some(assistant_text),
             image_attachments: None,
         }])
     }
@@ -514,25 +481,26 @@ impl Tool for GrepTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"A powerful search tool built on ripgrep
+        Ok(r#"Search file contents in the active workspace with BitFun's built-in structured search.
 
 Usage:
-- Use Grep by default for codebase content search because it preserves workspace-aware permissions and consistent output. Shell out to `grep` or `rg` only when this tool cannot meet the requirement, and prefer explaining why when doing so.
+- Use Grep by default for codebase content search because it preserves workspace-aware permissions and consistent output.
+- Grep is a tool API, not the shell command `grep` or `rg`. It does not require `rg` to be installed on the workspace host. Use ExecCommand for shell-specific workflows or an explicitly requested shell command.
 - For simple literal names or symbols, start with the literal text before trying broad regexes.
 - Narrow searches with `path`, `glob`, or `type` when you know the likely area or language, and use `head_limit` to keep exploratory searches readable.
 - A common workflow is `output_mode: "files_with_matches"` to locate candidate files, followed by `output_mode: "content"` with `-n` and small context when exact lines are needed.
-- Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
+- Uses Rust regex syntax (e.g., "log.*Error", "function\s+\w+"); look-around and backreferences are not supported.
 - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
 - The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool
 - Omit path to search the current workspace. Do not search host roots or placeholder paths such as `/workspace`.
 - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
 - Use Task tool for open-ended searches requiring multiple rounds
-- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\{\}` to find `interface{}` in Go code)
+- Escape regex metacharacters when matching literal text (use `interface\{\}` to find `interface{}` in Go code).
 - Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \{[\s\S]*?field`, use `multiline: true`"#.to_string())
     }
 
     fn short_description(&self) -> String {
-        "Search file contents with ripgrep-powered pattern matching.".to_string()
+        "Search workspace file contents with built-in structured pattern matching.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -541,7 +509,7 @@ Usage:
             "properties": {
                 "pattern": {
                     "type": "string",
-                    "description": "The regular expression pattern to search for in file contents"
+                    "description": "Rust regular expression to search for in file contents. Escape literal regex metacharacters. Look-around and backreferences are not supported."
                 },
                 "path": {
                     "type": "string",
@@ -549,23 +517,23 @@ Usage:
                 },
                 "glob": {
                     "type": "string",
-                    "description": "Glob pattern to filter files (e.g. \"*.js\", \"*.{ts,tsx}\") - maps to rg --glob"
+                    "description": "Glob pattern to filter files (e.g. \"*.js\", \"*.{ts,tsx}\")."
                 },
                 "output_mode": {
                     "type": "string",
                     "enum": ["content", "files_with_matches", "count"],
                     "description": "Output mode: \"content\" shows matching lines (supports -A/-B/-C context, -n line numbers, head_limit), \"files_with_matches\" shows file paths (supports head_limit), \"count\" shows match counts (supports head_limit). Defaults to \"files_with_matches\"."
                 },
-                "-B": { "type": "number", "description": "Number of lines to show before each match (rg -B). Requires output_mode: \"content\", ignored otherwise." },
-                "-A": { "type": "number", "description": "Number of lines to show after each match (rg -A). Requires output_mode: \"content\", ignored otherwise." },
-                "-C": { "type": "number", "description": "Number of lines to show before and after each match (rg -C). Requires output_mode: \"content\", ignored otherwise." },
+                "-B": { "type": "number", "description": "Number of lines to show before each match. Requires output_mode: \"content\", ignored otherwise." },
+                "-A": { "type": "number", "description": "Number of lines to show after each match. Requires output_mode: \"content\", ignored otherwise." },
+                "-C": { "type": "number", "description": "Number of lines to show before and after each match. Requires output_mode: \"content\", ignored otherwise." },
                 "context": { "type": "number", "description": "Alias for -C. Number of lines to show before and after each match." },
-                "-n": { "type": "boolean", "description": "Show line numbers in output (rg -n). Requires output_mode: \"content\", ignored otherwise." },
-                "-i": { "type": "boolean", "description": "Case insensitive search (rg -i)" },
-                "type": { "type": "string", "description": "File type to search (rg --type). Common types: js, py, rust, go, java, etc." },
+                "-n": { "type": "boolean", "description": "Show line numbers in output. Requires output_mode: \"content\", ignored otherwise." },
+                "-i": { "type": "boolean", "description": "Case insensitive search." },
+                "type": { "type": "string", "description": "File-type filter. Common types: js, py, rust, go, java, etc." },
                 "head_limit": { "type": "number", "description": "Limit output to first N lines/entries." },
                 "offset": { "type": "number", "description": "Skip the first N lines/entries before applying head_limit." },
-                "multiline": { "type": "boolean", "description": "Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false." }
+                "multiline": { "type": "boolean", "description": "Enable multiline mode where . matches newlines and patterns can span lines. Default: false." }
             },
             "required": ["pattern"],
             "additionalProperties": false,
@@ -623,7 +591,7 @@ Usage:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        // Remote workspace: use shell-based grep/rg
+        // Resolve and authorize the workspace path before selecting IO.
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved = context.resolve_tool_path(search_path)?;
         context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
@@ -765,13 +733,13 @@ Usage:
                     Ok(results) => return Ok(results),
                     Err(error) => {
                         log::warn!(
-                            "Grep tool remote workspace-search failed; falling back to shell grep: {}",
+                            "Grep tool remote workspace-search failed; falling back to workspace IO: {}",
                             error
                         );
                     }
                 }
             }
-            return self.call_remote(input, context).await;
+            return self.call_workspace_io(input, context).await;
         }
 
         if focused_excluded_paths.is_none()
@@ -1522,5 +1490,913 @@ mod tests {
             annotate_workspace_probe_pending(String::new(), true),
             WORKSPACE_PROBE_PENDING_NOTE
         );
+    }
+
+    mod workspace_io {
+        use crate::agentic::workspace::{LocalWorkspaceFs, LocalWorkspaceShell};
+        use bitfun_runtime_ports::{
+            WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry,
+            WorkspaceFileSystem, WorkspaceMetadata, WorkspaceReader, WorkspaceShell,
+        };
+        use std::sync::{Arc, Mutex};
+        use tool_runtime::search::grep_search::{
+            grep_search, grep_search_workspace, GrepOptions, GrepSearchResult, OutputMode,
+            SearchCancellation,
+        };
+
+        fn assert_same(actual: &GrepSearchResult, expected: &GrepSearchResult) {
+            assert_eq!(actual.file_count, expected.file_count);
+            assert_eq!(actual.total_matches, expected.total_matches);
+            assert_eq!(actual.result_text, expected.result_text);
+            assert_eq!(actual.applied_limit, expected.applied_limit);
+            assert_eq!(actual.applied_offset, expected.applied_offset);
+            assert_eq!(actual.cancelled, expected.cancelled);
+        }
+
+        async fn compare_native_and_io(options: GrepOptions) -> GrepSearchResult {
+            let native_options = options.clone();
+            let native =
+                tokio::task::spawn_blocking(move || grep_search(native_options, None, None))
+                    .await
+                    .unwrap()
+                    .unwrap();
+            let portable = grep_search_workspace(options, &LocalWorkspaceFs, None)
+                .await
+                .unwrap();
+            assert!(!portable.used_rg_candidates);
+            assert_same(&portable.result, &native);
+            portable.result
+        }
+
+        fn fixture() -> tempfile::TempDir {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::create_dir(dir.path().join(".git")).unwrap();
+            std::fs::create_dir(dir.path().join("sub")).unwrap();
+            for (name, content) in [
+                (
+                    "a.py",
+                    "before\nALL_REDUCE(value)\nbetween\nvalue 12\nend\n",
+                ),
+                ("b.py", "before\nall_reduce(value)\nend\n"),
+                (".hidden.py", "value 34\n"),
+                ("ignored.py", "all_reduce(ignored)\n"),
+                (".gitignore", "ignored.py\n"),
+                ("sub/.ignore", "skip.py\n"),
+                ("sub/skip.py", "all_reduce(skipped)\n"),
+                ("sub/c.py", "all_reduce(included)\n"),
+                ("view.ets", "all_reduce(arkts)\n"),
+                ("settings.json5", "all_reduce(json5)\n"),
+                ("custom.testtype", "all_reduce(custom)\n"),
+            ] {
+                std::fs::write(dir.path().join(name), content).unwrap();
+            }
+            dir
+        }
+
+        const UNFILTERED_FILES: &[&str] = &[
+            "known.py",
+            "custom.bitfun_custom_ext",
+            "opaque_workspace_notes",
+            "src/lib.rs",
+            "other.rs",
+            "src/log.txt",
+        ];
+
+        fn unfiltered_fixture() -> tempfile::TempDir {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::create_dir(dir.path().join(".git")).unwrap();
+            std::fs::create_dir(dir.path().join("src")).unwrap();
+            for name in UNFILTERED_FILES {
+                std::fs::write(dir.path().join(name), "needle\n").unwrap();
+            }
+            dir
+        }
+
+        fn unfiltered_cases(root: &str) -> Vec<(GrepOptions, Vec<&'static str>)> {
+            let options = GrepOptions::new("needle", root)
+                .display_base(root)
+                .output_mode(OutputMode::FilesWithMatches);
+            vec![
+                (options.clone(), UNFILTERED_FILES.to_vec()),
+                (
+                    options.clone().globs(vec!["src/*.rs".to_string()]),
+                    vec!["src/lib.rs"],
+                ),
+                (
+                    options.clone().globs(vec!["src/**".to_string()]),
+                    vec!["src/lib.rs", "src/log.txt"],
+                ),
+                (
+                    options.clone().globs(vec!["*.rs".to_string()]),
+                    vec!["other.rs", "src/lib.rs"],
+                ),
+                (
+                    options
+                        .clone()
+                        .globs(vec![format!("{}/src/*.rs", root.replace('\\', "/"))]),
+                    vec!["src/lib.rs"],
+                ),
+                (
+                    options.globs(vec!["lib.rs".to_string()]),
+                    vec!["src/lib.rs"],
+                ),
+            ]
+        }
+
+        fn assert_expected_files(result: &GrepSearchResult, expected: &[&str]) {
+            let expected: std::collections::BTreeSet<_> = expected.iter().copied().collect();
+            let actual: std::collections::BTreeSet<_> = result.result_text.lines().collect();
+            assert_eq!(actual, expected);
+            assert_eq!(result.file_count, expected.len());
+            assert_eq!(result.total_matches, expected.len());
+            assert!(!result.cancelled);
+        }
+
+        #[tokio::test]
+        async fn default_type_and_relative_globs_match_expected_files_across_workspace_paths() {
+            let dir = unfiltered_fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let mut candidates = "BITFUN_RG_CANDIDATES_BEGIN\0".to_string();
+            for name in UNFILTERED_FILES {
+                candidates.push_str(&LocalWorkspaceFs.join_path(&root, &[*name]));
+                candidates.push('\0');
+            }
+            candidates.push_str("BITFUN_RG_CANDIDATES_END\0");
+            let shell = ResponseShell {
+                status: 0,
+                stdout: candidates,
+                timed_out: false,
+            };
+            for (options, expected) in unfiltered_cases(&root) {
+                let native_options = options.clone();
+                let native =
+                    tokio::task::spawn_blocking(move || grep_search(native_options, None, None))
+                        .await
+                        .unwrap()
+                        .unwrap();
+                assert_expected_files(&native, &expected);
+                let portable = grep_search_workspace(options.clone(), &LocalWorkspaceFs, None)
+                    .await
+                    .unwrap();
+                assert!(!portable.used_rg_candidates && !portable.used_grep_candidates);
+                assert_expected_files(&portable.result, &expected);
+                let candidates = grep_search_workspace(options, &LocalWorkspaceFs, Some(&shell))
+                    .await
+                    .unwrap();
+                assert!(candidates.used_rg_candidates);
+                assert_expected_files(&candidates.result, &expected);
+            }
+        }
+
+        #[tokio::test]
+        async fn shared_regex_context_modes_windows_and_type_catalog_match_native() {
+            let dir = fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            for mode in [
+                OutputMode::Content,
+                OutputMode::Count,
+                OutputMode::FilesWithMatches,
+            ] {
+                for (offset, limit) in [(0, 0), (1, 2), (100, 2)] {
+                    compare_native_and_io(
+                        GrepOptions::new(r"(?i:all_reduce)|\d+", &root)
+                            .display_base(&root)
+                            .output_mode(mode)
+                            .context(1)
+                            .offset(offset)
+                            .head_limit(limit)
+                            .file_type("py"),
+                    )
+                    .await;
+                }
+            }
+            for file_type in ["arkts", "json", "testtype"] {
+                let result = compare_native_and_io(
+                    GrepOptions::new("all_reduce", &root)
+                        .file_type(file_type)
+                        .display_base(&root),
+                )
+                .await;
+                assert_eq!(result.file_count, 1, "shared type {file_type}");
+            }
+            compare_native_and_io(
+                GrepOptions::new("all_reduce", &root)
+                    .case_insensitive(true)
+                    .globs(vec!["**/*.py".to_string()])
+                    .display_base(&root),
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn shared_multiline_explicit_file_and_invalid_scope_match_native() {
+            let dir = fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            compare_native_and_io(
+                GrepOptions::new(r"before\nALL_REDUCE.*?\n", &root)
+                    .multiline(true)
+                    .display_base(&root)
+                    .offset(1)
+                    .head_limit(2),
+            )
+            .await;
+            let file = dir.path().join("extensionless");
+            std::fs::write(&file, "all_reduce(explicit)\n").unwrap();
+            let result = compare_native_and_io(
+                GrepOptions::new("all_reduce", file.to_string_lossy())
+                    .file_type("rust")
+                    .display_base(&root),
+            )
+            .await;
+            assert_eq!(
+                result.file_count, 1,
+                "an explicit file is not removed by directory type filters"
+            );
+            for options in [
+                GrepOptions::new("[", &root),
+                GrepOptions::new("needle", format!("{root}/missing")),
+            ] {
+                assert!(grep_search(options.clone(), None, None).is_err());
+                assert!(grep_search_workspace(options, &LocalWorkspaceFs, None)
+                    .await
+                    .is_err());
+            }
+        }
+
+        struct ResponseShell {
+            status: i32,
+            stdout: String,
+            timed_out: bool,
+        }
+        #[async_trait::async_trait]
+        impl WorkspaceShell for ResponseShell {
+            async fn exec_with_options(
+                &self,
+                command: &str,
+                options: WorkspaceCommandOptions,
+            ) -> anyhow::Result<WorkspaceCommandResult> {
+                if command.contains("command -v grep") {
+                    return Ok(WorkspaceCommandResult {
+                        stdout: String::new(),
+                        stderr: String::new(),
+                        exit_code: 127,
+                        interrupted: false,
+                        timed_out: false,
+                    });
+                }
+                assert!(command.contains("--files-with-matches --null"));
+                assert!(!command.contains("grep -"));
+                assert!(options.cancellation_token.is_some());
+                Ok(WorkspaceCommandResult {
+                    stdout: self.stdout.clone(),
+                    stderr: "target search failed".to_string(),
+                    exit_code: self.status,
+                    interrupted: false,
+                    timed_out: self.timed_out,
+                })
+            }
+        }
+
+        #[derive(Default)]
+        struct ObservedFs {
+            opened: Mutex<Vec<String>>,
+            pending_read: bool,
+            pending_operation: Option<&'static str>,
+            opened_signal: tokio::sync::Notify,
+            reader_drops: Arc<std::sync::atomic::AtomicUsize>,
+        }
+        struct PendingReader(Arc<std::sync::atomic::AtomicUsize>);
+        impl Drop for PendingReader {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        impl tokio::io::AsyncRead for PendingReader {
+            fn poll_read(
+                self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+                _: &mut tokio::io::ReadBuf<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                std::task::Poll::Pending
+            }
+        }
+        impl tokio::io::AsyncSeek for PendingReader {
+            fn start_seek(
+                self: std::pin::Pin<&mut Self>,
+                _: std::io::SeekFrom,
+            ) -> std::io::Result<()> {
+                Ok(())
+            }
+            fn poll_complete(
+                self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<std::io::Result<u64>> {
+                std::task::Poll::Ready(Ok(0))
+            }
+        }
+        #[async_trait::async_trait]
+        impl WorkspaceFileSystem for ObservedFs {
+            async fn open_read(&self, path: &str) -> anyhow::Result<WorkspaceReader> {
+                self.opened.lock().unwrap().push(path.to_string());
+                self.opened_signal.notify_one();
+                if self.pending_operation == Some("open") {
+                    return std::future::pending().await;
+                }
+                if self.pending_read {
+                    Ok(Box::new(PendingReader(self.reader_drops.clone())))
+                } else {
+                    LocalWorkspaceFs.open_read(path).await
+                }
+            }
+            async fn metadata(
+                &self,
+                path: &str,
+                follow: bool,
+            ) -> anyhow::Result<Option<WorkspaceMetadata>> {
+                if self.pending_operation == Some("metadata") {
+                    self.opened_signal.notify_one();
+                    return std::future::pending().await;
+                }
+                LocalWorkspaceFs.metadata(path, follow).await
+            }
+            async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+                LocalWorkspaceFs.read_file(path).await
+            }
+            async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+                LocalWorkspaceFs.read_file_text(path).await
+            }
+            async fn write_file(&self, _: &str, _: &[u8]) -> anyhow::Result<()> {
+                panic!("search cannot write")
+            }
+            async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+                LocalWorkspaceFs.exists(path).await
+            }
+            async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
+                LocalWorkspaceFs.is_file(path).await
+            }
+            async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
+                LocalWorkspaceFs.is_dir(path).await
+            }
+            async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+                if self.pending_operation == Some("read_dir") {
+                    self.opened_signal.notify_one();
+                    return std::future::pending().await;
+                }
+                LocalWorkspaceFs.read_dir(path).await
+            }
+        }
+
+        #[cfg(unix)]
+        struct WithoutRgShell {
+            local: LocalWorkspaceShell,
+            batches: std::sync::atomic::AtomicUsize,
+            malformed_batch: bool,
+        }
+
+        #[cfg(unix)]
+        #[async_trait::async_trait]
+        impl WorkspaceShell for WithoutRgShell {
+            async fn exec_with_options(
+                &self,
+                command: &str,
+                options: WorkspaceCommandOptions,
+            ) -> anyhow::Result<WorkspaceCommandResult> {
+                if command.contains("BITFUN_RG_CANDIDATES_BEGIN") {
+                    return Ok(WorkspaceCommandResult {
+                        stdout: String::new(),
+                        stderr: String::new(),
+                        exit_code: 127,
+                        interrupted: false,
+                        timed_out: false,
+                    });
+                }
+                if command.contains("BITFUN_GREP_BATCH_END") {
+                    self.batches
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if self.malformed_batch {
+                        return Ok(WorkspaceCommandResult {
+                            stdout: "0".to_string(),
+                            stderr: String::new(),
+                            exit_code: 0,
+                            interrupted: false,
+                            timed_out: false,
+                        });
+                    }
+                }
+                self.local.exec_with_options(command, options).await
+            }
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn default_type_and_relative_globs_match_expected_files_with_real_candidates() {
+            let dir = unfiltered_fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let shell = LocalWorkspaceShell::new(root.clone());
+            let has_rg = shell
+                .exec("command -v rg >/dev/null 2>&1", Some(1000))
+                .await
+                .unwrap()
+                .2
+                == 0;
+            let without_rg = WithoutRgShell {
+                local: LocalWorkspaceShell::new(root.clone()),
+                batches: Default::default(),
+                malformed_batch: false,
+            };
+            for (options, expected) in unfiltered_cases(&root) {
+                let accelerated =
+                    grep_search_workspace(options.clone(), &LocalWorkspaceFs, Some(&shell))
+                        .await
+                        .unwrap();
+                assert_eq!(accelerated.used_rg_candidates, has_rg);
+                assert!(accelerated.used_rg_candidates || accelerated.used_grep_candidates);
+                assert_expected_files(&accelerated.result, &expected);
+                let system_grep =
+                    grep_search_workspace(options, &LocalWorkspaceFs, Some(&without_rg))
+                        .await
+                        .unwrap();
+                assert!(!system_grep.used_rg_candidates);
+                assert!(system_grep.used_grep_candidates);
+                assert_expected_files(&system_grep.result, &expected);
+            }
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn no_rg_uses_batched_system_grep_without_losing_bom_binary_or_filename_matches() {
+            let dir = fixture();
+            std::fs::write(
+                dir.path().join("large-unmatched.py"),
+                "unrelated bytes\n".repeat(262_144),
+            )
+            .unwrap();
+            for index in 0..130 {
+                std::fs::write(
+                    dir.path().join(format!("unmatched-{index}.py")),
+                    "no candidate\n",
+                )
+                .unwrap();
+            }
+            std::fs::write(
+                dir.path().join("quote'\n\\.py"),
+                b"prefix\0needle after nul\n",
+            )
+            .unwrap();
+            for (name, bom, little_endian) in [
+                ("utf16-le.py", [0xff, 0xfe], true),
+                ("utf16-be.py", [0xfe, 0xff], false),
+            ] {
+                let mut bytes = bom.to_vec();
+                for unit in "needle in utf16\n".encode_utf16() {
+                    bytes.extend_from_slice(&if little_endian {
+                        unit.to_le_bytes()
+                    } else {
+                        unit.to_be_bytes()
+                    });
+                }
+                std::fs::write(dir.path().join(name), bytes).unwrap();
+            }
+            let root = dir.path().to_string_lossy().into_owned();
+            let shell = WithoutRgShell {
+                local: LocalWorkspaceShell::new(root.clone()),
+                batches: Default::default(),
+                malformed_batch: false,
+            };
+            let options = GrepOptions::new("needle|all_reduce", &root)
+                .file_type("py")
+                .display_base(&root)
+                .head_limit(2)
+                .offset(1)
+                .context(1);
+            let expected = grep_search_workspace(options.clone(), &LocalWorkspaceFs, None)
+                .await
+                .unwrap();
+            let fs = ObservedFs::default();
+            let actual = grep_search_workspace(options, &fs, Some(&shell))
+                .await
+                .unwrap();
+            assert!(actual.used_grep_candidates);
+            assert!(!actual.used_rg_candidates);
+            assert_same(&actual.result, &expected.result);
+            assert_eq!(shell.batches.load(std::sync::atomic::Ordering::Relaxed), 2);
+            assert!(actual.scanned_bytes < expected.scanned_bytes / 100);
+            let opened = fs.opened.lock().unwrap();
+            assert!(opened.iter().any(|path| path.ends_with("utf16-le.py")));
+            assert!(opened.iter().any(|path| path.ends_with("utf16-be.py")));
+            assert!(!opened.iter().any(|path| path.contains("unmatched")));
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn a_truncated_grep_batch_is_an_error_not_an_empty_search() {
+            let dir = fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let shell = WithoutRgShell {
+                local: LocalWorkspaceShell::new(root.clone()),
+                batches: Default::default(),
+                malformed_batch: true,
+            };
+            let fs = ObservedFs::default();
+            let error =
+                grep_search_workspace(GrepOptions::new("all_reduce", &root), &fs, Some(&shell))
+                    .await
+                    .err()
+                    .expect("truncated output must fail");
+            assert!(error.contains("completion marker"));
+            assert!(fs.opened.lock().unwrap().is_empty());
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn no_match_is_success_with_an_errexit_target_shell() {
+            struct ErrexitShell(LocalWorkspaceShell);
+            #[async_trait::async_trait]
+            impl WorkspaceShell for ErrexitShell {
+                async fn exec_with_options(
+                    &self,
+                    command: &str,
+                    options: WorkspaceCommandOptions,
+                ) -> anyhow::Result<WorkspaceCommandResult> {
+                    self.0
+                        .exec_with_options(&format!("set -e\n{command}"), options)
+                        .await
+                }
+            }
+            let dir = fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let shell = ErrexitShell(LocalWorkspaceShell::new(root.clone()));
+            let result = grep_search_workspace(
+                GrepOptions::new("absent_unique_literal", &root),
+                &LocalWorkspaceFs,
+                Some(&shell),
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.result.total_matches, 0);
+        }
+
+        #[tokio::test]
+        async fn target_regex_versions_cannot_prune_complex_or_case_folded_matches() {
+            struct UnexpectedShell;
+            #[async_trait::async_trait]
+            impl WorkspaceShell for UnexpectedShell {
+                async fn exec_with_options(
+                    &self,
+                    _: &str,
+                    _: WorkspaceCommandOptions,
+                ) -> anyhow::Result<WorkspaceCommandResult> {
+                    panic!("complex regex must stay in the Runtime matcher")
+                }
+            }
+            let dir = fixture();
+            std::fs::write(dir.path().join("unicode.py"), "\u{1c89}\n").unwrap();
+            let root = dir.path().to_string_lossy().into_owned();
+            for options in [
+                GrepOptions::new(r"\p{L}+", &root),
+                GrepOptions::new(r"all_reduce|\d+", &root),
+                GrepOptions::new("all_reduce", &root).case_insensitive(true),
+            ] {
+                let expected = grep_search_workspace(options.clone(), &LocalWorkspaceFs, None)
+                    .await
+                    .unwrap();
+                let actual =
+                    grep_search_workspace(options, &LocalWorkspaceFs, Some(&UnexpectedShell))
+                        .await
+                        .unwrap();
+                assert_same(&actual.result, &expected.result);
+                assert!(actual.result.total_matches > 0);
+            }
+        }
+
+        #[tokio::test]
+        async fn bounded_workspace_output_keeps_single_file_counts_and_truncation_facts() {
+            let dir = fixture();
+            let path = dir.path().join("large-match.py");
+            std::fs::write(&path, "needle\n".repeat(10_000)).unwrap();
+            for (offset, limit) in [(0, 2), (1, 2), (9_999, 2), (0, 0)] {
+                let options = GrepOptions::new("needle", path.to_string_lossy())
+                    .output_mode(OutputMode::Content)
+                    .offset(offset)
+                    .head_limit(limit);
+                let result = compare_native_and_io(options).await;
+                assert_eq!(result.total_matches, 10_000);
+            }
+        }
+
+        #[tokio::test]
+        async fn cancelling_pending_metadata_directory_or_open_returns_promptly() {
+            let dir = fixture();
+            for operation in ["metadata", "read_dir", "open"] {
+                let fs = Arc::new(ObservedFs {
+                    pending_operation: Some(operation),
+                    ..Default::default()
+                });
+                let cancellation = SearchCancellation::default();
+                let options = GrepOptions::new("all_reduce", dir.path().to_string_lossy())
+                    .cancellation(cancellation.clone());
+                let worker_fs = fs.clone();
+                let task = tokio::spawn(async move {
+                    grep_search_workspace(options, worker_fs.as_ref(), None).await
+                });
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(2),
+                    fs.opened_signal.notified(),
+                )
+                .await
+                .unwrap();
+                cancellation.cancel();
+                let result = tokio::time::timeout(std::time::Duration::from_secs(2), task)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                assert!(result.result.cancelled, "{operation}");
+            }
+        }
+
+        #[tokio::test]
+        async fn candidate_status_errors_are_not_empty_success_or_posix_fallback() {
+            let dir = fixture();
+            let options =
+                GrepOptions::new("all_reduce", dir.path().to_string_lossy()).file_type("py");
+            let fs = ObservedFs::default();
+            let absent = ResponseShell {
+                status: 127,
+                stdout: String::new(),
+                timed_out: false,
+            };
+            let fallback = grep_search_workspace(options.clone(), &fs, Some(&absent))
+                .await
+                .unwrap();
+            assert!(!fallback.used_rg_candidates);
+            assert!(fallback.result.total_matches > 0);
+            fs.opened.lock().unwrap().clear();
+            let empty = ResponseShell {
+                status: 1,
+                stdout: "BITFUN_RG_CANDIDATES_BEGIN\0BITFUN_RG_CANDIDATES_END\0".to_string(),
+                timed_out: false,
+            };
+            let result = grep_search_workspace(options.clone(), &fs, Some(&empty))
+                .await
+                .unwrap();
+            assert!(result.used_rg_candidates);
+            assert_eq!(result.result.total_matches, 0);
+            assert!(fs.opened.lock().unwrap().is_empty());
+            for (status, stdout, timed_out) in [
+                (2, "", false),
+                (0, "incomplete filename", false),
+                (0, "", true),
+            ] {
+                let shell = ResponseShell {
+                    status,
+                    stdout: stdout.to_string(),
+                    timed_out,
+                };
+                assert!(grep_search_workspace(options.clone(), &fs, Some(&shell))
+                    .await
+                    .is_err());
+                assert!(fs.opened.lock().unwrap().is_empty());
+            }
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn real_rg_candidate_acceleration_keeps_rust_results_and_transfers_only_matches() {
+            let dir = fixture();
+            // Candidate selection must not stop at binary NULs, hidden files,
+            // apostrophes or multiline input, and must leave type/glob semantics to Rust.
+            std::fs::write(
+                dir.path().join("binary.py"),
+                b"prefix\0binary\nneedle after nul\n",
+            )
+            .unwrap();
+            std::fs::write(dir.path().join("quote'name.py"), "needle 'quoted'\n").unwrap();
+            std::fs::write(
+                dir.path().join("unmatched.py"),
+                "no candidate in this file\n",
+            )
+            .unwrap();
+            let root = dir.path().to_string_lossy().into_owned();
+            let shell = LocalWorkspaceShell::new(root.clone());
+            let has_rg = shell
+                .exec("command -v rg >/dev/null 2>&1", Some(1000))
+                .await
+                .unwrap()
+                .2
+                == 0;
+            for (pattern, multiline, eligible) in [
+                (r"(?i:all_reduce)|\d+", false, false),
+                (r"before\nALL_REDUCE.*?\n", true, false),
+                ("needle", false, true),
+                ("needle 'quoted'", false, true),
+            ] {
+                let options = GrepOptions::new(pattern, &root)
+                    .file_type("py")
+                    .multiline(multiline)
+                    .display_base(&root)
+                    .head_limit(2)
+                    .context(1);
+                let expected = grep_search_workspace(options.clone(), &LocalWorkspaceFs, None)
+                    .await
+                    .unwrap();
+                let fs = ObservedFs::default();
+                let actual = grep_search_workspace(options, &fs, Some(&shell))
+                    .await
+                    .unwrap();
+                assert_eq!(actual.used_rg_candidates, has_rg && eligible);
+                assert_same(&actual.result, &expected.result);
+                if actual.used_rg_candidates || actual.used_grep_candidates {
+                    assert!(!fs
+                        .opened
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|path| path.ends_with("/unmatched.py")));
+                }
+            }
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn file_symlinks_are_searched_without_recursive_links_or_rg_false_negatives() {
+            let dir = fixture();
+            let outside = tempfile::tempdir().unwrap();
+            std::fs::write(outside.path().join("source.py"), "linked sentinel\n").unwrap();
+            std::os::unix::fs::symlink(
+                outside.path().join("source.py"),
+                dir.path().join("alias.py"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink(outside.path(), dir.path().join("linked-directory"))
+                .unwrap();
+            let root = dir.path().to_string_lossy().into_owned();
+            let options = GrepOptions::new("linked sentinel", &root).display_base(&root);
+            let expected = compare_native_and_io(options.clone()).await;
+            assert_eq!(expected.file_count, 1);
+            let shell = LocalWorkspaceShell::new(root.clone());
+            let actual = grep_search_workspace(options, &LocalWorkspaceFs, Some(&shell))
+                .await
+                .unwrap();
+            assert_same(&actual.result, &expected);
+            let explicit = GrepOptions::new(
+                "linked sentinel",
+                dir.path().join("alias.py").to_string_lossy(),
+            )
+            .display_base(&root);
+            compare_native_and_io(explicit).await;
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn posix_filename_characters_survive_native_io_and_candidate_display() {
+            let dir = fixture();
+            for name in ["a\\b.py", "line\nbreak.py", "quote'name.py"] {
+                std::fs::write(dir.path().join(name), "filename sentinel\n").unwrap();
+            }
+            let root = dir.path().to_string_lossy().into_owned();
+            let options = GrepOptions::new("filename sentinel", &root).display_base(&root);
+            let expected = compare_native_and_io(options.clone()).await;
+            assert_eq!(expected.file_count, 3);
+            assert!(expected.result_text.contains(r#""a\\b.py":1:"#));
+            assert!(expected.result_text.contains(r#""line\nbreak.py":1:"#));
+            let shell = LocalWorkspaceShell::new(root);
+            let actual = grep_search_workspace(options, &LocalWorkspaceFs, Some(&shell))
+                .await
+                .unwrap();
+            assert_same(&actual.result, &expected);
+        }
+
+        #[tokio::test]
+        async fn remote_tool_uses_shared_options_results_and_no_rg_io_provider() {
+            use super::*;
+            use bitfun_runtime_ports::WorkspaceServices;
+            let dir = fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
+                &root,
+                Some("search-test"),
+                Some("test.invalid"),
+            )
+            .unwrap();
+            let context = ToolUseContext {
+                tool_call_id: None,
+                agent_type: None,
+                session_id: None,
+                dialog_turn_id: None,
+                workspace: Some(WorkspaceBinding::new_remote(
+                    None,
+                    dir.path().to_path_buf(),
+                    "search-test".to_string(),
+                    "Search test".to_string(),
+                    identity,
+                )),
+                loaded_deferred_tool_specs: Vec::new(),
+                primary_model_facts: Default::default(),
+                custom_data: HashMap::new(),
+                computer_use_host: None,
+                runtime_tool_restrictions: Default::default(),
+                runtime_handles: ToolRuntimeHandles::new(
+                    Some(WorkspaceServices {
+                        fs: Arc::new(LocalWorkspaceFs),
+                        shell: Arc::new(ResponseShell {
+                            status: 127,
+                            stdout: String::new(),
+                            timed_out: false,
+                        }),
+                    }),
+                    None,
+                ),
+            };
+            let input = json!({"pattern": "all_reduce|\\d+", "type": "py", "output_mode": "content", "-i": true, "context": 1, "offset": 1, "head_limit": 2});
+            let tool = GrepTool::new();
+            let expected = grep_search_workspace(
+                tool.build_grep_options(&input, &context).unwrap(),
+                &LocalWorkspaceFs,
+                None,
+            )
+            .await
+            .unwrap();
+            let results = tool.call_impl(&input, &context).await.unwrap();
+            let crate::agentic::tools::framework::ToolResult::Result { data, .. } = &results[0]
+            else {
+                panic!("expected result");
+            };
+            assert_eq!(data["result"], expected.result.result_text);
+            assert_eq!(data["total_matches"], expected.result.total_matches);
+            assert_eq!(data["search_backend"], "workspace_io");
+        }
+
+        #[tokio::test]
+        async fn dropping_a_search_cancels_pending_io_without_cancelling_its_parent() {
+            let dir = fixture();
+            let parent = SearchCancellation::new();
+            let options = GrepOptions::new("needle", dir.path().join("a.py").to_string_lossy())
+                .cancellation(parent.clone());
+            grep_search_workspace(options.clone(), &LocalWorkspaceFs, None)
+                .await
+                .unwrap();
+            assert!(
+                !parent.is_cancelled(),
+                "normal completion must not cancel the turn token"
+            );
+            let fs = Arc::new(ObservedFs {
+                pending_read: true,
+                ..Default::default()
+            });
+            let worker_fs = fs.clone();
+            let task = tokio::spawn(async move {
+                grep_search_workspace(options, worker_fs.as_ref(), None).await
+            });
+            tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                fs.opened_signal.notified(),
+            )
+            .await
+            .unwrap();
+            task.abort();
+            assert!(matches!(task.await, Err(error) if error.is_cancelled()));
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                while fs.reader_drops.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(
+                !parent.is_cancelled(),
+                "dropping one search must not cancel its caller"
+            );
+        }
+
+        #[tokio::test]
+        async fn cancelling_a_pending_workspace_read_releases_the_reader_and_worker() {
+            let dir = fixture();
+            let fs = Arc::new(ObservedFs {
+                pending_read: true,
+                ..Default::default()
+            });
+            let cancellation = SearchCancellation::new();
+            let mut options = GrepOptions::new("needle", dir.path().join("a.py").to_string_lossy());
+            options.cancellation = Some(cancellation.clone());
+            let worker_fs = fs.clone();
+            let task = tokio::spawn(async move {
+                grep_search_workspace(options, worker_fs.as_ref(), None).await
+            });
+            tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                fs.opened_signal.notified(),
+            )
+            .await
+            .unwrap();
+            cancellation.cancel();
+            let result = tokio::time::timeout(std::time::Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            assert!(result.result.cancelled);
+            assert_eq!(fs.reader_drops.load(std::sync::atomic::Ordering::SeqCst), 1);
+        }
     }
 }

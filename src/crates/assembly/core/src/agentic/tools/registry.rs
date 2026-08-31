@@ -708,6 +708,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
             let assistant_text = tool.render_result_for_assistant(&json!({
                 "success": true,
+                "snapshot_recorded": true,
                 "file_path": "workspace/demo.txt"
             }));
 
@@ -1080,6 +1081,7 @@ mod tests {
 
             let assistant_text = tool.render_result_for_assistant(&json!({
                 "success": true,
+                "snapshot_recorded": true,
                 "file_path": "workspace/demo.txt"
             }));
 
@@ -1087,6 +1089,16 @@ mod tests {
                 assistant_text.contains("snapshot system"),
                 "expected snapshot wrapper text for {tool_name}, got: {assistant_text}"
             );
+            for recorded in [Value::Null, Value::Bool(false)] {
+                let unrecorded_text = tool.render_result_for_assistant(&json!({
+                    "success": true, "snapshot_recorded": recorded,
+                    "file_path": "workspace/demo.txt"
+                }));
+                assert!(
+                    !unrecorded_text.contains("snapshot system"),
+                    "successful file mutation alone cannot claim snapshot coverage"
+                );
+            }
         }
 
         let read_text = registry

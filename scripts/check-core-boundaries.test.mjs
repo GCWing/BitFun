@@ -72,6 +72,56 @@ const MODULES = [
 
 const TEST_ROOT = join('C:', 'repo');
 
+test('tool-runtime search regex stays available without enabling HTML extractors', () => {
+  const rule = requiredContentRules.find(
+    rule => rule.path === 'src/crates/execution/tool-execution/Cargo.toml',
+  );
+  assert.ok(rule);
+  const manifest = `[features]
+default = []
+web-readable = ["dep:htmd", "dep:legible", "dep:readability-js"]
+[dependencies]
+regex = { workspace = true }
+htmd = { version = "0.5.4", optional = true }
+legible = { version = "0.4.2", optional = true }
+readability-js = { version = "0.1.5", optional = true }
+`;
+  const accepts = text => rule.patterns.every(({ regex }) => regex.test(text));
+  assert.ok(accepts(manifest));
+  assert.equal(accepts(manifest.replace(
+    'regex = { workspace = true }',
+    'regex = { workspace = true, optional = true }',
+  )), false);
+  for (const dependency of ['htmd', 'legible', 'readability-js']) {
+    assert.equal(accepts(manifest.replace(
+      new RegExp(`(${dependency} = \\{[^}]*), optional = true`), '$1',
+    )), false, `${dependency} must remain optional`);
+  }
+  assert.equal(accepts(manifest.replace(
+    'web-readable = [', 'web-readable = ["dep:regex", ',
+  )), false);
+});
+
+test('workspace file tools reject new per-tool SSH implementations', async () => {
+  for (const tool of ['file_read_tool', 'file_write_tool', 'file_edit_tool', 'delete_file_tool', 'ls_tool']) {
+    const path = `src/crates/assembly/core/src/agentic/tools/implementations/${tool}.rs`;
+    const rule = forbiddenContentRules.find(rule => rule.path === path);
+    assert.ok(rule, `${tool} must retain its provider boundary guard`);
+    const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+    assert.deepEqual(findForbiddenContentMatches(source, rule.patterns), []);
+    for (const mutation of [
+      'if context.is_remote() { return call_remote(); }',
+      'resolved.uses_remote_workspace_backend()',
+      'context.ws_shell().unwrap().exec(command)',
+      'write_local_file(request)',
+      'build_remote_delete_command(path, recursive)',
+    ]) {
+      assert.ok(findForbiddenContentMatches(`${source}\n${mutation}`, rule.patterns).length > 0,
+        `${tool} must reject ${mutation}`);
+    }
+  }
+});
+
 test('Cargo manifest discovery ignores nested local-agent worktrees', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'bitfun-core-boundaries-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -372,7 +422,9 @@ test('portable contract crates expose only capability-local feature slices', asy
   assert.deepEqual(runtimePortFeatures['plugin-runtime'], []);
   assert.deepEqual(runtimePortFeatures['product-search'], ['dep:bitfun-product-domains']);
   assert.deepEqual(runtimePortFeatures['script-tool-runtime'], []);
-  assert.deepEqual(new Set(runtimePortFeatures['workspace-ports']), new Set(['dep:anyhow', 'dep:tokio-util']));
+  // Workspace byte readers expose AsyncRead/AsyncSeek without selecting a
+  // process, network, scheduler, or full Tokio runtime at the contract layer.
+  assert.deepEqual(new Set(runtimePortFeatures['workspace-ports']), new Set(['dep:anyhow', 'dep:tokio-util', 'dep:tokio', 'tokio/io-util']));
   assert.deepEqual(runtimePortFeatures['terminal-port'], ['dep:tokio']);
   assert.deepEqual(runtimePortFeatures['remote-exec-port'], ['dep:tokio']);
   assert.deepEqual(
@@ -438,7 +490,8 @@ test('runtime-ports async dependencies stay behind their exact port owners', () 
   );
   assert.deepEqual(
     ownersByDependency.get('tokio'),
-    new Set(['remote-exec-port', 'terminal-port']),
+    // WorkspaceReader exposes AsyncRead/AsyncSeek through the workspace IO port.
+    new Set(['remote-exec-port', 'terminal-port', 'workspace-ports']),
   );
 });
 
@@ -590,7 +643,7 @@ const RUNTIME_PORT_FEATURE_PROFILES = {
     'bitfun-core-types/ts',
     'bitfun-product-domains?/ts',
   ],
-  'workspace-ports': ['dep:anyhow', 'dep:tokio-util'],
+  'workspace-ports': ['dep:anyhow', 'dep:tokio-util', 'dep:tokio', 'tokio/io-util'],
 };
 
 const AGENT_TOOL_FEATURE_PROFILES = {
@@ -3833,6 +3886,8 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'bitfun-runtime-ports/runtime-event-port',
     'bitfun-runtime-ports/workspace-ports',
     'dep:dunce',
+    // The concrete local provider restores modification times through WorkspaceFS.
+    'dep:filetime',
     'process-runtime',
     'tokio/fs',
     'tokio/io-util',
@@ -4261,6 +4316,45 @@ test('capability contract consumers may inherit empty defaults but must select r
 
   assert.doesNotMatch(messages.join('\n'), /default-features = false/);
   assert.ok(messages.some((message) => /plugin-runtime/.test(message)));
+
+  // Shared file/search algorithms consume workspace IO, not the entire runtime API.
+  const toolRuntime = packageAt(
+    'tool-runtime',
+    'src/crates/execution/tool-execution/Cargo.toml',
+    [
+      pathDependency('src/crates/contracts/runtime-ports', {
+        name: 'bitfun-runtime-ports',
+        features: ['workspace-ports'],
+      }),
+      pathDependency('src/crates/execution/tool-contracts', {
+        name: 'bitfun-agent-tools',
+      }),
+    ],
+  );
+  const ioContractRules = capabilityContractDependencyRules.filter(
+    ({ packageName }) => ['bitfun-runtime-ports', 'bitfun-agent-tools'].includes(packageName),
+  );
+  assert.deepEqual(findTestCapabilityViolations(
+    cargoBoundaries.findCapabilityContractConsumerViolations,
+    [runtimePorts, agentTools, toolRuntime],
+    ioContractRules,
+  ), []);
+  for (const features of [[], ['workspace-ports', 'agent-api']]) {
+    const mutatedConsumer = {
+      ...toolRuntime,
+      dependencies: [
+        { ...toolRuntime.dependencies[0], features },
+        toolRuntime.dependencies[1],
+      ],
+    };
+    const violations = findTestCapabilityViolations(
+      cargoBoundaries.findCapabilityContractConsumerViolations,
+      [runtimePorts, agentTools, mutatedConsumer],
+      ioContractRules,
+    );
+    assert.ok(violations.some(({ message }) => /tool-runtime.*bitfun-runtime-ports/.test(message)),
+      `tool-runtime must retain exactly workspace-ports, not ${features.join(', ') || 'an empty edge'}`);
+  }
 });
 
 test('unreviewed consumers cannot add capability contract dependency edges', async () => {

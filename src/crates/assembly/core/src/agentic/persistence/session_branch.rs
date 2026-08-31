@@ -1,5 +1,5 @@
 use super::manager::PersistenceManager;
-use crate::agentic::core::{Session, SessionKind};
+use crate::agentic::core::{MessageContent, Session, SessionKind};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_services_core::session::SessionBranchBoundary;
 use bitfun_services_core::session::{
@@ -9,6 +9,15 @@ use bitfun_services_core::session::{
 pub use bitfun_services_core::session::{SessionBranchRequest, SessionBranchResult};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+fn clear_inherited_snapshot_capability(result: &mut serde_json::Value) {
+    if let Some(result) = result.as_object_mut() {
+        // File snapshots belong to the source Session and are not forked with
+        // conversation history. Keep the operation and its inline result, but
+        // do not advertise snapshot access under the new Session identity.
+        result.remove("snapshot_recorded");
+    }
+}
 
 impl PersistenceManager {
     pub async fn branch_session(
@@ -103,13 +112,22 @@ impl PersistenceManager {
                     let mut branched_turn = turn.clone();
                     branched_turn.session_id = target_session_id.clone();
                     branched_turn.turn_index = new_index;
+                    for tool in branched_turn
+                        .model_rounds
+                        .iter_mut()
+                        .flat_map(|round| &mut round.tool_items)
+                    {
+                        if let Some(result) = tool.tool_result.as_mut() {
+                            clear_inherited_snapshot_capability(&mut result.result);
+                        }
+                    }
                     branched_turn
                 })
                 .collect::<Vec<_>>();
 
             for (new_index, source_turn) in source_turns.iter().take(copied_turn_count).enumerate()
             {
-                if let Some(messages) = self
+                if let Some(mut messages) = self
                     .load_turn_context_snapshot(
                         workspace_path,
                         &request.source_session_id,
@@ -117,6 +135,11 @@ impl PersistenceManager {
                     )
                     .await?
                 {
+                    for message in &mut messages {
+                        if let MessageContent::ToolResult { result, .. } = &mut message.content {
+                            clear_inherited_snapshot_capability(result);
+                        }
+                    }
                     self.save_turn_context_snapshot(
                         workspace_path,
                         &target_session_id,
@@ -336,6 +359,168 @@ mod tests {
             .save_session_metadata(workspace_path, &metadata)
             .await
             .expect("renamed metadata should save");
+    }
+
+    #[tokio::test]
+    async fn branch_session_preserves_tool_history_without_inheriting_snapshot_capability() {
+        use crate::agentic::core::{MessageContent, ToolResult};
+        use serde_json::json;
+
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
+        let source = Session::new("Source".into(), "agentic".into(), Default::default());
+        manager
+            .save_session(workspace.path(), &source)
+            .await
+            .unwrap();
+        let recorded = json!({
+            "snapshot_recorded": true,
+            "old_string": "before",
+            "new_string": "after",
+            "file_path": "/remote/workspace/source.rs",
+            "nested_user_data": { "snapshot_recorded": true }
+        });
+        let legacy = json!({ "content": "legacy result without a capability marker" });
+        for index in 0..2 {
+            let turn_id = format!("turn-{index}");
+            let mut turn = build_turn(&source.session_id, &turn_id, index, "edit");
+            turn.model_rounds.push(serde_json::from_value(json!({
+                "id": format!("round-{index}"), "turnId": turn_id, "roundIndex": 0,
+                "timestamp": 1, "startTime": 1, "status": "completed",
+                "toolItems": [
+                    {
+                        "id": format!("operation-{index}"), "toolName": "Edit", "startTime": 1,
+                        "toolCall": { "id": format!("operation-{index}"), "input": { "file_path": "/remote/workspace/source.rs" } },
+                        "toolResult": { "success": true, "result": recorded, "resultForAssistant": "original assistant result" }
+                    },
+                    {
+                        "id": format!("legacy-{index}"), "toolName": "Read", "startTime": 1,
+                        "toolCall": { "id": format!("legacy-{index}"), "input": {} },
+                        "toolResult": { "success": true, "result": legacy }
+                    }
+                ]
+            })).unwrap());
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .unwrap();
+            let message = Message::tool_result(ToolResult {
+                tool_id: format!("operation-{index}"),
+                tool_name: "Edit".into(),
+                effective_tool_name: None,
+                result: recorded.clone(),
+                result_for_assistant: Some("original assistant result".into()),
+                is_error: false,
+                duration_ms: None,
+                image_attachments: None,
+            });
+            manager
+                .save_turn_context_snapshot(workspace.path(), &source.session_id, index, &[message])
+                .await
+                .unwrap();
+        }
+        let source_turns = manager
+            .load_session_turns(workspace.path(), &source.session_id)
+            .await
+            .unwrap();
+        let source_before = serde_json::to_value(&source_turns).unwrap();
+        let source_session_before = serde_json::to_value(
+            manager
+                .load_session(workspace.path(), &source.session_id)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let context_before = manager
+            .load_turn_context_snapshot(workspace.path(), &source.session_id, 0)
+            .await
+            .unwrap()
+            .unwrap();
+
+        for (turn_id, boundary, copied) in [
+            ("turn-0", SessionBranchBoundary::ThroughTurn, 1),
+            ("turn-1", SessionBranchBoundary::BeforeTurn, 1),
+            ("turn-1", SessionBranchBoundary::ThroughTurn, 2),
+        ] {
+            let branched = manager
+                .branch_session(
+                    workspace.path(),
+                    &SessionBranchRequest {
+                        source_session_id: source.session_id.clone(),
+                        source_turn_id: turn_id.into(),
+                        boundary,
+                    },
+                )
+                .await
+                .unwrap();
+            let turns = manager
+                .load_session_turns(workspace.path(), &branched.session_id)
+                .await
+                .unwrap();
+            assert_eq!(turns.len(), copied);
+            for (index, turn) in turns.iter().enumerate() {
+                let tools = &turn.model_rounds[0].tool_items;
+                assert_eq!(tools[0].tool_call.id, format!("operation-{index}"));
+                let actual = tools[0].tool_result.as_ref().unwrap();
+                assert!(actual.result.get("snapshot_recorded").is_none());
+                let mut expected = recorded.clone();
+                expected
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("snapshot_recorded");
+                assert_eq!(actual.result, expected);
+                assert_eq!(
+                    actual.result_for_assistant.as_deref(),
+                    Some("original assistant result")
+                );
+                assert_eq!(tools[1].tool_result.as_ref().unwrap().result, legacy);
+
+                let context = manager
+                    .load_turn_context_snapshot(workspace.path(), &branched.session_id, index)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let MessageContent::ToolResult {
+                    tool_id,
+                    result,
+                    result_for_assistant,
+                    ..
+                } = &context[0].content
+                else {
+                    panic!("copied tool message")
+                };
+                assert_eq!(tool_id, &format!("operation-{index}"));
+                assert_eq!(result, &expected);
+                assert_eq!(
+                    result_for_assistant.as_deref(),
+                    Some("original assistant result")
+                );
+            }
+        }
+        let source_after = manager
+            .load_session_turns(workspace.path(), &source.session_id)
+            .await
+            .unwrap();
+        assert_eq!(serde_json::to_value(source_after).unwrap(), source_before);
+        assert_eq!(
+            serde_json::to_value(
+                manager
+                    .load_session(workspace.path(), &source.session_id)
+                    .await
+                    .unwrap()
+            )
+            .unwrap(),
+            source_session_before
+        );
+        let context_after = manager
+            .load_turn_context_snapshot(workspace.path(), &source.session_id, 0)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(context_after).unwrap(),
+            serde_json::to_value(context_before).unwrap()
+        );
     }
 
     #[tokio::test]

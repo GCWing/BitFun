@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 
+import { activateSurface, getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { FileOperationToolCard } from './FileOperationToolCard';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
+  snapshotsAvailable: true,
+  emitSnapshotEvent: vi.fn(),
+  getOperationSummary: vi.fn(async () => null),
   currentWorkspace: undefined as undefined | { rootPath: string; connectionId?: string },
   createDiffEditorTab: vi.fn(),
   openFile: vi.fn(),
@@ -74,6 +78,8 @@ vi.mock('@/component-library', () => ({
 
 vi.mock('../../tools/snapshot_system/hooks/useSnapshotState', () => ({
   useSnapshotState: () => ({
+    surfaceEpoch: getActiveSurfaceScope().epoch,
+    snapshotsAvailable: mocks.snapshotsAvailable,
     files: [],
     error: null,
     clearError: vi.fn(),
@@ -86,7 +92,7 @@ vi.mock('../../tools/snapshot_system/core/SnapshotEventBus', () => ({
   },
   SnapshotEventBus: {
     getInstance: () => ({
-      emit: vi.fn(),
+      emit: mocks.emitSnapshotEvent,
     }),
   },
 }));
@@ -118,7 +124,7 @@ vi.mock('../../shared/services/FileTabManager', () => ({
 vi.mock('../../infrastructure/api', () => ({
   snapshotAPI: {
     getOperationDiff: mocks.getOperationDiff,
-    getOperationSummary: vi.fn(async () => null),
+    getOperationSummary: mocks.getOperationSummary,
   },
 }));
 
@@ -134,6 +140,7 @@ describe('FileOperationToolCard', () => {
   let root: Root;
 
   beforeEach(() => {
+    activateSurface('local');
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
     });
@@ -151,6 +158,9 @@ describe('FileOperationToolCard', () => {
     root = createRoot(container);
 
     mocks.currentWorkspace = undefined;
+    mocks.snapshotsAvailable = true;
+    mocks.emitSnapshotEvent.mockClear();
+    mocks.getOperationSummary.mockClear();
     mocks.createDiffEditorTab.mockReset();
     mocks.openFile.mockReset();
     mocks.codePreviewProps = [];
@@ -162,6 +172,129 @@ describe('FileOperationToolCard', () => {
       originalContent: '',
       modifiedContent: '',
       anchorLine: undefined,
+    });
+  });
+
+  it('keeps remote file results usable without summary, diff, or refresh snapshot requests', async () => {
+    mocks.snapshotsAvailable = false;
+    const config = {
+      toolName: 'Edit', displayName: 'Edit', icon: 'EDIT',
+      requiresConfirmation: false, resultDisplayType: 'detailed', displayMode: 'standard',
+    } as ToolCardConfig;
+    const running = {
+      id: 'remote-edit', type: 'tool', toolName: 'Edit', status: 'running',
+      toolCall: {
+        id: 'remote-call', name: 'Edit',
+        input: { file_path: '/workspace/file.ts', old_string: 'old\n', new_string: 'new\nnext\n' },
+      },
+    } as FlowToolItem;
+    await act(async () => {
+      root.render(<FileOperationToolCard toolItem={running} config={config} sessionId="ssh-session" />);
+    });
+    await act(async () => {
+      root.render(<FileOperationToolCard
+        toolItem={{ ...running, status: 'completed', endTime: 10, toolResult: { success: true, result: {} } }}
+        config={config} sessionId="ssh-session"
+      />);
+    });
+
+    expect(mocks.getOperationSummary).not.toHaveBeenCalled();
+    expect(mocks.emitSnapshotEvent).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-bf-change="added"]')?.textContent).toBe('+2');
+    expect(container.querySelector('[data-bf-change="removed"]')?.textContent).toBe('-1');
+    const openButton = container.querySelector('[data-testid="chat-file-change-open-file"]');
+    expect(openButton).not.toBeNull();
+    await act(async () => {
+      openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    expect(mocks.getOperationDiff).not.toHaveBeenCalled();
+    expect(mocks.openFile).toHaveBeenCalledWith(expect.objectContaining({
+      filePath: '/workspace/file.ts', mode: 'agent',
+    }));
+  });
+
+  it('loads a recorded remote operation without enabling incomplete Session snapshots', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.snapshotsAvailable = false;
+    mocks.getOperationDiff.mockResolvedValueOnce({ originalContent: 'before', modifiedContent: 'after', anchorLine: undefined });
+    const config = {
+      toolName: 'Edit', displayName: 'Edit', icon: 'EDIT',
+      requiresConfirmation: false, resultDisplayType: 'detailed', displayMode: 'standard',
+    } as ToolCardConfig;
+    const item = {
+      id: 'recorded-remote-edit', type: 'tool', toolName: 'Edit', status: 'completed', endTime: 10,
+      toolCall: {
+        id: 'recorded-call', name: 'Edit',
+        input: { file_path: '/workspace/file.ts', old_string: 'old', new_string: 'new' },
+      },
+      toolResult: { success: true, result: { snapshot_recorded: true } },
+    } as FlowToolItem;
+    await act(async () => {
+      root.render(<FileOperationToolCard toolItem={item} config={config} sessionId="ssh-session" />);
+    });
+    expect(mocks.getOperationSummary).toHaveBeenCalledWith('ssh-session', 'recorded-call');
+    expect(mocks.emitSnapshotEvent).not.toHaveBeenCalled();
+    const openButton = container.querySelector('[data-testid="chat-file-change-open-file"]');
+    expect(openButton).not.toBeNull();
+    await act(async () => {
+      openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    expect(mocks.getOperationDiff).toHaveBeenCalledWith('ssh-session', '/workspace/file.ts', 'recorded-call');
+    await act(async () => { await vi.advanceTimersByTimeAsync(260); });
+    expect(mocks.createDiffEditorTab).toHaveBeenCalledWith(
+      '/workspace/file.ts', 'file.ts', 'before', 'after', true, 'agent', undefined, undefined, true,
+    );
+    expect(mocks.openFile).not.toHaveBeenCalled();
+
+    mocks.createDiffEditorTab.mockClear();
+    await act(async () => {
+      openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    activateSurface('peer-b');
+    await act(async () => { await vi.advanceTimersByTimeAsync(260); });
+    expect(mocks.createDiffEditorTab).not.toHaveBeenCalled();
+
+  });
+
+  it('replaces an existing remote diff with the selected operation on the same file', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.snapshotsAvailable = false;
+    const tabUtils = await vi.importActual<typeof import('../../shared/utils/tabUtils')>(
+      '../../shared/utils/tabUtils',
+    );
+    mocks.createDiffEditorTab.mockImplementation(tabUtils.createDiffEditorTab);
+    const events: Array<{ duplicateCheckKey: string; replaceExisting: boolean; data: { originalCode: string; modifiedCode: string; readOnly: boolean } }> = [];
+    window.addEventListener('agent-create-tab', event => {
+      events.push((event as CustomEvent).detail);
+    });
+    const config = {
+      toolName: 'Edit', displayName: 'Edit', icon: 'EDIT',
+      requiresConfirmation: false, resultDisplayType: 'detailed', displayMode: 'standard',
+    } as ToolCardConfig;
+    for (const operationId of ['operation-1', 'operation-2']) {
+      mocks.getOperationDiff.mockResolvedValueOnce({
+        originalContent: `${operationId} before`, modifiedContent: `${operationId} after`, anchorLine: undefined,
+      });
+      const item = {
+        id: operationId, type: 'tool', toolName: 'Edit', status: 'completed', endTime: 10,
+        toolCall: {
+          id: operationId, name: 'Edit',
+          input: { file_path: '/workspace/file.ts', old_string: 'old', new_string: 'new' },
+        },
+        toolResult: { success: true, result: { snapshot_recorded: true } },
+      } as FlowToolItem;
+      await act(async () => root.render(<FileOperationToolCard toolItem={item} config={config} sessionId="ssh-session" />));
+      await act(async () => {
+        container.querySelector('[data-testid="chat-file-change-open-file"]')
+          ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(260); });
+    }
+    expect(events).toHaveLength(2);
+    expect(events[0].duplicateCheckKey).toBe(events[1].duplicateCheckKey);
+    expect(events[1]).toMatchObject({
+      replaceExisting: true,
+      data: { originalCode: 'operation-2 before', modifiedCode: 'operation-2 after', readOnly: true },
     });
   });
 
@@ -314,6 +447,8 @@ describe('FileOperationToolCard', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    activateSurface('local');
     act(() => {
       root.unmount();
     });

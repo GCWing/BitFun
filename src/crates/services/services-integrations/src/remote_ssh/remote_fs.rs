@@ -54,6 +54,83 @@ impl RemoteFileService {
         Self { manager }
     }
 
+    pub async fn open_read(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<bitfun_runtime_ports::WorkspaceReader> {
+        self.get_manager(connection_id)
+            .await?
+            .open_workspace_file_read(connection_id, path)
+            .await
+    }
+
+    pub async fn workspace_metadata(
+        &self,
+        connection_id: &str,
+        path: &str,
+        follow_symlinks: bool,
+    ) -> anyhow::Result<Option<bitfun_runtime_ports::WorkspaceMetadata>> {
+        let manager = self.get_manager(connection_id).await?;
+        if manager.is_container_workspace(connection_id).await {
+            return manager
+                .container_workspace_metadata(connection_id, path, follow_symlinks)
+                .await;
+        }
+        let attrs = match if follow_symlinks {
+            manager.sftp_stat(connection_id, path).await
+        } else {
+            manager.sftp_lstat(connection_id, path).await
+        } {
+            Ok(attrs) => attrs,
+            Err(error) if is_sftp_not_found(&error) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        use bitfun_runtime_ports::{WorkspaceMetadata, WorkspacePathKind};
+        let file_type = attrs.file_type();
+        let kind = if file_type.is_symlink() {
+            WorkspacePathKind::Symlink
+        } else if file_type.is_dir() {
+            WorkspacePathKind::Directory
+        } else if file_type.is_file() {
+            WorkspacePathKind::File
+        } else {
+            WorkspacePathKind::Other
+        };
+        Ok(Some(WorkspaceMetadata {
+            kind,
+            size: attrs.size,
+            modified: attrs.mtime.map(|seconds| {
+                std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds as u64)
+            }),
+            permissions: attrs.permissions,
+        }))
+    }
+
+    pub async fn set_permissions(
+        &self,
+        connection_id: &str,
+        path: &str,
+        permissions: u32,
+    ) -> anyhow::Result<()> {
+        self.get_manager(connection_id)
+            .await?
+            .set_workspace_file_permissions(connection_id, path, permissions)
+            .await
+    }
+
+    pub async fn set_modified(
+        &self,
+        connection_id: &str,
+        path: &str,
+        modified: std::time::SystemTime,
+    ) -> anyhow::Result<()> {
+        self.get_manager(connection_id)
+            .await?
+            .set_workspace_file_modified(connection_id, path, modified)
+            .await
+    }
+
     /// Get the SSH manager
     async fn get_manager(
         &self,
@@ -109,6 +186,20 @@ impl RemoteFileService {
                 .await;
         }
         manager.sftp_write(connection_id, path, content).await
+    }
+
+    /// Workspace edits follow the existing target instead of replacing an
+    /// upload destination. Keep generic upload semantics in `write_file`.
+    pub async fn write_workspace_file(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+    ) -> anyhow::Result<()> {
+        self.get_manager(connection_id)
+            .await?
+            .write_workspace_file(connection_id, path, content)
+            .await
     }
 
     /// Write content to a remote file via SFTP with chunked progress
@@ -382,11 +473,26 @@ impl RemoteFileService {
 
     /// Remove a directory and its contents recursively via SFTP
     pub async fn remove_dir_all(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
+        // Match local remove_dir_all: unlink a final symlink without traversing
+        // its target. Recheck at every recursive step, including the root.
+        match self
+            .workspace_metadata(connection_id, path, false)
+            .await?
+            .map(|metadata| metadata.kind)
+        {
+            Some(bitfun_runtime_ports::WorkspacePathKind::Symlink) => {
+                return self.remove_file(connection_id, path).await
+            }
+            Some(bitfun_runtime_ports::WorkspacePathKind::Directory) => {}
+            Some(_) => anyhow::bail!("Remote path is not a directory: {path}"),
+            None => anyhow::bail!("Remote directory does not exist: {path}"),
+        }
         // First, delete all contents
-        if let Ok(entries) = self.read_dir(connection_id, path).await {
+        {
+            let entries = self.read_dir(connection_id, path).await?;
             for entry in entries {
                 let entry_path = entry.path.clone();
-                if entry.is_dir {
+                if entry.is_dir && !entry.is_symlink {
                     Box::pin(self.remove_dir_all(connection_id, &entry_path)).await?;
                 } else {
                     let manager = self.get_manager(connection_id).await?;
@@ -447,10 +553,7 @@ impl RemoteFileService {
             return manager.container_stat(connection_id, path).await;
         }
 
-        match manager.sftp_stat(connection_id, path).await {
-            Ok(attrs) => Ok(Some(remote_file_entry_from_metadata(path, attrs))),
-            Err(_) => Ok(None),
-        }
+        remote_file_entry_from_stat_result(path, manager.sftp_stat(connection_id, path).await)
     }
 
     /// Get metadata for one exact path without following its final symlink.
@@ -463,11 +566,18 @@ impl RemoteFileService {
         if manager.is_container_workspace(connection_id).await {
             return manager.container_stat(connection_id, path).await;
         }
-        match manager.sftp_lstat(connection_id, path).await {
-            Ok(attrs) => Ok(Some(remote_file_entry_from_metadata(path, attrs))),
-            Err(error) if is_sftp_not_found(&error) => Ok(None),
-            Err(error) => Err(error),
-        }
+        remote_file_entry_from_stat_result(path, manager.sftp_lstat(connection_id, path).await)
+    }
+}
+
+fn remote_file_entry_from_stat_result(
+    path: &str,
+    result: anyhow::Result<russh_sftp::client::fs::Metadata>,
+) -> anyhow::Result<Option<RemoteFileEntry>> {
+    match result {
+        Ok(attrs) => Ok(Some(remote_file_entry_from_metadata(path, attrs))),
+        Err(error) if is_sftp_not_found(&error) => Ok(None),
+        Err(error) => Err(error),
     }
 }
 
@@ -561,7 +671,9 @@ fn format_permissions(mode: Option<u32>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_sftp_not_found, remote_file_entry_from_metadata, remote_posix_basename};
+    use super::{
+        remote_file_entry_from_metadata, remote_file_entry_from_stat_result, remote_posix_basename,
+    };
     use russh_sftp::client::error::Error as SftpError;
     use russh_sftp::protocol::{Status, StatusCode};
 
@@ -587,9 +699,25 @@ mod tests {
             .context("Failed to inspect remote path")
         };
 
-        assert!(is_sftp_not_found(&error(StatusCode::NoSuchFile)));
-        assert!(!is_sftp_not_found(&error(StatusCode::PermissionDenied)));
-        assert!(!is_sftp_not_found(&error(StatusCode::ConnectionLost)));
+        assert!(remote_file_entry_from_stat_result(
+            "/workspace/missing",
+            Err(error(StatusCode::NoSuchFile))
+        )
+        .expect("missing path is not a transport error")
+        .is_none());
+        for status in [StatusCode::PermissionDenied, StatusCode::ConnectionLost] {
+            let result = remote_file_entry_from_stat_result("/workspace/file", Err(error(status)))
+                .expect_err("access and transport failures must remain errors");
+            assert!(matches!(
+                result.downcast_ref::<SftpError>(),
+                Some(SftpError::Status(actual)) if actual.status_code == status
+            ));
+        }
+        assert!(remote_file_entry_from_stat_result(
+            "/workspace/file",
+            Err(anyhow::anyhow!("SSH connection unavailable"))
+        )
+        .is_err());
     }
 
     #[test]

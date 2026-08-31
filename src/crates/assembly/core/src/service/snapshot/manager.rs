@@ -2,16 +2,20 @@ use crate::agentic::tools::framework::{
     DynamicToolInfo, Tool, ToolExposure, ToolResult, ToolUseContext,
 };
 use crate::agentic::tools::registry::ToolRegistry;
-use crate::service::remote_ssh::workspace_state::is_remote_path;
 use crate::service::snapshot::service::SnapshotService;
 use crate::service::snapshot::snapshot_core::SessionStats;
 use crate::service::snapshot::types::{
     OperationType, SnapshotConfig, SnapshotError, SnapshotResult,
 };
-use crate::service::workspace_runtime::get_workspace_runtime_service_arc;
+use crate::service::workspace_runtime::{
+    get_workspace_runtime_service_arc, WorkspaceRuntimeContext, WorkspaceRuntimeTarget,
+};
 use async_trait::async_trait;
-use log::{debug, error, info, warn};
+use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
+use bitfun_services_core::workspace_identity::WorkspaceSessionIdentity;
+use log::{debug, info, warn};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock as StdRwLock};
@@ -246,6 +250,32 @@ impl SnapshotManager {
 
         Ok(serde_json::json!({
             "file_path": file_path.to_string_lossy(),
+            "original_content": original,
+            "modified_content": modified,
+            "anchor_line": anchor_line,
+        }))
+    }
+
+    pub async fn get_operation_diff_before(
+        &self,
+        session_id: &str,
+        file_path: &str,
+        operation_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<serde_json::Value> {
+        let (original, modified, anchor_line) = self
+            .snapshot_service
+            .read()
+            .await
+            .get_operation_diff_before(
+                session_id,
+                Path::new(file_path),
+                operation_id,
+                max_turn_exclusive,
+            )
+            .await?;
+        Ok(serde_json::json!({
+            "file_path": file_path,
             "original_content": original,
             "modified_content": modified,
             "anchor_line": anchor_line,
@@ -488,6 +518,232 @@ fn snapshot_workspace_key(workspace_dir: &Path) -> PathBuf {
     dunce::canonicalize(workspace_dir).unwrap_or_else(|_| workspace_dir.to_path_buf())
 }
 
+/// The logical path alone is not an identity: two SSH profiles may point at
+/// the same path and host while accessing different users or containers.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct BoundSnapshotKey {
+    identity: WorkspaceSessionIdentity,
+    runtime_root: PathBuf,
+}
+
+#[derive(Default)]
+struct BoundSnapshotManagers {
+    writers: HashMap<BoundSnapshotKey, Arc<SnapshotManager>>,
+    views: HashMap<BoundSnapshotKey, (Arc<SnapshotManager>, bool)>,
+}
+
+fn bound_snapshot_managers() -> &'static AsyncMutex<BoundSnapshotManagers> {
+    static MANAGERS: OnceLock<AsyncMutex<BoundSnapshotManagers>> = OnceLock::new();
+    MANAGERS.get_or_init(|| AsyncMutex::new(BoundSnapshotManagers::default()))
+}
+
+fn bound_snapshot_init_locks() -> &'static AsyncMutex<HashMap<BoundSnapshotKey, Arc<AsyncMutex<()>>>>
+{
+    static LOCKS: OnceLock<AsyncMutex<HashMap<BoundSnapshotKey, Arc<AsyncMutex<()>>>>> =
+        OnceLock::new();
+    LOCKS.get_or_init(|| AsyncMutex::new(HashMap::new()))
+}
+
+fn bound_snapshot_context(
+    identity: &WorkspaceSessionIdentity,
+    mut context: WorkspaceRuntimeContext,
+) -> SnapshotResult<WorkspaceRuntimeContext> {
+    match &context.target {
+        WorkspaceRuntimeTarget::LocalWorkspace { workspace_root } => {
+            if identity.remote_connection_id.is_some()
+                || identity.hostname
+                    != bitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
+                || snapshot_workspace_key(workspace_root)
+                    != snapshot_workspace_key(Path::new(&identity.logical_workspace_path))
+            {
+                return Err(SnapshotError::ConfigError(
+                    "Snapshot workspace identity does not match its local runtime context".into(),
+                ));
+            }
+        }
+        WorkspaceRuntimeTarget::RemoteWorkspaceMirror {
+            ssh_host,
+            remote_root,
+        } => {
+            if identity.hostname != *ssh_host
+                || identity.logical_workspace_path != *remote_root
+                || identity.hostname.trim().is_empty()
+                || identity
+                    .remote_connection_id
+                    .as_deref()
+                    .is_none_or(|id| id.trim().is_empty())
+                || !remote_root.starts_with('/')
+                || remote_root.contains('\0')
+                || remote_root
+                    .split('/')
+                    .any(|component| matches!(component, "." | ".."))
+            {
+                return Err(SnapshotError::ConfigError(
+                    "Snapshot workspace identity does not match its remote runtime context".into(),
+                ));
+            }
+            // Existing mirrors are shared by host+path and cannot prove which
+            // SSH profile wrote legacy snapshots. Keep those files untouched;
+            // all new remote snapshots have a connection-scoped local owner.
+            let encoded_identity = serde_json::to_vec(&(
+                &identity.hostname,
+                &identity.logical_workspace_path,
+                &identity.remote_connection_id,
+            ))?;
+            let scope = format!("{:x}", Sha256::digest(encoded_identity));
+            context.snapshots_dir = context
+                .snapshots_dir
+                .join("workspace-identities")
+                .join(&scope);
+            context.snapshot_by_hash_dir = context.snapshots_dir.join("by_hash");
+            context.snapshot_metadata_dir = context.snapshots_dir.join("metadata");
+            context.snapshot_baselines_dir = context.snapshots_dir.join("baselines");
+            context.snapshot_operations_dir = context.snapshots_dir.join("operations");
+            context.locks_dir = context.locks_dir.join("snapshot-identities").join(scope);
+        }
+    }
+    Ok(context)
+}
+
+/// Bind the verified workspace identity and its filesystem at assembly time.
+/// The caller must resolve both from the same WorkspaceBinding; this function
+/// never selects a transport by looking up a path on the controller.
+pub async fn get_or_create_snapshot_manager_with_workspace(
+    identity: &WorkspaceSessionIdentity,
+    workspace_fs: Arc<dyn WorkspaceFileSystem>,
+    runtime_context: WorkspaceRuntimeContext,
+    config: Option<SnapshotConfig>,
+) -> SnapshotResult<Arc<SnapshotManager>> {
+    open_bound_snapshot_manager(identity, Some(workspace_fs), runtime_context, config, false).await
+}
+
+/// Open connection-scoped persisted facts without creating any runtime state.
+pub async fn open_snapshot_manager_for_workspace_view(
+    identity: &WorkspaceSessionIdentity,
+    workspace_fs: Option<Arc<dyn WorkspaceFileSystem>>,
+    runtime_context: WorkspaceRuntimeContext,
+) -> SnapshotResult<Arc<SnapshotManager>> {
+    open_bound_snapshot_manager(identity, workspace_fs, runtime_context, None, true).await
+}
+
+/// Read recorded operation history from controller storage. This does not
+/// connect to SSH, create runtime directories or infer a connection from paths.
+pub async fn open_snapshot_history_for_workspace(
+    identity: &WorkspaceSessionIdentity,
+) -> SnapshotResult<Arc<SnapshotManager>> {
+    let runtime_service = get_workspace_runtime_service_arc();
+    let context = if identity.remote_connection_id.is_some() {
+        runtime_service
+            .context_for_remote_workspace(&identity.hostname, &identity.logical_workspace_path)
+    } else {
+        runtime_service.context_for_local_workspace(Path::new(&identity.logical_workspace_path))
+    };
+    open_snapshot_manager_for_workspace_view(identity, None, context).await
+}
+
+async fn open_bound_snapshot_manager(
+    identity: &WorkspaceSessionIdentity,
+    workspace_fs: Option<Arc<dyn WorkspaceFileSystem>>,
+    runtime_context: WorkspaceRuntimeContext,
+    config: Option<SnapshotConfig>,
+    read_only: bool,
+) -> SnapshotResult<Arc<SnapshotManager>> {
+    let runtime_context = bound_snapshot_context(identity, runtime_context)?;
+    if matches!(
+        runtime_context.target,
+        WorkspaceRuntimeTarget::LocalWorkspace { .. }
+    ) {
+        return if read_only {
+            open_snapshot_manager_for_view(Path::new(&identity.logical_workspace_path)).await
+        } else {
+            get_or_create_snapshot_manager(PathBuf::from(&identity.logical_workspace_path), config)
+                .await
+        };
+    }
+    let key = BoundSnapshotKey {
+        identity: identity.clone(),
+        runtime_root: runtime_context.runtime_root.clone(),
+    };
+    let init_lock = bound_snapshot_init_locks()
+        .lock()
+        .await
+        .entry(key.clone())
+        .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+        .clone();
+    let _guard = init_lock.lock().await;
+    {
+        let managers = bound_snapshot_managers().lock().await;
+        if let Some(existing) = managers.writers.get(&key) {
+            return Ok(existing.clone());
+        }
+        if read_only {
+            if let Some((existing, has_filesystem)) = managers.views.get(&key) {
+                if *has_filesystem || workspace_fs.is_none() {
+                    return Ok(existing.clone());
+                }
+            }
+        }
+    }
+    if !read_only {
+        for directory in [
+            &runtime_context.snapshots_dir,
+            &runtime_context.snapshot_by_hash_dir,
+            &runtime_context.snapshot_metadata_dir,
+            &runtime_context.snapshot_baselines_dir,
+            &runtime_context.snapshot_operations_dir,
+            &runtime_context.locks_dir,
+        ] {
+            tokio::fs::create_dir_all(directory).await?;
+        }
+    }
+    let has_filesystem = workspace_fs.is_some();
+    let mut service = match workspace_fs {
+        Some(fs) => SnapshotService::with_workspace_fs(
+            PathBuf::from(&identity.logical_workspace_path),
+            runtime_context,
+            config,
+            fs,
+        ),
+        None => SnapshotService::new(
+            PathBuf::from(&identity.logical_workspace_path),
+            runtime_context,
+            config,
+        ),
+    };
+    if read_only {
+        service.initialize_for_view().await?;
+    } else {
+        service.initialize().await?;
+    }
+    let manager = Arc::new(SnapshotManager {
+        snapshot_service: Arc::new(RwLock::new(service)),
+    });
+    let mut managers = bound_snapshot_managers().lock().await;
+    if read_only {
+        managers
+            .views
+            .insert(key, (manager.clone(), has_filesystem));
+    } else {
+        managers.views.remove(&key);
+        managers.writers.insert(key, manager.clone());
+    }
+    Ok(manager)
+}
+
+#[cfg(test)]
+pub(super) async fn clear_bound_snapshot_manager_for_test(
+    identity: &WorkspaceSessionIdentity,
+    runtime_root: &Path,
+) {
+    let key = BoundSnapshotKey {
+        identity: identity.clone(),
+        runtime_root: runtime_root.into(),
+    };
+    let mut managers = bound_snapshot_managers().lock().await;
+    managers.writers.remove(&key);
+    managers.views.remove(&key);
+}
+
 #[cfg(test)]
 static SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST: AtomicUsize = AtomicUsize::new(0);
 #[cfg(test)]
@@ -570,6 +826,15 @@ pub fn get_snapshot_wrapped_tools() -> Vec<Arc<dyn Tool>> {
 /// Wraps file-modification tools with snapshot functionality.
 struct WrappedTool {
     original_tool: Arc<dyn Tool>,
+}
+
+/// Prepared tracking state, held across the single underlying tool invocation.
+struct PreparedFileModification {
+    snapshot_service: tokio::sync::OwnedRwLockReadGuard<SnapshotService>,
+    session_id: String,
+    operation_id: String,
+    file_path: PathBuf,
+    intercept_ms: u64,
 }
 
 impl WrappedTool {
@@ -691,11 +956,12 @@ impl Tool for WrappedTool {
     }
 
     fn render_result_for_assistant(&self, output: &Value) -> String {
-        let original_render = self.original_tool.render_result_for_assistant(output);
-        format!(
-            "{}\n\nModification recorded to snapshot system, can be reviewed and managed in the review panel.",
-            original_render
-        )
+        let rendered = self.original_tool.render_result_for_assistant(output);
+        if output.get("snapshot_recorded").and_then(Value::as_bool) == Some(true) {
+            format!("{rendered}\nOperation recorded by the snapshot system.")
+        } else {
+            rendered
+        }
     }
 
     fn render_tool_use_message(
@@ -714,8 +980,7 @@ impl Tool for WrappedTool {
     }
 
     fn render_tool_result_message(&self, output: &Value) -> String {
-        let original_message = self.original_tool.render_tool_result_message(output);
-        format!("{} recorded to snapshot", original_message)
+        self.original_tool.render_tool_result_message(output)
     }
 
     async fn call_impl(
@@ -723,29 +988,86 @@ impl Tool for WrappedTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
-        if Self::is_file_modification_tool_name(self.name()) {
+        let mut snapshot_warning = None;
+        let prepared = if Self::is_file_modification_tool_name(self.name()) {
             debug!(
                 "Intercepting file modification tool: tool_name={}",
                 self.name()
             );
 
-            self.ensure_delete_snapshot_target_supported(input, context)?;
+            self.ensure_delete_snapshot_target_supported(input, context)
+                .await?;
 
-            match self.handle_file_modification_internal(input, context).await {
-                Ok(results) => {
-                    return Ok(results);
+            match self.prepare_file_modification(input, context).await {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    warn!(
+                        "Snapshot preparation failed; executing tool without tracking: tool_name={} error={}",
+                        self.name(), error
+                    );
+                    snapshot_warning = Some(format!(
+                        "Snapshot tracking could not start: {}. Snapshot review and rollback may be unavailable for this modification. Do not repeat the tool call to repair snapshot tracking.",
+                        error
+                    ));
+                    None
                 }
-                Err(e) => {
-                    warn!("Snapshot processing failed, falling back to original tool: tool_name={} error={}", self.name(), e);
-                    let error_msg = format!("{}", e);
-                    if error_msg.contains("file not found") || error_msg.contains("not exist") {
-                        warn!("Possible workspace path mismatch, check snapshot workspace and global workspace consistency");
-                    }
+            }
+        } else {
+            None
+        };
+
+        // A tool error can follow a partial mutation. Neither it nor a tracking
+        // error permits invoking the tool again.
+        let start_time = Instant::now();
+        let mut results = self.original_tool.call(input, context).await?;
+        let tool_call_ms = crate::util::elapsed_ms_u64(start_time);
+
+        if let Some(prepared) = prepared {
+            let complete_started_at = Instant::now();
+            if let Err(error) = prepared
+                .snapshot_service
+                .complete_file_modification(
+                    &prepared.session_id,
+                    &prepared.operation_id,
+                    tool_call_ms,
+                )
+                .await
+            {
+                warn!(
+                    "Snapshot completion failed after tool execution; preserving tool result: tool_name={} operation_id={} error={}",
+                    self.name(), prepared.operation_id, error
+                );
+                snapshot_warning = Some(format!(
+                    "The tool completed, but snapshot tracking could not finish: {}. Snapshot review and rollback may be unavailable for this modification. The tool was not repeated; do not repeat it to repair snapshot tracking.",
+                    error
+                ));
+            } else {
+                if let Some(ToolResult::Result {
+                    data: Value::Object(data),
+                    ..
+                }) = results.last_mut()
+                {
+                    // Additive evidence for consumers of persisted tool results;
+                    // legacy, skipped and failed tracking never receive it.
+                    data.insert("snapshot_recorded".into(), Value::Bool(true));
                 }
+                let complete_ms = crate::util::elapsed_ms_u64(complete_started_at);
+                let total_ms = prepared
+                    .intercept_ms
+                    .saturating_add(tool_call_ms)
+                    .saturating_add(complete_ms);
+                debug!(
+                    "File modification tool completed: tool_name={}, operation_id={}, total_ms={}, intercept_ms={}, tool_call_ms={}, complete_ms={}, file_path={}",
+                    self.name(), prepared.operation_id, total_ms, prepared.intercept_ms,
+                    tool_call_ms, complete_ms, prepared.file_path.display()
+                );
             }
         }
 
-        self.original_tool.call(input, context).await
+        if let Some(warning) = snapshot_warning {
+            self.append_snapshot_warning(&mut results, &warning);
+        }
+        Ok(results)
     }
 }
 
@@ -753,7 +1075,7 @@ impl WrappedTool {
     /// Snapshot storage currently preserves file bytes, not link objects. A
     /// tracked Delete must therefore stop before removing a link instead of
     /// falling back to an operation that cannot be rolled back faithfully.
-    fn ensure_delete_snapshot_target_supported(
+    async fn ensure_delete_snapshot_target_supported(
         &self,
         input: &Value,
         context: &ToolUseContext,
@@ -766,19 +1088,18 @@ impl WrappedTool {
             .extract_file_path(input, context)
             .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?;
         let resolved = context.resolve_tool_path(raw_path.to_string_lossy().as_ref())?;
-        if resolved.uses_remote_workspace_backend() {
+        if resolved.is_runtime_artifact() {
             return Ok(());
         }
-
-        match std::fs::symlink_metadata(&resolved.resolved_path) {
-            Ok(metadata) if is_symlink_or_reparse_point(&metadata) => {
+        let workspace_fs = context.file_system_for_path(&resolved)?;
+        match workspace_fs.metadata(&resolved.resolved_path, false).await {
+            Ok(Some(metadata)) if matches!(metadata.kind, WorkspacePathKind::Symlink | WorkspacePathKind::Other) => {
                 Err(crate::util::errors::BitFunError::Tool(format!(
                     "Snapshot-tracked Delete cannot remove a symbolic link or reparse point because rollback cannot restore the link object: {}. The delete was not performed",
                     resolved.logical_path
                 )))
             }
             Ok(_) => Ok(()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(crate::util::errors::BitFunError::Tool(format!(
                 "Failed to inspect Delete target for Snapshot safety: path={} error={}",
                 resolved.logical_path, error
@@ -786,12 +1107,13 @@ impl WrappedTool {
         }
     }
 
-    /// Handles a file-modification tool.
-    async fn handle_file_modification_internal(
+    /// Prepare tracking without invoking the underlying tool. Only failures in
+    /// this stage may safely degrade to execution without a snapshot.
+    async fn prepare_file_modification(
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+    ) -> crate::util::errors::BitFunResult<Option<PreparedFileModification>> {
         let session_id = context.session_id.clone().ok_or_else(|| {
             crate::util::errors::BitFunError::Tool(
                 "session_id is required in ToolUseContext".to_string(),
@@ -803,62 +1125,44 @@ impl WrappedTool {
             Err(e) => return Err(crate::util::errors::BitFunError::Tool(e.to_string())),
         };
 
-        let snapshot_workspace = context.workspace_root().map(PathBuf::from).ok_or_else(|| {
+        let resolved = context.resolve_tool_path(raw_path.to_string_lossy().as_ref())?;
+        if resolved.is_runtime_artifact() {
+            // Artifacts belong to controller storage, not workspace history.
+            return Ok(None);
+        }
+        let binding = context.workspace.as_ref().ok_or_else(|| {
             crate::util::errors::BitFunError::Tool(
-                "workspace is required in ToolUseContext for snapshot tracking".to_string(),
+                "workspace is required in ToolUseContext for snapshot tracking".into(),
             )
         })?;
-
-        // Remote workspaces: skip snapshot tracking, just execute the tool directly
-        if is_remote_path(snapshot_workspace.to_string_lossy().as_ref()).await {
-            debug!(
-                "Skipping snapshot for remote workspace: workspace={}",
-                snapshot_workspace.display()
-            );
-            return self.original_tool.call(input, context).await;
-        }
-
-        let snapshot_manager = get_or_create_snapshot_manager(snapshot_workspace.clone(), None)
+        let workspace_fs = context.file_system_for_path(&resolved)?;
+        let runtime_context = context.ensure_current_workspace_runtime().await?;
+        let snapshot_manager = get_or_create_snapshot_manager_with_workspace(
+            &binding.session_identity,
+            workspace_fs.clone(),
+            runtime_context,
+            None,
+        )
+        .await
+        .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?;
+        let file_path = PathBuf::from(&resolved.resolved_path);
+        let file_existed_before = workspace_fs
+            .metadata(&resolved.resolved_path, true)
             .await
-            .map_err(|e| crate::util::errors::BitFunError::Tool(e.to_string()))?;
-
-        let file_path = if raw_path.is_absolute() {
-            raw_path.clone()
-        } else {
-            snapshot_workspace.join(&raw_path)
-        };
-
+            .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?
+            .is_some();
         let is_create_tool = matches!(self.name(), "Write" | "write_file" | "create_file");
-
-        // For local workspaces only: verify the file exists before attempting to snapshot
-        if !is_remote_path(file_path.to_string_lossy().as_ref()).await
-            && !file_path.exists()
-            && !is_create_tool
-        {
-            error!(
-                "File not found: file_path={} raw_path={} snapshot_workspace={}",
-                file_path.display(),
-                raw_path.display(),
-                snapshot_workspace.display()
-            );
-
+        if !file_existed_before && !is_create_tool {
             return Err(crate::util::errors::BitFunError::Tool(format!(
-                "File not found: {} (Snapshot workspace: {})",
-                file_path.display(),
-                snapshot_workspace.display()
+                "File not found: {}",
+                resolved.logical_path
             )));
         }
-
-        if is_create_tool && !file_path.exists() {
-            debug!("Creating new file: file_path={}", file_path.display());
-        }
-
-        let file_existed_before = file_path.exists();
         let operation_type = self.get_operation_type_internal(file_existed_before);
         let turn_index = self.extract_turn_index(context);
 
         let snapshot_service = snapshot_manager.get_snapshot_service();
-        let snapshot_service = snapshot_service.read().await;
+        let snapshot_service = snapshot_service.read_owned().await;
         let intercept_started_at = std::time::Instant::now();
         let operation_id = snapshot_service
             .intercept_file_modification(
@@ -879,31 +1183,31 @@ impl WrappedTool {
             operation_id
         );
 
-        let start_time = std::time::Instant::now();
-        let results = self.original_tool.call(input, context).await?;
-        let tool_call_ms = crate::util::elapsed_ms_u64(start_time);
-
-        let complete_started_at = std::time::Instant::now();
-        snapshot_service
-            .complete_file_modification(&session_id, &operation_id, tool_call_ms)
-            .await
-            .map_err(|e| crate::util::errors::BitFunError::Tool(e.to_string()))?;
-        let complete_ms = crate::util::elapsed_ms_u64(complete_started_at);
-        let total_ms = intercept_ms
-            .saturating_add(tool_call_ms)
-            .saturating_add(complete_ms);
-
-        debug!(
-            "File modification tool completed: tool_name={}, operation_id={}, total_ms={}, intercept_ms={}, tool_call_ms={}, complete_ms={}, file_path={}",
-            self.name(),
+        Ok(Some(PreparedFileModification {
+            snapshot_service,
+            session_id,
             operation_id,
-            total_ms,
+            file_path,
             intercept_ms,
-            tool_call_ms,
-            complete_ms,
-            file_path.display()
-        );
-        Ok(results)
+        }))
+    }
+
+    fn append_snapshot_warning(&self, results: &mut Vec<ToolResult>, warning: &str) {
+        // The pipeline consumes the last result and exposes its entire data
+        // when no assistant text was supplied. Keep both contracts intact.
+        if let Some(ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        }) = results.last_mut()
+        {
+            let message = result_for_assistant.get_or_insert_with(|| data.to_string());
+            message.push_str("\n\nWarning: ");
+            message.push_str(warning);
+        } else if let Some(data) = results.last().map(ToolResult::content) {
+            let message = format!("{}\n\nWarning: {}", data, warning);
+            results.push(ToolResult::ok(data, Some(message)));
+        }
     }
 
     /// Extracts the turn index.
@@ -966,22 +1270,6 @@ impl WrappedTool {
             _ => OperationType::Modify,
         }
     }
-}
-
-fn is_symlink_or_reparse_point(metadata: &std::fs::Metadata) -> bool {
-    if metadata.file_type().is_symlink() {
-        return true;
-    }
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
-    }
-
-    #[cfg(not(windows))]
-    false
 }
 
 pub async fn get_or_create_snapshot_manager(
@@ -1118,7 +1406,7 @@ mod tests {
         snapshot_manager_new_count_for_test, snapshot_manager_test_serial_lock,
         wrap_tool_for_snapshot_tracking,
     };
-    use crate::agentic::tools::framework::ToolUseContext;
+    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::implementations::delete_file_tool::DeleteFileTool;
     use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -1129,7 +1417,9 @@ mod tests {
         set_workspace_runtime_service_for_current_test, WorkspaceRuntimeService,
     };
     use std::collections::HashMap;
+    use std::io::Write;
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
     use uuid::Uuid;
@@ -1172,6 +1462,312 @@ mod tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
+    }
+
+    struct CountingMutationTool {
+        file_path: PathBuf,
+        calls: Arc<AtomicUsize>,
+        block_metadata_after_mutation: Option<PathBuf>,
+        fail_after_mutation: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl Tool for CountingMutationTool {
+        fn name(&self) -> &str {
+            "Write"
+        }
+
+        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+            Ok(self.short_description())
+        }
+
+        fn short_description(&self) -> String {
+            "Count and append a mutation".to_string()
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            serde_json::json!({ "type": "object" })
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.file_path)
+                .expect("mutation target");
+            writeln!(file, "mutation").expect("append mutation");
+            if let Some(metadata_dir) = &self.block_metadata_after_mutation {
+                block_metadata_storage(metadata_dir);
+            }
+            if self.fail_after_mutation {
+                return Err(crate::util::errors::BitFunError::Tool(
+                    "original tool error after mutation".to_string(),
+                ));
+            }
+            Ok(vec![ToolResult::ok(
+                serde_json::json!({ "success": true, "mutated": true }),
+                Some("Mutation applied".to_string()),
+            )])
+        }
+    }
+
+    fn block_metadata_storage(metadata_dir: &Path) {
+        if metadata_dir.is_dir() {
+            std::fs::rename(metadata_dir, metadata_dir.with_extension("saved"))
+                .expect("preserve metadata fixtures");
+            std::fs::write(metadata_dir, "blocked metadata storage")
+                .expect("block metadata storage");
+        }
+    }
+
+    fn assert_single_mutation(file: &Path, calls: &AtomicUsize, expected: &str) {
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "tool must execute exactly once"
+        );
+        assert_eq!(std::fs::read_to_string(file).unwrap(), expected);
+    }
+
+    fn assert_success_with_snapshot_warning(results: &[ToolResult], expected_warning: &str) {
+        let [ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        }] = results
+        else {
+            panic!("original result envelope must be preserved: {results:?}");
+        };
+        assert_eq!(
+            data,
+            &serde_json::json!({ "success": true, "mutated": true })
+        );
+        let message = result_for_assistant.as_deref().expect("assistant result");
+        assert!(
+            message.starts_with("Mutation applied\n\nWarning: "),
+            "{message}"
+        );
+        assert!(message.contains(expected_warning), "{message}");
+        assert!(
+            message.contains("Do not repeat") || message.contains("do not repeat"),
+            "{message}"
+        );
+        assert!(!message.contains("recorded to snapshot"), "{message}");
+    }
+
+    #[tokio::test]
+    async fn wrapped_mutation_executes_once_and_records_snapshot() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        let file = workspace.path().join("mutation.txt");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let original: Arc<dyn Tool> = Arc::new(CountingMutationTool {
+            file_path: file.clone(),
+            calls: calls.clone(),
+            block_metadata_after_mutation: None,
+            fail_after_mutation: false,
+        });
+        let tool = wrap_tool_for_snapshot_tracking(original.clone());
+        let input = serde_json::json!({ "file_path": "mutation.txt" });
+        let context = tool_context(workspace.path().to_path_buf(), "single-mutation");
+
+        let results = tool
+            .call(&input, &context)
+            .await
+            .expect("mutation succeeds");
+
+        assert_single_mutation(&file, &calls, "mutation\n");
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("result")
+        };
+        assert_eq!(
+            data.get("snapshot_recorded"),
+            Some(&serde_json::Value::Bool(true))
+        );
+        assert_eq!(result_for_assistant.as_deref(), Some("Mutation applied"));
+        assert_eq!(
+            tool.render_result_for_assistant(&input),
+            original.render_result_for_assistant(&input)
+        );
+        assert_eq!(
+            tool.render_tool_result_message(&input),
+            original.render_tool_result_message(&input)
+        );
+        let manager =
+            get_snapshot_manager_for_workspace(workspace.path()).expect("snapshot manager");
+        assert_eq!(
+            manager.get_session_files("single-mutation").await.unwrap(),
+            vec![file.clone()]
+        );
+        manager
+            .rollback_session("single-mutation")
+            .await
+            .expect("rollback recorded mutation");
+        assert!(!file.exists());
+    }
+
+    #[tokio::test]
+    async fn wrapped_mutation_executes_once_when_snapshot_start_fails() {
+        let workspace = TestWorkspace::new();
+        let runtime = Arc::new(WorkspaceRuntimeService::new(Arc::new(
+            PathManager::with_user_root_for_tests(workspace.path().join("user-root")),
+        )));
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(runtime.clone());
+        let runtime_context = runtime
+            .ensure_local_workspace_runtime(workspace.path())
+            .await
+            .unwrap()
+            .context;
+        get_or_create_snapshot_manager(workspace.path().to_path_buf(), None)
+            .await
+            .unwrap();
+        block_metadata_storage(&runtime_context.snapshot_metadata_dir);
+        let file = workspace.path().join("mutation.txt");
+        std::fs::write(&file, "before\n").unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let tool = wrap_tool_for_snapshot_tracking(Arc::new(CountingMutationTool {
+            file_path: file.clone(),
+            calls: calls.clone(),
+            block_metadata_after_mutation: None,
+            fail_after_mutation: false,
+        }));
+
+        let results = tool
+            .call(
+                &serde_json::json!({ "file_path": "mutation.txt" }),
+                &tool_context(workspace.path().to_path_buf(), "failed-start"),
+            )
+            .await
+            .expect("snapshot start failure must preserve tool success");
+
+        assert_single_mutation(&file, &calls, "before\nmutation\n");
+        assert_success_with_snapshot_warning(&results, "Snapshot tracking could not start");
+    }
+
+    #[tokio::test]
+    async fn wrapped_mutation_does_not_repeat_when_snapshot_completion_fails() {
+        let workspace = TestWorkspace::new();
+        let runtime = Arc::new(WorkspaceRuntimeService::new(Arc::new(
+            PathManager::with_user_root_for_tests(workspace.path().join("user-root")),
+        )));
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(runtime.clone());
+        let runtime_context = runtime
+            .ensure_local_workspace_runtime(workspace.path())
+            .await
+            .unwrap()
+            .context;
+        let file = workspace.path().join("mutation.txt");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let tool = wrap_tool_for_snapshot_tracking(Arc::new(CountingMutationTool {
+            file_path: file.clone(),
+            calls: calls.clone(),
+            block_metadata_after_mutation: Some(runtime_context.snapshot_metadata_dir),
+            fail_after_mutation: false,
+        }));
+
+        let results = tool
+            .call(
+                &serde_json::json!({ "file_path": "mutation.txt" }),
+                &tool_context(workspace.path().to_path_buf(), "failed-completion"),
+            )
+            .await
+            .expect("snapshot completion failure must preserve tool success");
+
+        assert_single_mutation(&file, &calls, "mutation\n");
+        assert_success_with_snapshot_warning(&results, "snapshot tracking could not finish");
+    }
+
+    #[tokio::test]
+    async fn wrapped_mutation_preserves_tool_error_without_repeating() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
+        let file = workspace.path().join("mutation.txt");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let tool = wrap_tool_for_snapshot_tracking(Arc::new(CountingMutationTool {
+            file_path: file.clone(),
+            calls: calls.clone(),
+            block_metadata_after_mutation: None,
+            fail_after_mutation: true,
+        }));
+
+        let error = tool
+            .call(
+                &serde_json::json!({ "file_path": "mutation.txt" }),
+                &tool_context(workspace.path().to_path_buf(), "failed-tool"),
+            )
+            .await
+            .expect_err("original tool error must propagate");
+
+        assert!(
+            error
+                .to_string()
+                .contains("original tool error after mutation"),
+            "{error}"
+        );
+        assert_single_mutation(&file, &calls, "mutation\n");
+    }
+
+    #[cfg(feature = "remote-workspace")]
+    #[tokio::test]
+    async fn wrapped_remote_mutation_preserves_tool_error_without_repeating() {
+        let workspace = TestWorkspace::new();
+        let remote_root = format!("/bitfun-tests/snapshot-single-call/{}", Uuid::new_v4());
+        let connection_id = format!("snapshot-test-{}", Uuid::new_v4());
+        let mut context = tool_context(PathBuf::from(&remote_root), "failed-remote-tool");
+        context.workspace = Some(WorkspaceBinding::new_remote(
+            None,
+            PathBuf::from(&remote_root),
+            connection_id.clone(),
+            "test".into(),
+            bitfun_services_core::workspace_identity::WorkspaceSessionIdentity {
+                hostname: "test-host".into(),
+                logical_workspace_path: remote_root.clone(),
+                remote_connection_id: Some(connection_id),
+            },
+        ));
+        let file = workspace.path().join("mutation.txt");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let tool = wrap_tool_for_snapshot_tracking(Arc::new(CountingMutationTool {
+            file_path: file.clone(),
+            calls: calls.clone(),
+            block_metadata_after_mutation: None,
+            fail_after_mutation: true,
+        }));
+
+        let result = tool
+            .call(
+                &serde_json::json!({ "file_path": "mutation.txt" }),
+                &context,
+            )
+            .await;
+
+        let error = result.expect_err("remote tool error must propagate");
+        assert!(
+            error
+                .to_string()
+                .contains("original tool error after mutation"),
+            "{error}"
+        );
+        assert_single_mutation(&file, &calls, "mutation\n");
+        assert!(get_snapshot_manager_for_workspace(Path::new(&remote_root)).is_none());
     }
 
     #[test]

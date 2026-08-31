@@ -1,4 +1,5 @@
 use crate::util::string::shell_single_quote;
+use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -26,6 +27,57 @@ pub struct DeleteLocalPathOutcome {
 pub fn delete_path_success_message(path: &str, is_directory: bool) -> String {
     let type_name = if is_directory { "directory" } else { "file" };
     format!("Successfully deleted {} at: {}", type_name, path)
+}
+
+/// Inspect through the bound workspace, without following a symlink into its target.
+pub async fn inspect_workspace_delete_target(
+    fs: &dyn WorkspaceFileSystem,
+    path: &str,
+) -> Result<LocalDeleteTarget, String> {
+    let kind = fs
+        .path_kind_no_follow(path)
+        .await
+        .map_err(|error| format!("{error:#}"))?;
+    let is_directory = kind == Some(WorkspacePathKind::Directory);
+    let is_empty = if is_directory {
+        let listing = fs
+            .read_dir_bounded(path, 1)
+            .await
+            .map_err(|error| format!("{error:#}"))?;
+        listing.is_empty()
+    } else {
+        false
+    };
+    Ok(LocalDeleteTarget {
+        exists: kind.is_some(),
+        is_directory,
+        is_empty,
+    })
+}
+
+pub async fn delete_workspace_path(
+    fs: &dyn WorkspaceFileSystem,
+    logical_path: &str,
+    resolved_path: &str,
+    recursive: bool,
+) -> Result<DeleteLocalPathOutcome, String> {
+    let target = inspect_workspace_delete_target(fs, resolved_path).await?;
+    if !target.exists {
+        return Err(format!("Path does not exist: {logical_path}"));
+    }
+    if target.is_directory {
+        if !recursive && !target.is_empty {
+            return Err(format!("Directory is not empty: {logical_path}. Set recursive=true to delete non-empty directories"));
+        }
+        fs.remove_dir(resolved_path, recursive).await
+    } else {
+        fs.remove_file(resolved_path).await
+    }.map_err(|error| format!("Failed to delete {logical_path}: {error:#}"))?;
+    Ok(DeleteLocalPathOutcome {
+        logical_path: logical_path.into(),
+        is_directory: target.is_directory,
+        recursive,
+    })
 }
 
 pub fn inspect_local_delete_target(path: &Path) -> Result<LocalDeleteTarget, String> {

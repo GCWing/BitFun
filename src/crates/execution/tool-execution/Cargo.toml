@@ -5,15 +5,15 @@ edition.workspace = true
 
 [features]
 default = []
-shell-analysis = ["dep:regex"]
+shell-analysis = []
 document-read = ["dep:anydoc", "dep:sha2"]
-web-readable = ["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"]
+web-readable = ["dep:htmd", "dep:legible", "dep:readability-js"]
 
 [dependencies]
 anydoc = { workspace = true, optional = true }
 bitfun-agent-tools = { path = "../tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["workspace-ports"] }
 dashmap = { workspace = true }
 globset = { workspace = true }
 dunce = { workspace = true }
@@ -23,12 +23,12 @@ htmd = { version = "0.5.4", optional = true }
 ignore = { workspace = true }
 legible = { version = "0.4.2", optional = true }
 log = { workspace = true }
-regex = { workspace = true, optional = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["rt", "sync", "time"] }
-tokio-util = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "rt", "sync", "time"] }
+tokio-util = { workspace = true, features = ["io-util"] }
 vte = { workspace = true, features = ["ansi"] }
 
 [target.'cfg(windows)'.dependencies]

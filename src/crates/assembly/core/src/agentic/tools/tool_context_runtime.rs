@@ -402,6 +402,34 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
 }
 
 impl ToolUseContext {
+    /// Select IO once from the already-authorized path. Workspace tools share
+    /// their algorithms; only this boundary knows whether bytes are local or
+    /// supplied by the Session's SSH provider. Runtime artifact URIs continue
+    /// to address controller-owned storage even in a remote Session.
+    pub fn file_system_for_path(
+        &self,
+        resolved: &ToolPathResolution,
+    ) -> BitFunResult<Arc<dyn crate::agentic::workspace::WorkspaceFileSystem>> {
+        match resolved.backend {
+            ToolPathBackend::RemoteWorkspace if !self.is_remote() => Err(BitFunError::tool(
+                "Remote file access requires a remote Session workspace binding".to_string(),
+            )),
+            ToolPathBackend::RemoteWorkspace => self
+                .workspace_services()
+                .map(|services| Arc::clone(&services.fs))
+                .ok_or_else(|| {
+                    BitFunError::tool("Remote workspace file system is unavailable".to_string())
+                }),
+            ToolPathBackend::Local if !self.is_remote() && !resolved.is_runtime_artifact() => {
+                Ok(self
+                    .workspace_services()
+                    .map(|services| Arc::clone(&services.fs))
+                    .unwrap_or_else(|| Arc::new(crate::agentic::workspace::LocalWorkspaceFs)))
+            }
+            ToolPathBackend::Local => Ok(Arc::new(crate::agentic::workspace::LocalWorkspaceFs)),
+        }
+    }
+
     pub fn ws_fs(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceFileSystem> {
         self.workspace_services().map(|s| s.fs.as_ref())
     }
@@ -1037,6 +1065,63 @@ mod path_resolution_tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn file_system_selection_never_reads_local_files_for_unavailable_remote_workspace() {
+        let root = std::env::temp_dir().join(format!("bitfun-fs-route-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("sentinel.txt");
+        std::fs::write(&file, "controller-only").unwrap();
+        let path = file.to_string_lossy();
+        let local = local_context(root.to_string_lossy().as_ref());
+        let local_path = local.resolve_tool_path(&path).unwrap();
+        assert_eq!(
+            local
+                .file_system_for_path(&local_path)
+                .unwrap()
+                .read_file(&local_path.resolved_path)
+                .await
+                .unwrap(),
+            b"controller-only"
+        );
+        let remote = remote_context("/remote/workspace", None);
+        let remote_path = remote.resolve_tool_path(&path).unwrap();
+        let error = remote.file_system_for_path(&remote_path).err().unwrap();
+        assert!(error
+            .to_string()
+            .contains("Remote workspace file system is unavailable"));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "controller-only");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn file_system_selection_preserves_session_provider_and_local_artifact_boundary() {
+        use std::sync::Arc;
+        let mut context = remote_context("/remote/workspace", None);
+        let services = crate::agentic::workspace::local_workspace_services("/unused".into());
+        let provider = Arc::clone(&services.fs);
+        context.runtime_handles =
+            bitfun_runtime_ports::ToolRuntimeHandles::new(Some(services), None);
+        let workspace_file = context.resolve_tool_path("source.txt").unwrap();
+        assert!(Arc::ptr_eq(
+            &provider,
+            &context.file_system_for_path(&workspace_file).unwrap()
+        ));
+
+        context.session_id = Some("route-test".into());
+        context.custom_data.insert(
+            "__bitfun_test_runtime_root".into(),
+            serde_json::json!(std::env::temp_dir().join("bitfun-route-artifacts")),
+        );
+        let artifact = context
+            .resolve_tool_path("bitfun://current-session/artifacts/output.txt")
+            .unwrap();
+        assert!(!Arc::ptr_eq(
+            &provider,
+            &context.file_system_for_path(&artifact).unwrap()
+        ));
     }
 
     fn context_with_restrictions(

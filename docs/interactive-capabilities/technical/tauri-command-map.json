@@ -2482,7 +2482,7 @@
       "rustPath": "fork_session",
       "sourceFile": "src/apps/desktop/src/api/session_api.rs",
       "signature": "fn fork_session( request: ForkSessionRequest, runtime: State<'_, DesktopRuntimeContext>, ) -> Result<ForkSessionResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "frontend_update_candidate_ready",
@@ -3419,7 +3419,7 @@
       "rustPath": "get_operation_diff",
       "sourceFile": "src/apps/desktop/src/api/snapshot_service.rs",
       "signature": "fn get_operation_diff( runtime: State<'_, DesktopRuntimeContext>, request: GetOperationDiffRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "get_operation_summary",
@@ -3435,7 +3435,7 @@
       "rustPath": "get_operation_summary",
       "sourceFile": "src/apps/desktop/src/api/snapshot_service.rs",
       "signature": "fn get_operation_summary( runtime: State<'_, DesktopRuntimeContext>, request: GetOperationSummaryRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "get_pending_announcements",

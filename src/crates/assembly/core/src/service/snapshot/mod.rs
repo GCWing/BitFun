@@ -7,15 +7,19 @@ pub mod snapshot_core;
 pub mod snapshot_system;
 pub mod types;
 
+#[cfg(test)]
+mod workspace_io_tests;
+
 pub use events::{
     emit_snapshot_event, emit_snapshot_session_event, initialize_snapshot_event_emitter,
     SnapshotEvent, SnapshotEventEmitter,
 };
 pub use manager::{
     ensure_snapshot_manager_for_workspace, get_or_create_snapshot_manager,
-    get_snapshot_manager_for_workspace, get_snapshot_wrapped_tools,
-    initialize_snapshot_manager_for_workspace, open_snapshot_manager_for_view,
-    wrap_tool_for_snapshot_tracking, SnapshotManager,
+    get_or_create_snapshot_manager_with_workspace, get_snapshot_manager_for_workspace,
+    get_snapshot_wrapped_tools, initialize_snapshot_manager_for_workspace,
+    open_snapshot_history_for_workspace, open_snapshot_manager_for_view,
+    open_snapshot_manager_for_workspace_view, wrap_tool_for_snapshot_tracking, SnapshotManager,
 };
 pub use service::{SnapshotService, SystemStats};
 pub use snapshot_core::{FileChangeEntry, FileChangeQueue, SessionStats, SnapshotCore};

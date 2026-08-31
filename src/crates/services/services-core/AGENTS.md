@@ -78,6 +78,7 @@ cargo check -p bitfun-services-core --no-default-features --features filesystem
 cargo test -p bitfun-services-core --no-default-features --features diagnostics --lib diagnostics::contract_tests::
 cargo test -p bitfun-services-core --no-default-features --features diff --lib diff::contract_tests::
 cargo test -p bitfun-services-core --no-default-features --features workspace-text-runtime --lib workspace_text::tests::
+cargo test -p bitfun-services-core --no-default-features --features workspace-runtime --lib workspace::tests::
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
 cargo test -p bitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::

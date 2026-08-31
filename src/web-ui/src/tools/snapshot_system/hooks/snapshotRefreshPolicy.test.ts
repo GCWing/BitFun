@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { shouldRefreshSnapshotForSession } from './snapshotRefreshPolicy';
+import { hasSessionFileSnapshots, shouldRefreshSnapshotForSession } from './snapshotRefreshPolicy';
 
 describe('snapshot refresh policy', () => {
+  it.each([
+    { remoteConnectionId: 'ssh-disconnected' },
+    { remoteSshHost: 'saved-host' },
+    { config: { remoteConnectionId: 'ssh-legacy' } },
+    { config: { remoteSshHost: 'legacy-host' } },
+    { remoteConnectionId: 'ssh-loopback', remoteSshHost: 'localhost' },
+  ])('does not request local file snapshots for remote session %j', (binding) => {
+    const session = { ...binding, isHistorical: true, historyState: 'ready' as const };
+    expect(hasSessionFileSnapshots(session)).toBe(false);
+    expect(shouldRefreshSnapshotForSession(session)).toBe(false);
+  });
+
+  it('keeps snapshots available on the owning host for legacy local sessions', () => {
+    expect(hasSessionFileSnapshots({ remoteSshHost: 'localhost' })).toBe(true);
+    expect(hasSessionFileSnapshots({ config: { remoteSshHost: '127.0.0.1' } })).toBe(true);
+  });
+
   it('defers snapshot refresh while persisted history is not ready', () => {
     expect(shouldRefreshSnapshotForSession({
       isHistorical: true,
