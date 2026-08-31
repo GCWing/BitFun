@@ -1,7 +1,7 @@
 import { Button, Icon, IconButton, Input, Modal, Switch, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Zap, GitCommitHorizontal, GitPullRequest, Trash2 } from 'lucide-react';
+import { Zap, GitCommitHorizontal, GitPullRequest } from 'lucide-react';
 import { ConfigPageLoading } from '@/component-library';
 import {
   ConfigPageHeader,
@@ -185,7 +185,7 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
               aria-label={t('delete.button')}
               onClick={() => onDelete(action.id)}
               className="quick-actions-config__delete-btn"
-              icon={<Trash2 size={13} />}
+              icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
             />
           </Tooltip>
         )}

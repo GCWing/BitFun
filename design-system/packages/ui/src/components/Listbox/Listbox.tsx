@@ -11,7 +11,7 @@ import {
   type KeyboardEventHandler,
   type ReactNode,
 } from "react";
-import { Check } from "lucide-react";
+import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
 import { ScrollArea, type ScrollbarVisibility } from "../ScrollArea";
 import styles from "./Listbox.module.css";
@@ -251,7 +251,7 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
           <span className={styles.metadata} data-bf-part="metadata">{metadata}</span>
         )}
         <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
-          {indicator ?? (selected ? <Check /> : null)}
+          {indicator ?? (selected ? <Icon name="check-line" /> : null)}
         </span>
       </button>
     );

@@ -5,9 +5,9 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Button, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
+import { Icon, Button, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Trash2 } from 'lucide-react';
+
 import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
@@ -618,7 +618,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
       {loading ? (
         <div className="asv__empty" data-bf-component="scheduled-jobs-view" data-bf-part="empty" data-bf-state="loading">
-          <RefreshCw size={14} className="asv__spin" />
+          <Icon name="refresh" size="sm" className="asv__spin" />
         </div>
       ) : sortedJobs.length === 0 && expandedJobId !== NEW_JOB_ID ? (
         <div className="asv__empty" data-bf-component="scheduled-jobs-view" data-bf-part="empty">
@@ -671,7 +671,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                             tone="danger"
                             aria-label={t('nav.scheduledJobs.actions.delete')}
                             onClick={e => { e.stopPropagation(); void handleDeleteJob(job); }}
-                            icon={<Trash2 size={13} />}
+                            icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                           />
                         </Tooltip>
                       </div>

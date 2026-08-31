@@ -1,7 +1,7 @@
 import { ConfirmDialog, Icon, IconButton, NumberInput, Select, type SelectOption, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronUp, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
+import { FolderOpen, RotateCcw } from 'lucide-react';
 import { ConfigPageLoading } from '@/component-library';
 
 import { useNotification } from '@/shared/notification-system';
@@ -285,7 +285,7 @@ const MemorySettingsPage: React.FC = () => {
                 loading={actionBusy === 'reset-memory'}
                 disabled={actionBusy !== null}
                 aria-label={t('actions.resetMemory')}
-                icon={<Trash2 />}
+                icon={<Icon name="delete" size="lg" />}
               />
             </Tooltip>
           </>
@@ -381,7 +381,7 @@ const MemorySettingsPage: React.FC = () => {
                 onClick={() => setAdvancedOpen((open) => !open)}
                 aria-label={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
                 aria-expanded={advancedOpen}
-                icon={advancedOpen ? <ChevronUp /> : <Icon name="chevron-down" size="lg" />}
+                icon={advancedOpen ? <Icon name="chevron-up" size="lg" /> : <Icon name="chevron-down" size="lg" />}
               />
             </Tooltip>
           )}

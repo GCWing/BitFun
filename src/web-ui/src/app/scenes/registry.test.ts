@@ -1,4 +1,5 @@
-import { SessionIcon } from '@bitfun/ui';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { SCENE_TAB_REGISTRY, getSceneDef } from './registry';
 
@@ -8,12 +9,10 @@ describe('scene tab icon registry', () => {
     expect(SCENE_TAB_REGISTRY.some(scene => scene.defaultOpen)).toBe(false);
   });
 
-  it('uses the design-system SessionIcon only for the session tab', () => {
-    expect(getSceneDef('session')?.Icon).toBe(SessionIcon);
-    expect(
-      SCENE_TAB_REGISTRY
-        .filter(scene => scene.Icon === SessionIcon)
-        .map(scene => scene.id),
-    ).toEqual(['session']);
+  it('uses the shared catalog glyph for the session tab', () => {
+    const SceneIcon = getSceneDef('session')!.Icon!;
+    const markup = renderToStaticMarkup(createElement(SceneIcon));
+    expect(markup).toContain('data-bf-component="icon"');
+    expect(markup).toContain('data-bf-name="session"');
   });
 });

@@ -1,12 +1,11 @@
 import { Button, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
-import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Trash2, Wrench, type LucideIcon } from 'lucide-react';
+import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Wrench, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
-import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -746,7 +745,7 @@ const AgentsHomeView: React.FC = () => {
               data-testid="agents-harness-creative"
             >
               <span className="bitfun-agents-scene__harness-creative-icon" aria-hidden>
-                <HarnessCreativeIcon size={28} />
+                <Icon name="creative" size="lg" style={{ width: 28, height: 28 }} />
               </span>
               <span className="bitfun-agents-scene__harness-creative-copy">
                 <span className="bitfun-agents-scene__harness-creative-heading">
@@ -921,7 +920,7 @@ const AgentsHomeView: React.FC = () => {
                 size="sm"
                 loading={deletingAgent}
                 onClick={() => void handleDeleteCustomAgent()}
-                icon={<Trash2 size={14} />}
+                icon={<Icon name="delete" size="sm" />}
               />
             </Tooltip>
           </>

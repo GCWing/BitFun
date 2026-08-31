@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
+import { FilePlus, FolderPlus } from 'lucide-react';
 import { VirtualFileTree } from './VirtualFileTree';
 import { FileExplorerProps, FileSystemNode, FlatFileNode } from '../types';
 import { flattenFileTree } from '../utils/treeFlattening';
@@ -348,7 +348,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               <IconButton
                 size="sm"
                 aria-label={t('fileTree.refresh')}
-                icon={<RefreshCw />}
+                icon={<Icon name="refresh" size="lg" />}
                 onClick={handleRefresh}
               />
             </Tooltip>

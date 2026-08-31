@@ -7,16 +7,7 @@
 import { Button, Icon, IconButton, Modal, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FileJson,
-  RefreshCw,
-  Play,
-  Square,
-  AlertTriangle,
-  MinusCircle,
-  KeyRound,
-  Trash2,
-} from 'lucide-react';
+import { FileJson, Play, Square, AlertTriangle, MinusCircle, KeyRound } from 'lucide-react';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import {
@@ -1100,7 +1091,7 @@ const McpToolsConfig: React.FC = () => {
               size="sm"
               onClick={() => void loadServers()}
               aria-label={tMcp('actions.refresh')}
-              icon={<RefreshCw size={16} aria-hidden="true" />}
+              icon={<Icon name="refresh" size="md" aria-hidden="true" />}
             />
           </Tooltip>
         </>
@@ -1140,7 +1131,7 @@ const McpToolsConfig: React.FC = () => {
           size="sm"
           onClick={() => handleDeleteServer(server)}
           aria-label={tMcp('actions.delete')}
-          icon={<Trash2 size={14} />}
+          icon={<Icon name="delete" size="sm" />}
         />
       </Tooltip>
       {isStopped(server.status) ? (
@@ -1185,7 +1176,7 @@ const McpToolsConfig: React.FC = () => {
               ? tMcp('actions.restart')
               : tMcp('messages.commandUnavailable', { serverId: server.id })
           }
-          icon={<RefreshCw size={14} />}
+          icon={<Icon name="refresh" size="sm" />}
         />
       </Tooltip>
     </>
@@ -1320,7 +1311,7 @@ const McpToolsConfig: React.FC = () => {
                   size="sm"
                   onClick={() => void loadJsonConfig()}
                   aria-label={tMcp('actions.refresh')}
-                  icon={<RefreshCw size={16} aria-hidden="true" />}
+                  icon={<Icon name="refresh" size="md" aria-hidden="true" />}
                 />
               </Tooltip>
             </div>

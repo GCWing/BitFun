@@ -8,18 +8,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import {
-  ArrowDownToLine,
-  EyeOff,
-  FolderOpen,
-  Key,
-  Loader2,
-  Lock,
-  Play,
-  RefreshCw,
-  Server,
-  Trash2,
-} from 'lucide-react';
+import { ArrowDownToLine, EyeOff, FolderOpen, Key, Loader2, Lock, Play, Server } from 'lucide-react';
 import type {
   ConnectionTestReport,
   ConnectionTestStage,
@@ -785,7 +774,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         disabled={isConnecting}
                         title={t('actions.delete') || 'Delete'}
                         aria-label={t('actions.delete') || 'Delete'}
-                        icon={<Trash2 size={13} />}
+                        icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                       />
                       <IconButton
                         type="button"
@@ -953,7 +942,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       >
                         {isListingContainers
                           ? <Loader2 size={13} className="ssh-connection-dialog__spinner" />
-                          : <RefreshCw size={13} />}
+                          : <Icon name="refresh" size="lg" style={{ width: 13, height: 13 }} />}
                         {t('ssh.remote.discoverContainers')}
                       </Button>
                     )}

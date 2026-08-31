@@ -8,7 +8,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon, IconButton, Input } from '@bitfun/ui';
-import { AlertTriangle, ChevronLeft, RefreshCw, MousePointer2 } from 'lucide-react';
+import { AlertTriangle, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -168,7 +168,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
           size="sm"
           onClick={goBack}
           aria-label={t('nav.back')}
-          icon={<ChevronLeft />}
+          icon={<Icon name="chevron-left" size="lg" />}
           data-testid="browser-back-button"
         />
         <IconButton
@@ -186,10 +186,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
           disabled={isLoading}
           aria-label={t('actions.refresh')}
           icon={(
-            <RefreshCw
-              className={isLoading ? 'browser-panel__spinning' : undefined}
-              data-testid={isLoading ? 'browser-loading-indicator' : undefined}
-            />
+            <Icon name="refresh" size="lg" className={isLoading ? 'browser-panel__spinning' : undefined} data-testid={isLoading ? 'browser-loading-indicator' : undefined} />
           )}
           data-testid="browser-refresh-button"
         />

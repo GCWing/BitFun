@@ -7,7 +7,7 @@
 
 import { Icon, IconButton, Switch, Tooltip } from '@bitfun/ui';
 import React from 'react';
-import { CalendarClock, Trash2 } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n';
 import type { CronJob } from '@/infrastructure/api';
@@ -168,7 +168,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
               size="sm"
               tone="danger"
               aria-label={t('actions.delete')}
-              icon={<Trash2 />}
+              icon={<Icon name="delete" size="lg" />}
               onClick={() => onDelete(job)}
             />
           </Tooltip>

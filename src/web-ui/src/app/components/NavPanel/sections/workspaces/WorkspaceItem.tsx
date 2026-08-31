@@ -1,7 +1,7 @@
 import { Button, ConfirmDialog, Icon, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, FolderSearch, Trash2, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
+import { FolderOpen, FolderSearch, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { InputDialog, PresenceBoundary, BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon } from '@/component-library';
 
@@ -972,7 +972,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     ) : null}
                     {isDeletableAssistantWorkspace ? (
                       <MenuItem
-                        leading={<Trash2 size={13} />}
+                        leading={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                         tone="danger"
                         onClick={handleRequestDeleteAssistant}
                         disabled={isDeletingAssistant}

@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { versionInjectionPlugin } from "./vite.config.version-plugin";
 import { bitfunCanvasRuntimeBundlePlugin } from "./vite.config.canvas-runtime-plugin";
+import { watchSourcePlugin } from "../../design-system/tooling/vite/watch-source.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 const designSystemUiSourceDirectory = path.resolve(
@@ -80,6 +81,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     plugins: [
       react(),
+      watchSourcePlugin(designSystemUiSourceDirectory),
       bitfunCanvasRuntimeBundlePlugin(),
       versionInjectionPlugin()
     ],

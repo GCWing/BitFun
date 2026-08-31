@@ -1,16 +1,7 @@
 import { Button, Icon, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Bot,
-  CircleAlert,
-  EyeOff,
-  FileJson,
-  LoaderCircle,
-  RefreshCw,
-  Save,
-  Server,
-} from 'lucide-react';
+import { Bot, CircleAlert, EyeOff, FileJson, LoaderCircle, Save, Server } from 'lucide-react';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1170,7 +1161,7 @@ const AcpAgentsConfig: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
-                leadingIcon={<RefreshCw />}
+                leadingIcon={<Icon name="refresh" size="lg" />}
                 onClick={() => { void refreshRequirementProbes({ force: true }); }}
                 loading={probingRequirements}
               >
@@ -1619,7 +1610,7 @@ const AcpAgentsConfig: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            leadingIcon={<RefreshCw />}
+                            leadingIcon={<Icon name="refresh" size="lg" />}
                             onClick={() => {
                               loadedRemoteProbeIdsRef.current.delete(connection.id);
                               void refreshRemoteRequirementProbes(connection.id, {

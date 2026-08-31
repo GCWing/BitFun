@@ -11,10 +11,9 @@ import {
 } from "react";
 import {
   AlertCircle,
-  CheckCircle2,
-  Info,
   TriangleAlert,
 } from "lucide-react";
+import { Icon } from "../Icon";
 import { Button } from "../Button";
 import {
   Modal,
@@ -91,8 +90,8 @@ export interface ConfirmDialogProps {
 
 const defaultIcons: Record<ConfirmDialogType, ReactNode> = {
   error: <AlertCircle aria-hidden="true" />,
-  info: <Info aria-hidden="true" />,
-  success: <CheckCircle2 aria-hidden="true" />,
+  info: <Icon name="info" />,
+  success: <Icon name="check-circle" />,
   warning: <TriangleAlert aria-hidden="true" />,
 };
 

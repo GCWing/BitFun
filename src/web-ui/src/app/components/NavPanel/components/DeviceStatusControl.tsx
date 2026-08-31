@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Cloud, Monitor, RefreshCw, Server, Smartphone, Undo2 } from 'lucide-react';
+import { Cloud, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -351,7 +351,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  leadingIcon={<RefreshCw />}
+                  leadingIcon={<Icon name="refresh" size="lg" />}
                   className="bitfun-device-overview__notice"
                   onClick={() => { void refresh(); }}
                 >

@@ -10,12 +10,6 @@ import MiniAppEntry from './MiniAppEntry';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('@/component-library', () => ({
-  BITFUN_ICON_SIZE: { navigation: 16 },
-  NavigationMiniAppIcon: () => <span aria-hidden="true" />,
-  Tooltip: ({ children }: { children: React.ReactNode }) => children,
-}));
-
 vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));

@@ -1,7 +1,7 @@
 import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea, type ComboboxOption, type SelectOption } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Trash2 } from 'lucide-react';
+
 import { ConfigPageLoading } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
@@ -937,7 +937,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                       onClick={() => void handleRefreshCompanionPets()}
                       disabled={companionPetsLoading}
                       aria-label={t('features.pet.refresh')}
-                      icon={<RefreshCw size={14} />}
+                      icon={<Icon name="refresh" size="sm" />}
                     />
                   </Tooltip>
                   <Button
@@ -1058,7 +1058,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                                     disabled={isDeleting}
                                     aria-label={t('features.pet.delete')}
                                     onClick={(e) => void handleDeleteCompanionPet(e, pet)}
-                                    icon={<Trash2 size={14} />}
+                                    icon={<Icon name="delete" size="sm" />}
                                   />
                                 </Tooltip>
                               )}
@@ -1324,7 +1324,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                         aria-label={t('computerUse.refreshStatus')}
                         disabled={computerUseBusy || computerUseStatusLoading}
                         onClick={() => void refreshComputerUseStatus()}
-                        icon={<RefreshCw size={14} />}
+                        icon={<Icon name="refresh" size="sm" />}
                       />
                     </Tooltip>
                   </span>
@@ -1371,7 +1371,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                         aria-label={t('computerUse.refreshStatus')}
                         disabled={computerUseBusy || computerUseStatusLoading}
                         onClick={() => void refreshComputerUseStatus()}
-                        icon={<RefreshCw size={14} />}
+                        icon={<Icon name="refresh" size="sm" />}
                       />
                     </Tooltip>
                   </span>
@@ -1546,7 +1546,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                         aria-label={t('browserControl.refreshStatus')}
                         disabled={browserControlBusy || browserStatusLoading}
                         onClick={() => void refreshBrowserControlStatus()}
-                        icon={<RefreshCw size={14} />}
+                        icon={<Icon name="refresh" size="sm" />}
                       />
                     </Tooltip>
                   </span>

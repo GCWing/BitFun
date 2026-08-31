@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { Icon, SessionIcon, type IconName } from '@bitfun/ui';
+import { Icon, type IconName } from '@bitfun/ui';
 import {
   FileCode2,
   CircleUserRound,
@@ -32,7 +32,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'session' as SceneTabId,
     label: 'Session',
     labelKey: 'scenes.aiAgent',
-    Icon: SessionIcon,
+    Icon: catalogSceneIcon('session'),
     pinned: true,
     closable: false,
     singleton: true,

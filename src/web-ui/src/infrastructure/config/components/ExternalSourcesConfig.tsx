@@ -2,7 +2,7 @@ import { Button, ConfirmDialog, Icon, Select, Switch, Tooltip } from '@bitfun/ui
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, ShieldCheck } from 'lucide-react';
 import { ConfigPageLoading } from '@/component-library';
 import { LocalizedCombobox } from '@/infrastructure/design-system';
 
@@ -1516,7 +1516,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 void loadSnapshot(true, true);
               }}
             >
-              <RefreshCw size={15} aria-hidden="true" />
+              <Icon name="refresh" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </Button>
           </Tooltip>
         )}

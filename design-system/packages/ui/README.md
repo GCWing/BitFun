@@ -29,6 +29,23 @@ matching component slot, just as for SVG icons. These slots constrain catalog
 icons to the component's size; a standalone `Icon` retains its explicit size
 (24px by default). Do not shrink the catalog globally to correct a slot mismatch.
 
+The catalog uses exported vectors, including their view boxes and per-path
+opacity. Theme colors remain caller-owned through `currentColor`. Asset
+fingerprints are reviewed with intentional resource updates so replacing a
+glyph with a similarly named substitute cannot pass unnoticed.
+
+Use `canonicalIconNames` for galleries and pickers. `iconNames` also keeps the
+legacy `download`, `circle` and `turn` entries for compatibility; prefer
+`arrow-down`, `unselected` and `<NumberBadge value={18} />` respectively.
+`turn` is only the old empty background, not a complete numbered marker.
+`NumberBadge` owns a 24px slot, a 20px surface and 11px medium text; longer
+values grow horizontally. Callers supply formatted values and contextual
+accessible labels. `ToolbarBadge` delegates to the same anatomy.
+
+Use `Icon name="session"` in new consumers. `SessionIcon` retains its SVG
+interface for existing integrations, with geometry checked against the same
+catalog asset.
+
 ## Advanced selection and menus
 
 Use native `Select` for simple options. `Combobox` adds search, grouped options,

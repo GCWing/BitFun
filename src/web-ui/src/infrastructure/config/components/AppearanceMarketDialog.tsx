@@ -1,6 +1,6 @@
 import { Button, Icon, Modal, ScrollArea, SearchField, Select } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, PackageCheck, RefreshCw } from 'lucide-react';
+import { AlertTriangle, PackageCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { MarketAccountControls } from '@/features/market-account';
@@ -413,7 +413,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                 disabled={installDisabled}
                 onClick={() => release && void handleInstall(release)}
               >
-                {updateAvailable ? <RefreshCw size={15} /> : <Icon name="download" size="sm" />}
+                {updateAvailable ? <Icon name="refresh" size="lg" style={{ width: 15, height: 15 }} /> : <Icon name="download" size="sm" />}
                 {installing
                   ? t('package.market.installing')
                   : updateAvailable

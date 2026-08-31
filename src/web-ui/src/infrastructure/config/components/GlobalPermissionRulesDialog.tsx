@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ArrowDown, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { Save, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { PermissionEffect, PermissionRule } from '../types';
@@ -465,7 +465,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                             || activeIndex === activeDraftRules.length - 1
                           }
                           onClick={() => moveDraftRule(rule.localId, 1)}
-                          icon={<ArrowDown size={14} />}
+                          icon={<Icon name="arrow-down" size="sm" />}
                         />
                       </Tooltip>
                       <Tooltip content={t('permissionPolicy.removeGlobalRule')}>
@@ -475,7 +475,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                           aria-label={t('permissionPolicy.removeGlobalRule')}
                           disabled={isSaving || exiting}
                           onClick={() => handleRemoveRule(rule.localId)}
-                          icon={<Trash2 size={14} />}
+                          icon={<Icon name="delete" size="sm" />}
                         />
                       </Tooltip>
                     </div>

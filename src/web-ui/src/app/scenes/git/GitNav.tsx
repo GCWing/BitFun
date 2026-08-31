@@ -7,7 +7,7 @@
 import React, { useCallback } from 'react';
 import { Icon, IconButton, NavigationPanel, NavigationPanelItem, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { Layers2, ArrowDown, RefreshCw } from 'lucide-react';
+import { Layers2 } from 'lucide-react';
 import { useGitSceneStore, type GitSceneView } from './gitSceneStore';
 import { useGitState } from '../../../tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -82,7 +82,7 @@ const GitNav: React.FC = () => {
               )}
               {behind > 0 && (
                 <span title={t('status.behind')}>
-                  <ArrowDown size={10} /> {behind}
+                  <Icon name="arrow-down" size="lg" style={{ width: 10, height: 10 }} /> {behind}
                 </span>
               )}
             </div>
@@ -92,7 +92,7 @@ const GitNav: React.FC = () => {
               <IconButton
                 size="sm"
                 aria-label={t('actions.refresh')}
-                icon={<RefreshCw />}
+                icon={<Icon name="refresh" size="lg" />}
                 onClick={() => refresh({ force: true })}
               />
             </Tooltip>

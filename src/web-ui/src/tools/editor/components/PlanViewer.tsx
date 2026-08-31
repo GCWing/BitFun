@@ -2,7 +2,7 @@
 
 import { Button, Icon, IconButton, Input, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Loader2, AlertCircle, FileText, Trash2 } from 'lucide-react';
+import { Loader2, AlertCircle, FileText } from 'lucide-react';
 import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
@@ -674,7 +674,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                         tone="danger"
                         onClick={() => deleteTodo(todo.id || String(index))}
                         aria-label={t('editor.common.delete')}
-                        icon={<Trash2 />}
+                        icon={<Icon name="delete" size="lg" />}
                       />
                     </Tooltip>
                   </>

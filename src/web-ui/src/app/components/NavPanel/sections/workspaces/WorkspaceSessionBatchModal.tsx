@@ -1,6 +1,6 @@
 import { Button, Checkbox, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Bot, FolderKanban, Loader2, Trash2 } from 'lucide-react';
+import { Archive, Bot, FolderKanban, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionMetadata } from '@/shared/types/session-history';
@@ -446,7 +446,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
             onClick={() => { void handleDeleteSelected(); }}
             disabled={isBusy || selectedCount === 0}
             loading={actionKind === 'delete'}
-            leadingIcon={<Trash2 size={14} />}
+            leadingIcon={<Icon name="delete" size="sm" />}
           >
 
             <span>{t('nav.sessions.deleteSelected')}</span>

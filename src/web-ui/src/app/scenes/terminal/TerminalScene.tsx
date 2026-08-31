@@ -1,3 +1,4 @@
+import { Icon as CatalogIcon } from '@bitfun/ui';
 /**
  * TerminalScene — renders a ConnectedTerminal for the session selected
  * via terminalSceneStore.
@@ -8,7 +9,7 @@
 
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SquareTerminal } from 'lucide-react';
+
 import { useTerminalSceneStore } from '../../stores/terminalSceneStore';
 import ConnectedTerminal from '../../../tools/terminal/components/ConnectedTerminal';
 import './TerminalScene.scss';
@@ -53,7 +54,7 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
         />
       ) : (
         <div className="bitfun-terminal-scene__empty" data-testid="shell-command-list" data-bf-scene="terminal" data-bf-part="empty">
-          <SquareTerminal size={32} className="bitfun-terminal-scene__empty-icon" />
+          <CatalogIcon name="terminal" size="lg" className="bitfun-terminal-scene__empty-icon" style={{ width: 32, height: 32 }} />
           <p className="bitfun-terminal-scene__empty-hint" data-testid="shell-panel-title">{t('emptyState')}</p>
         </div>
       )}

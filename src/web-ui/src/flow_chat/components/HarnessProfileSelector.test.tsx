@@ -153,6 +153,7 @@ describe('HarnessProfileSelector', () => {
     );
     expect(triggerMark?.dataset.harnessProfile).toBe('balanced');
     expect(triggerMark?.dataset.harnessDensity).toBe('2');
+    expect(triggerMark?.querySelector('[data-bf-name="standard"][data-size="md"]')).not.toBeNull();
     expect(
       trigger?.querySelector('[data-bf-part="label"]')?.textContent,
     ).toBe('chatInput.harness.profiles.balanced.name');
@@ -256,13 +257,14 @@ describe('HarnessProfileSelector', () => {
       'other',
     ]);
     expect(rows.map(row => density(row))).toEqual([1, 2, 3, 0, 0]);
-    for (const row of rows.slice(0, 3)) {
-      expect(row.querySelector('.bitfun-harness-selector__density-core')).not.toBeNull();
-    }
+    expect(rows.slice(0, 4).map(row => row.querySelector<HTMLElement>(
+      '.bitfun-harness-selector__density-mark [data-bf-component="icon"]',
+    )?.dataset.bfName)).toEqual(['minimal', 'standard', 'ultimate', 'creative']);
+    expect(menu?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
     expect(menu?.querySelector('.bitfun-harness-selector__profile-promise')).toBeNull();
     const creative = rows[3];
     expect(creative?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
-    expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).not.toBeNull();
+    expect(creative?.querySelector('[data-bf-name="creative"][data-size="md"]')).not.toBeNull();
     expect(creative?.dataset.bfState).toBe('available');
     const other = rows[4];
     expect(other?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();

@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { Button, Icon } from '@bitfun/ui';
-import { AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
@@ -466,7 +466,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<RefreshCw />}
+            leadingIcon={<Icon name="refresh" size="lg" />}
             onClick={handleRetry}
             data-testid="shell-command-rerun"
           >
@@ -513,7 +513,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
               title="Close terminal"
               data-testid="shell-panel-close"
             >
-              <Trash2 size={14} />
+              <Icon name="delete" size="sm" />
             </button>
           </div>
         </div>

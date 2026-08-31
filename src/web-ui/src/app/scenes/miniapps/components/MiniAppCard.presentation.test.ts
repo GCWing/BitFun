@@ -13,6 +13,11 @@ function readRelative(filename: string): string {
 const cardCss = compile(fileURLToPath(new URL('./MiniAppCard.scss', import.meta.url))).css;
 
 describe('Mini App card presentation', () => {
+  it('uses the catalog deletion glyph and shared running-count badge', () => {
+    expect(readRelative('./MiniAppCard.tsx')).toContain('icon={<Icon name="delete" size="lg" />}');
+    expect(readRelative('../views/MiniAppGalleryView.tsx')).toContain('<NumberBadge value={activeApps.length} />');
+    expect(readRelative('../views/MiniAppGalleryView.tsx')).not.toContain('gallery-zone-badge');
+  });
   it('bounds the card without coupling its height to its width', () => {
     const stylesheet = readRelative('./MiniAppCard.scss');
     const rootStart = stylesheet.indexOf('.miniapp-card {');

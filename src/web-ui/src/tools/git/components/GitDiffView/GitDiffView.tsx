@@ -3,13 +3,7 @@
 import { Button, Icon, IconButton, SegmentedControl } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FileText,
-  RefreshCw,
-  Minus,
-  EyeOff,
-  AlertCircle,
-} from 'lucide-react';
+import { FileText, Minus, EyeOff, AlertCircle } from 'lucide-react';
 
 import { gitService } from '../../services';
 import { createLogger } from '@/shared/utils/logger';
@@ -285,7 +279,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           )}
           {loading && (
             <span className="bitfun-git-diff-view__loading-indicator">
-              <RefreshCw size={14} className="spinning" />
+              <Icon name="refresh" size="sm" className="spinning" />
               {t('common.loading')}
             </span>
           )}
@@ -306,7 +300,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
               disabled={loading}
               size="sm"
               title={t('common.refresh')}
-              icon={<RefreshCw size={16} />}
+              icon={<Icon name="refresh" size="md" />}
             />
           </div>
         </div>
@@ -320,7 +314,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             </div>
             <h3>{t('diffView.loadFailedTitle')}</h3>
             <p>{error}</p>
-            <Button onClick={loadDiff} variant="fill" size="sm" leadingIcon={<RefreshCw size={16} />}>
+            <Button onClick={loadDiff} variant="fill" size="sm" leadingIcon={<Icon name="refresh" size="md" />}>
 
               {t('common.retry')}
             </Button>

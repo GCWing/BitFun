@@ -1,6 +1,6 @@
 import { Button, ConfirmDialog, Field, Icon, IconButton, Input, Modal, ScrollArea, SearchField, Select, StatusPill, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, Trash2, TrendingUp, Zap } from 'lucide-react';
+import { FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
@@ -567,7 +567,7 @@ const SkillsScene: React.FC = () => {
                                   title={t('list.item.deleteTooltip')}
                                   data-bf-scene="skills"
                                   data-bf-part="installedCardDelete"
-                                  icon={<Trash2 size={13} />}
+                                  icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                                 />
                               )}
                             </div>
@@ -726,7 +726,7 @@ const SkillsScene: React.FC = () => {
                         data-bf-scene="skills"
                         data-bf-part="pageButton"
                       >
-                        <ChevronLeft size={14} />
+                        <Icon name="chevron-left" size="sm" />
                       </button>
                       <span className="skills-discover__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
                         {market.hasMore
@@ -817,7 +817,7 @@ const SkillsScene: React.FC = () => {
               setDeleteTarget(selectedInstalledSkill);
               setSelectedDetail(null);
             }}
-            leadingIcon={<Trash2 size={14} />}
+            leadingIcon={<Icon name="delete" size="sm" />}
           >
 
             {t('deleteModal.delete')}

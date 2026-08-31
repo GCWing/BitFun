@@ -363,7 +363,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(minimal?.textContent).toContain('harnessZone.profiles.minimal.purpose');
     expect(minimal?.textContent).not.toContain('harnessZone.connected');
     expect(ultimate?.textContent).not.toContain('harnessZone.comingSoon');
-    expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).toBeTruthy();
+    expect(creative?.querySelector('[data-bf-name="creative"]')).toBeTruthy();
 
     expect(notificationInfoMock).not.toHaveBeenCalled();
     expect(notificationSuccessMock).not.toHaveBeenCalled();

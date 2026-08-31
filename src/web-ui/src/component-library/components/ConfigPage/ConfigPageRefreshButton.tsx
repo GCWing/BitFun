@@ -1,6 +1,6 @@
 import React from 'react';
-import { RefreshCw } from 'lucide-react';
-import { IconButton, Tooltip } from '@bitfun/ui';
+
+import { Icon as CatalogIcon, IconButton, Tooltip } from '@bitfun/ui';
 
 export interface ConfigPageRefreshButtonProps {
   tooltip: string;
@@ -27,7 +27,7 @@ export const ConfigPageRefreshButton: React.FC<ConfigPageRefreshButtonProps> = (
         disabled={disabled}
         loading={loading}
         className={className}
-        icon={<RefreshCw size={14} />}
+        icon={<CatalogIcon name="refresh" size="sm" />}
       />
     </Tooltip>
   );

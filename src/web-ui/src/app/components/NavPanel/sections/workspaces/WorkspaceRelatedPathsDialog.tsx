@@ -11,7 +11,7 @@ import { sshApi } from '@/features/ssh-remote/sshApi';
 import RemoteFileBrowser from '@/features/ssh-remote/RemoteFileBrowser';
 import { createLogger } from '@/shared/utils/logger';
 import { isRemoteWorkspace, type RelatedPath, type WorkspaceInfo } from '@/shared/types';
-import { FolderOpen, Trash2 } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 import './WorkspaceRelatedPathsDialog.scss';
 
 const log = createLogger('WorkspaceRelatedPathsDialog');
@@ -285,7 +285,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                       onClick={() => handleRemoveDraft(draft.id)}
                       aria-label={t('actions.remove')}
                     >
-                      <Trash2 size={14} />
+                      <Icon name="delete" size="sm" />
                     </button>
                   </div>
 

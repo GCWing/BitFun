@@ -9,7 +9,7 @@
 
 import { Button, Icon, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Trash2, RotateCcw, Inbox, RefreshCw } from 'lucide-react';
+import { RotateCcw, Inbox } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   ConfigPageLayout,
@@ -92,7 +92,7 @@ const ArchivedRow: React.FC<ArchivedRowProps> = ({ entry, onRestore, onDelete, t
         <Button
           size="sm"
           variant="outline"
-          leadingIcon={<Trash2 size={13} />}
+          leadingIcon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
           onClick={() => onDelete(entry)}
           aria-label={t('nav.sessions.deleteArchived')}
         >
@@ -307,13 +307,13 @@ const ArchivedSessionsConfig: React.FC = () => {
         size="sm"
         onClick={() => { void loadArchived(); }}
         aria-label={t('actions.refresh')}
-        icon={<RefreshCw />}
+        icon={<Icon name="refresh" size="lg" />}
       />
       {hasEntries && (
         <Button
           size="sm"
           variant="outline"
-          leadingIcon={<Trash2 size={13} />}
+          leadingIcon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
           onClick={() => { void handleDeleteAll(); }}
         >
           {t('nav.sessions.deleteAllArchived')}

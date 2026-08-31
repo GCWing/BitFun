@@ -21,7 +21,7 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { ConfirmDialog, Icon, IconButton, Menu, MenuItem, SearchField } from '@bitfun/ui';
+import { ConfirmDialog, Icon, IconButton, Menu, MenuItem, NumberBadge, SearchField } from '@bitfun/ui';
 
 import {
   GalleryEmpty,
@@ -490,7 +490,7 @@ const MiniAppGalleryView: React.FC = () => {
           title={t('running')}
           data-testid="miniapp-running-zone"
           className={activeApps.length === 0 ? 'miniapp-gallery__running-zone is-empty' : 'miniapp-gallery__running-zone'}
-          tools={activeApps.length > 0 ? <span className="gallery-zone-badge">{activeApps.length}</span> : null}
+          tools={activeApps.length > 0 ? <NumberBadge value={activeApps.length} /> : null}
         >
           {activeApps.length > 0 ? (
             <GalleryGrid minCardWidth={MINIAPP_CARD_MIN_WIDTH} className="miniapp-gallery__card-grid">

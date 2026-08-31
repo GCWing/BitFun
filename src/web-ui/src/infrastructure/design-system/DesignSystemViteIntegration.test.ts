@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
+import viteConfig, {
   createDesignSystemSourceAliases,
   createDevServerResponseHeaders,
 } from '../../../vite.config';
+import type { SourceWatchPlugin } from '../../../../../design-system/tooling/vite/watch-source.mjs';
 
 describe('design-system Vite integration', () => {
   it('resolves UI package entry points to source only while serving for HMR', () => {
@@ -30,6 +31,22 @@ describe('design-system Vite integration', () => {
     expect(createDevServerResponseHeaders()).toEqual({
       'Cache-Control': 'no-store',
     });
+  });
+
+  it('watches aliased UI assets outside the application root during development', () => {
+    const config = viteConfig({ command: 'serve', mode: 'development' });
+    const watcher = config.plugins?.flat(Infinity).find(
+      plugin => plugin && typeof plugin === 'object'
+        && 'name' in plugin && plugin.name === 'bitfun:watch-ui-source',
+    ) as SourceWatchPlugin | undefined;
+
+    expect(watcher).toBeDefined();
+    expect(watcher?.apply).toBe('serve');
+    const watched: string[] = [];
+    watcher?.configureServer({ watcher: { add: directory => watched.push(directory) } });
+    expect(watched).toEqual([
+      path.dirname(createDesignSystemSourceAliases('serve')[3].replacement),
+    ]);
   });
 
   it('registers the layer contract before product modules can load component CSS', () => {

@@ -1,12 +1,6 @@
 import { Button, Icon, IconButton, SearchField, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CircleAlert,
-  Plug2,
-  RefreshCw,
-  RotateCcw,
-  Wrench,
-} from 'lucide-react';
+import { CircleAlert, Plug2, RotateCcw, Wrench } from 'lucide-react';
 
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
@@ -1007,7 +1001,7 @@ const AssistantDefaultsPage: React.FC = () => {
             <div className="assistant-defaults__header-actions">
               <span className={`assistant-defaults__save assistant-defaults__save--${saveState}`} role="status" aria-live="polite">
                 {saveState === 'saving'
-                  ? <RefreshCw size={15} className="nursery-spinning" />
+                  ? <Icon name="refresh" size="lg" className="nursery-spinning" style={{ width: 15, height: 15 }} />
                   : saveState === 'error'
                     ? <CircleAlert size={15} />
                     : <Icon name="check-circle" size="sm" />}
@@ -1031,7 +1025,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
         {loading ? (
           <div className="assistant-defaults__loading" data-bf-component="assistant-defaults-page" data-bf-part="loading">
-            <RefreshCw size={20} className="nursery-spinning" />
+            <Icon name="refresh" size="lg" className="nursery-spinning" style={{ width: 20, height: 20 }} />
             <span>{t('nursery.template.loading')}</span>
           </div>
         ) : (
@@ -1044,7 +1038,7 @@ const AssistantDefaultsPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    leadingIcon={<RefreshCw size={14} />}
+                    leadingIcon={<Icon name="refresh" size="sm" />}
                     onClick={() => void loadDefaults()}
                   >
                     {t('nursery.template.retry')}

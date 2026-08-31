@@ -1,7 +1,7 @@
 import { Button, ConfirmDialog, Icon, Modal, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw } from 'lucide-react';
+
 import { ConfigPageLoading } from '@/component-library';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -368,7 +368,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
               loading={importLoading}
               disabled={busyKey !== null}
               onClick={() => void refreshImports()}
-              leadingIcon={<RefreshCw size={14} />}
+              leadingIcon={<Icon name="refresh" size="sm" />}
             >
 
               {t('imports.refresh')}

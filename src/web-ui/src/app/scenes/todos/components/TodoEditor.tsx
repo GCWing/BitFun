@@ -8,7 +8,7 @@
 
 import { Button, Icon, Input, Select, Switch, ScrollArea, Textarea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bot, CalendarClock, ClipboardList, RefreshCw } from 'lucide-react';
+import { Bot, CalendarClock, ClipboardList } from 'lucide-react';
 import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
@@ -291,7 +291,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
 
             <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
               <span className="bf-todos__field-label">
-                <RefreshCw size={16} aria-hidden="true" />
+                <Icon name="refresh" size="md" aria-hidden="true" />
                 {t('editor.fields.scheduleKind')}
               </span>
               <Select

@@ -7,11 +7,7 @@ import { Button, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import {
-  Home,
-  Loader2,
-  RefreshCw,
-} from 'lucide-react';
+import { Home, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { globalAPI } from '@/infrastructure/api/service-api/GlobalAPI';
@@ -256,7 +252,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-component="peer-device"
             data-bf-part="toolButton"
           >
-            <RefreshCw size={14} />
+            <Icon name="refresh" size="sm" />
           </button>
           <div
             className="peer-directory-browser__path"

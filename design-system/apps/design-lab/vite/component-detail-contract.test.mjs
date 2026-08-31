@@ -9,6 +9,23 @@ const flowChatPreviewSource = new URL("../src/preview/FlowChatPreviewRegistry.ts
 const flowChatGallerySource = new URL("../src/preview/FlowChatToolGallery.tsx", import.meta.url);
 const stylesSource = new URL("../src/styles.css", import.meta.url);
 
+test("NumberBadge inspector updates both the preview value and copyable example", async () => {
+  const source = await readFile(detailSource, "utf8");
+  assert.match(source, /const \[numberBadgeValue, setNumberBadgeValue\] = useState\("18"\)/);
+  assert.match(source, /<NumberBadge value=\{numberBadgeValue\} \/>/);
+  assert.match(source, /onChange=\{\(event\) => setNumberBadgeValue\(event.target.value\)\}/);
+  assert.match(source, /JSON.stringify\(numberBadgeValue\)/);
+  assert.match(source, /iconTone,\s*numberBadgeValue,/);
+});
+
+test("copyable examples and color-page controls use the same catalog as previews", async () => {
+  const source = await readFile(detailSource, "utf8");
+  const styles = await readFile(stylesSource, "utf8");
+  assert.doesNotMatch(source, /<(MessageCircle|MoreHorizontal|SearchIcon|Check|Copy|Download|Terminal|Settings|ChevronDown)(?:\s|\/>)/);
+  assert.match(styles, /\.colors-select-field > :is\(svg, \[data-bf-component="icon"\]\)/);
+  assert.match(styles, /\.colors-expand-button :is\(svg, \[data-bf-component="icon"\]\)\[data-expanded\]/);
+});
+
 test("every preview matrix declares its state-column count", async () => {
   const source = await readFile(detailSource, "utf8");
   const matrices = source.match(/className="component-preview-matrix"/g) ?? [];
@@ -236,8 +253,8 @@ test("Button matrix is limited to the four reference interaction states", async 
 test("Button matrix uses the Session icon composition from the reference", async () => {
   const source = await readFile(detailSource, "utf8");
 
-  assert.match(source, /MessageCircle/);
-  assert.match(source, /ChevronDown/);
+  assert.match(source, /name="session"/);
+  assert.match(source, /chevron-down/);
   assert.match(source, /components\.preview\.session/);
   assert.match(source, /state === "hover" \|\| state === "active"/);
 });
@@ -274,7 +291,7 @@ test("Icon preview exposes the complete named catalog and semantic controls", as
   ]);
 
   assert.match(catalog, /case "Icon"/);
-  assert.match(detail, /iconNames\.map\(\(name\)/);
+  assert.match(detail, /canonicalIconNames\.map\(\(name\)/);
   assert.match(detail, /setIconName/);
   assert.match(detail, /setIconSize/);
   assert.match(detail, /setIconTone/);
@@ -291,7 +308,7 @@ test("StatusPill preview exposes compact indicator anatomy and semantic tones", 
   assert.match(catalog, /case "StatusPill"/);
   assert.match(detail, /case "StatusPill":\s*return \["neutral", "info", "success", "warning", "danger"\] as const/);
   assert.match(detail, /<StatusPill/);
-  assert.match(detail, /leading=\{<Icon name="circle" \/>\}/);
+  assert.match(detail, /leading=\{<Icon name="unselected" \/>\}/);
   assert.match(detail, /tone=\{state as StatusPillTone\}/);
 });
 
@@ -304,7 +321,7 @@ test("Select preview exposes native grouped selection and independent states", a
   assert.match(catalog, /case "Select"/);
   assert.match(detail, /case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
   assert.match(detail, /onValueChange=\{\(value\) => setSelectValue\(String\(value\)\)\}/);
-  assert.match(detail, /leading=\{<Icon name="circle" \/>\}/);
+  assert.match(detail, /leading=\{<Icon name="unselected" \/>\}/);
   assert.match(detail, /disabled=\{state === "disabled"\}/);
   assert.match(detail, /invalid=\{state === "invalid"\}/);
 });
@@ -313,7 +330,7 @@ test("ActionItem preview keeps its trigger and end actions as separate contracts
   const source = await readFile(detailSource, "utf8");
 
   assert.match(source, /component\.name === "ActionItem"/);
-  assert.match(source, /leading=\{<MessageCircle aria-hidden="true" \/>\}/);
+  assert.match(source, /leading=\{<Icon name="session" size="lg" aria-hidden="true" \/>\}/);
   assert.match(source, /shortcut=\{<KeyHint>K<\/KeyHint>\}/);
   assert.match(source, /id: "add"/);
   assert.match(source, /id: "more"/);
@@ -397,9 +414,9 @@ test("Input, KeyHint, and SearchField previews expose composable slot and state 
   assert.match(source, /component\.name === "Input"/);
   assert.match(source, /component\.name === "KeyHint"/);
   assert.match(source, /component\.name === "SearchField"/);
-  assert.match(source, /trailing=\{<Eye aria-hidden="true" \/>\}/);
-  assert.match(source, /leadingIcon=\{<SearchIcon aria-hidden="true" \/>\}/);
-  assert.match(source, /shortcut=\{<KeyHint icon=\{<Command aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
+  assert.match(source, /trailing=\{<Icon name="eye" size="lg" aria-hidden="true" \/>\}/);
+  assert.match(source, /leadingIcon=\{<Icon name="search" size="lg" aria-hidden="true" \/>\}/);
+  assert.match(source, /shortcut=\{<KeyHint icon=\{<Icon name="command-mac" size="lg" aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
 });
 
 test("ScrollArea preview exposes direction and native scrollbar visibility contracts", async () => {
@@ -500,7 +517,7 @@ test("FieldGroup preview exposes section, surface, row, and field composition co
   assert.match(source, /case "FieldGroup":\s*return \["subtle", "plain", "divided"\] as const/);
   assert.match(source, /component\.name === "FieldGroup"/);
   assert.match(source, /<FormSection/);
-  assert.match(source, /leading=\{<Settings aria-hidden="true" \/>\}/);
+  assert.match(source, /leading=\{<Icon name="gear" size="lg" aria-hidden="true" \/>\}/);
   assert.match(source, /<FieldGroup appearance=\{plain \? "plain" : "subtle"\} dividers=\{state === "divided"\}/);
   assert.match(source, /<FieldRow>/);
   assert.match(source, /controlWidth="fill"/);
@@ -517,7 +534,7 @@ test("PageHeader preview decouples semantic level from visual size and alignment
   assert.match(source, /size=\{pageHeaderSize\}/);
   assert.match(source, /align=\{pageHeaderAlign\}/);
   assert.match(source, /action=\{\(/);
-  assert.match(source, /leading=\{<Settings aria-hidden="true" \/>\}/);
+  assert.match(source, /leading=\{<Icon name="gear" size="lg" aria-hidden="true" \/>\}/);
 });
 
 test("TabGroup preview carries the selected and outline reference composition", async () => {
@@ -529,7 +546,7 @@ test("TabGroup preview carries the selected and outline reference composition", 
     [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]),
     ["selected", "unselected", "hover", "disabled"],
   );
-  assert.match(source, /import \{ MessageCircle \} from "lucide-react"/);
+  assert.match(source, /name="session"/);
   assert.match(source, /components\.preview\.welcome/);
   assert.match(source, /components\.preview\.settings/);
   assert.match(source, /data-component="tab-group"/);

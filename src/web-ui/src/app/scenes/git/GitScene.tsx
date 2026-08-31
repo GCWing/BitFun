@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
@@ -190,7 +190,7 @@ const GitScene: React.FC<GitSceneProps> = ({
               <IconButton
                 size="sm"
                 aria-label={t('actions.forceRefresh')}
-                icon={<RefreshCw />}
+                icon={<Icon name="refresh" size="lg" />}
                 onClick={() => {
                   setForceReset(true);
                   setTimeout(() => {

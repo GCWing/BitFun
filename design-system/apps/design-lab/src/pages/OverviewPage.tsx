@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { Icon } from "@bitfun/ui";
 import designSystemHero from "../assets/design-system-hero.webp";
 import { useI18n } from "../i18n";
 
@@ -23,7 +23,7 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
               type="button"
             >
               {t("overview.getStarted")}
-              <ArrowRight aria-hidden="true" size={16} />
+              <Icon name="arrow-right" size="md" aria-hidden="true" />
             </button>
             <button
               className="lab-button"

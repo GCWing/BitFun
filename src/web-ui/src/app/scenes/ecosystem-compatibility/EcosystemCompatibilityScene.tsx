@@ -1,19 +1,7 @@
 import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import {
-  Bot,
-  Brain,
-  CircleUserRound,
-  MessageSquarePlus,
-  Network,
-  Package,
-  PawPrint,
-  RefreshCw,
-  Server,
-  Webhook,
-  Wrench,
-} from 'lucide-react';
+import { Bot, CircleUserRound, MessageSquarePlus, Network, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -89,7 +77,7 @@ const IMPORT_ITEM_ICONS: Record<EcosystemImportItemKind, LucideIcon> = {
   skill: Package,
   mcp: Server,
   hook: Webhook,
-  memory: Brain,
+  memory: catalogLucide('thinking'),
   plugin: catalogLucide('extension'),
   pet: PawPrint,
 };
@@ -120,7 +108,7 @@ const ACP_SUBAGENT_PROFILE_MAX_LENGTH = 320;
 function OwnerSurfaceLoading({ label }: { label: string }) {
   return (
     <div className="ecosystem-compatibility__owner-loading" role="status">
-      <RefreshCw size={15} aria-hidden="true" />
+      <Icon name="refresh" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
       <span>{label}</span>
     </div>
   );
@@ -898,7 +886,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
         >
           {loading ? (
             <div className="ecosystem-compatibility__loading" role="status">
-              <RefreshCw size={16} aria-hidden="true" />
+              <Icon name="refresh" size="md" aria-hidden="true" />
               {t('loading')}
             </div>
           ) : null}

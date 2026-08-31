@@ -1,20 +1,9 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Bot,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Grid2X2,
-  Grid3X3,
-  Scan,
-  Square,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, type IconName } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
-import { HarnessCreativeIcon } from '@/component-library/icons';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { notificationService } from '@/shared/notification-system';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -81,10 +70,11 @@ const PROFILE_GEARS: Record<DensityHarnessProfileId, 1 | 2 | 3> = {
   ultimate: 3,
 };
 
-const PROFILE_DENSITY_ICONS: Record<DensityHarnessProfileId, LucideIcon> = {
-  minimal: Scan,
-  balanced: Grid2X2,
-  ultimate: Grid3X3,
+const PROFILE_ICONS: Record<SelectableHarnessProfileId, IconName> = {
+  minimal: 'minimal',
+  balanced: 'standard',
+  ultimate: 'ultimate',
+  creative: 'creative',
 };
 
 function isDensityProfile(profile: KnownHarnessProfileId): profile is DensityHarnessProfileId {
@@ -108,7 +98,6 @@ function HarnessProfileMark({
   profile: KnownHarnessProfileId;
 }): React.ReactElement {
   const densityProfile = isDensityProfile(profile) ? profile : undefined;
-  const DensityIcon = densityProfile ? PROFILE_DENSITY_ICONS[densityProfile] : null;
 
   return (
     <span
@@ -117,30 +106,17 @@ function HarnessProfileMark({
       data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}
       aria-hidden
     >
-      {profile === 'creative' ? (
-        <HarnessCreativeIcon
-          className="bitfun-harness-selector__density-frame"
-          size={16}
-        />
-      ) : profile === 'other' ? (
+      {profile === 'other' ? (
         <Bot
           className="bitfun-harness-selector__density-frame"
           size={15}
           strokeWidth={1.45}
         />
-      ) : DensityIcon ? (
-        <DensityIcon
+      ) : (
+        <Icon
+          name={PROFILE_ICONS[profile]}
           className="bitfun-harness-selector__density-frame"
-          size={16}
-          strokeWidth={1.4}
-        />
-      ) : null}
-      {densityProfile && (
-        <Square
-          className="bitfun-harness-selector__density-core"
-          size={5}
-          strokeWidth={0}
-          fill="currentColor"
+          size="md"
         />
       )}
     </span>
@@ -346,10 +322,10 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
               ? <HarnessProfileMark profile={knownSelectedProfile} />
               : <Bot size={15} strokeWidth={1.45} aria-hidden />}
             metadata={(
-              <ChevronRight
+              <Icon
+                name="chevron-right"
                 className="bitfun-harness-selector__trigger-chevron"
-                size={14}
-                strokeWidth={1.8}
+                size="sm"
                 aria-hidden
               />
             )}
@@ -447,13 +423,13 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                         leading={<HarnessProfileMark profile={id} />}
                         metadata={(
                           <span className="bitfun-harness-selector__profile-status">
-                            {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                            {connected ? <Icon name="check-line" size="sm" style={{ width: 13, height: 13 }} aria-hidden /> : null}
                             {id === 'other' ? (
                               <>
                                 <span className="bitfun-harness-selector__agent-count">
                                   {otherAgents.length}
                                 </span>
-                                <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
+                                <Icon name="chevron-right" size="sm" aria-hidden />
                               </>
                             ) : null}
                           </span>
@@ -470,7 +446,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
             ) : (
               <>
                 <MenuItem
-                  leading={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />}
+                  leading={<Icon name="chevron-left" size="sm" aria-hidden />}
                   onClick={() => setPage('profiles')}
                   data-testid="harness-agent-back"
                 >
@@ -507,7 +483,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                         leading={<Bot size={15} strokeWidth={1.55} aria-hidden />}
                         metadata={(
                           <span className="bitfun-harness-selector__profile-status">
-                            {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                            {connected ? <Icon name="check-line" size="sm" style={{ width: 13, height: 13 }} aria-hidden /> : null}
                             {agent.available === false
                               ? t('chatInput.harness.unavailable')
                               : null}
