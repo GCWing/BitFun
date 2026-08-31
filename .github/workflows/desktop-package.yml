@@ -113,12 +113,18 @@ jobs:
             "import { validateReleaseVersion } from './scripts/release-channel.mjs'; validateReleaseVersion(process.argv[1], process.argv[2]);" \
             "${CHANNEL}" "${VERSION}"
 
-          git fetch origin main --tags --force
+          git fetch origin main 1.0.0-explore --tags --force
           CHECKOUT_SHA="$(git rev-parse "${CHECKOUT_REF}^{commit}")"
-          if [[ "${GITHUB_REPOSITORY}" == "GCWing/BitFun" ]] && \
-             ! git merge-base --is-ancestor "${CHECKOUT_SHA}" origin/main; then
-            echo "Ref ${CHECKOUT_REF} (${CHECKOUT_SHA}) is not part of the protected main history." >&2
-            exit 1
+          if [[ "${GITHUB_REPOSITORY}" == "GCWing/BitFun" ]]; then
+            if git merge-base --is-ancestor "${CHECKOUT_SHA}" origin/main; then
+              :
+            elif [[ "${CHANNEL}" == "beta" ]] && \
+                 git merge-base --is-ancestor "${CHECKOUT_SHA}" origin/1.0.0-explore; then
+              :
+            else
+              echo "Ref ${CHECKOUT_REF} (${CHECKOUT_SHA}) is not part of the protected main history or the protected 1.0.0-explore beta history." >&2
+              exit 1
+            fi
           fi
           TAG_SHA="$(git rev-parse --verify --quiet "${TAG}^{commit}" || true)"
           if [[ -n "${TAG_SHA}" && "${TAG_SHA}" != "${CHECKOUT_SHA}" ]]; then

@@ -1114,6 +1114,12 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   );
   assert.match(prepareStep.run, /GITHUB_REPOSITORY.*GCWing\/BitFun/);
   assert.match(prepareStep.run, /merge-base --is-ancestor/);
+  assert.match(prepareStep.run, /git fetch origin main 1\.0\.0-explore/);
+  assert.match(
+    prepareStep.run,
+    /CHANNEL.*beta[\s\S]*origin\/1\.0\.0-explore/,
+    'beta builds may use only the protected explore history',
+  );
   assert.match(prepareStep.run, /rev-parse --verify --quiet/);
 
   const packageJob = workflow.jobs.package;
