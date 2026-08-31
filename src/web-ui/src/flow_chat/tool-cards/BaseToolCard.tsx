@@ -47,6 +47,8 @@ export interface BaseToolCardProps {
   errorContent?: ReactNode;
   /** Whether to show error */
   isFailed?: boolean;
+  /** Allow an explicitly expanded details panel to remain available for failed tools. */
+  allowExpandedWhenFailed?: boolean;
   /** Whether user confirmation is required (for highlighting border) */
   requiresConfirmation?: boolean;
   /** data-testid for the real click target that expands/collapses the card. */
@@ -80,6 +82,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   expandedContent,
   errorContent,
   isFailed = false,
+  allowExpandedWhenFailed = false,
   requiresConfirmation = false,
   toggleTestId,
   headerExpandAffordance: headerExpandAffordanceProp,
@@ -94,7 +97,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     onClick(event);
   };
 
-  const hasExpandedContent = isExpanded && expandedContent && !isFailed;
+  const hasExpandedContent = isExpanded && expandedContent && (!isFailed || allowExpandedWhenFailed);
   const showConfirmationHighlight = requiresConfirmation && 
     status !== 'completed' && 
     status !== 'confirmed' &&
@@ -105,7 +108,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   const resolvedHeaderExpandAffordance =
     headerExpandAffordanceProp !== undefined
       ? headerExpandAffordanceProp
-      : Boolean(onClick) && !isFailed && Boolean(expandedContent);
+      : Boolean(onClick) && (!isFailed || allowExpandedWhenFailed) && Boolean(expandedContent);
 
   const headerLayoutValue: ToolCardHeaderLayoutContextValue = {
     headerExpandAffordance: resolvedHeaderExpandAffordance,

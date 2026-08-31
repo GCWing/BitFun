@@ -82,6 +82,59 @@
       }
     }
 
+    .content-item-input {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mcp-input-toggle {
+      display: flex;
+      align-items: center;
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--bf-appearance-token-color-text-secondary);
+      cursor: pointer;
+      text-align: left;
+
+      &:hover {
+        color: var(--bf-appearance-token-color-text-primary);
+      }
+
+      svg {
+        flex-shrink: 0;
+      }
+    }
+
+    .mcp-input-label {
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .mcp-input-collapse .smooth-height-collapse__inner {
+      padding-top: var(--bf-appearance-token-flowchat-inline-gap);
+    }
+
+    .mcp-input-code {
+      margin: 0;
+      padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      border-radius: 8px;
+      background: var(--bf-appearance-token-color-bg-secondary);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: var(--bf-appearance-token-tool-card-font-mono);
+      font-size: var(--bf-appearance-token-flowchat-code-font-size);
+      line-height: var(--bf-appearance-token-flowchat-code-line-height);
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: auto;
+      max-height: 240px;
+    }
+
     .content-item-mcp-app {
       min-height: 200px;
     }
@@ -143,6 +196,10 @@
       color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
       font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     }
+  }
+
+  .base-tool-card.status-error.base-tool-card--header-expandable {
+    cursor: pointer;
   }
 
   .icon-completed {
