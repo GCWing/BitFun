@@ -1798,10 +1798,32 @@ pub fn normalize_host_path(path: &str) -> String {
         .to_string()
 }
 
+/// Returns a Windows drive path without an invalid POSIX-style leading slash.
+/// Non-Windows hosts leave the same spelling available for POSIX path semantics.
+pub fn strip_invalid_windows_drive_path_prefix(path: &str) -> Option<&str> {
+    #[cfg(windows)]
+    {
+        let bytes = path.as_bytes();
+        if bytes.len() >= 4
+            && bytes[0] == b'/'
+            && bytes[1].is_ascii_alphabetic()
+            && bytes[2] == b':'
+            && matches!(bytes[3], b'/' | b'\\')
+        {
+            return Some(&path[1..]);
+        }
+    }
+
+    let _ = path;
+    None
+}
+
 pub fn resolve_host_path_with_workspace(
     path: &str,
     workspace_root: Option<&Path>,
 ) -> Result<String, ToolPathContractError> {
+    let path = strip_invalid_windows_drive_path_prefix(path).unwrap_or(path);
+
     if Path::new(path).is_absolute() {
         Ok(normalize_host_path(path))
     } else {
