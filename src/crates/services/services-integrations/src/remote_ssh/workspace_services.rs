@@ -174,9 +174,18 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
                 .create_dir_all(&self.connection_id, parent)
                 .await?;
         }
-        self.file_service
-            .write_file(&self.connection_id, path, contents)
-            .await
+        #[cfg(feature = "remote-ssh-concrete")]
+        {
+            self.file_service
+                .write_workspace_file(&self.connection_id, path, contents)
+                .await
+        }
+        #[cfg(not(feature = "remote-ssh-concrete"))]
+        {
+            self.file_service
+                .write_file(&self.connection_id, path, contents)
+                .await
+        }
     }
 
     async fn remove_file(&self, path: &str) -> anyhow::Result<()> {
@@ -224,33 +233,28 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
     }
 
     async fn exists(&self, path: &str) -> anyhow::Result<bool> {
-        self.file_service.exists(&self.connection_id, path).await
+        Ok(self.metadata(path, true).await?.is_some())
     }
 
     async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
-        self.file_service.is_file(&self.connection_id, path).await
+        Ok(self
+            .metadata(path, true)
+            .await?
+            .is_some_and(|metadata| metadata.kind == WorkspacePathKind::File))
     }
 
     async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
-        self.file_service.is_dir(&self.connection_id, path).await
+        Ok(self
+            .metadata(path, true)
+            .await?
+            .is_some_and(|metadata| metadata.kind == WorkspacePathKind::Directory))
     }
 
     async fn path_kind_no_follow(&self, path: &str) -> anyhow::Result<Option<WorkspacePathKind>> {
         Ok(self
-            .file_service
-            .symlink_stat(&self.connection_id, path)
+            .metadata(path, false)
             .await?
-            .map(|entry| {
-                if entry.is_symlink {
-                    WorkspacePathKind::Symlink
-                } else if entry.is_dir {
-                    WorkspacePathKind::Directory
-                } else if entry.is_file {
-                    WorkspacePathKind::File
-                } else {
-                    WorkspacePathKind::Other
-                }
-            }))
+            .map(|metadata| metadata.kind))
     }
 
     async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {

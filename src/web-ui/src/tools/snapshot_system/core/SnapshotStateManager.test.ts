@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@/flow_chat/types/flow-chat';
 import { SnapshotStateManager } from './SnapshotStateManager';
 import { SnapshotEventBus, SNAPSHOT_EVENTS } from './SnapshotEventBus';
+import { activateSurface, getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 
 const mocks = vi.hoisted(() => ({
-  surfaceEpoch: 0,
   sessions: new Map<string, Session>(),
   getSessionStats: vi.fn(async () => ({ total_changes: 0 })),
   getSessionFiles: vi.fn(async () => []),
@@ -19,17 +19,11 @@ vi.mock('../services/SnapshotSystemService', () => ({
 }));
 vi.mock('@/infrastructure/api', () => ({ snapshotAPI: mocks }));
 vi.mock('@/infrastructure/event-bus', () => ({ globalEventBus: { on: vi.fn() } }));
-vi.mock('@/infrastructure/peer-device/deviceSurface', () => ({
-  getActiveSurfaceScope: () => {
-    const epoch = mocks.surfaceEpoch;
-    return { isCurrent: () => epoch === mocks.surfaceEpoch };
-  },
-}));
-
 describe('snapshot refresh target routing', () => {
+  let testSurface = 0;
   beforeEach(() => {
     mocks.sessions.clear();
-    mocks.surfaceEpoch = 0;
+    activateSurface(`snapshot-test-${++testSurface}`);
     vi.clearAllMocks();
   });
 
@@ -70,7 +64,7 @@ describe('snapshot refresh target routing', () => {
     if (change === 'remote binding') {
       mocks.sessions.set(sessionId, { remoteConnectionId: 'ssh', historyState: 'ready' } as Session);
     } else {
-      mocks.surfaceEpoch += 1;
+      activateSurface(`${getActiveSurfaceId()}-next`);
     }
     finishStats({ total_changes: 1 });
     await pending;
@@ -84,9 +78,54 @@ describe('snapshot refresh target routing', () => {
     mocks.getOperationDiff.mockImplementationOnce(() => new Promise(resolve => { finishDiff = resolve; }));
     const manager = SnapshotStateManager.getInstance();
     const pending = manager.refreshFileState('pending-diff', '/workspace/pending.ts');
-    mocks.surfaceEpoch += 1;
+    activateSurface(`${getActiveSurfaceId()}-next`);
     finishDiff({ originalCode: 'old device', modifiedCode: 'old device edit' });
     await pending;
     expect(manager.getFileState('/workspace/pending.ts')).toBeNull();
+  });
+
+  it('preserves separate local-workspace snapshots for equal Session ids and paths on two devices', async () => {
+    const firstSurface = getActiveSurfaceId();
+    const secondSurface = `${firstSurface}-other`;
+    mocks.sessions.set('same-session', { config: {}, historyState: 'ready' } as Session);
+    const manager = SnapshotStateManager.getInstance();
+    await manager.refreshSessionState('same-session');
+    mocks.getOperationDiff.mockResolvedValueOnce({ originalCode: 'A before', modifiedCode: 'A after' });
+    await manager.refreshFileState('same-session', '/workspace/same.ts');
+
+    activateSurface(secondSurface);
+    expect(manager.getSessionState('same-session')).toBeNull();
+    expect(manager.getFileState('/workspace/same.ts')).toBeNull();
+    await manager.refreshSessionState('same-session');
+    mocks.getOperationDiff.mockResolvedValueOnce({ originalCode: 'B before', modifiedCode: 'B after' });
+    await manager.refreshFileState('same-session', '/workspace/same.ts');
+    expect(manager.getSessionFiles('same-session')[0].modifiedContent).toBe('B after');
+
+    activateSurface(firstSurface);
+    expect(manager.getSessionFiles('same-session')[0].modifiedContent).toBe('A after');
+    expect(manager.getFileState('/workspace/same.ts')?.originalContent).toBe('A before');
+    manager.clearSession('same-session');
+    activateSurface(secondSurface);
+    expect(manager.getSessionFiles('same-session')[0].modifiedContent).toBe('B after');
+  });
+
+  it('does not overwrite either device with an old activation response after switching away and back', async () => {
+    const firstSurface = getActiveSurfaceId();
+    mocks.sessions.set('same-session', { config: {}, historyState: 'ready' } as Session);
+    const manager = SnapshotStateManager.getInstance();
+    mocks.getOperationDiff.mockResolvedValueOnce({ originalCode: 'A', modifiedCode: 'A saved' });
+    await manager.refreshFileState('same-session', '/workspace/same.ts');
+    let finish!: (diff: { originalCode: string; modifiedCode: string }) => void;
+    mocks.getOperationDiff.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = manager.refreshFileState('same-session', '/workspace/same.ts');
+    activateSurface(`${firstSurface}-other`);
+    mocks.getOperationDiff.mockResolvedValueOnce({ originalCode: 'B', modifiedCode: 'B saved' });
+    await manager.refreshFileState('same-session', '/workspace/same.ts');
+    activateSurface(firstSurface);
+    finish({ originalCode: 'stale A', modifiedCode: 'stale A' });
+    await pending;
+    expect(manager.getFileState('/workspace/same.ts')?.modifiedContent).toBe('A saved');
+    activateSurface(`${firstSurface}-other`);
+    expect(manager.getFileState('/workspace/same.ts')?.modifiedContent).toBe('B saved');
   });
 });

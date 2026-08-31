@@ -956,7 +956,12 @@ impl Tool for WrappedTool {
     }
 
     fn render_result_for_assistant(&self, output: &Value) -> String {
-        self.original_tool.render_result_for_assistant(output)
+        let rendered = self.original_tool.render_result_for_assistant(output);
+        if output.get("snapshot_recorded").and_then(Value::as_bool) == Some(true) {
+            format!("{rendered}\nOperation recorded by the snapshot system.")
+        } else {
+            rendered
+        }
     }
 
     fn render_tool_use_message(

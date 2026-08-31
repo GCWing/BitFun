@@ -7,10 +7,14 @@ import SnapshotLazyLoader from '../core/SnapshotLazyLoader';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { hasSessionFileSnapshots, shouldRefreshSnapshotForSession } from './snapshotRefreshPolicy';
+import { getActiveSurfaceScope, onSurfaceActivated } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('useSnapshotState');
+const subscribeToSurfaceActivation = (listener: () => void): (() => void) =>
+  onSurfaceActivated(() => listener());
 
 interface UseSnapshotStateReturn {
+  surfaceEpoch: number;
   snapshotsAvailable: boolean;
   sessionState: SessionState | null;
   files: SnapshotFile[];
@@ -33,6 +37,11 @@ interface UseSnapshotStateReturn {
 
 export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => {
   const { t } = useTranslation('flow-chat');
+  const surfaceScope = useSyncExternalStore(
+    subscribeToSurfaceActivation, getActiveSurfaceScope, getActiveSurfaceScope,
+  );
+  const identity = surfaceScope.key(surfaceScope.epoch, sessionId);
+  const [boundIdentity, setBoundIdentity] = useState(identity);
   const snapshotsAvailable = useSyncExternalStore(
     (callback) => flowChatStore.subscribe(() => callback()),
     () => hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined),
@@ -53,7 +62,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
   const diffEngine = useMemo(() => new DiffDisplayEngine(), []);
 
   const refreshSession = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     const session = flowChatStore.getState().sessions.get(sessionId);
     if (!shouldRefreshSnapshotForSession(session)) {
@@ -75,6 +84,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await SnapshotLazyLoader.ensureInitialized();
 
       if (
+        !surfaceScope.isCurrent() ||
         refreshGenerationRef.current !== refreshGeneration ||
         activeSessionIdRef.current !== sessionId ||
         !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))
@@ -85,6 +95,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await stateManager.refreshSessionState(sessionId);
 
       if (
+        !surfaceScope.isCurrent() ||
         refreshGenerationRef.current !== refreshGeneration ||
         activeSessionIdRef.current !== sessionId ||
         !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))
@@ -98,38 +109,40 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       setSessionState(newSessionState);
       setFiles(newFiles);
     } catch (err) {
-      if (refreshGenerationRef.current === refreshGeneration && activeSessionIdRef.current === sessionId) {
+      if (surfaceScope.isCurrent() && refreshGenerationRef.current === refreshGeneration && activeSessionIdRef.current === sessionId) {
         log.error('Failed to refresh session state', { sessionId, error: err });
         setError(t('snapshotSystem.errors.refreshSessionFailed'));
       }
     } finally {
-      if (refreshGenerationRef.current === refreshGeneration && activeSessionIdRef.current === sessionId) {
+      if (surfaceScope.isCurrent() && refreshGenerationRef.current === refreshGeneration && activeSessionIdRef.current === sessionId) {
         setLoading(false);
       }
     }
-  }, [sessionId, stateManager, t]);
+  }, [sessionId, stateManager, surfaceScope, t]);
 
   const acceptFile = useCallback(async (filePath: string) => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     try {
       setError(null);
       
       await SnapshotLazyLoader.ensureInitialized();
+      if (!surfaceScope.isCurrent()) return;
       
       eventBus.emit(SNAPSHOT_EVENTS.USER_ACCEPT_FILE, { filePath }, sessionId, filePath);
       
       await stateManager.handleUserFileAction(sessionId, filePath, 'accept');
       
     } catch (err) {
+      if (!surfaceScope.isCurrent()) return;
       log.error('Failed to accept file', { sessionId, filePath, error: err });
       setError(t('snapshotSystem.errors.acceptFileFailed'));
       throw err;
     }
-  }, [sessionId, eventBus, stateManager, t]);
+  }, [sessionId, eventBus, stateManager, surfaceScope, t]);
 
   const rejectFile = useCallback(async (filePath: string) => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     try {
       setError(null);
@@ -139,14 +152,15 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await stateManager.handleUserFileAction(sessionId, filePath, 'reject');
       
     } catch (err) {
+      if (!surfaceScope.isCurrent()) return;
       log.error('Failed to reject file', { sessionId, filePath, error: err });
       setError(t('snapshotSystem.errors.rejectFileFailed'));
       throw err;
     }
-  }, [sessionId, eventBus, stateManager, t]);
+  }, [sessionId, eventBus, stateManager, surfaceScope, t]);
 
   const acceptSession = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     try {
       setError(null);
@@ -155,14 +169,15 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await stateManager.handleUserSessionAction(sessionId, 'accept');
       
     } catch (err) {
+      if (!surfaceScope.isCurrent()) return;
       log.error('Failed to accept session', { sessionId, error: err });
       setError(t('snapshotSystem.errors.acceptSessionFailed'));
       throw err;
     }
-  }, [sessionId, eventBus, stateManager, t]);
+  }, [sessionId, eventBus, stateManager, surfaceScope, t]);
 
   const rejectSession = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     try {
       setError(null);
@@ -171,14 +186,15 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await stateManager.handleUserSessionAction(sessionId, 'reject');
       
     } catch (err) {
+      if (!surfaceScope.isCurrent()) return;
       log.error('Failed to reject session', { sessionId, error: err });
       setError(t('snapshotSystem.errors.rejectSessionFailed'));
       throw err;
     }
-  }, [sessionId, eventBus, stateManager, t]);
+  }, [sessionId, eventBus, stateManager, surfaceScope, t]);
 
   const acceptBlock = useCallback(async (filePath: string, blockId: string) => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     try {
       setError(null);
@@ -187,14 +203,15 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await stateManager.handleUserBlockAction(sessionId, filePath, blockId, 'accept');
       
     } catch (err) {
+      if (!surfaceScope.isCurrent()) return;
       log.error('Failed to accept block', { sessionId, filePath, blockId, error: err });
       setError(t('snapshotSystem.errors.acceptBlockFailed'));
       throw err;
     }
-  }, [sessionId, eventBus, stateManager, t]);
+  }, [sessionId, eventBus, stateManager, surfaceScope, t]);
 
   const rejectBlock = useCallback(async (filePath: string, blockId: string) => {
-    if (!sessionId) return;
+    if (!sessionId || !surfaceScope.isCurrent()) return;
 
     try {
       setError(null);
@@ -203,33 +220,39 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       await stateManager.handleUserBlockAction(sessionId, filePath, blockId, 'reject');
       
     } catch (err) {
+      if (!surfaceScope.isCurrent()) return;
       log.error('Failed to reject block', { sessionId, filePath, blockId, error: err });
       setError(t('snapshotSystem.errors.rejectBlockFailed'));
       throw err;
     }
-  }, [sessionId, eventBus, stateManager, t]);
+  }, [sessionId, eventBus, stateManager, surfaceScope, t]);
 
   const getCompactDiff = useCallback((filePath: string): CompactDiffResult | null => {
+    if (!surfaceScope.isCurrent()) return null;
     if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined)) return null;
     const file = stateManager.getFileState(filePath);
     if (!file) return null;
     
     return diffEngine.generateCompactDiff(file);
-  }, [sessionId, stateManager, diffEngine]);
+  }, [sessionId, stateManager, diffEngine, surfaceScope]);
 
   const getFullDiff = useCallback((filePath: string): FullDiffResult | null => {
+    if (!surfaceScope.isCurrent()) return null;
     if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined)) return null;
     const file = stateManager.getFileState(filePath);
     if (!file) return null;
     
     return diffEngine.generateFullDiff(file);
-  }, [sessionId, stateManager, diffEngine]);
+  }, [sessionId, stateManager, diffEngine, surfaceScope]);
 
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
   useEffect(() => {
+    setBoundIdentity(identity);
+    setLoading(false);
+    setError(null);
     if (!sessionId) {
       setFiles([]);
       setSessionState(null);
@@ -243,7 +266,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     setSessionState(null);
 
     const unsubscribeSession = stateManager.onSessionStateChange((newSessionState) => {
-      if (newSessionState.sessionId === activeSessionIdRef.current &&
+      if (surfaceScope.isCurrent() && newSessionState.sessionId === activeSessionIdRef.current &&
         shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))) {
         setSessionState(newSessionState);
         setFiles(Array.from(newSessionState.files.values()));
@@ -253,7 +276,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     });
 
     const unsubscribeFile = stateManager.onFileStateChange((file) => {
-      if (file.sessionId === activeSessionIdRef.current &&
+      if (surfaceScope.isCurrent() && file.sessionId === activeSessionIdRef.current &&
         shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))) {
         setFiles(prev => {
           const newFiles = [...prev];
@@ -279,6 +302,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     }
 
     const unsubscribeFlowChat = flowChatStore.subscribe((state) => {
+      if (!surfaceScope.isCurrent()) return;
       const nextCanRefresh = shouldRefreshSnapshotForSession(state.sessions.get(sessionId));
       if (nextCanRefresh && !canRefresh) {
         canRefresh = true;
@@ -302,14 +326,18 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       unsubscribeFile();
       unsubscribeFlowChat();
     };
-  }, [sessionId, stateManager, refreshSession]);
+  }, [identity, sessionId, stateManager, refreshSession, surfaceScope]);
 
+  // An activation may render the same Session id before effects rebind. Never
+  // paint the previous device's cached files during that render.
+  const hasCurrentState = snapshotsAvailable && boundIdentity === identity;
   return {
+    surfaceEpoch: surfaceScope.epoch,
     snapshotsAvailable,
-    sessionState: snapshotsAvailable ? sessionState : null,
-    files: snapshotsAvailable ? files : unavailableFiles,
-    loading: snapshotsAvailable && loading,
-    error: snapshotsAvailable ? error : null,
+    sessionState: hasCurrentState ? sessionState : null,
+    files: hasCurrentState ? files : unavailableFiles,
+    loading: hasCurrentState && loading,
+    error: hasCurrentState ? error : null,
     refreshSession,
     acceptFile,
     rejectFile,

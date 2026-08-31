@@ -33,6 +33,11 @@ pub struct LocalGlobResult {
 pub fn extract_glob_base_directory(pattern: &str) -> (String, String) {
     let glob_start = pattern.find(['*', '?', '[', '{']);
 
+    #[cfg(not(windows))]
+    if pattern[..glob_start.unwrap_or(pattern.len())].contains('\\') {
+        return (String::new(), pattern.to_string());
+    }
+
     match glob_start {
         Some(index) => {
             let static_prefix = &pattern[..index];
@@ -222,6 +227,12 @@ pub fn extract_remote_glob_base_directory(pattern: &str) -> (String, String) {
     let static_prefix = pattern
         .find(['*', '?', '[', '{'])
         .map_or(pattern.trim_end_matches('/'), |index| &pattern[..index]);
+    // This is a glob prefix, not yet a filesystem spelling. Escaped characters
+    // must be interpreted by the matcher, never copied into a directory name.
+    // Keeping the original root avoids needing a second glob parser here.
+    if static_prefix.contains('\\') {
+        return (String::new(), pattern.to_string());
+    }
     match static_prefix.rfind('/') {
         Some(index) => (
             if index == 0 { "/" } else { &pattern[..index] }.to_string(),
@@ -803,12 +814,32 @@ mod tests {
         assert!(!matcher.is_match("other/src/file.js"));
         assert_eq!(
             derive_remote_walk_root(r"/repo\name/", r"src\cache/*.rs"),
-            (r"/repo\name/src\cache".to_string(), "*.rs".to_string())
+            (r"/repo\name/".to_string(), r"src\cache/*.rs".to_string())
         );
         assert_eq!(
             derive_remote_walk_root("/", "src/*.rs"),
             ("/src".to_string(), "*.rs".to_string())
         );
+    }
+
+    #[test]
+    fn escaped_static_prefix_is_matched_without_becoming_a_literal_walk_root() {
+        for (pattern, file) in [
+            (r"a\\b/*.rs", r"a\b/source.rs"),
+            (r"a\ space/*.rs", "a space/source.rs"),
+            (r"literal\?/nested/*.rs", "literal?/nested/source.rs"),
+        ] {
+            assert_eq!(
+                derive_remote_walk_root("/repo", pattern),
+                ("/repo".to_string(), pattern.to_string())
+            );
+            assert!(WorkspaceGlobMatcher::new(pattern).unwrap().is_match(file));
+            #[cfg(not(windows))]
+            assert_eq!(
+                super::derive_walk_root(Path::new("/repo"), pattern),
+                (PathBuf::from("/repo"), pattern.to_string())
+            );
+        }
     }
 
     #[cfg(unix)]

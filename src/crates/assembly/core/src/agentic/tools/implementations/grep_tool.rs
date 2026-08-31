@@ -1553,6 +1553,101 @@ mod tests {
             dir
         }
 
+        const UNFILTERED_FILES: &[&str] = &[
+            "known.py",
+            "custom.bitfun_custom_ext",
+            "opaque_workspace_notes",
+            "src/lib.rs",
+            "other.rs",
+            "src/log.txt",
+        ];
+
+        fn unfiltered_fixture() -> tempfile::TempDir {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::create_dir(dir.path().join(".git")).unwrap();
+            std::fs::create_dir(dir.path().join("src")).unwrap();
+            for name in UNFILTERED_FILES {
+                std::fs::write(dir.path().join(name), "needle\n").unwrap();
+            }
+            dir
+        }
+
+        fn unfiltered_cases(root: &str) -> Vec<(GrepOptions, Vec<&'static str>)> {
+            let options = GrepOptions::new("needle", root)
+                .display_base(root)
+                .output_mode(OutputMode::FilesWithMatches);
+            vec![
+                (options.clone(), UNFILTERED_FILES.to_vec()),
+                (
+                    options.clone().globs(vec!["src/*.rs".to_string()]),
+                    vec!["src/lib.rs"],
+                ),
+                (
+                    options.clone().globs(vec!["src/**".to_string()]),
+                    vec!["src/lib.rs", "src/log.txt"],
+                ),
+                (
+                    options.clone().globs(vec!["*.rs".to_string()]),
+                    vec!["other.rs", "src/lib.rs"],
+                ),
+                (
+                    options
+                        .clone()
+                        .globs(vec![format!("{}/src/*.rs", root.replace('\\', "/"))]),
+                    vec!["src/lib.rs"],
+                ),
+                (
+                    options.globs(vec!["lib.rs".to_string()]),
+                    vec!["src/lib.rs"],
+                ),
+            ]
+        }
+
+        fn assert_expected_files(result: &GrepSearchResult, expected: &[&str]) {
+            let expected: std::collections::BTreeSet<_> = expected.iter().copied().collect();
+            let actual: std::collections::BTreeSet<_> = result.result_text.lines().collect();
+            assert_eq!(actual, expected);
+            assert_eq!(result.file_count, expected.len());
+            assert_eq!(result.total_matches, expected.len());
+            assert!(!result.cancelled);
+        }
+
+        #[tokio::test]
+        async fn default_type_and_relative_globs_match_expected_files_across_workspace_paths() {
+            let dir = unfiltered_fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let mut candidates = "BITFUN_RG_CANDIDATES_BEGIN\0".to_string();
+            for name in UNFILTERED_FILES {
+                candidates.push_str(&LocalWorkspaceFs.join_path(&root, &[*name]));
+                candidates.push('\0');
+            }
+            candidates.push_str("BITFUN_RG_CANDIDATES_END\0");
+            let shell = ResponseShell {
+                status: 0,
+                stdout: candidates,
+                timed_out: false,
+            };
+            for (options, expected) in unfiltered_cases(&root) {
+                let native_options = options.clone();
+                let native =
+                    tokio::task::spawn_blocking(move || grep_search(native_options, None, None))
+                        .await
+                        .unwrap()
+                        .unwrap();
+                assert_expected_files(&native, &expected);
+                let portable = grep_search_workspace(options.clone(), &LocalWorkspaceFs, None)
+                    .await
+                    .unwrap();
+                assert!(!portable.used_rg_candidates && !portable.used_grep_candidates);
+                assert_expected_files(&portable.result, &expected);
+                let candidates = grep_search_workspace(options, &LocalWorkspaceFs, Some(&shell))
+                    .await
+                    .unwrap();
+                assert!(candidates.used_rg_candidates);
+                assert_expected_files(&candidates.result, &expected);
+            }
+        }
+
         #[tokio::test]
         async fn shared_regex_context_modes_windows_and_type_catalog_match_native() {
             let dir = fixture();
@@ -1789,6 +1884,41 @@ mod tests {
                     }
                 }
                 self.local.exec_with_options(command, options).await
+            }
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn default_type_and_relative_globs_match_expected_files_with_real_candidates() {
+            let dir = unfiltered_fixture();
+            let root = dir.path().to_string_lossy().into_owned();
+            let shell = LocalWorkspaceShell::new(root.clone());
+            let has_rg = shell
+                .exec("command -v rg >/dev/null 2>&1", Some(1000))
+                .await
+                .unwrap()
+                .2
+                == 0;
+            let without_rg = WithoutRgShell {
+                local: LocalWorkspaceShell::new(root.clone()),
+                batches: Default::default(),
+                malformed_batch: false,
+            };
+            for (options, expected) in unfiltered_cases(&root) {
+                let accelerated =
+                    grep_search_workspace(options.clone(), &LocalWorkspaceFs, Some(&shell))
+                        .await
+                        .unwrap();
+                assert_eq!(accelerated.used_rg_candidates, has_rg);
+                assert!(accelerated.used_rg_candidates || accelerated.used_grep_candidates);
+                assert_expected_files(&accelerated.result, &expected);
+                let system_grep =
+                    grep_search_workspace(options, &LocalWorkspaceFs, Some(&without_rg))
+                        .await
+                        .unwrap();
+                assert!(!system_grep.used_rg_candidates);
+                assert!(system_grep.used_grep_candidates);
+                assert_expected_files(&system_grep.result, &expected);
             }
         }
 

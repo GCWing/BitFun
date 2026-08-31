@@ -958,6 +958,54 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
+    async fn escaped_glob_directories_keep_native_and_workspace_searches_in_scope() {
+        use crate::agentic::workspace::{LocalWorkspaceFs, LocalWorkspaceShell};
+        use bitfun_runtime_ports::WorkspaceShell;
+        use tool_runtime::search::glob_search::{
+            build_remote_rg_command, collect_remote_glob_result, validate_remote_glob_exit,
+        };
+
+        let root = make_temp_dir("workspace-io-escaped-prefix");
+        fs::create_dir(root.join(r"a\b")).unwrap();
+        fs::write(root.join(r"a\b/source.rs"), "").unwrap();
+        let pattern = r"a\\b/*.rs";
+        let expected = vec![PathBuf::from(r"a\b/source.rs")];
+        let portable =
+            collect_workspace_glob(&LocalWorkspaceFs, &root.to_string_lossy(), pattern, 10)
+                .await
+                .unwrap();
+        assert_eq!(portable.walk_root, root);
+        assert_eq!(portable.matches, expected);
+        assert_eq!(portable.total_matches, Some(1));
+        let native = execute_local_glob(LocalGlobRequest {
+            search_path: root.clone(),
+            pattern: pattern.to_string(),
+            limit: 10,
+        })
+        .unwrap();
+        assert_eq!(native.walk_root, root);
+        assert_eq!(native.matches, expected);
+
+        let shell = LocalWorkspaceShell::new(root.to_string_lossy().into_owned());
+        if shell
+            .exec("command -v rg >/dev/null 2>&1", Some(1000))
+            .await
+            .unwrap()
+            .2
+            == 0
+        {
+            let command = build_remote_rg_command(&root.to_string_lossy(), pattern);
+            let (stdout, stderr, status) = shell.exec(&command, Some(1000)).await.unwrap();
+            validate_remote_glob_exit(status, &stderr).unwrap();
+            let actual = collect_remote_glob_result(&root.to_string_lossy(), &stdout, 10, true);
+            assert_eq!(actual.matches, expected);
+            assert_eq!(actual.total_matches, Some(1));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
     async fn remote_glob_without_rg_executes_the_workspace_io_fallback() {
         use bitfun_runtime_ports::{
             ToolRuntimeHandles, WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceServices,

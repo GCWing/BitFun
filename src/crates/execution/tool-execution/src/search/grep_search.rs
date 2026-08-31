@@ -571,17 +571,131 @@ struct GrepWorkerConfig {
     before_context: usize,
     after_context: usize,
     display_base: Option<String>,
+    search_root: String,
     globs: Vec<regex::bytes::Regex>,
     excluded_paths: Vec<String>,
     reject_linked_files: bool,
+    output_budget: Option<usize>,
 }
 
+#[derive(Clone)]
 struct GrepFileResult {
     path: PathBuf,
     display_path: Option<String>,
     file_matches: usize,
     output_lines: Vec<String>,
     modified_time: SystemTime,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum GrepResultOrder {
+    Path(std::ffi::OsString),
+    Modified(std::cmp::Reverse<SystemTime>, String),
+}
+
+/// Retain only the global output prefix needed for pagination, regardless of
+/// traversal/completion order. Counts describe all scanned matches. Content and
+/// Count preserve native path ordering; FilesWithMatches preserves mtime then
+/// display-path ordering. One extra unit proves truncation to the final reducer.
+struct GrepResultCollector {
+    output_mode: OutputMode,
+    display_base: Option<String>,
+    budget: Option<usize>,
+    file_count: usize,
+    total_matches: usize,
+    retained_units: usize,
+    files: std::collections::BTreeMap<(GrepResultOrder, usize), GrepFileResult>,
+}
+
+fn grep_output_budget(options: &GrepOptions) -> Option<usize> {
+    options
+        .head_limit
+        .filter(|limit| *limit > 0)
+        .map(|limit| options.offset.saturating_add(limit).saturating_add(1))
+}
+
+impl GrepResultCollector {
+    fn new(options: &GrepOptions) -> Self {
+        Self {
+            output_mode: options.output_mode,
+            display_base: options.display_base.clone(),
+            budget: grep_output_budget(options),
+            file_count: 0,
+            total_matches: 0,
+            retained_units: 0,
+            files: std::collections::BTreeMap::new(),
+        }
+    }
+
+    fn push(&mut self, mut result: GrepFileResult) {
+        self.file_count += 1;
+        self.total_matches += result.file_matches;
+        let order = if self.output_mode == OutputMode::FilesWithMatches {
+            let display_path = result.display_path.clone().unwrap_or_else(|| {
+                relativize_display_path(&result.path, self.display_base.as_deref())
+            });
+            GrepResultOrder::Modified(std::cmp::Reverse(result.modified_time), display_path)
+        } else {
+            GrepResultOrder::Path(result.path.as_os_str().to_os_string())
+        };
+        let units = if self.output_mode == OutputMode::Content {
+            // Preserve the reducer's physical-line units, including multiline
+            // sink writes. Production sinks already bound each file prefix.
+            result.output_lines = result
+                .output_lines
+                .into_iter()
+                .flat_map(|line| {
+                    if line.contains('\n') {
+                        line.lines()
+                            .filter(|part| !part.is_empty())
+                            .map(str::to_string)
+                            .collect::<Vec<_>>()
+                    } else if line.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![line]
+                    }
+                })
+                .take(self.budget.unwrap_or(usize::MAX))
+                .collect();
+            if result.output_lines.is_empty() {
+                return;
+            }
+            result.output_lines.len()
+        } else {
+            1
+        };
+        self.retained_units += units;
+        self.files.insert((order, self.file_count), result);
+        if let Some(budget) = self.budget {
+            while self.retained_units > budget {
+                let mut last = self.files.last_entry().expect("retained result exists");
+                let units = if self.output_mode == OutputMode::Content {
+                    last.get().output_lines.len()
+                } else {
+                    1
+                };
+                let excess = self.retained_units - budget;
+                if units > excess {
+                    last.get_mut().output_lines.truncate(units - excess);
+                    self.retained_units -= excess;
+                } else {
+                    last.remove();
+                    self.retained_units -= units;
+                }
+            }
+        }
+    }
+
+    fn finish(self, options: &GrepOptions, cancelled: bool) -> Result<GrepSearchResult, String> {
+        reduce_grep_results_with_totals(
+            options,
+            self.files.into_values().collect(),
+            cancelled,
+            self.file_count,
+            self.total_matches,
+        )
+    }
 }
 
 enum GrepWorkerEvent {
@@ -612,6 +726,26 @@ fn build_grep_globs(patterns: &[String]) -> Result<Vec<regex::bytes::Regex>, Str
                 .map_err(|error| format!("Invalid glob pattern: {error}"))
         })
         .collect()
+}
+
+/// Relative filters address the requested search root. Keep absolute patterns
+/// and basename filters working too, without interpreting POSIX paths through
+/// the controller's platform-specific Path implementation.
+fn grep_globs_match(globs: &[regex::bytes::Regex], path: &str, search_root: &str) -> bool {
+    if globs.is_empty() {
+        return true;
+    }
+    let path = workspace_search_path(path);
+    let root = workspace_search_path(search_root);
+    let relative = path
+        .strip_prefix(&format!("{}/", root.trim_end_matches('/')))
+        .unwrap_or(&path);
+    let basename = path.rsplit('/').next().unwrap_or(&path);
+    globs.iter().any(|glob| {
+        glob.is_match(path.as_bytes())
+            || glob.is_match(relative.as_bytes())
+            || glob.is_match(basename.as_bytes())
+    })
 }
 
 fn build_grep_matcher(options: &GrepOptions) -> Result<RegexMatcher, String> {
@@ -655,8 +789,6 @@ fn build_grep_file_types(file_type: Option<&str>) -> Result<TypesBuilder, String
 
         // User specified type, use user-specified type
         types_builder.select(ftype);
-    } else {
-        types_builder.select("all");
     }
 
     Ok(types_builder)
@@ -704,11 +836,11 @@ fn search_entry(
         .iter()
         .any(|excluded| paths_equal_for_exclusion(path, excluded))
         || is_vcs_path(path)
-        || (!config.globs.is_empty()
-            && !config
-                .globs
-                .iter()
-                .any(|glob| glob.is_match(native_search_path(path).as_bytes())))
+        || !grep_globs_match(
+            &config.globs,
+            &native_search_path(path),
+            &config.search_root,
+        )
     {
         return GrepWorkerEvent::Processed(None);
     }
@@ -721,7 +853,8 @@ fn search_entry(
         None,
         path.to_path_buf(),
         config.display_base.clone(),
-    );
+    )
+    .with_output_budget(config.output_budget);
     if let Err(error) = searcher.search_path(matcher, path, sink.clone()) {
         return GrepWorkerEvent::Error(format!("Error searching file {}: {error}", path.display()));
     }
@@ -862,9 +995,11 @@ pub fn grep_search(
         before_context,
         after_context,
         display_base,
+        search_root: native_search_path(path),
         globs: glob_matchers,
         excluded_paths: options.excluded_paths.clone(),
         reject_linked_files: options.reject_linked_files,
+        output_budget: grep_output_budget(&options),
     };
     let worker_count =
         std::thread::available_parallelism().map_or(1, |parallelism| parallelism.get().min(8));
@@ -909,7 +1044,7 @@ pub fn grep_search(
     let mut files_processed = 0;
     let mut last_progress_time = std::time::Instant::now();
     let progress_interval_millis = progress_interval_millis.unwrap_or(500);
-    let mut file_results = Vec::new();
+    let mut file_results = GrepResultCollector::new(&options);
 
     let mut cancelled = false;
     for event in event_receiver {
@@ -953,20 +1088,30 @@ pub fn grep_search(
     // ends the loop above without setting the flag there.
     let cancelled = cancelled || is_cancelled();
 
-    reduce_grep_results(&options, file_results, cancelled)
+    file_results.finish(&options, cancelled)
 }
 
 fn reduce_grep_results(
     options: &GrepOptions,
+    file_results: Vec<GrepFileResult>,
+    cancelled: bool,
+) -> Result<GrepSearchResult, String> {
+    let file_count = file_results.len();
+    let total_matches = file_results.iter().map(|file| file.file_matches).sum();
+    reduce_grep_results_with_totals(options, file_results, cancelled, file_count, total_matches)
+}
+
+fn reduce_grep_results_with_totals(
+    options: &GrepOptions,
     mut file_results: Vec<GrepFileResult>,
     cancelled: bool,
+    file_count: usize,
+    total_matches: usize,
 ) -> Result<GrepSearchResult, String> {
     let output_mode = options.output_mode;
     let head_limit = options.head_limit;
     let offset = options.offset;
     let pattern = &options.pattern;
-    let file_count = file_results.len();
-    let total_matches = file_results.iter().map(|file| file.file_matches).sum();
     // Worker completion order is nondeterministic. Stable path order keeps Content and Count
     // output reproducible; FilesWithMatches applies its existing mtime ordering below.
     file_results.sort_by(|left, right| left.path.as_os_str().cmp(right.path.as_os_str()));
@@ -1292,7 +1437,7 @@ struct WorkspaceGrepCollector<'a> {
     options: &'a GrepOptions,
     fs: &'a dyn WorkspaceFileSystem,
     matcher: RegexMatcher,
-    file_results: Vec<GrepFileResult>,
+    file_results: GrepResultCollector,
     scanned_file_count: usize,
     bytes_read: Arc<std::sync::atomic::AtomicU64>,
 }
@@ -1371,13 +1516,7 @@ impl WorkspaceGrepCollector<'_> {
                 None,
             )
             .with_display_path(display_path.clone())
-            .with_output_budget(
-                self.options
-                    .head_limit
-                    .filter(|limit| *limit > 0)
-                    // One extra line preserves the reducer's truncation fact.
-                    .map(|limit| self.options.offset.saturating_add(limit).saturating_add(1)),
-            );
+            .with_output_budget(grep_output_budget(self.options));
             let worker_sink = sink.clone();
             let worker_matcher = self.matcher.clone();
             let multiline = self.options.multiline;
@@ -1429,7 +1568,7 @@ async fn grep_search_workspace_inner(
             options
                 .file_type
                 .as_deref()
-                .is_none_or(|name| definition.name() == name)
+                .is_some_and(|name| definition.name() == name)
         })
         .flat_map(|definition| definition.globs().to_vec())
         .map(|pattern| {
@@ -1559,7 +1698,7 @@ async fn grep_search_workspace_inner(
         options: &options,
         fs,
         matcher,
-        file_results: Vec::new(),
+        file_results: GrepResultCollector::new(&options),
         scanned_file_count: 0,
         bytes_read: Arc::new(std::sync::atomic::AtomicU64::new(0)),
     };
@@ -1615,16 +1754,13 @@ async fn grep_search_workspace_inner(
         {
             continue;
         }
-        if !globs.is_empty()
-            && !globs
-                .iter()
-                .any(|glob| glob.is_match(workspace_search_path(&path).as_bytes()))
-        {
+        if !grep_globs_match(&globs, &path, &options.path) {
             continue;
         }
         let name = file_name.as_deref().unwrap_or(&path);
         // Explicit files bypass the walker's type filters in the native path.
         if root_metadata.kind == WorkspacePathKind::Directory
+            && options.file_type.is_some()
             && !type_globs.is_match(name.as_bytes())
         {
             continue;
@@ -1662,11 +1798,9 @@ async fn grep_search_workspace_inner(
     }
     collector.scan_batch(&mut pending, grep_prefilter).await?;
     Ok(WorkspaceGrepResult {
-        result: reduce_grep_results(
-            &options,
-            collector.file_results,
-            cancellation.is_cancelled(),
-        )?,
+        result: collector
+            .file_results
+            .finish(&options, cancellation.is_cancelled())?,
         used_rg_candidates,
         used_grep_candidates,
         scanned_file_count: collector.scanned_file_count,
@@ -1954,6 +2088,30 @@ mod tests {
             super::workspace_display_path(r"/repo/a\b.py", Some("/repo")),
             r#""a\\b.py""#
         );
+    }
+
+    #[test]
+    fn relative_globs_use_search_root_without_rewriting_posix_backslashes() {
+        for (pattern, path, root) in [
+            ("src/*.rs", "/repo/src/lib.rs", "/repo"),
+            ("src/**", "/repo/src/nested/lib.rs", "/repo/"),
+            ("/repo/src/*.rs", "/repo/src/lib.rs", "/repo"),
+            ("lib.rs", "/repo/src/lib.rs", "/repo"),
+            (r"src/a\\b.rs", r"/repo/src/a\b.rs", "/repo"),
+            ("src/*.rs", r"C:\repo\src\lib.rs", r"C:\repo"),
+        ] {
+            let globs = super::build_grep_globs(&[pattern.to_string()]).unwrap();
+            assert!(
+                super::grep_globs_match(&globs, path, root),
+                "{pattern}: {path}"
+            );
+        }
+        let globs = super::build_grep_globs(&["src/*.rs".to_string()]).unwrap();
+        assert!(!super::grep_globs_match(
+            &globs,
+            "/repository/src/lib.rs",
+            "/repo"
+        ));
     }
 
     #[cfg(unix)]

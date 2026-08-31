@@ -117,11 +117,15 @@ local Docker uses the existing local PTY service with `docker exec -it`.
 SSH workspaces continue to use SFTP. Docker workspaces use binary stdio streams,
 not text or base64 envelopes.
 
-Reads stream chunks and report real byte progress. Writes stream to a unique
-temporary file in the destination directory and rename it only after the input
-has completed successfully. Cancellation kills the process and the shell trap
-removes the temporary file, so an interrupted upload does not replace a valid
-destination with partial content.
+Reads stream chunks and report real byte progress. File transfers stream to a
+unique temporary file in the destination directory and rename it only after the
+input has completed successfully. Cancellation kills the process and the shell
+trap removes the temporary file, so an interrupted upload does not replace a
+valid destination with partial content. Workspace tool writes retain ordinary
+filesystem semantics instead: after validating the staged bytes, they write
+through the destination to preserve existing links and permissions. The final
+write is not an atomic transaction against other writers; interruption during
+that phase can have a partial or unknown outcome.
 
 Directory and stat records use NUL-separated fields. File names containing
 newlines or the delimiters used by older implementations remain round-trippable.
@@ -329,10 +333,12 @@ one extra retained line preserves the truncation indicator. Search results expos
 the selected backend, scanned-file count and stream bytes. Cancellation covers
 metadata, enumeration and opening as well as reading. Ordinary SSH command tasks
 retain transport ownership after caller drop to interrupt, drain and close their
-channel without cancelling sibling commands. A channel-open request that never
-receives confirmation cannot be individually closed with the current SSH library;
-cleanup waits are bounded and report this limitation instead of disconnecting
-the shared connection.
+channel without cancelling sibling commands. Callers return after a bounded
+cleanup grace period; the transport owner retains a pending channel-open request
+until confirmation or disconnect, then closes a late channel without executing
+the cancelled command. A request that never receives confirmation cannot be
+individually closed with the current SSH library, so its owner remains until the
+transport ends rather than disconnecting the shared connection.
 These are current limits, not evidence of complete backend parity.
 
 ### Snapshot storage and safe mutations

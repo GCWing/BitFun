@@ -188,6 +188,20 @@ impl RemoteFileService {
         manager.sftp_write(connection_id, path, content).await
     }
 
+    /// Workspace edits follow the existing target instead of replacing an
+    /// upload destination. Keep generic upload semantics in `write_file`.
+    pub async fn write_workspace_file(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+    ) -> anyhow::Result<()> {
+        self.get_manager(connection_id)
+            .await?
+            .write_workspace_file(connection_id, path, content)
+            .await
+    }
+
     /// Write content to a remote file via SFTP with chunked progress
     /// reporting. `on_progress` is called with `(bytes_written, total_size)`
     /// after each chunk. Returns `false` from the callback to cancel.

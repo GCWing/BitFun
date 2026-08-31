@@ -3,7 +3,7 @@ import { SnapshotSystemService } from '../services/SnapshotSystemService';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { shouldRefreshSnapshotForSession } from '../hooks/snapshotRefreshPolicy';
-import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
+import { getActiveSurfaceId, getActiveSurfaceScope, type DeviceSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('SnapshotStateManager');
 
@@ -41,14 +41,35 @@ export interface SessionState {
   lastActivity: number;
 }
 
+interface SurfaceSnapshotState {
+  sessions: Map<string, SessionState>;
+  files: Map<string, SnapshotFile>;
+}
+
 export class SnapshotStateManager {
   private static instance: SnapshotStateManager;
   private eventBus: SnapshotEventBus;
   private snapshotService: SnapshotSystemService;
-  private sessions: Map<string, SessionState> = new Map();
-  // NOTE: Indexed by filePath (not session-scoped). Assumes the UI only tracks one active
-  // snapshot session per file at a time.
-  private files: Map<string, SnapshotFile> = new Map();
+  private readonly surfaces = new Map<DeviceSurfaceId, SurfaceSnapshotState>();
+
+  private get currentSurface(): SurfaceSnapshotState {
+    const surfaceId = getActiveSurfaceId();
+    let state = this.surfaces.get(surfaceId);
+    if (!state) {
+      state = { sessions: new Map(), files: new Map() };
+      this.surfaces.set(surfaceId, state);
+    }
+    return state;
+  }
+
+  private get sessions(): Map<string, SessionState> {
+    return this.currentSurface.sessions;
+  }
+
+  // Within one surface the UI tracks one active snapshot Session per file.
+  private get files(): Map<string, SnapshotFile> {
+    return this.currentSurface.files;
+  }
 
   private constructor() {
     this.eventBus = SnapshotEventBus.getInstance();
@@ -232,12 +253,14 @@ export class SnapshotStateManager {
   }
 
   async handleUserFileAction(sessionId: string, filePath: string, action: 'accept' | 'reject'): Promise<void> {
+    const scope = getActiveSurfaceScope();
     try {
       if (action === 'accept') {
         await this.snapshotService.acceptFileModifications(sessionId, filePath);
       } else {
         await this.snapshotService.rejectFileModifications(sessionId, filePath);
       }
+      if (!scope.isCurrent()) return;
 
       const file = this.files.get(filePath);
       if (file) {
@@ -256,12 +279,14 @@ export class SnapshotStateManager {
   }
 
   async handleUserSessionAction(sessionId: string, action: 'accept' | 'reject'): Promise<void> {
+    const scope = getActiveSurfaceScope();
     try {
       if (action === 'accept') {
         await this.snapshotService.acceptSessionModifications(sessionId);
       } else {
         await this.snapshotService.rejectSessionModifications(sessionId);
       }
+      if (!scope.isCurrent()) return;
 
       const sessionState = this.sessions.get(sessionId);
       if (sessionState) {

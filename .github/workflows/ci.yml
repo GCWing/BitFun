@@ -370,12 +370,32 @@ jobs:
       - name: Run file watch contract tests
         run: cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 
-      # Search tools resolve paths and symlinks directly, which also differs
-      # across platforms. Scoped to the search module: the glob tests in this
-      # crate fail on Windows independently of this branch (walk-root
-      # derivation treats separators differently) and need their own fix.
+      # Search tools share matching but retain provider-specific path and
+      # symlink handling. Keep the search module in the full OS matrix.
       - name: Run search tool tests
         run: "cargo test --locked -p tool-runtime --lib search::"
+
+      # Workspace providers own filesystem/link semantics and SSH cleanup;
+      # compiling them as Desktop dependencies does not execute their tests.
+      - name: Run workspace provider contracts
+        shell: bash
+        run: |
+          cargo test --locked -p bitfun-services-core --no-default-features --features workspace-runtime --lib workspace::tests::
+          cargo test --locked -p bitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::manager::tests::workspace_
+          cargo test --locked -p tool-runtime --no-default-features --lib fs::read_file::tests::
+          cargo test --locked -p tool-runtime --no-default-features --test tool_io_contracts
+
+      # Linux's product-full suite above already covers these tools. The
+      # feature-free Core suites on macOS/Windows do not exercise workspace IO.
+      - name: Run workspace Agent contracts
+        if: runner.os != 'Linux'
+        run: >-
+          cargo test --locked -p bitfun-core --no-default-features
+          --features agent-runtime,git,remote-workspace,document-read --lib --
+          file_read_tool::tests file_write_tool::tests file_edit_tool::tests
+          delete_file_tool::tests grep_tool::tests glob_tool::tests ls_tool::tests
+          tool_context_runtime::path_resolution_tests file_read_state_runtime::tests
+          service::snapshot:: product_runtime::tests::session_fork_
 
   # Call the standalone Linux/Relay workflow directly. Calling the Nightly
   # artifact orchestrator would register a misleading skipped Desktop package

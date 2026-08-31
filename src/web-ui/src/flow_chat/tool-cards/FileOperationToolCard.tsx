@@ -143,7 +143,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   
   const [isContentExpanded, setIsContentExpanded] = useState(status !== 'completed');
   const [retainLiveCompletionPreview, setRetainLiveCompletionPreview] = useState(false);
-  const [operationDiffStats, setOperationDiffStats] = useState<{ additions: number; deletions: number } | null>(null);
+  const [operationDiffStats, setOperationDiffStats] = useState<{ surfaceEpoch: number; additions: number; deletions: number } | null>(null);
   
   const hasInitializedCompletionEffectRef = useRef(false);
   const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
@@ -159,6 +159,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   });
   
   const {
+    surfaceEpoch,
     snapshotsAvailable,
     error,
     clearError
@@ -431,8 +432,9 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [toolItem.toolName, contentPreview, oldStringContent, newStringContent, status, isFailed]);
 
   const currentFileDiffStats = useMemo(() => {
-    return operationDiffStats ?? localDiffStats ?? { additions: 0, deletions: 0 };
-  }, [operationDiffStats, localDiffStats]);
+    return (operationDiffStats?.surfaceEpoch === surfaceEpoch ? operationDiffStats : null)
+      ?? localDiffStats ?? { additions: 0, deletions: 0 };
+  }, [operationDiffStats, localDiffStats, surfaceEpoch]);
 
   useEffect(() => {
     setOperationDiffStats(null);
@@ -449,6 +451,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         const summary = await snapshotAPI.getOperationSummary(sessionId, toolCall.id);
         if (cancelled || !scope.isCurrent()) return;
         setOperationDiffStats({
+          surfaceEpoch,
           additions: summary.linesAdded ? Number(summary.linesAdded) : 0,
           deletions: summary.linesRemoved ? Number(summary.linesRemoved) : 0
         });
@@ -461,7 +464,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [operationSnapshotAvailable, sessionId, toolCall?.id, status, isFailed]);
+  }, [operationSnapshotAvailable, sessionId, toolCall?.id, status, isFailed, surfaceEpoch]);
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
   /*
@@ -606,7 +609,8 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
             true,
             'agent',
             undefined,
-            jumpToLine
+            jumpToLine,
+            true
           );
         }, 250);
         return;

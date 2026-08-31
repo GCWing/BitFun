@@ -1,4 +1,3 @@
-use crate::util::string::truncate_string_by_chars;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
@@ -125,7 +124,7 @@ pub async fn read_file_tail_from_reader<R: tokio::io::AsyncRead + Unpin>(
 }
 
 async fn read_async_text<R: tokio::io::AsyncRead + Unpin>(
-    reader: R,
+    mut reader: R,
     source: &str,
     start_line: usize,
     limit: usize,
@@ -133,18 +132,33 @@ async fn read_async_text<R: tokio::io::AsyncRead + Unpin>(
     max_total_chars: usize,
     tail: bool,
 ) -> Result<ReadFileResult, String> {
-    use tokio::io::AsyncBufReadExt;
-    let mut selection =
-        ReadLineSelection::new(start_line, limit, max_line_chars, max_total_chars, tail)?;
-    let mut lines = tokio::io::BufReader::new(reader).lines();
-    while let Some(line) = lines
-        .next_line()
-        .await
-        .map_err(|error| format!("Failed to read {source}: {error}"))?
-    {
-        selection.push(line);
+    use tokio::io::AsyncReadExt;
+    let mut decoder = ReadTextDecoder::new(ReadLineSelection::new(
+        start_line,
+        limit,
+        max_line_chars,
+        max_total_chars,
+        tail,
+    )?);
+    let mut buffer = [0_u8; 8192];
+    loop {
+        // An async provider may use Interrupted for cancellation. Do not retry
+        // ready errors in a tight loop and prevent the owning task from yielding.
+        let count = reader
+            .read(&mut buffer)
+            .await
+            .map_err(|error| format!("Failed to read {source}: {error}"))?;
+        if count == 0 {
+            break;
+        }
+        decoder
+            .push_bytes(&buffer[..count])
+            .map_err(|error| format!("Failed to read {source}: {error}"))?;
     }
-    selection.finish()
+    decoder
+        .finish()
+        .map_err(|error| format!("Failed to read {source}: {error}"))?
+        .finish()
 }
 
 /// start_line: starts from 1
@@ -224,7 +238,7 @@ pub fn read_text_tail(
 }
 
 fn read_buffered_text<R: BufRead>(
-    reader: R,
+    mut reader: R,
     source: &str,
     start_line: usize,
     limit: usize,
@@ -232,12 +246,143 @@ fn read_buffered_text<R: BufRead>(
     max_total_chars: usize,
     tail: bool,
 ) -> Result<ReadFileResult, String> {
-    let mut selection =
-        ReadLineSelection::new(start_line, limit, max_line_chars, max_total_chars, tail)?;
-    for line in reader.lines() {
-        selection.push(line.map_err(|error| format!("Failed to read {source}: {error}"))?);
+    let mut decoder = ReadTextDecoder::new(ReadLineSelection::new(
+        start_line,
+        limit,
+        max_line_chars,
+        max_total_chars,
+        tail,
+    )?);
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let count = match reader.read(&mut buffer) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            result => result.map_err(|error| format!("Failed to read {source}: {error}"))?,
+        };
+        if count == 0 {
+            break;
+        }
+        decoder
+            .push_bytes(&buffer[..count])
+            .map_err(|error| format!("Failed to read {source}: {error}"))?;
     }
-    selection.finish()
+    decoder
+        .finish()
+        .map_err(|error| format!("Failed to read {source}: {error}"))?
+        .finish()
+}
+
+/// Validate every byte while retaining at most one bounded line prefix. A
+/// newline-free file must not allocate its full size before presentation limits
+/// can apply. Only an incomplete UTF-8 scalar and a possible CRLF carry across
+/// chunks; both sync and async readers use this same decoder.
+struct ReadTextDecoder {
+    selection: ReadLineSelection,
+    line: String,
+    line_chars: usize,
+    line_truncated: bool,
+    has_line: bool,
+    pending_cr: bool,
+    utf8_tail: [u8; 4],
+    utf8_tail_len: usize,
+}
+
+impl ReadTextDecoder {
+    fn new(selection: ReadLineSelection) -> Self {
+        Self {
+            selection,
+            line: String::new(),
+            line_chars: 0,
+            line_truncated: false,
+            has_line: false,
+            pending_cr: false,
+            utf8_tail: [0; 4],
+            utf8_tail_len: 0,
+        }
+    }
+
+    fn push_bytes(&mut self, mut bytes: &[u8]) -> Result<(), String> {
+        while self.utf8_tail_len > 0 && !bytes.is_empty() {
+            self.utf8_tail[self.utf8_tail_len] = bytes[0];
+            self.utf8_tail_len += 1;
+            bytes = &bytes[1..];
+            match std::str::from_utf8(&self.utf8_tail[..self.utf8_tail_len]) {
+                Ok(text) => {
+                    let character = text.chars().next().expect("completed UTF-8 scalar");
+                    self.utf8_tail_len = 0;
+                    self.push_char(character);
+                }
+                Err(error) if error.error_len().is_none() && self.utf8_tail_len < 4 => {}
+                Err(_) => return Err("stream did not contain valid UTF-8".to_string()),
+            }
+        }
+        match std::str::from_utf8(bytes) {
+            Ok(text) => self.push_text(text),
+            Err(error) => {
+                let valid = error.valid_up_to();
+                self.push_text(std::str::from_utf8(&bytes[..valid]).expect("valid UTF-8 prefix"));
+                if error.error_len().is_some() {
+                    return Err("stream did not contain valid UTF-8".to_string());
+                }
+                let tail = &bytes[valid..];
+                self.utf8_tail[..tail.len()].copy_from_slice(tail);
+                self.utf8_tail_len = tail.len();
+            }
+        }
+        Ok(())
+    }
+
+    fn push_text(&mut self, text: &str) {
+        for character in text.chars() {
+            self.push_char(character);
+        }
+    }
+
+    fn push_char(&mut self, character: char) {
+        if character == '\n' {
+            self.pending_cr = false;
+            self.finish_line();
+            return;
+        }
+        self.has_line = true;
+        if self.pending_cr {
+            self.retain_char('\r');
+        }
+        self.pending_cr = character == '\r';
+        if !self.pending_cr {
+            self.retain_char(character);
+        }
+    }
+
+    fn retain_char(&mut self, character: char) {
+        if self.line_chars < self.selection.max_line_chars {
+            self.line.push(character);
+            self.line_chars += 1;
+        } else {
+            self.line_truncated = true;
+        }
+    }
+
+    fn finish_line(&mut self) {
+        self.selection
+            .push(std::mem::take(&mut self.line), self.line_truncated);
+        self.line_chars = 0;
+        self.line_truncated = false;
+        self.has_line = false;
+    }
+
+    fn finish(mut self) -> Result<ReadLineSelection, String> {
+        if self.utf8_tail_len != 0 {
+            return Err("stream did not contain valid UTF-8".to_string());
+        }
+        if self.pending_cr {
+            self.retain_char('\r');
+        }
+        if self.has_line {
+            self.finish_line();
+        }
+        Ok(self.selection)
+    }
 }
 
 /// Shared line selection, Unicode truncation, numbering and output budget.
@@ -291,7 +436,7 @@ impl ReadLineSelection {
         })
     }
 
-    fn push(&mut self, line: String) {
+    fn push(&mut self, line: String, truncated: bool) {
         self.total_lines += 1;
         if self.tail_lines.is_none()
             && (self.total_lines < self.start_line
@@ -300,12 +445,8 @@ impl ReadLineSelection {
         {
             return;
         }
-        let truncated = line.chars().count() > self.max_line_chars;
         let line = if truncated {
-            format!(
-                "{} [truncated]",
-                truncate_string_by_chars(&line, self.max_line_chars)
-            )
+            format!("{line} [truncated]")
         } else {
             line
         };
@@ -416,6 +557,85 @@ mod tests {
         );
     }
 
+    #[test]
+    fn chunk_decoder_preserves_unicode_crlf_and_unterminated_lines() {
+        for (source, max_chars, expected, count) in [
+            (
+                "中😀文\r\nlast",
+                2,
+                "     1\t中😀 [truncated]\n     2\tla [truncated]",
+                2,
+            ),
+            ("one\r\r\nlast\r", 50, "     1\tone\r\n     2\tlast\r", 2),
+            ("\r\n\n😀", 50, "     1\t\n     2\t\n     3\t😀", 3),
+            ("😀\r\n", 1, "     1\t😀", 1),
+            ("", 50, "", 0),
+        ] {
+            for chunk_size in 1..=source.len().max(1) {
+                let selection =
+                    super::ReadLineSelection::new(1, 10, max_chars, 1000, false).unwrap();
+                let mut decoder = super::ReadTextDecoder::new(selection);
+                for chunk in source.as_bytes().chunks(chunk_size) {
+                    decoder.push_bytes(chunk).unwrap();
+                }
+                let actual = decoder.finish().unwrap().finish().unwrap();
+                assert_eq!(
+                    actual.content, expected,
+                    "chunk_size={chunk_size}, source={source:?}"
+                );
+                assert_eq!(actual.total_lines, count);
+            }
+        }
+    }
+
+    #[test]
+    fn newline_free_stream_retention_is_bounded_and_invalid_tail_is_rejected() {
+        let selection = super::ReadLineSelection::new(1, 1, 3, 100, false).unwrap();
+        let mut decoder = super::ReadTextDecoder::new(selection);
+        let chunk = "中😀文".repeat(1024);
+        for _ in 0..128 {
+            // Split a four-byte character on every iteration, including after
+            // the visible prefix is full. The source line exceeds one MiB.
+            decoder.push_bytes(&chunk.as_bytes()[..4]).unwrap();
+            decoder.push_bytes(&chunk.as_bytes()[4..]).unwrap();
+            assert_eq!(decoder.line, "中😀文");
+            assert!(decoder.line.capacity() <= 32);
+            assert!(decoder.utf8_tail_len <= 3);
+        }
+        assert!(decoder.push_bytes(b"\xff").is_err());
+
+        let selection = super::ReadLineSelection::new(1, 1, 3, 100, false).unwrap();
+        let mut decoder = super::ReadTextDecoder::new(selection);
+        decoder.push_bytes(b"visible\xf0\x9f").unwrap();
+        assert!(
+            decoder.finish().is_err(),
+            "an incomplete scalar at EOF is invalid even after truncation"
+        );
+    }
+
+    #[tokio::test]
+    async fn long_async_line_crosses_chunks_and_preserves_tail_and_invalid_suffix() {
+        let source = format!("{}\r\nlast😀", "中😀文".repeat(8192));
+        let actual = super::read_file_from_reader(source.as_bytes(), "stream", 1, 1, 3, 100)
+            .await
+            .unwrap();
+        assert_eq!(actual.content, "     1\t中😀文 [truncated]");
+        assert_eq!(actual.total_lines, 2);
+        assert_eq!(actual.end_line, 1);
+        assert!(actual.content_truncated);
+        let tail = super::read_file_tail_from_reader(source.as_bytes(), "stream", 1, 50, 100)
+            .await
+            .unwrap();
+        assert_eq!(tail.content, "     2\tlast😀");
+        assert!(!tail.content_truncated);
+        let mut invalid = source.into_bytes();
+        invalid.extend_from_slice(b"\xff");
+        let error = super::read_file_from_reader(invalid.as_slice(), "stream", 1, 1, 3, 100)
+            .await
+            .unwrap_err();
+        assert!(error.contains("valid UTF-8"));
+    }
+
     #[tokio::test]
     async fn async_streams_preserve_unicode_crlf_windows_and_tail() {
         use tokio::io::AsyncWriteExt;
@@ -477,6 +697,31 @@ mod tests {
             .await
             .unwrap_err();
         assert!(error.contains("connection lost"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn async_interrupted_read_returns_without_a_ready_retry_loop() {
+        struct AlwaysInterrupted(bool);
+        impl tokio::io::AsyncRead for AlwaysInterrupted {
+            fn poll_read(
+                mut self: std::pin::Pin<&mut Self>,
+                _cx: &mut std::task::Context<'_>,
+                _buffer: &mut tokio::io::ReadBuf<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                // Fail immediately if a regression retries rather than hanging
+                // the single executor poll (which a timeout could not stop).
+                assert!(!self.0, "async Interrupted must not be retried");
+                self.0 = true;
+                std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "workspace read cancelled",
+                )))
+            }
+        }
+        let error = super::read_file_from_reader(AlwaysInterrupted(false), "stream", 1, 1, 50, 100)
+            .await
+            .unwrap_err();
+        assert!(error.contains("workspace read cancelled"));
     }
 
     static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);

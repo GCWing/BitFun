@@ -41,14 +41,9 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        #[cfg(windows)]
-        let is_reparse_point = {
-            use std::os::windows::fs::MetadataExt;
-            !follow_symlinks && metadata.file_attributes() & 0x0400 != 0
-        };
-        #[cfg(not(windows))]
-        let is_reparse_point = false;
-        let kind = if metadata.file_type().is_symlink() || is_reparse_point {
+        // Rust classifies name-surrogate reparse tags, including junctions.
+        // Other reparse points (for example cloud placeholders) are not links.
+        let kind = if metadata.file_type().is_symlink() {
             WorkspacePathKind::Symlink
         } else if metadata.is_dir() {
             WorkspacePathKind::Directory
@@ -138,12 +133,11 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
     async fn remove_file(&self, path: &str) -> anyhow::Result<()> {
         #[cfg(windows)]
         {
-            use std::os::windows::fs::MetadataExt;
-            let attributes = tokio::fs::symlink_metadata(path).await?.file_attributes();
+            use std::os::windows::fs::FileTypeExt;
+            let file_type = tokio::fs::symlink_metadata(path).await?.file_type();
             // Directory symlinks and junctions need RemoveDirectory on Windows.
             // Inspect the link object, including dangling links; never recurse.
-            const DIRECTORY_REPARSE_POINT: u32 = 0x0010 | 0x0400;
-            if attributes & DIRECTORY_REPARSE_POINT == DIRECTORY_REPARSE_POINT {
+            if file_type.is_symlink_dir() {
                 return Ok(tokio::fs::remove_dir(path).await?);
             }
         }
