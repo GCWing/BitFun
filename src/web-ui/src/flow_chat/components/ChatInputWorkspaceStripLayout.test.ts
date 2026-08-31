@@ -375,7 +375,7 @@ describe('composer context track layout', () => {
       'background: var(--bf-color-surface-subtle) !important;',
     );
     expect(addControl).toMatch(
-      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?element-bg-soft/,
+      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?color-action-quiet-hover/,
     );
     expect(addControl).not.toContain('border-color:');
   });
@@ -454,7 +454,7 @@ describe('composer context track layout', () => {
     // Full access keeps a body of its own so the risk survives the label being
     // dropped on a narrow composer.
     expect(stylesheet).toMatch(
-      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-error\) 10%/,
+      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-status-danger-content\) 10%/,
     );
   });
 

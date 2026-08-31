@@ -327,7 +327,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(coreCardSurfaceStyles).not.toContain('$gradient');
     expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
     expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');
-    expect(coreCardSurfaceStyles).toContain('mask-image: linear-gradient(to bottom, black 0%, transparent 100%);');
+    expect(coreCardSurfaceStyles).toContain('mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);');
     expect(agentCardStyles).not.toContain('width: 360px;');
     expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
   });
