@@ -75,13 +75,13 @@ vi.mock('@bitfun/ui', () => ({
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),
-  ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
+  ConfirmDialog: ({ confirmText, message, onConfirm, open, title }: {
     confirmText: string;
-    isOpen: boolean;
     message: React.ReactNode;
     onConfirm: () => void;
+    open: boolean;
     title: string;
-  }) => isOpen ? (
+  }) => open ? (
     <div role="dialog">
       <h2>{title}</h2>
       <div>{message}</div>
@@ -116,10 +116,10 @@ vi.mock('@bitfun/ui', () => ({
     </button>
   ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-  NumberInput: ({ disabled, label, onChange, value }: {
+  NumberInput: ({ disabled, label, onValueChange, value }: {
     disabled?: boolean;
     label?: string;
-    onChange: (value: number) => void;
+    onValueChange: (value: number) => void;
     value: number;
   }) => (
     <input
@@ -127,7 +127,7 @@ vi.mock('@bitfun/ui', () => ({
       disabled={disabled}
       type="number"
       value={value}
-      onChange={event => onChange(Number(event.currentTarget.value))}
+      onChange={event => onValueChange(Number(event.currentTarget.value))}
     />
   ),
   Switch: ({ checked, disabled, onChange }: {

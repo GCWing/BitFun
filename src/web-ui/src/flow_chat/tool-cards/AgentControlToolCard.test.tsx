@@ -27,7 +27,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/infrastructure/markdown', () => ({
-  Markdown: ({ content }: { content: string }) => <div>{content}</div>,
+  MarkdownRenderer: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
 vi.mock('../services/btwSessionPane', () => ({

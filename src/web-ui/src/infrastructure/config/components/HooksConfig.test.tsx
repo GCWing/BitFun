@@ -26,24 +26,24 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: translateMock }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),
   Icon: ({ name }: { name: string }) => <span aria-hidden="true" data-icon={name} />,
-  ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
+  ConfirmDialog: ({ confirmText, open, message, onConfirm, title }: {
     confirmText?: string;
-    isOpen: boolean;
+    open: boolean;
     message: React.ReactNode;
     onConfirm: () => void;
     title: string;
-  }) => (isOpen ? (
+  }) => (open ? (
     <div role="dialog" aria-label={title}>
       {message}
       <button type="button" onClick={onConfirm}>{confirmText}</button>
     </div>
   ) : null),
-  Icon: ({ name }: { name: string }) => <span data-bf-icon={name} />,
   Switch: ({ checked, disabled, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
   ),

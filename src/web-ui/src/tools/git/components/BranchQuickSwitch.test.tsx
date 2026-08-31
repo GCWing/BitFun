@@ -51,21 +51,6 @@ vi.mock('@bitfun/ui', async importOriginal => ({
   ScrollArea: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ children, ...props }, ref) => <div ref={ref} {...props}>{children}</div>,
   ),
-  SearchField: forwardRef<HTMLInputElement, {
-    leadingIcon?: React.ReactNode;
-    value: string;
-    onValueChange: (value: string) => void;
-    placeholder?: string;
-  } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'>>(
-    ({ leadingIcon: _leadingIcon, onValueChange, value, ...props }, ref) => (
-      <input
-        ref={ref}
-        value={value}
-        onChange={event => onValueChange(event.target.value)}
-        {...props}
-      />
-    ),
-  ),
 }));
 
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({

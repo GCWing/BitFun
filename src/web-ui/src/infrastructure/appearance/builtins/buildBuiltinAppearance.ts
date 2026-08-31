@@ -7,8 +7,6 @@ import type {
   AppearanceLengthValue,
   AppearanceNumberValue,
   AppearancePackage,
-  AppearanceReference,
-  AppearanceStyle,
   AppearanceThemeTokenName,
 } from '../types';
 import {
@@ -17,12 +15,6 @@ import {
 } from '../adapters/widgetAppearanceVariables';
 
 const OVERLAY_WHITE_04 = 'rgba(255, 255, 255, 0.04)';
-
-const ref = (path: string): AppearanceReference => ({ kind: 'ref', path });
-const colorRef = (id: string): AppearanceReference => ref(`globals.colors.${id}`);
-const lengthRef = (id: string): AppearanceReference => ref(`globals.lengths.${id}`);
-const durationRef = (id: string): AppearanceReference => ref(`globals.durations.${id}`);
-const easingRef = (id: string): AppearanceReference => ref(`globals.easings.${id}`);
 
 function color(value: string): AppearanceColorValue {
   const trimmed = value.trim();
@@ -69,10 +61,6 @@ function duration(value: string): AppearanceDurationValue {
 
 function number(value: number): AppearanceNumberValue {
   return { kind: 'number', value };
-}
-
-function transition(property: 'all' | 'background-color' | 'border-color' | 'box-shadow' | 'color' | 'opacity' | 'transform' = 'all'): NonNullable<AppearanceStyle['transition']> {
-  return [{ property, duration: durationRef('base'), easing: easingRef('standard') }];
 }
 
 type ThemeValue = string | number | boolean;
@@ -427,7 +415,7 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
     name: palette.name,
     version: /^\d+\.\d+\.\d+/.test(palette.version ?? '') ? palette.version! : '1.0.0',
     mode: palette.type,
-    requiredCapabilities: ['components.v1', 'renderers.v1'],
+    requiredCapabilities: ['renderers.v1'],
     globals: {
       colors,
       lengths: {
@@ -450,68 +438,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
       },
       easings: {
         standard: { kind: 'easing', value: 'standard' },
-      },
-    },
-    materials: {
-      control: {
-        visualRole: 'control',
-        style: {
-          backgroundColor: colorRef('element-base'),
-          color: colorRef('text-secondary'),
-          borderRadius: lengthRef('radius-sm'),
-          transition: transition(),
-        },
-      },
-      surface: {
-        visualRole: 'card',
-        style: {
-          backgroundColor: colorRef('element-subtle'),
-          color: colorRef('text-secondary'),
-          borderRadius: lengthRef('radius-base'),
-          transition: transition(),
-        },
-      },
-    },
-    components: {
-      card: {
-        parts: {
-          root: {
-            materials: ['surface'],
-            base: { display: 'flex', flexDirection: 'column' },
-            facets: {
-              variant: {
-                default: { backgroundColor: colorRef('element-subtle') },
-                elevated: { backgroundColor: colorRef('element-soft') },
-                subtle: { backgroundColor: { kind: 'transparent' } },
-                accent: { backgroundColor: colorRef('element-soft') },
-                purple: { backgroundColor: colorRef('purple-bg') },
-              },
-              padding: {
-                none: { padding: { kind: 'zero' } },
-                small: { padding: lengthRef('gap-2') },
-                medium: { padding: lengthRef('gap-4') },
-                large: { padding: lengthRef('gap-6') },
-              },
-              radius: {
-                small: { borderRadius: lengthRef('radius-sm') },
-                medium: { borderRadius: lengthRef('radius-base') },
-                large: { borderRadius: lengthRef('radius-lg') },
-              },
-            },
-            states: {
-              fullWidth: { width: { kind: 'percent', value: 100 } },
-            },
-            contexts: [
-              { when: { states: ['interactive', 'hover'] }, style: { backgroundColor: colorRef('element-soft'), cursor: 'pointer' } },
-              { when: { states: ['interactive', 'active'] }, style: { backgroundColor: colorRef('element-base') } },
-            ],
-          },
-          header: { base: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: lengthRef('gap-3') } },
-          title: { base: { color: colorRef('text-primary') } },
-          subtitle: { base: { color: colorRef('text-muted') } },
-          body: { base: { color: colorRef('text-secondary') } },
-          footer: { base: { display: 'flex', alignItems: 'center', gap: lengthRef('gap-2') }, facets: { align: { left: { justifyContent: 'flex-start' }, center: { justifyContent: 'center' }, right: { justifyContent: 'flex-end' }, between: { justifyContent: 'space-between' } } } },
-        },
       },
     },
     renderers: {

@@ -51,17 +51,17 @@ vi.mock('@bitfun/ui', () => ({
   NumberInput: ({
     disabled,
     value,
-    onChange,
+    onValueChange,
   }: {
     disabled?: boolean;
     value: number;
-    onChange: (value: number) => void;
+    onValueChange: (value: number) => void;
   }) => (
     <input
       type="number"
       disabled={disabled}
       value={value}
-      onChange={(event) => onChange(Number(event.currentTarget.value))}
+      onChange={(event) => onValueChange(Number(event.currentTarget.value))}
     />
   ),
 }));

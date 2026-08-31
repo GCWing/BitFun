@@ -16,7 +16,7 @@ import {
 } from './appearancePayload';
 
 const CANONICAL_THEME_VARIABLE_NAMES = Object.values(themeCssVariables);
-const CANONICAL_THEME_VARIABLE_NAMES_HASH = '8d2fa88bd263ebe01778f9df1a717d8be3126aad34879f2bf530b8842f9d4678';
+const CANONICAL_THEME_VARIABLE_NAMES_HASH = '20c775e19798c1fc3add12c0b7c2b61f457bc35fb2bc3d885068e2ecfb011e0a';
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',
@@ -65,7 +65,7 @@ describe('generated widget appearance payload contract', () => {
       first: WIDGET_APPEARANCE_VAR_NAMES[0],
       last: WIDGET_APPEARANCE_VAR_NAMES[WIDGET_APPEARANCE_VAR_NAMES.length - 1],
     }).toEqual({
-      count: 100,
+      count: 111,
       hash: CANONICAL_THEME_VARIABLE_NAMES_HASH,
       first: '--bf-color-accent-border',
       last: '--bf-shadow-xs',

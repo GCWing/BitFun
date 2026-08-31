@@ -4,8 +4,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Combobox,
+  MultiSelect,
   Field,
   type ComboboxProps,
+  type MultiSelectProps,
   Dialog,
   DialogBody,
   DialogClose,
@@ -18,7 +20,9 @@ describe('public Combobox product integration', () => {
   let root: Root;
   let host: HTMLDivElement;
   const change = vi.fn();
-  const render = (props: ComboboxProps = {}) => act(() => root.render(<Combobox label="Models" options={[{ value: 'a', label: 'Alpha', group: 'First' }, { value: 'b', label: 'Beta', disabled: true }, { value: 'c', label: 'Gamma', group: 'First' }]} onChange={change} {...props} />));
+  const options = [{ value: 'a', label: 'Alpha', group: 'First' }, { value: 'b', label: 'Beta', disabled: true }, { value: 'c', label: 'Gamma', group: 'First' }];
+  const render = (props: ComboboxProps = {}) => act(() => root.render(<Combobox label="Models" options={options} onValueChange={change} {...props} />));
+  const renderMultiSelect = (props: MultiSelectProps = {}) => act(() => root.render(<MultiSelect label="Models" options={options} onValueChange={change} {...props} />));
   const trigger = () => host.querySelector<HTMLButtonElement>('button[role="combobox"]')!;
   const key = (element: Element, value: string, composing = false) => act(() => { element.dispatchEvent(new KeyboardEvent('keydown', { key: value, isComposing: composing, bubbles: true })); });
   const input = () => document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
@@ -33,7 +37,7 @@ describe('public Combobox product integration', () => {
     expect(document.querySelector('[role="listbox"]')).toBeNull();
   });
   it('does not accept an IME confirmation as an option selection', () => {
-    render({ allowCustomValue: true }); act(() => trigger().click()); type('custom'); key(input(), 'Enter', true);
+    render({ onCreateValue: value => value }); act(() => trigger().click()); type('custom'); key(input(), 'Enter', true);
     expect(change).not.toHaveBeenCalled();
     key(input(), 'Enter'); expect(change).toHaveBeenLastCalledWith('custom');
   });
@@ -43,9 +47,9 @@ describe('public Combobox product integration', () => {
     expect(change).toHaveBeenLastCalledWith(1); expect(trigger().textContent).toContain('Zero');
   });
   it('supports multi-selection, select-all, custom values and async option hydration', () => {
-    render({ multiple: true, defaultValue: ['custom'], options: [], loading: true, showSelectAll: true });
+    renderMultiSelect({ defaultValue: ['custom'], options: [], loading: true, showSelectAll: true });
     act(() => trigger().click()); expect(document.querySelector('[role="status"]')?.textContent).toContain('Loading');
-    render({ multiple: true, defaultValue: ['custom'], options: [{ value: 'a', label: 'Alpha' }], showSelectAll: true });
+    renderMultiSelect({ defaultValue: ['custom'], options: [{ value: 'a', label: 'Alpha' }], showSelectAll: true });
     const all = [...document.querySelectorAll('button')].find(button => button.textContent === 'Select all')!;
     act(() => all.click()); expect(change).toHaveBeenLastCalledWith(['custom', 'a']);
     expect(document.querySelector('[role="listbox"]')).not.toBeNull();
@@ -70,11 +74,11 @@ describe('public Combobox product integration', () => {
     expect(close).not.toHaveBeenCalled(); expect(document.activeElement).toBe(button);
   });
   it('commits a typed custom single value on Tab and releases the popup', () => {
-    render({ allowCustomValue: true }); act(() => trigger().click()); type('custom'); key(input(), 'Tab');
+    render({ onCreateValue: value => value }); act(() => trigger().click()); type('custom'); key(input(), 'Tab');
     expect(change).toHaveBeenLastCalledWith('custom'); expect(document.querySelector('[role="listbox"]')).toBeNull();
   });
   it('removes individual selected tags without nesting buttons or opening the popup', () => {
-    render({ multiple: true, defaultValue: ['a', 'c'] });
+    renderMultiSelect({ defaultValue: ['a', 'c'] });
     const remove = host.querySelector<HTMLButtonElement>('button[aria-label="Clear selection: Alpha"]')!;
     expect(remove.closest('button[role="combobox"]')).toBeNull();
     act(() => remove.click());
@@ -90,8 +94,9 @@ describe('public Combobox product integration', () => {
     const describedBy = trigger().getAttribute('aria-describedby')!.split(' ');
     expect(describedBy.map(id => document.getElementById(id)?.textContent)).toEqual(['Choose a model', 'Required']);
   });
-  it('mounts an initially open, filtered picker into its portal', () => {
-    render({ defaultOpen: true, defaultSearchValue: 'gam' });
+  it('filters an initially open picker inside its portal', () => {
+    render({ defaultOpen: true });
+    type('gam');
     expect(input().value).toBe('gam');
     expect(document.querySelectorAll('[role="option"]')).toHaveLength(1);
     expect(document.querySelector('[role="option"]')?.textContent).toBe('Gamma');
@@ -112,9 +117,15 @@ describe('public Combobox product integration', () => {
     expect(popup.style.top).toBe('64px');
     expect(popup.style.width).toBe('240px');
   });
-  it('keeps explicit inline popups in the local component tree', () => {
-    render({ dropdownMode: 'inline' }); act(() => trigger().click());
-    expect(host.querySelector('[data-bf-component="combobox"] [role="listbox"]')).not.toBeNull();
-    expect(host.querySelector<HTMLElement>('[data-bf-component="combobox-popup"]')?.style.position).toBe('');
+  it('reports controlled open requests without mutating controlled state', () => {
+    const onOpenChange = vi.fn();
+    render({ open: false, onOpenChange });
+    act(() => trigger().click());
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
+
+    render({ open: true, onOpenChange });
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(host.querySelector('[role="listbox"]')).toBeNull();
   });
 });

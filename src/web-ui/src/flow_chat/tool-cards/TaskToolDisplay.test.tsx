@@ -742,7 +742,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
     expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
     expect(container.querySelector('.task-review-outcome')).toBeNull();
     expect(container.querySelector('.task-failed-badge')).toBeNull();
@@ -777,7 +777,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeNull();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
     expect(container.querySelector('.task-subagent-stop-button')).toBeNull();
     expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
       ?.getAttribute('data-is-running')).toBe('false');
@@ -818,7 +818,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
     expect(container.textContent).toContain('Review CLI app layer diff');
   });
 
@@ -912,7 +912,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
       );
     });
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
 
     await act(async () => {
       mocks.dynamicReviewTurn.status = 'error';
@@ -921,7 +921,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       mocks.flowChatListeners.forEach((listener) => listener());
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeFalsy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeFalsy();
     expect(container.textContent).toContain('toolCards.taskTool.failed');
     expect(container.querySelector('[data-completed-status="error"]')).toBeTruthy();
   });
@@ -952,7 +952,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
       );
     });
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
 
     await act(async () => {
       mocks.dynamicReviewTurn.status = 'cancelled';
@@ -960,7 +960,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       mocks.flowChatListeners.forEach((listener) => listener());
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeFalsy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeFalsy();
     expect(container.querySelector('[data-completed-status="cancelled"]')).toBeTruthy();
   });
 
@@ -1323,7 +1323,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         );
       });
 
-      expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+      expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
       expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
       expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
         ?.getAttribute('data-is-running')).toBe('true');

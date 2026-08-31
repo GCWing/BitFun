@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, extname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 import { compile } from 'sass';
 import { describe, expect, it } from 'vitest';
@@ -59,7 +60,24 @@ function bundledFontLineHeight(): number {
 }
 
 function compiledRules(filename: string) {
-  const css = compile(resolve(webRoot, 'src/app', filename)).css;
+  const css = compile(resolve(webRoot, 'src/app', filename), {
+    importers: [{
+      findFileUrl(url: string) {
+        if (!url.startsWith('@/')) return null;
+        const unresolved = resolve(webRoot, 'src', url.slice(2));
+        const candidates = extname(unresolved)
+          ? [unresolved]
+          : [
+              `${unresolved}.scss`,
+              resolve(dirname(unresolved), `_${basename(unresolved)}.scss`),
+              resolve(unresolved, '_index.scss'),
+              resolve(unresolved, 'index.scss'),
+            ];
+        const matched = candidates.find(candidate => existsSync(candidate));
+        return matched ? pathToFileURL(matched) : null;
+      },
+    }],
+  }).css;
   return (selector: string) => {
     const declarations: Record<string, string> = {};
     let matched = false;

@@ -40,7 +40,7 @@ function manifest(): AppearancePackage {
       },
     },
     components: {
-      card: {
+      'gallery-layout': {
         parts: {
           root: { base: { backgroundImage: { kind: 'asset', assetId: 'background' } } },
         },

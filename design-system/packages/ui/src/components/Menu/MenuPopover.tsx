@@ -61,6 +61,10 @@ export function MenuPopover({ items, open, onClose, anchorRef, position, placeme
   const { present, state: phase } = usePresence(open, 100);
   const resolvedAnchor = anchorRef ?? markerRef;
   const branchRefs = anchorRef ? [anchorRef] : [];
+  const closeAndRestoreFocus = () => {
+    if (anchorRef?.current?.isConnected) anchorRef.current.focus();
+    onClose();
+  };
 
   useDismissibleLayer({
     branchRefs,
@@ -68,13 +72,13 @@ export function MenuPopover({ items, open, onClose, anchorRef, position, placeme
       && target.closest("[data-bf-menu-tree]")?.getAttribute("data-bf-menu-tree") === treeId,
     enabled: open,
     layerRef: menuRef,
-    onDismiss: onClose,
+    onDismiss: closeAndRestoreFocus,
   });
   useFocusScope({
-    active: open,
+    active: open && present,
     autoFocus: autoFocusFirstItem,
     containerRef: menuRef,
-    restoreFocus: true,
+    restoreFocus: !anchorRef,
     trapFocus: false,
   });
 
@@ -85,7 +89,7 @@ export function MenuPopover({ items, open, onClose, anchorRef, position, placeme
       autoFocusFirstItem={false}
       items={items}
       menuRef={menuRef}
-      onClose={onClose}
+      onClose={closeAndRestoreFocus}
       open={open}
       phase={phase}
       placement={placement}

@@ -73,7 +73,8 @@ vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({ error: vi.fn() }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Button: ({ children, isLoading: _isLoading, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { isLoading?: boolean }) => (
     <button {...props}>{children}</button>
   ),

@@ -30,25 +30,29 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async () => {
+vi.mock('@bitfun/ui', async importOriginal => {
   const ReactModule = await import('react');
 
   return {
+    ...await importOriginal<typeof import('@bitfun/ui')>(),
     Tooltip: ({ children }: { children: React.ReactNode }) => (
       <ReactModule.Fragment>{children}</ReactModule.Fragment>
     ),
     IconButton: ReactModule.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      icon?: React.ReactNode;
       size?: string;
       tooltip?: string;
       variant?: string;
     }>(({
       children,
+      icon,
       size,
       tooltip,
       variant,
       ...props
     }, ref) => (
       <button ref={ref} type="button" title={tooltip} {...props}>
+        {icon}
         {children}
       </button>
     )),

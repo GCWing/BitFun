@@ -36,8 +36,8 @@ describe('unified project session creation', () => {
     expect(voiceLauncherStyles).toContain('font-synthesis: none;');
     expect(voiceLauncherStyles).toContain('opacity: 0.22;');
     expect(voiceLauncherStyles).toMatch(/&\.is-active\s*\{\s*opacity: 1;/);
-    expect(voiceLauncherStyles).toContain('border-radius: $size-radius-lg 0 0 0;');
-    expect(voiceLauncherStyles).not.toContain('$size-radius-lg 0 $size-radius-lg 0');
+    expect(voiceLauncherStyles).toContain('border-radius: var(--bf-radius-lg) 0 0 0;');
+    expect(voiceLauncherStyles).not.toContain('var(--bf-radius-lg) 0 var(--bf-radius-lg) 0');
     expect(mainNav).not.toContain('nav-new-code-session-btn');
     expect(mainNav).not.toContain('nav-new-cowork-session-btn');
     expect(workspaceItem).toContain('data-testid="nav-workspace-menu-create-session"');
@@ -157,7 +157,7 @@ describe('unified project session creation', () => {
     expect(sectionsIndex).toBeGreaterThan(brandHeaderIndex);
     expect(contentIndex).toBeGreaterThan(-1);
     expect(persistentFooterIndex).toBeGreaterThan(contentIndex);
-    expect(mainNav).toContain('bodyRef={sectionsScrollRef}');
+    expect(mainNav).toContain('<NavigationPanelBody className="bitfun-nav-panel__sections" ref={sectionsScrollRef}>');
     expect(mainNav).toContain('<StickySectionHeader scrollRootRef={sectionsScrollRef}>');
     expect(stickyHeader).toContain('new IntersectionObserver');
     expect(stickyHeader).toContain('root: scrollRoot');

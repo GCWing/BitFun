@@ -299,7 +299,7 @@ describe('ExternalSourcesConfig', () => {
     const page = container.querySelector(
       '.bitfun-config-page-layout.bitfun-external-sources-config',
     );
-    expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent).toBe('title');
+    expect(page?.querySelector('[data-bf-part="pageHeaderTitle"]')?.textContent).toBe('title');
 
     /**
      * ConfigLoadingState waits out a grace period before admitting it is loading, so
@@ -307,7 +307,7 @@ describe('ExternalSourcesConfig', () => {
      */
     await act(async () => vi.advanceTimersByTimeAsync(260));
     expect(page?.querySelector(
-      '.bitfun-config-page-content .bitfun-config-page-loading',
+      '.bitfun-config-page-content [data-bf-part="loadingState"]',
     )?.textContent).toBe('loading');
 
     await act(async () => {
@@ -334,7 +334,7 @@ describe('ExternalSourcesConfig', () => {
       '.bitfun-external-sources-config__advanced',
     );
     expect(page?.getAttribute('data-presentation')).toBe('governance');
-    expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent)
+    expect(page?.querySelector('[data-bf-part="pageHeaderTitle"]')?.textContent)
       .toBe('governance.title');
     expect(page?.querySelector('.bitfun-external-sources-config__apps')).toBeNull();
     expect(advanced?.open).toBe(true);

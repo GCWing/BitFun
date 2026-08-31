@@ -14,21 +14,22 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   IconButton: ({
     children,
-    isLoading,
+    loading,
     size: _size,
     tooltip: _tooltip,
     variant: _variant,
     ...props
   }: React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    isLoading?: boolean;
+    loading?: boolean;
     size?: string;
     tooltip?: React.ReactNode;
     variant?: string;
   }>) => (
-    <button {...props} aria-busy={isLoading || undefined}>
+    <button {...props} aria-busy={loading || undefined}>
       {children}
     </button>
   ),
