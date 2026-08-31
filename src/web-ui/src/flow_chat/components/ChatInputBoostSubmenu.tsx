@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useRef, useState } from 'react';
+import React, { useCallback, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
 import { Menu, MenuItem } from '@bitfun/ui';
@@ -6,6 +6,8 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
 
 interface ChatInputBoostSubmenuProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   label: string;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -14,12 +16,13 @@ interface ChatInputBoostSubmenuProps {
 
 /** Shared second-level disclosure used by ChatInput's add menu. */
 export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
+  open,
+  onOpenChange: setOpen,
   label,
   icon,
   children,
   testId,
 }) => {
-  const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -37,7 +40,7 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
         submenuRef.current?.querySelector<HTMLButtonElement>('[data-bf-menu-item]')?.focus();
       });
     }
-  }, []);
+  }, [setOpen]);
 
   return (
     <div

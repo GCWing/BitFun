@@ -46,6 +46,9 @@ interface HarnessProfileSelectorProps {
    * secondary picker beside it in the shared overlay layer.
    */
   presentation?: HarnessProfileSelectorPresentation;
+  /** A parent menu can coordinate this flyout with its sibling submenus. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
   onSelectAgent?: (agentId: string) => void | Promise<void>;
   onStartNewSession?: (
@@ -137,6 +140,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   otherAgents = [],
   disabled = false,
   presentation = 'standalone',
+  open: controlledOpen,
+  onOpenChange,
   onSelectProfile,
   onSelectAgent,
   onStartNewSession,
@@ -144,7 +149,12 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const fixedSession = legacySession || sessionStarted;
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = useCallback((nextOpen: boolean) => {
+    if (controlledOpen === undefined) setLocalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  }, [controlledOpen, onOpenChange]);
   const [page, setPage] = useState<'profiles' | 'agents'>('profiles');
   const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -168,7 +178,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   const close = useCallback(() => {
     setOpen(false);
     setPage('profiles');
-  }, []);
+  }, [setOpen]);
 
   const finishSelection = useCallback(() => {
     close();
@@ -272,10 +282,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   const creatingNewSession = fixedSession;
   const handleTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    setOpen(value => {
-      if (!value) setPage('profiles');
-      return !value;
-    });
+    if (!open) setPage('profiles');
+    setOpen(!open);
   };
   const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (presentation !== 'menu-item' || event.key !== 'ArrowRight') return;

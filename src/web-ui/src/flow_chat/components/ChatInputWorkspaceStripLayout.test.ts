@@ -418,11 +418,12 @@ describe('composer context track layout', () => {
     const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
-    expect(component).toMatch(/minimal: Scan,[\s\S]*?balanced: Grid2X2,[\s\S]*?ultimate: Grid3X3,/);
+    expect(component).toMatch(/minimal: 'minimal',[\s\S]*?balanced: 'standard',[\s\S]*?ultimate: 'ultimate',[\s\S]*?creative: 'creative',/);
     expect(component).toContain(
       'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
     );
-    expect(component).toContain('className="bitfun-harness-selector__density-core"');
+    expect(component).toContain('name={PROFILE_ICONS[profile]}');
+    expect(component).not.toContain('className="bitfun-harness-selector__density-core"');
     expect(component).toContain('<HarnessProfileMark profile={id} />');
     expect(component).toContain('<HarnessProfileMark profile={knownSelectedProfile} />');
     expect(component).not.toContain('compact=');
