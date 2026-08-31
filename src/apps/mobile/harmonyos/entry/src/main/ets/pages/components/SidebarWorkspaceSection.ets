@@ -17,6 +17,10 @@ import {
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
 import { GREEN, INK, MUTED, SUBTLE } from './Theme';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
+import {
+  SidebarChevronIcon,
+  SidebarDeviceIcon
+} from './SidebarNavigationIcons';
 import { SidebarWorkspacePicker } from './SidebarWorkspacePicker';
 import { RemoteUiState } from '../../services/RemoteUiState';
 
@@ -55,11 +59,12 @@ export struct SidebarWorkspaceSection {
   @Event onSelectDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onAddWorkspace: (deviceId: string) => void = (_deviceId: string) => {};
-  @Event onRefreshDevices: () => void = () => {};
+  @Event onRefreshDevices: () => Promise<void> = async () => {};
   @Event onAddDevice: () => void = () => {};
   @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
   @Local showWorkspacePicker: boolean = false;
   @Local workspacePickerDeviceId: string = '';
+  @Local refreshingDevices: boolean = false;
   private readonly transientEntry: DeviceDirectoryEntry = emptyDeviceDirectoryEntry('', '', false);
 
   build() {
@@ -96,19 +101,29 @@ export struct SidebarWorkspaceSection {
         .fontColor(MUTED)
       Blank()
       Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.arrow_clockwise'))
-          .fontSize(18)
-          .fontColor([MUTED])
+        if (this.refreshingDevices) {
+          LoadingProgress()
+            .width(18)
+            .height(18)
+            .color(MUTED)
+        } else {
+          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+            .fontSize(20)
+            .fontWeight(FontWeight.Medium)
+            .fontColor([MUTED])
+        }
       }
       .width(34)
       .height(38)
+      .enabled(!this.refreshingDevices)
       .accessibilityText(RemoteI18n.t('common.refresh'))
       .onClick(() => {
-        this.onRefreshDevices();
+        void this.refreshDevices();
       })
       Stack({ alignContent: Alignment.Center }) {
         SymbolGlyph($r('sys.symbol.plus'))
-          .fontSize(18)
+          .fontSize(20)
+          .fontWeight(FontWeight.Medium)
           .fontColor([INK])
       }
       .width(34)
@@ -125,16 +140,13 @@ export struct SidebarWorkspaceSection {
 
   @Builder
   private DeviceRow(entry: DeviceDirectoryEntry) {
-    Row({ space: 10 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.desktop'))
-          .fontSize(19)
-          .fontColor([entry.online ? INK : SUBTLE])
-          .hitTestBehavior(HitTestMode.None)
-      }
-      .width(24)
-      .height(24)
-      .hitTestBehavior(HitTestMode.None)
+    Row({ space: 8 }) {
+      SidebarDeviceIcon({
+        deviceName: entry.deviceName,
+        iconSize: 24,
+        tint: entry.online ? INK : SUBTLE
+      })
+        .hitTestBehavior(HitTestMode.None)
       Text(entry.deviceName)
         .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(this.isSelected(entry) ? FontWeight.Medium : FontWeight.Regular)
@@ -158,10 +170,11 @@ export struct SidebarWorkspaceSection {
           .hitTestBehavior(HitTestMode.None)
       }
       Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph(this.isSelected(entry) ?
-          $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
-          .fontSize(13)
-          .fontColor([entry.online ? INK : SUBTLE])
+        SidebarChevronIcon({
+          expanded: this.isSelected(entry),
+          iconSize: 14,
+          tint: entry.online ? INK : SUBTLE
+        })
           .hitTestBehavior(HitTestMode.None)
       }
       .width(20)
@@ -175,8 +188,11 @@ export struct SidebarWorkspaceSection {
     .opacity(entry.online ? 1 : 0.58)
     .accessibilityText(`${entry.deviceName}, ${RemoteI18n.t(entry.online ?
       'sidebar.deviceOnline' : 'sidebar.deviceOffline')}`)
+    .enabled(this.canUseDevice(entry))
     .onClick(() => {
-      this.onSelectDevice(entry.deviceId);
+      if (this.canUseDevice(entry)) {
+        this.onSelectDevice(entry.deviceId);
+      }
     })
   }
 
@@ -409,6 +425,29 @@ export struct SidebarWorkspaceSection {
 
   private canUseDevice(entry: DeviceDirectoryEntry): boolean {
     return entry.online || (this.isActiveDevice(entry.deviceId) && this.isConnected());
+  }
+
+  private async refreshDevices(): Promise<void> {
+    if (this.refreshingDevices) {
+      return;
+    }
+    this.refreshingDevices = true;
+    const startedAt = Date.now();
+    try {
+      await this.onRefreshDevices();
+    } finally {
+      const remainingMs = 360 - (Date.now() - startedAt);
+      if (remainingMs > 0) {
+        await this.delay(remainingMs);
+      }
+      this.refreshingDevices = false;
+    }
+  }
+
+  private delay(durationMs: number): Promise<void> {
+    return new Promise<void>((resolve: () => void): void => {
+      setTimeout(resolve, durationMs);
+    });
   }
 
   private isConnected(): boolean {

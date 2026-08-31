@@ -6,11 +6,11 @@
     },
     {
       "name": "page_bg",
-      "value": "#FDFDFB"
+      "value": "#FFFFFF"
     },
     {
       "name": "page_bg_fade",
-      "value": "#00FDFDFB"
+      "value": "#00FFFFFF"
     },
     {
       "name": "ink",

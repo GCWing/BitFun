@@ -1,12 +1,14 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
+import { CARD, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
 import { AccountProfilePanel } from './AccountProfilePanel';
-import { SheetCloseButton } from './SheetCloseButton';
+import { SheetCloseHeader } from './SheetCloseHeader';
+import { AppActionButton, AppActionStyle } from './AppActionButton';
+import { SHEET_HORIZONTAL_PADDING, SHEET_TOP_RADIUS } from './SheetLayout';
 import {
   RemoteControlSettingsPage,
   RemoteControlSettingsPagePolicy
@@ -54,7 +56,7 @@ export struct RemoteControlSettingsSheet {
   }
 
   build() {
-    Stack({ alignContent: Alignment.TopEnd }) {
+    Stack() {
       if (this.currentPage() === 'login') {
         this.LoginPage()
       } else if (this.currentPage() === 'profile') {
@@ -62,43 +64,46 @@ export struct RemoteControlSettingsSheet {
       } else {
         this.RemoteControlPage()
       }
-      if (this.currentPage() === 'remote') {
-        this.CloseButton()
-      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(PAGE_BG)
-    .borderRadius({ topLeft: 34, topRight: 34 })
+    .borderRadius({ topLeft: SHEET_TOP_RADIUS, topRight: SHEET_TOP_RADIUS })
   }
 
   @Builder
   private RemoteControlPage() {
-    Scroll() {
-      Column({ space: 0 }) {
-        Text(RemoteI18n.t('remote.settings.title'))
-          .fontSize(MobileDesignTypography.headlineMedium.size)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(INK)
-          .width('100%')
-          .height(56)
-          .textAlign(TextAlign.Center)
-          .margin({ bottom: 30 })
+    Column({ space: 0 }) {
+      SheetCloseHeader({
+        title: RemoteI18n.t('remote.settings.title'),
+        showDivider: true,
+        onClose: this.onClose
+      })
 
-        this.ProfileEntry()
+      Scroll() {
+        Column({ space: 0 }) {
+          this.ProfileEntry()
 
-        this.ConnectionSectionHeader()
-        this.CurrentControlCard()
-        this.OtherConnectionSection()
-        this.PermissionSectionHeader()
-        this.PermissionModeCard()
+          this.ConnectionSectionHeader()
+          this.CurrentControlCard()
+          this.OtherConnectionSection()
+          this.PermissionSectionHeader()
+          this.PermissionModeCard()
+        }
+        .width('100%')
+        .padding({
+          left: SHEET_HORIZONTAL_PADDING,
+          right: SHEET_HORIZONTAL_PADDING,
+          top: 22,
+          bottom: 42
+        })
       }
       .width('100%')
-      .padding({ left: 18, right: 18, top: 20, bottom: 42 })
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
-    .scrollBar(BarState.Off)
   }
 
   @Builder
@@ -400,22 +405,20 @@ export struct RemoteControlSettingsSheet {
         .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(INK)
       Row({ space: 10 }) {
-        Button(RemoteI18n.t('remote.permissions.cancel'))
+        AppActionButton({
+          label: RemoteI18n.t('remote.permissions.cancel'),
+          style: AppActionStyle.Quiet,
+          actionHeight: 42,
+          onAction: (): void => { this.confirmFullAccess = false; }
+        })
           .layoutWeight(1)
-          .height(42)
-          .fontSize(MobileDesignTypography.bodyMedium.size)
-          .fontColor(INK)
-          .backgroundColor(SOFT)
-          .borderRadius(21)
-          .onClick(() => { this.confirmFullAccess = false; })
-        Button(RemoteI18n.t('remote.permissions.confirmFullAccess'))
+        AppActionButton({
+          label: RemoteI18n.t('remote.permissions.confirmFullAccess'),
+          style: AppActionStyle.Destructive,
+          actionHeight: 42,
+          onAction: (): void => { void this.applyPermissionMode('full_access'); }
+        })
           .layoutWeight(1)
-          .height(42)
-          .fontSize(MobileDesignTypography.bodyMedium.size)
-          .fontColor(PRIMARY_ACTION_TEXT)
-          .backgroundColor(RED)
-          .borderRadius(21)
-          .onClick(() => this.applyPermissionMode('full_access'))
       }
       .width('100%')
     }
@@ -462,16 +465,6 @@ export struct RemoteControlSettingsSheet {
     .width('100%')
     .height('100%')
     .scrollBar(BarState.Off)
-  }
-
-  @Builder
-  private CloseButton() {
-    SheetCloseButton({
-      onClose: (): void => {
-        this.onClose();
-      }
-    })
-    .margin({ top: 7, right: 8 })
   }
 
   private isConnectedOrConnecting(): boolean {

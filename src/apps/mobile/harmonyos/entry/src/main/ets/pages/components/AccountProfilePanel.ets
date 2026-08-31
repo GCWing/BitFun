@@ -1,10 +1,10 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
 import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
-import { NavigationBackButton } from './NavigationBackButton';
+import { SheetCloseHeader } from './SheetCloseHeader';
 
 /** Account identity and device management shared by Settings and account entry. */
 @ComponentV2
@@ -94,19 +94,19 @@ export struct AccountProfilePanel {
         .fontColor(this.isAccountAuthenticated() ? GREEN : MUTED)
     }
     .width('100%')
-    .height(72)
-    .padding({ left: 18, right: 18 })
+    .constraintSize({ minHeight: 72 })
+    .padding({ left: 18, right: 18, top: 12, bottom: 12 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(CARD)
-    .borderRadius(20)
-    .margin({ bottom: 28 })
+    .borderRadius(MobileDesignGeometry.settingsCardRadius)
+    .margin({ bottom: 24 })
   }
 
   @Builder
   private EmbeddedSectionTitle(title: string) {
     Text(title)
-      .fontSize(MobileDesignTypography.titleSmall.size)
-      .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
+      .fontSize(MobileDesignTypography.bodySmall.size)
+      .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
       .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
       .width('100%')
@@ -115,21 +115,10 @@ export struct AccountProfilePanel {
 
   @Builder
   private NavigationHeader() {
-    Row() {
-      NavigationBackButton({
-        controlSize: 44,
-        onBack: (): void => this.onBack()
-      })
-      Text(RemoteI18n.t('remote.settings.profile'))
-        .fontSize(MobileDesignTypography.headlineMedium.size)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(INK)
-        .layoutWeight(1)
-        .textAlign(TextAlign.Center)
-      Blank().width(44)
-    }
-    .width('100%')
-    .height(56)
+    SheetCloseHeader({
+      title: RemoteI18n.t('remote.settings.profile'),
+      onClose: this.onBack
+    })
     .margin({ bottom: 30 })
   }
 
@@ -156,7 +145,7 @@ export struct AccountProfilePanel {
     .width('100%')
     .padding({ top: 24, bottom: 24 })
     .backgroundColor(CARD)
-    .borderRadius(28)
+    .borderRadius(MobileDesignGeometry.settingsProminentCardRadius)
     .margin({ bottom: 24 })
   }
 
@@ -185,7 +174,7 @@ export struct AccountProfilePanel {
     .width('100%')
     .padding({ left: 18, right: 18, top: 16, bottom: 16 })
     .backgroundColor(CARD)
-    .borderRadius(24)
+    .borderRadius(MobileDesignGeometry.settingsCardRadius)
     .margin({ bottom: 24 })
   }
 
@@ -205,8 +194,8 @@ export struct AccountProfilePanel {
             .fontSize(18)
             .fontColor([this.accountDevicesBusy ? MUTED : INK])
         }
-          .width(36)
-          .height(36)
+          .width(MobileDesignGeometry.controlTouchSize)
+          .height(MobileDesignGeometry.controlTouchSize)
           .padding(0)
           .type(ButtonType.Circle)
           .backgroundColor(PAGE_BG)
@@ -218,7 +207,7 @@ export struct AccountProfilePanel {
           })
       }
       .width('100%')
-      .height(40)
+      .constraintSize({ minHeight: 48 })
       .padding({ left: 8, right: 4 })
 
       Column({ space: 4 }) {
@@ -245,7 +234,7 @@ export struct AccountProfilePanel {
       .width('100%')
       .padding({ left: 8, right: 8, top: 8, bottom: 8 })
       .backgroundColor(CARD)
-      .borderRadius(20)
+      .borderRadius(MobileDesignGeometry.settingsCardRadius)
     }
     .width('100%')
     .margin({ bottom: 24 })
@@ -280,11 +269,11 @@ export struct AccountProfilePanel {
       }
     }
     .width('100%')
-    .height(62)
-    .padding({ left: 10, right: 10 })
+    .constraintSize({ minHeight: 62 })
+    .padding({ left: 10, right: 10, top: 10, bottom: 10 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(this.isCurrentControlDevice(device) ? SOFT : CARD)
-    .borderRadius(14)
+    .borderRadius(MobileDesignGeometry.settingsCompactCardRadius)
     .opacity(device.online ? 1 : 0.48)
     .onClick(() => {
       void this.connectAccountDevice(device);
@@ -308,7 +297,7 @@ export struct AccountProfilePanel {
     }
     .width('100%')
     .backgroundColor(CARD)
-    .borderRadius(28)
+    .borderRadius(MobileDesignGeometry.settingsCardRadius)
   }
 
   @Builder
@@ -324,8 +313,8 @@ export struct AccountProfilePanel {
         .constraintSize({ maxWidth: 190 })
     }
     .width('100%')
-    .height(58)
-    .padding({ left: 18, right: 18 })
+    .constraintSize({ minHeight: 58 })
+    .padding({ left: 18, right: 18, top: 12, bottom: 12 })
   }
 
   @Builder
@@ -344,10 +333,10 @@ export struct AccountProfilePanel {
         .fontSize(MobileDesignTypography.titleMedium.size).fontWeight(FontWeight.Medium).fontColor(RED)
     }
     .width('100%')
-    .height(62)
-    .padding({ left: 20, right: 20 })
+    .constraintSize({ minHeight: 62 })
+    .padding({ left: 20, right: 20, top: 12, bottom: 12 })
     .backgroundColor(this.embeddedInSettings ? PAGE_BG : CARD)
-    .borderRadius(this.embeddedInSettings ? 0 : 20)
+    .borderRadius(this.embeddedInSettings ? 0 : MobileDesignGeometry.settingsCardRadius)
     .margin({ top: this.embeddedInSettings ? 4 : 32, bottom: 8 })
     .opacity(this.logoutBusy ? 0.55 : 1)
     .enabled(!this.logoutBusy)

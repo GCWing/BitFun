@@ -6,7 +6,7 @@ import {
 } from '../../generated/MobilePreviewScenarios';
 import { ComposerBar, ComposerPresentation } from '../components/ComposerBar';
 import { ConversationHeader } from '../components/ConversationHeader';
-import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT } from '../components/Theme';
+import { INK, LINE, MUTED, PAGE_BG, SOFT } from '../components/Theme';
 
 @Entry
 @ComponentV2
@@ -37,7 +37,7 @@ struct MobileDesignGallery {
       })
       Column({ space: MobileDesignGeometry.messageSpacing }) {
         ForEach(this.resolvedScenario().messages, (message: MobilePreviewMessage) => {
-          this.MessageBubble(message)
+          this.MessageRow(message)
         }, (message: MobilePreviewMessage) => `${message.role}:${message.text}`)
       }
       .layoutWeight(1)
@@ -86,7 +86,7 @@ struct MobileDesignGallery {
   }
 
   @Builder
-  private MessageBubble(message: MobilePreviewMessage) {
+  private MessageRow(message: MobilePreviewMessage) {
     Row() {
       if (message.role === 'user') {
         Blank()
@@ -95,16 +95,17 @@ struct MobileDesignGallery {
         .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(INK)
         .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
-        .constraintSize({ maxWidth: MobileDesignGeometry.messageBubbleMaxWidth })
-        .padding({
-          left: MobileDesignGeometry.messageBubbleHorizontalPadding,
-          right: MobileDesignGeometry.messageBubbleHorizontalPadding,
-          top: MobileDesignGeometry.messageBubbleVerticalPadding,
-          bottom: MobileDesignGeometry.messageBubbleVerticalPadding
+        .constraintSize({
+          maxWidth: message.role === 'user' ? MobileDesignGeometry.messageBubbleMaxWidth : '100%'
         })
-        .backgroundColor(message.role === 'user' ? SOFT : CARD)
-        .border({ width: 1, color: LINE })
-        .borderRadius(MobileDesignGeometry.messageBubbleRadius)
+        .padding({
+          left: message.role === 'user' ? MobileDesignGeometry.messageBubbleHorizontalPadding : 0,
+          right: message.role === 'user' ? MobileDesignGeometry.messageBubbleHorizontalPadding : 0,
+          top: message.role === 'user' ? MobileDesignGeometry.messageBubbleVerticalPadding : 2,
+          bottom: message.role === 'user' ? MobileDesignGeometry.messageBubbleVerticalPadding : 2
+        })
+        .backgroundColor(message.role === 'user' ? SOFT : '#00000000')
+        .borderRadius(message.role === 'user' ? MobileDesignGeometry.messageBubbleRadius : 0)
       if (message.role !== 'user') {
         Blank()
       }

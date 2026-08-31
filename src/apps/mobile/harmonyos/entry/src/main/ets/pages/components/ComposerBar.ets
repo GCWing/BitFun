@@ -9,7 +9,18 @@ import {
   ConversationUiSelectedImage
 } from '../state/ConversationUiModels';
 import { ConversationModelPresentationPolicy } from '../policy/ConversationModelPresentationPolicy';
-import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import {
+  CARD,
+  FLOATING_PANEL_BG,
+  GREEN,
+  INK,
+  LINE,
+  MUTED,
+  PRIMARY_ACTION,
+  PRIMARY_ACTION_TEXT,
+  RED,
+  SOFT
+} from './Theme';
 
 export enum ComposerPresentation {
   Compact = 'compact',
@@ -84,7 +95,7 @@ export struct ComposerBar {
       left: this.presentation === ComposerPresentation.Floating ? 24 : MobileDesignGeometry.contentGutter,
       right: this.presentation === ComposerPresentation.Floating ? 24 : MobileDesignGeometry.contentGutter,
       top: 8,
-      bottom: this.presentation === ComposerPresentation.Floating ? 18 : 14
+      bottom: this.presentation === ComposerPresentation.Floating ? 16 : 12
     })
     .backgroundColor('#00000000')
     .bindSheet($$this.showModelSelectorSheet, this.ModelSelector(true), this.modelSelectorSheetOptions())
@@ -150,11 +161,12 @@ export struct ComposerBar {
       bottom: this.isComposerExpanded() ? 2 : 0
     })
     .backgroundColor(CARD)
+    .border({ width: 1, color: LINE })
     .borderRadius(this.composerRadius())
     .shadow({
-      radius: this.presentation === ComposerPresentation.Floating ? 18 : 10,
-      color: this.presentation === ComposerPresentation.Floating ? '#18000000' : '#0D000000',
-      offsetY: this.presentation === ComposerPresentation.Floating ? 6 : 2
+      radius: this.presentation === ComposerPresentation.Floating ? 14 : 8,
+      color: this.presentation === ComposerPresentation.Floating ? '#10000000' : '#08000000',
+      offsetY: this.presentation === ComposerPresentation.Floating ? 4 : 2
     })
     .animation({ duration: MobileDesignMotion.structure, curve: Curve.EaseOut })
   }
@@ -177,9 +189,9 @@ export struct ComposerBar {
           .opacity(0.68)
       }
       .width(16)
-      .height(34)
+      .height(32)
     }
-    .height(34)
+    .height(32)
     .constraintSize({ maxWidth: 220 })
     .padding({ left: 4, right: 4 })
     .backgroundColor('#00000000')
@@ -263,7 +275,7 @@ export struct ComposerBar {
         if (this.isSelectedModel(model)) {
           SymbolGlyph($r('sys.symbol.checkmark_circle'))
             .fontSize(16)
-            .fontColor([INK])
+            .fontColor([this.primaryActionForegroundColor()])
         }
       }
       .width(20)
@@ -383,15 +395,16 @@ export struct ComposerBar {
             .opacity(this.primaryAction() === ComposerPrimaryAction.Send ? 1 : 0.38)
         }
       }
-      .width(40)
-      .height(40)
+      .width(COMPOSER_ACTION_SIZE)
+      .height(COMPOSER_ACTION_SIZE)
     }
-    .width(40)
-    .height(40)
+    .width(COMPOSER_ACTION_SIZE)
+    .height(COMPOSER_ACTION_SIZE)
     .padding(0)
     .type(ButtonType.Circle)
     .backgroundColor(this.actionBackgroundColor())
-    .borderRadius(20)
+    .borderRadius(COMPOSER_ACTION_SIZE / 2)
+    .stateEffect(true)
     .accessibilityText(RemoteI18n.t(ChatComposerPolicy.primaryActionAccessibilityKey(
       this.primaryAction(), this.isVoiceListening)))
     // Driven off the same decision that drew the glyph, so the button can never
@@ -428,8 +441,7 @@ export struct ComposerBar {
   MicrophoneGlyph() {
     SymbolGlyph($r('sys.symbol.mic'))
       .fontSize(22)
-      .fontColor([INK])
-      .opacity(this.canUseVoice() ? 1 : 0.4)
+      .fontColor([this.primaryActionForegroundColor()])
   }
 
   @Builder
@@ -547,8 +559,7 @@ export struct ComposerBar {
     if (this.isComposerExpanded() || this.selectedImages.length > 0) {
       return MobileDesignGeometry.composerExpandedRadius;
     }
-    return this.presentation === ComposerPresentation.Floating ?
-      MobileDesignGeometry.composerExpandedRadius : MobileDesignGeometry.composerCollapsedRadius;
+    return MobileDesignGeometry.composerCollapsedRadius;
   }
 
   private isComposerExpanded(): boolean {
@@ -665,9 +676,23 @@ export struct ComposerBar {
   // the user has typed something, the button is a send arrow, and a send arrow
   // on a stop-red circle reads as "this will cancel".
   private actionBackgroundColor(): ResourceColor {
-    if (this.primaryAction() !== ComposerPrimaryAction.Stop) {
-      return '#00000000';
+    const action = this.primaryAction();
+    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Voice) {
+      return PRIMARY_ACTION;
+    }
+    if (action === ComposerPrimaryAction.SendBlocked || action === ComposerPrimaryAction.VoiceBlocked ||
+      action === ComposerPrimaryAction.Idle) {
+      return SOFT;
     }
     return this.isVoiceListening ? GREEN : RED;
+  }
+
+  private primaryActionForegroundColor(): ResourceColor {
+    const action = this.primaryAction();
+    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Voice ||
+      action === ComposerPrimaryAction.Stop) {
+      return PRIMARY_ACTION_TEXT;
+    }
+    return MUTED;
   }
 }

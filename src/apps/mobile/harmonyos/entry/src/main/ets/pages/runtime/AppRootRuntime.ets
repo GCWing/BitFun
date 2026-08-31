@@ -252,6 +252,13 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async selectDirectoryDevice(deviceId: string): Promise<void> {
     const selectionVersion = ++this.directorySelectionVersion;
+    // Selecting an already disclosed device is a local collapse. The remote
+    // control target remains connected; only its workspace tree is hidden.
+    // Bumping the version first also prevents an earlier async selection from
+    // reopening the row after this second tap.
+    if (this.deviceDirectoryState.collapseIfSelected(deviceId)) {
+      return;
+    }
     await this.deviceDirectoryViewModel.selectDevice(deviceId);
     if (selectionVersion !== this.directorySelectionVersion) {
       return;
@@ -269,7 +276,11 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       if (this.appShellState.wideLayout) {
         await this.enterRemoteSurfaceWide();
       } else {
-        await this.enterRemoteSurfaceCompact();
+        // A device row is also the disclosure control for its workspaces. Keep
+        // the compact drawer visible so selecting it can reveal that content;
+        // entering Remote from any other compact entry point still dismisses
+        // the drawer through the method's default behavior.
+        await this.enterRemoteSurfaceCompact(false);
       }
       this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
     } catch (err) {
@@ -367,8 +378,10 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
    * session the user was last in, and otherwise rests on the Remote landing
    * surface rather than opening the create composer for them.
    */
-  async enterRemoteSurfaceCompact(): Promise<void> {
-    this.closeAppSidebar();
+  async enterRemoteSurfaceCompact(closeSidebar: boolean = true): Promise<void> {
+    if (closeSidebar) {
+      this.closeAppSidebar();
+    }
     if (AppRouteContract.isRemoteRoute(this.appShellViewModel.currentRoute())) {
       return;
     }

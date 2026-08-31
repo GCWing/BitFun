@@ -65,7 +65,7 @@ export interface SidebarPresentationActions {
   /** Opens the QR scanner from the device-section add button. */
   readonly addDesktop: () => void;
   /** Refreshes account device presence from the relay. */
-  readonly refreshDevices: () => void;
+  readonly refreshDevices: () => Promise<void>;
   readonly settings: () => void;
   readonly openAccount: () => void;
   readonly openSession: (session: RemoteSession) => void;
@@ -126,7 +126,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
     },
     onSidebar: {
       close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, addDesktop: () => {},
-      refreshDevices: () => {}, settings: () => {}, openAccount: () => {},
+      refreshDevices: async () => {}, settings: () => {}, openAccount: () => {},
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },
     onSettings: {

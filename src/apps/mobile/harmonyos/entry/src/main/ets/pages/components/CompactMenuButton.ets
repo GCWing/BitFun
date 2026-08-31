@@ -1,6 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { TemplateIcon } from './TemplateIcon';
-import { CARD } from './Theme';
 
 @ComponentV2
 export struct CompactMenuButton {
@@ -8,7 +7,7 @@ export struct CompactMenuButton {
   @Event onOpen: () => void = () => {};
 
   build() {
-    Stack({ alignContent: Alignment.Center }) {
+    Button() {
       TemplateIcon({
         src: $r('app.media.gpt_home_menu_glyph'),
         iconWidth: 22,
@@ -17,9 +16,10 @@ export struct CompactMenuButton {
     }
     .width(this.controlSize)
     .height(this.controlSize)
-    .backgroundColor(CARD)
-    .borderRadius(this.controlSize / 2)
-    .shadow({ radius: 16, color: '#12000000', offsetY: 6 })
+    .padding(0)
+    .backgroundColor('#00000000')
+    .borderRadius(12)
+    .stateEffect(true)
     .accessibilityText(RemoteI18n.t('sidebar.more'))
     .onClick(() => {
       this.onOpen();

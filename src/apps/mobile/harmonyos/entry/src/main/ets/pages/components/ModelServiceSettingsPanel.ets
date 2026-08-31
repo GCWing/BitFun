@@ -1,12 +1,13 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../../services/general-chat/GeneralChatConfigStore';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
-import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT, SUBTLE } from './Theme';
-import { NavigationBackButton } from './NavigationBackButton';
+import { CARD, GREEN, INK, LINE, MUTED, RED, SOFT, SUBTLE } from './Theme';
+import { SheetCloseHeader } from './SheetCloseHeader';
+import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 @ComponentV2
 export struct ModelServiceSettingsPanel {
@@ -88,44 +89,24 @@ export struct ModelServiceSettingsPanel {
     .width('100%')
     .height('100%')
     .backgroundColor(CARD)
-    .borderRadius({ topLeft: 20, topRight: 20 })
+    .borderRadius({
+      topLeft: MobileDesignGeometry.sheetTopRadius,
+      topRight: MobileDesignGeometry.sheetTopRadius
+    })
   }
 
   @Builder
   Header() {
-    Row() {
-      if (this.sheetPage() !== 'overview') {
-        NavigationBackButton({
-          controlSize: 44,
-          isEnabled: !this.isSaving && !this.isTesting,
-          onBack: this.onClose
-        })
-        .margin({ right: 8 })
-      }
-      Text(this.headerTitle())
-        .fontSize(MobileDesignTypography.headlineSmall.size)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(INK)
-      Blank()
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(18)
-          .fontColor([MUTED])
-      }
-      .width(32)
-      .height(32)
-      .accessibilityText(RemoteI18n.t('common.close'))
-      .onClick(() => {
+    SheetCloseHeader({
+      title: this.headerTitle(),
+      showDivider: true,
+      isEnabled: !this.isSaving && !this.isTesting,
+      onClose: (): void => {
         if (!this.isSaving && !this.isTesting) {
           this.onClose();
         }
-      })
-    }
-    .width('100%')
-    .height(ModelServiceSettingsPolicy.HEADER_HEIGHT)
-    .padding({ left: 16, right: 16 })
-    .border({ width: { bottom: 1 }, color: LINE })
-    .alignItems(VerticalAlign.Center)
+      }
+    })
   }
 
   @Builder
@@ -258,30 +239,27 @@ export struct ModelServiceSettingsPanel {
           'model'
         )
         Row({ space: 12 }) {
-          Button(this.isTesting ? RemoteI18n.t('common.loading') : RemoteI18n.t('settings.modelService.testConnection'))
-            .layoutWeight(1)
-            .height(50)
-        .fontSize(MobileDesignTypography.labelLarge.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(INK)
-            .backgroundColor(this.isTesting ? MUTED : SOFT)
-            .borderRadius(25)
-            .enabled(!this.isSaving && !this.isTesting && this.hasTestableApiKey())
-            .onClick(() => {
+          AppActionButton({
+            label: this.isTesting ? RemoteI18n.t('common.loading') :
+              RemoteI18n.t('settings.modelService.testConnection'),
+            style: AppActionStyle.Quiet,
+            actionHeight: 50,
+            isEnabled: !this.isSaving && !this.isTesting && this.hasTestableApiKey(),
+            onAction: (): void => {
               this.testConnection();
-            })
-          Button(this.isSaving ? RemoteI18n.t('common.loading') : RemoteI18n.t('common.save'))
+            }
+          })
             .layoutWeight(1)
-            .height(50)
-        .fontSize(MobileDesignTypography.labelLarge.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(PRIMARY_ACTION_TEXT)
-            .backgroundColor(this.isSaving ? MUTED : ACCENT)
-            .borderRadius(25)
-            .enabled(!this.isSaving && !this.isTesting)
-            .onClick(() => {
+          AppActionButton({
+            label: this.isSaving ? RemoteI18n.t('common.loading') : RemoteI18n.t('common.save'),
+            style: AppActionStyle.Primary,
+            actionHeight: 50,
+            isEnabled: !this.isSaving && !this.isTesting,
+            onAction: (): void => {
               this.save();
-            })
+            }
+          })
+            .layoutWeight(1)
         }
         .width('100%')
 

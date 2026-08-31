@@ -1,6 +1,7 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import { CARD, INK, LINE, MUTED, RED } from './Theme';
+import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 export enum SessionActionPresentation {
   BottomSheet = 'bottom_sheet',
@@ -162,30 +163,25 @@ export struct SessionActionSurface {
         .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(MUTED)
       Row({ space: 10 }) {
-        Text(RemoteI18n.t('common.cancel'))
-          .layoutWeight(1)
-          .height(44)
-          .fontSize(MobileDesignTypography.bodyMedium.size)
-          .fontColor(INK)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(SOFT)
-          .borderRadius(8)
-          .onClick(() => {
+        AppActionButton({
+          label: RemoteI18n.t('common.cancel'),
+          style: AppActionStyle.Quiet,
+          actionHeight: 44,
+          onAction: (): void => {
             this.confirmingDelete = false;
-          })
-        Text(RemoteI18n.t('common.delete'))
+          }
+        })
           .layoutWeight(1)
-          .height(44)
-          .fontSize(MobileDesignTypography.bodyMedium.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(CARD)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(RED)
-          .borderRadius(8)
-          .onClick(() => {
+        AppActionButton({
+          label: RemoteI18n.t('common.delete'),
+          style: AppActionStyle.Destructive,
+          actionHeight: 44,
+          onAction: (): void => {
             this.onDelete();
             this.onClose();
-          })
+          }
+        })
+          .layoutWeight(1)
       }
       .width('100%')
     }

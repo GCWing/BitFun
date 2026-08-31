@@ -1,4 +1,4 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
@@ -7,7 +7,8 @@ import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
 import { AccountProfilePanel } from './AccountProfilePanel';
 import { LanguageSettingsPanel } from './LanguageSettingsPanel';
 import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
-import { SheetCloseButton } from './SheetCloseButton';
+import { SheetCloseHeader } from './SheetCloseHeader';
+import { SHEET_HORIZONTAL_PADDING, SHEET_TOP_RADIUS } from './SheetLayout';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 
 @ComponentV2
@@ -80,33 +81,17 @@ export struct SettingsSheet {
     .width('100%')
     .height('100%')
     .backgroundColor(PAGE_BG)
-    .borderRadius({ topLeft: 34, topRight: 34 })
+    .borderRadius({ topLeft: SHEET_TOP_RADIUS, topRight: SHEET_TOP_RADIUS })
   }
 
   @Builder
   SettingsHome() {
     Column() {
-      Row() {
-        Text(RemoteI18n.t('settings.title'))
-          .fontSize(MobileDesignTypography.displayLarge.size)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(INK)
-        Blank()
-        SheetCloseButton({
-          onClose: (): void => {
-            this.onClose();
-          }
-        })
-      }
-      .width('100%')
-      .height(84)
-      .padding({ left: 28, right: 8, top: 10 })
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(PAGE_BG)
-
-      Divider()
-        .strokeWidth(1)
-        .color(LINE)
+      SheetCloseHeader({
+        title: RemoteI18n.t('settings.title'),
+        showDivider: true,
+        onClose: this.onClose
+      })
 
       Scroll() {
         Column({ space: 0 }) {
@@ -131,7 +116,12 @@ export struct SettingsSheet {
           })
         }
         .width('100%')
-        .padding({ left: 24, right: 24, top: 22, bottom: 34 })
+        .padding({
+          left: SHEET_HORIZONTAL_PADDING,
+          right: SHEET_HORIZONTAL_PADDING,
+          top: 22,
+          bottom: 34
+        })
       }
       .width('100%')
       .layoutWeight(1)
@@ -158,8 +148,8 @@ export struct SettingsSheet {
   @Builder
   SectionTitle(title: string) {
     Text(title)
-      .fontSize(MobileDesignTypography.titleSmall.size)
-      .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
+      .fontSize(MobileDesignTypography.bodySmall.size)
+      .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
       .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
       .width('100%')
@@ -181,8 +171,8 @@ export struct SettingsSheet {
     }
     .width('100%')
     .backgroundColor(CARD)
-    .borderRadius(20)
-    .margin({ bottom: 28 })
+    .borderRadius(MobileDesignGeometry.settingsCardRadius)
+    .margin({ bottom: 24 })
   }
 
   @Builder
@@ -200,8 +190,8 @@ export struct SettingsSheet {
     }
     .width('100%')
     .backgroundColor(CARD)
-    .borderRadius(20)
-    .margin({ bottom: 28 })
+    .borderRadius(MobileDesignGeometry.settingsCardRadius)
+    .margin({ bottom: 24 })
   }
 
   @Builder
@@ -216,7 +206,7 @@ export struct SettingsSheet {
     }
     .width('100%')
     .backgroundColor(CARD)
-    .borderRadius(20)
+    .borderRadius(MobileDesignGeometry.settingsCardRadius)
   }
 
   @Builder
@@ -234,8 +224,8 @@ export struct SettingsSheet {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .width('100%')
-    .height(56)
-    .padding({ left: 18, right: 18 })
+    .constraintSize({ minHeight: 56 })
+    .padding({ left: 18, right: 18, top: 12, bottom: 12 })
     .alignItems(VerticalAlign.Center)
   }
 
@@ -265,8 +255,8 @@ export struct SettingsSheet {
       }
     }
     .width('100%')
-    .height(56)
-    .padding({ left: 18, right: 18 })
+    .constraintSize({ minHeight: 56 })
+    .padding({ left: 18, right: 18, top: 12, bottom: 12 })
     .alignItems(VerticalAlign.Center)
     .onClick(action)
   }

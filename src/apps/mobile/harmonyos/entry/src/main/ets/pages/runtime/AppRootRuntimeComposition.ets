@@ -127,7 +127,7 @@ export abstract class AppRootRuntimeComposition {
   abstract currentActiveTurnId(): string;
   abstract disconnect(clearPairing: boolean): Promise<void>;
   abstract enterCompactLayout(): void;
-  abstract enterRemoteSurfaceCompact(): Promise<void>;
+  abstract enterRemoteSurfaceCompact(closeSidebar?: boolean): Promise<void>;
   abstract enterRemoteSurfaceWide(): Promise<void>;
   abstract exitActiveChat(): void;
   abstract failRemoteConnection(err: Object): void;
@@ -963,8 +963,8 @@ export abstract class AppRootRuntimeComposition {
         this.closeAppSidebar();
         this.openConnectSheet(CONNECT_INTENT_SCAN);
       },
-      refreshDevices: (): void => {
-        void this.settingsController.refreshAccountDevicesIfStale(0);
+      refreshDevices: async (): Promise<void> => {
+        await this.settingsController.refreshAccountDevicesIfStale(0);
       },
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {

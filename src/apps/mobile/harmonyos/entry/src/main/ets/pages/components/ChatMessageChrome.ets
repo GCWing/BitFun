@@ -1,4 +1,4 @@
-import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiMessage } from '../state/ConversationUiModels';
 import { MessageImageGallery } from './ChatMessageContent';
@@ -87,20 +87,25 @@ export struct ChatUserMessageBubble {
               Text(this.visibleText()).fontSize(MobileDesignTypography.bodyMedium.size).lineHeight(MobileDesignTypography.bodyMedium.lineHeight).fontColor(INK)
             }
           }
-          .padding({ left: 10, right: 10, top: 10, bottom: 10 })
+          .padding({
+            left: MobileDesignGeometry.messageBubbleHorizontalPadding,
+            right: MobileDesignGeometry.messageBubbleHorizontalPadding,
+            top: MobileDesignGeometry.messageBubbleVerticalPadding,
+            bottom: MobileDesignGeometry.messageBubbleVerticalPadding
+          })
           .backgroundColor(SOFT)
-          .borderRadius(18)
+          .borderRadius(MobileDesignGeometry.messageBubbleRadius)
           .alignItems(HorizontalAlign.Start)
         }
         if (this.item.status === 'failed' && this.showRetryAction) {
           ChatMessageRetryAction({ retryText: this.item.text, onRetry: this.onRetryMessage })
         }
       }
-      .constraintSize({ maxWidth: '70%' })
+      .constraintSize({ maxWidth: MobileDesignGeometry.messageBubbleMaxWidth })
       .alignItems(HorizontalAlign.End)
     }
     .width('100%')
-    .padding({ top: 8, bottom: 12 })
+    .padding({ top: 2, bottom: 2 })
   }
 
   private visibleText(): string {

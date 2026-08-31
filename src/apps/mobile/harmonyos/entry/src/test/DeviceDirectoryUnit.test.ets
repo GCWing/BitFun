@@ -177,6 +177,17 @@ export default function deviceDirectoryUnitTest() {
     });
   });
 
+  describe('DeviceDirectoryState', () => {
+    it('collapses only the device that is currently disclosed', 0, () => {
+      const state = new DeviceDirectoryState();
+      state.select('desk-a');
+      expect(state.collapseIfSelected('desk-b')).assertFalse();
+      expect(state.selectedDeviceId).assertEqual('desk-a');
+      expect(state.collapseIfSelected('desk-a')).assertTrue();
+      expect(state.selectedDeviceId).assertEqual('');
+    });
+  });
+
   describe('DeviceDirectoryViewModel', () => {
     it('does not issue RPC for an offline device', 0, async () => {
       let credentialCalls = 0;
