@@ -7,7 +7,7 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, u
 import { createPortal } from 'react-dom';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, Files, MessageSquarePlus, Play } from 'lucide-react';
+import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, Files, MessageSquarePlus, Play } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import {
@@ -142,7 +142,6 @@ import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
-import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import {
   configManager,
@@ -1158,7 +1157,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const suppressNextUserDefaultModeApplicationRef = useRef(false);
 
   const openScene = useSceneStore(s => s.openScene);
-  const openCreateAgent = useAgentsStore(s => s.openCreateAgent);
   const [resolvedModeSkills, setResolvedModeSkills] = useState<ModeSkillInfo[]>([]);
   const [resolvedModeSkillsLoading, setResolvedModeSkillsLoading] = useState(false);
   const [resolvedModeSkillsLoadFailed, setResolvedModeSkillsLoadFailed] = useState(false);
@@ -1169,16 +1167,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const { computerUseEnabled } = useComputerUseEnabled();
 
-  const handleOpenCreateCustomMode = useCallback(
-    (event: React.MouseEvent | React.KeyboardEvent) => {
-      event.stopPropagation();
-      dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      openCreateAgent();
-      openScene('agents' as SceneTabId);
-    },
-    [openCreateAgent, openScene]
-  );
-  
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
   const setChatInputHeight = useChatInputState(state => state.setInputHeight);
@@ -6199,16 +6187,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           onClick={handleBoostPickImage}
                         >
                           {t('input.addImage')}
-                        </MenuItem>
-
-                        <MenuItem
-                          data-bf-component="chat-input"
-                          data-bf-part="boostItem"
-                          data-bf-boost-item-kind="context"
-                          leading={<BotMessageSquare size={14} aria-hidden />}
-                          onClick={handleOpenCreateCustomMode}
-                        >
-                          {t('chatInput.createCustomMode')}
                         </MenuItem>
 
                         {canUseSkillsForTarget && (

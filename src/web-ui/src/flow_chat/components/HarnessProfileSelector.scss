@@ -51,48 +51,8 @@
   text-overflow: ellipsis;
 }
 
-.bitfun-harness-selector__trigger-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .bitfun-harness-selector__row-contract {
   display: contents;
-}
-
-.bitfun-harness-selector__trigger-meta,
-.bitfun-harness-selector__trigger-current {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.bitfun-harness-selector__trigger-meta {
-  flex: none;
-  gap: 6px;
-  max-width: 62%;
-}
-
-.bitfun-harness-selector__trigger-current {
-  gap: 4px;
-  overflow: hidden;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-regular);
-}
-
-.bitfun-harness-selector__trigger-current-separator {
-  flex: none;
-}
-
-.bitfun-harness-selector__trigger-current-value {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--bf-color-content-secondary);
-  font-weight: var(--bf-font-weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .bitfun-harness-selector__trigger-chevron {
@@ -100,9 +60,9 @@
   color: var(--bf-color-content-muted);
 }
 
-// Inside ChatInput's add menu the current Harness/main-Agent signature becomes
-// a normal disclosure row. Its secondary picker is portaled back into this
-// root so both menus share one outside-click boundary.
+// Inside ChatInput's add menu the current Harness/main-Agent signature is a
+// normal full-width disclosure row. The secondary picker uses the shared
+// overlay host so the parent menu's scroll viewport cannot clip it.
 .bitfun-harness-selector--menu-item {
   width: 100%;
 }

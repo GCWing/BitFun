@@ -22,4 +22,11 @@ describe('ModelSelector portal layer', () => {
     expect(dropdownBlock).toContain('z-index: $z-popover;');
     expect(dropdownBlock).not.toContain('z-index: $z-dropdown;');
   });
+
+  it('keeps native model and reasoning flyouts in the shared overlay host', () => {
+    const component = readSource('./ModelSelector.tsx');
+
+    expect(component).toContain('data-testid="chat-model-selector-submenu"');
+    expect(component.match(/getAppearanceOverlayHost\(\)/g)).toHaveLength(3);
+  });
 });
