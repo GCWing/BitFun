@@ -9,7 +9,6 @@ todos:
   - id: add-write-card
     content: Render .plan.md writes as plan cards
     status: pending
-    dependencies: []
 ---
 
 # Replace CreatePlan
@@ -25,7 +24,6 @@ describe('planDocument', () => {
         id: 'add-write-card',
         content: 'Render .plan.md writes as plan cards',
         status: 'pending',
-        dependencies: [],
       }],
       planContent: '# Replace CreatePlan\n\nImplement the Write-backed plan flow.',
     });
