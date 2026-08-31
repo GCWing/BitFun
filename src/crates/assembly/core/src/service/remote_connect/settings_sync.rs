@@ -1,7 +1,8 @@
 //! Account cloud settings sync engine, shared by Desktop and CLI.
 //!
 //! Owns the full settings sync lifecycle for one process:
-//! - **Push**: `notify_changed()` marks local settings dirty; a 5s debounce
+//! - **Push**: persisted ConfigService changes or `notify_settings_changed()`
+//!   mark local settings dirty; a 5s debounce
 //!   later the engine exports the config and uploads it to the relay. Uploads
 //!   are content-hash deduped so identical content is never re-uploaded.
 //! - **Pull**: an immediate pull on start, then every 30s, fetches the cloud
@@ -286,7 +287,7 @@ pub async fn apply_settings_blob(
     blob: &SettingsBlob,
     force: bool,
 ) -> Result<bool> {
-    apply_settings_blob_for_generation(account, blob, force, None).await
+    apply_settings_blob_for_generation(account, blob, force, None, None).await
 }
 
 async fn apply_settings_blob_for_generation(
@@ -294,6 +295,7 @@ async fn apply_settings_blob_for_generation(
     blob: &SettingsBlob,
     force: bool,
     generation: Option<u64>,
+    expected_local_config: Option<serde_json::Value>,
 ) -> Result<bool> {
     if !force {
         let known = sync_state::load_settings_cursor(&account.user_id);
@@ -313,10 +315,15 @@ async fn apply_settings_blob_for_generation(
     let config_service = crate::service::config::get_global_config_service()
         .await
         .map_err(|e| anyhow!("config service: {e}"))?;
-    let import_result = config_service
-        .import_config_data(inner_config)
-        .await
-        .map_err(|e| anyhow!("import cloud config: {e}"))?;
+    let import_result = match expected_local_config {
+        Some(expected) if !force => {
+            config_service
+                .import_account_settings_if_unchanged(inner_config, expected)
+                .await
+        }
+        _ => config_service.import_account_settings(inner_config).await,
+    }
+    .map_err(|e| anyhow!("import cloud config: {e}"))?;
     if !import_result.success {
         return Err(anyhow!(
             "import cloud config failed: {}",
@@ -355,6 +362,17 @@ async fn pull_and_apply_settings_for_generation(
     relay_url: &str,
     generation: Option<u64>,
 ) -> Result<bool> {
+    let config_service = crate::service::config::get_global_config_service()
+        .await
+        .map_err(|e| anyhow!("config service: {e}"))?;
+    let expected_local_config = serde_json::to_value(
+        config_service
+            .export_config()
+            .await
+            .map_err(|e| anyhow!("export config: {e}"))?
+            .config,
+    )
+    .map_err(|e| anyhow!("snapshot config: {e}"))?;
     let client = AccountClient::new();
     let Some(blob) = client
         .fetch_settings_with_version(relay_url, account)
@@ -365,7 +383,14 @@ async fn pull_and_apply_settings_for_generation(
     if generation.is_some_and(|value| !is_account_context_current(value)) {
         return Err(anyhow!("account context changed during settings pull"));
     }
-    apply_settings_blob_for_generation(account, &blob, false, generation).await
+    apply_settings_blob_for_generation(
+        account,
+        &blob,
+        false,
+        generation,
+        Some(expected_local_config),
+    )
+    .await
 }
 
 async fn account_context() -> Result<AccountContext> {
@@ -427,28 +452,67 @@ async fn pull_from_loop() {
 /// converges right after start instead of one interval later.
 async fn settings_sync_loop(mut rx: mpsc::UnboundedReceiver<()>) {
     let mut next_pull = tokio::time::Instant::now();
+    let mut local_changes = None;
     loop {
+        // Subscribe at the persistence owner as well as accepting legacy host
+        // notifications. Skills, Agent profiles, CLI mutations, and future
+        // settings must not depend on each adapter remembering an upload hook.
+        if local_changes.is_none() {
+            match crate::service::config::get_global_config_service().await {
+                Ok(service) => local_changes = Some(service.subscribe_local_changes()),
+                Err(error) => {
+                    warn!("Settings sync: config subscription unavailable; will retry: {error}")
+                }
+            }
+        }
         let pull_deadline = tokio::time::sleep_until(next_pull);
         tokio::pin!(pull_deadline);
 
-        tokio::select! {
-            Some(()) = rx.recv() => {
-                // Drain further notifications during the debounce window.
-                let deadline = tokio::time::sleep(SETTINGS_PUSH_DEBOUNCE);
-                tokio::pin!(deadline);
-                loop {
-                    tokio::select! {
-                        _ = &mut deadline => break,
-                        Some(()) = rx.recv() => {}
-                    }
+        let push_requested = tokio::select! {
+            // A queued local save takes priority over a periodic pull.
+            biased;
+            Some(()) = rx.recv() => true,
+            available = wait_for_local_config_change(&mut local_changes) => {
+                if !available {
+                    local_changes = None;
+                    continue;
                 }
-                push_from_loop().await;
-            }
+                true
+            },
             _ = &mut pull_deadline => {
                 next_pull = tokio::time::Instant::now() + SETTINGS_PULL_INTERVAL;
                 pull_from_loop().await;
+                false
+            }
+        };
+        if !push_requested {
+            continue;
+        }
+
+        // Drain both notification sources during the same debounce window.
+        let deadline = tokio::time::sleep(SETTINGS_PUSH_DEBOUNCE);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                Some(()) = rx.recv() => {},
+                available = wait_for_local_config_change(&mut local_changes) => {
+                    if !available {
+                        local_changes = None;
+                    }
+                }
             }
         }
+        push_from_loop().await;
+    }
+}
+
+async fn wait_for_local_config_change(
+    receiver: &mut Option<tokio::sync::watch::Receiver<()>>,
+) -> bool {
+    match receiver {
+        Some(receiver) => receiver.changed().await.is_ok(),
+        None => std::future::pending().await,
     }
 }
 

@@ -426,7 +426,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     try {
-      await aiExperienceConfigService.saveSettings(newSettings);
+      await aiExperienceConfigService.saveSettings({ [key]: value });
       notification.success(t('messages.saveSuccess'));
     } catch (error) {
       log.error('Failed to save AI features settings', error);
@@ -493,7 +493,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
         const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
         setSettings(next);
-        await aiExperienceConfigService.saveSettings(next);
+        await aiExperienceConfigService.saveSettings({ agent_companion_pet: DEFAULT_AGENT_COMPANION_PET });
       }
       notification.success(t('features.pet.deleteSuccess'));
     } catch (error) {

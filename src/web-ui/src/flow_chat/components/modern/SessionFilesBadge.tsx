@@ -202,7 +202,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
   const [quickActions, setQuickActions] = useState<QuickAction[]>(() => {
     const stored = aiExperienceConfigService.getSettings().quick_actions;
-    return (stored && stored.length > 0) ? stored : DEFAULT_QUICK_ACTIONS;
+    return stored ?? DEFAULT_QUICK_ACTIONS;
   });
 
   const badgeRef = useRef<HTMLDivElement>(null);
@@ -248,10 +248,10 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         return;
       }
       const actions = settings.quick_actions;
-      setQuickActions((actions && actions.length > 0) ? actions : DEFAULT_QUICK_ACTIONS);
+      setQuickActions(actions ?? DEFAULT_QUICK_ACTIONS);
       unsubscribeSettings = aiExperienceConfigService.addChangeListener((nextSettings) => {
         const nextActions = nextSettings.quick_actions;
-        setQuickActions((nextActions && nextActions.length > 0) ? nextActions : DEFAULT_QUICK_ACTIONS);
+        setQuickActions(nextActions ?? DEFAULT_QUICK_ACTIONS);
       });
     }, {
       signalName: 'bitfun:interactive-shell-ready',

@@ -225,6 +225,12 @@ pub struct ConfigManagerSettings {
     pub backup_count: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConfigImportSource {
+    Explicit,
+    AccountSync,
+}
+
 impl Default for ConfigManagerSettings {
     fn default() -> Self {
         Self {
@@ -276,6 +282,18 @@ impl ConfigManager {
     /// Returns the path manager.
     pub fn path_manager(&self) -> &Arc<PathManager> {
         &self.path_manager
+    }
+
+    /// Reloads from the same storage root while the service holds its write
+    /// lock, so a concurrent save cannot be replaced by an older disk read.
+    pub(crate) async fn reload(&mut self) -> BitFunResult<()> {
+        let settings = ConfigManagerSettings {
+            path_manager: Some(self.path_manager.clone()),
+            auto_save: true,
+            backup_count: self.backup_count,
+        };
+        *self = Self::new(settings).await?;
+        Ok(())
     }
 
     /// Loads or creates the configuration file.
@@ -486,7 +504,11 @@ impl ConfigManager {
 
     /// Saves the configuration file.
     async fn save_config(&self) -> BitFunResult<()> {
-        let content = serde_json::to_string_pretty(&config_value_for_persistence(&self.config)?)
+        self.persist_config(&self.config).await
+    }
+
+    async fn persist_config(&self, config: &GlobalConfig) -> BitFunResult<()> {
+        let content = serde_json::to_string_pretty(&config_value_for_persistence(config)?)
             .map_err(|e| BitFunError::config(format!("Config serialization failed: {}", e)))?;
 
         if let Some(parent) = self.config_file.parent() {
@@ -518,13 +540,17 @@ impl ConfigManager {
         fs::create_dir_all(&backup_dir)
             .await
             .map_err(|e| BitFunError::config(format!("Failed to create backup directory: {e}")))?;
-        let backup_file = backup_dir.join(format!("app_{reason}_{timestamp}.json"));
+        let backup_file = backup_dir.join(format!(
+            "app_{reason}_{timestamp}_{}.json",
+            uuid::Uuid::new_v4().simple()
+        ));
         fs::write(&backup_file, content)
             .await
             .map_err(|e| BitFunError::config(format!("Failed to write config backup: {e}")))?;
         self.prune_backups(&backup_dir).await?;
         info!(
-            "Created pre-repair config backup: path={}",
+            "Created config backup: reason={}, path={}",
+            reason,
             backup_file.display()
         );
         Ok(backup_file)
@@ -592,88 +618,73 @@ impl ConfigManager {
     where
         T: serde::Serialize,
     {
-        let old_config = self.config.clone();
         let json_value = serde_json::to_value(value)
             .map_err(|e| BitFunError::config(format!("Failed to serialize config value: {}", e)))?;
 
         let path = canonical_config_path(path);
-        self.set_value_by_path(path, json_value)?;
+        let mut config = self.config_with_value(path, json_value)?;
         // Apply capability-driven canonicalization before validation and persistence.
         // Speech/embedding/image-only models must never carry text-generation sentinels.
-        normalize_typed_config(&mut self.config);
-        self.config.last_modified = chrono::Utc::now();
+        normalize_typed_config(&mut config);
 
-        let validation_result = match self.validate_config().await {
-            Ok(result) => result,
-            Err(error) => {
-                self.config = old_config;
-                return Err(error);
-            }
-        };
+        let validation_result = self.providers.validate_config(&config).await?;
         if !validation_result.valid {
-            self.config = old_config;
             return Err(invalid_config_error(
                 "Invalid configuration update",
                 &validation_result,
             ));
         }
 
-        if path.is_empty() {
-            for provider_name in self.providers.get_provider_names() {
-                self.notify_config_changed(&provider_name, &old_config)
-                    .await?;
-            }
-        } else {
-            self.notify_config_changed(path, &old_config).await?;
-        }
-
-        self.save_config().await?;
-
-        Ok(())
+        self.commit_config(config, Some(path)).await
     }
 
     /// Resets configuration (supports dot-paths).
     pub async fn reset(&mut self, path: Option<&str>) -> BitFunResult<()> {
-        let old_config = self.config.clone();
-
-        if let Some(path) = path {
+        let config = if let Some(path) = path {
             let path = canonical_config_path(path);
             let default_config = self.providers.get_default_config();
             let default_value = self.get_value_by_path_from_config(&default_config, path)?;
-            self.set_value_by_path(path, default_value)?;
+            self.config_with_value(path, default_value)?
         } else {
-            self.config = self.providers.get_default_config();
-        }
-
-        self.config.last_modified = chrono::Utc::now();
-
-        let validation_result = match self.validate_config().await {
-            Ok(result) => result,
-            Err(error) => {
-                self.config = old_config;
-                return Err(error);
-            }
+            self.providers.get_default_config()
         };
+
+        let validation_result = self.providers.validate_config(&config).await?;
         if !validation_result.valid {
-            self.config = old_config;
             return Err(invalid_config_error(
                 "Invalid configuration reset",
                 &validation_result,
             ));
         }
 
-        if let Some(path) = path {
-            let path = canonical_config_path(path);
-            self.notify_config_changed(path, &old_config).await?;
-        } else {
-            for provider_name in self.providers.get_provider_names() {
-                self.notify_config_changed(&provider_name, &old_config)
-                    .await?;
+        self.commit_config(config, path.map(canonical_config_path))
+            .await
+    }
+
+    /// Publish only a configuration that has reached disk. Failed writes must
+    /// not change reads, runtime subscribers, or a subsequent unrelated save.
+    async fn commit_config(
+        &mut self,
+        mut config: GlobalConfig,
+        path: Option<&str>,
+    ) -> BitFunResult<()> {
+        config.last_modified = chrono::Utc::now();
+        self.persist_config(&config).await?;
+        let old_config = std::mem::replace(&mut self.config, config);
+        let paths = match path.filter(|path| !path.is_empty()) {
+            Some(path) => vec![path.to_string()],
+            None => self.providers.get_provider_names(),
+        };
+        for path in paths {
+            // A subscriber failure cannot undo an already committed file. Keep
+            // notifying the other providers and report the refresh failure.
+            if let Err(error) = self.notify_config_changed(&path, &old_config).await {
+                warn!(
+                    "Configuration saved but change notification failed: path={}, error={}",
+                    path, error
+                );
             }
         }
-
-        self.save_config().await?;
-
         Ok(())
     }
 
@@ -699,12 +710,20 @@ impl ConfigManager {
 
     /// Imports configuration.
     pub async fn import_config(&mut self, config_data: serde_json::Value) -> BitFunResult<()> {
-        let old_config = self.config.clone();
+        self.import_config_from_source(config_data, ConfigImportSource::Explicit)
+            .await
+    }
+
+    pub(crate) async fn import_config_from_source(
+        &mut self,
+        mut config_data: Value,
+        source: ConfigImportSource,
+    ) -> BitFunResult<()> {
+        self.preserve_imported_settings(&mut config_data, source)?;
         let normalized = normalize_config_value(config_data);
         reject_unsupported_schema(&normalized.diagnostics)?;
-        let config_data = normalized.value;
 
-        let mut imported_config: GlobalConfig = serde_json::from_value(config_data)
+        let mut imported_config: GlobalConfig = serde_json::from_value(normalized.value)
             .map_err(|e| BitFunError::config(format!("Failed to parse imported config: {}", e)))?;
 
         let mut import_diagnostics = normalized.diagnostics;
@@ -720,18 +739,100 @@ impl ConfigManager {
             ));
         }
 
-        self.config = imported_config;
+        // Imports replace the whole document. Keep the exact previous file
+        // recoverable before a cloud apply or an explicit backup restore.
+        let previous_content = fs::read_to_string(&self.config_file).await.map_err(|e| {
+            BitFunError::config(format!("Failed to read config before import backup: {e}"))
+        })?;
+        self.backup_raw_config(&previous_content, "pre-import")
+            .await?;
+
+        self.commit_config(imported_config, None).await?;
         self.load_diagnostics = import_diagnostics;
-        self.config.last_modified = chrono::Utc::now();
-
-        for provider_name in self.providers.get_provider_names() {
-            self.notify_config_changed(&provider_name, &old_config)
-                .await?;
-        }
-
-        self.save_config().await?;
 
         info!("Successfully imported configuration");
+        Ok(())
+    }
+
+    fn preserve_imported_settings(
+        &self,
+        config_data: &mut Value,
+        source: ConfigImportSource,
+    ) -> BitFunResult<()> {
+        // Exported account snapshots serialize fixed defaults in full. Raw
+        // on-disk backups intentionally elide memory/default AI preferences;
+        // their omissions must continue to mean reset when explicitly restored.
+        let mut shape = match source {
+            ConfigImportSource::AccountSync => serde_json::to_value(GlobalConfig::default())?,
+            ConfigImportSource::Explicit => config_value_for_persistence(&GlobalConfig::default())?,
+        };
+        let root = shape
+            .as_object_mut()
+            .expect("GlobalConfig serializes as an object");
+        for key in ["version", "schema_version", "last_modified"] {
+            root.remove(key);
+        }
+        // This optional record has a non-empty default, but None is omitted on
+        // export. Do not mistake that intentional omission for an unknown field.
+        shape["app"]["ai_experience"]
+            .as_object_mut()
+            .unwrap()
+            .remove("agent_companion_pet");
+
+        // Let actual legacy values reach their migrations before supplying a
+        // local value at the new name; otherwise preservation masks the rename.
+        if config_data.pointer("/ai/agent_models").is_some() {
+            shape["ai"]
+                .as_object_mut()
+                .unwrap()
+                .remove("agent_model_defaults");
+        }
+        if config_data.pointer("/ai/skip_tool_confirmation").is_some() {
+            shape.as_object_mut().unwrap().remove("tool_permissions");
+        }
+        preserve_missing_config_fields(
+            config_data,
+            &serde_json::to_value(&self.config)?,
+            &shape,
+            "",
+        );
+        self.preserve_imported_voice_config(config_data, source)
+    }
+
+    fn preserve_imported_voice_config(
+        &self,
+        config_data: &mut Value,
+        source: ConfigImportSource,
+    ) -> BitFunResult<()> {
+        let Some(root) = config_data.as_object_mut() else {
+            return Ok(());
+        };
+        let app = root.entry("app").or_insert_with(|| serde_json::json!({}));
+        let Some(app) = app.as_object_mut() else {
+            return Ok(());
+        };
+        let voice = app
+            .entry("voice_call")
+            .or_insert_with(|| serde_json::json!({}));
+        let Some(fields) = voice.as_object_mut() else {
+            return Ok(());
+        };
+
+        // Older hosts omit this section; newer unconfigured hosts export an
+        // empty key. Neither is a request to erase this controller's saved
+        // credential. Explicit imports and local set/reset still honor clears.
+        if source == ConfigImportSource::AccountSync
+            && fields
+                .get("api_key")
+                .and_then(Value::as_str)
+                .is_some_and(|key| key.trim().is_empty())
+        {
+            fields.remove("api_key");
+        }
+        *voice = deep_merge(
+            serde_json::to_value(&self.config.app.voice_call)?,
+            voice.take(),
+        );
         Ok(())
     }
 
@@ -746,12 +847,17 @@ impl ConfigManager {
             })?;
         }
 
-        let backup_file = backup_dir.join(format!("config_backup_{}.json", timestamp));
+        let backup_file = backup_dir.join(format!(
+            "config_backup_{}_{}.json",
+            timestamp,
+            uuid::Uuid::new_v4().simple()
+        ));
 
         let content = serde_json::to_string_pretty(&config_value_for_persistence(&self.config)?)
             .map_err(|e| BitFunError::config(format!("Failed to serialize backup: {}", e)))?;
 
-        fs::write(&backup_file, content)
+        JsonFileStore
+            .write_text_atomic_create_new(&backup_file, &content)
             .await
             .map_err(|e| BitFunError::config(format!("Failed to write backup: {}", e)))?;
 
@@ -789,6 +895,10 @@ impl ConfigManager {
         let config_value = serde_json::to_value(config)
             .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))?;
 
+        if path.is_empty() {
+            return Ok(config_value);
+        }
+
         let keys: Vec<&str> = path.split('.').collect();
         let mut current = &config_value;
 
@@ -801,12 +911,15 @@ impl ConfigManager {
         Ok(current.clone())
     }
 
-    /// Sets a configuration value by dot-path.
-    fn set_value_by_path(&mut self, path: &str, value: serde_json::Value) -> BitFunResult<()> {
+    /// Builds a candidate configuration without changing the committed value.
+    fn config_with_value(
+        &self,
+        path: &str,
+        value: serde_json::Value,
+    ) -> BitFunResult<GlobalConfig> {
         if path.is_empty() {
-            self.config = serde_json::from_value(value)
-                .map_err(|e| BitFunError::config(format!("Failed to deserialize config: {}", e)))?;
-            return Ok(());
+            return serde_json::from_value(value)
+                .map_err(|e| BitFunError::config(format!("Failed to deserialize config: {}", e)));
         }
 
         let mut config_value = serde_json::to_value(&self.config)
@@ -814,9 +927,8 @@ impl ConfigManager {
 
         let keys: Vec<&str> = path.split('.').filter(|k| !k.is_empty()).collect();
         if keys.is_empty() {
-            self.config = serde_json::from_value(value)
-                .map_err(|e| BitFunError::config(format!("Failed to deserialize config: {}", e)))?;
-            return Ok(());
+            return serde_json::from_value(value)
+                .map_err(|e| BitFunError::config(format!("Failed to deserialize config: {}", e)));
         }
 
         let last_key = keys.last().ok_or_else(|| {
@@ -840,11 +952,9 @@ impl ConfigManager {
             )));
         }
 
-        self.config = serde_json::from_value(config_value).map_err(|e| {
+        serde_json::from_value(config_value).map_err(|e| {
             BitFunError::config(format!("Failed to deserialize updated config: {}", e))
-        })?;
-
-        Ok(())
+        })
     }
 
     /// Notifies about a configuration change.
@@ -911,6 +1021,47 @@ impl ConfigManager {
                 },
             )
             .await;
+        }
+    }
+}
+
+/// Fill absent fixed fields only. Arrays, dynamic maps, tagged selections,
+/// credentials bound to an endpoint, and permission-policy documents remain
+/// authoritative replacements when supplied. A blanket deep merge resurrects
+/// deleted entries and changes the meaning of explicit reset payloads.
+fn preserve_missing_config_fields(incoming: &mut Value, local: &Value, shape: &Value, path: &str) {
+    if matches!(
+        path,
+        "ai.review_teams"
+            | "ai.agent_model_defaults.subagents.builtin"
+            | "ai.proxy"
+            | "tool_permissions"
+    ) {
+        return;
+    }
+    let (Some(incoming), Some(local), Some(shape)) = (
+        incoming.as_object_mut(),
+        local.as_object(),
+        shape.as_object(),
+    ) else {
+        return;
+    };
+    if shape.contains_key("kind") || shape.contains_key("type") {
+        return;
+    }
+    for (key, child_shape) in shape {
+        let Some(local_value) = local.get(key) else {
+            continue;
+        };
+        if let Some(value) = incoming.get_mut(key) {
+            let child_path = if path.is_empty() {
+                key.clone()
+            } else {
+                format!("{path}.{key}")
+            };
+            preserve_missing_config_fields(value, local_value, child_shape, &child_path);
+        } else {
+            incoming.insert(key.clone(), local_value.clone());
         }
     }
 }

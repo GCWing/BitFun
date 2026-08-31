@@ -1635,42 +1635,23 @@ const ModelSettingsPage: React.FC = () => {
         isProviderGroupEdit
       );
 
-      let updatedModels: AIModelConfigType[];
-      if (editingConfig.id) {
-        updatedModels = aiModels.map(m => m.id === editingConfig.id ? configsToSave[0] : m);
-      } else if (isProviderGroupEdit) {
-        updatedModels = [
-          ...aiModels.filter(model => !providerGroupModelIds.has(model.id || '')),
-          ...configsToSave,
-        ];
-      } else {
-        updatedModels = [
-          ...aiModels,
-          ...configsToSave,
-        ];
-      }
-
-      
-      await configManager.setConfig('ai.models', updatedModels);
-      setAiModels(updatedModels);
-
-      // Auto-set as primary model if no primary model is configured and this is a new model
-      if (!editingConfig.id) {
-        try {
-          const currentDefaultModels = await configManager.getConfig<Record<string, unknown>>('ai.default_models') || {};
-          const primaryModelExists = currentDefaultModels.primary && updatedModels.some(m => m.id === currentDefaultModels.primary);
-          if (!primaryModelExists) {
-            await configManager.setConfig('ai.default_models', {
-              ...currentDefaultModels,
-              primary: configsToSave[0]?.id,
-            });
-            log.info('Auto-set primary model for first configured model', { modelId: configsToSave[0]?.id });
-            notification.success(t('messages.autoSetPrimary'));
+      const updatedModels = await configManager.updateConfig<AIModelConfigType[]>('ai.models', current => {
+        if (editingConfig.id) {
+          if (!current.some(model => model.id === editingConfig.id)) {
+            throw new Error('The model was removed while it was being edited');
           }
-        } catch (error) {
-          log.warn('Failed to auto-set primary model', { error });
+          return current.map(model => model.id === editingConfig.id ? { ...model, ...configsToSave[0] } : model);
         }
-      }
+        if (isProviderGroupEdit) {
+          return [
+            ...current.filter(model => !providerGroupModelIds.has(model.id || '')),
+            ...configsToSave,
+          ];
+        }
+        return [...current, ...configsToSave];
+      });
+      setAiModels(updatedModels);
+      // The host reconciles default selectors using model capabilities.
       
       
       setIsEditing(false);
@@ -1738,24 +1719,10 @@ const ModelSettingsPage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const updatedModels = aiModels.filter(m => m.id !== id);
-      await configManager.setConfig('ai.models', updatedModels);
+      const updatedModels = await configManager.updateConfig<AIModelConfigType[]>(
+        'ai.models', current => current.filter(model => model.id !== id)
+      );
       setAiModels(updatedModels);
-
-      const currentDefaultModels = await configManager.getConfig<Record<string, unknown>>('ai.default_models') || {};
-      const nextDefaultModels = { ...currentDefaultModels };
-      let defaultModelsChanged = false;
-
-      for (const key of ['primary', 'fast', 'image_understanding', 'speech_recognition']) {
-        if (nextDefaultModels[key] === id) {
-          nextDefaultModels[key] = null;
-          defaultModelsChanged = true;
-        }
-      }
-
-      if (defaultModelsChanged) {
-        await configManager.setConfig('ai.default_models', nextDefaultModels);
-      }
     } catch (error) {
       log.error('Failed to delete config', { configId: id, error });
     }
@@ -1819,10 +1786,9 @@ const ModelSettingsPage: React.FC = () => {
     if (!config.id) return;
 
     try {
-      const updatedModels = aiModels.map(model =>
-        model.id === config.id ? { ...model, enabled } : model
+      const updatedModels = await configManager.updateConfig<AIModelConfigType[]>(
+        'ai.models', current => current.map(model => model.id === config.id ? { ...model, enabled } : model)
       );
-      await configManager.setConfig('ai.models', updatedModels);
       setAiModels(updatedModels);
     } catch (error) {
       log.error('Failed to toggle model status', { configId: config.id, enabled, error });

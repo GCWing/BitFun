@@ -212,7 +212,7 @@ const QuickActionsConfig: React.FC = () => {
     try {
       const settings = await aiExperienceConfigService.getSettingsAsync();
       const stored = settings.quick_actions;
-      setActions((stored && stored.length > 0) ? stored : DEFAULT_QUICK_ACTIONS);
+      setActions(stored ?? DEFAULT_QUICK_ACTIONS);
     } catch (error) {
       log.error('Failed to load quick actions', error);
     } finally {
@@ -224,8 +224,7 @@ const QuickActionsConfig: React.FC = () => {
 
   const persist = useCallback(async (next: QuickAction[]) => {
     try {
-      const settings = await aiExperienceConfigService.getSettingsAsync();
-      await aiExperienceConfigService.saveSettings({ ...settings, quick_actions: next });
+      await aiExperienceConfigService.saveSettings({ quick_actions: next });
       setActions(next);
       notification.success(t('messages.saved'));
     } catch (error) {

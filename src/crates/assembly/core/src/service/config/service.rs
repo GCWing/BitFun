@@ -2,19 +2,20 @@
 //!
 //! Provides comprehensive configuration management functionality.
 
-use super::manager::{ConfigManager, ConfigManagerSettings, ConfigStatistics};
+use super::manager::{ConfigImportSource, ConfigManager, ConfigManagerSettings, ConfigStatistics};
 use super::types::*;
 use crate::util::errors::*;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{watch, RwLock};
 
 /// Configuration service.
 pub struct ConfigService {
     manager: Arc<RwLock<ConfigManager>>,
     runtime_ai_models: Arc<RwLock<BTreeMap<String, AIModelConfig>>>,
+    local_changes: watch::Sender<()>,
 }
 
 /// Configuration import/export format.
@@ -62,6 +63,7 @@ impl ConfigService {
         let service = Self {
             manager: Arc::new(RwLock::new(manager)),
             runtime_ai_models: Arc::new(RwLock::new(BTreeMap::new())),
+            local_changes: watch::channel(()).0,
         };
 
         let recovered_with_defaults = service
@@ -131,6 +133,13 @@ impl ConfigService {
         self.runtime_ai_models.write().await.remove(model_id);
     }
 
+    /// Subscribe to successful persisted user mutations. Account sync consumes
+    /// this signal so individual UI/CLI mutation adapters cannot forget to mark
+    /// settings dirty. Cloud applies and reloads do not echo back as local edits.
+    pub fn subscribe_local_changes(&self) -> watch::Receiver<()> {
+        self.local_changes.subscribe()
+    }
+
     /// Sets a configuration value (supports dot-paths).
     ///
     /// When the path touches AI models / default model slots / agent-model
@@ -144,7 +153,41 @@ impl ConfigService {
             let mut manager = self.manager.write().await;
             manager.set(path, value).await?;
         }
+        self.after_config_change(path).await;
+        Ok(())
+    }
 
+    /// Reads, modifies, validates, and persists a section under one write lock.
+    /// Use this for mutations of lists/maps or partial changes to a settings
+    /// object; taking a snapshot with get_config before set_config can discard
+    /// a concurrent save. The closure must not perform IO or await other work.
+    pub async fn update_config<T, R>(
+        &self,
+        path: &str,
+        update: impl FnOnce(&mut T) -> BitFunResult<R>,
+    ) -> BitFunResult<R>
+    where
+        T: serde::Serialize + serde::de::DeserializeOwned,
+    {
+        let (result, changed) = {
+            let mut manager = self.manager.write().await;
+            let before: serde_json::Value = manager.get(path)?;
+            let mut value: T = serde_json::from_value(before.clone())?;
+            let result = update(&mut value)?;
+            let after = serde_json::to_value(value)?;
+            let changed = before != after;
+            if changed {
+                manager.set(path, after).await?;
+            }
+            (result, changed)
+        };
+        if changed {
+            self.after_config_change(path).await;
+        }
+        Ok(result)
+    }
+
+    async fn after_config_change(&self, path: &str) {
         let model_configuration_changed = Self::path_touches_models(path);
         if model_configuration_changed {
             if let Err(e) = self.reconcile_models("set_config").await {
@@ -158,8 +201,7 @@ impl ConfigService {
             )
             .await;
         }
-
-        Ok(())
+        self.local_changes.send_replace(());
     }
 
     /// Atomically replaces one JSON configuration value when its current value
@@ -182,11 +224,13 @@ impl ConfigService {
             return Ok(false);
         }
         manager.set(path, replacement).await?;
+        self.local_changes.send_replace(());
         Ok(true)
     }
 
     fn path_touches_models(path: &str) -> bool {
-        path == "ai"
+        path.is_empty()
+            || path == "ai"
             || path.starts_with("ai.models")
             || path.starts_with("ai.default_models")
             || path.starts_with("ai.agent_model_defaults")
@@ -220,6 +264,8 @@ impl ConfigService {
             )
             .await;
         }
+
+        self.local_changes.send_replace(());
 
         Ok(())
     }
@@ -261,13 +307,62 @@ impl ConfigService {
 
     /// Imports raw configuration JSON. Keeping this boundary raw preserves
     /// legacy fields that are intentionally normalized before deserialization.
+    /// Missing realtime voice fields retain their local values; explicit empty
+    /// credentials in a user-imported backup are still authoritative.
     pub async fn import_config_data(
         &self,
         config_data: serde_json::Value,
     ) -> BitFunResult<ConfigImportResult> {
+        self.import_config_data_from_source(config_data, ConfigImportSource::Explicit, None)
+            .await
+    }
+
+    /// Applies account settings without treating an unconfigured host's empty
+    /// realtime voice key as a deletion of this controller's saved credential.
+    /// Non-empty synced keys still update normally; explicit imports and local
+    /// set/reset operations retain their credential-clearing semantics.
+    pub async fn import_account_settings(
+        &self,
+        config_data: serde_json::Value,
+    ) -> BitFunResult<ConfigImportResult> {
+        self.import_config_data_from_source(config_data, ConfigImportSource::AccountSync, None)
+            .await
+    }
+
+    /// A periodic pull may spend seconds on the network. Apply its response
+    /// only if the local document still matches the pre-fetch snapshot, with
+    /// the comparison and import protected by the same manager write lock.
+    pub async fn import_account_settings_if_unchanged(
+        &self,
+        config_data: serde_json::Value,
+        expected_local_config: serde_json::Value,
+    ) -> BitFunResult<ConfigImportResult> {
+        self.import_config_data_from_source(
+            config_data,
+            ConfigImportSource::AccountSync,
+            Some(expected_local_config),
+        )
+        .await
+    }
+
+    async fn import_config_data_from_source(
+        &self,
+        config_data: serde_json::Value,
+        source: ConfigImportSource,
+        expected_local_config: Option<serde_json::Value>,
+    ) -> BitFunResult<ConfigImportResult> {
         let import_result = {
             let mut manager = self.manager.write().await;
-            manager.import_config(config_data).await
+            if let Some(expected) = expected_local_config {
+                if manager.export_config()? != expected {
+                    return Ok(ConfigImportResult {
+                        success: false,
+                        errors: vec!["Local settings changed while cloud settings were being fetched; skipped the stale response".to_string()],
+                        warnings: Vec::new(),
+                    });
+                }
+            }
+            manager.import_config_from_source(config_data, source).await
         };
 
         match import_result {
@@ -279,6 +374,9 @@ impl ConfigService {
                     super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
                 )
                 .await;
+                if source == ConfigImportSource::Explicit {
+                    self.local_changes.send_replace(());
+                }
                 Ok(ConfigImportResult {
                     success: true,
                     errors: Vec::new(),
@@ -315,7 +413,7 @@ impl ConfigService {
             warnings.push("No AI models configured".to_string());
         }
 
-        let config: GlobalConfig = self.get_config(None).await?;
+        let config = manager.get_config();
         if config.ai.default_models.primary.is_none() {
             warnings.push("Primary model not configured".to_string());
         }
@@ -349,12 +447,9 @@ impl ConfigService {
 
     /// Reloads configuration.
     pub async fn reload(&self) -> BitFunResult<()> {
-        let settings = ConfigManagerSettings::default();
-        let new_manager = ConfigManager::new(settings).await?;
-
         {
             let mut manager = self.manager.write().await;
-            *manager = new_manager;
+            manager.reload().await?;
         }
 
         info!("Configuration reloaded");
@@ -389,45 +484,40 @@ impl ConfigService {
 
     /// Adds an AI model configuration.
     pub async fn add_ai_model(&self, model: AIModelConfig) -> BitFunResult<()> {
-        let mut config: GlobalConfig = self.get_config(None).await?;
-        config.ai.models.push(model);
-        self.set_config("ai.models", &config.ai.models).await
+        self.update_config("ai.models", |models: &mut Vec<AIModelConfig>| {
+            models.push(model);
+            Ok(())
+        })
+        .await
     }
 
     /// Updates an AI model configuration.
     pub async fn update_ai_model(&self, model_id: &str, model: AIModelConfig) -> BitFunResult<()> {
-        let mut config: GlobalConfig = self.get_config(None).await?;
-
-        if let Some(existing_model) = config.ai.models.iter_mut().find(|m| m.id == model_id) {
-            *existing_model = model;
-            self.set_config("ai.models", &config.ai.models).await
-        } else {
-            Err(BitFunError::config(format!(
-                "AI model '{}' not found",
-                model_id
-            )))
-        }
+        self.update_config("ai.models", |models: &mut Vec<AIModelConfig>| {
+            let existing = models
+                .iter_mut()
+                .find(|m| m.id == model_id)
+                .ok_or_else(|| BitFunError::config(format!("AI model '{}' not found", model_id)))?;
+            *existing = model;
+            Ok(())
+        })
+        .await
     }
 
     /// Deletes an AI model configuration.
     pub async fn delete_ai_model(&self, model_id: &str) -> BitFunResult<()> {
-        let mut config: GlobalConfig = self.get_config(None).await?;
-
-        let original_len = config.ai.models.len();
-        config.ai.models.retain(|m| m.id != model_id);
-
-        if config.ai.models.len() == original_len {
-            return Err(BitFunError::config(format!(
-                "AI model '{}' not found",
-                model_id
-            )));
-        }
-
-        // Persist the list deletion. The follow-up reconcile pass triggered by
-        // `set_config` (and explicitly by `update_ai_model`) is responsible for
-        // cleaning every other place the deleted id might still be referenced
-        // (default slots, agent / func-agent mappings).
-        self.set_config("ai.models", &config.ai.models).await
+        self.update_config("ai.models", |models: &mut Vec<AIModelConfig>| {
+            let original_len = models.len();
+            models.retain(|m| m.id != model_id);
+            if models.len() == original_len {
+                return Err(BitFunError::config(format!(
+                    "AI model '{}' not found",
+                    model_id
+                )));
+            }
+            Ok(())
+        })
+        .await
     }
 
     /// Atomically upserts a pure speech-recognition model, selects it as the
@@ -535,6 +625,7 @@ impl ConfigService {
         )
         .await;
 
+        self.local_changes.send_replace(());
         Ok(SaveCloudSpeechConfigResult { model_id, created })
     }
 
@@ -555,12 +646,18 @@ impl ConfigService {
     ///
     /// `caller` is logged for diagnostics (e.g. `set_config`, `update_ai_model`).
     pub async fn reconcile_models(&self, caller: &str) -> BitFunResult<ReconcileModelsReport> {
-        let mut config: GlobalConfig = self.get_config(None).await?;
-        let reconciliation = super::normalization::reconcile_model_references(&mut config);
-
-        if !reconciliation.is_noop() {
-            self.manager.write().await.set("", &config).await?;
-        }
+        let reconciliation = {
+            // Reconciliation writes a full config snapshot. Keep its read and
+            // write under one lock so unrelated saves (such as voice keys)
+            // cannot be overwritten by the snapshot we read earlier.
+            let mut manager = self.manager.write().await;
+            let mut config = manager.get_config().clone();
+            let reconciliation = super::normalization::reconcile_model_references(&mut config);
+            if !reconciliation.is_noop() {
+                manager.set("", &config).await?;
+            }
+            reconciliation
+        };
 
         let report = ReconcileModelsReport {
             invalidated_model_ids: reconciliation.invalidated_model_ids,
@@ -689,6 +786,747 @@ mod tests {
         .expect("config service");
 
         (service, dir)
+    }
+
+    fn realtime_voice_fixture() -> VoiceCallConfig {
+        VoiceCallConfig {
+            api_key: "fixture-realtime-voice-key".to_string(),
+            voice: "fixture-voice".to_string(),
+            speed: 12,
+            loudness: -8,
+            microphone_device_id: "fixture-controller-microphone".to_string(),
+            ..Default::default()
+        }
+    }
+
+    async fn restart_test_service(dir: &tempfile::TempDir, name: &str) -> ConfigService {
+        ConfigService::with_settings(ConfigManagerSettings {
+            path_manager: Some(Arc::new(PathManager::with_user_root_for_tests(
+                dir.path().join(name),
+            ))),
+            auto_save: true,
+            backup_count: 0,
+        })
+        .await
+        .expect("restart config service")
+    }
+
+    async fn race_config_operations<A: std::future::Future, B: std::future::Future>(
+        service: &ConfigService,
+        first: A,
+        second: B,
+    ) -> (A::Output, B::Output) {
+        use std::future::poll_fn;
+        use std::task::Poll;
+
+        let manager = service.manager.write().await;
+        let mut first = std::pin::pin!(first);
+        let mut second = std::pin::pin!(second);
+        poll_fn(|cx| {
+            assert!(first.as_mut().poll(cx).is_pending());
+            assert!(second.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        drop(manager);
+        tokio::join!(first, second)
+    }
+
+    #[tokio::test]
+    async fn concurrent_model_additions_keep_both_credentials_after_restart() {
+        let name = "concurrent-model-additions";
+        let (service, dir) = test_service(name).await;
+        let (first, second) = race_config_operations(
+            &service,
+            service.add_ai_model(runtime_model("first", "first-fixture-key")),
+            service.add_ai_model(runtime_model("second", "second-fixture-key")),
+        )
+        .await;
+        first.unwrap();
+        second.unwrap();
+
+        let restarted = restart_test_service(&dir, name).await;
+        let models = restarted.get_ai_models().await.unwrap();
+        assert_eq!(models.len(), 2);
+        assert!(models
+            .iter()
+            .any(|m| m.id == "first" && m.api_key == "first-fixture-key"));
+        assert!(models
+            .iter()
+            .any(|m| m.id == "second" && m.api_key == "second-fixture-key"));
+    }
+
+    #[tokio::test]
+    async fn concurrent_model_delete_and_update_do_not_resurrect_deleted_credentials() {
+        let name = "concurrent-model-delete-update";
+        let (service, dir) = test_service(name).await;
+        service
+            .add_ai_model(runtime_model("keep", "old-fixture-key"))
+            .await
+            .unwrap();
+        service
+            .add_ai_model(runtime_model("remove", "deleted-fixture-key"))
+            .await
+            .unwrap();
+        let (deleted, updated) = race_config_operations(
+            &service,
+            service.delete_ai_model("remove"),
+            service.update_ai_model("keep", runtime_model("keep", "new-fixture-key")),
+        )
+        .await;
+        deleted.unwrap();
+        updated.unwrap();
+
+        let restarted = restart_test_service(&dir, name).await;
+        let models = restarted.get_ai_models().await.unwrap();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "keep");
+        assert_eq!(models[0].api_key, "new-fixture-key");
+    }
+
+    #[tokio::test]
+    async fn failed_config_writes_cannot_leak_into_a_later_successful_save() {
+        for reset in [false, true] {
+            let name = "failed-config-write";
+            let (service, dir) = test_service(name).await;
+            service
+                .set_config("app.voice_call", realtime_voice_fixture())
+                .await
+                .unwrap();
+            service
+                .add_ai_model(runtime_model("keep", "fixture-model-key"))
+                .await
+                .unwrap();
+            let before: serde_json::Value = service.get_config(None).await.unwrap();
+            let changes = service.subscribe_local_changes();
+            let config_file = dir.path().join(name).join("config/app.json");
+            let preserved = config_file.with_extension("preserved.json");
+            tokio::fs::rename(&config_file, &preserved).await.unwrap();
+            // Replacing a directory with a file fails on every supported OS,
+            // without relying on permissions (which root can bypass in CI).
+            tokio::fs::create_dir(&config_file).await.unwrap();
+
+            let result = if reset {
+                service.reset_config(None).await
+            } else {
+                service
+                    .set_config("app.voice_call.api_key", "unsaved-fixture-key")
+                    .await
+            };
+            assert!(result.is_err());
+            assert!(
+                !changes.has_changed().unwrap(),
+                "Failed writes must not trigger account uploads"
+            );
+            let after: serde_json::Value = service.get_config(None).await.unwrap();
+            assert_eq!(after, before, "A failed write changed the in-memory config");
+
+            tokio::fs::remove_dir(&config_file).await.unwrap();
+            tokio::fs::rename(&preserved, &config_file).await.unwrap();
+            service.set_config("editor.font_size", 18).await.unwrap();
+            let restarted = restart_test_service(&dir, name).await;
+            let saved: GlobalConfig = restarted.get_config(None).await.unwrap();
+            assert_eq!(
+                saved.app.voice_call.api_key,
+                realtime_voice_fixture().api_key
+            );
+            assert_eq!(saved.ai.models[0].api_key, "fixture-model-key");
+            assert_eq!(saved.editor.font_size, 18);
+        }
+    }
+
+    #[tokio::test]
+    async fn explicit_backups_are_distinct_even_when_requested_together() {
+        let (service, _dir) = test_service("concurrent-backups").await;
+        service
+            .add_ai_model(runtime_model("keep", "fixture-model-key"))
+            .await
+            .unwrap();
+        let (first, second, third) = tokio::join!(
+            service.create_backup(),
+            service.create_backup(),
+            service.create_backup(),
+        );
+        let backups = [first.unwrap(), second.unwrap(), third.unwrap()];
+        assert_eq!(
+            backups
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            3
+        );
+        for backup in backups {
+            let saved: GlobalConfig =
+                serde_json::from_slice(&tokio::fs::read(backup).await.unwrap()).unwrap();
+            assert_eq!(saved.ai.models[0].api_key, "fixture-model-key");
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_import_preserves_missing_settings_beyond_realtime_voice() {
+        for account_sync in [false, true] {
+            let name = "legacy-missing-settings";
+            let (service, dir) = test_service(name).await;
+            let mut local = GlobalConfig::default();
+            local.app.hooks.enabled = false;
+            local.app.notifications.permission_request_notify = false;
+            local.app.logging.include_sensitive_diagnostics = false;
+            local.app.ai_experience.voice_input.provider = "cloud".to_string();
+            local.app.ai_experience.voice_input.microphone_device_id =
+                "fixture-microphone".to_string();
+            local.ai.proxy.enabled = true;
+            local.ai.proxy.url = "http://127.0.0.1:12345".to_string();
+            local.ai.proxy.password = Some("fixture-proxy-password".to_string());
+            local.editor.minimap.enabled = false;
+            local.terminal.terminal_panel_position = "bottom".to_string();
+            local.memories.use_memories = true;
+            service.set_config("", &local).await.unwrap();
+
+            let mut legacy = serde_json::to_value(GlobalConfig::default()).unwrap();
+            legacy["version"] = serde_json::json!("0.2.18");
+            for (parent, key) in [
+                ("/app", "hooks"),
+                ("/app/notifications", "permission_request_notify"),
+                ("/app/logging", "include_sensitive_diagnostics"),
+                ("/app/ai_experience", "voice_input"),
+                ("/ai", "proxy"),
+                ("/editor", "minimap"),
+                ("/terminal", "terminal_panel_position"),
+            ] {
+                legacy
+                    .pointer_mut(parent)
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .remove(key);
+            }
+            if account_sync {
+                legacy.as_object_mut().unwrap().remove("memories");
+            }
+            let imported = if account_sync {
+                service.import_account_settings(legacy).await.unwrap()
+            } else {
+                service.import_config_data(legacy).await.unwrap()
+            };
+            assert!(imported.success, "{:?}", imported.errors);
+            let restarted = restart_test_service(&dir, name).await;
+            let saved: GlobalConfig = restarted.get_config(None).await.unwrap();
+            assert!(!saved.app.hooks.enabled);
+            assert!(!saved.app.notifications.permission_request_notify);
+            assert!(!saved.app.logging.include_sensitive_diagnostics);
+            assert_eq!(saved.app.ai_experience.voice_input.provider, "cloud");
+            assert_eq!(
+                saved.app.ai_experience.voice_input.microphone_device_id,
+                "fixture-microphone"
+            );
+            assert_eq!(
+                saved.ai.proxy.password.as_deref(),
+                Some("fixture-proxy-password")
+            );
+            assert!(!saved.editor.minimap.enabled);
+            assert_eq!(saved.terminal.terminal_panel_position, "bottom");
+            assert_eq!(saved.memories.use_memories, account_sync);
+        }
+    }
+
+    #[tokio::test]
+    async fn imports_still_honor_explicit_deletions_and_default_elision_in_backups() {
+        for account_sync in [false, true] {
+            let (service, _dir) = test_service("import-explicit-deletions").await;
+            // A raw backup intentionally omits these default values. Restoring
+            // it must still reset them, even though legacy missing fixed fields
+            // now retain their local values.
+            let backup = service.create_backup().await.unwrap();
+            let raw_backup: serde_json::Value =
+                serde_json::from_slice(&tokio::fs::read(backup).await.unwrap()).unwrap();
+            let mut local = GlobalConfig::default();
+            local.mcp_servers =
+                Some(serde_json::json!({"mcpServers": {"fixture": {"command": "fixture"}}}));
+            local.acp_clients =
+                Some(serde_json::json!({"acpClients": {"fixture": {"command": "fixture"}}}));
+            local.app.keybindings = Some(serde_json::json!({"version": 1, "overrides": {}}));
+            local.plugin = vec![PluginDeclarationConfig::Spec("fixture-plugin".to_string())];
+            local
+                .ai
+                .agent_profiles
+                .insert("fixture-profile".to_string(), AgentProfileConfig::default());
+            local.ai.agent_model_defaults.subagents.builtin.insert(
+                "fixture-override".to_string(),
+                SubagentModelSelection::Inherit,
+            );
+            local.memories.use_memories = true;
+            local.ai.allow_tool_json_repair = false;
+            local.ai.max_rounds = 42;
+            local.app.notifications.enabled = false;
+            service.set_config("", &local).await.unwrap();
+
+            let mut incoming = if account_sync {
+                serde_json::to_value(GlobalConfig::default()).unwrap()
+            } else {
+                raw_backup
+            };
+            incoming["ai"]["review_teams"] = serde_json::json!({});
+            incoming["ai"]["agent_model_defaults"]["subagents"]["builtin"] = serde_json::json!({});
+            incoming["workspace"]["exclude_patterns"] = serde_json::json!([]);
+            let result = if account_sync {
+                service.import_account_settings(incoming).await.unwrap()
+            } else {
+                service.import_config_data(incoming).await.unwrap()
+            };
+            assert!(result.success, "{:?}", result.errors);
+            let saved: GlobalConfig = service.get_config(None).await.unwrap();
+            assert!(saved.mcp_servers.is_none());
+            assert!(saved.acp_clients.is_none());
+            assert!(saved.app.keybindings.is_none());
+            assert!(saved.plugin.is_empty());
+            assert!(saved.ai.agent_profiles.is_empty());
+            assert!(saved.ai.review_teams.is_empty());
+            assert!(!saved
+                .ai
+                .agent_model_defaults
+                .subagents
+                .builtin
+                .contains_key("fixture-override"));
+            assert!(!saved
+                .ai
+                .agent_model_defaults
+                .subagents
+                .builtin
+                .contains_key("GeneralPurpose"));
+            assert!(saved.workspace.exclude_patterns.is_empty());
+            assert!(!saved.memories.use_memories);
+            assert!(saved.ai.allow_tool_json_repair);
+            assert_eq!(saved.ai.max_rounds, GlobalConfig::default().ai.max_rounds);
+            assert!(saved.app.notifications.enabled);
+        }
+    }
+
+    #[tokio::test]
+    async fn local_change_notifications_cover_mutations_without_echoing_cloud_restores() {
+        let (service, _dir) = test_service("config-local-notifications").await;
+        let mut changes = service.subscribe_local_changes();
+        assert!(!changes.has_changed().unwrap());
+
+        service
+            .set_config("app.notifications.enabled", false)
+            .await
+            .unwrap();
+        assert!(changes.has_changed().unwrap());
+        changes.borrow_and_update();
+
+        service
+            .update_config("ai.skill_settings", |settings: &mut SkillSettingsConfig| {
+                settings
+                    .globally_disabled_user_skills
+                    .push("user::fixture".to_string());
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert!(changes.has_changed().unwrap());
+        changes.borrow_and_update();
+
+        let snapshot: serde_json::Value = service.get_config(None).await.unwrap();
+        assert!(
+            service
+                .import_account_settings(snapshot.clone())
+                .await
+                .unwrap()
+                .success
+        );
+        service.reload().await.unwrap();
+        assert!(
+            !changes.has_changed().unwrap(),
+            "Cloud imports must not start an upload feedback loop"
+        );
+
+        assert!(service.import_config_data(snapshot).await.unwrap().success);
+        assert!(changes.has_changed().unwrap());
+        changes.borrow_and_update();
+
+        service
+            .reset_config(Some("app.notifications"))
+            .await
+            .unwrap();
+        assert!(changes.has_changed().unwrap());
+        changes.borrow_and_update();
+
+        service
+            .install_runtime_ai_model(runtime_model("ephemeral", "runtime-fixture-key"))
+            .await
+            .unwrap();
+        assert!(
+            !changes.has_changed().unwrap(),
+            "Runtime-only credentials must not be synced"
+        );
+
+        service.save_cloud_speech_config(serde_json::from_value(serde_json::json!({
+            "preset": "custom", "name": "Speech fixture", "baseUrl": "https://example.com/v1",
+            "modelName": "speech-fixture", "apiKey": "speech-fixture-key"
+        })).unwrap()).await.unwrap();
+        assert!(changes.has_changed().unwrap());
+    }
+
+    #[tokio::test]
+    async fn stale_cloud_pull_cannot_overwrite_a_save_made_during_the_fetch() {
+        let name = "config-stale-cloud-pull";
+        let (service, dir) = test_service(name).await;
+        let before_fetch: serde_json::Value = service.get_config(None).await.unwrap();
+        let mut cloud = before_fetch.clone();
+        cloud["app"]["voice_call"]["api_key"] = serde_json::json!("old-cloud-fixture-key");
+
+        let (saved, imported) = race_config_operations(
+            &service,
+            service.set_config("app.voice_call.api_key", "new-local-fixture-key"),
+            service.import_account_settings_if_unchanged(cloud.clone(), before_fetch),
+        )
+        .await;
+        saved.unwrap();
+        let imported = imported.unwrap();
+        assert!(!imported.success);
+        assert!(imported.errors[0].contains("Local settings changed"));
+        let restarted = restart_test_service(&dir, name).await;
+        assert_eq!(
+            restarted
+                .get_config::<String>(Some("app.voice_call.api_key"))
+                .await
+                .unwrap(),
+            "new-local-fixture-key"
+        );
+
+        // A later pull with a current snapshot is still authoritative.
+        let current = service.get_config(None).await.unwrap();
+        assert!(
+            service
+                .import_account_settings_if_unchanged(cloud, current)
+                .await
+                .unwrap()
+                .success
+        );
+        assert_eq!(
+            service
+                .get_config::<String>(Some("app.voice_call.api_key"))
+                .await
+                .unwrap(),
+            "old-cloud-fixture-key"
+        );
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_survives_legacy_config_import_and_restart() {
+        let name = "realtime-voice-legacy-import";
+        let (service, dir) = test_service(name).await;
+        let voice = realtime_voice_fixture();
+        service.set_config("app.voice_call", &voice).await.unwrap();
+
+        // A pre-voice cloud payload still carries the user's model keys.
+        let mut legacy = serde_json::to_value(GlobalConfig::default()).unwrap();
+        legacy["version"] = serde_json::json!("0.2.18");
+        legacy["app"].as_object_mut().unwrap().remove("voice_call");
+        legacy["ai"]["models"] =
+            serde_json::json!([runtime_model("synced-model", "fixture-synced-model-key")]);
+        let imported = service.import_config_data(legacy).await.unwrap();
+        assert!(imported.success, "{:?}", imported.errors);
+
+        drop(service);
+        let restarted = restart_test_service(&dir, name).await;
+        let config: GlobalConfig = restarted.get_config(None).await.unwrap();
+        assert_eq!(config.ai.models[0].api_key, "fixture-synced-model-key");
+        assert_eq!(
+            serde_json::to_value(config.app.voice_call).unwrap(),
+            serde_json::to_value(voice).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_survives_model_reconciliation_racing_a_save() {
+        use std::future::{poll_fn, Future};
+        use std::task::Poll;
+
+        let name = "realtime-voice-reconcile-race";
+        let (service, dir) = test_service(name).await;
+        let voice = realtime_voice_fixture();
+        let mut manager = service.manager.write().await;
+        // Leave the default slots unreconciled, just as a model-list mutation
+        // does before its follow-up reconciliation acquires the manager.
+        manager
+            .set(
+                "ai.models",
+                vec![runtime_model("configured-model", "fixture-model-key")],
+            )
+            .await
+            .unwrap();
+
+        let mut reconcile = std::pin::pin!(service.reconcile_models("realtime-voice-test"));
+        let mut save = std::pin::pin!(service.set_config("app.voice_call", &voice));
+        // Queue reconciliation before the save. A read-then-write reconcile
+        // releases its snapshot lock and writes after the queued save, losing
+        // the key. A single write-locked transaction cannot do that.
+        poll_fn(|cx| {
+            assert!(reconcile.as_mut().poll(cx).is_pending());
+            assert!(save.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        drop(manager);
+        let (reconciled, saved) = tokio::join!(reconcile, save);
+        assert!(!reconciled.unwrap().is_noop());
+        saved.unwrap();
+
+        let restarted = restart_test_service(&dir, name).await;
+        let config: GlobalConfig = restarted.get_config(None).await.unwrap();
+        assert_eq!(config.app.voice_call.api_key, voice.api_key);
+        assert_eq!(
+            config.ai.default_models.primary.as_deref(),
+            Some("configured-model")
+        );
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_account_sync_preserves_keys_from_missing_or_empty_payloads() {
+        for incoming_voice in [
+            None,
+            Some(serde_json::to_value(VoiceCallConfig::default()).unwrap()),
+            Some(serde_json::json!({ "api_key": " \n\t", "enabled": false })),
+        ] {
+            let name = "realtime-voice-account-compatibility";
+            let (service, dir) = test_service(name).await;
+            let voice = realtime_voice_fixture();
+            service
+                .add_ai_model(runtime_model(
+                    "obsolete-model",
+                    "fixture-obsolete-model-key",
+                ))
+                .await
+                .unwrap();
+            service.set_config("app.voice_call", &voice).await.unwrap();
+            let mut incoming = serde_json::to_value(GlobalConfig::default()).unwrap();
+            let app = incoming["app"].as_object_mut().unwrap();
+            match incoming_voice {
+                Some(voice) => {
+                    app.insert("voice_call".to_string(), voice);
+                }
+                None => {
+                    app.remove("voice_call");
+                }
+            }
+            incoming["ai"]["models"] =
+                serde_json::json!([runtime_model("cloud-model", "fixture-cloud-model-key")]);
+            let expected_enabled = incoming["app"]["voice_call"]["enabled"]
+                .as_bool()
+                .unwrap_or(voice.enabled);
+            let imported = service.import_account_settings(incoming).await.unwrap();
+            assert!(imported.success, "{:?}", imported.errors);
+            // This is the reload performed after an account settings apply.
+            service.reload().await.unwrap();
+
+            drop(service);
+            let restarted = restart_test_service(&dir, name).await;
+            let config: GlobalConfig = restarted.get_config(None).await.unwrap();
+            assert_eq!(config.app.voice_call.api_key, voice.api_key);
+            assert_eq!(config.app.voice_call.enabled, expected_enabled);
+            assert_eq!(config.ai.models.len(), 1);
+            assert_eq!(config.ai.models[0].id, "cloud-model");
+            assert_eq!(config.ai.models[0].api_key, "fixture-cloud-model-key");
+        }
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_account_sync_updates_keys_and_backs_up_the_previous_file() {
+        let name = "realtime-voice-account-update";
+        let (service, dir) = test_service(name).await;
+        service
+            .set_config("app.voice_call", realtime_voice_fixture())
+            .await
+            .unwrap();
+        let config_dir = service.get_statistics().await.config_directory;
+        let original = tokio::fs::read_to_string(config_dir.join("app.json"))
+            .await
+            .unwrap();
+
+        let mut incoming = serde_json::to_value(GlobalConfig::default()).unwrap();
+        incoming["app"]["voice_call"] = serde_json::json!({
+            "api_key": "fixture-updated-voice-key",
+            "voice": "fixture-updated-voice"
+        });
+        let imported = service.import_account_settings(incoming).await.unwrap();
+        assert!(imported.success, "{:?}", imported.errors);
+
+        let backup = std::fs::read_dir(config_dir.join("backups"))
+            .unwrap()
+            .map(Result::unwrap)
+            .find(|entry| entry.file_name().to_string_lossy().contains("pre-import"))
+            .expect("pre-import backup");
+        assert_eq!(
+            tokio::fs::read_to_string(backup.path()).await.unwrap(),
+            original
+        );
+
+        drop(service);
+        let restarted = restart_test_service(&dir, name).await;
+        let voice: VoiceCallConfig = restarted.get_config(Some("app.voice_call")).await.unwrap();
+        assert_eq!(voice.api_key, "fixture-updated-voice-key");
+        assert_eq!(voice.voice, "fixture-updated-voice");
+        assert_eq!(voice.microphone_device_id, "fixture-controller-microphone");
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_export_and_backup_restore_preserve_credentials() {
+        let name = "realtime-voice-backup-restore";
+        let (service, dir) = test_service(name).await;
+        let voice = realtime_voice_fixture();
+        service.set_config("app.voice_call", &voice).await.unwrap();
+        service
+            .add_ai_model(runtime_model("configured-model", "fixture-model-key"))
+            .await
+            .unwrap();
+        let export = service.export_config().await.unwrap();
+        let backup = service.create_backup().await.unwrap();
+        let backup: serde_json::Value =
+            serde_json::from_str(&tokio::fs::read_to_string(backup).await.unwrap()).unwrap();
+        assert_eq!(export.config.app.voice_call.api_key, voice.api_key);
+        assert_eq!(backup["app"]["voice_call"]["api_key"], voice.api_key);
+
+        service.reset_config(Some("app.voice_call")).await.unwrap();
+        let restored = service.import_config(export).await.unwrap();
+        assert!(restored.success, "{:?}", restored.errors);
+        let restored_voice: VoiceCallConfig =
+            service.get_config(Some("app.voice_call")).await.unwrap();
+        assert_eq!(restored_voice.api_key, voice.api_key);
+
+        service.reset_config(Some("app.voice_call")).await.unwrap();
+        let restored = service.import_config_data(backup).await.unwrap();
+        assert!(restored.success, "{:?}", restored.errors);
+        drop(service);
+        let restarted = restart_test_service(&dir, name).await;
+        let config: GlobalConfig = restarted.get_config(None).await.unwrap();
+        assert_eq!(config.ai.models[0].api_key, "fixture-model-key");
+        assert_eq!(
+            serde_json::to_value(config.app.voice_call).unwrap(),
+            serde_json::to_value(voice).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_explicit_import_save_and_reset_can_clear_credentials() {
+        let name = "realtime-voice-explicit-clear";
+        let (service, dir) = test_service(name).await;
+        for operation in ["import", "save", "reset"] {
+            service
+                .set_config("app.voice_call", realtime_voice_fixture())
+                .await
+                .unwrap();
+            match operation {
+                "import" => {
+                    let incoming = serde_json::to_value(GlobalConfig::default()).unwrap();
+                    let imported = service.import_config_data(incoming).await.unwrap();
+                    assert!(imported.success, "{:?}", imported.errors);
+                }
+                "save" => {
+                    service
+                        .set_config(
+                            "app.voice_call",
+                            VoiceCallConfig {
+                                enabled: false,
+                                ..Default::default()
+                            },
+                        )
+                        .await
+                        .unwrap();
+                }
+                _ => service.reset_config(Some("app.voice_call")).await.unwrap(),
+            }
+            let restarted = restart_test_service(&dir, name).await;
+            let voice: VoiceCallConfig =
+                restarted.get_config(Some("app.voice_call")).await.unwrap();
+            assert!(voice.api_key.is_empty(), "operation={operation}");
+        }
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_survives_model_mutations_and_application_upgrade() {
+        let name = "realtime-voice-upgrade";
+        let (service, dir) = test_service(name).await;
+        let voice = realtime_voice_fixture();
+        service.set_config("app.voice_call", &voice).await.unwrap();
+        service
+            .add_ai_model(runtime_model("keep", "fixture-model-key"))
+            .await
+            .unwrap();
+        service
+            .add_ai_model(runtime_model("remove", "fixture-removed-key"))
+            .await
+            .unwrap();
+        service
+            .update_ai_model("keep", runtime_model("keep", "fixture-updated-model-key"))
+            .await
+            .unwrap();
+        service.delete_ai_model("remove").await.unwrap();
+        service.set_config("version", "0.2.18").await.unwrap();
+
+        drop(service);
+        let restarted = restart_test_service(&dir, name).await;
+        let config: GlobalConfig = restarted.get_config(None).await.unwrap();
+        assert_eq!(config.version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(config.app.voice_call.api_key, voice.api_key);
+        assert_eq!(config.ai.models.len(), 1);
+        assert_eq!(config.ai.models[0].id, "keep");
+        assert_eq!(config.ai.models[0].api_key, "fixture-updated-model-key");
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_survives_reload_racing_a_save() {
+        use std::future::{poll_fn, Future};
+        use std::task::Poll;
+
+        let name = "realtime-voice-reload-race";
+        let (service, dir) = test_service(name).await;
+        let voice = realtime_voice_fixture();
+        let manager = service.manager.write().await;
+        let mut reload = std::pin::pin!(service.reload());
+        let mut save = std::pin::pin!(service.set_config("app.voice_call", &voice));
+        poll_fn(|cx| {
+            assert!(reload.as_mut().poll(cx).is_pending());
+            assert!(save.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        drop(manager);
+        let (reloaded, saved) = tokio::join!(reload, save);
+        reloaded.unwrap();
+        saved.unwrap();
+
+        let restarted = restart_test_service(&dir, name).await;
+        let config: VoiceCallConfig = restarted.get_config(Some("app.voice_call")).await.unwrap();
+        assert_eq!(config.api_key, voice.api_key);
+        let in_memory: VoiceCallConfig = service.get_config(Some("app.voice_call")).await.unwrap();
+        assert_eq!(in_memory.api_key, voice.api_key);
+    }
+
+    #[tokio::test]
+    async fn realtime_voice_invalid_import_keeps_memory_and_disk_unchanged() {
+        let (service, _dir) = test_service("realtime-voice-invalid-import").await;
+        service
+            .set_config("app.voice_call", realtime_voice_fixture())
+            .await
+            .unwrap();
+        let config_dir = service.get_statistics().await.config_directory;
+        let before = tokio::fs::read_to_string(config_dir.join("app.json"))
+            .await
+            .unwrap();
+        let mut invalid = serde_json::to_value(GlobalConfig::default()).unwrap();
+        invalid["app"]["voice_call"]["api_key"] = serde_json::Value::Null;
+        let imported = service.import_account_settings(invalid).await.unwrap();
+        assert!(!imported.success);
+        assert_eq!(
+            tokio::fs::read_to_string(config_dir.join("app.json"))
+                .await
+                .unwrap(),
+            before
+        );
+        let voice: VoiceCallConfig = service.get_config(Some("app.voice_call")).await.unwrap();
+        assert_eq!(voice.api_key, realtime_voice_fixture().api_key);
+        assert!(!config_dir.join("backups").exists());
     }
 
     #[tokio::test]

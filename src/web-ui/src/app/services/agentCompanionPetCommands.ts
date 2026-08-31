@@ -40,7 +40,6 @@ async function closeAgentCompanionDesktopPet(): Promise<void> {
   }
 
   await aiExperienceConfigService.saveSettings({
-    ...settings,
     enable_agent_companion: false,
   });
   log.info('Agent companion disabled from pet context menu');

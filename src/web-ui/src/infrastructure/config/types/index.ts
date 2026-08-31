@@ -542,6 +542,7 @@ export interface IConfigManager {
   validateConfig(): Promise<ConfigValidationResult>;
   exportConfig(): Promise<ConfigExport>;
   importConfig(config: ConfigExport): Promise<void>;
+  updateConfig<T>(path: string, update: (current: T) => T): Promise<T>;
   onConfigChange(callback: (path: string, oldValue: any, newValue: any) => void): () => void;
   refreshCache(): Promise<void>;
   clearCache(): void;

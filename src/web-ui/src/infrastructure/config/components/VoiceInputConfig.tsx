@@ -12,10 +12,7 @@ import { isTauriRuntime } from '@/infrastructure/runtime';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { useAIExperienceSettings } from '../hooks';
-import {
-  aiExperienceConfigService,
-  type AIExperienceSettings,
-} from '../services/AIExperienceConfigService';
+import { aiExperienceConfigService } from '../services/AIExperienceConfigService';
 import type { VoiceInputSettings } from '../types';
 import LocalVoiceModelsConfig from './LocalVoiceModelsConfig';
 import { VoiceInputDiagnostics } from './VoiceInputDiagnostics';
@@ -158,15 +155,8 @@ const VoiceInputConfig: React.FC = () => {
       notificationService.error(t('messages.loadFailed'));
       return false;
     }
-    const nextSettings: AIExperienceSettings = {
-      ...settings,
-      voice_input: {
-        ...settings.voice_input,
-        ...patch,
-      },
-    };
     try {
-      await aiExperienceConfigService.saveSettings(nextSettings);
+      await aiExperienceConfigService.saveSettings({ voice_input: patch });
       return true;
     } catch (error) {
       log.error('Failed to save voice input settings', { error });

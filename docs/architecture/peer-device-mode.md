@@ -161,6 +161,44 @@ applying or uploading settings, a host fans out `account://settings-applied`
 to attached controllers; the controller re-emits it locally so the frontend
 config cache and model selectors refresh without reconnecting.
 
+The sync engine subscribes to successful local mutations at `ConfigService`,
+in addition to legacy host notifications. This covers model, Skill, Agent
+profile, and individual preference mutations through Desktop and CLI. Failed
+writes, runtime-only credentials, reloads, and cloud imports do not emit this
+local-change signal. Pending local edits take priority over the periodic pull;
+a fetched blob is applied only if the local document still matches its
+pre-fetch snapshot. The comparison and import share the config write lock.
+
+Older settings snapshots may omit fixed fields introduced by a newer build.
+Imports preserve those local fields instead of replacing them with defaults.
+Supplied arrays and dynamic maps remain authoritative, so deleted models,
+profiles and list entries are not resurrected. Optional/default-elided fields
+retain their existing reset semantics; an explicit raw backup restore also
+honors omitted default memory and AI preferences. Legacy renamed fields still
+pass through their migrations before values at the new names are preserved.
+
+Realtime voice credentials live in `app.voice_call` in the same persisted
+configuration and export/backup format as model settings. Account settings
+apply preserves the controller's existing voice fields when an older payload
+omits them, and an empty voice API key from an unconfigured host does not erase
+a configured local key. Non-empty synced keys still replace the local key.
+Explicit file imports can restore or clear a supplied key; local voice saves
+and resets can also clear it. A valid whole-config import creates a raw
+`app_pre-import_*.json` backup before replacement, under the existing backup
+retention policy. Config reload and model-reference reconciliation serialize
+their reads and writes with local saves so stale snapshots cannot undo a
+completed credential save. These rules do not change speech command routing:
+capture, configuration and realtime connections remain on the controller.
+
+Config mutations publish in-memory values and change notifications only after
+atomic persistence succeeds. Model CRUD and Agent/Skill map edits use a shared
+read/modify/write operation; startup profile canonicalization updates only its
+map. User backups have unique names even within the same second. Web UI reads
+resolve legacy model metadata without writing it back, model edits read fresh
+host data inside the client mutation queue, and AI-experience controls save
+only edited fields. An explicit empty quick-action list stays empty across
+reloads; defaults are supplied only when absent or when explicitly reset.
+
 SSH `WorkspaceKind.Remote` remains a separate path (local session mirror + remote
 FS) and must not be mixed with Peer Device Mode.
 
