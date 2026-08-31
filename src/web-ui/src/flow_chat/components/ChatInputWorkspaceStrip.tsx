@@ -10,12 +10,15 @@
  * the track.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Circle,
+  Clock3,
   EyeOff,
   GitBranch,
   RefreshCw,
@@ -68,6 +71,7 @@ export interface ChatInputWorkspaceStripProps {
     saving?: boolean;
     disabled?: boolean;
     options?: Array<Exclude<ChatInputPermissionMode, 'acp'>>;
+    /** Scope owned by the primary radio list, such as the current session. */
     scopeLabel?: string;
     /**
      * The session chose its own mode instead of following the default. Shown so
@@ -86,7 +90,7 @@ export interface ChatInputWorkspaceStripProps {
     /** Whether `nextTurnMode` currently belongs to the active turn. */
     activeTurn?: boolean;
     onChange?: (mode: Exclude<ChatInputPermissionMode, 'acp'>) => void | Promise<void>;
-    /** Updates the one-off mode; re-picking the selected one clears it. */
+    /** Updates the one-off mode exposed through the secondary scope menu. */
     onChangeForNextTurn?: (
       mode: Exclude<ChatInputPermissionMode, 'acp'>,
     ) => void | Promise<void>;
@@ -162,6 +166,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const permissionTriggerRef = useRef<HTMLButtonElement>(null);
   const permissionMenuRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
+  const [permissionMenuView, setPermissionMenuView] = useState<'session' | 'turn'>('session');
+  const permissionMenuFocusTargetRef = useRef<string | null>(null);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
@@ -175,7 +181,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     preferredPlacement: 'top',
     alignment: 'end',
     gap: 7,
-    layoutRevision: `${permissionControl?.options?.length ?? 0}:${Boolean(permissionControl?.onHide)}`,
+    layoutRevision: `${permissionMenuView}:${permissionControl?.options?.length ?? 0}:${Boolean(permissionControl?.onHide)}`,
   });
   const workspaceMenuLayout = useAnchoredPopoverPosition({
     open: workspaceMenuOpen,
@@ -262,6 +268,35 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     description: string;
   }>;
 
+  const closePermissionMenu = useCallback(() => {
+    permissionMenuFocusTargetRef.current = null;
+    setPermissionMenuOpen(false);
+    setPermissionMenuView('session');
+  }, []);
+
+  const openPermissionTurnMenu = useCallback((focusTarget: string) => {
+    permissionMenuFocusTargetRef.current = focusTarget;
+    setPermissionMenuView('turn');
+  }, []);
+
+  const returnToPermissionSessionMenu = useCallback(() => {
+    permissionMenuFocusTargetRef.current = 'chat-input-permission-turn-scope';
+    setPermissionMenuView('session');
+  }, []);
+
+  useEffect(() => {
+    if (!permissionMenuOpen || !permissionMenuFocusTargetRef.current) return;
+
+    const focusTarget = permissionMenuFocusTargetRef.current;
+    permissionMenuFocusTargetRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      permissionMenuRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-testid="${focusTarget}"]`)
+        ?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [permissionMenuOpen, permissionMenuView]);
+
   useEffect(() => {
     if (!permissionMenuOpen) return;
 
@@ -271,12 +306,19 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         !permissionRootRef.current?.contains(target)
         && !permissionMenuRef.current?.contains(target)
       ) {
-        setPermissionMenuOpen(false);
+        closePermissionMenu();
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setPermissionMenuOpen(false);
+        event.preventDefault();
+        event.stopPropagation();
+        if (permissionMenuView === 'turn') {
+          returnToPermissionSessionMenu();
+        } else {
+          closePermissionMenu();
+          permissionTriggerRef.current?.focus();
+        }
       }
     };
 
@@ -286,7 +328,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [permissionMenuOpen]);
+  }, [
+    closePermissionMenu,
+    permissionMenuOpen,
+    permissionMenuView,
+    returnToPermissionSessionMenu,
+  ]);
 
   useEffect(() => {
     if (!workspaceMenuOpen) return;
@@ -409,6 +456,23 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         ? t('chatInput.permissionMode.currentSessionOverride', { mode: permissionModeLabel })
       : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
   const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode];
+  const PermissionSessionIcon = PERMISSION_MODE_ICONS[permissionMode];
+  const permissionTurnScopeLabel = t(permissionActiveTurn
+    ? 'chatInput.permissionMode.activeTurnScope'
+    : 'chatInput.permissionMode.turnScope');
+  const permissionSessionScopeLabel = permissionControl?.scopeLabel
+    ?? t('chatInput.permissionMode.globalScope');
+  const permissionTurnSettingsLabel = t(permissionActiveTurn
+    ? 'chatInput.permissionMode.activeTurnSettings'
+    : 'chatInput.permissionMode.turnSettings');
+  const permissionMenuScopeLabel = permissionMenuView === 'session'
+    ? permissionSessionScopeLabel
+    : permissionTurnScopeLabel;
+  const permissionTurnFocusTarget = permissionNextTurnMode
+    && permissionNextTurnMode !== 'acp'
+    && permissionModes.includes(permissionNextTurnMode)
+    ? `chat-input-permission-next-turn-${permissionNextTurnMode}`
+    : 'chat-input-permission-follow-session';
   const usageCurrentTokens = Number.isFinite(usageReport?.currentTokens)
     ? Math.max(0, Math.round(usageReport?.currentTokens ?? 0))
     : 0;
@@ -627,6 +691,74 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     />
   );
 
+  const renderPermissionModeOption = (
+    mode: Exclude<ChatInputPermissionMode, 'acp'>,
+    selectionScope: 'session' | 'turn',
+  ) => {
+    const oneOff = selectionScope === 'turn';
+    const selected = oneOff
+      ? permissionNextTurnMode === mode
+      : permissionMode === mode;
+    const copy = permissionCopy[mode];
+    const OptionIcon = PERMISSION_MODE_ICONS[mode];
+    const accessibleLabel = oneOff
+      ? t(permissionActiveTurn
+          ? 'chatInput.permissionMode.activeTurnOnly'
+          : 'chatInput.permissionMode.nextTurnOnly', {
+          mode: copy.label,
+        })
+      : `${copy.label} — ${copy.description}`;
+    const optionTestId = oneOff
+      ? `chat-input-permission-next-turn-${mode}`
+      : `chat-input-permission-option-${mode}`;
+    const selectedTestId = oneOff
+      ? `chat-input-permission-next-turn-selected-${mode}`
+      : `chat-input-permission-selected-${mode}`;
+
+    return (
+      <Tooltip
+        key={`${selectionScope}-${mode}`}
+        content={copy.description}
+        placement="left"
+      >
+        <MenuItem
+          role="menuitemradio"
+          checked={selected}
+          aria-label={accessibleLabel}
+          leading={(
+            <OptionIcon
+              size={13}
+              strokeWidth={2}
+              className={`bitfun-chat-input-workspace-strip__permission-option-icon bitfun-chat-input-workspace-strip__permission-option-icon--${mode}`}
+              aria-hidden
+            />
+          )}
+          metadata={selected ? (
+            <Check
+              size={14}
+              strokeWidth={2.2}
+              data-testid={selectedTestId}
+              aria-hidden
+            />
+          ) : null}
+          disabled={permissionControl?.saving}
+          data-testid={optionTestId}
+          onClick={event => {
+            event.stopPropagation();
+            closePermissionMenu();
+            if (oneOff) {
+              if (!selected) void permissionControl?.onChangeForNextTurn?.(mode);
+            } else {
+              void permissionControl?.onChange?.(mode);
+            }
+          }}
+        >
+          {copy.label}
+        </MenuItem>
+      </Tooltip>
+    );
+  };
+
   return (
     <div data-bf-component="chat-input-workspace-strip" data-bf-part="root"
       className="bitfun-chat-input-workspace-strip"
@@ -727,7 +859,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 onClick={event => {
                   event.stopPropagation();
                   if (!permissionDisabled) {
-                    setPermissionMenuOpen(open => !open);
+                    if (permissionMenuOpen) {
+                      closePermissionMenu();
+                    } else {
+                      setPermissionMenuView('session');
+                      setPermissionMenuOpen(true);
+                    }
                   }
                 }}
               >
@@ -766,120 +903,151 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   left: `${permissionMenuLayout?.left ?? 0}px`,
                   visibility: permissionMenuLayout ? 'visible' : 'hidden',
                 }}
-                aria-label={t('chatInput.permissionMode.menuLabel')}
+                aria-label={`${t('chatInput.permissionMode.menuLabel')} · ${permissionMenuScopeLabel}`}
                 data-testid="chat-input-permission-menu"
                 autoFocusFirstItem
+                onKeyDown={event => {
+                  if (
+                    permissionMenuView === 'turn'
+                    && (event.key === 'ArrowLeft' || event.key === 'Escape')
+                  ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    returnToPermissionSessionMenu();
+                  }
+                }}
               >
-                <MenuSection
-                  title={`${t('chatInput.permissionMode.menuLabel')} · ${permissionControl.scopeLabel ?? t('chatInput.permissionMode.globalScope')}`}
-                  data-bf-component="chat-input-workspace-strip"
-                  data-bf-part="permissionOptions"
-                >
-                  {permissionModes.map(mode => {
-                    const selected = permissionMode === mode;
-                    const copy = permissionCopy[mode];
-                    const armed = permissionNextTurnMode === mode;
-                    const OptionIcon = PERMISSION_MODE_ICONS[mode];
-                    const oneTurnLabel = t(permissionActiveTurn
-                      ? 'chatInput.permissionMode.activeTurnOnly'
-                      : 'chatInput.permissionMode.nextTurnOnly', {
-                      mode: copy.label,
-                    });
-                    return (
-                      <Tooltip key={mode} content={copy.description} placement="left">
+                {permissionMenuView === 'session' ? (
+                  <>
+                    <MenuSection
+                      title={`${t('chatInput.permissionMode.menuLabel')} · ${permissionSessionScopeLabel}`}
+                      data-bf-component="chat-input-workspace-strip"
+                      data-bf-part="permissionOptions"
+                    >
+                      {permissionModes.map(mode => renderPermissionModeOption(mode, 'session'))}
+                    </MenuSection>
+                    {permissionControl.onChangeForNextTurn ? (
+                      <>
+                        <MenuSeparator />
                         <MenuItem
-                          role="menuitemradio"
-                          checked={selected}
-                          aria-label={`${copy.label} — ${copy.description}`}
-                          leading={(
-                            <OptionIcon
-                              size={13}
-                              strokeWidth={2}
-                              className={`bitfun-chat-input-workspace-strip__permission-option-icon bitfun-chat-input-workspace-strip__permission-option-icon--${mode}`}
-                              aria-hidden
-                            />
-                          )}
-                          metadata={selected ? (
-                            <Check
-                              size={14}
-                              strokeWidth={2.2}
-                              data-testid={`chat-input-permission-selected-${mode}`}
-                              aria-hidden
-                            />
-                          ) : null}
-                          actions={permissionControl.onChangeForNextTurn ? [{
-                            id: `one-turn-${mode}`,
-                            label: oneTurnLabel,
-                            icon: armed
-                              ? <SquareCheck data-testid={`chat-input-permission-next-turn-${mode}`} aria-hidden />
-                              : <Square data-testid={`chat-input-permission-next-turn-${mode}`} aria-hidden />,
-                            checked: armed,
-                            disabled: permissionControl.saving,
-                            role: 'menuitemcheckbox',
-                            testId: `chat-input-permission-next-turn-${mode}`,
-                            onClick: event => {
-                              event.stopPropagation();
-                              setPermissionMenuOpen(false);
-                              void permissionControl.onChangeForNextTurn?.(mode);
-                            },
-                          }] : []}
-                          disabled={permissionControl.saving}
-                          data-testid={`chat-input-permission-option-${mode}`}
+                          leading={<Clock3 size={14} strokeWidth={2} aria-hidden />}
+                          metadata={permissionNextTurnArmed ? permissionModeLabel : undefined}
+                          shortcut={<ChevronRight size={14} strokeWidth={2} aria-hidden />}
+                          aria-haspopup="menu"
+                          data-testid="chat-input-permission-turn-scope"
                           onClick={event => {
                             event.stopPropagation();
-                            setPermissionMenuOpen(false);
-                            void permissionControl.onChange?.(mode);
+                            openPermissionTurnMenu(permissionTurnFocusTarget);
+                          }}
+                          onKeyDown={event => {
+                            if (event.key !== 'ArrowRight') return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openPermissionTurnMenu(permissionTurnFocusTarget);
                           }}
                         >
-                          {copy.label}
+                          {permissionTurnSettingsLabel}
                         </MenuItem>
-                      </Tooltip>
-                    );
-                  })}
-                </MenuSection>
-                {permissionOverridden && permissionControl.onResetToDefault ? (
-                  <>
-                    <MenuSeparator />
-                    <MenuItem
-                        data-testid="chat-input-permission-reset-default"
-                        disabled={permissionControl.saving}
-                        actions={permissionControl.onOpenDefaultSettings ? [{
-                          id: 'open-default-settings',
-                          label: t('chatInput.permissionMode.openDefaultSettings'),
-                          icon: <Settings size={13} strokeWidth={2} aria-hidden />,
-                          testId: 'chat-input-permission-open-default-settings',
-                          onClick: event => {
+                      </>
+                    ) : null}
+                    {permissionOverridden && permissionControl.onResetToDefault ? (
+                      <>
+                        <MenuSeparator />
+                        <MenuItem
+                          data-testid="chat-input-permission-reset-default"
+                          disabled={permissionControl.saving}
+                          actions={permissionControl.onOpenDefaultSettings ? [{
+                            id: 'open-default-settings',
+                            label: t('chatInput.permissionMode.openDefaultSettings'),
+                            icon: <Settings size={13} strokeWidth={2} aria-hidden />,
+                            testId: 'chat-input-permission-open-default-settings',
+                            onClick: event => {
+                              event.stopPropagation();
+                              closePermissionMenu();
+                              permissionControl.onOpenDefaultSettings?.();
+                            },
+                          }] : []}
+                          onClick={event => {
                             event.stopPropagation();
-                            setPermissionMenuOpen(false);
-                            permissionControl.onOpenDefaultSettings?.();
-                          },
-                        }] : []}
-                        onClick={event => {
-                          event.stopPropagation();
-                          setPermissionMenuOpen(false);
-                          void permissionControl.onResetToDefault?.();
-                        }}
-                      >
-                        {t('chatInput.permissionMode.resetToDefault')}
-                    </MenuItem>
+                            closePermissionMenu();
+                            void permissionControl.onResetToDefault?.();
+                          }}
+                        >
+                          {t('chatInput.permissionMode.resetToDefault')}
+                        </MenuItem>
+                      </>
+                    ) : null}
+                    {permissionControl.onHide ? (
+                      <>
+                        <MenuSeparator />
+                        <MenuItem
+                          leading={<EyeOff size={14} strokeWidth={2} aria-hidden />}
+                          data-testid="chat-input-permission-hide-control"
+                          onClick={event => {
+                            event.stopPropagation();
+                            closePermissionMenu();
+                            void permissionControl.onHide?.();
+                          }}
+                        >
+                          {t('chatInput.permissionMode.hideControl')}
+                        </MenuItem>
+                      </>
+                    ) : null}
                   </>
-                ) : null}
-                {permissionControl.onHide ? (
-                  <>
-                    <MenuSeparator />
+                ) : (
+                  <MenuSection
+                    title={`${t('chatInput.permissionMode.menuLabel')} · ${permissionTurnScopeLabel}`}
+                    data-bf-component="chat-input-workspace-strip"
+                    data-bf-part="permissionOptions"
+                  >
                     <MenuItem
-                      leading={<EyeOff size={14} strokeWidth={2} aria-hidden />}
-                      data-testid="chat-input-permission-hide-control"
+                      leading={<ChevronLeft size={14} strokeWidth={2} aria-hidden />}
+                      metadata={permissionCopy[permissionMode].label}
+                      aria-label={t('chatInput.permissionMode.backToSessionSettings')}
+                      data-testid="chat-input-permission-turn-back"
                       onClick={event => {
                         event.stopPropagation();
-                        setPermissionMenuOpen(false);
-                        void permissionControl.onHide?.();
+                        returnToPermissionSessionMenu();
                       }}
                     >
-                      {t('chatInput.permissionMode.hideControl')}
+                      {permissionSessionScopeLabel}
                     </MenuItem>
-                  </>
-                ) : null}
+                    <MenuSeparator />
+                    <MenuItem
+                      role="menuitemradio"
+                      checked={!permissionNextTurnArmed}
+                      aria-label={`${t('chatInput.permissionMode.followSessionMode')} — ${permissionCopy[permissionMode].label}`}
+                      leading={(
+                        <PermissionSessionIcon
+                          size={13}
+                          strokeWidth={2}
+                          className={`bitfun-chat-input-workspace-strip__permission-option-icon bitfun-chat-input-workspace-strip__permission-option-icon--${permissionMode}`}
+                          aria-hidden
+                        />
+                      )}
+                      metadata={!permissionNextTurnArmed ? (
+                        <Check
+                          size={14}
+                          strokeWidth={2.2}
+                          data-testid="chat-input-permission-follow-session-selected"
+                          aria-hidden
+                        />
+                      ) : null}
+                      disabled={permissionControl.saving}
+                      data-testid="chat-input-permission-follow-session"
+                      onClick={event => {
+                        event.stopPropagation();
+                        closePermissionMenu();
+                        if (permissionNextTurnMode && permissionNextTurnMode !== 'acp') {
+                          void permissionControl.onChangeForNextTurn?.(permissionNextTurnMode);
+                        }
+                      }}
+                    >
+                      {t('chatInput.permissionMode.followSessionMode')}
+                    </MenuItem>
+                    {permissionModes.map(mode => renderPermissionModeOption(mode, 'turn'))}
+                  </MenuSection>
+                )}
               </Menu>,
               getAppearanceOverlayHost(),
             ) : null}

@@ -5557,11 +5557,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           : {
               mode: permissionMode,
               saving: permissionModeSaving,
-              scopeLabel: activePermissionTurnId
-                ? t('chatInput.permissionMode.activeTurnScope')
-                : temporaryPermissionMode
-                  ? t('chatInput.permissionMode.turnScope')
-                  : t('chatInput.permissionMode.sessionScope'),
+              scopeLabel: t('chatInput.permissionMode.sessionScope'),
               overridden: permissionModeOverridden,
               nextTurnMode: temporaryPermissionMode
                 ? chatInputPermissionMode(temporaryPermissionMode)
