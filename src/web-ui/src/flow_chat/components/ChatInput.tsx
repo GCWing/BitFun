@@ -5308,7 +5308,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       });
     });
-  }, [dispatchInput]);
+  }, []);
 
   const handleOpenSkillsLibrary = useCallback(
     (e: React.MouseEvent) => {
