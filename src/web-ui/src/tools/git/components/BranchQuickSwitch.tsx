@@ -15,8 +15,14 @@ import {
   Listbox,
   ListboxEmpty,
   ListboxOption,
-  Modal,
   SearchField,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
 } from '@bitfun/ui';
 import { Loader2 } from 'lucide-react';
 
@@ -512,42 +518,24 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     <>
       {popover ? createPortal(popover, getAppearanceOverlayHost()) : null}
 
-      <Modal
-        isOpen={!!blocker && !commitDialogOpen}
-        title={t('quickSwitch.conflict.title')}
+      <Dialog
+        open={!!blocker && !commitDialogOpen}
+        onOpenChange={(nextOpen) => { if (!nextOpen) closeRecoveryDialogs(); }}
+        size="sm"
         role="alertdialog"
-        size="small"
-        contentPadding="lg"
-        showScrollbar={false}
-        showCloseButton
-        initialFocusRef={conflictConfirmRef}
         closeOnEscape={!isCommitting}
-        closeOnOverlayClick={!isCommitting}
-        portalContainer={getAppearanceOverlayHost}
-        dialogClassName="branch-switch-conflict-dialog"
-        testId="branch-switch-conflict-dialog"
-        onClose={closeRecoveryDialogs}
-        footer={(
-          <>
-            <Button variant="fill" disabled={isCommitting} onClick={closeRecoveryDialogs}>
-              {t('quickSwitch.conflict.cancel')}
-            </Button>
-            <Button
-              ref={conflictConfirmRef}
-              variant="primary"
-              disabled={isCommitting}
-              data-testid="branch-switch-conflict-confirm"
-              onClick={() => {
-                setCommitDialogOpen(true);
-                setCommitError(null);
-                setCommitCreated(false);
-              }}
-            >
-              {t('quickSwitch.conflict.commitAndSwitch')}
-            </Button>
-          </>
-        )}
+        closeOnPointerOutside={!isCommitting}
+        initialFocusRef={conflictConfirmRef}
+        className="branch-switch-conflict-dialog"
+        data-testid="branch-switch-conflict-dialog"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('quickSwitch.conflict.title')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         {blocker ? (
           <div className="branch-switch-conflict-dialog__content">
             <p>{t('quickSwitch.conflict.description')}</p>
@@ -584,43 +572,48 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
             <p>{t('quickSwitch.conflict.instruction')}</p>
           </div>
         ) : null}
-      </Modal>
-
-      <Modal
-        isOpen={!!blocker && commitDialogOpen}
-        title={t('quickSwitch.conflict.commitTitle', {
-          branch: blocker?.targetBranch ?? '',
-        })}
-        contentPadding="lg"
-        showScrollbar={false}
-        closeOnEscape={!isCommitting}
-        closeOnOverlayClick={!isCommitting}
-        initialFocusRef={commitInputRef}
-        portalContainer={getAppearanceOverlayHost}
-        dialogClassName="branch-switch-commit-dialog"
-        testId="branch-switch-commit-dialog"
-        onClose={closeRecoveryDialogs}
-        footer={(
+              </DialogBody>
+        <DialogFooter>{(
           <>
             <Button variant="fill" disabled={isCommitting} onClick={closeRecoveryDialogs}>
               {t('quickSwitch.conflict.cancel')}
             </Button>
             <Button
+              ref={conflictConfirmRef}
               variant="primary"
-              loading={isCommitting}
-              disabled={isCommitting || (!commitCreated && !commitMessage.trim())}
-              onClick={() => void handleCommitAndSwitch()}
-              data-testid="branch-switch-commit-confirm"
+              disabled={isCommitting}
+              data-testid="branch-switch-conflict-confirm"
+              onClick={() => {
+                setCommitDialogOpen(true);
+                setCommitError(null);
+                setCommitCreated(false);
+              }}
             >
-              {t(
-                commitCreated
-                  ? 'quickSwitch.conflict.retrySwitchAction'
-                  : 'quickSwitch.conflict.commitAction',
-              )}
+              {t('quickSwitch.conflict.commitAndSwitch')}
             </Button>
           </>
-        )}
+        )}</DialogFooter>
+      </Dialog>
+
+      <Dialog
+        open={!!blocker && commitDialogOpen}
+        onOpenChange={(nextOpen) => { if (!nextOpen) closeRecoveryDialogs(); }}
+        size="md"
+        closeOnEscape={!isCommitting}
+        closeOnPointerOutside={!isCommitting}
+        initialFocusRef={commitInputRef}
+        className="branch-switch-commit-dialog"
+        data-testid="branch-switch-commit-dialog"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('quickSwitch.conflict.commitTitle', {
+          branch: blocker?.targetBranch ?? '',
+        })}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         <div className="branch-switch-commit-dialog__content">
           <p>
             {t(
@@ -631,6 +624,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
             )}
           </p>
           <Input
+            className="branch-switch-commit-dialog__input"
             ref={commitInputRef}
             value={commitMessage}
             placeholder={t('quickSwitch.conflict.commitMessagePlaceholder')}
@@ -654,7 +648,28 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
             </p>
           ) : null}
         </div>
-      </Modal>
+              </DialogBody>
+        <DialogFooter>{(
+          <>
+            <Button variant="fill" disabled={isCommitting} onClick={closeRecoveryDialogs}>
+              {t('quickSwitch.conflict.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={isCommitting}
+              disabled={isCommitting || (!commitCreated && !commitMessage.trim())}
+              onClick={() => void handleCommitAndSwitch()}
+              data-testid="branch-switch-commit-confirm"
+            >
+              {t(
+                commitCreated
+                  ? 'quickSwitch.conflict.retrySwitchAction'
+                  : 'quickSwitch.conflict.commitAction',
+              )}
+            </Button>
+          </>
+        )}</DialogFooter>
+      </Dialog>
     </>
   );
 };

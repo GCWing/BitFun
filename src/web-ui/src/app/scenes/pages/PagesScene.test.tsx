@@ -73,15 +73,18 @@ vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({ error: vi.fn() }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   Button: ({ children, isLoading: _isLoading, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { isLoading?: boolean }) => (
     <button {...props}>{children}</button>
   ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-  PresenceBoundary: ({ active, children }: { active: boolean; children: React.ReactNode }) => (
-    active ? <>{children}</> : null
-  ),
   Select: () => <div />,
+}));
+
+vi.mock('@/shared/presence', () => ({
+  RetainedMountBoundary: ({ present, children }: { present: boolean; children: React.ReactNode }) => (
+    present ? <>{children}</> : null
+  ),
 }));
 
 vi.mock('@/infrastructure/confirm-dialog', () => ({

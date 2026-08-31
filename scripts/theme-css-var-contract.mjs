@@ -41,6 +41,25 @@ export const PACKAGE_CSS_VAR_DEFINITION_CONTRACTS = Object.freeze([
   }),
 ]);
 
+/**
+ * Resolved default-theme values used to detect raw application literals that
+ * duplicate a public semantic token. This keeps the governance check tied to
+ * the canonical token package after the Web UI Sass token owner is removed.
+ */
+export const CANONICAL_THEME_COLOR_TOKENS = Object.freeze(
+  Object.entries(bitfunThemeTokens)
+    .filter(([name, token]) => (
+      publicThemePrefixes.some(prefix => name.startsWith(prefix))
+      && token.type === 'color'
+      && typeof token.value === 'string'
+    ))
+    .map(([name, token]) => Object.freeze({
+      cssVariable: tokenNameToCssVariable(name),
+      name,
+      value: token.value,
+    })),
+);
+
 export const PACKAGE_CSS_VAR_IMPORT_CONTRACTS = Object.freeze([
   Object.freeze({
     specifier: '@bitfun/design-tokens/tokens.css',
@@ -75,16 +94,18 @@ export const COLOR_EXTENSIONS = new Set([
 
 export const TOKEN_PATH_PARTS = [
   'BitFun-Installer/src/theme',
-  'component-library/styles',
+  'design-system/packages/design-tokens/src',
+  'design-system/packages/theme-bitfun/src',
 ];
 
 export const TOKEN_ALIAS_SOURCE_PATH_PARTS = [
-  'component-library/styles/tokens.scss',
+  'design-system/packages/theme-bitfun/src',
 ];
 
 export const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
   'BitFun-Installer/src/theme/installerThemeRuntime.ts',
-  'component-library/styles',
+  'design-system/packages/design-tokens/src',
+  'design-system/packages/theme-bitfun/src',
   'infrastructure/appearance',
   'src/mobile-web/src/styles/global.scss',
   'tools/bitfun-canvas/runtime/styles',
@@ -92,7 +113,8 @@ export const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
 ];
 
 export const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'component-library/styles',
+  'design-system/packages/design-tokens/src',
+  'design-system/packages/theme-bitfun/src',
   'src/mobile-web/src/styles/global.scss',
 ];
 
@@ -134,7 +156,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'tokenContract',
     label: 'Token contracts',
-    pathParts: ['component-library/styles'],
+    pathParts: ['design-system/packages/design-tokens', 'design-system/packages/theme-bitfun'],
   },
   {
     key: 'generatedWidget',
@@ -154,7 +176,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'editor',
     label: 'Editor',
-    pathParts: ['tools/editor', 'component-library/components/CodeEditor', 'infrastructure/appearance/adapters/MonacoAppearanceAdapter'],
+    pathParts: ['tools/editor', 'infrastructure/appearance/adapters/MonacoAppearanceAdapter'],
   },
   {
     key: 'syntax',
@@ -186,11 +208,8 @@ export const COLOR_DOMAIN_RULES = [
   },
   {
     key: 'visualEffect',
-    label: 'Visual effects',
-    pathParts: [
-      'component-library/components/TextStrokeEffect',
-      'component-library/components/StreamText',
-    ],
+    label: 'Product identity effects',
+    pathParts: ['app/components/SplashScreen'],
   },
 ];
 
@@ -231,9 +250,9 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'tokenContract',
-    owner: 'src/web-ui/src/component-library/styles',
-    reason: 'Static Sass files bind component code to runtime-owned Appearance variables without owning visual values.',
-    mergePolicy: 'Keep bindings value-free and move every visual value into an Appearance package renderer setting.',
+    owner: 'design-system/packages/design-tokens/src; design-system/packages/theme-bitfun/src',
+    reason: 'Independent token packages own canonical system scales and semantic theme values for every product surface.',
+    mergePolicy: 'Keep token values in their canonical package and reject Web UI aliases or surface-local duplicate definitions.',
   },
   {
     key: 'generatedWidget',
@@ -255,7 +274,7 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'editor',
-    owner: 'src/web-ui/src/tools/editor; src/web-ui/src/component-library/components/CodeEditor',
+    owner: 'src/web-ui/src/tools/editor',
     reason: 'Code editor and Monaco palettes encode syntax, diff, selection, and editor chrome states beyond generic app UI.',
     mergePolicy: 'Do not merge editor states into app tokens without code-editor focused visual evidence.',
   },
@@ -291,9 +310,9 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'visualEffect',
-    owner: 'src/web-ui/src/component-library/components/TextStrokeEffect; src/web-ui/src/component-library/components/StreamText',
-    reason: 'Visual effects use decorative gradients and animation colors that are separate from UI state semantics.',
-    mergePolicy: 'Merge only extremely similar decorative colors when they are not adjacent and do not encode separate modes.',
+    owner: 'src/web-ui/src/app/components/SplashScreen',
+    reason: 'The product splash owns identity-specific decorative gradients that remain separate from interactive UI state semantics.',
+    mergePolicy: 'Keep only brand identity effects here and promote any reusable interface state to a canonical semantic theme token.',
   },
 ];
 

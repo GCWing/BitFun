@@ -1,4 +1,14 @@
-import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState } from 'react';
 import { FolderOpen, FileText, Code } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
@@ -181,12 +191,18 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
   );
 
   return (
-    <Modal
-      isOpen={isVisible}
-      onClose={onClose}
-      title="Workspace Status"
-      size="medium"
+    <Dialog
+      open={isVisible}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{"Workspace Status"}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
       <ScrollArea className="workspace-manager" data-bf-component="workspace-tool" data-bf-part="root">
         {error && (
           <div className="error-message" data-bf-component="workspace-tool" data-bf-part="error">
@@ -367,7 +383,8 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
           )}
         </div>
       </ScrollArea>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

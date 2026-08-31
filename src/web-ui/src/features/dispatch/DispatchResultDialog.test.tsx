@@ -33,9 +33,12 @@ vi.mock('@bitfun/ui', () => ({
       {children}
     </button>
   ),
-  Modal: ({ children, isOpen }: React.PropsWithChildren<{ isOpen: boolean }>) => (
-    isOpen ? <div>{children}</div> : null
+  Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) => (
+    open ? <div role="dialog">{children}</div> : null
   ),
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" {...props} />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
 }));
 
 const SYNCED = {

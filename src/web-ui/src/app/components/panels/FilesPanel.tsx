@@ -22,7 +22,8 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { useNotification } from '@/shared/notification-system';
-import { InputDialog, CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
+import { InputDialog } from '@/app/components/InputDialog';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { PanelHeader } from './base';
@@ -1236,7 +1237,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         ) : (
           loading && fileTree.length === 0 ? (
             <div className="bitfun-files-panel__loading">
-              <CubeLoading size="medium" text={t('status.loadingFileTree')} />
+              <LoadingState size="md">{t('status.loadingFileTree')}</LoadingState>
             </div>
           ) : error ? (
             <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">

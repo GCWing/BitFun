@@ -1,4 +1,3 @@
-@use '../../../../component-library/styles/tokens' as *;
 @use '../../../styles/surface-stagger';
 
 @mixin agent-surface-card() {
@@ -6,27 +5,27 @@
   min-width: 0;
   height: 148px;
   border: 1px solid var(--bf-color-border-default);
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-raised);
-  box-shadow: $shadow-xs;
+  box-shadow: var(--bf-shadow-xs);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  animation: agent-surface-card-in 0.28s $easing-decelerate both;
+  animation: agent-surface-card-in 0.28s var(--bf-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(60ms);
   transition:
-    transform $motion-fast $easing-decelerate,
-    border-color $motion-fast $easing-standard,
-    background-color $motion-fast $easing-standard,
-    box-shadow $motion-fast $easing-standard;
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
     transform: translateY(-1px);
     border-color: var(--bf-color-field-border-hover);
     background: var(--bf-color-surface-subtle);
-    box-shadow: $shadow-sm;
+    box-shadow: var(--bf-shadow-sm);
   }
 
   &:focus-visible {
@@ -38,7 +37,7 @@
 @mixin agent-surface-footer() {
   box-sizing: border-box;
   min-height: 34px;
-  border-radius: $size-radius-base;
+  border-radius: var(--bf-radius-base);
   background: var(--bf-color-surface-subtle);
   overflow: hidden;
   position: relative;

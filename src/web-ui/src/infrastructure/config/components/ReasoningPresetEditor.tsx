@@ -1,9 +1,8 @@
-import { Button, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, NumberInput, Select, Switch, Textarea, Tooltip, type SelectOption } from '@bitfun/ui';
+import { Button, Combobox, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, NumberInput, Select, Switch, Textarea, Tooltip, type ComboboxOption, type SelectOption } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -107,16 +106,11 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
     { label: t('reasoningPresets.settingBudget'), value: 'budget_tokens' },
     { label: t('reasoningPresets.settingPatch'), value: 'request_patch' },
   ], [t]);
-  const catalogOptions = useMemo<SelectOption[]>(() => [
-    { label: t('reasoningPresets.catalogAuto'), value: 'auto' },
-    { label: t('reasoningPresets.catalogModelsDev'), value: 'models_dev' },
-    { label: t('reasoningPresets.catalogDisabled'), value: 'disabled' },
+  const catalogOptions = useMemo<ComboboxOption[]>(() => [
+    { description: t('reasoningPresets.catalogAutoTooltip'), label: t('reasoningPresets.catalogAuto'), value: 'auto' },
+    { description: t('reasoningPresets.catalogModelsDevTooltip'), label: t('reasoningPresets.catalogModelsDev'), value: 'models_dev' },
+    { description: t('reasoningPresets.catalogDisabledTooltip'), label: t('reasoningPresets.catalogDisabled'), value: 'disabled' },
   ], [t]);
-  const catalogOptionTooltips = useMemo<Record<string, string>>(() => ({
-    auto: t('reasoningPresets.catalogAutoTooltip'),
-    models_dev: t('reasoningPresets.catalogModelsDevTooltip'),
-    disabled: t('reasoningPresets.catalogDisabledTooltip'),
-  }), [t]);
 
   const defaultOptions = useMemo<SelectOption[]>(() => [
     { label: t('reasoningPresets.auto'), value: '' },
@@ -354,20 +348,13 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             <span className="bitfun-reasoning-preset-editor__primary-setting-label">
               {t('reasoningPresets.catalogSource')}
             </span>
-            <LocalizedCombobox
+            <Combobox
+              className="bitfun-reasoning-preset-editor__primary-control"
               value={catalog.source}
               disabled={disabled}
               size="sm"
-              triggerAriaLabel={t('reasoningPresets.catalogSource')}
+              aria-label={t('reasoningPresets.catalogSource')}
               options={catalogOptions}
-              renderOption={(option) => (
-                <Tooltip content={catalogOptionTooltips[String(option.value)]} placement="right">
-                  <div className="bitfun-reasoning-preset-editor__catalog-option">
-                    <span>{option.label}</span>
-                    <Icon name="info" size="xs" className="bitfun-reasoning-preset-editor__catalog-option-info" aria-hidden="true" />
-                  </div>
-                </Tooltip>
-              )}
               onValueChange={(next) => {
                 const source = next as 'auto' | 'models_dev' | 'disabled';
                 const nextCatalog = source === 'models_dev'
@@ -386,6 +373,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
               {t('reasoningPresets.defaultBehavior')}
             </span>
             <Select
+              className="bitfun-reasoning-preset-editor__primary-control"
               value={value.default_preset ?? ''}
               disabled={disabled}
               size="sm"
@@ -411,6 +399,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     className="bitfun-reasoning-preset-editor__models-dev-search-control"
                   >
                     <Input
+                      className="bitfun-reasoning-preset-editor__models-dev-search-field-control"
                       value={modelsDevSearch}
                       disabled={disabled}
                       placeholder={t('reasoningPresets.catalogSearchPlaceholder')}
@@ -507,17 +496,15 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogProvider')}</span>
-              <LocalizedCombobox
+              <Combobox
+                className="bitfun-reasoning-preset-editor__binding-control"
                 size="sm"
-                triggerAriaLabel={t('reasoningPresets.catalogProvider')}
+                aria-label={t('reasoningPresets.catalogProvider')}
                 value={catalog.provider}
                 options={modelsDevProviderOptions}
                 disabled={disabled}
-                searchable
                 clearable
-                allowCustomValue
-                customValueHint={t('reasoningPresets.catalogProviderCustomValueHint')}
-                searchPlaceholder={t('reasoningPresets.catalogProvider')}
+                onCreateValue={value => value}
                 onValueChange={(next) => {
                   const provider = String(next || '');
                   rebindCatalog(provider
@@ -528,17 +515,15 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogModel')}</span>
-              <LocalizedCombobox
+              <Combobox
+                className="bitfun-reasoning-preset-editor__binding-control"
                 size="sm"
-                triggerAriaLabel={t('reasoningPresets.catalogModel')}
+                aria-label={t('reasoningPresets.catalogModel')}
                 value={catalog.model}
                 options={modelsDevModelOptions}
                 disabled={disabled}
-                searchable
                 clearable
-                allowCustomValue
-                customValueHint={t('reasoningPresets.catalogModelCustomValueHint')}
-                searchPlaceholder={t('reasoningPresets.catalogModel')}
+                onCreateValue={value => value}
                 onValueChange={(next) => {
                   const model = String(next || '');
                   rebindCatalog(model
@@ -666,6 +651,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       {expanded ? (
                         <div className="bitfun-reasoning-preset-editor__row-name-editor">
                           <Input
+                            className="bitfun-reasoning-preset-editor__row-name-input"
                             aria-label={t('reasoningPresets.label')}
                             value={preset.label ?? ''}
                             disabled={disabled}
@@ -772,6 +758,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         data-bf-part="action"
                       >
                         <Select
+                          className="bitfun-reasoning-preset-editor__action-type"
                           size="sm"
                           value={action.type}
                           disabled={disabled}
@@ -795,16 +782,14 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         />
                         {action.type === 'effort' && (
                           <div className="bitfun-reasoning-preset-editor__effort-control">
-                            <LocalizedCombobox
+                            <Combobox
+                              className="bitfun-reasoning-preset-editor__effort-select"
                               size="sm"
                               value={action.value}
                               disabled={disabled}
                               options={effortOptions}
-                              searchable
-                              allowCustomValue
-                              customValueHint={t('reasoningPresets.effortCustomValueHint')}
-                              searchPlaceholder={t('reasoningPresets.effortSearchPlaceholder')}
-                              triggerAriaLabel={t('reasoningPresets.settingEffort')}
+                              onCreateValue={value => value}
+                              aria-label={t('reasoningPresets.settingEffort')}
                               onValueChange={(next) => updateAction(presetIndex, actionIndex, {
                                 type: 'effort',
                                 value: String(next),
@@ -828,7 +813,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           <Switch checked={action.enabled} disabled={disabled} onChange={(event) => updateAction(presetIndex, actionIndex, { type: 'toggle', enabled: event.target.checked })} />
                         )}
                         {action.type === 'budget_tokens' && (
-                          <NumberInput size="small" value={action.value} min={1} max={2_000_000_000} step={1024} disabled={disabled} disableWheel onChange={(next) => updateAction(presetIndex, actionIndex, { type: 'budget_tokens', value: next })} />
+                          <NumberInput className="bitfun-reasoning-preset-editor__action-value" size="sm" value={action.value} min={1} max={2_000_000_000} step={1024} disabled={disabled} disableWheel onValueChange={(next) => updateAction(presetIndex, actionIndex, { type: 'budget_tokens', value: next })} />
                         )}
                         {action.type === 'request_patch' && (
                           <div className="bitfun-reasoning-preset-editor__json">
@@ -836,7 +821,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                               value={jsonValue}
                               disabled={disabled}
                               rows={4}
-                              error={!jsonIsValid}
+                              invalid={!jsonIsValid}
                               errorMessage={!jsonIsValid ? t('reasoningPresets.invalidJson') : undefined}
                               onChange={(event) => {
                                 const nextText = event.target.value;

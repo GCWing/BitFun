@@ -1,19 +1,10 @@
-@use '../../component-library/styles/tokens.scss' as *;
 @use '../styles/nav-panel-font-scope.scss' as nav-font;
 
-#bitfun-appearance-overlay-host
-  > .global-search-overlay[data-bf-component='modal'][data-bf-part='overlay'] {
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
-    width: 100%;
-    block-size: min(
-      520px,
-      calc(
-        100vh
-        - var(--bf-overlay-modal-viewport-gutter)
-        - var(--bf-overlay-modal-viewport-gutter)
-      )
-    );
-  }
+.global-search-dialog {
+  block-size: min(
+    520px,
+    calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter))
+  );
 }
 
 .global-search-modal-content {
@@ -102,11 +93,11 @@
     gap: 4px;
   }
 
-  &__scope:not([data-bf-component='button']) {
+  &__scope--native {
     min-height: 28px;
     padding: 0 12px;
     border: 0;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: transparent;
     color: var(--bf-color-content-muted);
     font: inherit;
@@ -407,7 +398,7 @@
   &__badge {
     flex: 0 0 auto;
     padding: 2px 7px;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
@@ -483,13 +474,13 @@
 .bitfun-nav-panel__search-trigger {
   display: flex;
   align-items: center;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   width: 100%;
   min-height: 34px;
   height: 34px;
-  padding: 0 $size-gap-2;
+  padding: 0 var(--bf-space-2);
   border: none;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: var(--bf-color-surface-scene);
   box-shadow: inset 0 0 0 1px var(--bf-color-border-subtle);
   cursor: text;
@@ -536,15 +527,8 @@
 }
 
 @media (max-width: 980px) {
-  .global-search-overlay[data-bf-component='modal'][data-bf-part='overlay'] {
-    padding: 16px;
-
-    > [data-bf-component='modal'][data-bf-part='dialog'] {
-      width: calc(100vw - 32px);
-      max-width: calc(100vw - 32px);
-      height: calc(100vh - 32px);
-      max-height: calc(100vh - 32px);
-    }
+  .global-search-dialog {
+    block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
   }
 
   .global-search--modal {
@@ -567,17 +551,6 @@
 }
 
 @media (max-width: 700px) {
-  .global-search-overlay[data-bf-component='modal'][data-bf-part='overlay'] {
-    padding: 8px;
-
-    > [data-bf-component='modal'][data-bf-part='dialog'] {
-      width: calc(100vw - 16px);
-      max-width: calc(100vw - 16px);
-      height: calc(100vh - 16px);
-      max-height: calc(100vh - 16px);
-    }
-  }
-
   .global-search--modal {
     .global-search__header {
       padding: 18px 18px 14px;
@@ -722,10 +695,6 @@
       box-shadow: none;
     }
 
-    > [data-bf-component='input'] {
-      width: 100%;
-    }
-
     input {
       color: var(--bf-color-content-primary);
       font-family:var(--bf-font-family-sans);
@@ -748,7 +717,7 @@
     gap: var(--bf-space-2);
   }
 
-  .global-search__scope[data-bf-component='button'] {
+  .global-search__scope--system {
     min-height: var(--bf-control-height-sm);
     font-size: var(--bf-font-size-base);
   }
@@ -959,7 +928,7 @@
 }
 
 @media (max-width: 980px) {
-  .global-search-modal-content[data-bf-component='modal'][data-bf-part='content'] {
+  .global-search-modal-content {
     padding: var(--bf-space-4);
   }
 
@@ -983,7 +952,7 @@
 }
 
 @media (max-width: 700px) {
-  .global-search-modal-content[data-bf-component='modal'][data-bf-part='content'] {
+  .global-search-modal-content {
     padding: var(--bf-space-3);
   }
 
@@ -1006,7 +975,7 @@
       margin-top: var(--bf-space-4);
     }
 
-    .global-search__scope[data-bf-component='button'] {
+    .global-search__scope--system {
       min-height: var(--bf-control-height-sm);
       padding-inline: var(--bf-space-4);
       font-size: var(--bf-font-size-sm);

@@ -2,17 +2,11 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const navigationPanelMeta = {
   category: "navigation",
-  description: "A scrollable application navigation panel with independent header, grouped content, selected items, and footer slots.",
+  description: "A compound application navigation panel with independently addressable header, scroll body, content, grouped items, and footer anatomy.",
   maturity: "stable",
   name: "NavigationPanel",
   props: [
     { name: "children", type: "ReactNode" },
-    { name: "header", type: "ReactNode" },
-    { name: "footer", type: "ReactNode" },
-    { name: "bodyRef", type: "Ref<HTMLDivElement>" },
-    { name: "bodyClassName", type: "string" },
-    { name: "contentClassName", type: "string" },
-    { defaultValue: "auto", name: "scrollbarVisibility", type: "auto | always | hidden" },
   ],
   states: ["default", "selected-item", "disabled-item", "scrolling"],
   tokens: [

@@ -7,7 +7,7 @@ import { DispatchTargetPicker } from './DispatchTargetPicker';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

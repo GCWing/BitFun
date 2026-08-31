@@ -1,9 +1,7 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .tool-group-picker {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
 
   &__head,
   &__group-head,
@@ -16,7 +14,7 @@
 
   &__head {
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__selected-count {
@@ -28,13 +26,13 @@
   &__sections {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__section-label {
@@ -48,23 +46,23 @@
   &__group {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
-    padding: $size-gap-2;
+    gap: var(--bf-space-1);
+    padding: var(--bf-space-2);
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: var(--bf-color-surface-subtle);
   }
 
   &__group-head {
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__group-title-wrap {
     display: inline-flex;
     align-items: center;
     min-width: 0;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__group-name {
@@ -85,7 +83,7 @@
     justify-content: center;
     min-width: 22px;
     padding: 1px 6px;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
@@ -95,7 +93,7 @@
 
   &__group-actions {
     flex-shrink: 0;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -103,7 +101,7 @@
   &__token-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__token {
@@ -113,7 +111,7 @@
     min-height: 26px;
     padding: 3px 8px;
     border: 1px solid transparent;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: transparent;
     color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
@@ -123,9 +121,9 @@
     white-space: nowrap;
     cursor: pointer;
     transition:
-      border-color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-on):not(:disabled) {
       border-color: var(--bf-color-field-border-hover);
@@ -148,12 +146,12 @@
 .tool-group-summary {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
 
   &__group {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__label {
@@ -165,7 +163,7 @@
   &__tools {
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 }
 
@@ -173,9 +171,9 @@
   display: flex;
   box-sizing: border-box;
   max-height: min(620px, 70vh);
-  padding-block: $size-gap-3;
+  padding-block: var(--bf-space-3);
   flex-direction: column;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
 
   &__head,
   &__group-row,
@@ -187,7 +185,7 @@
 
   &__head {
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
   }
@@ -198,8 +196,8 @@
 
   &__group-row {
     justify-content: space-between;
-    gap: $size-gap-3;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-2) var(--bf-space-3);
   }
 
   &__group-row + &__group-row {
@@ -236,13 +234,13 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__field {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
@@ -253,9 +251,9 @@
     max-height: 360px;
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     border: 1px solid var(--bf-color-border-subtle);
-    padding: $size-gap-2;
+    padding: var(--bf-space-2);
   }
 
   &__token {
@@ -265,7 +263,7 @@
     min-height: 26px;
     padding: 3px 8px;
     border: 1px solid transparent;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: transparent;
     color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
@@ -275,9 +273,9 @@
     white-space: nowrap;
     cursor: pointer;
     transition:
-      border-color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-on):not(:disabled) {
       border-color: var(--bf-color-field-border-hover);
@@ -298,14 +296,14 @@
 
   &__footer {
     justify-content: flex-end;
-    gap: $size-gap-2;
-    padding-top: $size-gap-2;
+    gap: var(--bf-space-2);
+    padding-top: var(--bf-space-2);
     border-top: 1px solid var(--bf-color-border-subtle);
   }
 }
 
 @container (max-width: 520px) {
   .tool-group-picker__group-head {
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 }

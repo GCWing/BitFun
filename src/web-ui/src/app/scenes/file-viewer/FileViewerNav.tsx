@@ -7,7 +7,15 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Icon, IconButton, NavigationPanel, Tooltip } from '@bitfun/ui';
+import {
+  Icon,
+  IconButton,
+  NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelHeader,
+  Tooltip,
+} from '@bitfun/ui';
 import { List, FilePlus, FolderPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
@@ -34,10 +42,9 @@ const FileViewerNav: React.FC = () => {
       data-bf-component="file-viewer-nav"
       data-bf-part="root"
       className="bitfun-file-viewer-nav"
-      bodyClassName="bitfun-file-viewer-nav__body"
-      contentClassName="bitfun-file-viewer-nav__content"
-      header={(
-      <div className="bitfun-file-viewer-nav__header" data-bf-component="file-viewer-nav" data-bf-part="header">
+    >
+      <NavigationPanelHeader className="bitfun-file-viewer-nav__panel-header">
+        <div className="bitfun-file-viewer-nav__header" data-bf-component="file-viewer-nav" data-bf-part="header">
         <span className="bitfun-file-viewer-nav__icon" data-bf-component="file-viewer-nav" data-bf-part="icon" aria-hidden="true">
           <Icon name="folder" size="sm" />
         </span>
@@ -87,17 +94,20 @@ const FileViewerNav: React.FC = () => {
             </Tooltip>
           </span>
         )}
-      </div>
-      )}
-    >
-      <FilesPanel
-        workspacePath={currentWorkspace?.rootPath}
-        hideHeader
-        hideExplorerToolbar
-        onExplorerToolbarApi={setExplorerToolbar}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
+        </div>
+      </NavigationPanelHeader>
+      <NavigationPanelBody className="bitfun-file-viewer-nav__body">
+        <NavigationPanelContent className="bitfun-file-viewer-nav__content">
+          <FilesPanel
+            workspacePath={currentWorkspace?.rootPath}
+            hideHeader
+            hideExplorerToolbar
+            onExplorerToolbarApi={setExplorerToolbar}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+        </NavigationPanelContent>
+      </NavigationPanelBody>
     </NavigationPanel>
   );
 };

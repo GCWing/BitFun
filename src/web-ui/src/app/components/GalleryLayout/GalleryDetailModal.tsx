@@ -1,5 +1,13 @@
 import React from 'react';
-import { Modal, type ModalProps } from '@bitfun/ui';
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+  type DialogSize,
+} from '@bitfun/ui';
 import './GalleryDetailModal.scss';
 
 interface GalleryDetailModalProps {
@@ -19,7 +27,7 @@ interface GalleryDetailModalProps {
   descriptionTestId?: string;
   closeButtonTestId?: string;
   titlePlacement?: 'header' | 'hero';
-  size?: ModalProps['size'];
+  size?: DialogSize;
   stableHeight?: boolean;
 }
 
@@ -40,15 +48,11 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   descriptionTestId,
   closeButtonTestId,
   titlePlacement = 'header',
-  size = 'medium',
+  size = 'md',
   stableHeight = false,
 }) => {
   const heroTitleId = React.useId();
   const usesHeroTitle = titlePlacement === 'hero';
-  const overlayClassName = [
-    usesHeroTitle ? 'gallery-detail-modal__overlay--hero-title' : '',
-    stableHeight ? 'gallery-detail-modal__overlay--stable-height' : '',
-  ].filter(Boolean).join(' ');
   const appearanceState = [
     usesHeroTitle ? 'heroTitle' : '',
     stableHeight ? 'stableHeight' : '',
@@ -83,18 +87,25 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   ) : null;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
       size={size}
-      title={usesHeroTitle ? undefined : title}
-      contentPadding="lg"
-      overlayClassName={overlayClassName || undefined}
-      testId={testId}
-      titleTestId={usesHeroTitle ? undefined : titleTestId}
-      closeButtonTestId={closeButtonTestId}
-      ariaLabelledBy={usesHeroTitle ? heroTitleId : undefined}
+      aria-labelledby={usesHeroTitle ? heroTitleId : undefined}
+      className={stableHeight ? 'gallery-detail-modal__surface--stable-height' : undefined}
+      data-testid={testId}
     >
+      <DialogHeader className={usesHeroTitle ? 'gallery-detail-modal__dialog-header--hero-title' : undefined}>
+        {!usesHeroTitle ? (
+          <DialogHeading>
+            <DialogTitle data-testid={titleTestId}>{title}</DialogTitle>
+          </DialogHeading>
+        ) : null}
+        <DialogClose data-testid={closeButtonTestId} />
+      </DialogHeader>
+      <DialogBody
+        className={stableHeight ? 'gallery-detail-modal__dialog-body--stable-height' : undefined}
+      >
       <div
         className={[
           'gallery-detail-modal',
@@ -183,7 +194,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
           </div>
         ) : null}
       </div>
-    </Modal>
+      </DialogBody>
+    </Dialog>
   );
 };
 

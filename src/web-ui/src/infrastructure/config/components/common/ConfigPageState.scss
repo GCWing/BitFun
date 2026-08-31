@@ -1,0 +1,18 @@
+@keyframes bitfun-config-page-loading-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.bitfun-config-loading-state {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-sm);
+}
+
+.bitfun-config-message {
+  margin-bottom: var(--bf-space-1);
+}
+

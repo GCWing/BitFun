@@ -96,37 +96,17 @@ vi.mock('@bitfun/ui', async importOriginal => ({
   ),
 }));
 
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
-  ConfigPageMessage: ({
+vi.mock('./common', async importOriginal => ({
+  ...await importOriginal<typeof import('./common')>(),
+  ConfigLoadingState: ({ label }: { label?: string }) => <div data-testid="usage-loading">{label}</div>,
+  ConfigMessage: ({
     message,
   }: {
     message: { type: string; text: string } | null;
   }) => message ? (
     <div data-testid="usage-message" data-message-type={message.type}>{message.text}</div>
   ) : null,
-  ConfigPageRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
-  Select: ({
-    value,
-    options,
-    onChange,
-  }: {
-    value: string | number;
-    options: { value: string | number; label: string }[];
-    onChange?: (value: string | number) => void;
-  }) => (
-    <select
-      data-testid="usage-select"
-      value={String(value)}
-      onChange={(event) => onChange?.(event.target.value)}
-    >
-      {options.map((option) => (
-        <option key={String(option.value)} value={String(option.value)}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  ),
+  ConfigRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
 }));
 
 const SAMPLE_STATS: UsageStatistics = {

@@ -12,15 +12,9 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', async () => {
-  const { PresenceBoundary } = await import(
-    '@/component-library/components/PresenceBoundary/PresenceBoundary'
-  );
-  return {
-    PresenceBoundary,
-    Tooltip: ({ children }: { children: React.ReactNode }) => children,
-  };
-});
+vi.mock('@bitfun/ui', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 describe('retained scroll controls', () => {
   let container: HTMLDivElement;

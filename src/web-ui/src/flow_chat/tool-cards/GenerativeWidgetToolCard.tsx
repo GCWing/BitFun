@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Loader2, Sparkles } from 'lucide-react';
-import { CubeLoading, Tooltip } from '../../component-library';
+import { Spinner, Tooltip } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { useTranslation } from 'react-i18next';
@@ -247,8 +247,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
 
   const header = (
     <ProminentToolCardHeader
-      icon={<Sparkles size={16} />}
-      iconClassName="generative-widget-card__icon"
+      icon={<span className="generative-widget-card__icon"><Sparkles size={16} /></span>}
       action={t('toolCards.generativeUI.action')}
       content={<span data-bf-component="generative-widget-tool-card" data-bf-part="title" className="generative-widget-card__title">{title}</span>}
       extra={(
@@ -281,7 +280,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
           </button>
         </Tooltip>
       )}
-      statusIcon={isLoading ? <CubeLoading size="small" /> : null}
+      statusIcon={isLoading ? <Spinner size="sm" /> : null}
     />
   );
 

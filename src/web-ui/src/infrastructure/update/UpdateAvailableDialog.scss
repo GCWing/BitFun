@@ -1,10 +1,8 @@
-@use '../../component-library/styles/tokens' as *;
-
 .bitfun-update-available {
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Vertical breathing room; horizontal inset comes from Modal `contentPadding="lg"`. */
+  /* Vertical breathing room; horizontal inset is owned by the dialog body recipe. */
   padding: 4px 0 22px;
   max-width: 100%;
 }
@@ -149,7 +147,7 @@
     justify-content: stretch;
     gap: 8px;
 
-    [data-bf-component='button'] {
+    > * {
       width: 100%;
     }
   }

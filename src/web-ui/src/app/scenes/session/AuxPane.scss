@@ -2,9 +2,6 @@
  * AuxPane styles — AI Agent scene right pane (ContentCanvas).
  * Renamed from panels/ContentPanel.scss.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .bitfun-aux-pane {
   display: flex;
   flex-direction: column;

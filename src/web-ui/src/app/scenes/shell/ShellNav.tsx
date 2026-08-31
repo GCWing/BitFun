@@ -16,7 +16,18 @@ import type { ShellInfo } from '@/tools/terminal/types/session';
 import { useShellEntries } from './hooks';
 import type { ShellEntry } from './hooks/shellEntryTypes';
 import { useShellNavMenuState } from './hooks/useShellNavMenuState';
-import { Button, Icon, Menu, MenuItem, MenuSeparator, NavigationPanel, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelHeader,
+  Tooltip,
+} from '@bitfun/ui';
 import ShellNavEntryItem from './components/ShellNavEntryItem';
 import ShellNavWorkspaceSwitcher from './components/ShellNavWorkspaceSwitcher';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -247,8 +258,9 @@ const ShellNav: React.FC = () => {
   }, [deleteEntry, t]);
 
   return (
-    <NavigationPanel data-bf-component="shell-nav" data-bf-part="root" className="bitfun-shell-nav" data-testid="shell-panel" header={(
-      <div data-bf-component="shell-nav" data-bf-part="header" className="bitfun-shell-nav__header">
+    <NavigationPanel data-bf-component="shell-nav" data-bf-part="root" className="bitfun-shell-nav" data-testid="shell-panel">
+      <NavigationPanelHeader className="bitfun-shell-nav__panel-header">
+        <div data-bf-component="shell-nav" data-bf-part="header" className="bitfun-shell-nav__header">
         <div className="bitfun-shell-nav__title-group">
           <span data-bf-component="shell-nav" data-bf-part="title" className="bitfun-shell-nav__title" data-testid="shell-panel-title">{t('nav.shell.title')}</span>
           <ShellNavWorkspaceSwitcher
@@ -322,8 +334,10 @@ const ShellNav: React.FC = () => {
             getAppearanceOverlayHost(),
           ) : null}
         </div>
-      </div>
-    )} bodyClassName={`bitfun-shell-nav__sections${!hasVisibleContent ? ' bitfun-shell-nav__sections--empty' : ''}`}>
+        </div>
+      </NavigationPanelHeader>
+      <NavigationPanelBody className={`bitfun-shell-nav__sections${!hasVisibleContent ? ' bitfun-shell-nav__sections--empty' : ''}`}>
+        <NavigationPanelContent className="bitfun-shell-nav__panel-content">
         {hasVisibleContent ? (
           <div data-bf-component="shell-nav" data-bf-part="list" className="bitfun-shell-nav__terminal-list" data-testid="shell-command-list">
             {entries.map((entry) => (
@@ -358,6 +372,8 @@ const ShellNav: React.FC = () => {
             </Button>
           </div>
         )}
+        </NavigationPanelContent>
+      </NavigationPanelBody>
       {editingTerminal ? (
         <TerminalEditModal
           isOpen={editModalOpen}

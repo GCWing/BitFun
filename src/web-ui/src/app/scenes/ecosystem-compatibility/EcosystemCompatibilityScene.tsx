@@ -503,6 +503,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                     </span>
                   ) : (
                     <Button
+                      className="ecosystem-compatibility__import-button"
                       size="sm"
                       variant="outline"
                       disabled={!ready || importing}
@@ -534,6 +535,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <p>{t('run.description', { name: selectedRuntime.spec.name })}</p>
           </div>
           <Button
+            className="ecosystem-compatibility__section-action"
             size="sm"
             variant="outline"
             onClick={() => setOwnerSurface(ownerSurface === 'acp' ? null : 'acp')}
@@ -585,6 +587,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                         <p>{t('run.session.description', { name: displayName })}</p>
                       </div>
                       <Button
+                        className="ecosystem-compatibility__runtime-mode-action"
                         size="sm"
                         variant="fill"
                         onClick={() => handleStartAcpClient(client)}
@@ -610,6 +613,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                           : t('run.subagent.bestForFallback')}</small>
                       </div>
                       <Button
+                        className="ecosystem-compatibility__runtime-mode-action"
                         size="sm"
                         variant="outline"
                         disabled={!profileSupported}
@@ -866,6 +870,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <span>{t('header.checksLabel')}</span>
             <strong title={headerCheckSummary}>{headerCheckSummary}</strong>
             <Button
+              className="ecosystem-compatibility__header-action"
               size="sm"
               variant="outline"
               onClick={() => setOwnerSurface(
@@ -897,7 +902,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                 sources: loadIssues.includes('externalSources') ? t('loadAreas.externalSources') : '',
                 acp: loadIssues.includes('acpClients') ? t('loadAreas.acpClients') : '',
               })}</span>
-              <Button variant="outline" size="sm" onClick={() => void loadCompatibility(true)}>
+              <Button className="ecosystem-compatibility__load-retry" variant="outline" size="sm" onClick={() => void loadCompatibility(true)}>
                 {t('retry')}
               </Button>
             </div>

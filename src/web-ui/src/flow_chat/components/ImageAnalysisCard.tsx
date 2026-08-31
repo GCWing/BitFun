@@ -77,7 +77,12 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
               <AlertCircle className="icon" size={14} />
               <span>Analysis failed</span>
               {onRetry && (
-                <Button variant="outline" size="sm" onClick={onRetry}>
+                <Button
+                  className="image-analysis-card__retry"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetry}
+                >
                   Retry
                 </Button>
               )}
@@ -94,6 +99,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
           </div>
           
           <Button
+            className="image-analysis-card__toggle"
             variant="outline"
             size="sm"
             leadingIcon={expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

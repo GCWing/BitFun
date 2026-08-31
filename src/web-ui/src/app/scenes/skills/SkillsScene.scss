@@ -1,4 +1,3 @@
-@use '../../../component-library/styles/tokens' as *;
 @use '../../styles/surface-stagger';
 
 $skills-sidebar-width: 184px;
@@ -59,7 +58,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   font-weight: var(--bf-font-weight-regular);
   line-height: var(--bf-line-height-ui);
   cursor: pointer;
-  transition: color $motion-fast $easing-standard;
+  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover:not(.is-active) {
     color: var(--bf-color-content-secondary);
@@ -147,14 +146,14 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-height: 32px;
   padding: 6px 10px;
   border: none;
-  border-radius: $size-radius-base;
+  border-radius: var(--bf-radius-base);
   background: transparent;
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-regular);
   cursor: pointer;
   text-align: left;
-  transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
+  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &.is-empty {
     color: var(--bf-color-content-muted);
@@ -261,16 +260,16 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--bf-color-border-subtle);
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: transparent;
   color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   transition:
-    background $motion-fast $easing-standard,
-    color $motion-fast $easing-standard,
-    border-color $motion-fast $easing-standard;
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
     color: var(--bf-color-content-primary);
@@ -308,7 +307,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   gap: 16px;
   padding: 18px 20px;
   border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 18%, var(--bf-color-border-subtle));
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent), transparent 42%),
     linear-gradient(180deg, color-mix(in srgb, var(--bf-color-accent-default) 7%, var(--bf-color-surface-panel)), var(--bf-color-surface-panel));
@@ -384,7 +383,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   color: var(--bf-color-content-muted);
   cursor: pointer;
   white-space: nowrap;
-  transition: color $motion-fast $easing-standard;
+  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover:not(:disabled):not(.is-active) {
     color: var(--bf-color-content-primary);
@@ -399,7 +398,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     height: 2px;
     border-radius: 999px;
     background: transparent;
-    transition: background $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &.is-active {
@@ -491,7 +490,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   gap: 14px;
   padding: 16px 18px;
   border: 1px solid var(--bf-color-border-subtle);
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-panel);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 4%, transparent);
 }
@@ -556,10 +555,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   line-height: var(--bf-line-height-none);
   cursor: pointer;
   transition:
-    background $motion-fast $easing-standard,
-    border-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard,
-    opacity $motion-fast $easing-standard;
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:focus-visible {
     outline: 2px solid var(--bf-color-accent-default);
@@ -671,7 +670,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: var(--bf-color-action-neutral-surface-hover);
   color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-micro);
@@ -695,7 +694,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   flex: 0 1 auto;
   min-height: 0;
   border: 1px solid var(--bf-color-border-subtle);
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-panel);
 }
 
@@ -712,9 +711,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-bottom: 1px solid var(--bf-color-border-subtle);
   background: transparent;
   cursor: pointer;
-  animation: skills-card-in 0.18s $easing-decelerate both;
+  animation: skills-card-in 0.18s var(--bf-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(24ms);
-  transition: background $motion-fast $easing-standard;
+  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:last-child {
     border-bottom: none;
@@ -827,15 +826,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     max-width: 100%;
   }
 
-  [data-bf-component='status-pill'] {
+  .skills-card__source-pill {
     max-width: 100%;
     overflow: hidden;
-
-    [data-bf-part='label'] {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   }
 }
 
@@ -880,7 +873,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   height: 64px;
   border-bottom: 1px solid var(--bf-color-border-subtle);
   background: var(--bf-color-surface-subtle);
-  animation: skills-card-in 0.2s $easing-decelerate both;
+  animation: skills-card-in 0.2s var(--bf-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(32ms);
 
   &:last-child {
@@ -908,11 +901,11 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   width: 28px;
   height: 28px;
   border: 1px solid var(--bf-color-field-border-hover);
-  border-radius: $size-radius-base;
+  border-radius: var(--bf-radius-base);
   background: var(--bf-color-action-quiet-hover);
   color: var(--bf-color-content-secondary);
   cursor: pointer;
-  transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
+  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover:not(:disabled) {
     background: var(--bf-color-action-neutral-surface-hover);
@@ -1039,10 +1032,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-discover__skeleton-card {
   height: 142px;
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-subtle);
   border: 1px solid var(--bf-color-border-subtle);
-  animation: skills-card-in 0.18s $easing-decelerate both;
+  animation: skills-card-in 0.18s var(--bf-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(40ms);
 }
 
@@ -1076,7 +1069,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
-    transition: color $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover { color: var(--bf-color-accent-hover); }
 
@@ -1089,7 +1082,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__detail-row {
     display: flex;
     align-items: baseline;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__detail-label {
@@ -1114,7 +1107,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__path-input {
     display: flex;
     align-items: flex-end;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
 
     > :first-child {
       flex: 1;
@@ -1130,8 +1123,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   &__validation {
-    padding: $size-gap-2 $size-gap-3;
-    border-radius: $size-radius-base;
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border-radius: var(--bf-radius-base);
     font-size: var(--bf-font-size-sm);
 
     &.is-valid {
@@ -1154,16 +1147,16 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__modal-form {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-4;
-    padding: $size-gap-5 $size-gap-5 $size-gap-4;
+    gap: var(--bf-space-4);
+    padding: var(--bf-space-5) var(--bf-space-5) var(--bf-space-4);
   }
 
   &__modal-form-actions {
     display: flex;
     justify-content: flex-end;
-    gap: $size-gap-2;
-    margin-top: $size-gap-1;
-    padding-top: $size-gap-3;
+    gap: var(--bf-space-2);
+    margin-top: var(--bf-space-1);
+    padding-top: var(--bf-space-3);
     border-top: 1px solid var(--bf-color-border-subtle);
   }
 }

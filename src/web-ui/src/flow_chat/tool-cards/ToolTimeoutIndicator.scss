@@ -1,5 +1,3 @@
-@use '../../component-library/styles/tokens' as tokens;
-
 .tool-timeout-indicator {
   display: inline-flex;
   align-items: center;
@@ -134,7 +132,7 @@
 
 .timeout-extend-popover {
   position: fixed;
-  z-index: tokens.$z-popover;
+  z-index: var(--bf-layer-popover);
   width: max-content;
   max-width: min(150px, calc(100vw - 16px));
 }

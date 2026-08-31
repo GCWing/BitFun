@@ -487,7 +487,13 @@ const SkillsConfig: React.FC = () => {
                   {isInstalled ? (
                     <Tooltip content={installedTooltipText}>
                       <span>
-                        <Button variant="fill" size="sm" disabled leadingIcon={<Icon name="check-circle" size="sm" />}>
+                        <Button
+                          className="bitfun-skills-config__market-action-button"
+                          variant="fill"
+                          size="sm"
+                          disabled
+                          leadingIcon={<Icon name="check-circle" size="sm" />}
+                        >
 
                           {t('market.item.installed')}
                         </Button>
@@ -499,6 +505,7 @@ const SkillsConfig: React.FC = () => {
                         <Tooltip content={projectTooltipText}>
                           <span>
                             <Button
+                              className="bitfun-skills-config__market-action-button"
                               variant="fill"
                               size="sm"
                               onClick={() => handleDownload(skill, 'project')}
@@ -514,6 +521,7 @@ const SkillsConfig: React.FC = () => {
                       <Tooltip content={userTooltipText}>
                         <span>
                           <Button
+                            className="bitfun-skills-config__market-action-button"
                             variant={isRemote ? 'fill' : 'outline'}
                             size="sm"
                             onClick={() => handleDownload(skill, 'user')}
@@ -661,6 +669,7 @@ const SkillsConfig: React.FC = () => {
         >
           <div className="bitfun-skills-config__market-toolbar" data-bf-component="skills-config" data-bf-part="marketToolbar">
             <SearchField
+              className="bitfun-skills-config__market-search"
               placeholder={t('market.searchPlaceholder')}
               aria-label={t('market.searchPlaceholder')}
               leadingIcon={<Icon name="search" size="sm" aria-hidden />}
@@ -715,8 +724,8 @@ const SkillsConfig: React.FC = () => {
       </ConfigPageContent>
 
       <ConfirmDialog
-        isOpen={deleteConfirm.show && !!deleteConfirm.skill}
-        onClose={() => setDeleteConfirm({ show: false, skill: null })}
+        open={deleteConfirm.show && !!deleteConfirm.skill}
+        onOpenChange={() => setDeleteConfirm({ show: false, skill: null })}
         onConfirm={confirmDelete}
         title={t('deleteModal.title')}
         message={

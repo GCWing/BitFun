@@ -40,6 +40,8 @@
 
   .label {
     min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .root[data-tone="neutral"] {

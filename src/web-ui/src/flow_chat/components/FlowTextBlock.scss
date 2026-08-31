@@ -1,7 +1,7 @@
 /**
  * FlowTextBlock styles
  */
-@use '../../component-library/styles/markdown-layout' as markdown;
+@use '@/infrastructure/markdown/layout' as markdown;
 
 .flow-text-block {
   width: 100%;

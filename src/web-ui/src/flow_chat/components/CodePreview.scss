@@ -2,19 +2,16 @@
  * CodePreview styles
  * Lightweight code preview with syntax highlighting and streaming support
  */
-
-@use '../../component-library/styles/_extended-mixins' as mixins;
-
 .code-preview {
   position: relative;
   width: 100%;
   background: transparent;
   border-radius: 6px;
-  
+
   &__content {
     overflow-y: auto;
     overflow-x: hidden;
-    
+
     // Prism container overrides for a clean embed
     pre {
       margin: 0 !important;
@@ -23,7 +20,7 @@
       border: none !important;
       box-shadow: none !important;
       overflow: visible !important;
-      
+
       code {
         background: transparent !important;
         white-space: pre-wrap !important;
@@ -36,23 +33,23 @@
         span[style] {
           font-weight: var(--bf-font-weight-regular) !important;
         }
-        
+
         > span[style] {
           &:hover {
             background-color: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent) !important;
           }
         }
-        
+
         .code-line--highlighted {
           background-color: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent) !important;
-          
+
           &:hover {
             background-color: color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent) !important;
           }
         }
       }
     }
-    
+
     .linenumber {
       min-width: 2.5em !important;
       padding-right: 1em !important;
@@ -61,7 +58,7 @@
       color: var(--bf-color-content-muted) !important;
       opacity: 0.6 !important;
     }
-    
+
   }
 
   &__plain {
@@ -120,8 +117,8 @@
     flex: 1 1 auto;
     min-width: 0;
   }
-  
-  
+
+
   &--empty {
     display: flex;
     align-items: center;
@@ -131,20 +128,20 @@
     font-size: var(--bf-type-flow-control-font-size);
     font-style: italic;
   }
-  
-  
+
+
   &--streaming {
     .code-preview__content {
       padding-bottom: 4px;
     }
   }
-  
-  
+
+
   &__placeholder {
     color: var(--bf-color-content-muted);
     font-style: italic;
   }
-  
+
   // Streaming cursor indicator
   &__cursor {
     display: inline-block;

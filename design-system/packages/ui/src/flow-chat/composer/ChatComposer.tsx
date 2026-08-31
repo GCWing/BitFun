@@ -20,7 +20,6 @@ export interface ChatComposerProps
   layout?: ChatComposerLayout;
   queue?: ReactNode;
   startActions?: ReactNode;
-  surfaceClassName?: string;
 }
 
 export interface ChatComposerSlotProps {
@@ -96,7 +95,6 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
     layout = "compact",
     queue,
     startActions,
-    surfaceClassName,
     ...props
   }, ref) {
     const contextVisible = hasSlot(contextBar);
@@ -134,7 +132,7 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
           )}
           <div
             aria-disabled={disabled || undefined}
-            className={classNames(styles.surface, surfaceClassName)}
+            className={styles.surface}
             data-bf-layout={layout}
             data-bf-part="surface"
           >

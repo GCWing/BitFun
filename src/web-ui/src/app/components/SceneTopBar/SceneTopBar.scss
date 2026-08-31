@@ -15,11 +15,6 @@
   container-type: inline-size;
   user-select: none;
 
-  > [data-bf-part='leading'],
-  > [data-bf-part='trailing'] {
-    height: 100%;
-  }
-
   &__actions {
     display: flex;
     align-items: center;

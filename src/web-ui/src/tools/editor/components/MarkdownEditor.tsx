@@ -20,7 +20,7 @@ import {
   isPeerDeviceModeActive,
   PEER_MODE_FILE_SYNC_POLL_MS,
 } from '@/infrastructure/peer-device/peerModeFlag';
-import { CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import CodeEditor from './CodeEditor';
 import {
@@ -627,7 +627,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   if (loading) {
     return (
       <div className={`bitfun-markdown-editor-loading ${className}`} data-bf-component="markdown-editor" data-bf-part="loading" data-bf-state="loading">
-        <CubeLoading size="medium" text={t('editor.markdownEditor.loadingFile')} />
+        <LoadingState size="md">{t('editor.markdownEditor.loadingFile')}</LoadingState>
       </div>
     );
   }

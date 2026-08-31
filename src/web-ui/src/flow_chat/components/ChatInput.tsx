@@ -111,7 +111,7 @@ import { chatInputSessionSubscriptionKey } from '../utils/chatInputSessionSubscr
 import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import { findWorkspaceForSession } from '../utils/workspaceScope';
 import { isTauriRuntime } from '@/infrastructure/runtime';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -253,7 +253,6 @@ const log = createLogger('ChatInput');
 
 export interface ChatInputProps {
   className?: string;
-  onSendMessage?: (message: string) => void;
   isSceneActive?: boolean;
   /**
    * Optional content and transport registration for hosts that embed the
@@ -460,7 +459,6 @@ type BoostSubmenuId = 'harness' | 'additional-modes' | 'skills';
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
-  onSendMessage,
   isSceneActive = true,
   registration,
 }) => {
@@ -746,7 +744,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clone.classList.remove('bitfun-chat-input--multi-line');
 
     const cloneComposerSurfaceEl = clone.querySelector(
-      '.bitfun-chat-input__composer-surface',
+      '[data-bf-component="chat-composer"] [data-bf-part="surface"]',
     ) as HTMLElement | null;
     const cloneInputAreaEl = clone.querySelector('.bitfun-chat-input__input-area') as HTMLElement | null;
 
@@ -1178,8 +1176,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const { computerUseEnabled } = useComputerUseEnabled();
 
-  const setChatInputActive = useChatInputState(state => state.setActive);
-  const setChatInputExpanded = useChatInputState(state => state.setExpanded);
   const setChatInputHeight = useChatInputState(state => state.setInputHeight);
   const userInvocableSkills = useMemo(
     // Management keeps the full catalog; invocation surfaces apply both runtime and author visibility.
@@ -1238,14 +1234,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [activeBtwSessionId, showTargetSwitcher]);
 
-  useEffect(() => {
-    setChatInputActive(inputState.isActive);
-  }, [inputState.isActive, setChatInputActive]);
-  
-  useEffect(() => {
-    setChatInputExpanded(inputState.isExpanded);
-  }, [inputState.isExpanded, setChatInputExpanded]);
-  
   // Reset history index when switching sessions
   useEffect(() => {
     setHistoryIndex(-1);
@@ -1866,7 +1854,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSavedDraft('');
     replacePendingLargePastes(draft.pendingLargePastes);
     replaceContexts(draft.contexts);
-    dispatchInput({ type: 'ACTIVATE' });
     dispatchInput({ type: 'SET_VALUE', payload: draft.value });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
     return true;
@@ -1884,7 +1871,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     currentSessionId: effectiveTargetSessionId || undefined,
     contexts,
     onClearContexts: clearContexts,
-    onSuccess: onSendMessage,
     // A busy session queues new input. Its active override must not leak into
     // that future turn's submission metadata.
     turnPermissionMode: activePermissionTurnId ? null : armedTurnPermissionMode,
@@ -1923,11 +1909,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         clearPendingLargePastes();
         dispatchInput({ type: 'CLEAR_VALUE' });
         setQueuedInput(null);
-        dispatchInput({ type: 'DEACTIVATE' });
       } else if (cleanupTarget === 'stored') {
         sessionComposerStore.getState().clearDraft(sessionId);
       }
-      onSendMessage?.(message);
     },
     currentAgentType: resolveChatInputSendAgentType({
       isSubagentTarget: isSubagentInputTarget,
@@ -1965,7 +1949,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
     clearPendingLargePastes();
     replaceContexts([]);
-    dispatchInput({ type: 'ACTIVATE' });
     dispatchInput({ type: 'SET_VALUE', payload: draft.text });
     inputValueRef.current = draft.text;
     richTextInputRef.current?.focus();
@@ -2040,7 +2023,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       
       if (message) {
         clearPendingLargePastes();
-        dispatchInput({ type: 'ACTIVATE' });
         dispatchInput({ type: 'SET_VALUE', payload: message });
         
         if (richTextInputRef.current) {
@@ -2070,7 +2052,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       if (data.context) {
-        dispatchInput({ type: 'ACTIVATE' });
         addContext(data.context);
         if (richTextInputRef.current) {
           const input = richTextInputRef.current as HTMLDivElement & {
@@ -2087,7 +2068,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const restoredValue = composerPresentationToEditorText(composerPresentation);
         replaceContexts(composerPresentationContexts(composerPresentation));
         clearPendingLargePastes();
-        dispatchInput({ type: 'ACTIVATE' });
         dispatchInput({ type: 'SET_VALUE', payload: restoredValue });
         inputValueRef.current = restoredValue;
         richTextInputRef.current?.restoreComposerPresentation?.(composerPresentation);
@@ -2113,7 +2093,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (data.mode !== 'append') {
         clearPendingLargePastes();
       }
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: nextValue });
       inputValueRef.current = nextValue;
 
@@ -2722,7 +2701,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         if (textContent) {
           clearPendingLargePastes();
-          dispatchInput({ type: 'ACTIVATE' });
           dispatchInput({ type: 'SET_VALUE', payload: textContent });
         }
 
@@ -2782,10 +2760,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const context = customEvent.detail?.context;
       
       if (context) {
-        if (!inputState.isActive) {
-          dispatchInput({ type: 'ACTIVATE' });
-        }
-
         setTimeout(() => {
           if (richTextInputRef.current && (richTextInputRef.current as any).insertTag) {
             const el = richTextInputRef.current;
@@ -2809,7 +2783,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('insert-context-tag', handleInsertContextTag);
     };
-  }, [dispatchInput, inputState.isActive]);
+  }, []);
 
   const refreshWorkspaceModeCatalog = useWorkspaceModeCatalog(
     {
@@ -2929,7 +2903,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       // Restoring while the user is actively typing would overwrite their draft.
       log.debug('Detected queuedInput, restoring message to input', { queuedInput });
       clearPendingLargePastes();
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: queuedInput });
       inputValueRef.current = queuedInput;
       if (richTextInputRef.current) {
@@ -3032,9 +3005,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         addContext(imageContext);
         undoImageStackRef.current.push(imageContext.id);
 
-        if (!inputState.isActive) {
-          dispatchInput({ type: 'ACTIVATE' });
-        }
       } catch (error) {
         log.error('Failed to process clipboard image', { fileName: file.name, error });
         notificationService.error(
@@ -3054,7 +3024,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         inputElement.removeEventListener('imagePaste', handleImagePaste);
       }
     };
-  }, [addContext, currentImageCount, dispatchInput, inputState.isActive, t]);
+  }, [addContext, currentImageCount, t]);
 
   React.useEffect(() => {
     if (!effectiveTargetSessionId || !sessionBoundWorkspacePath) {
@@ -3298,10 +3268,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [getFilteredActions, getFilteredSkills, getSlashPickerItems, slashCommandState.kind]);
   
   const handleInputChange = useCallback((text: string, activeContexts: import('../../shared/types/context').ContextItem[]) => {
-    if (!inputState.isActive && text.length > 0) {
-      dispatchInput({ type: 'ACTIVATE' });
-    }
-
     const activeContextIds = new Set(activeContexts.map(context => context.id));
     contexts.forEach(context => {
       // Image contexts are not represented by inline tag pills inside the
@@ -3415,7 +3381,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [canUseThreadGoal, contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands, caps.ops]);
+  }, [canUseThreadGoal, contexts, derivedState, dispatchInput, externalPromptCommands, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands, caps.ops]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -3455,7 +3421,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         { duration: 4000 }
       );
       replacePendingLargePastes(originalPendingLargePastes);
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
     }
@@ -3487,10 +3452,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         expand: true,
       });
       setInputTarget('btw');
-      dispatchInput({ type: 'DEACTIVATE' });
     } catch (e) {
       log.error('Failed to start /btw thread', { e });
-      dispatchInput({ type: 'ACTIVATE' });
       replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
     }
@@ -3530,7 +3493,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         error,
         sessionId: effectiveTargetSessionId,
       });
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
@@ -3559,7 +3521,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     try {
-      const result = await FlowChatManager.getInstance().runSessionUsageReport(
+      await FlowChatManager.getInstance().runSessionUsageReport(
         effectiveTargetSessionId,
         {
           isProcessing: !!derivedState?.isProcessing,
@@ -3569,10 +3531,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           unknownErrorMessage: t('error.unknown'),
         },
       );
-
-      if (result.shown) {
-        dispatchInput({ type: 'DEACTIVATE' });
-      }
     } catch (error) {
       log.error('Failed to trigger /usage', {
         error,
@@ -3582,7 +3540,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     derivedState?.isProcessing,
-    dispatchInput,
     effectiveTargetSession,
     effectiveTargetSessionId,
     t,
@@ -3611,7 +3568,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     try {
       await runEffectiveSessionUsageReport();
     } catch {
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
     }
   }, [
@@ -3671,13 +3627,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         remoteConnectionId: effectiveTargetSession.remoteConnectionId,
         remoteSshHost: effectiveTargetSession.remoteSshHost,
       });
-      dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to trigger /init', {
         error,
         sessionId: effectiveTargetSessionId,
       });
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
@@ -3733,12 +3687,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const result = await threadGoalController.runSlashAction(message);
 
     if (!result && parsed?.kind === 'set') {
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
     }
-
-    dispatchInput({ type: 'DEACTIVATE' });
   }, [
     dispatchInput,
     effectiveTargetSession,
@@ -3787,7 +3738,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         sessionId: effectiveTargetSessionId,
         target: parsed.target,
       });
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
@@ -3883,14 +3833,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           duration: 8000,
         });
       }
-      dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to trigger Review', {
         error,
         sessionId: effectiveTargetSessionId,
       });
       replacePendingLargePastes(originalPendingLargePastes);
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalComposerValue });
       notificationService.error(
         getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
@@ -3993,14 +3941,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           pendingLargePastes: originalPendingLargePastes,
         },
       });
-      dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to run MCP prompt command', {
         command: originalMessage,
         error,
       });
       replacePendingLargePastes(originalPendingLargePastes);
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
@@ -4290,9 +4236,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           : {}),
       });
       if (!submissionTargetIsCurrent()) return true;
-      if (composerCleared && inputValueRef.current === '') {
-        dispatchInput({ type: 'DEACTIVATE' });
-      }
     } catch (error) {
       log.warn('External prompt command invocation failed', {
         code: error instanceof ExternalSourceApiError ? error.code : 'internal',
@@ -4315,7 +4258,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           );
       if (restoreSubmittedComposer) {
         replacePendingLargePastes(originalPendingLargePastes);
-        dispatchInput({ type: 'ACTIVATE' });
         dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       }
       if (error instanceof ExternalSourceApiError
@@ -4707,7 +4649,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         { duration: 4000 }
       );
       replacePendingLargePastes(originalPendingLargePastes);
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
     }
@@ -4754,11 +4695,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
       if (transport === 'registered') {
         clearContexts();
-        onSendMessage?.(message);
       }
       clearPendingLargePastes();
       dispatchInput({ type: 'CLEAR_VALUE' });
-      dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to send message', { error });
       const recoveryTarget = failedSubmissionRecoveryTarget(
@@ -4769,7 +4708,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
       if (recoveryTarget === 'current') {
         replacePendingLargePastes(originalPendingLargePastes);
-        dispatchInput({ type: 'ACTIVATE' });
         dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
         if (derivedState?.isProcessing) {
           setQueuedInput(originalMessage);
@@ -4795,7 +4733,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     contexts,
     workspacePath,
     clearContexts,
-    onSendMessage,
     addToHistory,
     effectiveTargetSessionId,
     clearPendingLargePastes,
@@ -5010,7 +4947,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       const selected = (window.getSelection?.()?.toString() ?? '').trim();
       const initial = selected ? `/btw Explain this:\n\n${selected}` : '/btw ';
-      dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: initial });
       window.setTimeout(() => richTextInputRef.current?.focus(), 0);
       return;
@@ -5299,7 +5235,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const insertInlineReferenceIntoInput = useCallback(
     (token: string) => {
-      dispatchInput({ type: 'ACTIVATE' });
       const appendInlineTokenAtEnd = getRichTextInlineTriggerController()?.appendInlineTokenAtEnd;
       if (appendInlineTokenAtEnd) {
         appendInlineTokenAtEnd(token);
@@ -5364,7 +5299,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleBoostOpenAtContext = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation();
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
-    dispatchInput({ type: 'ACTIVATE' });
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const el = richTextInputRef.current;
@@ -5398,7 +5332,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
 
   const voiceInput = useComposerVoiceInput({
-    activateInput: () => dispatchInput({ type: 'ACTIVATE' }),
     focusInputSoon: () => {
       window.requestAnimationFrame(() => richTextInputRef.current?.focus());
     },
@@ -5633,9 +5566,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ) {
             (richTextInputRef.current as any).insertTag(context);
           }
-          if (!inputState.isActive) {
-            dispatchInput({ type: 'ACTIVATE' });
-          }
         }}
       >
         <div 
@@ -5675,7 +5605,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <div className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
             <ChatComposer
               className="bitfun-chat-input__composer"
-              surfaceClassName="bitfun-chat-input__composer-surface"
               contextBar={workspaceStrip}
               layout={isMultiLine ? 'expanded' : 'compact'}
               queue={(

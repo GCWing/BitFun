@@ -9,9 +9,8 @@
  * Completely independent from the main ChatInput / FlowChat stores.
  */
 
-import React, { useCallback, useState } from 'react';
-import { Icon, IconButton, Textarea } from '@bitfun/ui';
-;
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { Composer, ComposerToolbar, Icon, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -39,7 +38,16 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
   const { setActiveWorkspace } = useWorkspaceContext();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { isImeOwnedKey, handleCompositionStart, handleCompositionEnd } = useImeOwnedKeyGuard();
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
@@ -93,9 +101,47 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
 
   return (
     <div data-bf-component="assistant-quick-input" data-bf-part="root" className="aqi">
-      <div className="aqi__box" data-bf-component="assistant-quick-input" data-bf-part="box">
-        <Textarea
-          className="aqi__embed"
+      <Composer
+        aria-label={placeholder}
+        className="aqi__composer"
+        disabled={sending}
+        toolbar={(
+          <ComposerToolbar
+            leading={(
+              <div
+                className="aqi__footer-left"
+                data-bf-component="assistant-quick-input"
+                data-bf-part="footerLeft"
+              >
+                <ModelSelector currentMode="Claw" className="aqi__model" />
+                <span
+                  className="aqi__hint"
+                  data-bf-component="assistant-quick-input"
+                  data-bf-part="hint"
+                >
+                  {t('input.sendHint')}
+                </span>
+              </div>
+            )}
+            trailing={(
+              <IconButton
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={sending}
+                disabled={!value.trim() || sending}
+                onClick={() => { void handleSend(); }}
+                aria-label={t('actions.send')}
+                className="aqi__send"
+                icon={<Icon name="arrow-up" size="lg" />}
+              />
+            )}
+          />
+        )}
+      >
+        <textarea
+          ref={textareaRef}
+          className="aqi__editor"
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
@@ -104,29 +150,8 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
           placeholder={placeholder}
           rows={1}
           disabled={sending}
-          autoResize
-          variant="default"
         />
-      <div className="aqi__footer" data-bf-component="assistant-quick-input" data-bf-part="footer">
-        <div className="aqi__footer-left" data-bf-component="assistant-quick-input" data-bf-part="footerLeft">
-            <ModelSelector currentMode="Claw" className="aqi__model" />
-          <span className="aqi__hint" data-bf-component="assistant-quick-input" data-bf-part="hint">
-              {t('input.sendHint')}
-            </span>
-          </div>
-          <IconButton
-            type="button"
-            variant="primary"
-            size="sm"
-            loading={sending}
-            disabled={!value.trim() || sending}
-            onClick={() => { void handleSend(); }}
-            aria-label={t('actions.send')}
-            className="aqi__send"
-            icon={<Icon name="arrow-up" size="lg" />}
-          />
-        </div>
-      </div>
+      </Composer>
     </div>
   );
 };

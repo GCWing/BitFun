@@ -3,7 +3,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const userMessageItemAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'user-message-item',
   parts: [
-    { id: 'root' }, { id: 'timestamp' }, { id: 'main' }, { id: 'content' },
+    { id: 'root' }, { id: 'main' }, { id: 'content' },
     { id: 'steeringTag' }, { id: 'actions' }, { id: 'images' }, { id: 'image' },
     { id: 'lightbox' }, { id: 'loading' },
   ],

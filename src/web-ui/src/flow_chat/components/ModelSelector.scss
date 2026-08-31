@@ -8,16 +8,13 @@
  * - Border: light gray; blue-purple gradient on hover/active
  * - Shadow: layered soft shadows, avoid harsh glow
  */
-
-@use '../../component-library/styles/tokens' as *;
-
 .bitfun-model-selector {
   position: relative;
   display: inline-flex;
   align-items: center;
-  
+
   // ==================== Trigger button ====================
-  
+
   &__trigger {
     display: inline-flex;
     align-items: center;
@@ -41,12 +38,12 @@
     opacity: 0.72;
     white-space: nowrap;
     letter-spacing: var(--bf-letter-spacing-wide);
-    
+
     // More visible while input is focused
     .bitfun-chat-input__box:focus-within & {
       opacity: 1;
     }
-    
+
     &:hover {
       background: var(--bf-color-action-neutral-surface-hover);
       color: var(--bf-color-content-primary);
@@ -62,19 +59,19 @@
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
       opacity: 1;
     }
-    
+
     &--open {
       background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
       color: var(--bf-color-content-primary);
       opacity: 1;
     }
-    
+
     &:disabled {
       opacity: 0.4;
       cursor: default;
     }
   }
-  
+
   &__name {
     max-width: 100px;
     overflow: hidden;
@@ -100,7 +97,7 @@
     color: var(--bf-color-status-warning-content);
     flex-shrink: 0;
   }
-  
+
   &__badge {
     display: inline-flex;
     align-items: center;
@@ -172,21 +169,21 @@
     color: var(--bf-color-content-muted);
     flex-shrink: 0;
     transition: transform 0.2s ease;
-    
+
     .bitfun-model-selector__trigger--open & {
       transform: rotate(180deg);
     }
   }
-  
+
   // ==================== Dropdown menu ====================
-  
+
   &__dropdown {
     --bitfun-model-dropdown-offset: -4px;
 
     position: fixed;
     min-width: clamp(0px, 220px, calc(100vw - 16px));
     max-width: clamp(0px, 280px, calc(100vw - 16px));
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     transform-origin: center top;
     transition:
       opacity 100ms ease,
@@ -221,7 +218,7 @@
     min-width: clamp(0px, 220px, calc(100vw - 16px));
     max-width: clamp(0px, 280px, calc(100vw - 16px));
     overflow-y: auto;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     transform-origin: left top;
     transition:
       opacity 100ms ease,
@@ -242,7 +239,7 @@
       }
     }
   }
-  
+
   // One menu level. It is remounted on every step, so its entry animation is
   // what makes the height change read as a step in a direction rather than as
   // the surface resizing on its own.
@@ -285,7 +282,7 @@
     min-width: 0;
     flex: 1;
   }
-  
+
   &__option-name {
     display: flex;
     align-items: center;
@@ -297,7 +294,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
+
   &__option-desc {
     font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-color-content-muted);
@@ -341,7 +338,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
+
 }
 
 @keyframes bitfun-ctx-critical-pulse {

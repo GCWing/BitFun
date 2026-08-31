@@ -548,7 +548,6 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     return (
       <ProminentToolCardHeader
         icon={null}
-        iconClassName="code-review-icon"
         content={renderContent()}
         actions={hasData && reviewData ? (
           <CodeReviewReportExportActions

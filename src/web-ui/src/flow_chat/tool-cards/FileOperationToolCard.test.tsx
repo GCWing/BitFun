@@ -63,19 +63,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../component-library', () => ({
-  CubeLoading: () => <span data-testid="cube-loading" />,
-}));
-
-vi.mock('@/component-library', () => ({
-  CubeLoading: () => <span data-testid="cube-loading" />,
-  IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: React.MouseEventHandler }) => (
-    <button type="button" onClick={onClick}>{children}</button>
-  ),
-  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('../../tools/snapshot_system/hooks/useSnapshotState', () => ({
   useSnapshotState: () => ({
     surfaceEpoch: getActiveSurfaceScope().epoch,

@@ -13,8 +13,8 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Menu, MenuItem } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
-import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
+import { Tooltip } from '@bitfun/ui';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type { AcpModeState } from '../utils/acpSessionConfig';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
@@ -181,7 +181,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
         </button>
       </Tooltip>
 
-      <PresenceBoundary active={open}>
+      <RetainedMountBoundary present={open}>
         {createPortal(
           <Menu
             id={menuId}
@@ -229,7 +229,6 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
                     data-selected={isSelected ? 'true' : 'false'}
                     disabled={mode.locked || loading}
                     className="bitfun-acp-mode-selector__option-row"
-                    triggerClassName="bitfun-acp-mode-selector__option"
                     data-bf-component="acp-mode-selector"
                     data-bf-part="option"
                     data-bf-state={isSelected ? 'selected' : undefined}
@@ -237,7 +236,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
                     onClick={() => select(candidate.value)}
                     shortcut={isSelected ? <Check size={14} aria-hidden="true" /> : undefined}
                   >
-                    <span>
+                    <span className="bitfun-acp-mode-menu__option-content">
                       <strong>{candidate.name}</strong>
                     </span>
                   </MenuItem>
@@ -246,7 +245,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
           </Menu>,
           getAppearanceOverlayHost(),
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </div>
   );
 };

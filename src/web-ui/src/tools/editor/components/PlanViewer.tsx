@@ -7,7 +7,7 @@ import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { createLogger } from '@/shared/utils/logger';
-import { CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -656,7 +656,6 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                   <>
                     <Input
                       className="todo-content-input-field"
-                      inputClassName="todo-content-input"
                       value={panelDrafts[todo.id || String(index)] ?? todo.content}
                       onValueChange={(value) => {
                         const key = todo.id || String(index);
@@ -773,7 +772,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
   if (loading) {
     return (
       <div className="bitfun-plan-viewer bitfun-plan-viewer--loading" data-bf-component="plan-viewer" data-bf-part="loading" data-bf-state="loading">
-        <CubeLoading size="medium" text={t('editor.planViewer.loadingPlan')} />
+        <LoadingState size="md">{t('editor.planViewer.loadingPlan')}</LoadingState>
       </div>
     );
   }

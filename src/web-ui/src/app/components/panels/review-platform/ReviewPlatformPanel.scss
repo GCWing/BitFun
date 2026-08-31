@@ -1,5 +1,3 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .review-platform {
   container: review-platform / inline-size;
   display: flex;
@@ -350,7 +348,7 @@
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-meta);
     cursor: pointer;
-    transition: border-color $motion-base $easing-standard, background $motion-base $easing-standard, color $motion-base $easing-standard;
+    transition: border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard), background var(--bf-motion-duration-base) var(--bf-motion-easing-standard), color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
       border-color: color-mix(in srgb, var(--bf-color-accent-default) 32%, var(--bf-color-border-default));
@@ -436,7 +434,7 @@
     color: inherit;
     text-align: left;
     cursor: pointer;
-    transition: border-color $motion-base $easing-standard, background $motion-base $easing-standard;
+    transition: border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard), background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
       background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 78%, transparent);
@@ -690,7 +688,7 @@
       white-space: nowrap;
     }
 
-    [data-bf-component='button'] {
+    > :last-child {
       flex: 0 0 auto;
     }
   }
@@ -711,7 +709,7 @@
       font-weight: var(--bf-font-weight-semibold);
     }
 
-    [data-bf-component='button'] {
+    > :last-child {
       flex-shrink: 0;
     }
   }
@@ -1021,7 +1019,7 @@
     }
   }
 
-  &__file-add-button[data-bf-component='button'] {
+  &__file-add-button {
     flex-shrink: 0;
   }
 
@@ -1611,7 +1609,7 @@
       justify-self: start;
     }
 
-    &__file-add-button[data-bf-component='button'] {
+    &__file-add-button {
       justify-self: flex-start;
       margin-left: 98px;
     }

@@ -49,7 +49,7 @@ export const ConfigCheckbox = forwardRef<HTMLInputElement, ConfigCheckboxProps>(
       ref={ref}
       label={labelText}
       description={description}
-      error={!!error}
+      invalid={Boolean(error)}
       className={className}
       {...props}
     >

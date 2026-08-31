@@ -26,7 +26,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library/components/Markdown/Markdown', () => ({
+vi.mock('@/infrastructure/markdown', () => ({
   Markdown: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 

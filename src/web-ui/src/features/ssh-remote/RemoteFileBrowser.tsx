@@ -410,7 +410,6 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             <Input
               ref={pathInputRef}
               className="remote-file-browser__path-input-field"
-              inputClassName="remote-file-browser__path-input"
               value={pathInputValue}
               onValueChange={setPathInputValue}
               onKeyDown={handlePathInputKeyDown}
@@ -641,7 +640,6 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 value={renameValue}
                 onValueChange={setRenameValue}
                 className="remote-file-browser__dialog-input-field"
-                inputClassName="remote-file-browser__dialog-input"
                 autoFocus
                 onKeyDown={(e) => {
                   if (
@@ -680,7 +678,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
 
         {/* Delete Confirmation Dialog */}
         <ConfirmDialog
-          isOpen={deleteConfirm.show}
+          open={deleteConfirm.show}
           title={t('ssh.remote.deleteTitle') || 'Delete'}
           message={deleteConfirm.entry
             ? t('ssh.remote.deleteConfirm') || `Delete "${deleteConfirm.entry.name}"?`
@@ -689,7 +687,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           confirmText={t('actions.delete') || 'Delete'}
           cancelText={t('actions.cancel')}
           onConfirm={handleDeleteConfirm}
-          onClose={() => setDeleteConfirm({ show: false, entry: null })}
+          onOpenChange={() => setDeleteConfirm({ show: false, entry: null })}
           confirmDanger
           type="error"
         />

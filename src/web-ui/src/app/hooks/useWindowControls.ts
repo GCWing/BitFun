@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
+import { useOverlayLayerActions } from '@bitfun/ui';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
@@ -6,7 +7,6 @@ import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { nowMs } from '@/shared/utils/timing';
-import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { useI18n } from '@/infrastructure/i18n';
 import { isMacOSDesktopRuntime, supportsNativeWindowControls } from '@/infrastructure/runtime';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -45,6 +45,7 @@ const createWindowKeyboardFocusTarget = (
  */
 export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
   const { t } = useI18n('errors');
+  const { dismissAll: dismissAllOverlayLayers } = useOverlayLayerActions();
   const isToolbarMode = options?.isToolbarMode ?? false;
   const canUseNativeWindowControls = supportsNativeWindowControls();
   const { hasWorkspace, closeWorkspace } = useWorkspaceContext();
@@ -391,11 +392,11 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       }
       
       // 2) Dismiss transient overlays so the reset lands on a clean surface.
-      dismissibleLayerManager.dismissAll();
+      dismissAllOverlayLayers();
     } catch (error) {
       log.error('Failed to return to startup page', error);
     }
-  }, [hasWorkspace, closeWorkspace]);
+  }, [closeWorkspace, dismissAllOverlayLayers, hasWorkspace]);
 
   return {
     handleMinimize,

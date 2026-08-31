@@ -1,8 +1,4 @@
 import { lazy, Suspense, useEffect, useCallback, useLayoutEffect, useState, useRef } from 'react';
-import { ComboboxProvider, ConfirmDialogProvider, ModalProvider, TooltipProvider } from '@bitfun/ui';
-import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
-import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { ChatProvider } from '../infrastructure/contexts/ChatProvider';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeProvider';
 import { SSHRemoteProvider } from '../features/ssh-remote';
@@ -37,7 +33,6 @@ import { RealtimeVoiceCallProvider } from '../flow_chat/components/voice/Realtim
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 import { shouldBlockBrowserShortcut } from './browserShortcutPolicy';
-import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 
 const log = createLogger('App');
 
@@ -98,13 +93,11 @@ const DEFERRED_TRAY_INIT_DELAY_MS = 1500;
 
 function App() {
   const { t } = useI18n('settings/application');
-  const { t: tComponents } = useI18n('components');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
 
   const [startupOverlayVisible, setStartupOverlayVisible] = useState(isStartupOverlayPresent);
-  const hasAppDismissibleLayer = useHasDismissibleLayer('app');
   const mainWindowShownRef = useRef(false);
   const userCloseRequestedRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
@@ -832,20 +825,6 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, []);
 
-  // Escape closes preview overlay (registered via ShortcutManager)
-  useShortcut(
-    'app.closePreview',
-    { key: 'Escape', scope: 'app', allowInInput: true },
-    () => {
-      dismissibleLayerManager.dismissTop('app');
-    },
-    {
-      enabled: hasAppDismissibleLayer,
-      priority: 1,
-      description: 'keyboard.shortcuts.app.closePreview',
-    }
-  );
-
   // Top SceneBar: Mod+Alt+1..9 / Mod+Alt+PageUp/PageDown
   useGlobalSceneShortcuts();
 
@@ -966,25 +945,7 @@ function App() {
 
   // Unified layout via a single AppLayout
   return (
-    <ModalProvider
-      closeLabel={tComponents('modal.close')}
-      portalContainer={getAppearanceOverlayHost}
-    >
-      <TooltipProvider portalContainer={getAppearanceOverlayHost}>
-      <ComboboxProvider portalContainer={getAppearanceOverlayHost} labels={{
-        placeholder: tComponents('select.placeholder'),
-        search: tComponents('select.search'),
-        empty: tComponents('select.emptyText'),
-        loading: tComponents('select.loading'),
-        clear: tComponents('search.clear'),
-        selectAll: tComponents('select.selectAll'),
-        create: tComponents('select.customValueHint'),
-      }}>
-      <ConfirmDialogProvider
-        cancelLabel={tComponents('dialog.confirm.cancel')}
-        confirmLabel={tComponents('dialog.confirm.ok')}
-      >
-        <ChatProvider>
+    <ChatProvider>
         <ViewModeProvider defaultMode="coder">
           <SSHRemoteProvider>
             <RealtimeVoiceCallProvider>
@@ -1025,11 +986,7 @@ function App() {
             </RealtimeVoiceCallProvider>
           </SSHRemoteProvider>
         </ViewModeProvider>
-        </ChatProvider>
-      </ConfirmDialogProvider>
-      </ComboboxProvider>
-      </TooltipProvider>
-    </ModalProvider>
+    </ChatProvider>
   );
 }
 

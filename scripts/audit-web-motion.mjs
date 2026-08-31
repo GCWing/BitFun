@@ -10,7 +10,6 @@ const sourceExtensions = new Set(['.css', '.scss', '.ts', '.tsx']);
 const styleExtensions = new Set(['.css', '.scss']);
 const excludedRoots = new Set([
   path.join(sourceRoot, 'generated'),
-  path.join(sourceRoot, 'component-library/preview'),
 ]);
 
 function isAuditedSourceFile(file) {

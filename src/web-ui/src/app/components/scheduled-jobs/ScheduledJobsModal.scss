@@ -1,5 +1,3 @@
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .scheduled-jobs-modal__body {
-  padding: $size-gap-4;
+  padding: var(--bf-space-4);
 }

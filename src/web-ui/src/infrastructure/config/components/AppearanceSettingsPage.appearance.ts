@@ -5,7 +5,7 @@ export const appearanceSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor
   parts: [
     { id: 'root' }, { id: 'content' }, { id: 'settings' },
     { id: 'settingsContent' }, { id: 'language' }, { id: 'palettePicker' },
-    { id: 'paletteSelect' }, { id: 'paletteOption' },
+    { id: 'paletteSelect' },
     { id: 'packageSection' }, { id: 'packageSelect' }, { id: 'packagePreview' },
     { id: 'packageActions' },
     { id: 'packageDiagnostics' }, { id: 'packageDiagnosticsHeader' },

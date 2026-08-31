@@ -1,0 +1,124 @@
+@layer bf.components {
+  .root,
+  .loadingState,
+  .cell,
+  .label {
+    box-sizing: border-box;
+  }
+
+  .root {
+    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-md);
+    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-md);
+
+    display: inline-grid;
+    flex: 0 0 auto;
+    color: currentColor;
+    vertical-align: middle;
+  }
+
+  .root[data-variant="matrix"] {
+    grid-template-columns: repeat(3, var(--_spinner-cell));
+    grid-template-rows: repeat(3, var(--_spinner-cell));
+    gap: var(--_spinner-gap);
+    inline-size: calc(3 * var(--_spinner-cell) + 2 * var(--_spinner-gap));
+    block-size: calc(3 * var(--_spinner-cell) + 2 * var(--_spinner-gap));
+  }
+
+  .root[data-variant="matrix"][data-size="xs"] {
+    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-xs);
+    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-sm);
+  }
+
+  .root[data-variant="matrix"][data-size="sm"] {
+    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-sm);
+    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-sm);
+  }
+
+  .root[data-variant="matrix"][data-size="lg"] {
+    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-lg);
+    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-md);
+  }
+
+  .root[data-variant="matrix"] .cell {
+    inline-size: var(--_spinner-cell);
+    block-size: var(--_spinner-cell);
+    border-radius: var(--bf-layout-spinner-matrix-radius);
+    background: currentColor;
+    animation: bf-spinner-matrix-pulse var(--bf-motion-duration-loop) ease-in-out infinite;
+    will-change: opacity, transform;
+  }
+
+  .root[data-variant="matrix"] .cell:nth-child(2),
+  .root[data-variant="matrix"] .cell:nth-child(4) { animation-delay: 100ms; }
+  .root[data-variant="matrix"] .cell:nth-child(3),
+  .root[data-variant="matrix"] .cell:nth-child(5),
+  .root[data-variant="matrix"] .cell:nth-child(7) { animation-delay: 200ms; }
+  .root[data-variant="matrix"] .cell:nth-child(6),
+  .root[data-variant="matrix"] .cell:nth-child(8) { animation-delay: 300ms; }
+  .root[data-variant="matrix"] .cell:nth-child(9) { animation-delay: 400ms; }
+
+  .root[data-variant="bars"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2em;
+    font-size: var(--bf-font-size-2xl);
+  }
+
+  .root[data-variant="bars"][data-size="xs"] { font-size: var(--bf-font-size-meta); }
+  .root[data-variant="bars"][data-size="sm"] { font-size: var(--bf-font-size-base); }
+  .root[data-variant="bars"][data-size="lg"] { font-size: var(--bf-font-size-3xl); }
+
+  .root[data-variant="bars"] .cell {
+    inline-size: 0.22em;
+    border-radius: var(--bf-radius-pill);
+    background: currentColor;
+    animation: bf-spinner-bars-pulse var(--bf-motion-duration-loop) ease-in-out infinite;
+  }
+
+  .root[data-variant="bars"] .cell:nth-child(1),
+  .root[data-variant="bars"] .cell:nth-child(3) { block-size: 0.55em; }
+  .root[data-variant="bars"] .cell:nth-child(2) {
+    block-size: 0.85em;
+    animation-delay: 150ms;
+  }
+  .root[data-variant="bars"] .cell:nth-child(3) { animation-delay: 300ms; }
+
+  .loadingState {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-secondary);
+  }
+
+  .label {
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-type-support-font-family);
+    font-size: var(--bf-type-support-font-size);
+    font-weight: var(--bf-type-support-font-weight);
+    line-height: var(--bf-type-support-line-height);
+    letter-spacing: var(--bf-type-support-letter-spacing);
+    text-align: center;
+  }
+
+  @keyframes bf-spinner-matrix-pulse {
+    0%, 100% { opacity: 0.2; transform: scale(0.82); }
+    45%, 60% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes bf-spinner-bars-pulse {
+    0%, 100% { opacity: 0.35; transform: scaleY(0.7); }
+    50% { opacity: 1; transform: scaleY(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cell {
+      animation: none !important;
+      opacity: 0.75;
+      transform: none;
+    }
+  }
+}

@@ -1,9 +1,6 @@
 /**
  * ChatEmptyState component styles
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
-
 .fc-chat-empty {
   position: relative;
   width: 100%;
@@ -15,7 +12,7 @@
   background: var(--bf-color-surface-canvas);
   padding: 0;
   margin: 0;
-  
+
   &::before {
     content: '';
     position: absolute;
@@ -31,39 +28,39 @@
       transparent 70%
     );
     filter: blur(60px);
-    z-index: $z-base;
+    z-index: var(--bf-layer-base);
     pointer-events: none;
   }
-  
+
   &__container {
     position: relative;
-    z-index: $z-content;
+    z-index: var(--bf-layer-content);
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
-    gap: $size-gap-8;
+    gap: var(--bf-space-8);
     max-width: 800px;
     width: 100%;
-    padding: $size-gap-10 $size-gap-8;
+    padding: var(--bf-space-10) var(--bf-space-8);
     margin: 0 auto;
-    animation: fc-chat-empty-fade-in $motion-slow $easing-decelerate;
+    animation: fc-chat-empty-fade-in var(--bf-motion-duration-slow) var(--bf-motion-easing-decelerate);
   }
 
   &__greeting {
     text-align: left;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-4;
+    gap: var(--bf-space-4);
     width: 100%;
-    
+
     p {
       margin: 0;
       font-size: var(--bf-type-flow-section-title-font-size);
       color: var(--bf-color-content-secondary);
       font-weight: var(--bf-font-weight-regular);
       line-height: var(--bf-line-height-relaxed);
-      
+
       &:first-child {
         font-size: var(--bf-type-flow-page-title-font-size);
         font-weight: var(--bf-font-weight-semibold);
@@ -72,56 +69,56 @@
       }
     }
   }
-  
+
   &__workspace-name {
     display: inline-flex;
     align-items: center;
-    padding: 2px $size-gap-2;
+    padding: 2px var(--bf-space-2);
     font-family: var(--bf-font-family-mono);
     font-weight: var(--bf-font-weight-medium);
     font-size: inherit;
     color: var(--bf-color-content-primary);
     background: var(--bf-color-action-quiet-hover);
     border: 1px solid var(--bf-color-field-border-hover);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     line-height: var(--bf-type-flow-support-line-height);
     transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard;
-    
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+
     &:hover {
       background: var(--bf-color-action-neutral-surface-hover);
       border-color: var(--bf-color-border-strong);
     }
   }
-  
+
   &__branch-name {
     display: inline-flex;
     align-items: center;
-    padding: 2px $size-gap-2;
+    padding: 2px var(--bf-space-2);
     font-family: var(--bf-font-family-mono);
     font-weight: var(--bf-font-weight-medium);
     font-size: inherit;
     color: var(--bf-color-content-primary);
     background: var(--bf-color-action-quiet-hover);
     border: 1px solid var(--bf-color-field-border-hover);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     line-height: var(--bf-type-flow-support-line-height);
     transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard;
-    
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+
     &:hover {
       background: var(--bf-color-action-neutral-surface-hover);
       border-color: var(--bf-color-border-strong);
     }
   }
-  
+
   &__divider {
     width: 100%;
     height: 1px;
     position: relative;
-    margin: $size-gap-2 0;
+    margin: var(--bf-space-2) 0;
     background: linear-gradient(
       90deg,
       var(--bf-color-border-strong) 0%,
@@ -130,38 +127,38 @@
       transparent 100%
     );
   }
-  
+
   &__no-workspace {
     text-align: left;
-    padding: $size-gap-6 0;
+    padding: var(--bf-space-6) 0;
     width: 100%;
-    
+
     p {
-      margin: 0 0 $size-gap-3;
+      margin: 0 0 var(--bf-space-3);
       font-size: var(--bf-type-flow-section-title-font-size);
       color: var(--bf-color-content-secondary);
       line-height: var(--bf-line-height-relaxed);
       font-weight: var(--bf-font-weight-regular);
-      
+
       &:last-child {
         margin: 0;
       }
     }
   }
-  
+
   &__hint {
     font-size: var(--bf-type-flow-title-font-size);
     color: var(--bf-color-content-muted);
     font-style: italic;
   }
-  
+
   &__prompt {
     text-align: left;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     width: 100%;
-    
+
     p {
       margin: 0;
       font-size: var(--bf-type-flow-title-font-size);
@@ -169,20 +166,20 @@
       line-height: var(--bf-type-flow-body-line-height);
       font-weight: var(--bf-font-weight-regular);
     }
-    
+
     &-hint {
-      margin-top: $size-gap-4;
-      padding: $size-gap-3 $size-gap-4;
+      margin-top: var(--bf-space-4);
+      padding: var(--bf-space-3) var(--bf-space-4);
       font-size: var(--bf-type-flow-lead-font-size);
       color: var(--bf-color-content-muted);
       font-style: italic;
       background: var(--bf-color-surface-subtle);
       border-left: 2px solid var(--bf-color-border-strong);
-      border-radius: 0 $size-radius-sm $size-radius-sm 0;
+      border-radius: 0 var(--bf-radius-sm) var(--bf-radius-sm) 0;
       transition:
-        background-color $motion-base $easing-standard,
-        border-left-color $motion-base $easing-standard;
-      
+        background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+        border-left-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+
       &:hover {
         background: var(--bf-color-action-quiet-hover);
         border-left-color: var(--bf-color-content-muted);
@@ -205,24 +202,24 @@
 @media (max-width: 768px) {
   .fc-chat-empty {
     &__container {
-      padding: $size-gap-6 $size-gap-4;
+      padding: var(--bf-space-6) var(--bf-space-4);
       max-width: 100%;
     }
-    
+
     &__workspace-info {
-      padding: $size-gap-4;
+      padding: var(--bf-space-4);
     }
-    
+
     &__info-row {
       flex-direction: column;
       align-items: flex-start;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
-    
+
     &__info-label {
       min-width: auto;
     }
-    
+
     &__info-value {
       text-align: left;
       width: 100%;

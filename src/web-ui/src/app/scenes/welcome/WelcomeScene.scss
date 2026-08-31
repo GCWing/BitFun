@@ -2,9 +2,6 @@
  * Welcome is the quiet landing scene inside the shared scene surface. Composer
  * integration is intentionally outside this phase.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .welcome-scene {
   position: relative;
   display: flex;
@@ -25,14 +22,14 @@
     justify-content: center;
     min-width: 0;
     min-height: 0;
-    padding: clamp(#{$size-gap-6}, 7vh, #{$size-gap-12}) $size-gap-6;
+    padding: clamp(var(--bf-space-6), 7vh, var(--bf-space-12)) var(--bf-space-6);
   }
 
   &__greeting {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     max-width: 760px;
     text-align: center;
   }
@@ -78,7 +75,7 @@
 @media (max-width: 700px) {
   .welcome-scene {
     &__content {
-      padding-inline: $size-gap-4;
+      padding-inline: var(--bf-space-4);
     }
 
     &__title {

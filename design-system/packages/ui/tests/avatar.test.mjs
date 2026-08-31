@@ -8,7 +8,7 @@ test("Avatar renders text fallback with a stable anatomy contract", () => {
   const markup = renderToStaticMarkup(createElement(Avatar, {
     children: "BF",
     shape: "square",
-    size: "small",
+    size: "sm",
   }));
 
   assert.match(markup, /data-bf-component="avatar"/);

@@ -103,8 +103,7 @@ vi.mock('./DeepReviewActionBar', () => ({
   ReviewActionBar: () => <div data-testid="review-action-bar" />,
 }));
 
-vi.mock('@/component-library', () => ({
-  DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
+vi.mock('@bitfun/ui', () => ({
   IconButton: ({
     children,
     onClick,

@@ -33,24 +33,6 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('../../component-library', () => ({
-  DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
-  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-  IconButton: ({
-    children,
-    tooltip,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: React.ReactNode }) => (
-    <button
-      type="button"
-      title={typeof tooltip === 'string' ? tooltip : undefined}
-      {...props}
-    >
-      {children}
-    </button>
-  ),
-}));
-
 vi.mock('@/tools/terminal/components/LazyTerminalOutputRenderer', () => ({
   LazyTerminalOutputRenderer: React.forwardRef<
     { getVisibleText: () => string },

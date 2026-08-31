@@ -2,7 +2,7 @@ import { IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Bot, Loader2, Mic, MicOff, PhoneOff, Settings2, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
 import './RealtimeVoiceCallButton.scss';

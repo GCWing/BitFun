@@ -44,7 +44,7 @@ test("Reference patterns use real provider controls, scene tabs and nested popov
   for (const name of ["ProviderConfigurationPattern", "SceneToolbarPattern", "NestedMenuPattern"]) {
     assert.match(page, new RegExp(`<${name}`));
   }
-  for (const name of ["Modal", "Combobox", "Disclosure", "NumberInput", "Textarea", "FieldGroup", "Toolbar", "TabGroup", "MenuPopover"]) {
+  for (const name of ["Dialog", "MultiSelect", "Disclosure", "NumberInput", "Textarea", "FieldGroup", "Toolbar", "TabGroup", "MenuPopover"]) {
     assert.match(recipes, new RegExp(`<${name}\\b`));
   }
   assert.match(recipes, /className="pattern-demo-actions"/);

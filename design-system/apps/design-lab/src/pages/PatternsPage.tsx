@@ -15,6 +15,10 @@ import {
   IconButton,
   KeyHint,
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
+  NavigationPanelHeader,
   NavigationPanelItem,
   NavigationPanelSection,
   PageHeader,
@@ -116,21 +120,29 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
           <div className="pattern-navigation-stage" data-bf-pattern="navigation-panel">
             <NavigationPanel
               aria-label={t("patterns.navigation.title")}
-              footer={<div className="pattern-navigation-footer"><StatusPill leading={<Icon name="unselected" />} tone="success">{t("patterns.device.online")}</StatusPill><IconButton aria-label={t("patterns.device.refresh")} icon={<Icon name="refresh" />} size="xs" variant="quiet" /></div>}
-              header={<SearchField aria-label={t("patterns.navigation.search")} leadingIcon={<Icon name="search" />} placeholder={t("patterns.navigation.search")} />}
             >
-              <NavigationPanelSection title={t("patterns.navigation.workspace")}>
-                <NavigationPanelItem leading={<Icon name="folder" />} selected>Open-BitFun</NavigationPanelItem>
-                <NavigationPanelItem leading={<Icon name="star" />}>BitFun UI</NavigationPanelItem>
-              </NavigationPanelSection>
-              <Disclosure defaultOpen leading={<Icon name="extension" />} summary={t("patterns.navigation.tools")}>
-                <NavigationPanelItem leading={<Icon name="browser" />}>{t("patterns.actions.openBrowser")}</NavigationPanelItem>
-                <NavigationPanelItem leading={<Icon name="terminal" />}>{t("patterns.actions.openTerminal")}</NavigationPanelItem>
-              </Disclosure>
-              <NavigationPanelSection title={t("patterns.navigation.projects")}>
-                <NavigationPanelItem leading={<Icon name="files" />}>design-system</NavigationPanelItem>
-                <NavigationPanelItem leading={<Icon name="git" />}>fmy/ui-sys</NavigationPanelItem>
-              </NavigationPanelSection>
+              <NavigationPanelHeader>
+                <SearchField aria-label={t("patterns.navigation.search")} leadingIcon={<Icon name="search" />} placeholder={t("patterns.navigation.search")} />
+              </NavigationPanelHeader>
+              <NavigationPanelBody>
+                <NavigationPanelContent>
+                  <NavigationPanelSection title={t("patterns.navigation.workspace")}>
+                    <NavigationPanelItem leading={<Icon name="folder" />} selected>Open-BitFun</NavigationPanelItem>
+                    <NavigationPanelItem leading={<Icon name="star" />}>BitFun UI</NavigationPanelItem>
+                  </NavigationPanelSection>
+                  <Disclosure defaultOpen leading={<Icon name="extension" />} summary={t("patterns.navigation.tools")}>
+                    <NavigationPanelItem leading={<Icon name="browser" />}>{t("patterns.actions.openBrowser")}</NavigationPanelItem>
+                    <NavigationPanelItem leading={<Icon name="terminal" />}>{t("patterns.actions.openTerminal")}</NavigationPanelItem>
+                  </Disclosure>
+                  <NavigationPanelSection title={t("patterns.navigation.projects")}>
+                    <NavigationPanelItem leading={<Icon name="files" />}>design-system</NavigationPanelItem>
+                    <NavigationPanelItem leading={<Icon name="git" />}>fmy/ui-sys</NavigationPanelItem>
+                  </NavigationPanelSection>
+                </NavigationPanelContent>
+              </NavigationPanelBody>
+              <NavigationPanelFooter>
+                <div className="pattern-navigation-footer"><StatusPill leading={<Icon name="circle" />} tone="success">{t("patterns.device.online")}</StatusPill><IconButton aria-label={t("patterns.device.refresh")} icon={<Icon name="refresh" />} size="xs" variant="quiet" /></div>
+              </NavigationPanelFooter>
             </NavigationPanel>
             <div className="pattern-navigation-copy">
               <PageHeader description={t("patterns.navigation.description")} level={3} size="lg" title={t("patterns.navigation.workspace")} />

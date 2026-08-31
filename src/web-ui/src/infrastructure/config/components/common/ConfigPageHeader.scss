@@ -1,6 +1,3 @@
- 
-
-@use '../../../../component-library/styles/tokens' as *;
 @use './config-page-layout.tokens' as configLayout;
 
 
@@ -33,15 +30,6 @@
 .bitfun-config-page-header__info {
   flex: 1;
   min-width: 0;
-}
-
-.bitfun-config-page-header__title {
-  margin: 0;
-  font-size: var(--bf-font-size-4xl);
-  font-weight: var(--bf-font-weight-bold);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-dense);
-  font-family:var(--bf-font-family-sans);
 }
 
 .bitfun-config-page-header__subtitle {
@@ -80,10 +68,6 @@
 @media (max-width: 600px) {
   .bitfun-config-page-header__left {
     gap: var(--bf-space-3);
-  }
-
-  .bitfun-config-page-header__title {
-    font-size: var(--bf-font-size-3xl);
   }
 
   .bitfun-config-page-header__subtitle {
@@ -132,10 +116,6 @@
   .bitfun-config-page-header__left {
     gap: var(--bf-space-3);
     width: 100%;
-  }
-
-  .bitfun-config-page-header__title {
-    font-size: var(--bf-font-size-3xl);
   }
 
   .bitfun-config-page-header__subtitle {

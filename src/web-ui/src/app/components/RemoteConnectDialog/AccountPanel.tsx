@@ -1056,8 +1056,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       <div data-bf-component="remote-account-panel" data-bf-part="root" data-bf-view={view} className="account-panel">
         {error && (
           <div className="account-panel__error-banner" data-bf-component="remote-account-panel" data-bf-part="error">
-            <Alert type="error" message={error} closable onClose={() => setError(null)}
-              className="account-panel__error-alert" />
+            <Alert tone="error" message={error} closable onClose={() => setError(null)} />
           </div>
         )}
 
@@ -1074,7 +1073,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             <div className="account-panel__form" data-bf-component="remote-account-panel" data-bf-part="form">
               <Field
                 className="account-panel__field"
-                controlClassName="account-panel__field-control"
+                controlWidth="fill"
                 label={t('accountLogin.username')}
               >
                 <Input
@@ -1089,7 +1088,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Field>
               <Field
                 className="account-panel__field"
-                controlClassName="account-panel__field-control"
+                controlWidth="fill"
                 label={t('accountLogin.password')}
               >
                 <Input
@@ -1115,7 +1114,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Field>
               <Field
                 className="account-panel__field"
-                controlClassName="account-panel__field-control"
+                controlWidth="fill"
                 label={t('accountLogin.authServer')}
               >
                 <Input
@@ -1274,9 +1273,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             {relayError && (
               <div className="account-panel__error-banner" data-bf-component="remote-account-panel" data-bf-part="error">
                 <Alert
-                  type="error"
+                  tone="error"
                   message={relayError}
-                  className="account-panel__error-alert"
                 />
               </div>
             )}

@@ -14,7 +14,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   IconButton: ({
     children,
     isLoading,

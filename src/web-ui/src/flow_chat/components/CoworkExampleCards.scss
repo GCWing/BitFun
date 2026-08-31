@@ -35,55 +35,7 @@
   }
 
   &__card {
-    cursor: pointer;
-    user-select: none;
-    min-height: 82px;
-    display: flex;
-    flex-direction: column;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    padding: var(--bf-control-flow-chat-card-expanded-padding-inline);
-  }
-
-  &__card-header {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-control-flow-chat-control-gap);
-  }
-
-  &__card-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: var(--bf-color-surface-canvas);
-    border: 1px solid var(--bf-color-border-default);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--bf-color-content-primary);
-    flex-shrink: 0;
-  }
-
-  &__card-title {
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-color-content-primary);
-    line-height: var(--bf-type-flow-meta-line-height);
-  }
-
-  &__card-desc {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-flow-support-line-height);
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bitfun-cowork-example-cards__card {
-    transition-duration: 0ms;
+    min-width: 0;
   }
 }
 

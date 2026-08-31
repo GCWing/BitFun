@@ -543,6 +543,7 @@ const CreateAgentPage: React.FC = () => {
             </div>
             <div className="th-create-page__actions" data-bf-component="create-agent-page" data-bf-part="actions">
               <Button
+                className="th-create-page__action"
                 type="button"
                 variant="outline"
                 size="sm"
@@ -552,6 +553,7 @@ const CreateAgentPage: React.FC = () => {
                 {t('agentsOverview.form.cancel')}
               </Button>
               <Button
+                className="th-create-page__action"
                 type="submit"
                 form="custom-agent-form"
                 variant="fill"
@@ -866,9 +868,8 @@ const CreateAgentPage: React.FC = () => {
                       return (
                         <Tooltip
                           key={section}
-                          content={tooltipContent}
+                          content={<span className="th-create-panel__tooltip-content">{tooltipContent}</span>}
                           placement="top"
-                          className="th-create-panel__context-tooltip"
                           interactive
                         >
                           <button
@@ -930,17 +931,22 @@ const CreateAgentPage: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <Textarea
-                      id="custom-agent-prompt"
-                      className="th-create-panel__prompt-textarea"
+                    <div
                       data-bf-component="create-agent-page"
                       data-bf-part="prompt"
-                      value={prompt}
-                      onChange={(event) => setPrompt(event.target.value)}
-                      placeholder={t('agentsOverview.form.promptPlaceholder')}
-                      aria-describedby="custom-agent-runtime-context-preview"
-                      rows={20}
-                    />
+                      className="th-create-panel__prompt-control"
+                    >
+                      <Textarea
+                        id="custom-agent-prompt"
+                        value={prompt}
+                        onChange={(event) => setPrompt(event.target.value)}
+                        placeholder={t('agentsOverview.form.promptPlaceholder')}
+                        aria-describedby="custom-agent-runtime-context-preview"
+                        layout="fill"
+                        resize="none"
+                        rows={20}
+                      />
+                    </div>
                   </div>
                 </div>
               </section>

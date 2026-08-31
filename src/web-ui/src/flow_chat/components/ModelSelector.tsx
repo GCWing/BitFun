@@ -25,8 +25,8 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName, getProviderGroupKey } from '@/infrastructure/config/services/modelConfigs';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import { Tooltip } from '@/component-library';
-import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
+import { Tooltip } from '@bitfun/ui';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
@@ -1576,7 +1576,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           />
         ) : null}
 
-        <PresenceBoundary active={dropdownOpen}>
+        <RetainedMountBoundary present={dropdownOpen}>
           {createPortal(
             <Menu
             id={menuId}
@@ -1616,7 +1616,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </Menu>,
             document.body,
           )}
-        </PresenceBoundary>
+        </RetainedMountBoundary>
       </div>
     );
   }
@@ -1738,7 +1738,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ) : null}
 
         {showModelTrigger && (
-        <PresenceBoundary active={dropdownOpen}>
+        <RetainedMountBoundary present={dropdownOpen}>
           {createPortal(
             <Menu
             id={menuId}
@@ -1815,7 +1815,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </Menu>,
             getAppearanceOverlayHost()
           )}
-        </PresenceBoundary>
+        </RetainedMountBoundary>
         )}
       </div>
     );
@@ -1907,7 +1907,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </Tooltip>
       )}
 
-      <PresenceBoundary active={dropdownOpen}>
+      <RetainedMountBoundary present={dropdownOpen}>
         {createPortal(
           <Menu
             id={menuId}
@@ -1987,7 +1987,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </Menu>,
           getAppearanceOverlayHost()
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
 
       {dropdownOpen && nativeSubmenu && createPortal(
         <Menu

@@ -1,9 +1,6 @@
 /**
  * User message item styles (BEM).
  */
-
-@use '../../../component-library/styles/tokens.scss' as tokens;
-
 .user-message-item {
   box-sizing: border-box;
   /*
@@ -40,7 +37,7 @@
    * conversation jumping.
    */
   position: relative;
-  
+
   &:hover {
     background: var(--bf-color-action-quiet-hover);
     border-color: color-mix(in srgb, var(--bf-color-border-subtle) 56%, transparent);
@@ -57,20 +54,12 @@
       opacity: 1;
     }
   }
-  
+
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
     margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
     margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
   }
-}
-
-.user-message-item__timestamp {
-  font-size: var(--bf-type-flow-meta-font-size);
-  color: var(--bf-color-content-muted);
-  font-weight: var(--bf-font-weight-regular);
-  margin-bottom: 0.12rem;
-  line-height: var(--bf-type-flow-meta-line-height);
 }
 
 .user-message-item__main {
@@ -306,13 +295,13 @@
   align-self: center;
   outline: none;
   user-select: none;
-  
+
   &:hover:not(:disabled) {
     background: transparent;
     color: var(--bf-color-content-primary);
     box-shadow: none;
   }
-  
+
   &:active:not(:disabled) {
     transform: scale(0.97);
   }
@@ -326,7 +315,7 @@
     cursor: default;
     opacity: 0.35;
   }
-  
+
   svg {
     width: 14px;
     height: 14px;
@@ -426,7 +415,7 @@
 .user-message-item__lightbox {
   position: fixed;
   inset: 0;
-  z-index: tokens.$z-fullscreen;
+  z-index: var(--bf-layer-fullscreen);
   background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
   display: flex;
   align-items: center;

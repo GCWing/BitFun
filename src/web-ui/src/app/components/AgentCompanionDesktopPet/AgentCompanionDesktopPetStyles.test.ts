@@ -43,7 +43,7 @@ describe('AgentCompanionDesktopPet styles', () => {
     const menuItem = extractBlock(stylesheet, '&__menu-item');
 
     expect(source).toContain('import { Menu, MenuItem, ScrollArea } from \'@bitfun/ui\'');
-    expect(source).toContain('triggerClassName="bitfun-agent-companion-window__menu-item"');
+    expect(source).not.toContain('triggerClassName');
     expect(overlay).not.toMatch(/\b(?:color|background|border|box-shadow|backdrop-filter)\s*:/);
     expect(menuItem).toBe('');
     expect(actionItemStyles).toContain('color: var(--bf-color-action-neutral-content);');

@@ -2,12 +2,10 @@
  * File mention picker styles
  */
 
-@use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/_extended-mixins' as mixins;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .file-mention-picker {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: absolute;
   bottom: calc(100% + 8px);
@@ -26,7 +24,7 @@
     // constraint when the overlay is placed by the viewport anchor hook.
     bottom: auto;
     left: auto;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     width: min(400px, calc(100vw - 16px));
     min-width: min(260px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);

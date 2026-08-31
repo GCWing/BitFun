@@ -4,7 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/component-library', () => ({
+vi.mock('@/app/icons', () => ({
   BITFUN_ICON_SIZE: { navigation: 16 },
   NavigationSessionViewAllIcon: ({ size }: { size: number }) => (
     <svg data-bf-icon="navigation-session-view-all" width={size} height={size} />
@@ -12,6 +12,9 @@ vi.mock('@/component-library', () => ({
   NavigationSessionViewGroupedIcon: ({ size }: { size: number }) => (
     <svg data-bf-icon="navigation-session-view-grouped" width={size} height={size} />
   ),
+}));
+
+vi.mock('@bitfun/ui', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

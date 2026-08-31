@@ -4,7 +4,7 @@
  * Defines the operation/event contract used by the panel controller and event bus.
  */
 import { PanelContentType } from '@/app/components/panels/base/types';
-import type { LineRange } from '@/component-library/components/Markdown';
+import { type LineRange } from '@/shared/editor/LineRange';
 
  
 export type IdeControlOperation =

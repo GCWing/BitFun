@@ -1,7 +1,5 @@
  
 
-@use '../../../../component-library/styles/tokens' as *;
-@use '../../../../component-library/styles/_extended-mixins' as mixins;
 @use './config-page-layout.tokens' as configLayout;
 
 
@@ -209,35 +207,11 @@
   justify-content: flex-end;
   justify-self: stretch;
 
-  > [data-bf-component='input'],
-  > :is([data-bf-component='combobox'], [data-bf-component='select']),
-  > [data-bf-component='number-input'] {
+  // Form controls render span/div roots; buttons and switch/checkbox labels
+  // keep their intrinsic width while fields and product wrappers fill the row.
+  > :where(span, div) {
     width: 100%;
     min-width: 0;
-  }
-
-  /*
-   * Safety net for pages that wrap a control in a positioning/state div: an
-   * unstyled wrapper is a flex item, so it would shrink to content width and
-   * that row's dropdown would render narrower than every other row's.
-   */
-  > div:has(> :is([data-bf-component='combobox'], [data-bf-component='select'])),
-  > div:has(> [data-bf-component='input']),
-  > div:has(> [data-bf-component='number-input']) {
-    width: 100%;
-    min-width: 0;
-
-    > :is([data-bf-component='combobox'], [data-bf-component='select']),
-    > [data-bf-component='input'],
-    > [data-bf-component='number-input'] {
-      width: 100%;
-      min-width: 0;
-    }
-  }
-
-  > [data-bf-component='number-input'] [data-bf-part='input'],
-  > div:has(> [data-bf-component='number-input']) > [data-bf-component='number-input'] [data-bf-part='input'] {
-    text-align: left;
   }
 }
 

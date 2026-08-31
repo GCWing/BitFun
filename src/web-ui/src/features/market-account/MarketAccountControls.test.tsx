@@ -53,9 +53,14 @@ vi.mock('@bitfun/ui', () => ({
   MenuItem: ({ children, leading, ...props }: any) => (
     <button type="button" role="menuitem" {...props}>{leading}{children}</button>
   ),
-  Modal: ({ isOpen, title, children }: any) => isOpen ? (
-    <section role="dialog" aria-label={title}>{children}</section>
+  Dialog: ({ open, children }: any) => open ? (
+    <section role="dialog">{children}</section>
   ) : null,
+  DialogBody: ({ children }: any) => <div>{children}</div>,
+  DialogClose: (props: any) => <button type="button" {...props} />,
+  DialogHeader: ({ children }: any) => <header>{children}</header>,
+  DialogHeading: ({ children }: any) => <div>{children}</div>,
+  DialogTitle: ({ children }: any) => <h2>{children}</h2>,
 }));
 
 describe('MarketAccountControls', () => {

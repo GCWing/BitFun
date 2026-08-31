@@ -1,4 +1,14 @@
-import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useMemo, useRef } from 'react';
 import { Bot, Cpu, Database, FolderKanban, Play, ShieldCheck, Square } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
@@ -171,33 +181,36 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
       : t('detail.status.installed');
 
   return (
-    <Modal
-      isOpen={Boolean(app)}
-      onClose={onClose}
-      size="xxlarge"
-      title={localizedName}
-      titleExtra={(
-        <span className="miniapp-detail-modal__source-badge" data-testid="miniapp-detail-source">
-          {sourceLabel(source, t)}
-        </span>
-      )}
-      overlayClassName="miniapp-detail-overlay"
-      contentClassName="miniapp-detail-modal__modal-content"
-      testId="miniapp-detail-dialog"
-      titleTestId="miniapp-detail-title"
-      closeButtonTestId="miniapp-detail-close"
+    <Dialog
+      open={Boolean(app)}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="2xl"
+      className="miniapp-detail-dialog"
+      data-testid="miniapp-detail-dialog"
     >
-      <ScrollArea
-        className="miniapp-detail-modal"
-        data-bf-component="mini-app-detail-modal"
-        data-bf-part="root"
-        data-bf-state={[
-          snapshot.isActive && 'running',
-          snapshot.isCustomizing && 'customizing',
-        ].filter(Boolean).join(' ') || undefined}
-        data-bf-source={source}
-        data-miniapp-id={displayedApp.id}
-      >
+      <DialogHeader className="miniapp-detail-dialog__header">
+        <DialogHeading className="miniapp-detail-dialog__heading">
+          <DialogTitle className="miniapp-detail-dialog__title" data-testid="miniapp-detail-title">
+            {localizedName}
+          </DialogTitle>
+          <span className="miniapp-detail-modal__source-badge" data-testid="miniapp-detail-source">
+            {sourceLabel(source, t)}
+          </span>
+        </DialogHeading>
+        <DialogClose data-testid="miniapp-detail-close" />
+      </DialogHeader>
+      <DialogBody className="miniapp-detail-dialog__body" inset="none">
+        <ScrollArea
+          className="miniapp-detail-modal"
+          data-bf-component="mini-app-detail-modal"
+          data-bf-part="root"
+          data-bf-state={[
+            snapshot.isActive && 'running',
+            snapshot.isCustomizing && 'customizing',
+          ].filter(Boolean).join(' ') || undefined}
+          data-bf-source={source}
+          data-miniapp-id={displayedApp.id}
+        >
         <section className="miniapp-detail-modal__hero" data-bf-component="mini-app-detail-modal" data-bf-part="hero">
           <div className="miniapp-detail-modal__icon-stage" data-bf-component="mini-app-detail-modal" data-bf-part="iconStage">
             <div className="miniapp-detail-modal__icon" data-bf-component="mini-app-detail-modal" data-bf-part="icon">
@@ -302,8 +315,9 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
             </Button>
           </div>
         </footer>
-      </ScrollArea>
-    </Modal>
+        </ScrollArea>
+      </DialogBody>
+    </Dialog>
   );
 };
 

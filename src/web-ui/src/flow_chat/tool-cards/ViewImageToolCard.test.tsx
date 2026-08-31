@@ -12,12 +12,6 @@ vi.mock('@/infrastructure/i18n', async () => {
   };
 });
 
-vi.mock('@/component-library', () => ({
-  Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) => (
-    isOpen ? <div data-testid="modal">{children}</div> : null
-  ),
-}));
-
 function makeProps(mimeType = 'image/png'): ToolCardProps {
   return {
     toolItem: {

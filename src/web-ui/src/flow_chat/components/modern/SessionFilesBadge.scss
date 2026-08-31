@@ -1,9 +1,7 @@
 /**
  * Session file changes badge styles.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .session-files-badge {
   position: relative;
@@ -21,16 +19,16 @@
     padding: 0 6px;
     background: transparent;
     border: none;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     font-size: var(--bf-type-flow-support-font-size);
     line-height: var(--bf-line-height-none);
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      opacity $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     white-space: nowrap;
 
     // Avoid I-beam over label/icon; beat global :disabled cursor when chained with class.
@@ -76,7 +74,7 @@
     color: var(--bf-color-content-muted);
     width: 12px;
     height: 12px;
-    transition: transform $motion-fast $easing-standard;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &__review-btn {
@@ -88,14 +86,14 @@
     padding: 0 6px;
     background: transparent;
     border: none;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-muted);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      opacity $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     span,
     svg {
@@ -205,7 +203,7 @@
   &__review-menu-chevron {
     flex-shrink: 0;
     color: var(--bf-color-content-muted);
-    transition: transform $motion-fast $easing-standard;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &--open {
       transform: rotate(180deg);
@@ -214,7 +212,7 @@
 
   &__review-menu-popover {
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
   }
 
   &__review-main-icon,
@@ -246,10 +244,10 @@
 
   // ==================== Popover ====================
   &__popover {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     width: min(380px, calc(100vw - 16px));
     min-width: min(260px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
@@ -257,7 +255,7 @@
     overflow: hidden;
     color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
-    animation: session-files-badge-popover-in 0.2s $easing-standard;
+    animation: session-files-badge-popover-in 0.2s var(--bf-motion-easing-standard);
 
     @keyframes session-files-badge-popover-in {
       from {
@@ -275,7 +273,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 8px 10px;
     border-bottom: 1px solid var(--bf-color-border-subtle);
     font-size: var(--bf-type-flow-support-font-size);
@@ -333,14 +331,14 @@
     align-items: center;
     gap: 6px;
     padding: 4px 6px;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      opacity $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     user-select: none;
 
     span,

@@ -1,8 +1,24 @@
-import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea, type ComboboxOption, type SelectOption } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  NumberInput,
+  Select,
+  Switch,
+  Tooltip,
+  ScrollArea,
+  type ComboboxOption,
+  type SelectOption,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { ConfigPageLoading } from '@/component-library';
+import { ConfigLoadingState } from '@/infrastructure/config/components/common';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -867,7 +883,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={page}>
         <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
         <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
-          <ConfigPageLoading text={t('loading.text')} />
+          <ConfigLoadingState label={t('loading.text')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -1183,12 +1199,12 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
               <NumberInput
                 value={executionTimeout === '' ? 0 : parseInt(executionTimeout, 10)}
-                onChange={(val) => handleToolTimeoutChange(val === 0 ? '' : String(val))}
+                onValueChange={(val) => handleToolTimeoutChange(val === 0 ? '' : String(val))}
                 min={0}
                 max={3600}
                 step={5}
                 unit={tTools('config.seconds')}
-                size="small"
+                size="sm"
                 variant="compact"
               />
             </div>
@@ -1220,11 +1236,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
               <NumberInput
                 value={subagentMaxConcurrency}
-                onChange={(val) => void handleSubagentMaxConcurrencyChange(val)}
+                onValueChange={(val) => void handleSubagentMaxConcurrencyChange(val)}
                 min={1}
                 max={100}
                 step={1}
-                size="small"
+                size="sm"
                 variant="compact"
               />
             </div>
@@ -1237,11 +1253,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
               <NumberInput
                 value={swarmMaxConcurrency}
-                onChange={(val) => void handleSwarmMaxConcurrencyChange(val)}
+                onValueChange={(val) => void handleSwarmMaxConcurrencyChange(val)}
                 min={1}
                 max={100}
                 step={1}
-                size="small"
+                size="sm"
                 variant="compact"
               />
             </div>
@@ -1575,15 +1591,21 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           ) : null}
         </ConfigPageSection>
 
-        <Modal
-          isOpen={browserRestartPrompt !== null}
-          onClose={() => {
-            if (!browserControlBusy) setBrowserRestartPrompt(null);
+        <Dialog
+          open={browserRestartPrompt !== null}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && !browserControlBusy) setBrowserRestartPrompt(null);
           }}
-          title={t('browserControl.restartModal.title')}
-          size="small"
-          closeOnOverlayClick={!browserControlBusy}
+          size="sm"
+          closeOnPointerOutside={!browserControlBusy}
         >
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{t('browserControl.restartModal.title')}</DialogTitle>
+            </DialogHeading>
+            <DialogClose />
+          </DialogHeader>
+          <DialogBody inset="none">
           <div className="bitfun-debug-config__modal-body" data-bf-component="runtime-settings" data-bf-part="restartModal">
             <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
             <p>{t('browserControl.restartModal.warning')}</p>
@@ -1611,7 +1633,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 : t('browserControl.restartModal.confirm')}
             </Button>
           </div>
-        </Modal>
+                  </DialogBody>
+        </Dialog>
 
           </>
         ) : null}

@@ -12,13 +12,10 @@ const readSource = (fromProjectRoot: string): string =>
   readFileSync(resolve(process.cwd(), fromProjectRoot), 'utf8');
 
 const layerStyles = readSource('src/infrastructure/appearance/runtime/AppearanceOverlayHost.scss');
-const tokens = readSource('src/component-library/styles/tokens.scss');
-
-/** Numeric value of a `$z-*` token, so the ordering below is read, not assumed. */
-const zLevel = (token: string): number => {
-  const match = tokens.match(new RegExp(`^\\$${token}:\\s*(\\d+);`, 'm'));
-  if (!match) throw new Error(`missing z token: $${token}`);
-  return Number(match[1]);
+const systemTokens = JSON.parse(readSource(
+  '../../design-system/packages/design-tokens/src/system.tokens.json',
+)) as {
+  layer: Record<string, { $value: number }>;
 };
 
 /** The host's own rule block, without the child rule that follows it. */
@@ -47,13 +44,13 @@ describe('appearance overlay host', () => {
   // and never receives its clicks.
   it('gives portaled overlays their own stacking context', () => {
     expect(hostRule).toMatch(/position:\s*fixed/);
-    expect(hostRule).toMatch(/z-index:\s*\$z-overlay-host/);
+    expect(hostRule).toMatch(/z-index:\s*var\(--bf-layer-overlay-host\)/);
   });
 
   it('stacks above containers that host app UI and below always-on-top chrome', () => {
-    expect(zLevel('z-overlay-host')).toBeGreaterThan(zLevel('z-overlay'));
-    expect(zLevel('z-overlay-host')).toBeLessThan(zLevel('z-notification'));
-    expect(zLevel('z-overlay-host')).toBeLessThan(zLevel('z-context-menu'));
+    expect(systemTokens.layer.overlayHost.$value).toBeGreaterThan(systemTokens.layer.overlay.$value);
+    expect(systemTokens.layer.overlayHost.$value).toBeLessThan(systemTokens.layer.notification.$value);
+    expect(systemTokens.layer.overlayHost.$value).toBeLessThan(systemTokens.layer.contextMenu.$value);
   });
 
   // A containing block on the host would re-anchor every `position: fixed`

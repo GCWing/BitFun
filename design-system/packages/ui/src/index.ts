@@ -1,6 +1,22 @@
 import "./styles/layers.css";
 
 export {
+  DesignSystemProvider,
+  type DesignSystemMessages,
+  type DesignSystemProviderProps,
+} from "./providers";
+export {
+  useDismissibleLayer,
+  useHasOverlayLayers,
+  useOverlayLayerActions,
+  type OverlayDismissReason,
+  type OverlayLayerScope,
+  type OverlayPortalContainer,
+  type OverlayPortalTarget,
+  type UseDismissibleLayerOptions,
+} from "./overlay";
+
+export {
   ActionCard,
   type ActionCardAction,
   type ActionCardProps,
@@ -55,23 +71,21 @@ export {
 } from "./components/Composer";
 export {
   Combobox,
-  ComboboxProvider,
-  type ComboboxLabels,
   type ComboboxOption,
   type ComboboxPlacement,
-  type ComboboxPopoverMode,
-  type ComboboxPortalTarget,
   type ComboboxProps,
   type ComboboxSize,
   type ComboboxValue,
 } from "./components/Combobox";
 export {
+  MultiSelect,
+  type MultiSelectProps,
+} from "./components/MultiSelect";
+export {
   ConfirmDialog,
-  ConfirmDialogProvider,
   type ConfirmDialogAction,
   type ConfirmDialogCloseReason,
   type ConfirmDialogProps,
-  type ConfirmDialogProviderProps,
   type ConfirmDialogType,
 } from "./components/ConfirmDialog";
 export {
@@ -137,26 +151,38 @@ export {
 } from "./components/Menu";
 export { useSubmenuIntent, isPointInSubmenuBridge, isPointerMovingTowardSubmenu, type SubmenuIntentPoint, type SubmenuIntentRect, type UseSubmenuIntentOptions, type SubmenuIntentControls } from "./internal/useSubmenuIntent";
 export {
-  Modal,
-  ModalProvider,
-  type ModalBackdropBlur,
-  type ModalBorder,
-  type ModalContentLayout,
-  type ModalContentPadding,
-  type ModalElevation,
-  type ModalPlacement,
-  type ModalPortalContainer,
-  type ModalPortalTarget,
-  type ModalProps,
-  type ModalProviderProps,
-  type ModalRadius,
-  type ModalSize,
-} from "./components/Modal";
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogHeaderActions,
+  DialogHeading,
+  DialogTitle,
+  Sheet,
+  type DialogBodyProps,
+  type DialogCloseProps,
+  type DialogCloseReason,
+  type DialogProps,
+  type DialogSize,
+  type SheetPlacement,
+  type SheetProps,
+  type SheetSize,
+} from "./components/Dialog";
 export {
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
+  NavigationPanelHeader,
   NavigationPanelItem,
   NavigationPanelSection,
   NavigationPanelSeparator,
+  type NavigationPanelBodyProps,
+  type NavigationPanelContentProps,
+  type NavigationPanelFooterProps,
+  type NavigationPanelHeaderProps,
   type NavigationPanelItemProps,
   type NavigationPanelProps,
   type NavigationPanelSectionAction,
@@ -189,6 +215,14 @@ export {
   type StatusPillProps,
   type StatusPillTone,
 } from "./components/StatusPill";
+export {
+  LoadingState,
+  Spinner,
+  type LoadingStateProps,
+  type SpinnerProps,
+  type SpinnerSize,
+  type SpinnerVariant,
+} from "./components/Spinner";
 export { Switch, type SwitchProps } from "./components/Switch";
 export { Textarea, type TextareaProps } from "./components/Textarea";
 export { Disclosure, type DisclosureProps } from "./components/Disclosure";
@@ -213,12 +247,8 @@ export {
 } from "./components/Toolbar";
 export {
   Tooltip,
-  TooltipProvider,
   type TooltipPlacement,
-  type TooltipPortalContainer,
-  type TooltipPortalTarget,
   type TooltipProps,
-  type TooltipProviderProps,
   type TooltipTrigger,
 } from "./components/Tooltip";
 export { SessionIcon, type SessionIconProps } from "./icons";

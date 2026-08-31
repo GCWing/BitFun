@@ -15,7 +15,22 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
-import { Button, Checkbox, FieldGroup, FormSection, Icon, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Checkbox,
+  FieldGroup,
+  FormSection,
+  Icon,
+  IconButton,
+  Input,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -218,21 +233,22 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
   );
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={onClose}
-      title={t('ssh.portForward.title')}
-      titleExtra={
-        connectionName ? (
-          <span className="port-forward-dialog__target">{connectionName}</span>
-        ) : undefined
-      }
-      size="large"
-      contentPadding="lg"
-      contentClassName="port-forward-dialog__modal"
-      showCloseButton
-      testId="ssh-port-forward-dialog"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="lg"
+      data-testid="ssh-port-forward-dialog"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('ssh.portForward.title')}{connectionName ? (
+          <span className="port-forward-dialog__target">{connectionName}</span>
+        ) : undefined}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
+        <div className="port-forward-dialog__modal">
       <div
         className="port-forward-dialog"
         data-bf-component="ssh-remote"
@@ -486,7 +502,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
             </FieldGroup>
 
             <Checkbox
-              size="small"
+              size="sm"
               checked={exposeOnLan}
               onChange={(event) => setExposeOnLan(event.target.checked)}
               label={t('ssh.portForward.exposeOnLan')}
@@ -495,7 +511,9 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
           </div>
         </FormSection>
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 };
 

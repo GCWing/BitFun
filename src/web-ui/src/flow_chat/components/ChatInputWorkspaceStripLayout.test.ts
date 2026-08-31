@@ -150,10 +150,10 @@ describe('composer context track layout', () => {
     expect(component).toContain('contextBar={workspaceStrip}');
     expect(component).toContain('<ChatInputWorkspaceStrip');
     expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 \$size-gap-2;/,
+      /\.bitfun-context-drop-zone\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 var\(--bf-space-2\);/,
     );
     expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: \$size-gap-6;/,
+      /\.bitfun-context-drop-zone\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: var\(--bf-space-6\);/,
     );
     expect(stripRoot).toContain('position: relative;');
     expect(stripRoot).toContain('padding: 0;');
@@ -319,7 +319,7 @@ describe('composer context track layout', () => {
     const component = readLocalFile('ChatInput.tsx');
 
     expect(component).toContain(
-      "clone.querySelector(\n      '.bitfun-chat-input__composer-surface'",
+      'clone.querySelector(\n      \'[data-bf-component="chat-composer"] [data-bf-part="surface"]\'',
     );
     expect(component).toContain("cloneComposerSurfaceEl.dataset.bfLayout = 'compact';");
     expect(component).toContain('const singleLineThreshold = paddingBlock + singleLineHeight * 1.5;');

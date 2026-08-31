@@ -3,7 +3,7 @@
  */
 
 import React, { useRef } from 'react';
-import { PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { PeerDirectoryBrowser } from './PeerDirectoryBrowser';
 import { usePeerDirectoryPickerStore } from './peerDirectoryPickerStore';
 
@@ -31,7 +31,7 @@ export const PeerDirectoryPickerHost: React.FC = () => {
   }
 
   return (
-    <PresenceBoundary active={isOpen}>
+    <RetainedMountBoundary present={isOpen}>
       <PeerDirectoryBrowser
         key={requestIdentityRef.current.key}
         visible={isOpen}
@@ -40,7 +40,7 @@ export const PeerDirectoryPickerHost: React.FC = () => {
         onSelect={select}
         onCancel={cancel}
       />
-    </PresenceBoundary>
+    </RetainedMountBoundary>
   );
 };
 

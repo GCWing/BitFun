@@ -1,19 +1,16 @@
 /**
  * NotificationButton styles — TitleBar notification indicator.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .bitfun-notification-btn {
   display: flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   border: none;
   background: transparent;
   color: var(--bf-color-content-muted);
   cursor: pointer;
   padding: 4px 6px;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   font-size: var(--bf-font-size-xs);
   flex-shrink: 0;
   position: relative;
@@ -74,7 +71,7 @@
   &__menu-count {
     min-width: 18px;
     padding: 1px 5px;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-tight);
@@ -88,14 +85,14 @@
     left: 50%;
     transform: translateX(-50%);
     pointer-events: none;
-    z-index: $z-tooltip;
+    z-index: var(--bf-layer-tooltip);
     white-space: nowrap;
   }
 
   &__tooltip-content {
     background: var(--bf-color-surface-raised);
     border: 1px solid var(--bf-color-field-border-hover);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     padding: 4px 8px;
     font-size: var(--bf-font-size-xs);
     color: var(--bf-color-content-primary);

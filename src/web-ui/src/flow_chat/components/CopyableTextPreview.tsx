@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Tooltip } from '../../component-library';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './CopyableTextPreview.scss';
 
@@ -58,19 +58,19 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
         <div className="copyable-text-preview-tooltip-content" data-bf-component="copyable-text-preview" data-bf-part="tooltipContent">
           <span className="copyable-text-preview-tooltip-content__text" data-bf-component="copyable-text-preview" data-bf-part="tooltipText">{tooltipContent}</span>
           {copyText && (
-            <IconButton
-              className={`copyable-text-preview-tooltip__copy${copied ? ' copied' : ''}`}
-              data-bf-component="copyable-text-preview"
-              data-bf-part="copyAction"
-              data-bf-state={copied ? 'copied' : undefined}
-              variant="ghost"
-              size="xs"
-              onClick={copy}
-              tooltip={copyTooltip}
-              aria-label={copyTooltip}
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-            </IconButton>
+            <Tooltip content={copyTooltip}>
+              <IconButton
+                className={`copyable-text-preview-tooltip__copy${copied ? ' copied' : ''}`}
+                data-bf-component="copyable-text-preview"
+                data-bf-part="copyAction"
+                data-bf-state={copied ? 'copied' : undefined}
+                variant="quiet"
+                size="xs"
+                onClick={copy}
+                icon={copied ? <Check size={12} /> : <Copy size={12} />}
+                aria-label={copyTooltip}
+              />
+            </Tooltip>
           )}
         </div>
       }

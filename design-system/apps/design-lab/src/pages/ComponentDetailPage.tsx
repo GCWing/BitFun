@@ -21,6 +21,13 @@ import {
   ComposerDivider,
   ComposerToolbar,
   ConfirmDialog,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
   Disclosure,
   Empty,
   Field,
@@ -35,12 +42,17 @@ import {
   KeyHint,
   Listbox,
   ListboxOption,
+  LoadingState,
   Menu,
   MenuItem,
   MenuSection,
   MenuSeparator,
-  Modal,
+  MultiSelect,
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
+  NavigationPanelHeader,
   NavigationPanelItem,
   NavigationPanelSection,
   NavigationPanelSeparator,
@@ -51,7 +63,9 @@ import {
   SearchField,
   SegmentedControl,
   Select,
+  Sheet,
   StatusPill,
+  Spinner,
   Switch,
   TabGroup,
   Textarea,
@@ -248,7 +262,7 @@ function NumberInputPreview({ state }: { state: string }) {
       aria-label={t("components.preview.inputLabel")}
       className={`component-number-input-example lab-state-${state}`}
       disabled={state === "disabled"}
-      onChange={setValue}
+      onValueChange={setValue}
       value={value}
     />
   );
@@ -314,8 +328,7 @@ export function ComponentDetailPage({
   const [previewIconPosition, setPreviewIconPosition] = useState<PreviewIconPosition>("left");
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalShowScrollbar, setModalShowScrollbar] = useState(true);
+  const [overlayOpen, setOverlayOpen] = useState(false);
   const [menuShowScrollbar, setMenuShowScrollbar] = useState(true);
   const [navigationPanelShowScrollbar, setNavigationPanelShowScrollbar] = useState(true);
   const [composerShowContext, setComposerShowContext] = useState(false);
@@ -354,7 +367,9 @@ export function ComponentDetailPage({
       case "Field":
       case "Icon":
       case "KeyHint":
-      case "Modal":
+      case "Dialog":
+      case "LoadingState":
+      case "Sheet":
       case "PageHeader":
         return ["default"] as const;
       case "FieldGroup":
@@ -369,6 +384,8 @@ export function ComponentDetailPage({
         return ["auto", "always", "hidden"] as const;
       case "StatusPill":
         return ["neutral", "info", "success", "warning", "danger"] as const;
+      case "Spinner":
+        return component.states;
       case "SegmentedControl":
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
@@ -392,7 +409,7 @@ export function ComponentDetailPage({
     if (component.name === "Avatar") return 'import { Avatar } from "@bitfun/ui";\n\n<Avatar>BF</Avatar>';
     if (component.name === "Checkbox" || component.name === "Radio") return `import { ${component.name} } from "@bitfun/ui";\n\n<${component.name} label="${t("components.preview.notifications")}" defaultChecked />`;
     if (component.name === "NumberBadge") return `import { NumberBadge } from "@bitfun/ui";\n\n<NumberBadge value={${JSON.stringify(numberBadgeValue)}} />;`;
-    if (component.name === "NumberInput") return 'import { useState } from "react";\nimport { NumberInput } from "@bitfun/ui";\n\nfunction Example() {\n  const [value, setValue] = useState(8);\n  return <NumberInput value={value} onChange={setValue} />;\n}';
+    if (component.name === "NumberInput") return 'import { useState } from "react";\nimport { NumberInput } from "@bitfun/ui";\n\nfunction Example() {\n  const [value, setValue] = useState(8);\n  return <NumberInput value={value} onValueChange={setValue} />;\n}';
     if (component.name === "Empty") return `import { Empty } from "@bitfun/ui";\n\n<Empty title="${t("components.preview.cardTitle")}" description="${t("components.preview.cardDescription")}" />`;
     if (flowChatPreview) {
       return flowChatPreview.codeSample(t);
@@ -441,7 +458,7 @@ export function ComponentDetailPage({
       return `import { Button, Composer, ComposerContextBar, ComposerDivider, ComposerToolbar, IconButton } from "@bitfun/ui";\n\n<Composer\n  aria-label="${t("components.preview.composerLabel")}"${contextProp}${toolbarProp}${stateProps}\n>\n  <textarea\n    aria-label="${t("components.preview.composerEditorLabel")}"\n    placeholder="${t("components.preview.composerPlaceholder")}"\n  />\n</Composer>`;
     }
     if (component.name === "ConfirmDialog") {
-      return `import { ConfirmDialog } from "@bitfun/ui";\n\n<ConfirmDialog\n  cancelText="${t("components.preview.modalCancel")}"\n  confirmDanger\n  confirmText="${t("components.preview.confirmDelete")}"\n  isOpen={open}\n  message="${t("components.preview.confirmMessage")}"\n  onClose={() => setOpen(false)}\n  onConfirm={() => deleteItem()}\n  preview="/workspace/project"\n  title="${t("components.preview.confirmTitle")}"\n  type="error"\n/>`;
+      return `import { ConfirmDialog } from "@bitfun/ui";\n\n<ConfirmDialog\n  cancelText="${t("components.preview.modalCancel")}"\n  confirmDanger\n  confirmText="${t("components.preview.confirmDelete")}"\n  message="${t("components.preview.confirmMessage")}"\n  onConfirm={() => deleteItem()}\n  onOpenChange={() => setOpen(false)}\n  open={open}\n  preview="/workspace/project"\n  title="${t("components.preview.confirmTitle")}"\n  type="error"\n/>`;
     }
     if (component.name === "Icon") {
       return `import { Icon } from "@bitfun/ui";\n\n<Icon name="${iconName}" size="${iconSize}" tone="${iconTone}" />`;
@@ -476,14 +493,20 @@ export function ComponentDetailPage({
     if (component.name === "FieldGroup") {
       return `import { Icon, Field, FieldGroup, FieldRow, FormSection, Input } from "@bitfun/ui";\n\n<FormSection\n  description="${t("components.preview.fieldDescription")}"\n  headingAs="h3"\n  leading={<Icon name="gear" />}\n  title="${t("components.preview.modalSectionTitle")}"\n>\n  <FieldGroup appearance="subtle" dividers>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalProviderName")}" labelWidth="md" orientation="horizontal" required>\n        <Input defaultValue="OpenBitFun" />\n      </Field>\n    </FieldRow>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalApiUrl")}" labelWidth="md" orientation="horizontal">\n        <Input defaultValue="https://api.openbitfun.com" />\n      </Field>\n    </FieldRow>\n  </FieldGroup>\n</FormSection>`;
     }
+    if (component.name === "LoadingState") {
+      return `import { LoadingState } from "@bitfun/ui";\n\n<LoadingState>${t("detail.loading")}</LoadingState>`;
+    }
     if (component.name === "Tooltip") {
       return `import { Tooltip } from "@bitfun/ui";\n\n<Tooltip\n  content="${t("components.preview.tooltipContent")}"\n  placement="${previewState}"\n>\n  <Button>${t("components.preview.tooltipTrigger")}</Button>\n</Tooltip>`;
     }
     if (component.name === "Menu") {
       return `import { Icon, Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
     }
-    if (component.name === "Modal") {
-      return `import { Button, Modal } from "@bitfun/ui";\n\n<Modal\n  contentPadding="lg"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  showScrollbar={${modalShowScrollbar}}\n  size="xxlarge"\n  title="${t("components.preview.modalTitle")}"\n>\n  <ProviderConfigurationFields />\n</Modal>`;
+    if (component.name === "Dialog") {
+      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@bitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="2xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
+    }
+    if (component.name === "Sheet") {
+      return `import { Button, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Sheet } from "@bitfun/ui";\n\n<Sheet onOpenChange={() => setOpen(false)} open={open} placement="right" size="lg">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Sheet>`;
     }
     if (component.name === "PageHeader") {
       const requiredProp = pageHeaderRequired ? "\n  required" : "";
@@ -498,7 +521,13 @@ export function ComponentDetailPage({
       return `import { Icon, KeyHint, SearchField } from "@bitfun/ui";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Icon name="search" />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}${stateProps}\n/>`;
     }
     if (component.name === "Combobox") {
-      return `import { Combobox } from "@bitfun/ui";\n\n<Combobox\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  searchable\n  triggerAriaLabel="Mode"\n  value={mode}\n/>`;
+      return `import { Combobox } from "@bitfun/ui";\n\n<Combobox\n  aria-label="Mode"\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value={mode}\n/>`;
+    }
+    if (component.name === "Spinner") {
+      return `import { Spinner } from "@bitfun/ui";\n\n<Spinner aria-label="${t("detail.loading")}" size="${size}" variant="${previewState === "bars" ? "bars" : "matrix"}" />`;
+    }
+    if (component.name === "MultiSelect") {
+      return `import { MultiSelect } from "@bitfun/ui";\n\n<MultiSelect\n  aria-label="Modes"\n  onValueChange={setModes}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value={modes}\n/>`;
     }
     if (component.name === "Listbox") {
       return `import { Listbox, ListboxOption } from "@bitfun/ui";\n\n<Listbox aria-label="Mode">\n  <ListboxOption selected value="ask">Ask</ListboxOption>\n  <ListboxOption value="plan">Plan</ListboxOption>\n  <ListboxOption disabled value="agent">Agent</ListboxOption>\n</Listbox>`;
@@ -518,7 +547,7 @@ export function ComponentDetailPage({
       return `import { Disclosure } from "@bitfun/ui";\n\n<Disclosure summary="${t("components.preview.appearance")}"${stateProps}>\n  ${t("components.preview.appearanceDescription")}\n</Disclosure>`;
     }
     if (component.name === "NavigationPanel") {
-      return `import { Icon, IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Icon name="device-mac" />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Icon name="gear" />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Icon name="search" />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
+      return `import { Icon, IconButton, NavigationPanel, NavigationPanelBody, NavigationPanelContent, NavigationPanelFooter, NavigationPanelHeader, NavigationPanelItem, NavigationPanelSection, NavigationPanelSeparator, SearchField } from "@bitfun/ui";\n\n<NavigationPanel aria-label="${t("components.preview.navigationPanelLabel")}">\n  <NavigationPanelHeader>\n    <SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Icon name="search" />} />\n  </NavigationPanelHeader>\n  <NavigationPanelBody scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}">\n    <NavigationPanelContent>\n      <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n        <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n        <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n      </NavigationPanelSection>\n      <NavigationPanelSeparator />\n      <NavigationPanelSection title="${t("components.preview.navigationPanelMoreSection")}">\n        <NavigationPanelItem>${t("components.preview.navigationPanelMoreItem")}</NavigationPanelItem>\n      </NavigationPanelSection>\n    </NavigationPanelContent>\n  </NavigationPanelBody>\n  <NavigationPanelFooter>\n    <NavigationPanelItem leading={<Icon name="device-mac" />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Icon name="gear" />} />\n  </NavigationPanelFooter>\n</NavigationPanel>`;
     }
     if (component.name === "ScrollArea") {
       return `import { ScrollArea } from "@bitfun/ui";\n\n<ScrollArea\n  aria-label="${t("components.preview.scrollAreaLabel")}"\n  className="activity-scroll-area"\n  orientation="${scrollAreaOrientation}"\n  scrollbarVisibility="${previewState}"\n>\n  {items.map((item) => <div key={item.id}>{item.label}</div>)}\n</ScrollArea>`;
@@ -557,7 +586,6 @@ export function ComponentDetailPage({
     inspectorDisabled,
     inspectorLoading,
     menuShowScrollbar,
-    modalShowScrollbar,
     navigationPanelShowScrollbar,
     pageHeaderAlign,
     pageHeaderRequired,
@@ -583,11 +611,11 @@ export function ComponentDetailPage({
     }
   }
 
-  function renderModalConfigurationContent() {
+  function renderDialogConfigurationContent() {
     return (
       <FormSection
         aria-label={t("components.preview.modalSectionTitle")}
-        className="component-modal-example"
+        className="component-dialog-example"
         headingAs="h3"
         title={t("components.preview.modalSectionTitle")}
       >
@@ -681,8 +709,8 @@ export function ComponentDetailPage({
             </Field>
           </FieldRow>
         </FieldGroup>
-        <p className="component-modal-example__hint">{t("components.preview.modalPresetModels")}</p>
-        <div className="component-modal-example__model-card">
+        <p className="component-dialog-example__hint">{t("components.preview.modalPresetModels")}</p>
+        <div className="component-dialog-example__model-card">
           <strong>k3-256k</strong>
           <span>{t("components.preview.modalModelSummary")}</span>
         </div>
@@ -690,40 +718,71 @@ export function ComponentDetailPage({
     );
   }
 
-  function renderModalExample(interactive: boolean) {
-    const closePreview = () => {
-      if (interactive) setModalOpen(false);
-    };
-
+  function renderDialogExample() {
+    const closePreview = () => setOverlayOpen(false);
     return (
-      <Modal
-        autoFocus={interactive}
-        closeOnEscape={interactive}
-        closeOnOverlayClick={interactive}
-        contentPadding="lg"
-        dialogClassName={interactive ? undefined : "component-modal-preview-dialog"}
-        footer={(
-          <>
+      <>
+        <Button onClick={() => setOverlayOpen(true)} variant="fill">
+          {t("components.preview.modalInteractionDemo")}
+        </Button>
+        <Dialog
+          onOpenChange={closePreview}
+          open={overlayOpen}
+          size="2xl"
+        >
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{t("components.preview.modalTitle")}</DialogTitle>
+            </DialogHeading>
+            <DialogClose />
+          </DialogHeader>
+          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
+          <DialogFooter>
             <Button onClick={closePreview} variant="fill">
               {t("components.preview.modalCancel")}
             </Button>
             <Button onClick={closePreview} variant="primary">
               {t("components.preview.modalSave")}
             </Button>
-          </>
-        )}
-        isOpen={interactive ? modalOpen : true}
-        onClose={closePreview}
-        overlayClassName={interactive ? undefined : "component-modal-preview-overlay"}
-        portalled={interactive}
-        preventScroll={interactive}
-        showScrollbar={modalShowScrollbar}
-        size="xxlarge"
-        title={t("components.preview.modalTitle")}
-        trapFocus={interactive}
-      >
-        {renderModalConfigurationContent()}
-      </Modal>
+          </DialogFooter>
+        </Dialog>
+      </>
+    );
+  }
+
+  function renderSheetExample() {
+    const closePreview = () => setOverlayOpen(false);
+    const placement = previewState === "left" || previewState === "bottom"
+      ? previewState
+      : "right";
+    return (
+      <>
+        <Button onClick={() => setOverlayOpen(true)} variant="fill">
+          {t("components.preview.modalInteractionDemo")}
+        </Button>
+        <Sheet
+          onOpenChange={closePreview}
+          open={overlayOpen}
+          placement={placement}
+          size="lg"
+        >
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{t("components.preview.modalTitle")}</DialogTitle>
+            </DialogHeading>
+            <DialogClose />
+          </DialogHeader>
+          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
+          <DialogFooter>
+            <Button onClick={closePreview} variant="fill">
+              {t("components.preview.modalCancel")}
+            </Button>
+            <Button onClick={closePreview} variant="primary">
+              {t("components.preview.modalSave")}
+            </Button>
+          </DialogFooter>
+        </Sheet>
+      </>
     );
   }
 
@@ -874,29 +933,42 @@ export function ComponentDetailPage({
     }
 
     if (component.name === "Combobox") {
-      const multiple = state === "multiple";
       return (
         <Combobox
           defaultOpen={state === "open" || state === "searching"}
-          defaultSearchValue={state === "searching" ? "Ask" : ""}
           disabled={state === "disabled"}
           invalid={state === "invalid"}
           key={state}
           loading={state === "loading"}
-          multiple={multiple}
-          onValueChange={(value) => {
-            if (!Array.isArray(value)) setSelectValue(String(value));
-          }}
+          onValueChange={(value) => setSelectValue(String(value))}
           options={state === "empty" || state === "loading" ? [] : [
             { label: "Ask", value: "ask" },
             { label: "Plan", value: "plan" },
             { disabled: true, label: "Agent", value: "agent" },
           ]}
-          allowCustomValue={state === "custom"}
-          popoverMode="inline"
-          searchable={state === "searching"}
-          triggerAriaLabel="Mode"
-          value={multiple ? ["ask", "plan"] : selectValue}
+          onCreateValue={state === "custom" ? value => value : undefined}
+          aria-label="Mode"
+          value={selectValue}
+        />
+      );
+    }
+
+    if (component.name === "MultiSelect") {
+      return (
+        <MultiSelect
+          defaultOpen={state === "open" || state === "searching"}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          key={state}
+          loading={state === "loading"}
+          onCreateValue={state === "custom" ? value => value : undefined}
+          options={state === "loading" ? [] : [
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+            { disabled: true, label: "Agent", value: "agent" },
+          ]}
+          aria-label="Modes"
+          value={["ask", "plan"]}
         />
       );
     }
@@ -1001,7 +1073,6 @@ export function ComponentDetailPage({
             : <Icon name="check-line" size="lg" aria-hidden="true" />}
           metadata={surface ? <ChangeCount additions={6} deletions={0} /> : undefined}
           onActivate={surface ? () => undefined : undefined}
-          triggerProps={{ tabIndex: -1 }}
         >
           {surface
             ? t("components.preview.activityDescription")
@@ -1354,38 +1425,48 @@ export function ComponentDetailPage({
       );
     }
 
-    if (component.name === "ConfirmDialog") {
-      const confirmType = state === "pending" ? "warning" : state as ConfirmDialogType;
+    if (component.name === "LoadingState") {
+      return <LoadingState>{state === "with-label" ? t("detail.loading") : null}</LoadingState>;
+    }
+
+    if (component.name === "Spinner") {
       return (
-        <ConfirmDialog
-          cancelText={t("components.preview.modalCancel")}
-          confirmDanger={confirmType === "error"}
-          confirmText={confirmType === "error"
-            ? t("components.preview.confirmDelete")
-            : t("components.preview.modalSave")}
-          dialogClassName="component-confirm-dialog-preview-dialog"
-          isOpen
-          message={t("components.preview.confirmMessage")}
-          onClose={() => undefined}
-          onConfirm={() => undefined}
-          overlayClassName="component-confirm-dialog-preview-overlay"
-          pendingAction={state === "pending" ? "confirm" : null}
-          portalled={false}
-          preventScroll={false}
-          preview="/workspace/project"
-          title={t("components.preview.confirmTitle")}
-          type={confirmType}
+        <Spinner
+          aria-label={t("detail.loading")}
+          size={size}
+          variant={state === "bars" ? "bars" : "matrix"}
         />
       );
     }
 
-    if (component.name === "Modal") {
+    if (component.name === "ConfirmDialog") {
+      const confirmType = state === "pending" ? "warning" : state as ConfirmDialogType;
       return (
-        <Button onClick={() => setModalOpen(true)} variant="fill">
-          {t("components.preview.modalInteractionDemo")}
-        </Button>
+        <>
+          <Button onClick={() => setOverlayOpen(true)} variant="fill">
+            {t("components.preview.modalInteractionDemo")}
+          </Button>
+          <ConfirmDialog
+            cancelText={t("components.preview.modalCancel")}
+            confirmDanger={confirmType === "error"}
+            confirmText={confirmType === "error"
+              ? t("components.preview.confirmDelete")
+              : t("components.preview.modalSave")}
+            message={t("components.preview.confirmMessage")}
+            onConfirm={() => undefined}
+            onOpenChange={() => setOverlayOpen(false)}
+            open={overlayOpen}
+            pendingAction={state === "pending" ? "confirm" : null}
+            preview="/workspace/project"
+            title={t("components.preview.confirmTitle")}
+            type={confirmType}
+          />
+        </>
       );
     }
+
+    if (component.name === "Dialog") return renderDialogExample();
+    if (component.name === "Sheet") return renderSheetExample();
 
     if (component.name === "PageHeader") {
       return (
@@ -1432,7 +1513,42 @@ export function ComponentDetailPage({
         <NavigationPanel
           aria-label={t("components.preview.navigationPanelLabel")}
           className="component-navigation-panel-example"
-          footer={(
+        >
+          <NavigationPanelHeader>
+            <SearchField
+              aria-label={t("components.preview.searchLabel")}
+              leadingIcon={<Icon name="search" size="lg" aria-hidden="true" />}
+              placeholder={t("components.preview.searchPlaceholder")}
+            />
+          </NavigationPanelHeader>
+          <NavigationPanelBody scrollbarVisibility={navigationPanelShowScrollbar ? "auto" : "hidden"}>
+            <NavigationPanelContent>
+              <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
+                {Array.from({ length: itemCount }, (_, index) => (
+                  <NavigationPanelItem
+                    disabled={state === "disabled-item" && index === 1}
+                    key={index}
+                    leading={index % 3 === 0 ? <Icon name="session" size="lg" aria-hidden="true" /> : undefined}
+                    reserveLeadingSpace
+                    selected={state === "selected-item" && index === 0}
+                  >
+                    {index === 0
+                      ? t("components.preview.menuItemOne")
+                      : index === 1
+                        ? t("components.preview.menuItemTwo")
+                        : t("components.preview.menuItem", { index: index + 1 })}
+                  </NavigationPanelItem>
+                ))}
+              </NavigationPanelSection>
+              <NavigationPanelSeparator />
+              <NavigationPanelSection title={t("components.preview.navigationPanelMoreSection")}>
+                <NavigationPanelItem reserveLeadingSpace>
+                  {t("components.preview.navigationPanelMoreItem")}
+                </NavigationPanelItem>
+              </NavigationPanelSection>
+            </NavigationPanelContent>
+          </NavigationPanelBody>
+          <NavigationPanelFooter>
             <>
               <NavigationPanelItem
                 className="component-navigation-panel-example__device"
@@ -1447,39 +1563,7 @@ export function ComponentDetailPage({
                 variant="quiet"
               />
             </>
-          )}
-          header={(
-            <SearchField
-              aria-label={t("components.preview.searchLabel")}
-              leadingIcon={<Icon name="search" size="lg" aria-hidden="true" />}
-              placeholder={t("components.preview.searchPlaceholder")}
-            />
-          )}
-          scrollbarVisibility={navigationPanelShowScrollbar ? "auto" : "hidden"}
-        >
-          <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
-            {Array.from({ length: itemCount }, (_, index) => (
-              <NavigationPanelItem
-                disabled={state === "disabled-item" && index === 1}
-                key={index}
-                leading={index % 3 === 0 ? <Icon name="session" size="lg" aria-hidden="true" /> : undefined}
-                reserveLeadingSpace
-                selected={state === "selected-item" && index === 0}
-              >
-                {index === 0
-                  ? t("components.preview.menuItemOne")
-                  : index === 1
-                    ? t("components.preview.menuItemTwo")
-                    : t("components.preview.menuItem", { index: index + 1 })}
-              </NavigationPanelItem>
-            ))}
-          </NavigationPanelSection>
-          <NavigationPanelSeparator />
-          <NavigationPanelSection title={t("components.preview.navigationPanelMoreSection")}>
-            <NavigationPanelItem reserveLeadingSpace>
-              {t("components.preview.navigationPanelMoreItem")}
-            </NavigationPanelItem>
-          </NavigationPanelSection>
+          </NavigationPanelFooter>
         </NavigationPanel>
       );
     }
@@ -1668,22 +1752,12 @@ export function ComponentDetailPage({
               role="region"
               aria-label={t("detail.preview")}
             >
-              {component.name === "ConfirmDialog" ? (
-                <div className="component-confirm-dialog-preview-stage">
-                  <span className="component-confirm-dialog-preview-stage__label">
+              {component.name === "ConfirmDialog" || component.name === "Dialog" || component.name === "Sheet" ? (
+                <div className="component-dialog-preview-stage">
+                  <span className="component-dialog-preview-stage__label">
                     {stateLabel(previewState)}
                   </span>
                   {renderPreview(previewState)}
-                </div>
-              ) : component.name === "Modal" ? (
-                <div className="component-modal-preview-stage">
-                  {renderModalExample(false)}
-                  <div className="component-modal-preview-stage__actions">
-                    <Button onClick={() => setModalOpen(true)} variant="fill">
-                      {t("components.preview.modalInteractionDemo")}
-                    </Button>
-                  </div>
-                  {renderModalExample(true)}
                 </div>
               ) : component.name === "Card" ? (
                 <div className="component-card-preview-stage">
@@ -2166,13 +2240,6 @@ export function ComponentDetailPage({
                       checked={composerShowToolbar}
                       label={t("detail.showToolbar")}
                       onCheckedChange={setComposerShowToolbar}
-                    />
-                  )}
-                  {component.name === "Modal" && (
-                    <InspectorToggle
-                      checked={modalShowScrollbar}
-                      label={t("detail.showScrollbar")}
-                      onCheckedChange={setModalShowScrollbar}
                     />
                   )}
                   {component.name === "Menu" && (

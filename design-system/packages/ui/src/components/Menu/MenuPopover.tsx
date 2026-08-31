@@ -1,11 +1,14 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType, type HTMLAttributes, type ReactNode, type RefObject } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, useState, type ComponentType, type HTMLAttributes, type ReactNode, type RefObject } from "react";
 import { Menu, MenuItem, MenuSeparator, type MenuProps, type MenuItemRole } from "./Menu";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
-import { resolveLayerPortal, useAnchoredLayer, type LayerPlacement, type PortalTarget } from "../../internal/useAnchoredLayer";
+import { useAnchoredLayer, type LayerPlacement } from "../../internal/useAnchoredLayer";
 import { useSubmenuIntent } from "../../internal/useSubmenuIntent";
+import { Portal } from "../../overlay/Portal";
+import { useDismissibleLayer } from "../../overlay/useDismissibleLayer";
+import { useFocusScope } from "../../overlay/useFocusScope";
+import { usePresence } from "../../overlay/usePresence";
 import styles from "./MenuPopover.module.css";
 
 export interface MenuEntry {
@@ -30,9 +33,6 @@ export interface MenuPopoverProps extends Omit<MenuProps, "children"> {
   anchorRef?: RefObject<HTMLElement | null>;
   position?: { x: number; y: number };
   placement?: LayerPlacement;
-  portalContainer?: PortalTarget;
-  /** Hosts that already own an overlay root can render in place. */
-  portalled?: boolean;
   /** Stable wrappers must forward all props (and refs for root/item/separator). */
   parts?: MenuPopoverParts;
 }
@@ -54,68 +54,51 @@ function ownItems(menu: HTMLElement) {
 }
 
 /** Anchored/coordinate menu with nested navigation, safe pointer corridors and focus return. */
-export function MenuPopover({ items, open, onClose, anchorRef, position, placement = "bottom", portalContainer, portalled = true, autoFocusFirstItem = true, ...props }: MenuPopoverProps) {
+export function MenuPopover({ items, open, onClose, anchorRef, position, placement = "bottom", autoFocusFirstItem = true, ...props }: MenuPopoverProps) {
   const markerRef = useRef<HTMLSpanElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const wasOpen = useRef(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const treeId = useId();
-  const [present, setPresent] = useState(open);
-  const [phase, setPhase] = useState("entering");
-  const [target, setTarget] = useState<Element | DocumentFragment | null>(null);
+  const { present, state: phase } = usePresence(open, 100);
   const resolvedAnchor = anchorRef ?? markerRef;
-  const restoreFocus = () => {
-    const target = previousFocus.current;
-    if (target?.isConnected && !target.matches(":disabled")) target.focus();
-  };
-  const close = () => { restoreFocus(); onClose(); };
+  const branchRefs = anchorRef ? [anchorRef] : [];
 
-  useLayoutEffect(() => {
-    setTarget(resolveLayerPortal(portalContainer, markerRef.current ?? resolvedAnchor.current));
-  }, [portalContainer, resolvedAnchor, open]);
+  useDismissibleLayer({
+    branchRefs,
+    containsTarget: (target) => target instanceof Element
+      && target.closest("[data-bf-menu-tree]")?.getAttribute("data-bf-menu-tree") === treeId,
+    enabled: open,
+    layerRef: menuRef,
+    onDismiss: onClose,
+  });
+  useFocusScope({
+    active: open,
+    autoFocus: autoFocusFirstItem,
+    containerRef: menuRef,
+    restoreFocus: true,
+    trapFocus: false,
+  });
 
-  useLayoutEffect(() => {
-    const doc = markerRef.current?.ownerDocument;
-    if (open && !wasOpen.current) {
-      previousFocus.current = doc?.activeElement as HTMLElement | null;
-      setPresent(true);
-    } else if (!open && wasOpen.current && doc?.activeElement?.closest("[data-bf-menu-tree]")?.getAttribute("data-bf-menu-tree") === treeId) {
-      restoreFocus();
-    }
-    wasOpen.current = open;
-  }, [open, treeId]);
-
-  useEffect(() => {
-    const view = markerRef.current?.ownerDocument.defaultView;
-    if (!view) return;
-    let first = 0;
-    let second = 0;
-    let timer = 0;
-    if (open) {
-      setPhase("entering");
-      first = view.requestAnimationFrame(() => {
-        second = view.requestAnimationFrame(() => setPhase("entered"));
-      });
-    } else {
-      setPhase("exiting");
-      timer = view.setTimeout(() => setPresent(false), 100);
-    }
-    return () => { view.cancelAnimationFrame(first); view.cancelAnimationFrame(second); view.clearTimeout(timer); };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const doc = markerRef.current?.ownerDocument;
-    const outside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (target.closest?.("[data-bf-menu-tree]")?.getAttribute("data-bf-menu-tree") !== treeId && !anchorRef?.current?.contains(target)) onClose();
-    };
-    doc?.addEventListener("mousedown", outside, true);
-    doc?.addEventListener("contextmenu", outside, true);
-    return () => { doc?.removeEventListener("mousedown", outside, true); doc?.removeEventListener("contextmenu", outside, true); };
-  }, [open, onClose, treeId, anchorRef]);
-
-  const content = present ? <MenuLevel {...props} items={items} open={open} phase={phase} treeId={treeId} onClose={close} anchorRef={resolvedAnchor} position={position} placement={placement} autoFocusFirstItem={autoFocusFirstItem} portalTarget={portalled ? target : null} /> : null;
-  return <><span ref={markerRef} hidden />{portalled ? target && createPortal(content, target) : content}</>;
+  const content = present ? (
+    <MenuLevel
+      {...props}
+      anchorRef={resolvedAnchor}
+      autoFocusFirstItem={false}
+      items={items}
+      menuRef={menuRef}
+      onClose={onClose}
+      open={open}
+      phase={phase}
+      placement={placement}
+      position={position}
+      treeId={treeId}
+    />
+  ) : null;
+  return (
+    <>
+      <span ref={markerRef} hidden />
+      <Portal ownerDocument={markerRef.current?.ownerDocument}>{content}</Portal>
+    </>
+  );
 }
 
 interface MenuLevelProps extends Omit<MenuProps, "children"> {
@@ -128,12 +111,11 @@ interface MenuLevelProps extends Omit<MenuProps, "children"> {
   anchorRef: RefObject<HTMLElement | null>;
   position?: { x: number; y: number };
   placement: LayerPlacement;
-  portalTarget: Element | DocumentFragment | null;
   menuRef?: RefObject<HTMLDivElement | null>;
   parts?: MenuPopoverParts;
 }
 
-function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, position, placement, portalTarget, menuRef: externalRef, autoFocusFirstItem, className, style, parts, ...props }: MenuLevelProps) {
+function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, position, placement, menuRef: externalRef, autoFocusFirstItem, className, style, parts, ...props }: MenuLevelProps) {
   const MenuSurface = parts?.root ?? Menu;
   const Item = parts?.item ?? MenuItem;
   const Separator = parts?.separator ?? MenuSeparator;
@@ -183,7 +165,6 @@ function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, pos
         case "ArrowUp": index = (current - 1 + enabled.length) % enabled.length; break;
         case "Home": index = 0; break;
         case "End": index = enabled.length - 1; break;
-        case "Escape": event.preventDefault(); event.stopPropagation(); onClose(); return;
         case "Tab": onClose(); return;
         case "ArrowLeft":
           if (onBack) { event.preventDefault(); event.stopPropagation(); onBack(); }
@@ -211,7 +192,7 @@ function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, pos
   });
 
   const submenu = activeEntry ? <SubmenuBoundary className={styles.submenuBoundary}><MenuLevel key={activeEntry.id} id={submenuId} aria-label={activeEntry.label} menuRef={submenuRef} items={activeEntry.submenu!} open={open} phase={phase} treeId={treeId} onClose={onClose} parts={parts}
-    onBack={() => { intent.closeNow(); submenuAnchor.current?.focus(); }} anchorRef={submenuAnchor} placement="right" portalTarget={portalTarget} autoFocusFirstItem={keyboardOpen.current}
+    onBack={() => { intent.closeNow(); submenuAnchor.current?.focus(); }} anchorRef={submenuAnchor} placement="right" autoFocusFirstItem={keyboardOpen.current}
     onPointerEnter={intent.keepOpen} onPointerLeave={intent.requestClose} /></SubmenuBoundary> : null;
 
   return <>
@@ -228,6 +209,6 @@ function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, pos
         <Label>{item.label}</Label>
       </Item>)}
     </MenuSurface>
-    {submenu && (portalTarget ? createPortal(submenu, portalTarget) : submenu)}
+    {submenu && <Portal ownerDocument={menuRef.current?.ownerDocument}>{submenu}</Portal>}
   </>;
 }

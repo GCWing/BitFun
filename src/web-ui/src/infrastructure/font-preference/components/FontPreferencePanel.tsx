@@ -138,13 +138,9 @@ export function FontPreferencePanel() {
                     size="sm"
                     decrementLabel={`${t('appearance.fontSize.customPxLabel')} −1`}
                     incrementLabel={`${t('appearance.fontSize.customPxLabel')} +1`}
-                    onChange={handleCustomValueChange}
-                    inputProps={{
-                      'aria-label': t('appearance.fontSize.customPxLabel'),
-                      'data-testid': 'appearance-ui-font-custom-input',
-                      'data-font-level': 'custom',
-                      onFocus: () => void handleLevelClick('custom'),
-                    }}
+                    onValueChange={handleCustomValueChange}
+                    aria-label={t('appearance.fontSize.customPxLabel')}
+                    onFocus={() => void handleLevelClick('custom')}
                   />
                 </div>
               )}

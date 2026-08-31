@@ -14,7 +14,7 @@ import {
 import type { FlowToolItem, FlowItem, FlowChatState } from '../../types/flow-chat';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { ToolTimeoutIndicator } from '../../tool-cards/ToolTimeoutIndicator';
-import { DotMatrixLoader } from '@/component-library';
+import { Spinner } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
@@ -533,7 +533,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         />
         {isRunning && (
           <span className="task-detail-panel__header-loading">
-            <DotMatrixLoader size="small" />
+            <Spinner size="sm" />
           </span>
         )}
       </div>
@@ -630,7 +630,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
 
         {hasPendingSubagentRender && (
           <div className="task-detail-panel__loading task-detail-panel__loading--inline" data-bf-component="task-detail-panel" data-bf-part="loading" data-bf-state="loading">
-            <DotMatrixLoader size="small" />
+            <Spinner size="sm" />
             <span>
               {t('toolCards.taskDetailPanel.loadingMore')}
             </span>
@@ -639,7 +639,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
 
         {((isRunning || !isSnapshotHydrated) && subagentItems.length === 0) && (
           <div className="task-detail-panel__loading" data-bf-component="task-detail-panel" data-bf-part="loading" data-bf-state="loading">
-            <DotMatrixLoader size="medium" />
+            <Spinner size="md" />
             <span>
               {isSnapshotHydrated
                 ? t('toolCards.taskDetailPanel.status.running')

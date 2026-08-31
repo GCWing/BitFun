@@ -11,7 +11,7 @@ import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { requestGitRepositoryTrust } from '@/shared/services/gitTrustService';
 import './GitScene.scss';
@@ -202,7 +202,7 @@ const GitScene: React.FC<GitSceneProps> = ({
             </Tooltip>
           </div>
           <div className="bitfun-git-scene__loading-state" data-bf-scene="git" data-bf-part="loading">
-            <CubeLoading size="medium" text={t('loading.text')} />
+            <LoadingState size="md">{t('loading.text')}</LoadingState>
             <p className="bitfun-git-scene__loading-hint">{t('loading.hint')}</p>
           </div>
         </div>

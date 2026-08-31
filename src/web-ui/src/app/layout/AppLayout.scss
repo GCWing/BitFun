@@ -4,9 +4,7 @@
  * The root stays visually quiet and lets the scene viewport carry elevation.
  * Frequent workspace and panel changes deliberately avoid entrance motion.
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 // ==================== CSS reset ====================
 // Note: keep box-sizing !important for global consistency.
@@ -146,18 +144,18 @@ html, body {
 }
 
 .bitfun-window-mode-hint {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + #{$size-gap-2});
+  top: calc(env(safe-area-inset-top, 0px) + var(--bf-space-2));
   left: 50%;
-  z-index: $z-notification;
+  z-index: var(--bf-layer-notification);
   display: inline-flex;
   align-items: center;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   max-width: min(560px, calc(100vw - 32px));
   min-height: 34px;
-  padding: $size-gap-1 $size-gap-3;
+  padding: var(--bf-space-1) var(--bf-space-3);
   color: var(--bf-color-content-primary);
   pointer-events: none;
   transform: translateX(-50%);

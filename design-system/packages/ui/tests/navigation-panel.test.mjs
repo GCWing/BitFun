@@ -5,6 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
+  NavigationPanelHeader,
   NavigationPanelItem,
   NavigationPanelSection,
   NavigationPanelSeparator,
@@ -16,20 +20,27 @@ test("NavigationPanel composes independent header, grouped body, and footer regi
       NavigationPanel,
       {
         "aria-label": "Application navigation",
-        footer: createElement("button", null, "Device"),
-        header: createElement("button", null, "Search"),
-        scrollbarVisibility: "always",
       },
+      createElement(NavigationPanelHeader, null, createElement("button", null, "Search")),
       createElement(
-        NavigationPanelSection,
-        {
-          actions: [{ icon: createElement("svg"), id: "add", label: "Add" }],
-          title: "Sessions",
-        },
-        createElement(NavigationPanelItem, { selected: true }, "Welcome"),
-        createElement(NavigationPanelItem, { disabled: true }, "Unavailable"),
+        NavigationPanelBody,
+        { scrollbarVisibility: "always" },
+        createElement(
+          NavigationPanelContent,
+          null,
+          createElement(
+            NavigationPanelSection,
+            {
+              actions: [{ icon: createElement("svg"), id: "add", label: "Add" }],
+              title: "Sessions",
+            },
+            createElement(NavigationPanelItem, { selected: true }, "Welcome"),
+            createElement(NavigationPanelItem, { disabled: true }, "Unavailable"),
+          ),
+          createElement(NavigationPanelSeparator),
+        ),
       ),
-      createElement(NavigationPanelSeparator),
+      createElement(NavigationPanelFooter, null, createElement("button", null, "Device")),
     ),
   );
 

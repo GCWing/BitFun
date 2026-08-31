@@ -562,8 +562,8 @@ const MiniAppMarketView: React.FC = () => {
       </GalleryDetailModal>
 
       <ConfirmDialog
-        isOpen={installPrompt}
-        onClose={() => setInstallPrompt(false)}
+        open={installPrompt}
+        onOpenChange={() => setInstallPrompt(false)}
         onConfirm={() => void install()}
         title={t(installed ? 'market.confirmUpdate.title' : 'market.confirmInstall.title', {
           name: detailName,

@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ViewTransitionBoundary } from '@/component-library';
+import { NavigationTransitionBoundary } from '@/app/navigation/NavigationTransitionBoundary';
 import {
   getSettingsPageManifest,
   isSettingsPageReady,
@@ -76,11 +76,11 @@ const SettingsScene: React.FC = () => {
       data-bf-page={activePageId}
     >
       {Content ? (
-        <ViewTransitionBoundary
-          viewKey={activePageId}
-          animate={shouldAnimatePageTransition}
+        <NavigationTransitionBoundary
+          transitionKey={activePageId}
+          motion={shouldAnimatePageTransition ? 'pointer' : 'none'}
           className="bitfun-settings-scene__content-transition"
-          viewClassName="bitfun-settings-scene__content-wrapper"
+          layerClassName="bitfun-settings-scene__content-wrapper"
         >
           <div
             data-testid="settings-scene-content"
@@ -95,7 +95,7 @@ const SettingsScene: React.FC = () => {
               />
             </Suspense>
           </div>
-        </ViewTransitionBoundary>
+        </NavigationTransitionBoundary>
       ) : <SettingsSceneLoading />}
     </div>
   );

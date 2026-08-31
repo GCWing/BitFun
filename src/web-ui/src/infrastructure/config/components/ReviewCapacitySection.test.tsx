@@ -44,23 +44,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button type="button" disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  ),
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
-}));
-
 vi.mock('@bitfun/ui', () => ({
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
@@ -84,6 +67,7 @@ vi.mock('@bitfun/ui', () => ({
 }));
 
 vi.mock('./common', () => ({
+  ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (
     <header>

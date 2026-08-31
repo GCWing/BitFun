@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   markdownRenderer: vi.fn(),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@/infrastructure/markdown', () => ({
   MarkdownRenderer: (props: { content: string; isStreaming?: boolean }) => {
     mocks.markdownRenderer(props);
     return <div data-testid="markdown-renderer">{props.content}</div>;

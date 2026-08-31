@@ -368,25 +368,25 @@ test("ActionItem preview reserves a full-width column for its complete anatomy",
   );
 });
 
-test("Modal preview exposes a direct anatomy specimen and a separate interaction demo", async () => {
+test("Dialog and Sheet previews exercise provider-owned overlays and compound anatomy", async () => {
   const [catalog, detail, styles] = await Promise.all([
     readFile(catalogSource, "utf8"),
     readFile(detailSource, "utf8"),
     readFile(stylesSource, "utf8"),
   ]);
 
-  assert.match(catalog, /case "Modal"/);
-  assert.match(detail, /component\.name === "Modal"/);
-  assert.match(detail, /renderModalExample\(false\)/);
-  assert.match(detail, /renderModalExample\(true\)/);
-  assert.match(detail, /portalled=\{interactive\}/);
-  assert.match(detail, /preventScroll=\{interactive\}/);
-  assert.match(detail, /contentPadding="lg"/);
-  assert.match(detail, /footer=\{\(/);
-  assert.match(detail, /size="xxlarge"/);
-  assert.match(detail, /showScrollbar=\{modalShowScrollbar\}/);
-  assert.match(styles, /\.component-modal-preview-overlay\s*\{[^}]*position:\s*relative/s);
-  assert.match(styles, /\.component-modal-preview-dialog\s*\{[^}]*block-size:\s*700px/s);
+  assert.match(catalog, /case "Dialog":\s*case "Sheet":/);
+  assert.match(detail, /component\.name === "Dialog"/);
+  assert.match(detail, /component\.name === "Sheet"/);
+  assert.match(detail, /renderDialogExample\(\)/);
+  assert.match(detail, /renderSheetExample\(\)/);
+  assert.match(detail, /<DialogHeader>/);
+  assert.match(detail, /<DialogBody>/);
+  assert.match(detail, /<DialogFooter>/);
+  assert.match(detail, /size="2xl"/);
+  assert.match(detail, /placement=\{placement\}/);
+  assert.doesNotMatch(detail, /portalled=|portalContainer=|contentPadding=|overlayClassName=|dialogClassName=/);
+  assert.match(styles, /\.component-dialog-preview-stage\s*\{/);
 });
 
 test("ConfirmDialog preview exposes semantic, destructive, preview, and pending contracts", async () => {
@@ -402,9 +402,10 @@ test("ConfirmDialog preview exposes semantic, destructive, preview, and pending 
   assert.match(detail, /confirmDanger=\{confirmType === "error"\}/);
   assert.match(detail, /pendingAction=\{state === "pending" \? "confirm" : null\}/);
   assert.match(detail, /preview="\/workspace\/project"/);
-  assert.match(detail, /portalled=\{false\}/);
-  assert.match(styles, /\.component-confirm-dialog-preview-overlay\s*\{[^}]*position:\s*relative/s);
-  assert.match(styles, /\.component-confirm-dialog-preview-dialog\s*\{[^}]*animation:\s*none/s);
+  assert.match(detail, /open=\{overlayOpen\}/);
+  assert.match(detail, /onOpenChange=\{\(\) => setOverlayOpen\(false\)\}/);
+  assert.doesNotMatch(detail, /portalled=|preventScroll=|overlayClassName=|dialogClassName=/);
+  assert.match(styles, /\.component-dialog-preview-stage\s*\{/);
 });
 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
@@ -461,8 +462,8 @@ test("NavigationPanel preview exposes header, grouped navigation, selected items
   assert.match(detail, /NavigationPanelSection/);
   assert.match(detail, /NavigationPanelSeparator/);
   assert.match(detail, /"default", "selected-item", "disabled-item", "scrolling"/);
-  assert.match(detail, /footer=\{\(/);
-  assert.match(detail, /header=\{\(/);
+  assert.match(detail, /<NavigationPanelFooter>/);
+  assert.match(detail, /<NavigationPanelHeader>/);
   assert.match(detail, /selected=\{state === "selected-item"/);
   assert.match(detail, /scrollbarVisibility=\{navigationPanelShowScrollbar \? "auto" : "hidden"\}/);
   assert.match(styles, /\.component-navigation-panel-example\s*\{[^}]*block-size:\s*520px/s);
@@ -575,7 +576,8 @@ test("Combobox details render their own live state and menus include nested inte
   const detail = await readFile(detailSource, "utf8");
   assert.match(detail, /data-component="combobox"/);
   assert.match(detail, /defaultOpen=\{state === "open" \|\| state === "searching"\}/);
-  assert.match(detail, /defaultSearchValue=\{state === "searching"/);
+  assert.match(detail, /onCreateValue=\{state === "custom"/);
+  assert.match(detail, /component\.name === "MultiSelect"/);
   assert.match(detail, /<NestedMenuPattern/);
 });
 

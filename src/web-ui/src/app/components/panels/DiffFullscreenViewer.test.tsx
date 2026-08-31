@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import { DEFAULT_RETAINED_MOUNT_MS } from '@/shared/presence';
 import { DiffFullscreenViewer } from './DiffFullscreenViewer';
 
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({
@@ -69,7 +69,7 @@ describe('DiffFullscreenViewer presence', () => {
     expect(document.querySelector('.diff-fullscreen-overlay')?.getAttribute('data-state')).toBe('closed');
     expect(document.querySelector('[data-testid="retained-diff-path"]')?.textContent).toBe('/repo/old.ts');
 
-    act(() => vi.advanceTimersByTime(PRESENCE_BOUNDARY_MIN_EXIT_MS));
+    act(() => vi.advanceTimersByTime(DEFAULT_RETAINED_MOUNT_MS));
     expect(document.querySelector('.diff-fullscreen-overlay')).toBeNull();
   });
 });

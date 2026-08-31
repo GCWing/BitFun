@@ -30,7 +30,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', async () => {
+vi.mock('@bitfun/ui', async () => {
   const ReactModule = await import('react');
 
   return {
@@ -55,7 +55,6 @@ vi.mock('@/component-library', async () => {
     Input: ReactModule.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => (
       <input ref={ref} {...props} />
     )),
-    DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
   };
 });
 

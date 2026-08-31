@@ -11,7 +11,17 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
-import { Button, Icon, IconButton, Modal, ScrollArea, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  ScrollArea,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+} from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -21,7 +31,7 @@ import React, {
   useState,
 } from 'react';
 import { CalendarClock, CalendarDays } from 'lucide-react';
-import { PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
@@ -467,38 +477,39 @@ const TodosScene: React.FC = () => {
         </div>
       </header>
 
-      <Modal
-        isOpen={editorOpen}
-        onClose={handleCloseEditor}
-        size="xxlarge"
-        showCloseButton={!renderedEditor.saving}
-        closeOnOverlayClick={!renderedEditor.saving}
-        overlayClassName="bf-todos-editor-modal"
-        contentClassName="bf-todos-editor-modal__content"
-        ariaLabel={
-          renderedEditor.editingJob ? t('editor.editTitle') : t('editor.createTitle')
-        }
-        testId="todos-editor-modal"
+      <Dialog
+        open={editorOpen}
+        onOpenChange={(nextOpen) => { if (!nextOpen) handleCloseEditor(); }}
+        size="2xl"
+        closeOnPointerOutside={!renderedEditor.saving}
+        aria-label={renderedEditor.editingJob ? t('editor.editTitle') : t('editor.createTitle')}
+        className="bf-todos-editor-dialog"
+        data-testid="todos-editor-modal"
       >
-        <TodoEditor
-          draft={renderedEditor.draft}
-          onDraftChange={setDraft}
-          validationErrors={renderedEditor.validationErrors}
-          onValidationErrorsChange={setValidationErrors}
-          workspaceOptions={renderedEditor.workspaceOptions}
-          selectedWorkspaceId={renderedEditor.selectedWorkspaceId}
-          onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
-          isEditing={Boolean(renderedEditor.editingJob)}
-          boundSessionId={
-            renderedEditor.editingJob?.target.kind === 'session'
-              ? renderedEditor.editingJob.target.sessionId
-              : null
-          }
-          saving={renderedEditor.saving}
-          onSave={() => { void handleSave(); }}
-          onCancel={handleCloseEditor}
-        />
-      </Modal>
+        <DialogHeader className="bf-todos-editor-dialog__header">
+          {!renderedEditor.saving && <DialogClose />}
+        </DialogHeader>
+        <DialogBody className="bf-todos-editor-dialog__body" inset="none">
+          <TodoEditor
+            draft={renderedEditor.draft}
+            onDraftChange={setDraft}
+            validationErrors={renderedEditor.validationErrors}
+            onValidationErrorsChange={setValidationErrors}
+            workspaceOptions={renderedEditor.workspaceOptions}
+            selectedWorkspaceId={renderedEditor.selectedWorkspaceId}
+            onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
+            isEditing={Boolean(renderedEditor.editingJob)}
+            boundSessionId={
+              renderedEditor.editingJob?.target.kind === 'session'
+                ? renderedEditor.editingJob.target.sessionId
+                : null
+            }
+            saving={renderedEditor.saving}
+            onSave={() => { void handleSave(); }}
+            onCancel={handleCloseEditor}
+          />
+        </DialogBody>
+      </Dialog>
 
       <div className="bf-todos__panes" data-bf-scene="todos" data-bf-part="panes">
         {/* ── Tier 1: due within 24 hours ───────────────────── */}
@@ -611,10 +622,10 @@ const TodosScene: React.FC = () => {
             onSelectDay={handleSelectDay}
           />
 
-          <PresenceBoundary
-            active={selectedDayKey != null}
-            exitDurationMs={160}
-            minimumExitDurationMs={160}
+          <RetainedMountBoundary
+            present={selectedDayKey != null}
+            retainForMs={160}
+            minimumRetainMs={160}
           >
             <ScrollArea
               className="bf-todos__day-detail-presence"
@@ -669,7 +680,7 @@ const TodosScene: React.FC = () => {
                 )}
               </section>
             </ScrollArea>
-          </PresenceBoundary>
+          </RetainedMountBoundary>
         </div>
       </div>
     </ScrollArea>

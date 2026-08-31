@@ -2,7 +2,7 @@ import { Button } from '@bitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Check, Copy, Download, FilePenLine, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { notificationService } from '@/shared/notification-system';
 import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
 import { downloadMarkdownInBrowser } from '@/shared/utils/browserDownload';

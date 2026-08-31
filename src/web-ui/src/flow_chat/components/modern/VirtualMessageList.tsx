@@ -532,8 +532,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     );
   }, [activeSession, activeSessionState.isProcessing, viewportMode]);
 
-  const isInputActive = useChatInputState(state => state.isActive);
-  const isInputExpanded = useChatInputState(state => state.isExpanded);
   const inputHeight = useChatInputState(state => state.inputHeight);
   const bottomLayoutInsetPx = computeFlowChatInputStackFooterPx(inputHeight);
 
@@ -2551,8 +2549,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           ? onRequestJumpToLatest
           : scrollToLatestEndPosition}
         focusReturnRef={scrollerElementRef}
-        isInputActive={isInputActive}
-        isInputExpanded={isInputExpanded}
         inputHeight={inputHeight}
       />
     </div>

@@ -46,8 +46,10 @@ test("registry exposes only the formal stable components", () => {
       "Input",
       "KeyHint",
       "Listbox",
+      "LoadingState",
       "Menu",
-      "Modal",
+      "Dialog",
+      "MultiSelect",
       "NavigationPanel",
       "NumberInput",
       "NumberBadge",
@@ -63,10 +65,12 @@ test("registry exposes only the formal stable components", () => {
       "SearchField",
       "SegmentedControl",
       "Select",
+      "Sheet",
       "SessionControlToolCard",
       "SessionMessageToolCard",
       "SkillToolCard",
       "StatusPill",
+      "Spinner",
       "Switch",
       "TabGroup",
       "Textarea",
@@ -99,6 +103,7 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("letterSpacing.") ||
           token.startsWith("lineHeight.") ||
           token.startsWith("layout.") ||
+          token.startsWith("motion.") ||
           token.startsWith("overlay.") ||
           token.startsWith("radius.") ||
           token.startsWith("scrollbar.") ||

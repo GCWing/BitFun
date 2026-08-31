@@ -35,29 +35,36 @@ vi.mock('@bitfun/ui', async importOriginal => ({
   Input: forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
     (props, ref) => <input ref={ref} {...props} />,
   ),
-  Modal: ({
+  Dialog: ({
     children,
-    footer,
-    isOpen,
-    onClose: _onClose,
-    testId,
-    title,
-  }: {
-    children: React.ReactNode;
-    footer?: React.ReactNode;
-    isOpen: boolean;
-    onClose: () => void;
-    testId?: string;
-    title?: React.ReactNode;
-  }) => isOpen ? (
-    <div data-testid={testId ?? 'modal'}>
-      <h2>{title}</h2>
-      {children}
-      <footer>{footer}</footer>
-    </div>
+    open,
+    'data-testid': testId,
+  }: React.PropsWithChildren<{ open: boolean; 'data-testid'?: string }>) => open ? (
+    <div role="dialog" data-testid={testId}>{children}</div>
   ) : null,
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" {...props} />,
+  DialogFooter: ({ children }: React.PropsWithChildren) => <footer>{children}</footer>,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
   ScrollArea: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ children, ...props }, ref) => <div ref={ref} {...props}>{children}</div>,
+  ),
+  SearchField: forwardRef<HTMLInputElement, {
+    leadingIcon?: React.ReactNode;
+    value: string;
+    onValueChange: (value: string) => void;
+    placeholder?: string;
+  } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'>>(
+    ({ leadingIcon: _leadingIcon, onValueChange, value, ...props }, ref) => (
+      <input
+        ref={ref}
+        value={value}
+        onChange={event => onValueChange(event.target.value)}
+        {...props}
+      />
+    ),
   ),
 }));
 

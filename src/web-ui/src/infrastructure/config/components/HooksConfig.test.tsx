@@ -47,18 +47,20 @@ vi.mock('@bitfun/ui', () => ({
   Switch: ({ checked, disabled, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
   ),
-  Modal: ({ children, isOpen, title }: {
+  Dialog: ({ children, open, 'aria-label': ariaLabel }: {
     children: React.ReactNode;
-    isOpen: boolean;
-    title?: string;
-  }) => (isOpen ? <div role="dialog" aria-label={title}>{children}</div> : null),
-}));
-
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
+    open: boolean;
+    'aria-label'?: string;
+  }) => (open ? <div role="dialog" aria-label={ariaLabel}>{children}</div> : null),
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: () => <button type="button" aria-label="Close" />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
 }));
 
 vi.mock('./common', () => ({
+  ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (
     <header><h1>{title}</h1><p>{subtitle}</p></header>

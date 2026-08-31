@@ -2,7 +2,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { CheckCheck, Loader2 } from 'lucide-react';
-import { Icon, IconButton, Modal, ScrollArea, SearchField } from '@bitfun/ui';
+import {
+  Icon,
+  IconButton,
+  ScrollArea,
+  SearchField,
+  Dialog,
+  DialogBody,
+  DialogHeader,
+} from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -356,12 +364,14 @@ export const NotificationCenter: React.FC = () => {
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      showCloseButton={false}
-      size="large"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleClose(); }}
+      size="lg"
     >
+      <DialogHeader>
+      </DialogHeader>
+      <DialogBody inset="none">
       <div className="notification-center" data-testid="notification-center" data-bf-component="notification" data-bf-part="centerRoot">
         
         <div className="notification-center__header" data-bf-component="notification" data-bf-part="centerHeader">
@@ -491,7 +501,8 @@ export const NotificationCenter: React.FC = () => {
           )}
         </ScrollArea>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

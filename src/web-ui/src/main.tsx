@@ -11,7 +11,7 @@ import { PeerDeviceProvider } from "./infrastructure/peer-device/PeerDeviceConte
 import { PeerHostInvokeBridge } from "./infrastructure/peer-device/PeerHostInvokeBridge";
 import { PeerDirectoryPickerHost } from "./infrastructure/peer-device/PeerDirectoryPickerHost";
 import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
-import { DesignSystemThemeBridge } from "./infrastructure/design-system";
+import { BitFunDesignSystemProvider } from "./infrastructure/design-system";
 import "./app/styles/index.scss";
 
 // Font: Noto Sans SC is loaded via a <link> tag in index.html.
@@ -349,11 +349,11 @@ async function startApplication(): Promise<void> {
   if (isAgentCompanionWindow) {
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <AppErrorBoundary>
-        <DesignSystemThemeBridge>
-          <I18nProvider>
+        <I18nProvider>
+          <BitFunDesignSystemProvider>
             <AgentCompanionDesktopPet />
-          </I18nProvider>
-        </DesignSystemThemeBridge>
+          </BitFunDesignSystemProvider>
+        </I18nProvider>
       </AppErrorBoundary>
     );
     logElapsed(log, 'Startup step completed', renderStartedAt, {
@@ -371,8 +371,8 @@ async function startApplication(): Promise<void> {
 
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <AppErrorBoundary>
-      <DesignSystemThemeBridge>
-        <I18nProvider>
+      <I18nProvider>
+        <BitFunDesignSystemProvider>
           <WorkspaceProvider>
             <PeerDeviceProvider>
               <PeerHostInvokeBridge />
@@ -380,8 +380,8 @@ async function startApplication(): Promise<void> {
               <App />
             </PeerDeviceProvider>
           </WorkspaceProvider>
-        </I18nProvider>
-      </DesignSystemThemeBridge>
+        </BitFunDesignSystemProvider>
+      </I18nProvider>
     </AppErrorBoundary>
   );
   logElapsed(log, 'Startup step completed', renderStartedAt, {

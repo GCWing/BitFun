@@ -57,7 +57,7 @@ export const ConfigTextarea = forwardRef<HTMLTextAreaElement, ConfigTextareaProp
     <Textarea
       ref={ref}
       label={labelIcon ? undefined : label} 
-      error={!!error}
+      invalid={Boolean(error)}
       errorMessage={error}
       hint={hint}
       showCount={showCount}

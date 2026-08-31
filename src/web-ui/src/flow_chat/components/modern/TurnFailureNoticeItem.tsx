@@ -1,6 +1,6 @@
 import React, { useCallback, useId, useMemo, useState } from 'react';
 import { AlertCircle, Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   getAiErrorPresentation,

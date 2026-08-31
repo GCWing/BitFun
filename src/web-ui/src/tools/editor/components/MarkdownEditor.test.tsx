@@ -13,18 +13,6 @@ vi.mock('lucide-react', () => ({
   Copy: () => <Icon name="copy" />,
 }));
 
-vi.mock('@/component-library', () => ({
-  IconButton: ({
-    children,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button type="button" data-component="icon-button" {...props}>
-      {children}
-    </button>
-  ),
-  CubeLoading: ({ text }: { text: string }) => <div>{text}</div>,
-}));
-
 vi.mock('@bitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -40,6 +28,7 @@ vi.mock('@bitfun/ui', () => ({
   }) => (
     <button type="button" data-component="icon-button" {...props}>{icon}</button>
   ),
+  LoadingState: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   SegmentedControl: ({
     options,
     value,

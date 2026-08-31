@@ -267,7 +267,6 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
               >
                 <Input
                   ref={pathInputRef}
-                  inputClassName="peer-directory-browser__path-input"
                   value={pathInputValue}
                   onValueChange={setPathInputValue}
                   onBlur={handleCommitPathInput}

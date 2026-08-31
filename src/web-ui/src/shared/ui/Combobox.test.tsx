@@ -2,7 +2,17 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Combobox, Field, Modal, type ComboboxProps } from '@bitfun/ui';
+import {
+  Combobox,
+  Field,
+  type ComboboxProps,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 
 describe('public Combobox product integration', () => {
   let root: Root;
@@ -42,7 +52,19 @@ describe('public Combobox product integration', () => {
   });
   it('closes only the picker on Escape inside a modal and restores trigger focus', () => {
     const close = vi.fn();
-    act(() => root.render(<Modal isOpen title="Provider" onClose={close}><Combobox label="Models" /></Modal>));
+    act(() => root.render(<Dialog
+      open
+      onOpenChange={(nextOpen) => { if (!nextOpen) close(); }}
+      size="md"
+    >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{"Provider"}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none"><Combobox label="Models" />      </DialogBody>
+    </Dialog>));
     const button = document.querySelector<HTMLButtonElement>('button[role="combobox"]')!;
     act(() => button.click()); key(input(), 'Escape');
     expect(close).not.toHaveBeenCalled(); expect(document.activeElement).toBe(button);

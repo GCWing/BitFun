@@ -69,20 +69,6 @@ vi.mock('@/shared/notification-system', () => ({
   },
 }));
 
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
-  ConfigPageMessage: ({
-    message,
-  }: {
-    message: { text: string } | null;
-  }) => message ? <div>{message.text}</div> : null,
-  ConfigPageRefreshButton: ({
-    onClick,
-  }: {
-    onClick: () => void;
-  }) => <button type="button" onClick={onClick}>refresh</button>,
-}));
-
 vi.mock('@bitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -154,6 +140,11 @@ vi.mock('@bitfun/ui', () => ({
 }));
 
 vi.mock('./common', () => ({
+  ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
+  ConfigMessage: ({ message }: { message: { text: string } | null }) => message ? <div>{message.text}</div> : null,
+  ConfigRefreshButton: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick}>refresh</button>
+  ),
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (
     <header>

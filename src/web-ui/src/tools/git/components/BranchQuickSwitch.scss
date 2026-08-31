@@ -1,13 +1,11 @@
 /** Branch picker and its guarded-checkout recovery dialogs. */
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .branch-quick-switch {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: fixed;
-  z-index: $z-popover;
+  z-index: var(--bf-layer-popover);
   box-sizing: border-box;
   width: min(280px, calc(100vw - 16px));
   overflow: hidden;
@@ -27,7 +25,7 @@
 
 .branch-quick-switch__list {
   max-height: min(280px, calc(100vh - 96px));
-  padding: $size-gap-1;
+  padding: var(--bf-space-1);
 }
 
 .branch-quick-switch__loading,
@@ -131,7 +129,7 @@
     line-height: var(--bf-line-height-base);
   }
 
-  > [data-bf-component='input'] {
+  > .branch-switch-commit-dialog__input {
     width: 100%;
   }
 

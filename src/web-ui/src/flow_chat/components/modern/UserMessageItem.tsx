@@ -26,7 +26,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
@@ -96,9 +96,8 @@ function buildPresentationRerunPayload(presentation: ComposerPresentation): {
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId, absoluteTurnIndex, turnStatus, steeringStatus }) => {
-    const { t, formatDate } = useI18n('flow-chat');
+    const { t } = useI18n('flow-chat');
     const {
-      config,
       sessionId,
       activeSessionOverride,
       allowUserMessageRollback = true,
@@ -506,14 +505,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         data-status={resolvedTurnStatus || ''}
         data-failed={isFailed ? 'true' : 'false'}
       >
-        {config?.showTimestamps && (
-          <div className="user-message-item__timestamp" data-bf-component="user-message-item" data-bf-part="timestamp">
-            {formatDate(new Date(message.timestamp), {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </div>
-        )}
         {isEditing ? (
           <UserMessageEditComposer
             value={editDraft}

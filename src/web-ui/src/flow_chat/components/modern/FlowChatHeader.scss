@@ -1,14 +1,12 @@
 /* FlowChat header styling aligned with side panel headers. */
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .flowchat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: $size-gap-1;
-  padding: 0 $size-gap-3;
+  gap: var(--bf-space-1);
+  padding: 0 var(--bf-space-3);
 
   // Opaque bar stacked above the transcript, so transcript geometry stays
   // independent of the header.
@@ -17,7 +15,7 @@
   height: 36px;
   min-height: 36px;
   flex-shrink: 0;
-  transition: background-color $motion-base $easing-standard;
+  transition: background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   position: relative;
   z-index: 10;
 
@@ -26,7 +24,7 @@
     height: 100%;
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     max-width: 100%;
   }
 
@@ -34,7 +32,7 @@
     min-width: 0;
 
     &--left {
-      margin-right: $size-gap-1;
+      margin-right: var(--bf-space-1);
     }
   }
 
@@ -144,7 +142,7 @@
   &__search {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-width: min(320px, 38vw);
     max-width: min(420px, 42vw);
   }
@@ -152,17 +150,6 @@
   &__search-field {
     flex: 1;
     min-width: 0;
-
-    &[data-bf-component='input'] {
-      gap: 0;
-      padding-right: 2px;
-    }
-
-    [data-bf-part='trailing'] {
-      display: flex;
-      align-items: center;
-      padding: 0;
-    }
   }
 
   &__search-prefix-icon {
@@ -212,7 +199,7 @@
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     opacity: 0.8;
-    transition: opacity $motion-base $easing-standard, background $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard), background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     line-height: 0;
 
     &:hover:not(:disabled) {
@@ -227,7 +214,7 @@
   }
 
   &__session-overview-panel {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
     position: fixed;
     width: min(360px, calc(100vw - 16px));
@@ -235,7 +222,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
   }
@@ -244,8 +231,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
     border-bottom: 1px solid var(--bf-color-border-default);
     font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-color-content-secondary);
@@ -254,7 +241,7 @@
   &__session-overview-panel-heading {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-width: 0;
   }
 
@@ -274,13 +261,13 @@
     flex-direction: column;
     min-height: 0;
     overflow-y: auto;
-    padding: 2px $size-gap-2 $size-gap-1;
+    padding: 2px var(--bf-space-2) var(--bf-space-1);
     scrollbar-gutter: stable;
   }
 
   &__session-overview-section {
     min-width: 0;
-    padding: 2px 0 $size-gap-1;
+    padding: 2px 0 var(--bf-space-1);
     border-bottom: 1px solid var(--bf-color-border-subtle);
 
     &:last-child {
@@ -291,20 +278,20 @@
   &__session-overview-section-header {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-height: 28px;
-    padding: 2px $size-gap-1;
+    padding: 2px var(--bf-space-1);
 
     &--action {
       width: 100%;
       border: 0;
-      border-radius: $size-radius-base;
+      border-radius: var(--bf-radius-base);
       background: transparent;
       color: inherit;
       font: inherit;
       text-align: left;
       cursor: pointer;
-      transition: background $motion-base $easing-standard;
+      transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
       &:hover:not(:disabled),
       &:focus-visible {
@@ -326,7 +313,7 @@
     min-width: 0;
     display: inline-flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex: 1;
     overflow: hidden;
     color: var(--bf-color-content-primary);
@@ -361,11 +348,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     width: 100%;
     min-height: 44px;
     box-sizing: border-box;
-    padding: $size-gap-2 $size-gap-3;
+    padding: var(--bf-space-2) var(--bf-space-3);
     border: 0;
     background: transparent;
     color: var(--bf-color-content-muted);
@@ -373,10 +360,10 @@
     text-align: center;
 
     &--action {
-      border-radius: $size-radius-base;
+      border-radius: var(--bf-radius-base);
       font-family:var(--bf-font-family-sans);
       cursor: pointer;
-      transition: background $motion-base $easing-standard;
+      transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
       &:hover,
       &:focus-visible {
@@ -393,25 +380,25 @@
   &__pull-request-list {
     display: flex;
     flex-direction: column;
-    padding: 0 $size-gap-1;
+    padding: 0 var(--bf-space-1);
   }
 
   &__pull-request-item {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     width: 100%;
     min-height: 30px;
-    padding: 4px $size-gap-2;
+    padding: 4px var(--bf-space-2);
     border: 0;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: transparent;
     color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
     font-size: var(--bf-type-flow-control-font-size);
     text-align: left;
     cursor: pointer;
-    transition: background $motion-base $easing-standard;
+    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     > span {
       min-width: 0;
@@ -441,7 +428,7 @@
   &__background-command-list {
     display: flex;
     flex-direction: column;
-    padding: 0 $size-gap-1;
+    padding: 0 var(--bf-space-1);
   }
 
   &__background-command-list-item-button {
@@ -450,14 +437,14 @@
     align-items: flex-start;
     gap: 2px;
     width: 100%;
-    padding: $size-gap-2;
+    padding: var(--bf-space-2);
     border: 0;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: transparent;
     color: var(--bf-color-content-primary);
     text-align: left;
     cursor: pointer;
-    transition: background $motion-base $easing-standard;
+    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
       background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
@@ -469,8 +456,8 @@
     align-items: stretch;
     gap: 2px;
     width: 100%;
-    border-radius: $size-radius-base;
-    transition: background $motion-base $easing-standard;
+    border-radius: var(--bf-radius-base);
+    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
       background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
@@ -495,7 +482,7 @@
     margin-right: 2px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   &__background-command-list-item:hover &__background-command-actions,
@@ -528,7 +515,7 @@
   &__background-command-list-title {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     width: 100%;
     font-size: var(--bf-type-flow-control-font-size);
     color: inherit;
@@ -564,11 +551,11 @@
     z-index: 2;
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex-shrink: 0;
 
     &--left {
-      margin-right: $size-gap-2;
+      margin-right: var(--bf-space-2);
       overflow: visible;
     }
   }

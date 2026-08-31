@@ -2,10 +2,6 @@
  * SessionScene styles — ChatPane + Resizer + AuxPane layout.
  * Resizer styles moved here from WorkspaceShell.scss.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
-
 .bitfun-session-scene {
   display: flex;
   flex-direction: column;
@@ -84,8 +80,8 @@
   box-sizing: border-box;
   max-width: 1200px;
 
-  transition: width $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  transition: width var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &--collapsed {
     min-width: 0;
@@ -164,7 +160,7 @@
   position: relative;
   cursor: col-resize;
   user-select: none;
-  z-index: $z-sticky;
+  z-index: var(--bf-layer-sticky);
   background: var(--bf-color-border-subtle);
 
   &::before {
@@ -179,9 +175,9 @@
 
   // Explicit property list (no `transition: all`): only the collapse width
   // and cheap paint properties animate; hover feedback uses transform below.
-  transition: width $motion-base $easing-standard,
-              opacity $motion-base $easing-standard,
-              background-color $motion-base $easing-standard;
+  transition: width var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &--collapsed {
     width: 0;
@@ -203,11 +199,11 @@
     width: 2px;
     height: 50px;
     background: transparent;
-    border-radius: $size-radius-sm;
-    transition: opacity $motion-base $easing-standard,
-                background-color $motion-base $easing-standard,
-                box-shadow $motion-base $easing-standard,
-                transform $motion-base $easing-standard;
+    border-radius: var(--bf-radius-sm);
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     opacity: 0;
     pointer-events: none;
   }
@@ -218,13 +214,13 @@
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
-    transition: opacity $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     pointer-events: none;
   }
 
   &__icon {
     color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
-    transition: color $motion-base $easing-standard;
+    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   &:hover,
@@ -296,8 +292,8 @@
   position: relative;
   box-sizing: border-box;
   border-top: 1px solid var(--bf-color-border-subtle);
-  transition: height $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  transition: height var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &--collapsed {
     min-height: 0;
@@ -320,12 +316,12 @@
   position: relative;
   cursor: row-resize;
   user-select: none;
-  z-index: $z-sticky;
+  z-index: var(--bf-layer-sticky);
   background: var(--bf-color-border-subtle);
   transition:
-    background-color $motion-base $easing-standard,
-    height $motion-base $easing-standard,
-    opacity $motion-base $easing-standard;
+    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    height var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &::before {
     content: '';
@@ -357,11 +353,11 @@
     width: 72px;
     height: 2px;
     background: transparent;
-    border-radius: $size-radius-sm;
-    transition: opacity $motion-base $easing-standard,
-                background-color $motion-base $easing-standard,
-                box-shadow $motion-base $easing-standard,
-                transform $motion-base $easing-standard;
+    border-radius: var(--bf-radius-sm);
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     opacity: 0;
     pointer-events: none;
   }
@@ -372,13 +368,13 @@
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
-    transition: opacity $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     pointer-events: none;
   }
 
   &__icon {
     color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
-    transition: color $motion-base $easing-standard;
+    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   &:hover,

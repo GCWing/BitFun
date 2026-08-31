@@ -13,9 +13,7 @@ export interface ComposerProps
   children: ReactNode;
   contextBar?: ReactNode;
   disabled?: boolean;
-  editorClassName?: string;
   invalid?: boolean;
-  surfaceClassName?: string;
   toolbar?: ReactNode;
 }
 
@@ -34,9 +32,7 @@ export const Composer = forwardRef<HTMLFieldSetElement, ComposerProps>(
     className,
     contextBar,
     disabled = false,
-    editorClassName,
     invalid = false,
-    surfaceClassName,
     toolbar,
     ...props
   }, ref) {
@@ -61,14 +57,8 @@ export const Composer = forwardRef<HTMLFieldSetElement, ComposerProps>(
             {contextBar}
           </div>
         )}
-        <div
-          className={classNames(styles.surface, surfaceClassName)}
-          data-bf-part="surface"
-        >
-          <div
-            className={classNames(styles.editor, editorClassName)}
-            data-bf-part="editor"
-          >
+        <div className={styles.surface} data-bf-part="surface">
+          <div className={styles.editor} data-bf-part="editor">
             {children}
           </div>
           {toolbar !== undefined && toolbar !== null && (

@@ -1,4 +1,15 @@
-import { Alert, Button, Checkbox, Icon, Input, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Icon,
+  Input,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -390,17 +401,18 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={handleModalClose}
-      size="medium"
-      closeOnOverlayClick={!targetMutationInProgress}
-      showCloseButton={!targetMutationInProgress}
-      // The dialog renders its own heading, so point the modal's label at it
-      // rather than at the chrome title it no longer uses.
-      ariaLabelledBy={DIALOG_TITLE_ID}
-      testId="dispatch-install-dialog"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleModalClose(); }}
+      size="md"
+      closeOnPointerOutside={!targetMutationInProgress}
+      aria-labelledby={DIALOG_TITLE_ID}
+      data-testid="dispatch-install-dialog"
     >
+      <DialogHeader>
+        {!targetMutationInProgress && <DialogClose />}
+      </DialogHeader>
+      <DialogBody inset="none">
       <div
         className="dispatch-install-dialog"
         data-bf-component="dispatch-install-dialog"
@@ -425,11 +437,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           data-bf-part="body"
         >
           {error ? (
-            <Alert type="error" message={error} closable onClose={() => setError(null)} />
+            <Alert tone="error" message={error} closable onClose={() => setError(null)} />
           ) : null}
           {preparationOutcome ? (
             <Alert
-              type="success"
+              tone="success"
               message={t(
                 preparationOutcome === 'synced'
                   ? 'dispatch.prepareSucceededWithAccount'
@@ -439,7 +451,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           ) : null}
           {baseRefError ? (
             <Alert
-              type="error"
+              tone="error"
               message={baseRefError}
               closable
               onClose={() => setBaseRefError(null)}
@@ -534,7 +546,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               </>
             ) : null}
             {installUnavailable ? (
-              <Alert type="warning" message={t('dispatch.installUnavailable')} />
+              <Alert tone="warning" message={t('dispatch.installUnavailable')} />
             ) : null}
             {cliReady && provisionRetryAvailable ? (
               <div className="dispatch-install-dialog__retry">
@@ -664,6 +676,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           </Button>
         </div>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };

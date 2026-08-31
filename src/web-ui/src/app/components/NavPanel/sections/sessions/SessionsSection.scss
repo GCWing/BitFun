@@ -4,8 +4,6 @@
  * Uses the parent BEM block (.bitfun-nav-panel) to stay consistent with the
  * rest of the navigation styling, while being self-contained in this file.
  */
-
-@use '../../../../../component-library/styles/tokens.scss' as *;
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../../../styles/workspace-shell-surfaces' as shell-surfaces;
 
@@ -15,16 +13,16 @@
     // stylesheets that indent rows (see WorkspaceListSection's 30px icon
     // gutter) re-declare this so the toggle label can never drift off the rail
     // the session titles sit on.
-    --bf-nav-session-rail: #{$size-gap-1};
+    --bf-nav-session-rail: var(--bf-space-1);
 
     display: flex;
     flex-direction: column;
     min-width: 0;
     max-width: 100%;
-    padding: 2px $size-gap-1 2px;
+    padding: 2px var(--bf-space-1) 2px;
     gap: calc(var(--bf-space-1) / 2);
     // No vertical margin: the list owns the separation between adjacent row surfaces.
-    margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);
+    margin: 0 var(--bf-space-1) 0 calc(var(--bf-space-1) + 4px);
 
     &.is-flat-workspace-view {
       margin: 0 6px;
@@ -41,7 +39,7 @@
   &__inline-empty {
     font-size: var(--bf-font-size-xs);
     color: var(--bf-color-content-muted);
-    padding: 4px $size-gap-1;
+    padding: 4px var(--bf-space-1);
     font-style: italic;
     text-align: center;
 
@@ -50,7 +48,7 @@
       min-width: 0;
       min-height: 40px;
       align-items: center;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
       font-style: normal;
     }
   }
@@ -79,7 +77,7 @@
     gap: 5px;
     min-width: 0;
     height: 24px;
-    padding: 0 $size-gap-1;
+    padding: 0 var(--bf-space-1);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
 
@@ -103,7 +101,7 @@
     min-width: 0;
     max-width: 100%;
     height: 26px;
-    padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);
+    padding: 0 var(--bf-space-1) 0 var(--bf-nav-session-rail);
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -116,8 +114,8 @@
     text-align: left;
     overflow: hidden;
     position: relative;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -136,7 +134,7 @@
 
     &.is-assistant-session {
       height: 40px;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
       padding-block: 4px;
     }
 
@@ -358,7 +356,7 @@
     height: 10px;
     flex-shrink: 0;
     transform-origin: center center;
-    transition: opacity $motion-fast $easing-standard, transform $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &.is-bot {
       animation: bitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
@@ -423,8 +421,8 @@
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    transition: opacity $motion-fast $easing-standard,
-                visibility $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                visibility var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     .bitfun-nav-panel__inline-item:hover &,
     &.is-open {
@@ -446,8 +444,8 @@
     background: transparent;
     color: var(--bf-color-content-primary);
     cursor: pointer;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover,
     &.is-open {
@@ -472,25 +470,6 @@
   &__inline-item-edit-field {
     flex: 1;
     min-width: 0;
-
-    &[data-bf-component='input'] {
-      height: 18px;
-      min-height: 18px;
-      padding: 0 6px;
-      border-radius: 4px;
-      border-color: var(--bf-color-border-subtle);
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 55%, transparent);
-
-      &:focus-within {
-        border-color: color-mix(in srgb, var(--bf-color-content-primary) 35%, var(--bf-color-border-subtle));
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
-      }
-    }
-
-    input {
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-compact);
-    }
   }
 
   // Reads as the next row of the list rather than a floating footer: same left
@@ -502,7 +481,7 @@
     justify-content: flex-start;
     gap: 5px;
     height: 22px;
-    padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);
+    padding: 0 var(--bf-space-1) 0 var(--bf-nav-session-rail);
     margin-top: 1px;
     border: none;
     border-radius: 4px;
@@ -513,8 +492,8 @@
     cursor: pointer;
     width: 100%;
     min-width: 0;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -541,8 +520,8 @@
   &__inline-toggle-chevron {
     flex: 0 0 auto;
     opacity: 0.65;
-    transition: opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   // Grows to fill the row so the count chip and chevron ride the trailing edge,
@@ -570,8 +549,8 @@
     font-weight: var(--bf-font-weight-semibold);
     font-variant-numeric: tabular-nums;
     line-height: var(--bf-line-height-none);
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &__inline-toggle:hover &__inline-toggle-chevron,
@@ -604,8 +583,8 @@
     color: var(--bf-color-content-primary);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &.confirm:hover {
       color: var(--bf-color-status-success-content);
@@ -746,14 +725,14 @@
 // response. Running/attention motion remains because it communicates state.
 .bitfun-nav-panel {
   &__inline-list {
-    margin: 0 6px 0 $size-gap-3;
+    margin: 0 6px 0 var(--bf-space-3);
     padding: 2px 0;
   }
 
   &__inline-item {
     height: 28px;
     padding: 0 6px 0 var(--bf-nav-session-rail);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -778,7 +757,7 @@
 
   &__inline-item-action-btn,
   &__inline-item-edit-btn {
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -792,7 +771,7 @@
   // Press feedback matches a full-width row, not the 20px icon buttons: the
   // icon-button 0.94 squish travels far too much across the panel width.
   &__inline-toggle {
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -824,9 +803,9 @@
 
   &__inline-item {
     height: 30px;
-    gap: $size-gap-2;
-    padding-right: $size-gap-2;
-    border-radius: $size-radius-base;
+    gap: var(--bf-space-2);
+    padding-right: var(--bf-space-2);
+    border-radius: var(--bf-radius-base);
     @include nav-font.nav-panel-text-row;
 
     &:hover,

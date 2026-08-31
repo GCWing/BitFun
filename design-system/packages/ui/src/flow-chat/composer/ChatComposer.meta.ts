@@ -14,7 +14,6 @@ export const chatComposerMeta = {
     { name: "endActions", type: "ReactNode" },
     { defaultValue: "false", name: "busy", type: "boolean" },
     { defaultValue: "false", name: "disabled", type: "boolean" },
-    { name: "surfaceClassName", type: "string" },
   ],
   states: ["default", "expanded", "queued", "focus-visible", "busy", "disabled"],
   tokens: [

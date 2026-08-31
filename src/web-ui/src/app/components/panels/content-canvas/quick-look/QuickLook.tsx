@@ -18,11 +18,10 @@ import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useTranslation } from 'react-i18next';
 
-import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import type { PanelContent } from '../types';
 import './QuickLook.scss';
-import { Icon, Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip, useDismissibleLayer } from '@bitfun/ui';
 
 export interface QuickLookProps {
   /** Whether visible */
@@ -57,9 +56,9 @@ export const QuickLook: React.FC<QuickLookProps> = ({
 
   useDismissibleLayer({
     enabled: isOpen,
+    layerRef: containerRef,
     scope: 'canvas',
     onDismiss: onClose,
-    id: 'canvas-quick-look',
   });
 
   // Adjust position to stay within viewport
@@ -97,27 +96,6 @@ export const QuickLook: React.FC<QuickLookProps> = ({
     if (!isOpen) return;
     containerRef.current?.focus({ preventScroll: true });
   }, [isOpen]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-
-    // Delay listener to avoid immediate trigger
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onClose]);
 
   // Content change handling
   const handleContentChange = useCallback((newContent: PanelContent | null) => {

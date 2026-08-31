@@ -4,7 +4,19 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
-import { Button, Icon, IconButton, Modal, Textarea, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Textarea,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileJson, Play, Square, AlertTriangle, MinusCircle, KeyRound } from 'lucide-react';
@@ -1337,7 +1349,7 @@ const McpToolsConfig: React.FC = () => {
                 data-bf-component="mcp-tools-config"
                 data-bf-part="jsonTextarea"
                 spellCheck={false}
-                error={!!jsonLintError}
+                invalid={Boolean(jsonLintError)}
                 errorMessage={
                   jsonLintError
                     ? tMcp('jsonEditor.lintError', {
@@ -1412,17 +1424,20 @@ const McpToolsConfig: React.FC = () => {
 
         <ExternalMcpOverview />
       </ConfigPageContent>
-      <Modal
-        isOpen={desktopConfigAvailable && !!authDialogServer}
-        onClose={handleCloseAuthDialog}
-        title={
-          authDialogServer
-            ? tMcp('modal.remoteAuthTitle', { serverName: authDialogServer.name })
-            : tMcp('actions.remoteAuth')
-        }
-        size="medium"
-        showCloseButton={!authSubmitting && !oauthCancelling}
+      <Dialog
+        open={desktopConfigAvailable && !!authDialogServer}
+        onOpenChange={(nextOpen) => { if (!nextOpen) handleCloseAuthDialog(); }}
+        size="md"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{authDialogServer
+            ? tMcp('modal.remoteAuthTitle', { serverName: authDialogServer.name })
+            : tMcp('actions.remoteAuth')}</DialogTitle>
+          </DialogHeading>
+          {!authSubmitting && !oauthCancelling && <DialogClose />}
+        </DialogHeader>
+        <DialogBody inset="none">
         {authDialogServer && (
           <div className="bitfun-mcp-tools__json-editor" data-bf-component="mcp-tools-config" data-bf-part="authEditor">
             {authDialogServer.oauthEnabled && (
@@ -1504,7 +1519,8 @@ const McpToolsConfig: React.FC = () => {
             </div>
           </div>
         )}
-      </Modal>
+              </DialogBody>
+      </Dialog>
     </ConfigPageLayout>
   );
 };

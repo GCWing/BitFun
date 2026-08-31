@@ -1,7 +1,7 @@
 import { Button, IconButton } from '@bitfun/ui';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ClipboardCopy, Copy, Keyboard, Loader2, Terminal } from 'lucide-react';
-import { Checkbox, Textarea, Tooltip } from '@/component-library';
+import { Checkbox, Textarea, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { agentAPI } from '@/infrastructure/api';
 import type {
@@ -359,7 +359,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
             <span className="background-command-output-panel__sanitize-toggle-trigger">
               <Checkbox
                 className="background-command-output-panel__sanitize-toggle"
-                size="small"
+                size="sm"
                 checked={sanitizeOutput}
                 onChange={(event) => setSanitizeOutput(event.target.checked)}
                 label={t('backgroundCommandOutput.simplifiedView')}
@@ -425,7 +425,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
               <div data-bf-component="background-command-output-panel" data-bf-part="inputOptions" className="background-command-output-panel__input-options">
                 <Checkbox
                   className="background-command-output-panel__input-option"
-                  size="small"
+                  size="sm"
                   checked={inputAppendEnter}
                   onChange={(event) => setInputAppendEnter(event.target.checked)}
                   disabled={!canSendInput || isSendingInput}
@@ -433,7 +433,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                 />
                 <Checkbox
                   className="background-command-output-panel__input-option"
-                  size="small"
+                  size="sm"
                   checked={maskInput}
                   onChange={(event) => setMaskInput(event.target.checked)}
                   disabled={!canSendInput || isSendingInput}

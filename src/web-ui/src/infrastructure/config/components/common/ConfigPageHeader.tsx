@@ -25,8 +25,7 @@ export const ConfigPageHeader: React.FC<ConfigPageHeaderProps> = ({
           <div className="bitfun-config-page-header__info" data-bf-component="config" data-bf-part="pageHeaderInfo">
             <PageHeader
               level={2}
-              size="lg"
-              headingClassName="bitfun-config-page-header__title"
+              size="display"
               title={<span data-bf-component="config" data-bf-part="pageHeaderTitle">{title}</span>}
               description={subtitle ? (
                 <span className="bitfun-config-page-header__subtitle" data-bf-component="config" data-bf-part="pageHeaderSubtitle">{subtitle}</span>

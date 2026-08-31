@@ -8,7 +8,18 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { ActionCard, Button, Icon, KeyHint, Modal, SearchField, type IconName, type IconSize, ScrollArea } from '@bitfun/ui';
+import {
+  ActionCard,
+  Button,
+  Icon,
+  KeyHint,
+  SearchField,
+  type IconName,
+  type IconSize,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+} from '@bitfun/ui';
 import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, SlidersHorizontal, Users, type LucideIcon } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
@@ -440,7 +451,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       key={candidate}
                       size="sm"
                       variant={selected ? 'fill' : 'outline'}
-                      className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                      className={`global-search__scope global-search__scope--system${selected ? ' is-selected' : ''}`}
                       aria-pressed={selected}
                       disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
                       onClick={() => {
@@ -455,7 +466,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     <button
                       key={candidate}
                       type="button"
-                      className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                      className={`global-search__scope global-search__scope--native${selected ? ' is-selected' : ''}`}
                       aria-pressed={selected}
                       disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
                       onClick={() => {
@@ -734,28 +745,24 @@ const GlobalSearchRoot: React.FC = () => {
   }, [toggleSearch]);
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={closeSearch}
-      size="xlarge"
-      radius="2xl"
-      backdropBlur="subtle"
-      contentPadding="md"
-      contentLayout="flex"
-      showCloseButton={false}
-      overlayClassName="global-search-overlay"
-      contentClassName="global-search-modal-content"
-      ariaLabel={tCommon('nav.search.dialogLabel')}
-      testId="global-search-dialog"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen) closeSearch(); }}
+      size="xl"
+      aria-label={tCommon('nav.search.dialogLabel')}
+      className="global-search-dialog"
+      data-testid="global-search-dialog"
     >
-      <GlobalSearchContent
-        active={open}
-        autoFocus
-        initialQuery={initialQuery}
-        onBeforeActivate={closeSearch}
-        variant="modal"
-      />
-    </Modal>
+      <DialogBody className="global-search-modal-content">
+        <GlobalSearchContent
+          active={open}
+          autoFocus
+          initialQuery={initialQuery}
+          onBeforeActivate={closeSearch}
+          variant="modal"
+        />
+      </DialogBody>
+    </Dialog>
   );
 };
 

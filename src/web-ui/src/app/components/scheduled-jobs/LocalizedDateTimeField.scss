@@ -1,11 +1,10 @@
-@use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .bf-datetime-field {
   position: relative;
   display: flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   min-width: 0;
 
   &__input {
@@ -15,7 +14,7 @@
 }
 
 .bf-datetime-picker {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: fixed;
   z-index: 9999;
@@ -23,14 +22,14 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: $size-gap-2;
-  padding: $size-gap-3;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-3);
 
   &__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__month {
@@ -63,13 +62,13 @@
     height: 28px;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: transparent;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-xs);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
-    transition: background $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       background: var(--bf-color-action-quiet-hover);
@@ -99,8 +98,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
-    padding-top: $size-gap-2;
+    gap: var(--bf-space-2);
+    padding-top: var(--bf-space-2);
     border-top: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 70%, transparent);
   }
 }

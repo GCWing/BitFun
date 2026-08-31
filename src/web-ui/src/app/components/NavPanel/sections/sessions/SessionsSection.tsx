@@ -9,7 +9,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Bot, Loader2, Archive, FileDown } from 'lucide-react';
-import { PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
@@ -2041,7 +2041,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </button>
       )}
 
-      <PresenceBoundary active={scheduledJobsSession != null}>
+      <RetainedMountBoundary present={scheduledJobsSession != null}>
         {retainedScheduledJobsSession && (
           <Suspense fallback={null}>
             <ScheduledJobsModal
@@ -2060,7 +2060,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             />
           </Suspense>
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </div>
   );
 };

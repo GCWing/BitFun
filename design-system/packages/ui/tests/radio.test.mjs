@@ -26,7 +26,7 @@ test("Radio exposes normalized sizes and states", () => {
     disabled: true,
     invalid: true,
     label: "Unavailable",
-    size: "small",
+    size: "sm",
   }));
   assert.match(markup, /data-size="sm"/);
   assert.match(markup, /data-disabled="true"/);

@@ -1,10 +1,8 @@
-@use '../../../component-library/styles/tokens' as *;
-
 .quick-actions-config {
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-6;
+    gap: var(--bf-space-6);
   }
 
   // ── List ────────────────────────────────────────────────────────────────
@@ -105,8 +103,8 @@
   &__modal-body {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-4;
-    padding-block: $size-gap-4 $size-gap-3;
+    gap: var(--bf-space-4);
+    padding-block: var(--bf-space-4) var(--bf-space-3);
   }
 
   &__modal-icon-preview {
@@ -157,9 +155,9 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: $size-gap-2;
-    margin-top: $size-gap-3;
-    padding-top: $size-gap-3;
+    gap: var(--bf-space-2);
+    margin-top: var(--bf-space-3);
+    padding-top: var(--bf-space-3);
     border-top: 1px solid var(--bf-color-border-subtle);
   }
 }

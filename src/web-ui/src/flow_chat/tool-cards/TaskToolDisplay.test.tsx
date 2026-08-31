@@ -67,25 +67,16 @@ vi.mock('react-i18next', () => {
   };
 });
 
-vi.mock('../../component-library', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button type="button" disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  ),
-  CubeLoading: () => <span data-testid="cube-loading" />,
-}));
+vi.mock('@bitfun/ui', async () => {
+  const actual = await vi.importActual<typeof import('@bitfun/ui')>('@bitfun/ui');
+  return {
+    ...actual,
+    Spinner: () => <span data-testid="spinner" />,
+  };
+});
 
-vi.mock('@/component-library/components/Markdown/Markdown', () => ({
-  Markdown: ({ content }: { content: string }) => <div>{content}</div>,
+vi.mock('@/infrastructure/markdown', () => ({
+  MarkdownRenderer: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
 vi.mock('@/shared/services/reviewTeamService', () => ({

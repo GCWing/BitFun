@@ -161,7 +161,6 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
           'bitfun-device-switcher',
           isRemote && 'is-remote',
         ].filter(Boolean).join(' ')}
-        triggerClassName="bitfun-device-switcher__trigger"
         data-testid="device-surface-switcher"
         data-bf-component="peer-device"
         data-bf-part="switcher"

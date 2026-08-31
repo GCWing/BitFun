@@ -18,12 +18,12 @@ test("Checkbox keeps native semantics and independent content", () => {
   assert.match(markup, /data-bf-component="checkbox"/);
 });
 
-test("Checkbox exposes migration-compatible sizes and states", () => {
+test("Checkbox exposes canonical sizes and states", () => {
   const markup = renderToStaticMarkup(createElement(Checkbox, {
     disabled: true,
-    error: true,
+    invalid: true,
     indeterminate: true,
-    size: "small",
+    size: "sm",
   }));
   assert.match(markup, /data-size="sm"/);
   assert.match(markup, /data-disabled="true"/);

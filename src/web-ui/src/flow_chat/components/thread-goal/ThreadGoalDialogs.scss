@@ -1,8 +1,5 @@
-@use '../../../component-library/styles/tokens' as *;
-
-// Modal body: the shared large padding contract sets the inset; add vertical breathing room.
-.bitfun-thread-goal-modal__body[data-bf-component='modal'][data-bf-part='content'][data-bf-padding='lg'] {
-  padding: $size-gap-5 $size-gap-6 $size-gap-6 !important;
+.bitfun-thread-goal-modal__body {
+  padding: var(--bf-space-5) var(--bf-space-6) var(--bf-space-6);
 }
 
 .bitfun-thread-goal-menu,
@@ -10,7 +7,7 @@
 .bitfun-thread-goal-resume {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-5;
+  gap: var(--bf-space-5);
   min-width: 0;
 }
 
@@ -19,16 +16,16 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
   min-height: 28px;
 }
 
 .bitfun-thread-goal-menu__status-badge {
   display: inline-flex;
   align-items: center;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   padding: 6px 12px;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-line-height-dense);
@@ -67,9 +64,9 @@
 .bitfun-thread-goal-menu__section {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-3;
-  padding: $size-gap-4 $size-gap-4 $size-gap-4;
-  border-radius: $size-radius-lg;
+  gap: var(--bf-space-3);
+  padding: var(--bf-space-4) var(--bf-space-4) var(--bf-space-4);
+  border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-subtle);
   border: 1px solid var(--bf-color-border-subtle);
 }
@@ -101,13 +98,13 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
 }
 
 .bitfun-thread-goal-menu__workflow-step {
   display: flex;
   align-items: flex-start;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
   font-size: var(--bf-type-flow-support-font-size);
   line-height: var(--bf-line-height-base);
   color: var(--bf-color-content-secondary);
@@ -161,8 +158,8 @@
 }
 
 .bitfun-thread-goal-menu__workflow-note {
-  margin: $size-gap-2 0 0;
-  padding: $size-gap-3 0 0;
+  margin: var(--bf-space-2) 0 0;
+  padding: var(--bf-space-3) 0 0;
   border-top: 1px solid var(--bf-color-border-subtle);
   font-size: var(--bf-type-flow-micro-font-size);
   line-height: var(--bf-line-height-comfortable);
@@ -172,19 +169,19 @@
 .bitfun-thread-goal-menu__footer {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-3;
-  margin-top: $size-gap-1;
-  padding-top: $size-gap-4;
+  gap: var(--bf-space-3);
+  margin-top: var(--bf-space-1);
+  padding-top: var(--bf-space-4);
   border-top: 1px solid var(--bf-color-border-subtle);
 }
 
 .bitfun-thread-goal-menu__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   justify-content: stretch;
 
-  [data-bf-component='button'] {
+  > * {
     flex: 1 1 0;
     min-width: 72px;
   }
@@ -201,17 +198,17 @@
 
 .bitfun-thread-goal-menu--empty {
   align-items: stretch;
-  gap: $size-gap-4;
+  gap: var(--bf-space-4);
   text-align: left;
 }
 
 .bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__hint {
-  padding: $size-gap-2 0;
+  padding: var(--bf-space-2) 0;
   text-align: left;
 }
 
 .bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__actions {
-  [data-bf-component='button'] {
+  > * {
     width: 100%;
     flex: none;
   }
@@ -227,8 +224,8 @@
 
 .bitfun-thread-goal-resume__subtitle {
   margin: 0;
-  padding: $size-gap-4;
-  border-radius: $size-radius-lg;
+  padding: var(--bf-space-4);
+  border-radius: var(--bf-radius-lg);
   font-size: var(--bf-type-flow-control-font-size);
   color: var(--bf-color-content-primary);
   line-height: var(--bf-line-height-comfortable);
@@ -241,7 +238,7 @@
 .bitfun-thread-goal-resume__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   justify-content: flex-end;
-  padding-top: $size-gap-2;
+  padding-top: var(--bf-space-2);
 }
