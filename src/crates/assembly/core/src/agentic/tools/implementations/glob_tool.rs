@@ -965,7 +965,9 @@ mod tests {
             build_remote_rg_command, collect_remote_glob_result, validate_remote_glob_exit,
         };
 
-        let root = make_temp_dir("workspace-io-escaped-prefix");
+        let root = make_temp_dir("workspace-io-escaped-prefix")
+            .canonicalize()
+            .unwrap();
         fs::create_dir(root.join(r"a\b")).unwrap();
         fs::write(root.join(r"a\b/source.rs"), "").unwrap();
         let pattern = r"a\\b/*.rs";

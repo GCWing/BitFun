@@ -134,6 +134,8 @@ isolated by the complete connection identity. A successfully recorded operation
 can display its persisted summary and diff even after disconnecting. An older
 operation, failed snapshot, or unsupported symbolic-link target does not claim
 that history exists; tool cards retain their inline preview instead.
+Forked conversation history retains inline tool results but does not inherit
+the source Session's snapshot preview capability.
 
 These operation records do not prove complete historical coverage. Full file
 rollback and edit-and-rerun remain unavailable for remote Sessions until the
