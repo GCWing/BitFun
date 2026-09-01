@@ -21,7 +21,16 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { ConfirmDialog, Icon, IconButton, Menu, MenuItem, NumberBadge, SearchField } from '@bitfun/ui';
+import {
+  ConfirmDialog,
+  Icon,
+  IconButton,
+  Menu,
+  MenuItem,
+  NumberBadge,
+  SearchField,
+  SegmentedControl,
+} from '@bitfun/ui';
 
 import {
   GalleryEmpty,
@@ -521,24 +530,27 @@ const MiniAppGalleryView: React.FC = () => {
           tools={(
             <>
               {categories.length > 1 ? (
-                <div data-bf-component="miniapp-gallery-view" data-bf-part="categoryFilters" className="gallery-chip-row">
-                  {categories.map((category) => (
-                    <button
-                      data-bf-component="miniapp-gallery-view"
-                      data-bf-part="categoryFilter"
-                      key={category}
-                      type="button"
-                      className={[
-                        'gallery-cat-chip',
-                        categoryFilter === category && 'gallery-cat-chip--active',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      onClick={() => setCategoryFilter(category)}
-                    >
-                      {category === 'all' ? t('all') : category}
-                    </button>
-                  ))}
+                <div
+                  data-bf-component="miniapp-gallery-view"
+                  data-bf-part="categoryFilters"
+                >
+                  <SegmentedControl
+                    className="miniapp-gallery__categories"
+                    options={categories.map((category) => ({
+                      label: (
+                        <span
+                          data-bf-component="miniapp-gallery-view"
+                          data-bf-part="categoryFilter"
+                        >
+                          {category === 'all' ? t('all') : category}
+                        </span>
+                      ),
+                      value: category,
+                    }))}
+                    value={categoryFilter}
+                    onValueChange={setCategoryFilter}
+                    aria-label={t('allApps')}
+                  />
                 </div>
               ) : null}
               <span className="gallery-zone-count">{t('count', { count: filtered.length })}</span>

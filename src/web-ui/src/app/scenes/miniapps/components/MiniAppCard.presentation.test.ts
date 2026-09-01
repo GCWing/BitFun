@@ -18,6 +18,24 @@ describe('Mini App card presentation', () => {
     expect(readRelative('../views/MiniAppGalleryView.tsx')).toContain('<NumberBadge value={activeApps.length} />');
     expect(readRelative('../views/MiniAppGalleryView.tsx')).not.toContain('gallery-zone-badge');
   });
+
+  it('uses shared controls and card anatomy across Mini App surfaces', () => {
+    const gallery = readRelative('../views/MiniAppGalleryView.tsx');
+    const market = readRelative('../views/MiniAppMarketView.tsx');
+    const submissions = readRelative('../views/MiniAppSubmissionsView.tsx');
+
+    expect(gallery).toContain('<SegmentedControl');
+    expect(gallery).not.toContain('gallery-cat-chip');
+    expect(market).toContain('<SegmentedControl');
+    expect(market).toContain('<Card');
+    expect(market).toContain('<CardMedia');
+    expect(market).toContain('<CardBody');
+    expect(market).toContain('<IconButton');
+    expect(market).not.toContain('gallery-cat-chip');
+    expect(submissions).toContain('<Disclosure');
+    expect(submissions).toContain('<IconButton');
+    expect(submissions).not.toContain('miniapp-submissions__advanced-toggle');
+  });
   it('bounds the card without coupling its height to its width', () => {
     const stylesheet = readRelative('./MiniAppCard.scss');
     const rootStart = stylesheet.indexOf('.miniapp-card {');
