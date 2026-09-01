@@ -127,6 +127,7 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('browser_control_get_status')).toBe(false);
     expect(isPeerLocalOnlyCommand('browser_control_restart_with_cdp')).toBe(false);
     expect(isPeerLocalOnlyCommand('browser_control_enable_default_cdp')).toBe(false);
+    expect(isPeerLocalOnlyCommand('browser_control_disconnect')).toBe(false);
     expect(isPeerLocalOnlyCommand('computer_use_get_status')).toBe(false);
     expect(isPeerLocalOnlyCommand('computer_use_request_permissions')).toBe(false);
     expect(isPeerLocalOnlyCommand('computer_use_open_system_settings')).toBe(false);
@@ -233,6 +234,7 @@ describe('peerInvokePriorityFor', () => {
     expect(isPeerRetryableReadCommand('browser_control_launch')).toBe(false);
     expect(isPeerRetryableReadCommand('browser_control_restart_with_cdp')).toBe(false);
     expect(isPeerRetryableReadCommand('browser_control_enable_default_cdp')).toBe(false);
+    expect(isPeerRetryableReadCommand('browser_control_disconnect')).toBe(false);
     expect(isPeerRetryableReadCommand('computer_use_request_permissions')).toBe(false);
     expect(isPeerRetryableReadCommand('computer_use_open_system_settings')).toBe(false);
   });

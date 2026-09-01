@@ -61,6 +61,10 @@ impl BrowserLauncher {
         provider::BrowserLauncher::is_default_cdp_enabled(kind)
     }
 
+    pub fn user_profile_debugging_setup_url(kind: &BrowserKind) -> Option<&'static str> {
+        provider::BrowserLauncher::user_profile_debugging_setup_url(kind)
+    }
+
     /// Browser-level endpoint published by a browser that is running right now
     /// with remote debugging enabled. `None` means there is nothing to attach
     /// to without going through the launch flow.

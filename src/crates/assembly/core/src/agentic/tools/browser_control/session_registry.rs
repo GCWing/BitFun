@@ -554,6 +554,26 @@ impl BrowserSessionRegistry {
         }
     }
 
+    /// Remove every external page session associated with one logical CDP
+    /// port. The caller owns closing the returned clients so it can also close
+    /// the retained browser-level transport in the same operation.
+    pub async fn remove_by_port(&self, port: u16) -> Vec<BrowserSession> {
+        let mut g = self.inner.write().await;
+        let ids = g
+            .sessions
+            .iter()
+            .filter_map(|(id, session)| (session.port == port).then_some(id.clone()))
+            .collect::<Vec<_>>();
+        let removed = ids
+            .iter()
+            .filter_map(|id| g.sessions.remove(id))
+            .collect::<Vec<_>>();
+        if g.default_id.as_ref().is_some_and(|id| ids.contains(id)) {
+            g.default_id = None;
+        }
+        removed
+    }
+
     /// Snapshot of registered session ids — used by `list_sessions` actions.
     pub async fn list(&self) -> Vec<String> {
         let g = self.inner.read().await;
