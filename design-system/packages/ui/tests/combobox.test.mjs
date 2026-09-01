@@ -63,6 +63,10 @@ test("Combobox owns keyboard selection, IME safety, filtering, and custom values
 });
 
 test("Combobox styling uses public field, overlay, action, and motion tokens", async () => {
+  const source = await readFile(
+    new URL("../src/components/Combobox/Combobox.tsx", import.meta.url),
+    "utf8",
+  );
   const styles = await readFile(
     new URL("../src/components/Combobox/Combobox.module.css", import.meta.url),
     "utf8",
@@ -74,6 +78,8 @@ test("Combobox styling uses public field, overlay, action, and motion tokens", a
   assert.match(styles, /--bf-shadow-menu/);
   assert.match(styles, /position:\s*fixed/);
   assert.match(styles, /z-index:\s*var\(--bf-layer-popover\)/);
+  assert.match(source, /className=\{styles\.searchField\}/);
+  assert.match(styles, /\.searchField\s*\{[^}]*inline-size:\s*100%/);
   assert.doesNotMatch(styles, /data-popover-mode/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
