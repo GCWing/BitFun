@@ -92,6 +92,16 @@
     min-height: 152px;
   }
 
+  &__categories {
+    max-width: min(56vw, 720px);
+    overflow-x: auto;
+    scrollbar-width: thin;
+
+    > [data-bf-part='segment'] {
+      flex: 0 0 auto;
+    }
+  }
+
 }
 
 /* Positioning-only overrides; the design-system Menu owns the surface look. */
@@ -113,6 +123,10 @@
       > :first-child {
         width: 100%;
       }
+    }
+
+    &__categories {
+      max-width: min(64vw, 520px);
     }
   }
 }

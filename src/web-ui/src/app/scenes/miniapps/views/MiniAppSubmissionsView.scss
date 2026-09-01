@@ -201,55 +201,14 @@
         white-space: nowrap;
       }
 
-      button {
-        display: grid;
-        padding: 3px;
-        border: 0;
-        border-radius: var(--bf-radius-sm);
-        background: transparent;
+      [data-bf-component='icon-button'] {
         color: var(--bf-color-content-muted);
-        cursor: pointer;
-        place-items: center;
-
-        &:hover {
-          background: var(--bf-color-action-neutral-surface-hover);
-          color: var(--bf-color-content-primary);
-        }
       }
     }
   }
 
-  &__advanced-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-space-2);
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    cursor: pointer;
-    justify-self: start;
+  &__advanced-disclosure {
     max-width: 100%;
-
-    &:hover {
-      color: var(--bf-color-content-primary);
-    }
-
-    svg {
-      flex: 0 0 auto;
-      color: var(--bf-color-content-muted);
-    }
-
-    small {
-      overflow: hidden;
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-regular);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   }
 
   &__advanced {

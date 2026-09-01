@@ -1,4 +1,14 @@
-import { Button, Field, Icon, Input, Select, StatusPill, Textarea } from '@bitfun/ui';
+import {
+  Button,
+  Disclosure,
+  Field,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  StatusPill,
+  Textarea,
+} from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AlertTriangle, Camera, FileImage, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
@@ -362,29 +372,27 @@ const MiniAppSubmissionsView: React.FC = () => {
                 <div key={path}>
                   <FileImage size={14} />
                   <span title={path}>{fileName(path)}</span>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="xs"
                     aria-label={t('market.submissions.removeScreenshot')}
+                    title={t('market.submissions.removeScreenshot')}
                     onClick={() =>
                       setScreenshotPaths((current) => current.filter((item) => item !== path))
                     }
-                  >
-                    <Icon name="xmark" size="xs" />
-                  </button>
+                    icon={<Icon name="xmark" size="xs" />}
+                  />
                 </div>
               ))}
             </div>
           ) : null}
 
-          <button
-            type="button"
-            className="miniapp-submissions__advanced-toggle"
-            onClick={() => setShowAdvanced((current) => !current)}
-          >
-            {showAdvanced ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
-            <span>{t('market.submissions.advanced')}</span>
-            {!showAdvanced ? (
-              <small>
+          <Disclosure
+            className="miniapp-submissions__advanced-disclosure"
+            open={showAdvanced}
+            onOpenChange={setShowAdvanced}
+            summary={t('market.submissions.advanced')}
+            description={!showAdvanced ? (
+              <span>
                 {[
                   draft.slug,
                   `v${draft.releaseNumber}`,
@@ -394,11 +402,9 @@ const MiniAppSubmissionsView: React.FC = () => {
                   ),
                   draft.license.spdxExpression,
                 ].filter(Boolean).join(' · ')}
-              </small>
-            ) : null}
-          </button>
-
-          {showAdvanced ? (
+              </span>
+            ) : undefined}
+          >
             <div className="miniapp-submissions__advanced">
               <div className="miniapp-submissions__form-grid">
                 <Field
@@ -517,7 +523,7 @@ const MiniAppSubmissionsView: React.FC = () => {
                 />
               </Field>
             </div>
-          ) : null}
+          </Disclosure>
 
           {progress && busy ? (
             <div className="miniapp-submissions__progress">
