@@ -40,7 +40,6 @@
     "loginCancelled": "已取消登入",
     "logout": "登出",
     "refresh": "重新整理 Token",
-    "manageSubscription": "開通或管理訂閱",
     "refreshSuccess": "Token 已重新整理",
     "refreshFailed": "重新整理失敗：{{error}}",
     "loginSuccess": "登入成功",
