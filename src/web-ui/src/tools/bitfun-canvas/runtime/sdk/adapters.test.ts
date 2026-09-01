@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import * as adapters from './index';
 
 describe('BitFun Canvas SDK adapters', () => {
-  it('exports the first component-library adapter set', () => {
+  it('exports the initial Canvas runtime adapter set', () => {
     expect(Object.keys(adapters).sort()).toEqual([
       'Alert',
       'BarChart',
@@ -81,6 +81,5 @@ describe('BitFun Canvas SDK adapters', () => {
     );
 
     expect(source).not.toMatch(/@\/infrastructure\/api|@\/flow_chat|@tauri-apps|useI18n|zustand/);
-    expect(source).not.toContain("from '@/component-library/components'");
   });
 });

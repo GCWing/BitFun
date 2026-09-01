@@ -21,9 +21,7 @@
  * form. Inside one segment, grouping is spacing alone, at a fixed 2.5:1 —
  * $track-item-gap between segments, $track-part-gap inside one.
  */
-
-@use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 // The only two spacings on the track. Their ratio is what replaces the
 // separators: parts of one segment sit close, segments sit apart.
@@ -57,8 +55,8 @@ $track-item-gap: 10px;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover:not(:disabled),
   &[aria-expanded='true']:not(:disabled) {
@@ -279,7 +277,7 @@ $track-item-gap: 10px;
 
   &__permission-menu {
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     width: min(240px, calc(100vw - 16px));
   }
 
@@ -353,8 +351,8 @@ $track-item-gap: 10px;
     &--branch-switchable {
       cursor: pointer;
       transition:
-        background-color $motion-fast $easing-standard,
-        color $motion-fast $easing-standard;
+        background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
       &:hover:not(:disabled),
       &[aria-expanded='true']:not(:disabled) {
@@ -438,8 +436,8 @@ $track-item-gap: 10px;
   &__workspace--switchable {
     cursor: pointer;
     transition:
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(:disabled),
     &[aria-expanded='true']:not(:disabled) {
@@ -479,7 +477,7 @@ $track-item-gap: 10px;
   // workspace names with a check on the active one.
   &__workspace-menu {
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     width: min(220px, calc(100vw - 16px));
   }
 

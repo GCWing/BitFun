@@ -1,5 +1,4 @@
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .bitfun-reasoning-preset-editor {
   display: flex;
@@ -10,8 +9,8 @@
   &__section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
-    padding: $size-gap-4;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-4);
     border-bottom: 1px solid var(--bf-color-border-subtle);
 
     &:last-child {
@@ -22,17 +21,17 @@
   &__primary-settings {
     display: flex;
     align-items: center;
-    gap: $size-gap-5;
+    gap: var(--bf-space-5);
   }
 
   &__primary-setting {
     display: flex;
     flex: 1 1 0;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     min-width: 0;
 
-    > :is([data-bf-component='combobox'], [data-bf-component='select']) {
+    > .bitfun-reasoning-preset-editor__primary-control {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -49,8 +48,8 @@
   &__models-dev-binding {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: $size-gap-5;
-    padding-top: $size-gap-3;
+    gap: var(--bf-space-5);
+    padding-top: var(--bf-space-3);
     border-top: 1px dashed var(--bf-color-border-subtle);
   }
 
@@ -62,7 +61,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
-    gap: $size-gap-5;
+    gap: var(--bf-space-5);
     min-width: 0;
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
@@ -71,7 +70,7 @@
   &__models-dev-search-input {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     min-width: 0;
 
     > span {
@@ -86,6 +85,10 @@
     min-width: 0;
   }
 
+  &__models-dev-search-field-control {
+    width: 100%;
+  }
+
   &__models-dev-search-hint {
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
@@ -93,10 +96,10 @@
   }
 
   &__models-dev-search-results {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     box-sizing: border-box;
     max-width: calc(100vw - 16px);
     max-height: min(280px, calc(100vh - 16px));
@@ -108,7 +111,7 @@
   }
 
   &__models-dev-search-limit {
-    padding: $size-gap-2 $size-gap-3;
+    padding: var(--bf-space-2) var(--bf-space-3);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
   }
@@ -120,7 +123,7 @@
   &__binding-field {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     min-width: 0;
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
@@ -130,7 +133,7 @@
       white-space: nowrap;
     }
 
-    > [data-bf-component='input'] {
+    > .bitfun-reasoning-preset-editor__binding-control {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -139,7 +142,7 @@
   &__json {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-width: 0;
   }
 
@@ -147,7 +150,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     width: 100%;
   }
 
@@ -165,7 +168,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__section-title {
@@ -177,7 +180,7 @@
   &__section-title-group {
     display: inline-flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__section-title-info {
@@ -212,13 +215,13 @@
   &__generated {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__generated-list {
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__generated-item {
@@ -232,10 +235,10 @@
   &__unavailable-warning {
     display: flex;
     align-items: flex-start;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
     border: 1px solid var(--bf-color-status-warning-border);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: var(--bf-color-status-warning-surface);
     color: var(--bf-color-content-secondary);
 
@@ -268,14 +271,14 @@
   &__list {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__row {
     display: flex;
     flex-direction: column;
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-subtle);
 
     &[data-expanded='true'] {
@@ -286,16 +289,16 @@
   &__row-summary {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     min-height: 42px;
-    padding: $size-gap-1 $size-gap-2;
+    padding: var(--bf-space-1) var(--bf-space-2);
   }
 
   &__row-toggle {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
-    padding: $size-gap-1;
+    padding: var(--bf-space-1);
     border: 0;
     background: transparent;
     color: inherit;
@@ -305,7 +308,7 @@
     &:focus-visible {
       outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 1px;
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
     }
 
     > svg {
@@ -318,7 +321,7 @@
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     min-width: 0;
   }
 
@@ -338,7 +341,7 @@
     cursor: pointer;
 
     &:focus-visible {
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
       outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 2px;
     }
@@ -348,7 +351,7 @@
     flex: 0 1 220px;
     min-width: 120px;
 
-    > [data-bf-component='input'] {
+    > .bitfun-reasoning-preset-editor__row-name-input {
       width: 100%;
     }
   }
@@ -367,7 +370,7 @@
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__badge {
@@ -381,31 +384,29 @@
   &__row-editor {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
-    padding: $size-gap-3;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-3);
     border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__action {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     min-width: 0;
   }
 
-  &__action > :is([data-bf-component='combobox'], [data-bf-component='select']),
-  &__action > [data-bf-component='input'],
-  &__action > [data-bf-component='number-input'] {
+  &__action-type,
+  &__action-value {
     min-width: 0;
   }
 
-  &__action > :is([data-bf-component='combobox'], [data-bf-component='select']):first-child {
+  &__action-type {
     flex: 0 0 190px;
     width: 190px;
   }
 
-  &__action > [data-bf-component='input'],
-  &__action > [data-bf-component='number-input'] {
+  &__action-value {
     flex: 1 1 160px;
   }
 
@@ -413,10 +414,10 @@
     display: flex;
     flex: 1 1 160px;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-width: 0;
 
-    > :is([data-bf-component='combobox'], [data-bf-component='select']) {
+    > .bitfun-reasoning-preset-editor__effort-select {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -430,7 +431,7 @@
     width: 20px;
     height: 20px;
     border-radius: 999px;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     color: var(--bf-color-status-warning-content);
     cursor: help;
 
@@ -444,25 +445,19 @@
   &__actions {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__action-controls {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     margin-left: auto;
   }
 
   &__json {
     flex: 1 1 100%;
-  }
-
-  [data-bf-component='textarea'] > [data-bf-part='input'] {
-    min-height: 92px;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
   }
 
 }
@@ -477,27 +472,26 @@
     &__primary-settings {
       align-items: stretch;
       flex-direction: column;
-      gap: $size-gap-3;
+      gap: var(--bf-space-3);
     }
 
     &__models-dev-binding {
       grid-template-columns: 1fr;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     &__models-dev-search-field {
       align-items: stretch;
       grid-template-columns: 1fr;
-      gap: $size-gap-1;
+      gap: var(--bf-space-1);
     }
 
     &__models-dev-search-hint {
       flex-basis: auto;
     }
 
-    &__action > :is([data-bf-component='combobox'], [data-bf-component='select']):first-child,
-    &__action > [data-bf-component='input'],
-    &__action > [data-bf-component='number-input'],
+    &__action-type,
+    &__action-value,
     &__effort-control,
     &__action > .bitfun-reasoning-preset-editor__json {
       flex: 1 1 100%;
@@ -505,7 +499,7 @@
     }
 
     &__section {
-      padding: $size-gap-3;
+      padding: var(--bf-space-3);
     }
 
     &__row-summary {

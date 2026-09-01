@@ -3,8 +3,31 @@ use bitfun_services_integrations::mcp::server::{
     mcp_server_is_running, mcp_should_start_after_config_update, MCPProcessStartContext,
     MCPProcessStartOutcome,
 };
+use std::collections::BTreeMap;
 
 impl MCPServerManager {
+    pub(super) fn try_begin_persisted_server_operation(
+        &self,
+        server_id: &str,
+    ) -> BitFunResult<PersistedServerOperationGuard> {
+        let mut in_flight = self
+            .persisted_server_operations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !in_flight.insert(server_id.to_string()) {
+            return Err(BitFunError::Configuration(format!(
+                "MCP server lifecycle operation already in progress: {}",
+                server_id
+            )));
+        }
+        drop(in_flight);
+
+        Ok(PersistedServerOperationGuard {
+            server_id: server_id.to_string(),
+            in_flight: Arc::clone(&self.persisted_server_operations),
+        })
+    }
+
     async fn runtime_server_config(&self, server_id: &str) -> BitFunResult<MCPServerConfig> {
         if let Some(config) = self.config_service.get_server_config(server_id).await? {
             return Ok(config);
@@ -20,92 +43,10 @@ impl MCPServerManager {
 
     /// Initializes all servers.
     pub async fn initialize_all(&self) -> BitFunResult<()> {
-        info!("Initializing all MCP servers");
-        let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
-
-        let existing_server_ids = self.runtime.get_all_server_ids().await;
-        if !existing_server_ids.is_empty() {
-            let external_ids = self.ephemeral_workspace_scopes.read().await;
-            let refresh_ids = existing_server_ids
-                .iter()
-                .filter(|server_id| !external_ids.contains_key(*server_id))
-                .cloned()
-                .collect::<Vec<_>>();
-            drop(external_ids);
-            info!(
-                "Refreshing persisted MCP servers while preserving external workspace runtimes: count={}",
-                refresh_ids.len()
-            );
-            for server_id in refresh_ids {
-                let _ = self.stop_server(&server_id).await;
-                let _ = self.runtime.unregister(&server_id).await;
-                self.runtime.remove_catalog(&server_id).await;
-                self.clear_reconnect_state(&server_id).await;
-            }
-        }
-
-        let configs = self.config_service.load_all_configs().await?;
-        info!("Loaded {} MCP server configs", configs.len());
-
-        if configs.is_empty() {
-            debug!("No MCP server configurations found, skipping initialization");
-            return Ok(());
-        }
-
-        self.start_reconnect_monitor_if_needed();
-
-        let mut registered_count = 0;
-        for config in &configs {
-            if config.enabled {
-                match self.runtime.register(config).await {
-                    Ok(_) => {
-                        registered_count += 1;
-                        debug!(
-                            "Registered MCP server: name={} id={}",
-                            config.name, config.id
-                        );
-                    }
-                    Err(e) => {
-                        error!(
-                            "Failed to register MCP server: name={} id={} error={}",
-                            config.name, config.id, e
-                        );
-                        return Err(e.into());
-                    }
-                }
-            }
-        }
-        info!("Registered {} MCP servers", registered_count);
-
-        let mut started_count = 0;
-        let mut failed_count = 0;
-        for config in configs {
-            if config.enabled && config.auto_start {
-                info!(
-                    "Auto-starting MCP server: name={} id={}",
-                    config.name, config.id
-                );
-                match self.start_server(&config.id).await {
-                    Ok(_) => {
-                        started_count += 1;
-                        info!("MCP server started successfully: name={}", config.name);
-                    }
-                    Err(e) => {
-                        failed_count += 1;
-                        error!(
-                            "Failed to auto-start MCP server: name={} id={} error={}",
-                            config.name, config.id, e
-                        );
-                    }
-                }
-            }
-        }
-
-        info!(
-            "MCP server initialization completed: started={} failed={}",
-            started_count, failed_count
-        );
-        Ok(())
+        // Initialization can be requested by more than one product surface.
+        // It must never tear down a healthy runtime merely because another
+        // caller is ensuring that configured servers exist.
+        self.initialize_non_destructive().await
     }
 
     /// Initializes servers without shutting down existing ones.
@@ -113,6 +54,7 @@ impl MCPServerManager {
     /// This is safe to call multiple times (e.g., from multiple frontend windows).
     pub async fn initialize_non_destructive(&self) -> BitFunResult<()> {
         info!("Initializing MCP servers (non-destructive)");
+        let _lifecycle_guard = self.persisted_lifecycle.write().await;
 
         let configs = self.config_service.load_all_configs().await?;
         if configs.is_empty() {
@@ -147,7 +89,9 @@ impl MCPServerManager {
                 }
             }
 
-            let _ = self.start_server(&config.id).await;
+            let _ = self
+                .start_server_with_external_token(&config.id, None)
+                .await;
         }
 
         Ok(())
@@ -174,6 +118,8 @@ impl MCPServerManager {
 
     /// Starts a server.
     pub async fn start_server(&self, server_id: &str) -> BitFunResult<()> {
+        let _operation_guard = self.try_begin_persisted_server_operation(server_id)?;
+        let _lifecycle_guard = self.persisted_lifecycle.read().await;
         self.start_server_with_external_token(server_id, None).await
     }
 
@@ -312,6 +258,12 @@ impl MCPServerManager {
 
     /// Stops a server.
     pub async fn stop_server(&self, server_id: &str) -> BitFunResult<()> {
+        let _operation_guard = self.try_begin_persisted_server_operation(server_id)?;
+        let _lifecycle_guard = self.persisted_lifecycle.read().await;
+        self.stop_server_unlocked(server_id).await
+    }
+
+    async fn stop_server_unlocked(&self, server_id: &str) -> BitFunResult<()> {
         info!("Stopping MCP server: id={}", server_id);
 
         self.stop_connection_event_listener(server_id).await;
@@ -357,11 +309,97 @@ impl MCPServerManager {
 
     /// Restarts a server.
     pub async fn restart_server(&self, server_id: &str) -> BitFunResult<()> {
+        let _operation_guard = self.try_begin_persisted_server_operation(server_id)?;
+        let _lifecycle_guard = self.persisted_lifecycle.read().await;
         info!("Restarting MCP server: id={}", server_id);
         self.runtime_server_config(server_id).await?;
         self.ensure_registered(server_id).await?;
-        self.stop_server(server_id).await?;
-        self.start_server(server_id).await
+        self.stop_server_unlocked(server_id).await?;
+        self.start_server_with_external_token(server_id, None).await
+    }
+
+    /// Reconciles a persisted configuration replacement without disturbing
+    /// unchanged MCP runtimes. Existing manual-running state is preserved for
+    /// changed servers, while newly added servers follow their auto-start policy.
+    pub async fn reconcile_persisted_configs(
+        &self,
+        previous: Vec<MCPServerConfig>,
+        current: Vec<MCPServerConfig>,
+    ) -> BitFunResult<()> {
+        let _lifecycle_guard = self.persisted_lifecycle.write().await;
+        let previous = previous
+            .into_iter()
+            .map(|config| (config.id.clone(), config))
+            .collect::<BTreeMap<_, _>>();
+        let current = current
+            .into_iter()
+            .map(|config| (config.id.clone(), config))
+            .collect::<BTreeMap<_, _>>();
+
+        for server_id in previous
+            .keys()
+            .filter(|server_id| !current.contains_key(*server_id))
+        {
+            self.remove_persisted_runtime_unlocked(server_id).await?;
+        }
+
+        for (server_id, config) in &current {
+            let previous_config = previous.get(server_id);
+            let unchanged = match previous_config {
+                Some(previous) => serde_json::to_value(previous)? == serde_json::to_value(config)?,
+                None => false,
+            };
+
+            if unchanged {
+                if config.enabled {
+                    self.runtime.ensure_registered(config).await?;
+                } else {
+                    self.remove_persisted_runtime_unlocked(server_id).await?;
+                }
+                continue;
+            }
+
+            let previous_status = if self.runtime.contains(server_id).await {
+                self.runtime.process_status(server_id).await.ok()
+            } else {
+                None
+            };
+            let was_active = previous_status.is_some_and(|status| {
+                matches!(
+                    status,
+                    MCPServerStatus::Starting
+                        | MCPServerStatus::Connected
+                        | MCPServerStatus::Healthy
+                        | MCPServerStatus::NeedsAuth
+                        | MCPServerStatus::Reconnecting
+                )
+            });
+
+            self.remove_persisted_runtime_unlocked(server_id).await?;
+            if !config.enabled {
+                continue;
+            }
+
+            self.runtime.register(config).await?;
+            if was_active || config.auto_start {
+                self.start_server_with_external_token(server_id, None)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn remove_persisted_runtime_unlocked(&self, server_id: &str) -> BitFunResult<()> {
+        if !self.runtime.contains(server_id).await {
+            return Ok(());
+        }
+
+        self.stop_server_unlocked(server_id).await?;
+        self.runtime.unregister(server_id).await?;
+        self.runtime.remove_catalog(server_id).await;
+        self.clear_reconnect_state(server_id).await;
+        Ok(())
     }
 
     /// Returns server status.

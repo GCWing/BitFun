@@ -1,6 +1,5 @@
 import React from 'react';
 import { Menu, MenuItem, MenuPopover, MenuSeparator, type MenuEntry, type MenuItemProps, type MenuProps, type MenuPopoverParts, type MenuSeparatorProps } from '@bitfun/ui';
-import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { createLogger } from '@/shared/utils/logger';
 import type { ContextMenuProps, ContextMenuItem } from './types';
 
@@ -40,7 +39,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ items, position, visib
     },
   });
 
-  return <MenuPopover items={items.map(convert)} position={position} open={visible} onClose={onClose} portalContainer={getAppearanceOverlayHost} parts={menuParts} />;
+  return <MenuPopover items={items.map(convert)} position={position} open={visible} onClose={onClose} parts={menuParts} />;
 };
 
 export default ContextMenu;

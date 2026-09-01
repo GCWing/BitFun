@@ -705,7 +705,11 @@
       "comingSoonNotice": "「{{name}}」Harness 执行框架正在开发中。",
       "legacySessionNotice": "该旧会话继续使用原 Agent 执行模式；请新建会话使用 Agent Harness 执行框架。",
       "sessionStartedNotice": "Harness 与主 Agent 在首轮开始前确定；如需切换，请新建会话。",
-      "selectionCreatesNewSession": "切换模式将创建新会话",
+      "newSessionConfirmation": {
+        "title": "使用「{{name}}」创建新会话？",
+        "message": "当前会话不会更改；新会话将使用「{{name}}」。",
+        "confirm": "创建新会话"
+      },
       "unsupportedProfile": "不受支持的 Harness（{{id}}）",
       "unsupportedProfileNotice": "该会话使用当前版本无法运行的 {{id}}。请选择一个受支持的 Harness。",
       "profileChangeBusy": "请等待当前轮次结束后再切换 Harness。",
@@ -1745,7 +1749,7 @@
     },
     "execProcess": {
       "executeCommand": "运行命令:",
-      "writeStdin": "写入标准输入:",
+      "writeStdin": "发送输入:",
       "pollProcess": "轮询进程:",
       "interruptProcess": "中断进程:",
       "killProcess": "终止进程:",

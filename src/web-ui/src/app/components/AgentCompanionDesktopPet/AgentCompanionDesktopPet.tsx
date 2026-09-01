@@ -898,7 +898,6 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             <MenuItem
               key={menuItem.key}
               tone={menuItem.key === 'close-pet' ? 'danger' : 'neutral'}
-              triggerClassName="bitfun-agent-companion-window__menu-item"
               onClick={menuItem.onClick}
             >
               {menuItem.label}

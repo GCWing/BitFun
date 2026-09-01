@@ -25,7 +25,7 @@ import {
   noteTailFollowStep,
 } from '@/infrastructure/diagnostics/flowChatTailFollowDiagnostics';
 import { latestReasoningSummaryPreview } from '../utils/reasoningSummaryPresentation';
-import { Markdown } from '@/component-library/components/Markdown/Markdown';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import './ModelThinkingDisplay.scss';
 
 interface ModelThinkingDisplayProps {
@@ -379,7 +379,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
             onTouchEnd={handleContentTouchEnd}
             onKeyDown={handleContentKeyDown}
           >
-            <Markdown
+            <MarkdownRenderer
               content={renderedContent}
               isStreaming={isVisuallyStreaming}
               className="thinking-markdown"

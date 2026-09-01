@@ -2,7 +2,7 @@ import React, { useCallback, memo } from 'react';
 import { Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { AlertCircle } from 'lucide-react';
 
-import { Markdown as MarkdownRenderer } from '@/component-library/components/Markdown/Markdown';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';

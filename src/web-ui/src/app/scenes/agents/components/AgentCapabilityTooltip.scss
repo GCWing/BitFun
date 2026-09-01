@@ -1,11 +1,7 @@
-@use '../../../../component-library/styles/tokens' as tokens;
-
 .agent-capability-tooltip {
-  [data-bf-part='content'] {
+  &__body {
     width: min(360px, calc(100vw - 16px));
     max-width: min(360px, calc(100vw - 16px));
-    max-inline-size: none;
-    padding: tokens.$size-gap-2 tokens.$size-gap-3;
   }
 
   &__title {
@@ -17,7 +13,7 @@
   }
 
   &__description {
-    margin-top: tokens.$size-gap-1;
+    margin-top: var(--bf-space-1);
     color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-support);
     white-space: pre-wrap;
@@ -26,16 +22,16 @@
 
   &__fields {
     display: grid;
-    gap: tokens.$size-gap-1;
-    margin: tokens.$size-gap-2 0 0;
-    padding-top: tokens.$size-gap-2;
+    gap: var(--bf-space-1);
+    margin: var(--bf-space-2) 0 0;
+    padding-top: var(--bf-space-2);
     border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__field {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    gap: tokens.$size-gap-3;
+    gap: var(--bf-space-3);
     align-items: baseline;
 
     dt {

@@ -1,5 +1,4 @@
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .session-tree-popover {
   position: relative;
@@ -19,7 +18,7 @@
   &--embedded &__body {
     height: auto;
     max-height: none;
-    padding: 0 $size-gap-1;
+    padding: 0 var(--bf-space-1);
     overflow-y: visible;
     scrollbar-gutter: auto;
   }
@@ -41,7 +40,7 @@
   &--embedded &__node-copy {
     flex-direction: row;
     align-items: baseline;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     white-space: nowrap;
   }
 
@@ -93,7 +92,7 @@
   }
 
   &__panel {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
     --session-tree-popover-offset: -4px;
 
@@ -103,7 +102,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
     transform-origin: center top;
@@ -138,8 +137,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
     border-bottom: 1px solid var(--bf-color-border-default);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
@@ -148,7 +147,7 @@
   &__body {
     min-height: 42px;
     max-height: min(390px, calc(100vh - 64px));
-    padding: $size-gap-1;
+    padding: var(--bf-space-1);
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
@@ -157,7 +156,7 @@
     display: flex;
     align-items: center;
     min-height: 34px;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
 
     &:hover {
       background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
@@ -204,8 +203,8 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: 3px $size-gap-2 3px 0;
+    gap: var(--bf-space-2);
+    padding: 3px var(--bf-space-2) 3px 0;
     border: 0;
     background: transparent;
     color: var(--bf-color-content-primary);
@@ -227,7 +226,7 @@
     margin-right: 2px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   &__node:hover &__node-actions,
@@ -309,8 +308,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
 

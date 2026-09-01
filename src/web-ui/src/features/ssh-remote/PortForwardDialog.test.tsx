@@ -40,9 +40,14 @@ vi.mock('@/shared/utils/logger', () => ({
 
 vi.mock('@bitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
-  Modal: ({ isOpen, children }: React.PropsWithChildren<{ isOpen: boolean }>) => (
-    isOpen ? <div>{children}</div> : null
+  Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) => (
+    open ? <div role="dialog">{children}</div> : null
   ),
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" {...props} />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
   Button: ({
     children,
     onClick,

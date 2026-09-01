@@ -18,7 +18,7 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   Button: ({
     children,
     disabled,

@@ -1,12 +1,11 @@
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 // ─── Overlay backdrop ─────────────────────────────────────────────────────────
 .feature-modal-backdrop {
   position: fixed;
   inset: 0;
   background: color-mix(in srgb, var(--bf-color-content-on-light) 55%, transparent);
-  z-index: calc(#{$z-modal} + 10);
+  z-index: calc(var(--bf-layer-modal) + 10);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20,7 +19,7 @@
 
 // ─── Modal shell ──────────────────────────────────────────────────────────────
 .feature-modal {
-  @include surfaces.dialog-surface;
+  @include surfaces.dialog;
 
   position: relative;
   display: flex;
@@ -113,9 +112,9 @@
     border: 1px solid var(--bf-color-border-default);
     cursor: pointer;
     transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard,
-      width $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      width var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &--active {
       width: 18px;
@@ -134,7 +133,7 @@
   &__nav {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
 }
@@ -252,7 +251,7 @@
     code {
       background: var(--bf-color-surface-panel);
       border: 1px solid var(--bf-color-border-default);
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
       padding: 1px 5px;
       font-size: var(--bf-font-size-xs);
       font-family: var(--bf-font-family-mono);

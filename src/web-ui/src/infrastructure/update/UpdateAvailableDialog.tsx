@@ -2,7 +2,17 @@
  * Dialog when a remote update is available (daily prompt or manual check).
  */
 
-import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useRef } from 'react';
 ;
 import { useI18n } from '@/infrastructure/i18n';
@@ -42,14 +52,18 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
   const notes = displayData.releaseNotes?.trim();
 
   return (
-    <Modal
-      isOpen={modalOpen}
-      onClose={onLater}
-      title={t('update.availableTitle')}
-      showCloseButton={true}
-      size="medium"
-      contentPadding="lg"
+    <Dialog
+      open={modalOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onLater(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('update.availableTitle')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div
         className="bitfun-update-available"
         data-bf-component="update"
@@ -136,6 +150,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
           )}
         </div>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };

@@ -5,7 +5,8 @@
 
 import React, { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PresenceBoundary, Tooltip } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
+import { Tooltip } from '@bitfun/ui';
 import './ScrollToBottomButton.scss';
 
 interface ScrollToBottomButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
@@ -39,7 +40,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
   }, [focusReturnRef, visible]);
 
   return (
-    <PresenceBoundary active={visible}>
+    <RetainedMountBoundary present={visible}>
       <Tooltip content={t('scroll.toBottom')} disabled={!visible}>
         <button data-bf-component="scroll-to-bottom-button" data-bf-part="root"
           ref={buttonRef}
@@ -72,6 +73,6 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
           )}
         </button>
       </Tooltip>
-    </PresenceBoundary>
+    </RetainedMountBoundary>
   );
 };

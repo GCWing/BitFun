@@ -35,10 +35,6 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('../../component-library', () => ({
-  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-}));
-
 describe('ReadFileDisplay', () => {
   let dom: JSDOM;
   let container: HTMLDivElement;

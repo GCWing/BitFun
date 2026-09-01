@@ -35,6 +35,7 @@ vi.mock('@bitfun/ui', () => ({
       {children}
     </button>
   ),
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -49,10 +50,6 @@ vi.mock('react-i18next', () => ({
       return labels[key] ?? key;
     },
   }),
-}));
-
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/shared/notification-system', () => ({

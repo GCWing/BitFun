@@ -25,8 +25,8 @@ Allow agents to operate a browser or local UI while explicitly managing accessib
   - Open the matching operating-system privacy and security settings
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现受支持的浏览器并查看当前 CDP 连接状态
   - Discover supported browsers and inspect the current CDP connection state
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启动浏览器控制或连接已经开放 CDP 的浏览器
-  - Launch browser control or connect to a browser that already exposes CDP
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启动浏览器控制，以及连接或断开已经配置 CDP 的浏览器
+  - Launch browser control, or connect to and disconnect from a browser configured for CDP
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启用默认 CDP 配置并按需要重启浏览器
   - Enable the default CDP setup and restart the browser when required
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `ComputerUse` · 授权后让 Agent 截图、点击、输入、滚动并读取可见界面

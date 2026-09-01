@@ -42,7 +42,8 @@ vi.mock('@/app/components/scheduled-jobs/LocalizedDateTimeField', () => ({
   ),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Button: ({
     children,
     isLoading: _isLoading,

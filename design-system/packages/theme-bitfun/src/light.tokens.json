@@ -16,16 +16,20 @@
         "$value": "{color.action.quiet.hover}"
       },
       "tertiary": {
-        "$description": "Opaque tertiary surface used when subtle translucent fill is insufficient.",
+        "$description": "Opaque low-emphasis container surface for persistent grouped content.",
         "$type": "color",
-        "$value": "{color.action.quiet.hover}"
+        "$value": "{ref.color.neutral.75}"
       },
       "chrome": {
-        "$description": "Structural application chrome surface when it differs from content scenes.",
+        "$description": "Structural application chrome behind persistent navigation and window controls.",
         "$type": "color",
-        "$value": "{color.surface.canvas}"
+        "$value": "{ref.color.neutral.70}"
       },
-      "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.03)" }
+      "subtle": {
+        "$description": "Translucent local tint for transient feedback and small inset details; not a persistent container surface.",
+        "$type": "color",
+        "$value": "rgba(16, 26, 39, 0.03)"
+      }
     },
     "overlay": {
       "scrim": {
@@ -85,6 +89,22 @@
         "surfaceSubtle": { "$type": "color", "$value": "color-mix(in srgb, {color.identity.assistant.content} 5%, transparent)" },
         "surface": { "$type": "color", "$value": "color-mix(in srgb, {color.identity.assistant.content} 9%, transparent)" },
         "border": { "$type": "color", "$value": "color-mix(in srgb, {color.identity.assistant.content} 15%, transparent)" }
+      },
+      "globalSearch": {
+        "$description": "Stable wayfinding identities for the six primary Global Search actions; these colors do not imply status.",
+        "newSession": { "$type": "color", "$value": "{ref.color.red.650}" },
+        "openBrowser": { "$type": "color", "$value": "{ref.color.amber.550}" },
+        "openTerminal": { "$type": "color", "$value": "{color.action.neutral.content}" },
+        "openProject": { "$type": "color", "$value": "{ref.color.cyan.500}" },
+        "newProject": { "$type": "color", "$value": "{ref.color.blue.575}" },
+        "openFiles": { "$type": "color", "$value": "{ref.color.purple.450}" }
+      },
+      "harness": {
+        "$description": "Stable identities for the four selectable Agent Harness profiles.",
+        "minimal": { "$type": "color", "$value": "{ref.color.purple.550}" },
+        "standard": { "$type": "color", "$value": "{ref.color.green.550}" },
+        "ultimate": { "$type": "color", "$value": "{ref.color.amber.550}" },
+        "creative": { "$type": "color", "$value": "{ref.color.blue.550}" }
       }
     },
     "link": {
@@ -103,7 +123,7 @@
         "contentDisabled": { "$type": "color", "$value": "rgba(0, 0, 0, 0.30)" },
         "fillBorder": { "$type": "color", "$value": "{color.action.neutral.surface}" },
         "surface": { "$type": "color", "$value": "rgba(0, 0, 0, 0.05)" },
-        "surfaceHover": { "$type": "color", "$value": "rgba(0, 0, 0, 0.10)" },
+        "surfaceHover": { "$type": "color", "$value": "rgba(0, 0, 0, 0.08)" },
         "surfacePressed": { "$type": "color", "$value": "rgba(0, 0, 0, 0.10)" }
       },
       "primary": {
@@ -122,6 +142,13 @@
         "hover": { "$type": "color", "$value": "{ref.color.neutral.100}" },
         "pressed": { "$type": "color", "$value": "rgba(16, 26, 39, 0.09)" },
         "content": { "$type": "color", "$value": "{ref.color.neutral.750}" }
+      }
+    },
+    "selection": {
+      "surface": {
+        "$description": "Persistent neutral selection fill, distinct from transient pressed feedback.",
+        "$type": "color",
+        "$value": "{color.action.neutral.surfaceHover}"
       }
     },
     "field": {

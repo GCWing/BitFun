@@ -12,8 +12,6 @@ export { default as AppearanceSettingsPage } from './AppearanceSettingsPage';
 
 
 export { default as DefaultModelConfig } from './DefaultModelConfig';
-export { default as ModelSelectionRadio } from './ModelSelectionRadio';
-export type { ModelSelectionRadioProps } from './ModelSelectionRadio';
 
 
 export type { EditorConfigProps } from './EditorConfig';

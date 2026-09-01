@@ -9,8 +9,8 @@ import {
   RefreshCw,
   Square,
 } from 'lucide-react';
-import { DotMatrixLoader, Tooltip } from '@/component-library';
-import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
+import { Spinner, Tooltip } from '@bitfun/ui';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
@@ -561,7 +561,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           data-bf-state="loading"
           aria-live="polite"
         >
-          <DotMatrixLoader size="small" />
+          <Spinner size="sm" />
           <span>{t('flowChatHeader.agentTreeLoading')}</span>
         </div>
       ) : null}
@@ -658,7 +658,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
         />
       </Tooltip>
 
-      <PresenceBoundary active={isOpen}>
+      <RetainedMountBoundary present={isOpen}>
         {createPortal(
           <div
           ref={panelRef}
@@ -690,7 +690,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           </div>,
           getAppearanceOverlayHost(),
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </div>
   );
 };

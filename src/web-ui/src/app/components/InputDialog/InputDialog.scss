@@ -1,0 +1,24 @@
+.input-dialog__description {
+  margin: 0 0 var(--bf-space-3);
+  color: var(--bf-color-content-muted);
+  font-family: var(--bf-type-support-font-family);
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-support-font-weight);
+  line-height: var(--bf-type-support-line-height);
+  letter-spacing: var(--bf-type-support-letter-spacing);
+}
+
+.input-dialog__input {
+  inline-size: 100%;
+}
+
+.input-dialog__error {
+  display: block;
+  margin-block-start: var(--bf-space-2);
+  color: var(--bf-color-status-danger-content);
+  font-family: var(--bf-type-support-font-family);
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-support-font-weight);
+  line-height: var(--bf-type-support-line-height);
+  letter-spacing: var(--bf-type-support-letter-spacing);
+}

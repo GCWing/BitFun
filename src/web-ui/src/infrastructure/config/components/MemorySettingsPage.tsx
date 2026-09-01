@@ -2,7 +2,7 @@ import { ConfirmDialog, Icon, IconButton, NumberInput, Select, type SelectOption
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RotateCcw } from 'lucide-react';
-import { ConfigPageLoading } from '@/component-library';
+import { ConfigLoadingState } from '@/infrastructure/config/components/common';
 
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -234,7 +234,7 @@ const MemorySettingsPage: React.FC = () => {
       >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('messages.loading')} />
+          <ConfigLoadingState label={t('messages.loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -395,12 +395,12 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.min_rollout_idle_hours}
-                  onChange={(value) => void updateConfig('min_rollout_idle_hours', value)}
+                  onValueChange={(value) => void updateConfig('min_rollout_idle_hours', value)}
                   min={1}
                   max={48}
                   step={1}
                   unit={t('units.hours')}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'min_rollout_idle_hours' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -412,12 +412,12 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.max_rollout_age_days}
-                  onChange={(value) => void updateConfig('max_rollout_age_days', value)}
+                  onValueChange={(value) => void updateConfig('max_rollout_age_days', value)}
                   min={0}
                   max={config.max_unused_days}
                   step={1}
                   unit={t('units.days')}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'max_rollout_age_days' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -429,11 +429,11 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.max_rollouts_per_startup}
-                  onChange={(value) => void updateConfig('max_rollouts_per_startup', value)}
+                  onValueChange={(value) => void updateConfig('max_rollouts_per_startup', value)}
                   min={1}
                   max={128}
                   step={1}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'max_rollouts_per_startup' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -445,11 +445,11 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.max_rollouts_scan_limit}
-                  onChange={(value) => void updateConfig('max_rollouts_scan_limit', value)}
+                  onValueChange={(value) => void updateConfig('max_rollouts_scan_limit', value)}
                   min={1}
                   max={50000}
                   step={100}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'max_rollouts_scan_limit' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -461,11 +461,11 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.phase1_max_concurrency}
-                  onChange={(value) => void updateConfig('phase1_max_concurrency', value)}
+                  onValueChange={(value) => void updateConfig('phase1_max_concurrency', value)}
                   min={1}
                   max={16}
                   step={1}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'phase1_max_concurrency' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -476,11 +476,11 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.max_raw_memories_for_consolidation}
-                  onChange={(value) => void updateConfig('max_raw_memories_for_consolidation', value)}
+                  onValueChange={(value) => void updateConfig('max_raw_memories_for_consolidation', value)}
                   min={1}
                   max={4096}
                   step={1}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'max_raw_memories_for_consolidation' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -492,12 +492,12 @@ const MemorySettingsPage: React.FC = () => {
               >
                 <NumberInput
                   value={config.max_unused_days}
-                  onChange={(value) => void updateConfig('max_unused_days', value)}
+                  onValueChange={(value) => void updateConfig('max_unused_days', value)}
                   min={config.max_rollout_age_days}
                   max={365}
                   step={1}
                   unit={t('units.days')}
-                  size="small"
+                  size="sm"
                   disabled={savingKey === 'max_unused_days' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
@@ -506,8 +506,8 @@ const MemorySettingsPage: React.FC = () => {
         </ConfigPageSection>
       </ConfigPageContent>
       <ConfirmDialog
-        isOpen={resetMemoryConfirmOpen}
-        onClose={() => setResetMemoryConfirmOpen(false)}
+        open={resetMemoryConfirmOpen}
+        onOpenChange={() => setResetMemoryConfirmOpen(false)}
         onConfirm={() => void handleResetMemory()}
         title={t('actions.resetMemory')}
         message={t('actions.resetMemoryConfirm')}

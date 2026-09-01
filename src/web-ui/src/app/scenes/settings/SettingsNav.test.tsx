@@ -109,8 +109,8 @@ describe('SettingsNav shared component composition', () => {
     expect(results.querySelectorAll('[role="option"]')).toHaveLength(3);
     const first = results.querySelector('[role="option"]')!;
     const label = first.querySelector('[data-bf-part="label"]')!;
-    expect(label.querySelector(':scope > .bitfun-settings-nav__search-result-line')).not.toBeNull();
-    expect(label.querySelector(':scope > .bitfun-settings-nav__search-result-desc')).not.toBeNull();
+    expect(label.querySelector('.bitfun-settings-nav__search-result-line')).not.toBeNull();
+    expect(label.querySelector('.bitfun-settings-nav__search-result-desc')).not.toBeNull();
     expect(first.getAttribute('aria-current')).toBe('page');
 
     await act(async () => pressKey(input, 'ArrowDown'));

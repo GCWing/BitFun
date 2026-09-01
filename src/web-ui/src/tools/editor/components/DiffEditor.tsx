@@ -8,7 +8,7 @@ import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/Mo
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
-import { CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
@@ -576,7 +576,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
 
       {loading && (
         <div className="diff-editor-loading-overlay" data-bf-component="diff-editor" data-bf-part="loading" data-bf-state="loading">
-          <CubeLoading size="medium" text={t('editor.diffEditor.loading')} />
+          <LoadingState size="md">{t('editor.diffEditor.loading')}</LoadingState>
         </div>
       )}
 

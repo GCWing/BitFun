@@ -51,7 +51,7 @@ describe('Nursery gallery presentation', () => {
     expect(actionSection).toContain('width: 168px;');
     expect(actionSection).toContain('height: 48px;');
     expect(actionSection).toContain('border: 0;');
-    expect(actionSection).toContain('border-radius: $size-radius-full;');
+    expect(actionSection).toContain('border-radius: var(--bf-radius-pill);');
     expect(actionSection).toContain('width: 44px;');
     expect(actionSection).toContain('background-image: radial-gradient(');
     expect(actionSection).toContain('mask-image: radial-gradient(');
@@ -66,7 +66,7 @@ describe('Nursery gallery presentation', () => {
 
     expect(cardSection).toContain('&__main {');
     expect(cardSection).toContain('min-height: 168px;');
-    expect(cardSection).toContain('padding: $size-gap-3 14px;');
+    expect(cardSection).toContain('padding: var(--bf-space-3) 14px;');
     expect(cardSection).toContain('min-height: 52px;');
     expect(cardSection).toContain('&__session-actions {');
     expect(cardSection).toContain('border-top: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);');

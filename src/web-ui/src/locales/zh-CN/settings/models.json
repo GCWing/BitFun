@@ -30,7 +30,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "订阅账号",
-    "sectionDescription": "连接 Codex、Antigravity、OpenCode 或 xAI 订阅",
+    "sectionDescription": "连接 Codex、Antigravity、OpenCode、xAI 或 Hermes 订阅",
     "rescan": "刷新状态",
     "import": "导入使用",
     "login": "登录",
@@ -40,6 +40,7 @@
     "loginCancelled": "已取消登录",
     "logout": "退出登录",
     "refresh": "刷新 Token",
+    "manageSubscription": "开通或管理订阅",
     "refreshSuccess": "Token 已刷新",
     "refreshFailed": "刷新失败：{{error}}",
     "loginSuccess": "登录成功",
@@ -59,6 +60,7 @@
       "codex": "Codex（ChatGPT 订阅）",
       "antigravity": "Antigravity（Google 订阅）",
       "grok": "xAI（SuperGrok 订阅）",
+      "hermes": "Hermes（Nous Portal 订阅）",
       "opencodeZen": "OpenCode 账号 · Zen API",
       "opencodeGo": "OpenCode 账号 · Go API"
     },

@@ -1,9 +1,6 @@
 /**
  * Token usage indicator styles.
  */
-
-@use '../../component-library/styles/tokens' as *;
-
 .bitfun-token-usage {
   position: relative;
   display: flex;
@@ -21,13 +18,13 @@
   height: 18px;
   opacity: 0;
   pointer-events: none;
-  
+
   // Show on input focus
   .bitfun-chat-input__box:focus-within & {
     opacity: 1;
     pointer-events: auto;
   }
-  
+
   // Progress track (background)
   &__progress-track {
     position: absolute;
@@ -43,7 +40,7 @@
       background-color 140ms ease,
       border-color 140ms ease;
   }
-  
+
   // Progress fill
   &__progress-fill {
     --token-usage-progress: 0;
@@ -58,7 +55,7 @@
     transition: transform 140ms linear;
     border-radius: inherit;
   }
-  
+
   // Hover content
   &__hover-content {
     position: absolute;
@@ -71,13 +68,13 @@
     transition: opacity 100ms ease;
     white-space: nowrap;
   }
-  
+
   &__percentage {
     line-height: var(--bf-type-flow-meta-line-height);
     font-weight: var(--bf-font-weight-semibold);
     font-size: var(--bf-type-flow-micro-font-size);
   }
-  
+
   // Normal state (0-69%)
   &--normal {
     color: var(--bf-color-accent-default);
@@ -86,7 +83,7 @@
       background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
       border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent);
     }
-    
+
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
@@ -94,9 +91,9 @@
         color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent)
       );
     }
-    
+
   }
-  
+
   // Warning state (70-89%)
   &--warning {
     color: var(--bf-color-status-warning-content);
@@ -105,7 +102,7 @@
       background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
       border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent);
     }
-    
+
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,

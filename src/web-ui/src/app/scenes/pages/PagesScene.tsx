@@ -1,7 +1,7 @@
 import { Button, Icon, Input, Select, type SelectOption } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleStop, FileClock, Globe, HardDrive, Lock, PanelsTopLeft, Rocket, Save, Users, type LucideIcon } from 'lucide-react';
-import { PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import {
@@ -896,6 +896,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       <span className="pages-scene__setting-label">{t('titleField.label')}</span>
                       <div className="pages-scene__title-control">
                         <Input
+                          className="pages-scene__title-input"
                           value={titleDraft}
                           maxLength={120}
                           disabled={pageBusy}
@@ -1085,7 +1086,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           </div>
         )}
       </div>
-      <PresenceBoundary active={showAccountDialog}>
+      <RetainedMountBoundary present={showAccountDialog}>
         <Suspense fallback={null}>
           <RemoteConnectDialog
             isOpen={showAccountDialog}
@@ -1096,7 +1097,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
             }}
           />
         </Suspense>
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </GalleryLayout>
   );
 };

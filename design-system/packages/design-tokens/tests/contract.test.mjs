@@ -269,6 +269,13 @@ test("ConfirmDialog tokens preserve semantic content and preview composition", a
   assert.equal(tokens["layout.confirmDialog.messageGap"], "12px");
   assert.equal(tokens["layout.confirmDialog.iconSize"], "32px");
   assert.equal(tokens["layout.confirmDialog.iconGlyphSize"], "18px");
+  assert.equal(tokens["layout.confirmDialog.previewMaxBlockSize"], "240px");
+  assert.equal(tokens["layout.spinner.matrixCellXs"], "3px");
+  assert.equal(tokens["layout.spinner.matrixCellSm"], "4px");
+  assert.equal(tokens["layout.spinner.matrixCellMd"], "6px");
+  assert.equal(tokens["layout.spinner.matrixCellLg"], "8px");
+  assert.equal(tokens["layout.spinner.matrixGapSm"], "1px");
+  assert.equal(tokens["layout.spinner.matrixGapMd"], "2px");
   assert.equal(tokens["layout.confirmDialog.previewPaddingBlock"], "12px");
   assert.equal(tokens["layout.confirmDialog.previewPaddingInline"], "16px");
   assert.equal(tokens["layout.confirmDialog.previewRadius"], "8px");
@@ -290,20 +297,24 @@ test("Toolbar tokens preserve independent compact and tab-strip compositions", a
   assert.equal(systemDocument.layout.toolbar.groupGapMd.$value, "{space.2}");
 });
 
-test("Modal tokens preserve the reference surface and chrome contract", async () => {
+test("OverflowText exposes one shared inline-end fade extent", () => {
+  assert.equal(tokens["layout.overflowText.fadeExtent"], "16px");
+});
+
+test("Dialog tokens preserve the reference surface and chrome contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
-  assert.equal(tokens["overlay.modal.backdropBlur"], "blur(20px)");
-  assert.equal(tokens["overlay.modal.surfaceRadius"], "28px");
-  assert.equal(tokens["overlay.modal.headerGap"], "20px");
-  assert.equal(tokens["overlay.modal.headerPaddingBlockStart"], "24px");
-  assert.equal(tokens["overlay.modal.headerPaddingBlockEnd"], "20px");
-  assert.equal(tokens["overlay.modal.headerPaddingInline"], "24px");
-  assert.equal(systemDocument.overlay.modal.scrollbarWidth.$value, "{scrollbar.width}");
-  assert.equal(tokens["overlay.modal.scrollbarWidth"], "6px");
-  assert.equal(tokens["overlay.modal.footerBlur"], "blur(10px)");
-  assert.equal(tokens["overlay.modal.footerFadeExtent"], "24px");
-  assert.equal(tokens["overlay.modal.footerContentInset"], "104px");
+  assert.equal(tokens["overlay.dialog.backdropBlur"], "blur(20px)");
+  assert.equal(tokens["overlay.dialog.surfaceRadius"], "28px");
+  assert.equal(tokens["overlay.dialog.headerGap"], "20px");
+  assert.equal(tokens["overlay.dialog.headerPaddingBlockStart"], "24px");
+  assert.equal(tokens["overlay.dialog.headerPaddingBlockEnd"], "20px");
+  assert.equal(tokens["overlay.dialog.headerPaddingInline"], "24px");
+  assert.equal(systemDocument.overlay.dialog.scrollbarWidth.$value, "{scrollbar.width}");
+  assert.equal(tokens["overlay.dialog.scrollbarWidth"], "6px");
+  assert.equal(tokens["overlay.dialog.footerBlur"], "blur(10px)");
+  assert.equal(tokens["overlay.dialog.footerFadeExtent"], "24px");
+  assert.equal(tokens["overlay.dialog.footerContentInset"], "104px");
 });
 
 test("control heights preserve an eight-pixel size step in every density mode", () => {

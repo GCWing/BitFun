@@ -705,7 +705,11 @@
       "comingSoonNotice": "「{{name}}」Harness 執行框架正在開發中。",
       "legacySessionNotice": "該舊會話繼續使用原 Agent 執行模式；請新增會話使用 Agent Harness 執行框架。",
       "sessionStartedNotice": "Harness 與主 Agent 在首輪開始前確定；如需切換，請新增會話。",
-      "selectionCreatesNewSession": "切換模式將建立新工作階段",
+      "newSessionConfirmation": {
+        "title": "使用「{{name}}」建立新工作階段？",
+        "message": "目前工作階段不會變更；新工作階段將使用「{{name}}」。",
+        "confirm": "建立新工作階段"
+      },
       "unsupportedProfile": "不支援的 Harness（{{id}}）",
       "unsupportedProfileNotice": "該工作階段使用目前版本無法執行的 {{id}}。請選擇受支援的 Harness。",
       "profileChangeBusy": "請等待目前回合結束後再切換 Harness。",
@@ -1745,7 +1749,7 @@
     },
     "execProcess": {
       "executeCommand": "執行命令:",
-      "writeStdin": "寫入標準輸入:",
+      "writeStdin": "傳送輸入:",
       "pollProcess": "輪詢進程:",
       "interruptProcess": "中斷進程:",
       "killProcess": "終止進程:",

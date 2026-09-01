@@ -20,8 +20,8 @@ import {
   ConfigPageContent,
   ConfigPageHeader,
   ConfigPageLayout,
-  ConfigPageLoading,
-  ConfigPageMessage,
+  ConfigLoadingState,
+  ConfigMessage,
   ConfigPageRow,
   ConfigPageSection,
 } from './common';
@@ -258,7 +258,7 @@ const VoiceInputConfig: React.FC = () => {
       <ConfigPageLayout className="voice-input-config" data-bf-component="voice-input-config" data-bf-part="root">
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <ConfigPageMessage message={{ type: 'info', text: t('messages.unsupported') }} />
+          <ConfigMessage message={{ type: 'info', text: t('messages.unsupported') }} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -269,7 +269,7 @@ const VoiceInputConfig: React.FC = () => {
       <ConfigPageLayout className="voice-input-config" data-bf-component="voice-input-config" data-bf-part="root">
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('loading')} />
+          <ConfigLoadingState label={t('loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -280,7 +280,7 @@ const VoiceInputConfig: React.FC = () => {
       <ConfigPageLayout className="voice-input-config" data-bf-component="voice-input-config" data-bf-part="root">
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <ConfigPageMessage message={{ type: 'error', text: t('messages.loadFailed') }} />
+          <ConfigMessage message={{ type: 'error', text: t('messages.loadFailed') }} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );

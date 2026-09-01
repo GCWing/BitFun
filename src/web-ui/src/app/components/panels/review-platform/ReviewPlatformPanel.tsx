@@ -1,8 +1,24 @@
-import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, TabGroup, Tooltip, type ComboboxOption } from '@bitfun/ui';
+import {
+  Button,
+  Combobox,
+  Field,
+  Icon,
+  IconButton,
+  Input as DesignInput,
+  ScrollArea,
+  TabGroup,
+  Tooltip,
+  type ComboboxOption,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleDot, Code2, GitCommitHorizontal, GitPullRequest, GitPullRequestClosed, KeyRound, Loader2, MessageSquareText, ShieldCheck } from 'lucide-react';
-import { MarkdownRenderer } from '@/component-library';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1850,13 +1866,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
           <div className="review-platform__topbar-actions" data-bf-component="review-platform" data-bf-part="actions">
             <div className="review-platform__remote-select">
-              <LocalizedCombobox
+              <Combobox
                 size="sm"
                 value={selectedRemoteId ?? ''}
                 options={remoteOptions}
                 placeholder="Select remote"
                 disabled={!remoteOptions.length || loading}
-                searchable
                 onValueChange={handleRemoteChange}
               />
             </div>
@@ -2534,18 +2549,23 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           )}
         </main>
       </div>
-      <Modal
-        isOpen={authModalOpen}
-        onClose={() => {
-          if (!authSaving) {
+      <Dialog
+        open={authModalOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !authSaving) {
             setAuthModalOpen(false);
             setAuthError(null);
           }
         }}
-        title={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : `${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}
-        size="small"
-        contentPadding="lg"
+        size="sm"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : `${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         <form
           className="review-platform__auth-form"
           onSubmit={(event) => {
@@ -2629,7 +2649,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
           </div>
         </form>
-      </Modal>
+              </DialogBody>
+      </Dialog>
       {deepReviewConsentDialog}
     </div>
   );

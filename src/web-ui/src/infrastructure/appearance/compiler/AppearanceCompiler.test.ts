@@ -25,15 +25,14 @@ describe('AppearanceCompiler', () => {
       .toThrow(AppearancePackageValidationError);
   });
 
-  it('compiles a built-in appearance into host-owned component selectors', () => {
+  it('compiles a built-in appearance without retired design-system component selectors', () => {
     const compiler = new AppearanceCompiler(createDefaultAppearanceRegistry());
     const snapshot = compiler.compile(buildBuiltinAppearance(bitfunDarkPalette), 3);
 
     expect(snapshot.id).toBe(bitfunDarkPalette.id);
     expect(snapshot.revision).toBe(3);
     expect(snapshot.cssText).toContain('--bf-appearance-colors-bg-primary');
-    expect(snapshot.cssText).toContain('[data-bf-component="card"][data-bf-part="root"]');
-    expect(snapshot.cssText).toContain('[data-bf-variant="elevated"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="card"]');
     expect(snapshot.cssText).not.toContain('@layer');
     expect(snapshot.cssText).not.toContain(' !important;');
     expect(snapshot.cssText).not.toContain('.btn-primary');
@@ -185,16 +184,17 @@ describe('AppearanceCompiler', () => {
 
     const original = JSON.stringify(pkg);
     const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
-    expect(snapshot.cssText).toContain('[data-bf-component="card"][data-bf-part="root"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="card"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="button"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="switch"]');
     expect(snapshot.components).not.toHaveProperty('button');
+    expect(snapshot.components).not.toHaveProperty('card');
     expect(snapshot.components).not.toHaveProperty('switch');
     expect(snapshot.components).not.toHaveProperty('select');
     expect(JSON.stringify(pkg)).toBe(original);
     const roundTrip = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(JSON.parse(original), 2);
     expect(roundTrip.components).not.toHaveProperty('select');
-    expect(roundTrip.components).toHaveProperty('card');
+    expect(roundTrip.components).not.toHaveProperty('card');
   });
 
   it('compiles canonical Settings surface ids', () => {
@@ -254,7 +254,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'light',
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               base: {
@@ -281,7 +281,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'dark',
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               cascade: 'override',
@@ -337,7 +337,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'light',
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               base: {
@@ -386,7 +386,7 @@ describe('AppearanceCompiler', () => {
         },
       },
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               materials: ['surface', 'accent'],
@@ -403,7 +403,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('border-radius:6px;');
   });
 
-  it('does not promote inherited baseline declarations when an imported part overrides its own fields', () => {
+  it('does not synthesize retired component baselines for an explicit product-surface override', () => {
     const pkg: AppearancePackage = {
       schema: 'bitfun.appearance',
       schemaVersion: 1,
@@ -412,7 +412,7 @@ describe('AppearanceCompiler', () => {
       version: '1.0.0',
       mode: 'light',
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               cascade: 'override',
@@ -428,8 +428,7 @@ describe('AppearanceCompiler', () => {
       1,
     );
     expect(snapshot.cssText).toContain('border-radius:2px !important;');
-    expect(snapshot.cssText).toContain('display:flex;');
-    expect(snapshot.cssText).not.toContain('display:flex !important;');
+    expect(snapshot.cssText).not.toContain('display:flex;');
   });
 
   it('compiles structured layout, media, transform, and filter values without CSS passthrough', () => {
@@ -498,7 +497,7 @@ describe('AppearanceCompiler', () => {
         ornament: { kind: 'image', mimeType: 'image/png', source: { kind: 'package', path: 'assets/ornament.png' } },
       },
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               base: {

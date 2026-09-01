@@ -1,6 +1,8 @@
-@use '../../../component-library/styles/tokens' as *;
+@use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
 
 .session-usage-report-card {
+  @include flatMarkdownSurfaces.apply;
+
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -12,7 +14,7 @@
   border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 68%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--bf-color-surface-panel) 82%, var(--bf-color-surface-scene));
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--bf-color-content-primary) 4%, transparent) inset;
+  box-shadow: none;
   color: var(--bf-color-content-primary);
 
   &--fallback {

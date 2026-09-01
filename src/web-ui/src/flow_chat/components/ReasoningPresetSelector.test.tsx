@@ -30,10 +30,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({
   getAppearanceOverlayHost: () => document.body,
 }));
@@ -131,7 +127,7 @@ describe('ReasoningPresetSelector', () => {
     });
 
     const auto = document.body.querySelector<HTMLButtonElement>(
-      '.bitfun-reasoning-preset-selector__auto',
+      '.bitfun-reasoning-preset-selector__auto-row [data-bf-part="trigger"]',
     );
     const options = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
       '.bitfun-reasoning-preset-selector__options [data-preset-id]',

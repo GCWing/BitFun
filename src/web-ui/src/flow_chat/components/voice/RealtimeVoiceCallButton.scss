@@ -1,21 +1,20 @@
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
-@use '../../../component-library/styles/tokens' as *;
+@use '@/shared/styles/surface-recipes' as surfaces;
 @use './RealtimeVoiceCall';
 
 .bitfun-realtime-call__launcher {
   position: absolute;
   right: 0;
   bottom: 0;
-  z-index: $z-floating;
+  z-index: var(--bf-layer-floating);
   display: inline-flex;
   width: 84px;
   height: 40px;
   align-items: center;
   justify-content: flex-start;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   padding: 0 11px;
   border: 0;
-  border-radius: $size-radius-lg 0 0 0;
+  border-radius: var(--bf-radius-lg) 0 0 0;
   background: color-mix(
     in srgb,
     var(--bf-color-content-on-light) 79%,
@@ -30,8 +29,8 @@
   opacity: 0.22;
   cursor: pointer;
   transition:
-    opacity $motion-fast $easing-standard,
-    background $motion-fast $easing-standard;
+    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover,
   &:focus-visible,
@@ -68,7 +67,7 @@
 }
 
 .bitfun-realtime-call {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   background-image: linear-gradient(
     145deg,

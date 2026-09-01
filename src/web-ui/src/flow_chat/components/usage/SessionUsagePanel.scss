@@ -1,4 +1,8 @@
+@use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
+
 .session-usage-panel {
+  @include flatMarkdownSurfaces.apply;
+
   display: flex;
   flex-direction: column;
   height: 100%;

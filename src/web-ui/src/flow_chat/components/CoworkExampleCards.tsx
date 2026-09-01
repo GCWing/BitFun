@@ -21,9 +21,8 @@ import {
   RotateCcw,
   Plus,
 } from 'lucide-react';
-import { Card, Tooltip } from '@/component-library';
+import { ActionCard, IconButton, Tooltip } from '@bitfun/ui';
 import './CoworkExampleCards.scss';
-import { IconButton } from '@bitfun/ui';
 
 type ExampleId =
   | 'desktop_cleanup'
@@ -102,30 +101,16 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
       const handleSelect = () => onSelectPrompt(prompt);
 
       return (
-        <Card
+        <ActionCard
           key={example.id}
-          data-bf-component="cowork-example-cards"
-          data-bf-part="card"
           className="bitfun-cowork-example-cards__card"
-          variant="subtle"
-          interactive
-          role="button"
-          tabIndex={0}
+          description={description}
+          leading={<Icon size={18} />}
+          size="md"
           onClick={handleSelect}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            handleSelect();
-          }}
         >
-          <div data-bf-component="cowork-example-cards" data-bf-part="cardHeader" className="bitfun-cowork-example-cards__card-header">
-            <div data-bf-component="cowork-example-cards" data-bf-part="cardIcon" className="bitfun-cowork-example-cards__card-icon">
-              <Icon size={18} />
-            </div>
-            <div data-bf-component="cowork-example-cards" data-bf-part="cardTitle" className="bitfun-cowork-example-cards__card-title">{title}</div>
-          </div>
-          <div data-bf-component="cowork-example-cards" data-bf-part="cardDescription" className="bitfun-cowork-example-cards__card-desc">{description}</div>
-        </Card>
+          {title}
+        </ActionCard>
       );
     });
   }, [onSelectPrompt, selected, t]);

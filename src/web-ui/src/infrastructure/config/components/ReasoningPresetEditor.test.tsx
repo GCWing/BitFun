@@ -22,14 +22,12 @@ vi.mock('react-i18next', async importOriginal => ({
 
 interface SelectSpyProps {
   'aria-label'?: string;
-  triggerAriaLabel?: string;
-  value?: string | number | (string | number)[] | null;
+  value?: string | number | null;
   options?: Array<{ label: string; value: string | number }>;
-  onValueChange?: (value: string | number | (string | number)[]) => void;
+  onValueChange?: (value: string | number) => void;
+  onCreateValue?: (value: string) => string | number | void;
   disabled?: boolean;
-  searchable?: boolean;
   clearable?: boolean;
-  allowCustomValue?: boolean;
 }
 
 const selectProps: Record<string, SelectSpyProps> = {};
@@ -55,7 +53,7 @@ vi.mock('@bitfun/ui', async importOriginal => ({
   NumberInput: () => <input type="number" />,
   Switch: () => <input type="checkbox" />,
   Combobox: (props: SelectSpyProps) => {
-    const label = props.triggerAriaLabel ?? '';
+    const label = props['aria-label'] ?? '';
     selectProps[label] = props;
     return (
       <select
@@ -87,18 +85,6 @@ vi.mock('@bitfun/ui', async importOriginal => ({
     );
   },
   Textarea: () => <textarea />,
-  Combobox: (props: SelectSpyProps) => {
-    const label = props.triggerAriaLabel ?? '';
-    selectProps[label] = props;
-    return (
-      <select aria-label={label} value={typeof props.value === 'string' ? props.value : ''}
-        disabled={props.disabled} onChange={(event) => props.onChange?.(event.target.value)}>
-        {props.options?.map(option => (
-          <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
-        ))}
-      </select>
-    );
-  },
 }));
 
 const modelsDevReasoningCatalog: ModelsDevReasoningCatalog = {
@@ -186,18 +172,16 @@ describe('ReasoningPresetEditor models-dev binding', () => {
     expect(provider).toBeTruthy();
     expect(provider?.options?.map(o => o.value)).toEqual(['', 'deepseek', 'github-copilot']);
     expect(provider?.value).toBe('');
-    expect(provider?.searchable).toBe(true);
     expect(provider?.clearable).toBe(true);
-    expect(provider?.allowCustomValue).toBe(true);
+    expect(provider?.onCreateValue?.('custom')).toBe('custom');
   });
 
   it('lists only reasoning-capable models of the selected provider', () => {
     render({ catalog: { source: 'models_dev', provider: 'deepseek', model: '' }, presets: [] });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options?.map(o => o.value)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
-    expect(model?.searchable).toBe(true);
     expect(model?.clearable).toBe(true);
-    expect(model?.allowCustomValue).toBe(true);
+    expect(model?.onCreateValue?.('custom')).toBe('custom');
   });
 
   it('returns empty model options for an unknown provider', () => {
@@ -248,16 +232,14 @@ describe('ReasoningPresetEditor models-dev binding', () => {
     expect(model?.value).toBe('gpt-5.1-codex');
   });
 
-  it('enables searchable, clearable and allowCustomValue on both binding selects', () => {
+  it('keeps both bindings clearable and gives custom values an explicit creation callback', () => {
     render();
     const provider = selectProps['reasoningPresets.catalogProvider'];
     const model = selectProps['reasoningPresets.catalogModel'];
-    expect(provider?.searchable).toBe(true);
     expect(provider?.clearable).toBe(true);
-    expect(provider?.allowCustomValue).toBe(true);
-    expect(model?.searchable).toBe(true);
+    expect(provider?.onCreateValue?.('provider')).toBe('provider');
     expect(model?.clearable).toBe(true);
-    expect(model?.allowCustomValue).toBe(true);
+    expect(model?.onCreateValue?.('model')).toBe('model');
   });
 
   it('clears the model when the provider changes', () => {

@@ -113,7 +113,6 @@ vi.mock('@/infrastructure/speech/voiceInputAudio', () => ({
 }));
 
 interface ProbeProps {
-  activateInput: () => void;
   focusInputSoon: () => void;
   insertText: (text: string) => string | null;
   submitText: (text: string) => Promise<void>;
@@ -130,7 +129,6 @@ describe('useComposerVoiceInput completion modes', () => {
   let host: HTMLDivElement;
   let root: Root;
   let controller: ComposerVoiceInputController | undefined;
-  let activateInput: ReturnType<typeof vi.fn>;
   let focusInputSoon: ReturnType<typeof vi.fn>;
   let insertText: ReturnType<typeof vi.fn>;
   let submitText: ReturnType<typeof vi.fn>;
@@ -162,7 +160,6 @@ describe('useComposerVoiceInput completion modes', () => {
     mocks.modelStatusListener = undefined;
     mocks.notificationInfo.mockClear();
     mocks.notificationError.mockClear();
-    activateInput = vi.fn();
     focusInputSoon = vi.fn();
     insertText = vi.fn(() => 'Existing draft Transcribed request');
     submitText = vi.fn(async () => undefined);
@@ -178,7 +175,6 @@ describe('useComposerVoiceInput completion modes', () => {
     await act(async () => {
       root.render(
         <Probe
-          activateInput={activateInput}
           focusInputSoon={focusInputSoon}
           insertText={insertText}
           submitText={submitText}
@@ -226,7 +222,6 @@ describe('useComposerVoiceInput completion modes', () => {
       await Promise.resolve();
     });
 
-    expect(activateInput).toHaveBeenCalledOnce();
     expect(insertText).toHaveBeenCalledWith('Transcribed request');
     expect(submitText).toHaveBeenCalledWith('Existing draft Transcribed request');
     expect(focusInputSoon).not.toHaveBeenCalled();
@@ -255,7 +250,6 @@ describe('useComposerVoiceInput completion modes', () => {
     await act(async () => {
       root.render(
         <Probe
-          activateInput={activateInput}
           focusInputSoon={focusInputSoon}
           insertText={insertText}
           submitText={submitText}

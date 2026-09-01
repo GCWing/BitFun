@@ -23,7 +23,10 @@ describe('ContextMenu presence', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>');
+    dom = new JSDOM(
+      '<!doctype html><html><body><div id="root"></div></body></html>',
+      { url: 'http://localhost/' },
+    );
     globalThis.window = dom.window as unknown as Window & typeof globalThis;
     globalThis.document = dom.window.document;
     window.requestAnimationFrame = callback => window.setTimeout(() => callback(0), 0);
@@ -109,16 +112,17 @@ describe('ContextMenu presence', () => {
       { id: 'copy', label: 'Copy', onClick: onCopy },
       { id: 'delete', label: 'Delete', onClick: onDelete },
     ];
-
-    act(() => root.render(
+    const renderMenu = (visible: boolean) => root.render(
       <ContextMenu
         items={items}
         position={{ x: 0, y: 0 }}
-        visible
+        visible={visible}
         onClose={onClose}
         onItemClick={onItemClick}
       />,
-    ));
+    );
+
+    act(() => renderMenu(true));
 
     await act(async () => {
       document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -126,17 +130,20 @@ describe('ContextMenu presence', () => {
     expect(onCopy).toHaveBeenCalledOnce();
     expect(onItemClick).toHaveBeenCalledWith(items[0], undefined);
     expect(onClose).toHaveBeenCalledOnce();
+
+    act(() => renderMenu(false));
     expect(document.activeElement).toBe(trigger);
 
+    act(() => renderMenu(true));
     act(() => {
-      const firstItem = document.querySelector<HTMLElement>('[role="menuitem"]');
-      firstItem?.focus();
       document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
     await act(async () => {
       document.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     });
     expect(onDelete).toHaveBeenCalledOnce();
+    act(() => renderMenu(false));
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('restores the pre-open focus snapshot on Escape', () => {
@@ -158,6 +165,14 @@ describe('ContextMenu presence', () => {
     act(() => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
 
     expect(onClose).toHaveBeenCalledOnce();
+    act(() => root.render(
+      <ContextMenu
+        items={[{ id: 'copy', label: 'Copy' }]}
+        position={{ x: 0, y: 0 }}
+        visible={false}
+        onClose={onClose}
+      />,
+    ));
     expect(document.activeElement).toBe(trigger);
   });
 

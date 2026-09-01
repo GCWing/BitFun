@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { activateMainSession } from '../../services/sessionActivation';
@@ -133,8 +133,7 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
           <div className="bitfun-session-menu__actions" data-bf-component="session-menu" data-bf-part="actions">
             <MenuItem
               type="button"
-              className="bitfun-session-menu__item-row bitfun-session-menu__item-row--new"
-              triggerClassName="bitfun-session-menu__item bitfun-session-menu__item--new"
+              className="bitfun-session-menu__item-row bitfun-session-menu__item-row--new bitfun-session-menu__item--new"
               data-bf-component="session-menu"
               data-bf-part="item"
               data-bf-item-kind="create"
@@ -169,11 +168,10 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
                 type="button"
                 role="menuitemradio"
                 checked={session.sessionId === activeSessionId}
-                className="bitfun-session-menu__item-row"
-                triggerClassName={[
-                    'bitfun-session-menu__item',
-                    session.sessionId === activeSessionId ? 'bitfun-session-menu__item--active' : '',
-                  ].filter(Boolean).join(' ')}
+                className={[
+                  'bitfun-session-menu__item-row',
+                  session.sessionId === activeSessionId ? 'bitfun-session-menu__item-row--active' : '',
+                ].filter(Boolean).join(' ')}
                 data-bf-component="session-menu"
                 data-bf-part="item"
                 data-bf-item-kind="session"

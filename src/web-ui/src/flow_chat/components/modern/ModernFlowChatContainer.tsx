@@ -43,11 +43,7 @@ import {
   useVisibleTurnInfo,
   type VisibleTurnInfo,
 } from '../../store/modernFlowChatStore';
-import type {
-  FlowChatConfig,
-  Session,
-  SessionHistoryPresentation,
-} from '../../types/flow-chat';
+import type { Session, SessionHistoryPresentation } from '../../types/flow-chat';
 import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
 import {
   FLOWCHAT_MESSAGE_SUBMITTED_EVENT,
@@ -62,7 +58,7 @@ import {
 import {
   useBackgroundSubagentActivityStore,
 } from '../../store/backgroundSubagentActivityStore';
-import { type LineRange } from '@/component-library';
+import { type LineRange } from '@/shared/editor/LineRange';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
@@ -124,7 +120,6 @@ const log = createLogger('ModernFlowChatContainer');
 
 interface ModernFlowChatContainerProps {
   className?: string;
-  config?: Partial<FlowChatConfig>;
   isViewportActive?: boolean;
   /** Whether the host-owned session right panel is open. */
   isRightPanelOpen?: boolean;
@@ -133,11 +128,10 @@ interface ModernFlowChatContainerProps {
   /** Host-owned replacement for the ordinary new-session WelcomePanel. */
   emptyState?: React.ReactNode;
 
-  // Callbacks compatible with the legacy version.
+  // Host-owned file, tab, and visualization actions.
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
   onTabOpen?: (tabInfo: any, sessionId?: string, panelType?: string) => void;
   onOpenVisualization?: (type: string, data: any) => void;
-  onSwitchToChatPanel?: () => void;
 }
 
 interface FlowChatTurnSummary {
@@ -291,7 +285,6 @@ function backgroundCommandSummaryFromActivity(activity: BackgroundCommandActivit
 
 export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = ({
   className = '',
-  config,
   isViewportActive = true,
   isRightPanelOpen = false,
   onToggleRightPanel,
@@ -299,7 +292,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   onFileViewRequest,
   onTabOpen,
   onOpenVisualization,
-  onSwitchToChatPanel,
 }) => {
   const { t } = useTranslation('flow-chat');
   const canonicalVirtualItems = useVirtualItems();
@@ -921,7 +913,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onTabOpen,
     onHttpLinkClick: handleHttpLinkClick,
     onOpenVisualization,
-    onSwitchToChatPanel,
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
     sessionId: activeSessionId,
@@ -930,14 +921,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     isHistoricalSession: activeSessionIsHistorical,
     contextRestoreState: activeSessionContextRestoreState,
     allowUserMessageRollback,
-    config: {
-      enableMarkdown: true,
-      autoScroll: true,
-      showTimestamps: false,
-      maxHistoryRounds: 50,
-      enableVirtualScroll: true,
-      ...config,
-    },
     onExploreGroupToggle: handleExploreGroupToggle,
     onExpandGroup: handleExpandGroup,
     onExpandAllInTurn: handleExpandAllInTurn,
@@ -947,7 +930,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onTabOpen,
     handleHttpLinkClick,
     onOpenVisualization,
-    onSwitchToChatPanel,
     handleToolConfirm,
     handleToolReject,
     activeSessionId,
@@ -956,7 +938,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     activeSessionIsHistorical,
     activeSessionContextRestoreState,
     allowUserMessageRollback,
-    config,
     handleExploreGroupToggle,
     handleExpandGroup,
     handleExpandAllInTurn,

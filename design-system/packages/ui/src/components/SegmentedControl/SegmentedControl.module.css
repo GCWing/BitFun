@@ -13,7 +13,7 @@
     padding: var(--bf-control-segmented-control-padding);
     border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
     border-radius: var(--bf-control-segmented-control-radius);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-action-neutral-surface);
   }
 
   .segment {

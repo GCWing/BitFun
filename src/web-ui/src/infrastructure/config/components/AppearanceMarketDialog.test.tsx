@@ -44,9 +44,12 @@ vi.mock('@bitfun/ui', () => ({
   Button: ({ children, isLoading: _isLoading, loading: _loading, iconOnly: _iconOnly, ...props }: any) => (
     <button {...props}>{children}</button>
   ),
-  Modal: ({ isOpen, title, titleExtra, children }: any) => isOpen ? (
-    <section role="dialog" aria-label={title}>{titleExtra}{children}</section>
-  ) : null,
+  Dialog: ({ open, children }: any) => open ? <section role="dialog">{children}</section> : null,
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: () => <button type="button" aria-label="Close" />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
   SearchField: ({ value, onValueChange, onSearch, 'aria-label': ariaLabel }: any) => (
     <input
       aria-label={ariaLabel}
@@ -90,14 +93,6 @@ vi.mock('@bitfun/ui', () => ({
     </label>
   ),
   Tooltip: ({ children }: any) => <>{children}</>,
-}));
-
-vi.mock('@/component-library', () => ({
-  Select: () => <div />,
-  Input: ({ label, ...props }: any) => <label>{label}<input {...props} /></label>,
-  Textarea: ({ label, showCount: _showCount, ...props }: any) => (
-    <label>{label}<textarea {...props} /></label>
-  ),
 }));
 
 vi.mock('@/infrastructure/confirm-dialog', () => ({

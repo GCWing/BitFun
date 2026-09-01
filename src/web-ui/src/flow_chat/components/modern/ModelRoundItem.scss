@@ -1,7 +1,4 @@
 /* Model round item styles (BEM). */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .model-round-item {
   /*
    * No bottom margin — the inter-round gap is covered by the same line-height rhythm
@@ -246,7 +243,7 @@
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     opacity 140ms ease;
   opacity: 1;
-  
+
   &:hover {
     background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
     color: var(--bf-color-content-primary);
@@ -289,7 +286,7 @@
 
 .model-round-item__copy-menu {
   position: fixed;
-  z-index: $z-popover;
+  z-index: var(--bf-layer-popover);
 }
 
 .model-round-item__fork-btn {

@@ -1,17 +1,15 @@
-@use '../../../component-library/styles/tokens' as *;
-
 .bitfun-editor-config {
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-6;
+    gap: var(--bf-space-6);
   }
 
   &__actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     width: 100%;
   }
 

@@ -278,7 +278,7 @@ const RETIRED_APPEARANCE_SETTINGS_PARTS = new Set([
   'packageEmpty',
 ]);
 
-const RETIRED_COMPONENT_SURFACE_IDS = new Set(['button', 'switch', 'select']);
+const RETIRED_COMPONENT_SURFACE_IDS = new Set(['button', 'card', 'switch', 'select']);
 
 const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'assistant-card': new Set(['configure', 'newSession']),

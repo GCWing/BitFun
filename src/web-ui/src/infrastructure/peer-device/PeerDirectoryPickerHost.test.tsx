@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import { DEFAULT_RETAINED_MOUNT_MS } from '@/shared/presence';
 import { PeerDirectoryPickerHost } from './PeerDirectoryPickerHost';
 import { usePeerDirectoryPickerStore } from './peerDirectoryPickerStore';
 
@@ -80,7 +80,7 @@ describe('PeerDirectoryPickerHost presence', () => {
     expect(closingBrowser?.getAttribute('data-title')).toBe('Choose peer folder');
     expect(closingBrowser?.getAttribute('data-initial-path')).toBe('/peer/project');
 
-    act(() => vi.advanceTimersByTime(PRESENCE_BOUNDARY_MIN_EXIT_MS));
+    act(() => vi.advanceTimersByTime(DEFAULT_RETAINED_MOUNT_MS));
     expect(container.querySelector('[data-testid="peer-directory-browser-stub"]')).toBeNull();
   });
 

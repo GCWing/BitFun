@@ -26,10 +26,15 @@ import {
   KeyHint,
   Listbox,
   ListboxOption,
+  LoadingState,
   Menu,
   MenuItem,
   MenuSection,
+  MultiSelect,
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
   NavigationPanelItem,
   NavigationPanelSection,
   NumberInput,
@@ -42,6 +47,7 @@ import {
   Select,
   Stack,
   StatusPill,
+  Spinner,
   Switch,
   TabGroup,
   Textarea,
@@ -93,14 +99,18 @@ const componentIcons = {
   Input: <CatalogIcon name="eye" style={{ width: 19, height: 19 }} />,
   KeyHint: <Keyboard aria-hidden="true" size={19} />,
   Listbox: <List aria-hidden="true" size={19} />,
+  LoadingState: <AppWindow aria-hidden="true" size={19} />,
   Menu: <List aria-hidden="true" size={19} />,
-  Modal: <AppWindow aria-hidden="true" size={19} />,
+  Dialog: <AppWindow aria-hidden="true" size={19} />,
+  Sheet: <AppWindow aria-hidden="true" size={19} />,
+  MultiSelect: <List aria-hidden="true" size={19} />,
   NavigationPanel: <CatalogIcon name="sidebar-left" style={{ width: 19, height: 19 }} />,
   PageHeader: <Heading aria-hidden="true" size={19} />,
   ScrollArea: <Rows3 aria-hidden="true" size={19} />,
   SearchField: <CatalogIcon name="search" style={{ width: 19, height: 19 }} />,
   SegmentedControl: <ToggleLeft aria-hidden="true" size={19} />,
   Select: <List aria-hidden="true" size={19} />,
+  Spinner: <AppWindow aria-hidden="true" size={19} />,
   StatusPill: <CatalogIcon name="check-line" style={{ width: 19, height: 19 }} />,
   Switch: <ToggleLeft aria-hidden="true" size={19} />,
   Disclosure: <CatalogIcon name="chevron-right" style={{ width: 19, height: 19 }} />,
@@ -301,13 +311,23 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             { label: "Ask", value: "ask" },
             { label: "Plan", value: "plan" },
           ]}
-          searchable
-          triggerAriaLabel={t("components.preview.appearance")}
+          aria-label={t("components.preview.appearance")}
           value="ask"
         />
       );
+    case "MultiSelect":
+      return (
+        <MultiSelect
+          aria-label={t("components.preview.appearance")}
+          options={[
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+          ]}
+          value={["ask", "plan"]}
+        />
+      );
     case "NumberInput":
-      return <NumberInput onChange={() => undefined} value={8} />;
+      return <NumberInput onValueChange={() => undefined} value={8} />;
     case "Radio":
       return (
         <Radio
@@ -372,16 +392,21 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           </span>
         </Composer>
       );
-    case "Modal":
+    case "Dialog":
+    case "Sheet":
       return (
         <Button
           leadingIcon={<AppWindow aria-hidden="true" />}
           size="sm"
           tabIndex={-1}
         >
-          {t("components.preview.openModal")}
+          {t("components.preview.openDialog")}
         </Button>
       );
+    case "LoadingState":
+      return <LoadingState>{t("detail.loading")}</LoadingState>;
+    case "Spinner":
+      return <Spinner aria-label={t("detail.loading")} size="sm" />;
     case "PageHeader":
       return (
         <PageHeader
@@ -397,17 +422,22 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <NavigationPanel
           aria-label={t("components.preview.navigationPanelLabel")}
           className="component-navigation-panel-card-preview"
-          footer={<span>{t("components.preview.navigationPanelDevice")}</span>}
-          scrollbarVisibility="hidden"
         >
-          <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
-            <NavigationPanelItem leading={<CatalogIcon name="session" aria-hidden="true" />} selected tabIndex={-1}>
-              {t("components.preview.menuItemOne")}
-            </NavigationPanelItem>
-            <NavigationPanelItem reserveLeadingSpace tabIndex={-1}>
-              {t("components.preview.menuItemTwo")}
-            </NavigationPanelItem>
-          </NavigationPanelSection>
+          <NavigationPanelBody scrollbarVisibility="hidden">
+            <NavigationPanelContent>
+              <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
+                <NavigationPanelItem leading={<CatalogIcon name="session" aria-hidden="true" />} selected tabIndex={-1}>
+                  {t("components.preview.menuItemOne")}
+                </NavigationPanelItem>
+                <NavigationPanelItem reserveLeadingSpace tabIndex={-1}>
+                  {t("components.preview.menuItemTwo")}
+                </NavigationPanelItem>
+              </NavigationPanelSection>
+            </NavigationPanelContent>
+          </NavigationPanelBody>
+          <NavigationPanelFooter>
+            <span>{t("components.preview.navigationPanelDevice")}</span>
+          </NavigationPanelFooter>
         </NavigationPanel>
       );
     case "ScrollArea":
@@ -592,7 +622,7 @@ export function ComponentsPage({
       </div>
 
       {isFlowChatCategory && (
-        <section className="component-library-section-heading">
+        <section className="component-catalog-section-heading">
           <div>
             <span className="page-kicker">{t("components.flowChat.templatesKicker")}</span>
             <h2>{t("components.flowChat.templatesTitle")}</h2>

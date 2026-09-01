@@ -96,7 +96,6 @@ describe('FlowChat semantic typography roles', () => {
       'font-size: var(--bf-type-flow-meta-font-size);',
     );
     expectRole(userMessage, '.user-message-item__content {', 'body');
-    expectRole(userMessage, '.user-message-item__timestamp {', 'meta');
     expectRole(userMessage, '.user-message-item__steering-tag {', 'micro');
     expect(extractBlock(userMessage, '.user-message-item--failed {')).toContain(
       '--_failed-font-size: var(--bf-type-flow-control-font-size);',

@@ -14,7 +14,7 @@ function validPackage(): AppearancePackage {
     version: '1.0.0',
     mode: 'dark',
     components: {
-      card: {
+      'gallery-layout': {
         parts: {
           root: {
             base: {
@@ -49,7 +49,7 @@ describe('AppearancePackageValidator', () => {
       },
     };
     raw.components = {
-      card: {
+      'gallery-layout': {
         parts: {
           root: {
             base: {
@@ -83,8 +83,8 @@ describe('AppearancePackageValidator', () => {
   it('rejects raw CSS strings and unregistered parts', () => {
     const raw = validPackage() as unknown as Record<string, unknown>;
     const components = raw.components as Record<string, { parts: Record<string, unknown> }>;
-    components.card.parts.root = { base: { backgroundColor: 'url(https://example.com/a.png)' } };
-    components.card.parts.internalClass = { base: { color: { kind: 'hex', value: '#fff' } } };
+    components['gallery-layout'].parts.root = { base: { backgroundColor: 'url(https://example.com/a.png)' } };
+    components['gallery-layout'].parts.internalClass = { base: { color: { kind: 'hex', value: '#fff' } } };
 
     const result = appearancePackageValidator.validate(raw, registry);
     expect(result.errors).toEqual(expect.arrayContaining([
@@ -206,11 +206,11 @@ describe('AppearancePackageValidator', () => {
     const raw = validPackage() as unknown as Record<string, unknown>;
     raw.css = '.btn { display: none }';
     const components = raw.components as Record<string, { parts: Record<string, Record<string, unknown>> }>;
-    components.card.parts.root.selector = '.private-class';
+    components['gallery-layout'].parts.root.selector = '.private-class';
     const result = appearancePackageValidator.validate(raw, registry);
     expect(result.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'UNKNOWN_FIELD', path: 'css' }),
-      expect.objectContaining({ code: 'UNKNOWN_FIELD', path: 'components.card.parts.root.selector' }),
+      expect.objectContaining({ code: 'UNKNOWN_FIELD', path: 'components.gallery-layout.parts.root.selector' }),
     ]));
   });
 
@@ -265,7 +265,7 @@ describe('AppearancePackageValidator', () => {
       backdrop: { kind: 'image', mimeType: 'image/webp', source: { kind: 'package', path: 'assets/backdrop.webp' } },
       ornament: { kind: 'image', mimeType: 'image/png', source: { kind: 'package', path: 'assets/ornament.png' } },
     };
-    pkg.components!.card.parts.root.base = {
+    pkg.components!['gallery-layout'].parts.root.base = {
       backgroundImages: [
         { kind: 'asset', assetId: 'ornament' },
         { kind: 'asset', assetId: 'backdrop' },
@@ -325,7 +325,7 @@ describe('AppearancePackageValidator', () => {
       motion: { kind: 'video', mimeType: 'video/mp4', source: { kind: 'package', path: 'assets/background.mp4' } },
     };
     pkg.preview = { kind: 'asset', assetId: 'motion' };
-    pkg.components!.card.parts.root.base = {
+    pkg.components!['gallery-layout'].parts.root.base = {
       backgroundImage: { kind: 'asset', assetId: 'motion' },
     };
 
@@ -354,7 +354,7 @@ describe('AppearancePackageValidator', () => {
   it('rejects conflicting or misaligned background layer declarations', () => {
     const pkg = validPackage() as unknown as Record<string, unknown>;
     const components = pkg.components as Record<string, { parts: Record<string, { base: Record<string, unknown> }> }>;
-    components.card.parts.root.base = {
+    components['gallery-layout'].parts.root.base = {
       backgroundImage: { kind: 'asset', assetId: 'backdrop' },
       backgroundImages: [
         { kind: 'asset', assetId: 'backdrop' },
@@ -382,13 +382,13 @@ describe('AppearancePackageValidator', () => {
       },
     };
     const components = pkg.components as Record<string, { parts: Record<string, Record<string, unknown>> }>;
-    components.card.parts.root.materials = ['surface'];
+    components['gallery-layout'].parts.root.materials = ['surface'];
     expect(appearancePackageValidator.validate(pkg, registry).valid).toBe(true);
 
-    delete components.card.parts.root.materials;
-    components.card.parts.root.material = 'surface';
+    delete components['gallery-layout'].parts.root.materials;
+    components['gallery-layout'].parts.root.material = 'surface';
     expect(appearancePackageValidator.validate(pkg, registry).errors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'UNKNOWN_FIELD', path: 'components.card.parts.root.material' }),
+      expect.objectContaining({ code: 'UNKNOWN_FIELD', path: 'components.gallery-layout.parts.root.material' }),
     ]));
   });
 

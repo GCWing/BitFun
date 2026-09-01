@@ -27,7 +27,6 @@ export async function reviewPromptCommandShell(
       : undefined,
     cancelText: translate('chatInput.promptCommandShellReview.cancel'),
     preview: plan.commands.map(command => `$ ${command}`).join('\n\n'),
-    previewMaxHeight: 240,
   });
 
   if (choice === 'cancel' || (choice === 'secondary' && !plan.canRemember)) {

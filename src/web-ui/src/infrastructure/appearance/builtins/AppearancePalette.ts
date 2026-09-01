@@ -9,6 +9,8 @@ export interface BackgroundColors {
   elevated: ColorValue;
   workbench: ColorValue;
   scene: ColorValue;
+  /** Persistent structural navigation/window surface. Falls back to primary for legacy packages. */
+  chrome?: ColorValue;
 }
 
 export interface TextColors {

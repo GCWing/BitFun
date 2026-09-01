@@ -12,6 +12,7 @@ import { useSceneTabNavigation } from './useSceneTabNavigation';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
 import { useCurrentSettingsPageTitle } from '../../hooks/useCurrentSettingsPageTitle';
+import { isSceneTabClosable } from '../../scenes/registry';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from './types';
 import './SceneBar.scss';
@@ -63,7 +64,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
     if (e.button !== 1) return;
     if ((e.target as HTMLElement | null)?.closest('[data-scene-bar-part="closeTab"]')) return;
     const sceneId = getSceneIdFromTabTarget(e.target);
-    if (!sceneId || tabDefs.find(def => def.id === sceneId)?.pinned) return;
+    if (!sceneId || !isSceneTabClosable(tabDefs.find(def => def.id === sceneId))) return;
     e.preventDefault();
   }, [tabDefs]);
 
@@ -71,7 +72,16 @@ const SceneBar: React.FC<SceneBarProps> = ({
     if (e.button !== 1) return;
     if ((e.target as HTMLElement | null)?.closest('[data-scene-bar-part="closeTab"]')) return;
     const sceneId = getSceneIdFromTabTarget(e.target);
-    if (!sceneId || tabDefs.find(def => def.id === sceneId)?.pinned) return;
+    if (!sceneId || !isSceneTabClosable(tabDefs.find(def => def.id === sceneId))) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeScene(sceneId);
+  }, [closeScene, tabDefs]);
+
+  const handleTabsKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Delete') return;
+    const sceneId = getSceneIdFromTabTarget(e.target);
+    if (!sceneId || !isSceneTabClosable(tabDefs.find(def => def.id === sceneId))) return;
     e.preventDefault();
     e.stopPropagation();
     closeScene(sceneId);
@@ -86,6 +96,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
       (tab.id === 'session' && sessionTitle ? sessionTitle : undefined)
       ?? (tab.id === 'settings' && settingsPageTitle ? settingsPageTitle : undefined);
     const closeLabel = t('sceneBar.closeTab', { label: translatedLabel });
+    const closable = isSceneTabClosable(def);
 
     items.push({
       value: tab.id,
@@ -101,7 +112,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
           )}
         </span>
       ),
-      endAction: def.pinned ? undefined : (
+      endAction: closable ? (
         <button
           type="button"
           aria-label={closeLabel}
@@ -116,7 +127,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
         >
           <Icon name="xmark" size="xs" aria-hidden="true" />
         </button>
-      ),
+      ) : undefined,
     });
     return items;
   }, []);
@@ -156,6 +167,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
           onValueChange={handleTabValueChange}
           onScroll={handleTabsScroll}
           onWheel={handleTabsWheel}
+          onKeyDown={handleTabsKeyDown}
           onMouseDown={handleTabsMouseDown}
           onAuxClick={handleTabsAuxClick}
           data-scene-bar-part="tabs"

@@ -50,5 +50,6 @@ test("ActionCard styles use public action-card and semantic tokens", async () =>
   assert.match(styles, /--bf-control-action-card-sm-min-block-size/);
   assert.match(styles, /--bf-control-action-card-leading-size/);
   assert.match(styles, /--bf-color-action-neutral-surface-hover/);
+  assert.match(styles, /--bf-color-selection-surface/);
   assert.match(styles, /--bf-color-focus-ring/);
 });

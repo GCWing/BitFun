@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  type CSSProperties,
   type HTMLAttributes,
   type ReactNode,
 } from "react";
@@ -8,7 +7,7 @@ import { classNames } from "../../internal/classNames";
 import { Icon } from "../Icon";
 import styles from "./Empty.module.css";
 
-export type EmptyMediaSize = "sm" | "md" | "lg" | "small" | "medium" | "large" | number;
+export type EmptyMediaSize = "sm" | "md" | "lg";
 
 export interface EmptyProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "title"> {
@@ -19,13 +18,6 @@ export interface EmptyProps
   image?: ReactNode;
   imageSize?: EmptyMediaSize;
   title?: ReactNode;
-}
-
-function normalizeMediaSize(size: EmptyMediaSize) {
-  if (size === "small") return "sm";
-  if (size === "large") return "lg";
-  if (size === "medium") return "md";
-  return size;
 }
 
 export const Empty = forwardRef<HTMLDivElement, EmptyProps>(function Empty({
@@ -40,11 +32,7 @@ export const Empty = forwardRef<HTMLDivElement, EmptyProps>(function Empty({
   title,
   ...props
 }, ref) {
-  const resolvedSize = normalizeMediaSize(imageSize);
   const media = icon ?? image ?? <Icon name="folder" size="lg" tone="muted" />;
-  const mediaStyle = typeof resolvedSize === "number"
-    ? { blockSize: resolvedSize, inlineSize: resolvedSize } as CSSProperties
-    : undefined;
   const footer = actions ?? children;
 
   return (
@@ -58,8 +46,7 @@ export const Empty = forwardRef<HTMLDivElement, EmptyProps>(function Empty({
       <div
         className={styles.media}
         data-bf-part="media"
-        data-size={typeof resolvedSize === "number" ? "custom" : resolvedSize}
-        style={mediaStyle}
+        data-size={imageSize}
       >
         {media}
       </div>

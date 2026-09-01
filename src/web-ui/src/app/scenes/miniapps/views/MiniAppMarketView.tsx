@@ -1,4 +1,17 @@
-import { Button, ConfirmDialog, Icon, SearchField, Select, type SelectOption, StatusPill } from '@bitfun/ui';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardMedia,
+  ConfirmDialog,
+  Icon,
+  IconButton,
+  SearchField,
+  SegmentedControl,
+  Select,
+  type SelectOption,
+  StatusPill,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Heart, Loader2, PackageCheck, ShieldCheck } from 'lucide-react';
 
@@ -293,21 +306,16 @@ const MiniAppMarketView: React.FC = () => {
             />
           )}
         >
-          <div className="gallery-chip-row">
-            {CATEGORIES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={[
-                  'gallery-cat-chip',
-                  value === category && 'gallery-cat-chip--active',
-                ].filter(Boolean).join(' ')}
-                onClick={() => setCategory(value)}
-              >
-                {categoryLabel(value, t)}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            className="miniapp-market-native__categories"
+            options={CATEGORIES.map((value) => ({
+              label: categoryLabel(value, t),
+              value,
+            }))}
+            value={category}
+            onValueChange={(value) => setCategory(value as (typeof CATEGORIES)[number])}
+            aria-label={t('market.catalog')}
+          />
           {loading ? (
             <GallerySkeleton
               count={8}
@@ -339,46 +347,53 @@ const MiniAppMarketView: React.FC = () => {
                   const name = pickLocalizedString(item, currentLanguage, 'name');
                   const description = pickLocalizedString(item, currentLanguage, 'description');
                   return (
-                    <button
+                    <Card
                       key={item.listingId}
-                      type="button"
                       className="miniapp-market-card"
-                      data-bf-component="miniapp-market-view"
-                      data-bf-part="card"
-                      onClick={() => void openDetail(item)}
+                      appearance="raised"
+                      clip
+                      radius="lg"
                     >
-                      <div className="miniapp-market-card__visual">
-                        {item.screenshotUrls[0] ? (
-                          <img
-                            src={marketImageUrl(item.screenshotUrls[0], 'compact-v1')}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            onError={(event) => retryOriginalMarketImage(event.currentTarget, item.screenshotUrls[0]!)}
-                          />
-                        ) : (
-                          <span
-                            className="miniapp-market-card__fallback"
-                            style={{ background: getMiniAppIconGradient(item.icon || 'box') }}
-                          >
-                            {renderMiniAppIcon(item.icon || 'box', 30)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="miniapp-market-card__body">
-                        <div className="miniapp-market-card__eyebrow">
-                          <span>{categoryLabel(item.category, t)}</span>
-                          <span>v{item.latestRelease}</span>
-                        </div>
-                        <strong>{name}</strong>
-                        <p>{description}</p>
-                        <div className="miniapp-market-card__stats">
-                          <span><Icon name="star" size="xs" /> {item.ratingAverage.toFixed(1)}</span>
-                          <span><Icon name="download" size="xs" /> {formatNumber(item.downloadCount)}</span>
-                          <span><Heart size={12} /> {formatNumber(item.favoriteCount)}</span>
-                        </div>
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        className="miniapp-market-card__trigger"
+                        data-bf-component="miniapp-market-view"
+                        data-bf-part="card"
+                        onClick={() => void openDetail(item)}
+                      >
+                        <CardMedia className="miniapp-market-card__visual">
+                          {item.screenshotUrls[0] ? (
+                            <img
+                              src={marketImageUrl(item.screenshotUrls[0], 'compact-v1')}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              onError={(event) => retryOriginalMarketImage(event.currentTarget, item.screenshotUrls[0]!)}
+                            />
+                          ) : (
+                            <span
+                              className="miniapp-market-card__fallback"
+                              style={{ background: getMiniAppIconGradient(item.icon || 'box') }}
+                            >
+                              {renderMiniAppIcon(item.icon || 'box', 30)}
+                            </span>
+                          )}
+                        </CardMedia>
+                        <CardBody className="miniapp-market-card__body">
+                          <div className="miniapp-market-card__eyebrow">
+                            <span>{categoryLabel(item.category, t)}</span>
+                            <span>v{item.latestRelease}</span>
+                          </div>
+                          <strong>{name}</strong>
+                          <p>{description}</p>
+                          <div className="miniapp-market-card__stats">
+                            <span><Icon name="star" size="xs" /> {item.ratingAverage.toFixed(1)}</span>
+                            <span><Icon name="download" size="xs" /> {formatNumber(item.downloadCount)}</span>
+                            <span><Heart size={12} /> {formatNumber(item.favoriteCount)}</span>
+                          </div>
+                        </CardBody>
+                      </button>
+                    </Card>
                   );
                 })}
               </GalleryGrid>
@@ -510,9 +525,16 @@ const MiniAppMarketView: React.FC = () => {
               <h4>{t('market.detail.rating')}</h4>
               <div className="miniapp-market-detail__rating">
                 {[1, 2, 3, 4, 5].map((value) => (
-                  <button key={value} type="button" onClick={() => void rate(value)} disabled={actionBusy}>
-                    <Icon name="star" size="lg" />
-                  </button>
+                  <IconButton
+                    key={value}
+                    size="xs"
+                    className="miniapp-market-detail__rating-action"
+                    onClick={() => void rate(value)}
+                    disabled={actionBusy}
+                    aria-label={`${t('market.detail.rating')} ${value}`}
+                    title={`${t('market.detail.rating')} ${value}`}
+                    icon={<Icon name="star" size="lg" />}
+                  />
                 ))}
                 <span>{detail.ratingAverage.toFixed(1)} · {formatNumber(detail.ratingCount)}</span>
               </div>
@@ -533,17 +555,20 @@ const MiniAppMarketView: React.FC = () => {
                 ))}
               </div>
               {detail.releases.length > 1 ? (
-                <button
-                  type="button"
+                <Button
+                  variant="text"
+                  size="xs"
                   className="miniapp-market-detail__releases-toggle"
                   aria-expanded={releasesExpanded}
                   onClick={() => setReleasesExpanded((current) => !current)}
+                  leadingIcon={releasesExpanded
+                    ? <Icon name="chevron-up" size="lg" />
+                    : <Icon name="chevron-down" size="xs" />}
                 >
-                  {releasesExpanded ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="xs" />}
                   {releasesExpanded
                     ? t('market.detail.releasesCollapse')
                     : t('market.detail.releasesExpand', { count: releaseHistory.hiddenCount })}
-                </button>
+                </Button>
               ) : null}
             </section>
             {detail.repositoryUrl ? (
@@ -562,8 +587,8 @@ const MiniAppMarketView: React.FC = () => {
       </GalleryDetailModal>
 
       <ConfirmDialog
-        isOpen={installPrompt}
-        onClose={() => setInstallPrompt(false)}
+        open={installPrompt}
+        onOpenChange={() => setInstallPrompt(false)}
         onConfirm={() => void install()}
         title={t(installed ? 'market.confirmUpdate.title' : 'market.confirmInstall.title', {
           name: detailName,

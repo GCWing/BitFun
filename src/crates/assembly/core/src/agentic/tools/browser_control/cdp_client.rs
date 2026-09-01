@@ -7,7 +7,7 @@ use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use log::{debug, info, warn};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
@@ -69,9 +69,14 @@ pub struct CdpBrowserConnection {
 }
 
 static BROWSER_CONNECTIONS: OnceLock<RwLock<HashMap<u16, CdpBrowserConnection>>> = OnceLock::new();
+static SUPPRESSED_BROWSER_CONNECTIONS: OnceLock<RwLock<HashSet<u16>>> = OnceLock::new();
 
 fn browser_connections() -> &'static RwLock<HashMap<u16, CdpBrowserConnection>> {
     BROWSER_CONNECTIONS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn suppressed_browser_connections() -> &'static RwLock<HashSet<u16>> {
+    SUPPRESSED_BROWSER_CONNECTIONS.get_or_init(|| RwLock::new(HashSet::new()))
 }
 
 impl CdpClient {
@@ -111,6 +116,12 @@ impl CdpClient {
         browser_kind: &BrowserKind,
         ws_url: &str,
     ) -> BitFunResult<CdpBrowserConnection> {
+        if Self::browser_connection_suppressed(logical_port).await {
+            return Err(BitFunError::tool(
+                "Browser control was disconnected in Settings. Reconnect it there before attaching again."
+                    .to_string(),
+            ));
+        }
         if let Some(existing) = Self::browser_connection(logical_port).await {
             if existing.actual_port == actual_port && existing.browser_kind == *browser_kind {
                 return Ok(existing);
@@ -185,6 +196,44 @@ impl CdpClient {
         browser_connections().write().await.remove(&logical_port);
     }
 
+    /// Close and forget the browser-level connection assigned to a logical
+    /// tool port. Unlike [`remove_browser_connection`], this is an explicit
+    /// user disconnect: all flattened page clients sharing the transport are
+    /// invalidated immediately instead of being allowed to finish naturally.
+    pub async fn disconnect_browser_connection(logical_port: u16) -> bool {
+        let connection = browser_connections().write().await.remove(&logical_port);
+        if let Some(connection) = connection {
+            connection.client.disconnect().await;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Prevent agent-driven actions from silently reattaching after the user
+    /// explicitly disconnected Browser Control in Settings. An explicit user
+    /// connect action clears this process-local guard.
+    pub async fn suppress_browser_connection(logical_port: u16) {
+        suppressed_browser_connections()
+            .write()
+            .await
+            .insert(logical_port);
+    }
+
+    pub async fn allow_browser_connection(logical_port: u16) {
+        suppressed_browser_connections()
+            .write()
+            .await
+            .remove(&logical_port);
+    }
+
+    pub async fn browser_connection_suppressed(logical_port: u16) -> bool {
+        suppressed_browser_connections()
+            .read()
+            .await
+            .contains(&logical_port)
+    }
+
     async fn connect_with_timeout(ws_url: &str, timeout: Duration) -> BitFunResult<Self> {
         let (ws_stream, _) = tokio::time::timeout(timeout, connect_async(ws_url))
             .await
@@ -246,6 +295,40 @@ impl CdpClient {
                 .as_ref()
                 .map(|alive| alive.load(Ordering::SeqCst))
                 .unwrap_or(true)
+    }
+
+    /// Explicitly close this CDP transport and invalidate every page session
+    /// multiplexed over it. This is idempotent so a browser-level connection
+    /// and its registered page sessions can all participate in one cleanup.
+    pub async fn disconnect(&self) {
+        if !self.transport.alive.swap(false, Ordering::SeqCst) {
+            return;
+        }
+
+        self.transport.pending.write().await.clear();
+        self.transport.event_channels.write().await.clear();
+        for status in self
+            .transport
+            .session_statuses
+            .write()
+            .await
+            .drain()
+            .map(|(_, status)| status)
+        {
+            if let Some(status) = status.upgrade() {
+                status.store(false, Ordering::SeqCst);
+            }
+        }
+
+        // The local state above makes disconnect observable immediately. Give
+        // the browser a short opportunity to receive a normal WebSocket close
+        // frame, then abort the reader so a stalled peer cannot hold up the UI.
+        let sink = self.transport.sink.clone();
+        let _ = tokio::time::timeout(Duration::from_secs(1), async move {
+            sink.lock().await.send(Message::Close(None)).await
+        })
+        .await;
+        self.transport.reader_handle.abort();
     }
 
     /// Connect to the first available page on a legacy debug port.
@@ -409,6 +492,9 @@ impl CdpClient {
 
     /// Send a CDP method call and wait for the response.
     pub async fn send(&self, method: &str, params: Option<Value>) -> BitFunResult<Value> {
+        if !self.is_connected() {
+            return Err(BitFunError::tool("CDP response channel closed".to_string()));
+        }
         let id = self.transport.next_id.fetch_add(1, Ordering::SeqCst);
         let mut msg = json!({
             "id": id,
@@ -697,6 +783,65 @@ mod tests {
             Err(tokio::sync::broadcast::error::TryRecvError::Empty)
         ));
 
+        server.await.expect("mock CDP server");
+    }
+
+    #[tokio::test]
+    async fn disconnect_invalidates_browser_and_flattened_page_clients() {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("bind mock CDP server");
+        let address = listener.local_addr().expect("mock CDP address");
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept CDP client");
+            let mut socket = tokio_tungstenite::accept_async(stream)
+                .await
+                .expect("accept WebSocket");
+
+            while let Some(message) = socket.next().await {
+                match message.expect("read CDP message") {
+                    Message::Text(text) => {
+                        let command: Value =
+                            serde_json::from_str(&text).expect("parse CDP command");
+                        let id = command
+                            .get("id")
+                            .and_then(Value::as_i64)
+                            .expect("command id");
+                        assert_eq!(command["method"], "Target.attachToTarget");
+                        socket
+                            .send(Message::Text(
+                                json!({ "id": id, "result": { "sessionId": "session-1" } })
+                                    .to_string()
+                                    .into(),
+                            ))
+                            .await
+                            .expect("send attach response");
+                    }
+                    Message::Close(_) => break,
+                    _ => {}
+                }
+            }
+        });
+
+        let browser = CdpClient::connect(&format!("ws://{address}"))
+            .await
+            .expect("connect browser WebSocket");
+        let page = browser
+            .attach_to_page("page-1")
+            .await
+            .expect("attach flattened page session");
+        assert!(browser.is_connected());
+        assert!(page.is_connected());
+
+        browser.disconnect().await;
+
+        assert!(!browser.is_connected());
+        assert!(!page.is_connected());
+        let error = page
+            .send("Runtime.enable", None)
+            .await
+            .expect_err("disconnected page must reject new commands");
+        assert!(error.to_string().contains("response channel closed"));
         server.await.expect("mock CDP server");
     }
 }

@@ -17,7 +17,7 @@ import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/Mo
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
-import { CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
@@ -41,7 +41,7 @@ import {
   isLikelyFileNotFoundError,
 } from '@/shared/utils/fsErrorUtils';
 import { useI18n } from '@/infrastructure/i18n';
-import type { LineRange } from '@/component-library/components/Markdown';
+import { type LineRange } from '@/shared/editor/LineRange';
 import { EditorBreadcrumb } from './EditorBreadcrumb';
 import { EditorStatusBar } from './EditorStatusBar';
 import largeFileExpansionLabels from './largeFileExpansionLabels.json';
@@ -2190,7 +2190,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       {loading && showLoadingOverlay && (
         <div className="code-editor-tool__loading-overlay" data-bf-component="editor-tool" data-bf-part="loading">
-          <CubeLoading size="medium" text={loadingOverlayText} />
+          <LoadingState size="md">{loadingOverlayText}</LoadingState>
         </div>
       )}
 

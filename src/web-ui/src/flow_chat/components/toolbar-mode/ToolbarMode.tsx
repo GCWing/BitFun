@@ -36,7 +36,7 @@ import { SessionMenu, useFlowChatSessions } from '../session-menu';
 
 const log = createLogger('ToolbarMode');
 import ChatPane from '@/app/scenes/session/ChatPane';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {

@@ -377,7 +377,6 @@ describe('startup performance contract', () => {
 
   it('keeps editor panel implementations lazy from the session shell', () => {
     const source = readSource('../components/panels/base/FlexiblePanel.tsx');
-    const componentLibraryBarrel = readSource('../../component-library/components/index.ts');
 
     expect(source).not.toMatch(/from\s+['"]@\/tools\/editor['"]/);
     expect(source).not.toMatch(/from\s+['"]@\/tools\/git\/components\/GitDiffEditor\/GitDiffEditor['"]/);
@@ -385,7 +384,6 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('@/tools/editor/components/DiffEditor')");
     expect(source).toContain("import('@/tools/git/components/GitDiffEditor/GitDiffEditor')");
     expect(source).toContain('renderLazyEditor(');
-    expect(componentLibraryBarrel).not.toMatch(/CodeEditor/);
   });
 
   it('keeps terminal xterm runtime out of session startup until terminal output is rendered', () => {
@@ -484,7 +482,6 @@ describe('startup performance contract', () => {
     const flowToolCardSource = readSource('../../flow_chat/components/FlowToolCard.tsx');
     const modelRoundItemSource = readSource('../../flow_chat/components/modern/ModelRoundItem.tsx');
     const flowStoreSource = readSource('../../flow_chat/store/modernFlowChatStore.ts');
-    const componentRegistrySource = readSource('../../component-library/components/registry.tsx');
     const keyboardShortcutsSource = readSource('../scenes/settings/components/KeyboardShortcutsTab.tsx');
 
     expect(metadataSource).toContain('TOOL_CARD_CONFIGS');
@@ -499,7 +496,6 @@ describe('startup performance contract', () => {
     expect(modelRoundItemSource).not.toMatch(/from\s+['"]\.\.\/\.\.\/tool-cards['"]/);
     expect(flowStoreSource).toContain("from '../tool-cards/toolCardMetadata'");
     expect(flowStoreSource).not.toMatch(/from\s+['"]\.\.\/tool-cards['"]/);
-    expect(componentRegistrySource).toContain("from '@/flow_chat/tool-cards/toolCardMetadata'");
     expect(keyboardShortcutsSource).not.toMatch(/from\s+['"]@\/infrastructure\/config['"]/);
     expect(keyboardShortcutsSource).toContain(
       "from '@/infrastructure/config/services/ConfigManager'"
@@ -645,7 +641,7 @@ describe('startup performance contract', () => {
   it('uses narrow context-menu imports from startup-visible modules', () => {
     const sources = [
       '../../app/scenes/shell/ShellNav.tsx',
-      '../../component-library/components/Markdown/Markdown.tsx',
+      '../../infrastructure/markdown/MarkdownRenderer.tsx',
       '../../flow_chat/tool-cards/GenerativeWidgetToolCard.tsx',
       '../../tools/file-system/components/FileSearchResults.tsx',
       '../../tools/generative-widget/useGenerativeWidgetPromptMenu.ts',
@@ -658,8 +654,8 @@ describe('startup performance contract', () => {
   });
 
   it('keeps markdown content rendering off the components i18n subscription path', () => {
-    const source = readSource('../../component-library/components/Markdown/Markdown.tsx');
-    const mathSource = readSource('../../component-library/components/Markdown/MarkdownMathRenderer.tsx');
+    const source = readSource('../../infrastructure/markdown/MarkdownRenderer.tsx');
+    const mathSource = readSource('../../infrastructure/markdown/MarkdownMathRenderer.tsx');
 
     expect(source).not.toContain("useI18n('components')");
     expect(source).not.toContain('useI18n("components")');
@@ -718,7 +714,7 @@ describe('startup performance contract', () => {
     expect(appLayoutSource).not.toMatch(/import\s+\{\s*NewProjectDialog\s*\}\s+from/);
     expect(appLayoutSource).toContain('const NewProjectDialog = lazy');
     expect(appLayoutSource).toContain("import('../components/NewProjectDialog')");
-    expect(appLayoutSource).toContain('<PresenceBoundary active={showNewProjectDialog}>');
+    expect(appLayoutSource).toContain('<RetainedMountBoundary present={showNewProjectDialog}>');
 
     expect(workspaceItemSource).not.toMatch(/import\s+WorkspaceRelatedPathsDialog\s+from/);
     expect(workspaceItemSource).not.toMatch(/import\s+WorkspaceSessionBatchModal\s+from/);
@@ -726,17 +722,17 @@ describe('startup performance contract', () => {
     expect(workspaceItemSource).toContain("lazy(() => import('./WorkspaceRelatedPathsDialog'))");
     expect(workspaceItemSource).toContain("lazy(() => import('./WorkspaceSessionBatchModal'))");
     expect(workspaceItemSource).toContain("lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'))");
-    expect(workspaceItemSource).toContain('<PresenceBoundary active={relatedPathsDialogOpen}>');
-    expect(workspaceItemSource).toContain('<PresenceBoundary active={sessionBatchModalOpen}>');
-    expect(workspaceItemSource).toContain('<PresenceBoundary active={scheduledJobsModalOpen}>');
+    expect(workspaceItemSource).toContain('<RetainedMountBoundary present={relatedPathsDialogOpen}>');
+    expect(workspaceItemSource).toContain('<RetainedMountBoundary present={sessionBatchModalOpen}>');
+    expect(workspaceItemSource).toContain('<RetainedMountBoundary present={scheduledJobsModalOpen}>');
 
     expect(sessionsSectionSource).not.toMatch(/import\s+ScheduledJobsModal\s+from/);
     expect(sessionsSectionSource).toContain("lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'))");
-    expect(sessionsSectionSource).toContain('<PresenceBoundary active={scheduledJobsSession != null}>');
+    expect(sessionsSectionSource).toContain('<RetainedMountBoundary present={scheduledJobsSession != null}>');
 
     expect(footerActionsSource).not.toMatch(/import\s+\{\s*RemoteConnectDialog\s*\}\s+from/);
     expect(footerActionsSource).toContain("lazy(() => import('../../RemoteConnectDialog'))");
-    expect(footerActionsSource).toContain('<PresenceBoundary active={showRemoteConnect}>');
+    expect(footerActionsSource).toContain('<RetainedMountBoundary present={showRemoteConnect}>');
 
     expect(newProjectDialogSource).not.toMatch(/from\s+['"]@tauri-apps\/plugin-dialog['"]/);
     expect(newProjectDialogSource).not.toContain("await import('@tauri-apps/plugin-dialog')");

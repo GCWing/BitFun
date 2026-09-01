@@ -104,13 +104,10 @@ export function buildWriteStdinCardModel(
     : result.sessionId;
   const displaySessionId = sessionId ?? result.requestedSessionId;
   const chars = typeof input.chars === 'string' ? input.chars : '';
-  const appendEnter = Boolean(input.append_enter);
   const isPollOnly = chars.length === 0;
   const primaryText = isPollOnly
     ? t('toolCards.execProcess.pollSession', { id: displaySessionId ?? '?' })
-    : appendEnter
-      ? `${chars}\\n`
-      : chars;
+    : chars;
   const resultNoticeText = result.status === 'session_not_found'
     ? t('toolCards.execProcess.sessionNotFound', {
       id: displaySessionId ?? '?',

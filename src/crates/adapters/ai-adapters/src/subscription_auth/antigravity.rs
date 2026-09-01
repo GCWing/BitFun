@@ -363,6 +363,7 @@ pub(crate) async fn begin_login(
 /// Ensures the stored access token is fresh, refreshing it when needed. Returns
 /// the current `(access, expires_ms)`.
 async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)> {
+    let _refresh_lease = store::acquire_provider_refresh_lease(STORE_KEY).await?;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential

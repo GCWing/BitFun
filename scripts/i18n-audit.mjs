@@ -1712,8 +1712,7 @@ function shouldSkipSourceScan(file) {
     normalized.endsWith('.test.ts') ||
     normalized.endsWith('.test.tsx') ||
     normalized.endsWith('.spec.ts') ||
-    normalized.endsWith('.spec.tsx') ||
-    normalized.includes('/component-library/components/registry.tsx')
+    normalized.endsWith('.spec.tsx')
   );
 }
 

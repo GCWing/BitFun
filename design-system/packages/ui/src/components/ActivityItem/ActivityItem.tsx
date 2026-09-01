@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  type ButtonHTMLAttributes,
   type HTMLAttributes,
   type MouseEventHandler,
   type ReactNode,
@@ -31,10 +30,6 @@ export interface ActivityItemProps
   leading?: ReactNode;
   metadata?: ReactNode;
   onActivate?: MouseEventHandler<HTMLButtonElement>;
-  triggerProps?: Omit<
-    ButtonHTMLAttributes<HTMLButtonElement>,
-    "children" | "className" | "disabled" | "onClick" | "type"
-  >;
 }
 
 export interface ChangeCountProps extends HTMLAttributes<HTMLSpanElement> {
@@ -76,7 +71,6 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
     leading,
     metadata,
     onActivate,
-    triggerProps,
     ...props
   }, ref) {
     const content = (
@@ -99,7 +93,6 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
       >
         {onActivate ? (
           <button
-            {...triggerProps}
             className={styles.trigger}
             data-bf-part="trigger"
             disabled={disabled}

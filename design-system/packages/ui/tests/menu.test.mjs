@@ -74,6 +74,9 @@ test("Menu styling uses only public surface, geometry, action, and scrollbar tok
 
   assert.match(styles, /--bf-overlay-menu-inline-size/);
   assert.match(styles, /--bf-overlay-menu-item-height/);
+  assert.match(styles, /\.list\s*\{[^}]*gap: calc\(var\(--bf-space-1\) \/ 2\)/);
+  assert.match(styles, /\.items\s*\{[^}]*gap: calc\(var\(--bf-space-1\) \/ 2\)/);
+  assert.match(styles, /\.separator\s*\{[^}]*margin-block: calc\(/);
   assert.match(styles, /--bf-color-surface-panel/);
   assert.match(styles, /--bf-shadow-menu/);
   assert.match(styles, /--bf-overlay-menu-scrollbar-gap/);

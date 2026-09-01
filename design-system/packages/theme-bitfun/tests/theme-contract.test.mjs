@@ -97,6 +97,17 @@ test("reference colors expose ordered name-plus-number scales for authoring", ()
   }
 });
 
+test("reference colors retain the global-search action identity anchors", () => {
+  const valueAt = (scale, step) => referenceColorScales[scale]
+    .find((entry) => entry.step === step)?.value;
+
+  assert.equal(valueAt("red", 650), "#ec221f");
+  assert.equal(valueAt("amber", 550), "#ff8c00");
+  assert.equal(valueAt("cyan", 500), "#059cb0");
+  assert.equal(valueAt("blue", 575), "#3271d7");
+  assert.equal(valueAt("purple", 450), "#9e54ff");
+});
+
 test("semantic theme documents route solid colors through reference scales", async () => {
   for (const fileName of [
     "light.tokens.json",
@@ -208,14 +219,27 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.action.neutral.content"], "rgba(0, 0, 0, 0.80)");
   assert.equal(themes.light["color.action.neutral.contentDisabled"], "rgba(0, 0, 0, 0.30)");
   assert.equal(themes.light["color.action.neutral.surface"], "rgba(0, 0, 0, 0.05)");
-  assert.equal(themes.light["color.action.neutral.surfaceHover"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.action.neutral.surfaceHover"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.action.neutral.surfacePressed"], "rgba(0, 0, 0, 0.10)");
-  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.selection.surface"], "rgba(0, 0, 0, 0.08)");
+  assert.equal(themes.light["color.surface.chrome"], "#f8f8f9");
+  assert.equal(themes.light["color.surface.tertiary"], "#f7f7f7");
+  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.scrollbar.thumbHover"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.control.switch.track"], "#dddddd");
   assert.equal(themes.light["color.control.switch.trackChecked"], "#34c78c");
   assert.equal(themes.light["color.control.switch.thumb"], "#ffffff");
+  assert.equal(themes.light["color.identity.harness.minimal"], "#b434ef");
+  assert.equal(themes.light["color.identity.harness.standard"], "#1aa73e");
+  assert.equal(themes.light["color.identity.harness.ultimate"], "#ff8c00");
+  assert.equal(themes.light["color.identity.harness.creative"], "#2e7eff");
+  assert.equal(themes.light["color.identity.globalSearch.newSession"], "#ec221f");
+  assert.equal(themes.light["color.identity.globalSearch.openBrowser"], "#ff8c00");
+  assert.equal(themes.light["color.identity.globalSearch.openTerminal"], "rgba(0, 0, 0, 0.80)");
+  assert.equal(themes.light["color.identity.globalSearch.openProject"], "#059cb0");
+  assert.equal(themes.light["color.identity.globalSearch.newProject"], "#3271d7");
+  assert.equal(themes.light["color.identity.globalSearch.openFiles"], "#9e54ff");
   assert.equal(themes.light["color.status.warning.surface"], "rgba(154, 101, 31, 0.08)");
   assert.equal(themes.light["shadow.base"], "0 4px 8px rgba(16, 26, 39, 0.07)");
   assert.equal(themes.light["shadow.composer"], "0 2px 6px rgba(0, 0, 0, 0.08)");
@@ -227,6 +251,16 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.dark["color.keyHint.background"], "rgba(255, 255, 255, 0.1)");
   assert.equal(themes.dark["color.action.primary.background"], "rgba(255, 255, 255, 0.16)");
   assert.equal(themes.dark["color.action.neutral.surface"], "rgba(255, 255, 255, 0.1)");
+  assert.equal(themes.dark["color.identity.harness.minimal"], "#b434ef");
+  assert.equal(themes.dark["color.identity.harness.standard"], "#1aa73e");
+  assert.equal(themes.dark["color.identity.harness.ultimate"], "#ff8c00");
+  assert.equal(themes.dark["color.identity.harness.creative"], "#2e7eff");
+  assert.equal(themes.dark["color.identity.globalSearch.newSession"], "#ec221f");
+  assert.equal(themes.dark["color.identity.globalSearch.openBrowser"], "#ff8c00");
+  assert.equal(themes.dark["color.identity.globalSearch.openTerminal"], "#b0b0b0");
+  assert.equal(themes.dark["color.identity.globalSearch.openProject"], "#059cb0");
+  assert.equal(themes.dark["color.identity.globalSearch.newProject"], "#3271d7");
+  assert.equal(themes.dark["color.identity.globalSearch.openFiles"], "#9e54ff");
   assert.equal(themes.dark["color.scrollbar.thumb"], "rgba(255, 255, 255, 0.12)");
   assert.equal(themes.dark["color.scrollbar.thumbHover"], "rgba(255, 255, 255, 0.15)");
   assert.equal(themes.dark["shadow.base"], "0 4px 8px rgba(0, 0, 0, 0.7)");

@@ -225,10 +225,10 @@ describe('AppearanceRuntime', () => {
   });
 
   it('applies normal cascade after legacy styles and reserves important for explicit overrides', async () => {
-    document.head.innerHTML = '<style>.legacy-card { color: rgb(255, 0, 0); }</style>';
-    document.body.innerHTML = '<div class="legacy-card" data-bf-component="card" data-bf-part="root">Run</div>';
+    document.head.innerHTML = '<style>.legacy-gallery { color: rgb(255, 0, 0); }</style>';
+    document.body.innerHTML = '<div class="legacy-gallery" data-bf-component="gallery-layout" data-bf-part="root">Run</div>';
     const registry = new AppearanceRegistry()
-      .registerComponent({ id: 'card', parts: [{ id: 'root' }] })
+      .registerComponent({ id: 'gallery-layout', parts: [{ id: 'root' }] })
       .freeze();
     const runtime = new AppearanceRuntime(registry);
     const basePackage: AppearancePackage = {
@@ -239,7 +239,7 @@ describe('AppearanceRuntime', () => {
       version: '1.0.0',
       mode: 'dark',
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: { base: { color: { kind: 'hex', value: '#00ff00' } } },
           },
@@ -248,14 +248,14 @@ describe('AppearanceRuntime', () => {
     };
 
     await runtime.initialize(basePackage);
-    const card = document.querySelector('[data-bf-component="card"]') as HTMLDivElement;
-    expect(window.getComputedStyle(card).color).toBe('rgb(0, 255, 0)');
+    const gallery = document.querySelector('[data-bf-component="gallery-layout"]') as HTMLDivElement;
+    expect(window.getComputedStyle(gallery).color).toBe('rgb(0, 255, 0)');
 
-    card.style.color = 'rgb(255, 0, 0)';
+    gallery.style.color = 'rgb(255, 0, 0)';
     await runtime.applyPackage({
       ...basePackage,
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               cascade: 'override',
@@ -265,6 +265,6 @@ describe('AppearanceRuntime', () => {
         },
       },
     });
-    expect(window.getComputedStyle(card).color).toBe('rgb(0, 0, 255)');
+    expect(window.getComputedStyle(gallery).color).toBe('rgb(0, 0, 255)');
   });
 });

@@ -1,5 +1,12 @@
 import React from 'react';
-import { Modal } from '@bitfun/ui';
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import ScheduledJobsView from '@/app/components/scheduled-jobs/ScheduledJobsView';
 import type { CronJobTargetKind } from '@/infrastructure/api';
@@ -40,12 +47,18 @@ const ScheduledJobsModal: React.FC<ScheduledJobsModalProps> = ({
   const { t } = useI18n('common');
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title || t('nav.scheduledJobs.title')}
-      size="xlarge"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="xl"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{title || t('nav.scheduledJobs.title')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
       <div data-bf-component="scheduled-jobs-modal" data-bf-part="body" className="scheduled-jobs-modal__body">
         <ScheduledJobsView
           workspacePath={workspacePath}
@@ -61,7 +74,8 @@ const ScheduledJobsModal: React.FC<ScheduledJobsModalProps> = ({
           targetDescription={targetDescription}
         />
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

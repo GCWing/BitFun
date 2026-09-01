@@ -71,7 +71,8 @@ interface SearchDestination {
 const componentIcons: Record<string, LucideIcon> = {
   AmbientToolCard: SquareTerminal,
   Button: MousePointerClick,
-  Modal: AppWindow,
+  Dialog: AppWindow,
+  Sheet: AppWindow,
   ProminentToolCard: SquareTerminal,
   Switch: ToggleLeft,
   TabGroup: PanelTop,

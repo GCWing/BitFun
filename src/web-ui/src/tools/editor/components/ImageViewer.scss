@@ -2,9 +2,6 @@
  * Image Viewer Styles
  * Following Git panel design style
  */
-
-@use '@/component-library/styles/tokens' as *;
-
 .bitfun-image-viewer {
   display: flex;
   flex-direction: column;
@@ -20,7 +17,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: $z-fullscreen;
+    z-index: var(--bf-layer-fullscreen);
     background: var(--bf-color-surface-canvas);
   }
 
@@ -32,7 +29,7 @@
   &__info {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     font-size: var(--bf-font-size-sm);
     flex: 1;
     min-width: 0;
@@ -68,7 +65,7 @@
     // Checkerboard pattern for transparent images
     // Uses theme CSS variables to adapt to any theme
     background-color: var(--bf-color-surface-canvas);
-    background-image: 
+    background-image:
       linear-gradient(45deg, var(--bf-color-action-quiet-hover) 25%, transparent 25%),
       linear-gradient(-45deg, var(--bf-color-action-quiet-hover) 25%, transparent 25%),
       linear-gradient(45deg, transparent 75%, var(--bf-color-action-quiet-hover) 75%),

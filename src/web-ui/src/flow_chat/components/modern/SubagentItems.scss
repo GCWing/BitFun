@@ -92,31 +92,3 @@
     }
   }
 }
-
-// Keep the legacy subagent-item class for compatibility.
-.subagent-item {
-  display: block;
-
-  &.subagent-item--collapsed {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transform: translateY(-2px);
-    transition:
-      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.18s ease,
-      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-  }
-
-  &.subagent-item--expanded {
-    max-height: 520px;
-    opacity: 1;
-    overflow: visible;
-    transform: translateY(0);
-    transition:
-      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.18s ease,
-      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-}

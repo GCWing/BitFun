@@ -11,6 +11,7 @@ export const commandToolCardMeta = {
     { name: "command", type: "string | null" },
     { name: "isExpanded", type: "boolean" },
     { name: "output", type: "ReactNode" },
+    { defaultValue: "fixed", name: "outputSizing", type: "content | fixed" },
     { defaultValue: "false", name: "reserveOutput", type: "boolean" },
     { defaultValue: "false", name: "reserveFooter", type: "boolean" },
     { name: "footerItems", type: "readonly CommandToolCardFooterItem[]" },

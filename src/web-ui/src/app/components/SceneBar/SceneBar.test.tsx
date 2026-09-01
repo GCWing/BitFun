@@ -20,7 +20,7 @@ const sceneHarness = vi.hoisted(() => ({
     activeTabId: 'session' as SceneTabId,
     navigationMotion: 'instant' as InteractionMotion,
     tabDefs: [
-      { id: 'session' as const, label: 'Session', pinned: true, singleton: true, defaultOpen: false },
+      { id: 'session' as const, label: 'Session', pinned: true, closable: true, singleton: true, defaultOpen: false },
       { id: 'settings' as const, label: 'Settings', pinned: false, singleton: true, defaultOpen: false },
       { id: 'terminal' as const, label: 'Terminal', pinned: false, singleton: true, defaultOpen: false },
       { id: 'git' as const, label: 'Git', pinned: false, singleton: true, defaultOpen: false },
@@ -58,8 +58,12 @@ vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({ debug: vi.fn() }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock('@/app/components/WindowControls', () => ({
   WindowControls: () => null,
 }));
 
@@ -167,14 +171,45 @@ describe('SceneBar overflow navigation', () => {
     expect(scrollTo).toHaveBeenCalledWith({ left: 340, behavior: 'smooth' });
   });
 
-  it('renders close actions beside tabs and closes the owning scene', () => {
+  it('renders close actions from closeability metadata, including the leading session tab', () => {
     renderSceneBar();
+    const sessionTab = container.querySelector<HTMLElement>('[role="tab"][data-bf-value="session"]')!;
+    const sessionItem = sessionTab.closest<HTMLElement>('[data-bf-part="item"]')!;
+    const sessionCloseButton = sessionItem.querySelector<HTMLButtonElement>('[data-scene-bar-part="closeTab"]')!;
     const settingsTab = container.querySelector<HTMLElement>('[role="tab"][data-bf-value="settings"]')!;
     const settingsItem = settingsTab.closest<HTMLElement>('[data-bf-part="item"]')!;
     const closeButton = settingsItem.querySelector<HTMLButtonElement>('[data-scene-bar-part="closeTab"]')!;
 
+    expect(sessionCloseButton).not.toBeNull();
+    act(() => sessionCloseButton.click());
+    expect(sceneHarness.closeScene).toHaveBeenCalledWith('session');
+
     expect(settingsTab.contains(closeButton)).toBe(false);
     act(() => closeButton.click());
     expect(sceneHarness.closeScene).toHaveBeenCalledWith('settings');
+  });
+
+  it('supports standard middle-click and Delete-key close interactions for session', () => {
+    renderSceneBar();
+    const sessionTab = container.querySelector<HTMLElement>('[role="tab"][data-bf-value="session"]')!;
+
+    act(() => {
+      sessionTab.dispatchEvent(new MouseEvent('auxclick', {
+        button: 1,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    expect(sceneHarness.closeScene).toHaveBeenCalledWith('session');
+
+    sceneHarness.closeScene.mockReset();
+    act(() => {
+      sessionTab.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Delete',
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    expect(sceneHarness.closeScene).toHaveBeenCalledWith('session');
   });
 });

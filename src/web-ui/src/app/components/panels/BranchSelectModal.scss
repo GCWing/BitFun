@@ -2,9 +2,7 @@
  * Branch selection modal styles
  * Simple and understated style
  */
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 // ==================== Overlay ====================
 
@@ -14,7 +12,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: $z-modal;
+  z-index: var(--bf-layer-modal);
   background: color-mix(in srgb, var(--bf-color-content-on-light) 60%, transparent);
   display: flex;
   align-items: center;
@@ -33,7 +31,7 @@
 // ==================== Dialog Body ====================
 
 .branch-select-dialog {
-  @include surfaces.dialog-surface;
+  @include surfaces.dialog;
 
   position: relative;
   display: flex;
@@ -135,7 +133,7 @@
   border: 1px solid var(--bf-color-border-subtle);
   border-radius: 6px;
   background: var(--bf-color-surface-panel);
-  
+
 }
 
 .branch-select-dialog__loading {
@@ -203,7 +201,7 @@
   &--new {
     border-bottom: 1px solid var(--bf-color-border-subtle);
     background: var(--bf-color-action-quiet-hover);
-    
+
     &:hover {
       background: var(--bf-color-action-secondary-background);
     }

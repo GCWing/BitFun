@@ -26,25 +26,24 @@ vi.mock('@bitfun/ui', () => ({
     children: React.ReactNode;
     onClick?: () => void;
   }) => <button onClick={onClick}>{children}</button>,
-  Modal: ({
-    ariaLabel,
+  Dialog: ({
+    'aria-label': ariaLabel,
     children,
-    isOpen,
+    open,
   }: {
-    ariaLabel?: string;
+    'aria-label'?: string;
     children: React.ReactNode;
-    isOpen: boolean;
-  }) => (isOpen ? <div role="dialog" aria-modal="true" aria-label={ariaLabel}>{children}</div> : null),
-}));
-
-vi.mock('@/component-library', () => ({
-  PopupCloseButton: ({
+    open: boolean;
+  }) => (open ? <div role="dialog" aria-modal="true" aria-label={ariaLabel}>{children}</div> : null),
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: ({
     'aria-label': ariaLabel,
     onClick,
   }: {
     'aria-label': string;
     onClick?: () => void;
   }) => <button type="button" aria-label={ariaLabel} onClick={onClick} />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
 }));
 
 let JSDOMCtor: (new (

@@ -363,6 +363,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
 
             <CardFooter align="center" className="bitfun-device-overview__actions">
               <Button
+                className="bitfun-device-overview__action"
                 variant="primary"
                 size="sm"
                 leadingIcon={<Icon name="link" size="sm" />}
@@ -373,6 +374,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
               </Button>
               {overview.peerActive && (
                 <Button
+                  className="bitfun-device-overview__action"
                   variant="outline"
                   size="sm"
                   leadingIcon={<Undo2 />}

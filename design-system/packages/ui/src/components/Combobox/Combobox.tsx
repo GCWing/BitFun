@@ -1,8 +1,6 @@
 import {
-  createContext,
   forwardRef,
   useCallback,
-  useContext,
   useEffect,
   useId,
   useMemo,
@@ -12,10 +10,13 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import { LoaderCircle } from "lucide-react";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
+import { useAnchoredLayer, type LayerPlacement } from "../../internal/useAnchoredLayer";
+import { Portal } from "../../overlay/Portal";
+import { useDesignSystem } from "../../overlay/useDesignSystem";
+import { useDismissibleLayer } from "../../overlay/useDismissibleLayer";
 import { IconButton } from "../IconButton";
 import {
   Listbox,
@@ -25,134 +26,64 @@ import {
   type ListboxValue,
 } from "../Listbox";
 import { SearchField } from "../SearchField";
-import {
-  resolveLayerPortal,
-  useAnchoredLayer,
-  type PortalTarget,
-} from "../../internal/useAnchoredLayer";
 import styles from "./Combobox.module.css";
 
 export type ComboboxValue = ListboxValue;
 export type ComboboxSize = "sm" | "md" | "lg";
-export type ComboboxPlacement = "top" | "bottom";
-export type ComboboxPopoverMode = "overlay" | "inline";
-export type ComboboxPortalTarget = PortalTarget;
+export type ComboboxPlacement = Extract<LayerPlacement, "top" | "bottom">;
 
 export interface ComboboxOption {
   description?: ReactNode;
   disabled?: boolean;
   group?: string;
-  /** Compatibility alias for `leading`. */
-  icon?: ReactNode;
   label: string;
   leading?: ReactNode;
   metadata?: ReactNode;
-  testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
   testId?: string;
   value: ComboboxValue;
 }
 
-export interface ComboboxLabels {
-  placeholder: string;
-  search: string;
-  empty: string;
-  loading: string;
-  clear: string;
-  selectAll: string;
-  create: string;
-}
-
-const defaultLabels: ComboboxLabels = {
-  placeholder: "Select an option",
-  search: "Search options",
-  empty: "No options",
-  loading: "Loading",
-  clear: "Clear selection",
-  selectAll: "Select all",
-  create: "Use custom value",
-};
-
-const ComboboxContext = createContext<{
-  labels: ComboboxLabels;
-  portalContainer?: ComboboxPortalTarget;
-}>({ labels: defaultLabels });
-
-export function ComboboxProvider({
-  children,
-  labels,
-  portalContainer,
-}: {
-  children: ReactNode;
-  labels?: Partial<ComboboxLabels>;
-  portalContainer?: ComboboxPortalTarget;
-}) {
-  const value = useMemo(() => ({
-    labels: { ...defaultLabels, ...labels },
-    portalContainer,
-  }), [labels, portalContainer]);
-  return <ComboboxContext.Provider value={value}>{children}</ComboboxContext.Provider>;
-}
-
-export interface ComboboxProps
+interface PickerCommonProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "onChange"> {
-  allowCustomValue?: boolean;
-  autoClose?: boolean;
-  clearLabel?: string;
   clearable?: boolean;
-  customValueHint?: ReactNode | ((value: string) => ReactNode);
   defaultOpen?: boolean;
-  defaultSearchValue?: string;
-  defaultValue?: ComboboxValue | ComboboxValue[];
   disabled?: boolean;
-  /** Compatibility alias for `popoverMode`. */
-  dropdownMode?: ComboboxPopoverMode;
-  /** Compatibility alias for `matchTriggerWidth`. */
-  dropdownMatchTriggerWidth?: boolean;
-  dropdownClassName?: string;
-  dropdownTestId?: string;
-  emptyText?: ReactNode;
-  /** Compatibility alias for `invalid`. */
-  error?: boolean;
   errorMessage?: ReactNode;
   filterOption?: (option: ComboboxOption, query: string) => boolean;
   invalid?: boolean;
   label?: ReactNode;
   loading?: boolean;
-  loadingText?: ReactNode;
-  matchTriggerWidth?: boolean;
-  maxTagCount?: number;
-  multiple?: boolean;
-  /** Compatibility callback retained while consumers migrate to `onValueChange`. */
-  onChange?: (value: ComboboxValue | ComboboxValue[]) => void;
+  onCreateValue?: (input: string) => ComboboxValue | void;
   onOpenChange?: (open: boolean) => void;
-  onValueChange?: (value: ComboboxValue | ComboboxValue[]) => void;
   open?: boolean;
   options?: readonly ComboboxOption[];
   placement?: ComboboxPlacement;
   placeholder?: ReactNode;
-  popoverMode?: ComboboxPopoverMode;
-  portalContainer?: ComboboxPortalTarget;
-  renderOption?: (option: ComboboxOption) => ReactNode;
-  renderValue?: (option?: ComboboxOption | ComboboxOption[]) => ReactNode;
   required?: boolean;
-  searchPlaceholder?: string;
-  searchable?: boolean;
-  selectAllLabel?: ReactNode;
-  showSelectAll?: boolean;
-  size?: ComboboxSize | "small" | "medium" | "large";
-  triggerAriaDescribedBy?: string;
-  triggerAriaLabel?: string;
-  triggerAriaLabelledBy?: string;
-  triggerClassName?: string;
-  triggerTestId?: string;
-  value?: ComboboxValue | ComboboxValue[];
-  /** Optional custom suffix retained for existing public consumers. */
-  indicator?: ReactNode;
+  size?: ComboboxSize;
 }
+
+export interface ComboboxProps extends PickerCommonProps {
+  defaultValue?: ComboboxValue;
+  onValueChange?: (value: ComboboxValue) => void;
+  value?: ComboboxValue;
+}
+
+export interface MultiSelectProps extends PickerCommonProps {
+  defaultValue?: readonly ComboboxValue[];
+  maxVisibleTags?: number;
+  onValueChange?: (value: ComboboxValue[]) => void;
+  showSelectAll?: boolean;
+  value?: readonly ComboboxValue[];
+}
+
+type PickerProps =
+  | ({ mode: "single" } & ComboboxProps)
+  | ({ mode: "multiple" } & MultiSelectProps);
 
 type NavigationItem =
   | { kind: "all" }
-  | { kind: "custom"; value: string }
+  | { kind: "create"; value: string }
   | { kind: "option"; option: ComboboxOption };
 
 function isImeOwnedKeyboardEvent(event: ReactKeyboardEvent) {
@@ -169,12 +100,6 @@ function optionMatches(option: ComboboxOption, query: string) {
       && option.description.toLocaleLowerCase().includes(normalizedQuery));
 }
 
-function valuesFrom(value: ComboboxProps["value"], multiple: boolean): ComboboxValue[] {
-  if (Array.isArray(value)) return value;
-  if (value === undefined || value === "") return [];
-  return multiple ? [value] : [value];
-}
-
 function firstEnabledIndex(items: readonly NavigationItem[], direction: 1 | -1) {
   if (items.length === 0) return -1;
   let index = direction === 1 ? 0 : items.length - 1;
@@ -186,109 +111,88 @@ function firstEnabledIndex(items: readonly NavigationItem[], direction: 1 | -1) 
   return -1;
 }
 
-export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combobox({
-  allowCustomValue = false,
-  autoClose,
-  className,
-  clearLabel: clearLabelProp,
-  clearable = false,
-  customValueHint: customValueHintProp,
-  defaultOpen = false,
-  defaultSearchValue = "",
-  defaultValue,
-  id: providedId,
-  "aria-describedby": rootAriaDescribedBy,
-  "aria-invalid": rootAriaInvalid,
-  "aria-label": rootAriaLabel,
-  "aria-labelledby": rootAriaLabelledBy,
-  disabled = false,
-  dropdownMode,
-  dropdownMatchTriggerWidth,
-  dropdownClassName,
-  dropdownTestId,
-  emptyText: emptyTextProp,
-  error = false,
-  errorMessage,
-  filterOption = optionMatches,
-  invalid: invalidProp = false,
-  indicator,
-  label,
-  loading = false,
-  loadingText: loadingTextProp,
-  matchTriggerWidth: matchTriggerWidthProp,
-  maxTagCount = 3,
-  multiple = false,
-  onChange,
-  onOpenChange,
-  onValueChange,
-  open,
-  options: optionsProp = [],
-  placement = "bottom",
-  placeholder: placeholderProp,
-  popoverMode: popoverModeProp,
-  portalContainer: portalContainerProp,
-  renderOption,
-  renderValue,
-  required = false,
-  searchPlaceholder: searchPlaceholderProp,
-  searchable = true,
-  selectAllLabel: selectAllLabelProp,
-  showSelectAll = false,
-  size: sizeProp = "md",
-  triggerAriaDescribedBy,
-  triggerAriaLabel,
-  triggerAriaLabelledBy,
-  triggerClassName,
-  triggerTestId,
-  value,
-  ...rootProps
-}, forwardedRef) {
-  const context = useContext(ComboboxContext);
-  const clearLabel = clearLabelProp ?? context.labels.clear;
-  const customValueHint = customValueHintProp ?? context.labels.create;
-  const emptyText = emptyTextProp ?? context.labels.empty;
-  const invalid = invalidProp || error
-    || rootAriaInvalid === true
-    || rootAriaInvalid === "true";
-  const loadingText = loadingTextProp ?? context.labels.loading;
-  const matchTriggerWidth = matchTriggerWidthProp ?? dropdownMatchTriggerWidth ?? true;
+const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function CollectionPicker(
+  pickerProps,
+  forwardedRef,
+) {
+  const { mode } = pickerProps;
+  const props = pickerProps as ComboboxProps | MultiSelectProps;
+  const {
+    "aria-describedby": ariaDescribedBy,
+    "aria-invalid": ariaInvalid,
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
+    className,
+    clearable = false,
+    defaultOpen = false,
+    disabled = false,
+    errorMessage,
+    filterOption = optionMatches,
+    id: providedId,
+    invalid: invalidProp = false,
+    label,
+    loading = false,
+    onCreateValue,
+    onOpenChange,
+    open,
+    options: optionsProp = [],
+    placement = "bottom",
+    placeholder: placeholderProp,
+    required = false,
+    size = "md",
+    ...rootProps
+  } = props;
+  delete (rootProps as Record<string, unknown>).defaultValue;
+  delete (rootProps as Record<string, unknown>).onValueChange;
+  delete (rootProps as Record<string, unknown>).value;
+  delete (rootProps as Record<string, unknown>).maxVisibleTags;
+  delete (rootProps as Record<string, unknown>).showSelectAll;
+  const divProps = rootProps as HTMLAttributes<HTMLDivElement>;
+
+  const designSystem = useDesignSystem();
+  const multiple = mode === "multiple";
+  const defaultValue = props.defaultValue;
+  const controlledValue = props.value;
+  const onValueChange = props.onValueChange;
+  const maxVisibleTags = multiple
+    ? (props as MultiSelectProps).maxVisibleTags ?? 3
+    : 0;
+  const showSelectAll = multiple
+    && ((props as MultiSelectProps).showSelectAll ?? false);
+  const placeholder = placeholderProp ?? designSystem.messages.selectPlaceholder;
   const options = optionsProp;
-  const placeholder = placeholderProp ?? context.labels.placeholder;
-  const popoverMode = popoverModeProp ?? dropdownMode ?? "overlay";
-  const portalContainer = portalContainerProp ?? context.portalContainer;
-  const searchPlaceholder = searchPlaceholderProp ?? context.labels.search;
-  const selectAllLabel = selectAllLabelProp ?? context.labels.selectAll;
-  const size: ComboboxSize = sizeProp === "small"
-    ? "sm"
-    : sizeProp === "medium"
-      ? "md"
-      : sizeProp === "large"
-        ? "lg"
-        : sizeProp;
   const generatedId = useId();
-  const id = providedId ?? `bf-combobox-${generatedId}`;
+  const id = providedId ?? `bf-${multiple ? "multi-select" : "combobox"}-${generatedId}`;
   const labelId = `${id}-label`;
   const listboxId = `${id}-listbox`;
   const errorId = `${id}-error`;
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(
-    defaultOpen && !disabled,
-  );
-  const [uncontrolledValue, setUncontrolledValue] = useState<ComboboxValue | ComboboxValue[]>(
-    defaultValue ?? (multiple ? [] : ""),
-  );
-  const [query, setQuery] = useState(defaultSearchValue);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen && !disabled);
+  const [uncontrolledValues, setUncontrolledValues] = useState<ComboboxValue[]>(() => {
+    if (multiple) {
+      const values = defaultValue as readonly ComboboxValue[] | undefined;
+      return values ? [...values] : [];
+    }
+    const value = defaultValue as ComboboxValue | undefined;
+    return value === undefined || value === "" ? [] : [value];
+  });
+  const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const dismissibleBranches = useMemo(() => [rootRef], []);
   const resolvedOpen = open ?? uncontrolledOpen;
-  const resolvedValue = value ?? uncontrolledValue;
-  const selectedValues = useMemo(
-    () => valuesFrom(resolvedValue, multiple),
-    [multiple, resolvedValue],
-  );
+  const selectedValues = useMemo<ComboboxValue[]>(() => {
+    if (multiple) {
+      const values = controlledValue as readonly ComboboxValue[] | undefined;
+      return values ? [...values] : uncontrolledValues;
+    }
+    const value = controlledValue as ComboboxValue | undefined;
+    if (value !== undefined) return value === "" ? [] : [value];
+    return uncontrolledValues;
+  }, [controlledValue, multiple, uncontrolledValues]);
+  const invalid = invalidProp || ariaInvalid === true || ariaInvalid === "true";
 
   const setRootRef = useCallback((node: HTMLDivElement | null) => {
     rootRef.current = node;
@@ -296,50 +200,48 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
     else if (forwardedRef) forwardedRef.current = node;
   }, [forwardedRef]);
 
-  const setSearchInputRef = useCallback((node: HTMLInputElement | null) => {
-    searchRef.current = node;
-    if (node && resolvedOpen && searchable) node.focus();
-  }, [resolvedOpen, searchable]);
-
   const updateOpen = useCallback((nextOpen: boolean) => {
     if (nextOpen === resolvedOpen) return;
     if (open === undefined) setUncontrolledOpen(nextOpen);
     onOpenChange?.(nextOpen);
   }, [onOpenChange, open, resolvedOpen]);
 
-  const commitValue = useCallback((nextValue: ComboboxValue | ComboboxValue[]) => {
-    if (value === undefined) setUncontrolledValue(nextValue);
-    onValueChange?.(nextValue);
-    onChange?.(nextValue);
-  }, [onChange, onValueChange, value]);
+  const commitValues = useCallback((nextValues: ComboboxValue[]) => {
+    if (controlledValue === undefined) setUncontrolledValues(nextValues);
+    if (multiple) {
+      (onValueChange as MultiSelectProps["onValueChange"])?.(nextValues);
+    } else {
+      (onValueChange as ComboboxProps["onValueChange"])?.(nextValues[0] ?? "");
+    }
+  }, [controlledValue, multiple, onValueChange]);
 
   const filteredOptions = useMemo(
-    () => searchable && query.trim()
-      ? options.filter(option => filterOption(option, query))
+    () => query.trim()
+      ? options.filter((option) => filterOption(option, query))
       : [...options],
-    [filterOption, options, query, searchable],
+    [filterOption, options, query],
   );
 
-  const customCandidate = useMemo(() => {
+  const createCandidate = useMemo(() => {
     const candidate = query.trim();
-    if (!allowCustomValue || !candidate) return null;
+    if (!onCreateValue || !candidate) return null;
     const normalized = candidate.toLocaleLowerCase();
-    const exactMatch = options.some(option => (
+    const exactMatch = options.some((option) => (
       String(option.value).toLocaleLowerCase() === normalized
       || option.label.toLocaleLowerCase() === normalized
     ));
     return exactMatch ? null : candidate;
-  }, [allowCustomValue, options, query]);
+  }, [onCreateValue, options, query]);
 
   const navigationItems = useMemo<NavigationItem[]>(() => {
     const items: NavigationItem[] = [];
-    if (multiple && showSelectAll && filteredOptions.some(option => !option.disabled)) {
+    if (showSelectAll && filteredOptions.some((option) => !option.disabled)) {
       items.push({ kind: "all" });
     }
-    filteredOptions.forEach(option => items.push({ kind: "option", option }));
-    if (customCandidate) items.push({ kind: "custom", value: customCandidate });
+    filteredOptions.forEach((option) => items.push({ kind: "option", option }));
+    if (createCandidate) items.push({ kind: "create", value: createCandidate });
     return items;
-  }, [customCandidate, filteredOptions, multiple, showSelectAll]);
+  }, [createCandidate, filteredOptions, showSelectAll]);
 
   const optionId = useCallback((index: number) => `${listboxId}-option-${index}`, [listboxId]);
 
@@ -359,54 +261,52 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
   const selectOption = useCallback((option: ComboboxOption) => {
     if (disabled || loading || option.disabled) return;
     if (multiple) {
-      const nextValues = selectedValues.includes(option.value)
-        ? selectedValues.filter(candidate => candidate !== option.value)
-        : [...selectedValues, option.value];
-      commitValue(nextValues);
-      if (autoClose === true) updateOpen(false);
+      commitValues(selectedValues.includes(option.value)
+        ? selectedValues.filter((value) => value !== option.value)
+        : [...selectedValues, option.value]);
       return;
     }
-    commitValue(option.value);
+    commitValues([option.value]);
     setQuery("");
     updateOpen(false);
     triggerRef.current?.focus();
-  }, [autoClose, commitValue, disabled, loading, multiple, selectedValues, updateOpen]);
+  }, [commitValues, disabled, loading, multiple, selectedValues, updateOpen]);
 
-  const submitCustomValue = useCallback((candidate: string) => {
-    if (!allowCustomValue || !candidate || disabled || loading) return;
+  const submitCreateValue = useCallback((candidate: string) => {
+    if (!onCreateValue || disabled || loading) return;
+    const createdValue = onCreateValue(candidate);
+    if (createdValue === undefined) return;
     if (multiple) {
-      const nextValues = selectedValues.includes(candidate)
-        ? selectedValues
-        : [...selectedValues, candidate];
-      commitValue(nextValues);
-      if (autoClose === true) updateOpen(false);
+      if (!selectedValues.includes(createdValue)) {
+        commitValues([...selectedValues, createdValue]);
+      }
     } else {
-      commitValue(candidate);
+      commitValues([createdValue]);
       updateOpen(false);
       triggerRef.current?.focus();
     }
     setQuery("");
-  }, [allowCustomValue, autoClose, commitValue, disabled, loading, multiple, selectedValues, updateOpen]);
+  }, [commitValues, disabled, loading, multiple, onCreateValue, selectedValues, updateOpen]);
 
   const toggleSelectAll = useCallback(() => {
     if (!multiple || disabled || loading) return;
     const availableValues = filteredOptions
-      .filter(option => !option.disabled)
-      .map(option => option.value);
+      .filter((option) => !option.disabled)
+      .map((option) => option.value);
     const allSelected = availableValues.length > 0
-      && availableValues.every(candidate => selectedValues.includes(candidate));
-    commitValue(allSelected
-      ? selectedValues.filter(candidate => !availableValues.includes(candidate))
+      && availableValues.every((value) => selectedValues.includes(value));
+    commitValues(allSelected
+      ? selectedValues.filter((value) => !availableValues.includes(value))
       : [...new Set([...selectedValues, ...availableValues])]);
-  }, [commitValue, disabled, filteredOptions, loading, multiple, selectedValues]);
+  }, [commitValues, disabled, filteredOptions, loading, multiple, selectedValues]);
 
   const activateItem = useCallback((index: number) => {
     const item = navigationItems[index];
     if (!item) return;
     if (item.kind === "all") toggleSelectAll();
-    else if (item.kind === "custom") submitCustomValue(item.value);
+    else if (item.kind === "create") submitCreateValue(item.value);
     else selectOption(item.option);
-  }, [navigationItems, selectOption, submitCustomValue, toggleSelectAll]);
+  }, [navigationItems, selectOption, submitCreateValue, toggleSelectAll]);
 
   const openListbox = useCallback((direction: 1 | -1 = 1, keyboard = false) => {
     if (disabled) return;
@@ -416,8 +316,10 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
       setActiveIndex(-1);
       return;
     }
-    const selectedIndex = navigationItems.findIndex(item => (
-      item.kind === "option" && selectedValues.includes(item.option.value) && !item.option.disabled
+    const selectedIndex = navigationItems.findIndex((item) => (
+      item.kind === "option"
+      && selectedValues.includes(item.option.value)
+      && !item.option.disabled
     ));
     setActiveIndex(selectedIndex >= 0
       ? selectedIndex
@@ -436,7 +338,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (!resolvedOpen) openListbox(event.key === "ArrowDown" ? 1 : -1, true);
-      else setActiveIndex(current => moveActive(current, event.key === "ArrowDown" ? 1 : -1));
+      else setActiveIndex((current) => moveActive(current, event.key === "ArrowDown" ? 1 : -1));
       return;
     }
     if (event.key === "Home" && resolvedOpen) {
@@ -449,36 +351,22 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
       setActiveIndex(firstEnabledIndex(navigationItems, -1));
       return;
     }
-    if (event.key === "Escape" && resolvedOpen) {
-      event.preventDefault();
-      closeListbox(true);
-      return;
-    }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (!resolvedOpen) openListbox(1, true);
       else if (activeIndex >= 0) activateItem(activeIndex);
     }
-  }, [
-    activateItem,
-    activeIndex,
-    closeListbox,
-    disabled,
-    moveActive,
-    navigationItems,
-    openListbox,
-    resolvedOpen,
-  ]);
+  }, [activateItem, activeIndex, disabled, moveActive, navigationItems, openListbox, resolvedOpen]);
 
   const handleSearchKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if ((event.key === "Enter" || event.key === "Escape") && isImeOwnedKeyboardEvent(event)) {
+    if (event.key === "Enter" && isImeOwnedKeyboardEvent(event)) {
       event.stopPropagation();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       event.stopPropagation();
-      setActiveIndex(current => moveActive(current, event.key === "ArrowDown" ? 1 : -1));
+      setActiveIndex((current) => moveActive(current, event.key === "ArrowDown" ? 1 : -1));
       return;
     }
     if (event.key === "Home" || event.key === "End") {
@@ -491,69 +379,37 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
       event.preventDefault();
       event.stopPropagation();
       if (activeIndex >= 0) activateItem(activeIndex);
-      else if (customCandidate) submitCustomValue(customCandidate);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeListbox(true);
+      else if (createCandidate) submitCreateValue(createCandidate);
       return;
     }
     if (event.key === "Tab") {
       const candidate = query.trim();
       const exactOption = candidate
-        ? options.find(option => (
+        ? options.find((option) => (
             String(option.value).toLocaleLowerCase() === candidate.toLocaleLowerCase()
             || option.label.toLocaleLowerCase() === candidate.toLocaleLowerCase()
           ))
         : undefined;
       if (exactOption && !exactOption.disabled) selectOption(exactOption);
-      else if (customCandidate) submitCustomValue(customCandidate);
-      closeListbox(true);
+      else if (createCandidate) submitCreateValue(createCandidate);
+      closeListbox(false);
     }
-  }, [
-    activateItem,
-    activeIndex,
-    closeListbox,
-    customCandidate,
-    moveActive,
-    navigationItems,
-    options,
-    query,
-    selectOption,
-    submitCustomValue,
-  ]);
+  }, [activateItem, activeIndex, closeListbox, createCandidate, moveActive, navigationItems, options, query, selectOption, submitCreateValue]);
 
-  useEffect(() => {
-    if (!resolvedOpen) return;
-    if (activeIndex < 0) return;
-    const current = navigationItems[activeIndex];
-    if (current?.kind !== "option" || !current.option.disabled) {
-      if (current) return;
-    }
-    setActiveIndex(firstEnabledIndex(navigationItems, 1));
-  }, [activeIndex, navigationItems, resolvedOpen]);
-
-  useEffect(() => {
-    if (!resolvedOpen) return;
-    const handleOutsidePointer = (event: MouseEvent) => {
-      const target = event.target;
-      if (!target || typeof (target as Node).nodeType !== "number") return;
-      if (!rootRef.current?.contains(target as Node) && !popoverRef.current?.contains(target as Node)) {
-        closeListbox(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsidePointer, true);
-    return () => document.removeEventListener("mousedown", handleOutsidePointer, true);
-  }, [closeListbox, resolvedOpen]);
+  useDismissibleLayer({
+    branchRefs: dismissibleBranches,
+    enabled: resolvedOpen,
+    layerRef: popoverRef,
+    onDismiss: (reason) => closeListbox(reason === "escape-key"),
+    ownerDocument: rootRef.current?.ownerDocument,
+  });
 
   const layout = useAnchoredLayer({
-    open: resolvedOpen && popoverMode === "overlay",
+    open: resolvedOpen,
     anchorRef: triggerRef,
     layerRef: popoverRef,
     placement,
-    matchWidth: matchTriggerWidth,
+    matchWidth: true,
     revision: `${query}:${filteredOptions.length}:${loading}`,
   });
 
@@ -562,43 +418,19 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
     document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex, optionId, resolvedOpen]);
 
-  const selectedOptions = useMemo<ComboboxOption[]>(() => selectedValues.map(selectedValue => (
-    options.find(option => option.value === selectedValue)
-      ?? { label: String(selectedValue), value: selectedValue }
+  const selectedOptions = useMemo<ComboboxOption[]>(() => selectedValues.map((value) => (
+    options.find((option) => option.value === value)
+      ?? { label: String(value), value }
   )), [options, selectedValues]);
-
-  const renderedValue = useMemo(() => {
-    const customValue = renderValue?.(multiple ? selectedOptions : selectedOptions[0]);
-    if (customValue !== undefined && customValue !== null) return customValue;
-    if (selectedOptions.length === 0) {
-      return <span className={styles.placeholder}>{placeholder}</span>;
-    }
-    if (!multiple) {
-      const selected = selectedOptions[0];
-      const selectedLeading = selected?.leading ?? selected?.icon;
-      return (
-        <span className={styles.singleValue}>
-          {selectedLeading && <span aria-hidden="true" className={styles.valueLeading}>{selectedLeading}</span>}
-          <span className={styles.valueLabel}>{selected?.label}</span>
-        </span>
-      );
-    }
-    return (
-      <span className={styles.valueLabel}>
-        {selectedOptions.map(option => option.label).join(", ")}
-      </span>
-    );
-  }, [multiple, placeholder, renderValue, selectedOptions]);
-
   const hasValue = selectedValues.length > 0;
-  const allFilteredSelected = filteredOptions.some(option => !option.disabled)
+  const allFilteredSelected = filteredOptions.some((option) => !option.disabled)
     && filteredOptions
-      .filter(option => !option.disabled)
-      .every(option => selectedValues.includes(option.value));
+      .filter((option) => !option.disabled)
+      .every((option) => selectedValues.includes(option.value));
   const groupedOptions = useMemo(() => {
     const ungrouped: ComboboxOption[] = [];
     const groups = new Map<string, ComboboxOption[]>();
-    filteredOptions.forEach(option => {
+    filteredOptions.forEach((option) => {
       if (!option.group) {
         ungrouped.push(option);
         return;
@@ -611,7 +443,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
   }, [filteredOptions]);
 
   const renderListboxOption = (option: ComboboxOption) => {
-    const navigationIndex = navigationItems.findIndex(item => (
+    const navigationIndex = navigationItems.findIndex((item) => (
       item.kind === "option" && item.option === option
     ));
     const selected = selectedValues.includes(option.value);
@@ -621,21 +453,20 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
         aria-label={typeof option.description === "string"
           ? `${option.label} — ${option.description}`
           : option.label}
-        description={renderOption ? undefined : option.description}
+        description={option.description}
         disabled={option.disabled || loading}
         id={optionId(navigationIndex)}
         indicator={selected ? <Icon name="check-line" /> : null}
         key={`${typeof option.value}:${option.value}`}
-        leading={renderOption ? undefined : option.leading ?? option.icon}
-        metadata={renderOption ? undefined : option.metadata}
+        leading={option.leading}
+        metadata={option.metadata}
         onClick={() => selectOption(option)}
-        onMouseDown={event => event.preventDefault()}
+        onMouseDown={(event) => event.preventDefault()}
         selected={selected}
         value={option.value}
         data-testid={option.testId}
-        {...option.testAttributes}
       >
-        {renderOption ? renderOption(option) : option.label}
+        {option.label}
       </ListboxOption>
     );
   };
@@ -643,64 +474,55 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
   const activeDescendant = resolvedOpen && activeIndex >= 0
     ? optionId(activeIndex)
     : undefined;
-  const resolvedTriggerAriaLabel = triggerAriaLabel
-    ?? rootAriaLabel
-    ?? (label || providedId
-      ? undefined
-      : typeof placeholder === "string" ? placeholder : context.labels.placeholder);
-  const resolvedTriggerLabelledBy = resolvedTriggerAriaLabel
-    ? triggerAriaLabelledBy ?? rootAriaLabelledBy
-    : triggerAriaLabelledBy ?? rootAriaLabelledBy ?? (label ? labelId : undefined);
-  const resolvedTriggerDescribedBy = [
-    triggerAriaDescribedBy ?? rootAriaDescribedBy,
+  const resolvedTriggerLabel = ariaLabel
+    ?? (label || providedId || typeof placeholder !== "string" ? undefined : placeholder);
+  const resolvedLabelledBy = ariaLabel
+    ? ariaLabelledBy
+    : ariaLabelledBy ?? (label ? labelId : undefined);
+  const resolvedDescribedBy = [
+    ariaDescribedBy,
     errorMessage ? errorId : undefined,
   ].filter(Boolean).join(" ") || undefined;
-  const portalTarget = resolvedOpen && popoverMode === "overlay"
-    ? resolveLayerPortal(portalContainer, triggerRef.current)
-    : null;
+
   const popover = resolvedOpen ? (
     <div
-      className={classNames(styles.popover, dropdownClassName)}
-      data-bf-component="combobox-popup"
+      className={styles.popover}
+      data-bf-component={multiple ? "multi-select-popup" : "combobox-popup"}
       data-bf-part="popover"
       data-keyboard-open={keyboardOpen ? "true" : "false"}
       data-placement={layout?.placement ?? placement}
-      data-popover-mode={popoverMode}
-      data-testid={dropdownTestId}
       ref={popoverRef}
-      style={popoverMode === "overlay"
-        ? layout?.style ?? { position: "fixed", visibility: "hidden" }
-        : undefined}
+      style={layout?.style ?? { position: "fixed", visibility: "hidden" }}
     >
-      {searchable && (
-        <div className={styles.search} data-bf-part="search">
-          <SearchField
-            aria-activedescendant={activeDescendant}
-            aria-autocomplete="list"
-            aria-controls={listboxId}
-            aria-expanded={resolvedOpen}
-            aria-label={searchPlaceholder}
-            autoComplete="off"
-            clearLabel={clearLabel}
-            onClear={() => {
-              setQuery("");
-              setActiveIndex(firstEnabledIndex(navigationItems, 1));
-            }}
-            onKeyDown={handleSearchKeyDown}
-            onValueChange={(nextQuery) => {
-              setQuery(nextQuery);
-              setActiveIndex(-1);
-            }}
-            placeholder={searchPlaceholder}
-            ref={setSearchInputRef}
-            role="combobox"
-            size={size}
-            value={query}
-          />
-        </div>
-      )}
+      <div className={styles.search} data-bf-part="search">
+        <SearchField
+          aria-activedescendant={activeDescendant}
+          aria-autocomplete="list"
+          aria-controls={listboxId}
+          aria-expanded={resolvedOpen}
+          aria-label={designSystem.messages.searchOptions}
+          autoComplete="off"
+          clearLabel={designSystem.messages.clearSelection}
+          onClear={() => {
+            setQuery("");
+            setActiveIndex(firstEnabledIndex(navigationItems, 1));
+          }}
+          onKeyDown={handleSearchKeyDown}
+          onValueChange={(nextQuery) => {
+            setQuery(nextQuery);
+            setActiveIndex(-1);
+          }}
+          placeholder={designSystem.messages.searchOptions}
+          ref={(node) => {
+            if (node && resolvedOpen) node.focus();
+          }}
+          role="combobox"
+          size={size}
+          value={query}
+        />
+      </div>
       <Listbox
-        aria-label={triggerAriaLabel ?? (typeof label === "string" ? label : "Options")}
+        aria-label={ariaLabel ?? (typeof label === "string" ? label : "Options")}
         className={styles.listbox}
         focusMode="virtual"
         id={listboxId}
@@ -709,10 +531,10 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
         {loading && filteredOptions.length === 0 ? (
           <ListboxEmpty className={styles.message}>
             <LoaderCircle aria-hidden="true" className={styles.spinner} />
-            <span>{loadingText}</span>
+            <span>{designSystem.messages.loading}</span>
           </ListboxEmpty>
         ) : navigationItems.length === 0 ? (
-          <ListboxEmpty>{emptyText}</ListboxEmpty>
+          <ListboxEmpty>{designSystem.messages.noOptions}</ListboxEmpty>
         ) : (
           <>
             {navigationItems[0]?.kind === "all" && (
@@ -721,10 +543,10 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
                 id={optionId(0)}
                 indicator={allFilteredSelected ? <Icon name="check-line" /> : null}
                 onClick={toggleSelectAll}
-                onMouseDown={event => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
                 selected={allFilteredSelected}
               >
-                {selectAllLabel}
+                {designSystem.messages.selectAll}
               </ListboxOption>
             )}
             {groupedOptions.ungrouped.map(renderListboxOption)}
@@ -733,21 +555,19 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
                 {groupOptions.map(renderListboxOption)}
               </ListboxGroup>
             ))}
-            {customCandidate && (() => {
-              const customIndex = navigationItems.findIndex(item => item.kind === "custom");
+            {createCandidate && (() => {
+              const createIndex = navigationItems.findIndex((item) => item.kind === "create");
               return (
                 <ListboxOption
-                  active={activeIndex === customIndex}
-                  id={optionId(customIndex)}
+                  active={activeIndex === createIndex}
+                  id={optionId(createIndex)}
                   leading={<Icon name="plus" />}
-                  onClick={() => submitCustomValue(customCandidate)}
-                  onMouseDown={event => event.preventDefault()}
-                  selected={selectedValues.includes(customCandidate)}
-                  value={customCandidate}
+                  onClick={() => submitCreateValue(createCandidate)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  selected={selectedValues.includes(createCandidate)}
+                  value={createCandidate}
                 >
-                  {typeof customValueHint === "function"
-                    ? customValueHint(customCandidate)
-                    : <>{customValueHint}: {customCandidate}</>}
+                  {designSystem.messages.createValue}: {createCandidate}
                 </ListboxOption>
               );
             })()}
@@ -757,14 +577,15 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
     </div>
   ) : null;
 
+  const singleOption = selectedOptions[0];
+
   return (
     <div
-      {...rootProps}
+      {...divProps}
       className={classNames(styles.root, className)}
-      data-bf-component="combobox"
+      data-bf-component={multiple ? "multi-select" : "combobox"}
       data-disabled={disabled ? "true" : "false"}
       data-invalid={invalid ? "true" : "false"}
-      data-multiple={multiple ? "true" : "false"}
       data-open={resolvedOpen ? "true" : "false"}
       data-size={size}
       ref={setRootRef}
@@ -777,46 +598,44 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
       <div
         className={styles.control}
         data-bf-part="control"
-        data-tags={multiple && !renderValue && hasValue ? "true" : "false"}
+        data-tags={multiple && hasValue ? "true" : "false"}
       >
-        {multiple && !renderValue && hasValue && (
+        {multiple && hasValue && (
           <span className={styles.tags} data-bf-part="tags">
-            {selectedOptions.slice(0, Math.max(1, maxTagCount)).map(option => (
+            {selectedOptions.slice(0, Math.max(1, maxVisibleTags)).map((option) => (
               <span className={styles.tag} data-bf-part="tag" key={`${typeof option.value}:${option.value}`}>
                 <span>{option.label}</span>
                 <IconButton
-                  aria-label={`${clearLabel}: ${option.label}`}
+                  aria-label={`${designSystem.messages.clearSelection}: ${option.label}`}
                   disabled={disabled}
                   icon={<Icon name="xmark" />}
-                  onClick={event => {
+                  onClick={(event) => {
                     event.stopPropagation();
-                    commitValue(selectedValues.filter(candidate => candidate !== option.value));
+                    commitValues(selectedValues.filter((value) => value !== option.value));
                   }}
-                  onMouseDown={event => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                   size="xs"
                   variant="quiet"
                 />
               </span>
             ))}
-            {selectedOptions.length > Math.max(1, maxTagCount) && (
-              <span className={styles.tag}>+{selectedOptions.length - Math.max(1, maxTagCount)}</span>
+            {selectedOptions.length > Math.max(1, maxVisibleTags) && (
+              <span className={styles.tag}>+{selectedOptions.length - Math.max(1, maxVisibleTags)}</span>
             )}
           </span>
         )}
         <button
-          aria-activedescendant={!searchable ? activeDescendant : undefined}
           aria-controls={resolvedOpen ? listboxId : undefined}
-          aria-describedby={resolvedTriggerDescribedBy}
+          aria-describedby={resolvedDescribedBy}
           aria-expanded={resolvedOpen}
           aria-haspopup="listbox"
           aria-invalid={invalid || undefined}
-          aria-label={resolvedTriggerAriaLabel}
-          aria-labelledby={resolvedTriggerLabelledBy}
+          aria-label={resolvedTriggerLabel}
+          aria-labelledby={resolvedLabelledBy}
           aria-required={required || undefined}
           aria-busy={loading || undefined}
-          className={classNames(styles.trigger, triggerClassName)}
+          className={styles.trigger}
           data-bf-part="trigger"
-          data-testid={triggerTestId}
           disabled={disabled}
           id={id}
           onClick={() => {
@@ -828,16 +647,29 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
           role="combobox"
           type="button"
         >
-          <span className={styles.value} data-bf-part="value">{renderedValue}</span>
+          <span className={styles.value} data-bf-part="value">
+            {!hasValue ? (
+              <span className={styles.placeholder}>{placeholder}</span>
+            ) : multiple ? (
+              <span className={styles.valueLabel}>{selectedOptions.map((option) => option.label).join(", ")}</span>
+            ) : (
+              <span className={styles.singleValue}>
+                {singleOption?.leading && (
+                  <span aria-hidden="true" className={styles.valueLeading}>{singleOption.leading}</span>
+                )}
+                <span className={styles.valueLabel}>{singleOption?.label}</span>
+              </span>
+            )}
+          </span>
         </button>
         {clearable && hasValue && !disabled && (
           <IconButton
-            aria-label={clearLabel}
+            aria-label={designSystem.messages.clearSelection}
             className={styles.clear}
             icon={<Icon name="xmark" />}
-            onClick={event => {
+            onClick={(event) => {
               event.stopPropagation();
-              commitValue(multiple ? [] : "");
+              commitValues([]);
               setQuery("");
             }}
             size="sm"
@@ -845,7 +677,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
           />
         )}
         <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
-          {indicator ?? <Icon name="chevron-down" />}
+          <Icon name="chevron-down" />
         </span>
       </div>
       {errorMessage ? (
@@ -853,7 +685,25 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
           {errorMessage}
         </span>
       ) : null}
-      {popover && (portalTarget ? createPortal(popover, portalTarget) : popover)}
+      {popover && (
+        <Portal ownerDocument={triggerRef.current?.ownerDocument}>
+          {popover}
+        </Portal>
+      )}
     </div>
   );
+});
+
+export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combobox(
+  props,
+  ref,
+) {
+  return <CollectionPicker {...props} mode="single" ref={ref} />;
+});
+
+export const MultiSelect = forwardRef<HTMLDivElement, MultiSelectProps>(function MultiSelect(
+  props,
+  ref,
+) {
+  return <CollectionPicker {...props} mode="multiple" ref={ref} />;
 });

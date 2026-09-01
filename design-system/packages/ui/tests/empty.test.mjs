@@ -8,7 +8,7 @@ test("Empty exposes independent media, copy, and action regions", () => {
   const markup = renderToStaticMarkup(createElement(Empty, {
     actions: createElement("button", null, "Create"),
     description: "Create an item to get started.",
-    imageSize: "small",
+    imageSize: "sm",
     title: "No items",
   }));
 

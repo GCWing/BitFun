@@ -1,11 +1,8 @@
 import {
   cloneElement,
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
   type FocusEvent as ReactFocusEvent,
@@ -14,17 +11,13 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { createPortal } from "react-dom";
 import { classNames } from "../../internal/classNames";
+import { Portal } from "../../overlay/Portal";
+import { useDesignSystem } from "../../overlay/useDesignSystem";
 import styles from "./Tooltip.module.css";
 
 export type TooltipPlacement = "top" | "bottom" | "left" | "right";
 export type TooltipTrigger = "hover" | "click" | "focus";
-export type TooltipPortalContainer = Element | DocumentFragment;
-export type TooltipPortalTarget =
-  | TooltipPortalContainer
-  | (() => TooltipPortalContainer | null)
-  | null;
 
 const DEFAULT_TOOLTIP_DELAY_MS = 450;
 const INTERACTIVE_HIDE_DELAY_MS = 400;
@@ -41,33 +34,6 @@ const CURSOR_OFFSET_Y = 8;
 const GAP = 8;
 const VIEWPORT_PADDING = 8;
 
-interface TooltipContextValue {
-  delay?: number;
-  portalContainer?: TooltipPortalTarget;
-}
-
-const TooltipContext = createContext<TooltipContextValue>({});
-
-export interface TooltipProviderProps {
-  children: ReactNode;
-  /** Default open delay in milliseconds for descendant tooltips. */
-  delay?: number;
-  portalContainer?: TooltipPortalTarget;
-}
-
-export function TooltipProvider({
-  children,
-  delay,
-  portalContainer,
-}: TooltipProviderProps) {
-  const value = useMemo<TooltipContextValue>(
-    () => ({ delay, portalContainer }),
-    [delay, portalContainer],
-  );
-
-  return <TooltipContext.Provider value={value}>{children}</TooltipContext.Provider>;
-}
-
 export interface TooltipProps {
   /** Single focusable trigger element the tooltip describes. */
   children: ReactElement;
@@ -82,16 +48,7 @@ export interface TooltipProps {
   interactive?: boolean;
   /** Preferred side of the trigger; flips to the opposite side when space runs out. */
   placement?: TooltipPlacement;
-  portalContainer?: TooltipPortalTarget;
   trigger?: TooltipTrigger;
-}
-
-function resolvePortalContainer(
-  target: TooltipPortalTarget | undefined,
-): TooltipPortalContainer | null {
-  if (typeof target === "function") return target();
-  if (target) return target;
-  return typeof document === "undefined" ? null : document.body;
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {
@@ -208,14 +165,10 @@ export function Tooltip({
   followCursor = false,
   interactive = false,
   placement = "top",
-  portalContainer,
   trigger = "hover",
 }: TooltipProps) {
-  const context = useContext(TooltipContext);
-  const resolvedDelayMs = delay ?? context.delay ?? DEFAULT_TOOLTIP_DELAY_MS;
-  const resolvedPortalContainer = resolvePortalContainer(
-    portalContainer === undefined ? context.portalContainer : portalContainer,
-  );
+  const designSystem = useDesignSystem();
+  const resolvedDelayMs = delay ?? designSystem.tooltipDelay ?? DEFAULT_TOOLTIP_DELAY_MS;
 
   const tooltipId = useId();
   const [visible, setVisible] = useState(false);
@@ -435,7 +388,8 @@ export function Tooltip({
   return (
     <>
       {triggerElement}
-      {visible && resolvedPortalContainer && createPortal(
+      {visible && (
+        <Portal ownerDocument={triggerRef.current?.ownerDocument}>
         <div
           ref={tooltipRef}
           id={tooltipId}
@@ -464,8 +418,8 @@ export function Tooltip({
           <div className={styles.content} data-bf-part="content">
             <div className={styles.body} data-bf-part="body">{content}</div>
           </div>
-        </div>,
-        resolvedPortalContainer,
+        </div>
+        </Portal>
       )}
     </>
   );

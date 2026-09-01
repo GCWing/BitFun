@@ -13,13 +13,12 @@ export function ConfirmDialogRenderer() {
       cancelText={options.cancelText ?? t('dialog.confirm.cancel')}
       confirmDanger={options.confirmDanger}
       confirmText={options.confirmText ?? t('dialog.confirm.ok')}
-      isOpen={isOpen}
+      open={isOpen}
       message={options.message}
-      onClose={cancel}
+      onOpenChange={cancel}
       onConfirm={confirm}
       onSecondary={secondary}
       preview={options.preview}
-      previewMaxHeight={options.previewMaxHeight}
       secondaryText={options.secondaryText}
       showCancel={options.showCancel}
       title={options.title}

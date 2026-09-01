@@ -69,33 +69,19 @@ vi.mock('@/shared/notification-system', () => ({
   },
 }));
 
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
-  ConfigPageMessage: ({
-    message,
-  }: {
-    message: { text: string } | null;
-  }) => message ? <div>{message.text}</div> : null,
-  ConfigPageRefreshButton: ({
-    onClick,
-  }: {
-    onClick: () => void;
-  }) => <button type="button" onClick={onClick}>refresh</button>,
-}));
-
 vi.mock('@bitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),
-  ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
+  ConfirmDialog: ({ confirmText, message, onConfirm, open, title }: {
     confirmText: string;
-    isOpen: boolean;
     message: React.ReactNode;
     onConfirm: () => void;
+    open: boolean;
     title: string;
-  }) => isOpen ? (
+  }) => open ? (
     <div role="dialog">
       <h2>{title}</h2>
       <div>{message}</div>
@@ -130,10 +116,10 @@ vi.mock('@bitfun/ui', () => ({
     </button>
   ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-  NumberInput: ({ disabled, label, onChange, value }: {
+  NumberInput: ({ disabled, label, onValueChange, value }: {
     disabled?: boolean;
     label?: string;
-    onChange: (value: number) => void;
+    onValueChange: (value: number) => void;
     value: number;
   }) => (
     <input
@@ -141,7 +127,7 @@ vi.mock('@bitfun/ui', () => ({
       disabled={disabled}
       type="number"
       value={value}
-      onChange={event => onChange(Number(event.currentTarget.value))}
+      onChange={event => onValueChange(Number(event.currentTarget.value))}
     />
   ),
   Switch: ({ checked, disabled, onChange }: {
@@ -154,6 +140,11 @@ vi.mock('@bitfun/ui', () => ({
 }));
 
 vi.mock('./common', () => ({
+  ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
+  ConfigMessage: ({ message }: { message: { text: string } | null }) => message ? <div>{message.text}</div> : null,
+  ConfigRefreshButton: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick}>refresh</button>
+  ),
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (
     <header>

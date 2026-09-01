@@ -28,7 +28,7 @@
   }
 
   .root[data-appearance="subtle"] {
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-surface-tertiary);
   }
 
   .root[data-appearance="neutral"] {

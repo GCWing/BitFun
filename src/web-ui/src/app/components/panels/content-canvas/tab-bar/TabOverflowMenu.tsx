@@ -200,8 +200,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
           {hasMissionControl && (
             <>
               <MenuItem
-                className="canvas-tab-overflow-menu__mission-control-row"
-                triggerClassName="canvas-tab-overflow-menu__mission-control"
+                className="canvas-tab-overflow-menu__mission-control-row canvas-tab-overflow-menu__mission-control"
                 onClick={handleMissionControlClick}
                 leading={<LayoutGrid size={14} />}
                 shortcut={<KeyHint>⌘.</KeyHint>}
@@ -224,8 +223,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                 key={tab.id}
                 role="menuitemradio"
                 checked={activeTabId === tab.id}
-                className="canvas-tab-overflow-menu__item-row"
-                triggerClassName={`canvas-tab-overflow-menu__item ${
+                className={`canvas-tab-overflow-menu__item-row canvas-tab-overflow-menu__item ${
                   activeTabId === tab.id ? 'is-active' : ''
                 } ${tab.isDirty ? 'is-dirty' : ''} ${tab.fileDeletedFromDisk ? 'is-file-deleted' : ''}`}
                 onClick={() => handleTabClick(tab.id)}

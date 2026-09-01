@@ -12,8 +12,12 @@ const loadJsonConfigMock = vi.hoisted(() => vi.fn());
 const saveJsonConfigMock = vi.hoisted(() => vi.fn());
 const initializeServersMock = vi.hoisted(() => vi.fn());
 const startServerMock = vi.hoisted(() => vi.fn());
+const startRemoteOAuthMock = vi.hoisted(() => vi.fn());
+const getRemoteOAuthSessionMock = vi.hoisted(() => vi.fn());
+const cancelRemoteOAuthMock = vi.hoisted(() => vi.fn());
 const deleteServerMock = vi.hoisted(() => vi.fn());
 const confirmDangerMock = vi.hoisted(() => vi.fn());
+const openExternalMock = vi.hoisted(() => vi.fn());
 const notificationMocks = vi.hoisted(() => ({
   success: vi.fn(),
   warning: vi.fn(),
@@ -50,10 +54,15 @@ vi.mock('../../api/service-api/MCPAPI', () => ({
     saveMCPJsonConfig: saveJsonConfigMock,
     initializeServers: initializeServersMock,
     startServer: startServerMock,
+    startRemoteOAuth: startRemoteOAuthMock,
+    getRemoteOAuthSession: getRemoteOAuthSessionMock,
+    cancelRemoteOAuth: cancelRemoteOAuthMock,
     deleteServer: deleteServerMock,
   },
 }));
-vi.mock('../../api/service-api/SystemAPI', () => ({ systemAPI: {} }));
+vi.mock('../../api/service-api/SystemAPI', () => ({
+  systemAPI: { openExternal: openExternalMock },
+}));
 vi.mock('./ExternalMcpOverview', () => ({
   default: () => <div data-testid="external-mcp-overview" />,
 }));
@@ -76,6 +85,16 @@ describe('McpToolsConfig remote behavior', () => {
     saveJsonConfigMock.mockReset().mockResolvedValue(undefined);
     initializeServersMock.mockReset().mockResolvedValue(undefined);
     startServerMock.mockReset().mockResolvedValue(undefined);
+    startRemoteOAuthMock.mockReset().mockResolvedValue({
+      serverId: 'notion',
+      status: 'awaitingBrowser',
+      authorizationUrl: 'https://mcp.notion.test/authorize',
+      redirectUri: 'http://127.0.0.1:31337/callback',
+      message: 'Authorization started',
+    });
+    getRemoteOAuthSessionMock.mockReset().mockResolvedValue(null);
+    cancelRemoteOAuthMock.mockReset().mockResolvedValue(undefined);
+    openExternalMock.mockReset().mockResolvedValue(undefined);
     deleteServerMock.mockReset().mockResolvedValue(undefined);
     confirmDangerMock.mockReset().mockResolvedValue(true);
     notificationMocks.success.mockReset();
@@ -225,9 +244,34 @@ describe('McpToolsConfig remote behavior', () => {
     });
 
     expect(saveJsonConfigMock).toHaveBeenCalledWith('{"mcpServers":{}}', 'sha256:test');
+    expect(initializeServersMock).not.toHaveBeenCalled();
   });
 
-  it('does not notify or reload after a pending start loses desktop capability', async () => {
+  it('offers start rather than stop for an uninitialized server', async () => {
+    getServersMock.mockResolvedValueOnce([{
+      id: 'local-test',
+      name: 'Local test server',
+      status: 'Uninitialized',
+      serverType: 'local',
+      transport: 'stdio',
+      enabled: true,
+      autoStart: false,
+      commandAvailable: true,
+      startSupported: true,
+    }]);
+    peerState.active = false;
+
+    await act(async () => {
+      root.render(<McpToolsConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[aria-label="actions.start"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="actions.stop"]')).toBeNull();
+  });
+
+  it('coalesces repeated clicks while a start is pending and ignores completion after capability loss', async () => {
     let resolveStart: (() => void) | undefined;
     startServerMock.mockReturnValueOnce(new Promise<void>((resolve) => {
       resolveStart = resolve;
@@ -257,8 +301,11 @@ describe('McpToolsConfig remote behavior', () => {
     expect(startButton).toBeDefined();
     await act(async () => {
       startButton?.click();
+      startButton?.click();
       await Promise.resolve();
     });
+    expect(startServerMock).toHaveBeenCalledTimes(1);
+    expect((startButton as HTMLButtonElement).disabled).toBe(true);
     peerState.active = true;
     await act(async () => {
       root.render(<McpToolsConfig />);
@@ -272,6 +319,80 @@ describe('McpToolsConfig remote behavior', () => {
     expect(notificationMocks.success).not.toHaveBeenCalled();
     expect(notificationMocks.error).not.toHaveBeenCalled();
     expect(getServersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts OAuth directly for an unauthorized remote server without reporting a start failure', async () => {
+    getServersMock.mockResolvedValueOnce([{
+      id: 'notion',
+      name: 'Notion',
+      status: 'Uninitialized',
+      serverType: 'Remote',
+      transport: 'streamable-http',
+      enabled: true,
+      autoStart: false,
+      authConfigured: false,
+      oauthEnabled: true,
+      startSupported: true,
+    }]);
+    peerState.active = false;
+
+    await act(async () => {
+      root.render(<McpToolsConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const startButton = container.querySelector<HTMLButtonElement>('[data-testid="mcp-server-start"]');
+    await act(async () => {
+      startButton?.click();
+      startButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(startServerMock).not.toHaveBeenCalled();
+    expect(startRemoteOAuthMock).toHaveBeenCalledTimes(1);
+    expect(startRemoteOAuthMock).toHaveBeenCalledWith({ serverId: 'notion' });
+    expect(openExternalMock).toHaveBeenCalledWith('https://mcp.notion.test/authorize');
+    expect(getRemoteOAuthSessionMock).not.toHaveBeenCalled();
+    expect(notificationMocks.error).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-bf-part="authEditor"]')).not.toBeNull();
+  });
+
+  it('reauthorizes after an auth handshake challenge without reporting a start failure', async () => {
+    startServerMock.mockRejectedValueOnce(new Error(
+      'Handshake failed: Auth required, when send initialize request',
+    ));
+    getServersMock.mockResolvedValueOnce([{
+      id: 'notion',
+      name: 'Notion',
+      status: 'NeedsAuth',
+      serverType: 'Remote',
+      transport: 'streamable-http',
+      enabled: true,
+      autoStart: false,
+      authConfigured: true,
+      oauthEnabled: true,
+      startSupported: true,
+    }]);
+    peerState.active = false;
+
+    await act(async () => {
+      root.render(<McpToolsConfig />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const startButton = container.querySelector<HTMLButtonElement>('[data-testid="mcp-server-start"]');
+    await act(async () => {
+      startButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(startServerMock).toHaveBeenCalledWith('notion');
+    expect(startRemoteOAuthMock).toHaveBeenCalledWith({ serverId: 'notion' });
+    expect(notificationMocks.error).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-bf-part="authEditor"]')).not.toBeNull();
   });
 
   it('deletes a server after confirmation and reloads the list', async () => {

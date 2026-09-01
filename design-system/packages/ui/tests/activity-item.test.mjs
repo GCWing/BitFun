@@ -35,7 +35,6 @@ test("ActivityItem exposes an optional native trigger without nesting sibling ac
     createElement(ActivityItem, {
       actions: [{ icon: createElement("svg"), id: "open", label: "Open" }],
       onActivate: () => undefined,
-      triggerProps: { "aria-expanded": false },
     }, "Read file"),
   );
 
@@ -43,7 +42,7 @@ test("ActivityItem exposes an optional native trigger without nesting sibling ac
   const siblingAction = markup.indexOf("<button", markup.indexOf("<button") + 1);
 
   assert.equal((markup.match(/<button/g) ?? []).length, 2);
-  assert.match(markup, /<button[^>]+aria-expanded="false"[^>]+data-bf-part="trigger"/);
+  assert.match(markup, /<button[^>]+data-bf-part="trigger"/);
   assert.ok(triggerEnd < siblingAction);
 });
 

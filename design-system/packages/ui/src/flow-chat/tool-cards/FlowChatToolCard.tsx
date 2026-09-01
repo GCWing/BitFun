@@ -223,6 +223,7 @@ function CollapsibleRegion({
 
 export interface ProminentToolCardProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "onClick"> {
+  allowExpandedWhenFailed?: boolean;
   className?: string;
   disableExpandAnimation?: boolean;
   errorContent?: ReactNode;
@@ -239,6 +240,7 @@ export interface ProminentToolCardProps
 }
 
 export function ProminentToolCard({
+  allowExpandedWhenFailed = false,
   className,
   disableExpandAnimation = false,
   errorContent,
@@ -255,7 +257,8 @@ export function ProminentToolCard({
   ...props
 }: ProminentToolCardProps) {
   const failed = isFailed || status === "error";
-  const expandable = headerExpandAffordance ?? Boolean(onClick && expandedContent && !failed);
+  const expandable = headerExpandAffordance
+    ?? Boolean(onClick && expandedContent && (!failed || allowExpandedWhenFailed));
   const loading = LOADING_STATUSES.has(status);
   const confirmation = requiresConfirmation && ![
     "completed",
@@ -323,7 +326,7 @@ export function ProminentToolCard({
 
       <CollapsibleRegion
         disableAnimation={disableExpandAnimation}
-        isOpen={Boolean(isExpanded && expandedContent && !failed)}
+        isOpen={Boolean(isExpanded && expandedContent && (!failed || allowExpandedWhenFailed))}
         part="expanded"
         status={status}
       >
@@ -498,7 +501,6 @@ export interface ToolCardIconSlotProps {
   className?: string;
   expandable?: boolean;
   icon: ReactNode;
-  iconClassName?: string;
   isExpanded?: boolean;
   onAffordanceClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   showDivider?: boolean;
@@ -509,7 +511,6 @@ export function ToolCardIconSlot({
   className,
   expandable,
   icon,
-  iconClassName,
   isExpanded,
   onAffordanceClick,
   showDivider = false,
@@ -540,7 +541,7 @@ export function ToolCardIconSlot({
         data-bf-part="iconMarks"
       >
         <span
-          className={classNames(styles.mainIcon, iconClassName)}
+          className={styles.mainIcon}
           data-bf-component="flow-chat-tool-card"
           data-bf-part="iconGraphic"
         >
@@ -668,7 +669,6 @@ export interface ProminentToolCardHeaderProps {
   extra?: ReactNode;
   headerExpanded?: boolean;
   icon?: ReactNode;
-  iconClassName?: string;
   onAffordanceClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   statusIcon?: ReactNode;
   trailingActions?: ReactNode;
@@ -685,7 +685,6 @@ export function ProminentToolCardHeader({
   extra,
   headerExpanded,
   icon,
-  iconClassName,
   onAffordanceClick,
   statusIcon,
   trailingActions,
@@ -707,7 +706,7 @@ export function ProminentToolCardHeader({
       data-bf-part="header"
     >
       {icon !== undefined && icon !== null && icon !== false && icon !== "" && (
-        <ToolCardIconSlot icon={icon} iconClassName={iconClassName} />
+        <ToolCardIconSlot icon={icon} />
       )}
       {action !== undefined && action !== null && action !== false && action !== "" && (
         <span
@@ -796,7 +795,6 @@ export interface AmbientToolCardHeaderProps {
   expandable?: boolean;
   extra?: ReactNode;
   icon?: ReactNode;
-  iconClassName?: string;
   isExpanded?: boolean;
   onAffordanceClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   rightStatusIcon?: ReactNode;
@@ -811,7 +809,6 @@ export function AmbientToolCardHeader({
   expandable,
   extra,
   icon,
-  iconClassName,
   isExpanded,
   onAffordanceClick,
   rightStatusIcon,
@@ -827,7 +824,6 @@ export function AmbientToolCardHeader({
           affordanceKind={affordanceKind}
           expandable={expandable ?? layout.expandable}
           icon={icon}
-          iconClassName={iconClassName}
           isExpanded={isExpanded ?? layout.isExpanded}
           onAffordanceClick={onAffordanceClick}
           showDivider={showDivider}

@@ -1,4 +1,15 @@
-import { Button, Icon, Input, Modal, Textarea } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  Input,
+  Textarea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -224,18 +235,21 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
 
   return (
     <>
-      <Modal
-        isOpen={isOpen}
-        onClose={() => {
-          if (!saving) {
-            onClose();
-          }
+      <Dialog
+        open={isOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !saving) onClose();
         }}
-        title={t('nav.workspaces.relatedPaths.dialog.title')}
-        size="large"
-        contentPadding="lg"
-        contentClassName="workspace-related-paths-dialog__modal"
+        size="lg"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('nav.workspaces.relatedPaths.dialog.title')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
+          <div className="workspace-related-paths-dialog__modal">
         <div
           className="workspace-related-paths-dialog"
           data-bf-component="workspace-related-paths-dialog"
@@ -315,18 +329,22 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                     </Button>
                   </div>
 
-                  <Textarea
+                  <div
                     data-bf-component="workspace-related-paths-dialog"
                     data-bf-part="description"
                     className="workspace-related-paths-dialog__description"
-                    value={draft.description}
-                    onChange={event => setDraftValue(draft.id, 'description', event.target.value)}
-                    placeholder={t('nav.workspaces.relatedPaths.dialog.descriptionPlaceholder')}
-                    disabled={saving}
-                    autoResize
-                    rows={2}
-                    variant="outlined"
-                  />
+                  >
+                    <Textarea
+                      value={draft.description}
+                      onChange={event => setDraftValue(draft.id, 'description', event.target.value)}
+                      placeholder={t('nav.workspaces.relatedPaths.dialog.descriptionPlaceholder')}
+                      disabled={saving}
+                      layout="fill"
+                      resize="none"
+                      rows={2}
+                      variant="outlined"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -441,7 +459,9 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
             </div>
           </div>
         </div>
-      </Modal>
+                </div>
+                </DialogBody>
+      </Dialog>
 
       {remoteWorkspace && connectionId && browsingIndex !== null ? (
         <RemoteFileBrowser

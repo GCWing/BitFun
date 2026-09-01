@@ -54,10 +54,15 @@ vi.mock('./SSHAuthPromptDialog', () => ({
 vi.mock('@bitfun/ui', () => ({
   Alert: () => null,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
-  Modal: ({
-    isOpen,
+  Dialog: ({
+    open,
     children,
-  }: React.PropsWithChildren<{ isOpen: boolean }>) => isOpen ? <div>{children}</div> : null,
+  }: React.PropsWithChildren<{ open: boolean }>) => open ? <div role="dialog">{children}</div> : null,
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: () => <button type="button" aria-label="Close" />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
   Button: ({
     children,
     leadingIcon: _leadingIcon,
@@ -140,51 +145,6 @@ vi.mock('@bitfun/ui', () => ({
       })}
       {error}
     </div>
-  ),
-}));
-
-vi.mock('@/component-library', () => ({
-  Input: ({
-    label,
-    value,
-    onChange,
-    className,
-    placeholder,
-    suffix,
-  }: {
-    label?: string;
-    value?: string;
-    onChange?: React.ChangeEventHandler<HTMLInputElement>;
-    className?: string;
-    placeholder?: string;
-    suffix?: React.ReactNode;
-  }) => (
-    <label className={className}>
-      {label}
-      <input aria-label={label} value={value} onChange={onChange} placeholder={placeholder} />
-      {suffix}
-    </label>
-  ),
-  Select: ({
-    options,
-    value,
-    onChange,
-    dropdownClassName,
-  }: {
-    options: Array<{ label: string; value: string }>;
-    value: string;
-    onChange: (value: string) => void;
-    dropdownClassName?: string;
-  }) => (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      data-dropdown-class-name={dropdownClassName}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
-      ))}
-    </select>
   ),
 }));
 

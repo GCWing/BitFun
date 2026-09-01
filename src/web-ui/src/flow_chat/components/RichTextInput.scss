@@ -2,9 +2,6 @@
  * Rich text input styles
  */
 
-@use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/_extended-mixins' as mixins;
-
 .rich-text-input {
   flex: 1;
   background: transparent;

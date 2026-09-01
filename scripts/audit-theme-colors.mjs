@@ -5,6 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {
+  CANONICAL_THEME_COLOR_TOKENS,
   COLOR_DOMAIN_KEYS,
   COLOR_DOMAIN_LABELS,
   COLOR_DOMAIN_CONTRACTS,
@@ -296,7 +297,7 @@ function isTokenFile(relativePath) {
 }
 
 function isTokenAliasSourceFile(relativePath) {
-  return TOKEN_ALIAS_SOURCE_PATH_PARTS.some(part => relativePath.endsWith(part));
+  return TOKEN_ALIAS_SOURCE_PATH_PARTS.some(part => relativePath.includes(part));
 }
 
 function isContractVarDefinitionFile(relativePath) {
@@ -740,6 +741,13 @@ function topEntries(map, limit) {
 
 function collectTokenAliasDefinitions(files, cwd) {
   const definitionsByColorKey = new Map();
+
+  for (const token of CANONICAL_THEME_COLOR_TOKENS) {
+    const colorKey = canonicalColorKey(token.value);
+    if (colorKey) {
+      addToSetMap(definitionsByColorKey, colorKey, token.cssVariable);
+    }
+  }
 
   for (const file of files) {
     const relativePath = normalizePath(path.relative(cwd, file));

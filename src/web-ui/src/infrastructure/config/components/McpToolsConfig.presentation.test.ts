@@ -16,6 +16,6 @@ describe('MCP settings presentation', () => {
     const editorEnd = stylesheet.indexOf('&__json-editor-header', editorStart);
 
     expect(stylesheet).not.toContain('.bitfun-config-page-row {');
-    expect(stylesheet.slice(editorStart, editorEnd)).toContain('padding: $size-gap-4;');
+    expect(stylesheet.slice(editorStart, editorEnd)).toContain('padding: var(--bf-space-4);');
   });
 });

@@ -12,16 +12,25 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, KeyHint, Menu, MenuItem, MenuSection, MenuSeparator, NavigationPanel, ScrollArea, Tooltip } from '@bitfun/ui';
+import {
+  Icon,
+  KeyHint,
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelHeader,
+  ScrollArea,
+  Tooltip,
+} from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { Plus, FolderOpen, FolderPlus, History, Users, Network, CalendarClock } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
-import {
-  BITFUN_ICON_SIZE,
-  NavigationExtensionsCompatibilityIcon,
-  NavigationSessionContextAddIcon,
-} from '@/component-library';
+import { BITFUN_ICON_SIZE, NavigationExtensionsCompatibilityIcon, NavigationSessionContextAddIcon } from '@/app/icons';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from '../SceneBar/types';
@@ -379,11 +388,9 @@ const MainNav: React.FC<MainNavProps> = ({
     <>
     <NavigationPanel
       className="bitfun-nav-panel__main-nav"
-      bodyRef={sectionsScrollRef}
-      bodyClassName="bitfun-nav-panel__sections"
-      contentClassName="bitfun-nav-panel__main-nav-content"
-      header={(
-      <div data-bf-component="nav-panel" data-bf-part="brandHeader" className="bitfun-nav-panel__brand-header">
+    >
+      <NavigationPanelHeader className="bitfun-nav-panel__main-nav-header">
+        <div data-bf-component="nav-panel" data-bf-part="brandHeader" className="bitfun-nav-panel__brand-header">
         <div className="bitfun-nav-panel__utility-row" data-bf-component="nav-panel" data-bf-part="utilityRow">
           <div className="bitfun-nav-panel__brand-search" data-bf-component="nav-panel" data-bf-part="search">
             <Tooltip content={t('nav.search.triggerTooltip')} placement="right" followCursor>
@@ -429,9 +436,10 @@ const MainNav: React.FC<MainNavProps> = ({
             </button>
           </Tooltip>
         </div>
-      </div>
-      )}
-    >
+        </div>
+      </NavigationPanelHeader>
+      <NavigationPanelBody className="bitfun-nav-panel__sections" ref={sectionsScrollRef}>
+        <NavigationPanelContent className="bitfun-nav-panel__main-nav-content">
         <div data-testid="nav-sections" className="bitfun-nav-panel__sections-slot">
         <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
           <Tooltip content={assistantManagerLabel} placement="right" followCursor>
@@ -649,6 +657,8 @@ const MainNav: React.FC<MainNavProps> = ({
           </div>
         </div>
         </div>
+        </NavigationPanelContent>
+      </NavigationPanelBody>
     </NavigationPanel>
 
       {workspaceMenuPortal}

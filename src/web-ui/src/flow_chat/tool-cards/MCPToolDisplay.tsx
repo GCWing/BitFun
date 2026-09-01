@@ -3,10 +3,10 @@
  * Supports MCP Apps: when tool result contains ui:// resource, renders interactive UI in sandboxed iframe.
  */
 
-import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CubeLoading } from '../../component-library';
+import { Disclosure, Spinner } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
@@ -58,6 +58,46 @@ interface MCPToolResult {
   content?: MCPToolResultContent[];
   is_error?: boolean;
 }
+
+const parseMcpToolInput = (input: unknown): unknown => {
+  if (typeof input !== 'string') return input;
+
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return input;
+  }
+};
+
+const sanitizeMcpToolInput = (input: unknown): unknown => {
+  const parsed = parseMcpToolInput(input);
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return parsed;
+
+  return Object.fromEntries(
+    Object.entries(parsed).filter(([key]) => !key.startsWith('_')),
+  );
+};
+
+const hasVisibleMcpToolInput = (input: unknown): boolean => {
+  if (input === null || input === undefined) return false;
+  if (typeof input === 'string') return input.trim().length > 0;
+  if (Array.isArray(input)) return input.length > 0;
+  if (typeof input === 'object') return Object.keys(input).length > 0;
+  return true;
+};
+
+const formatMcpToolInput = (input: unknown): string => {
+  if (typeof input === 'string') return input;
+
+  try {
+    return JSON.stringify(input, null, 2);
+  } catch {
+    return String(input);
+  }
+};
 
 /** Clean and escape domains for CSP injection (prevent HTML injection). */
 const cleanDomains = (domains: string[] | undefined): string => {
@@ -151,14 +191,39 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   config,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const { status, toolCall, toolResult, requiresConfirmation, userConfirmed } = toolItem;
+  const {
+    status,
+    toolCall,
+    toolResult,
+    requiresConfirmation,
+    userConfirmed,
+    isParamsStreaming,
+  } = toolItem;
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isInputExpanded, setIsInputExpanded] = useState(false);
   const toolId = toolItem.id ?? toolCall?.id;
-  const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
+  const { cardRootRef, applyExpandedState, dispatchToolCardToggle } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
   });
   const [resolvedToolInfo, setResolvedToolInfo] = useState<ToolInfo | null>(null);
+  const toolInputIsIncomplete = Boolean(
+    isParamsStreaming
+    || (toolCall?.input && typeof toolCall.input === 'object' && (
+      toolCall.input._early_detection === true || toolCall.input._partial_params === true
+    )),
+  );
+  const displayToolInput = useMemo(
+    () => sanitizeMcpToolInput(toolCall?.input),
+    [toolCall?.input],
+  );
+  const hasToolInput = !toolInputIsIncomplete && hasVisibleMcpToolInput(displayToolInput);
+  const formattedToolInput = useMemo(
+    () => isExpanded && isInputExpanded && hasToolInput
+      ? formatMcpToolInput(displayToolInput)
+      : null,
+    [displayToolInput, hasToolInput, isExpanded, isInputExpanded],
+  );
 
   const getResultData = (): MCPToolResult | null => {
     if (!toolResult?.result) return null;
@@ -207,6 +272,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   const isFailed = status === 'error';
 
   const mcpAppIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const autoExpandedMcpAppRef = useRef<{ toolId: string | undefined; uri: string } | null>(null);
   const [mcpAppHeight, setMcpAppHeight] = useState<number | undefined>(undefined);
   const bridgeDataRef = useRef({ config, toolCall, resultData, status, isFailed });
   bridgeDataRef.current = { config, toolCall, resultData, status, isFailed };
@@ -249,12 +315,21 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       .catch(() => setToolMetaUiUri(null));
   }, [config.toolName, uiResourceUriFromResult, status, isFailed, toolId]);
 
-  // Auto-expand when MCP App UI is ready so user sees the interactive UI immediately
+  // Auto-expand once when this tool call's MCP App UI becomes ready. Mark an
+  // already-open card as handled too, so a later user collapse is preserved.
   useLayoutEffect(() => {
-    if (mcpAppState?.html && !isExpanded) {
+    if (!mcpAppState?.html) return;
+
+    const autoExpandedApp = autoExpandedMcpAppRef.current;
+    if (autoExpandedApp?.toolId === toolId && autoExpandedApp.uri === mcpAppState.uri) {
+      return;
+    }
+
+    autoExpandedMcpAppRef.current = { toolId, uri: mcpAppState.uri };
+    if (!isExpanded) {
       applyExpandedState(isExpanded, true, setIsExpanded);
     }
-  }, [applyExpandedState, isExpanded, mcpAppState?.html]);
+  }, [applyExpandedState, isExpanded, mcpAppState?.html, mcpAppState?.uri, toolId]);
 
   // Iframe <-> parent postMessage bridge (MCP App protocol). Register in useLayoutEffect so listener is attached before iframe script runs.
   useLayoutEffect(() => {
@@ -577,16 +652,26 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const contentSummary = getContentSummary();
-  const hasContent =
+  const hasResultContent =
     status === 'completed' &&
     (!!uiResourceUri || (resultData?.content && resultData.content.length > 0));
+  const hasExpandableDetails = hasToolInput || hasResultContent;
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
   const needsConfirmation =
     requiresConfirmation && !userConfirmed && status !== 'completed' && status !== 'cancelled' && status !== 'rejected' && status !== 'error';
 
   const toggleExpanded = useCallback(() => {
-    applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
+    const nextExpanded = !isExpanded;
+    if (!nextExpanded) {
+      setIsInputExpanded(false);
+    }
+    applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
   }, [applyExpandedState, isExpanded]);
+
+  const handleInputOpenChange = useCallback((open: boolean) => {
+    setIsInputExpanded(open);
+    dispatchToolCardToggle();
+  }, [dispatchToolCardToggle]);
 
   const getErrorMessage = () => {
     if (toolResult && 'error' in toolResult) {
@@ -595,36 +680,20 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     return t('toolCards.mcp.executionFailed');
   };
 
-  const handleCardClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('.preview-toggle-btn')) {
-      return;
-    }
-    
-    if (isFailed) {
-      return;
-    }
-    
-    if (hasContent) {
-      toggleExpanded();
-    }
-  }, [hasContent, isFailed, toggleExpanded]);
-
   const renderToolIcon = () => {
     return <Package size={16} />;
   };
 
   const renderStatusIcon = () => {
     if (isLoading) {
-      return <CubeLoading size="small" />;
+      return <Spinner size="sm" />;
     }
     return null;
   };
 
   const renderHeader = () => (
     <ProminentToolCardHeader
-      icon={renderToolIcon()}
-      iconClassName="mcp-icon"
+      icon={<span className="mcp-icon">{renderToolIcon()}</span>}
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
         <span className="mcp-tool-info" data-bf-component="mcp-tool-display" data-bf-part="info">
@@ -650,20 +719,41 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   );
 
   const renderExpandedContent = () => {
-    const hasResultContent = resultData?.content && resultData.content.length > 0;
+    const hasRenderableResultContent = resultData?.content && resultData.content.length > 0;
     const hasMcpApp = mcpAppState?.html;
-    if (!hasResultContent && !hasMcpApp) {
+    const hasMcpAppState = Boolean(mcpAppState);
+    if (!hasRenderableResultContent && !hasMcpApp && !hasToolInput) {
       return null;
     }
 
+    const inputContent = hasToolInput ? (
+      <div
+        className="content-item content-item-input"
+        data-bf-component="mcp-tool-display"
+        data-bf-part="input"
+      >
+        <Disclosure
+          className="mcp-input-disclosure"
+          open={isInputExpanded}
+          onOpenChange={handleInputOpenChange}
+          summary={t('toolCards.common.inputParams')}
+        >
+          {formattedToolInput !== null && (
+            <pre className="mcp-input-code">{formattedToolInput}</pre>
+          )}
+        </Disclosure>
+      </div>
+    ) : null;
+
     return (
       <div data-bf-component="mcp-tool-display" data-bf-part="expanded" data-bf-state="expanded" className="mcp-expanded-content">
+        {!hasMcpAppState && inputContent}
         {/* MCP App: sandboxed iframe for ui:// resources */}
         {mcpAppState && (
           <div className="content-item content-item-mcp-app" data-bf-component="mcp-tool-display" data-bf-part="item">
             {mcpAppState.loading && (
               <div className="mcp-app-loading" data-bf-component="mcp-tool-display" data-bf-part="loading" data-bf-state="loading">
-                <CubeLoading size="small" />
+                <Spinner size="sm" />
                 <span>{t('toolCards.mcp.loadingApp')}</span>
               </div>
             )}
@@ -687,6 +777,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
             )}
           </div>
         )}
+        {hasMcpAppState && inputContent}
         {/* Text, image, and non-ui resources */}
         {(resultData?.content ?? []).map((item, index) => {
           const isUiResource = item.type === 'resource' && item.resource?.uri?.startsWith('ui://');
@@ -735,13 +826,15 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       <ProminentToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleCardClick}
+        onClick={hasExpandableDetails ? toggleExpanded : undefined}
         className="mcp-tool-display"
         header={renderHeader()}
         expandedContent={renderExpandedContent()}
         errorContent={renderErrorContent()}
         isFailed={isFailed}
+        allowExpandedWhenFailed={isFailed && hasToolInput}
         requiresConfirmation={needsConfirmation}
+        toggleTestId="mcp-tool-card-toggle"
       />
     </div>
   );

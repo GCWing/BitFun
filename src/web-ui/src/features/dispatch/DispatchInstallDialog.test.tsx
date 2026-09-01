@@ -32,9 +32,9 @@ const mocks = vi.hoisted(() => ({
   provisionTarget: vi.fn(),
   getFreshConfig: vi.fn(),
   resolveRevision: vi.fn(),
-  modalOnClose: null as (() => void) | null,
-  modalLifecycleProps: null as {
-    closeOnOverlayClick?: boolean;
+  dialogOnOpenChange: null as ((open: boolean) => void) | null,
+  dialogLifecycleProps: null as {
+    closeOnPointerOutside?: boolean;
     showCloseButton?: boolean;
   } | null,
 }));
@@ -108,25 +108,29 @@ vi.mock('@bitfun/ui', () => ({
       {children}
     </button>
   ),
-  Modal: ({
+  Dialog: ({
     children,
-    closeOnOverlayClick,
-    isOpen,
-    onClose,
-    showCloseButton,
+    closeOnPointerOutside,
+    onOpenChange,
+    open,
   }: React.PropsWithChildren<{
-    closeOnOverlayClick?: boolean;
-    isOpen: boolean;
-    onClose: () => void;
-    showCloseButton?: boolean;
+    closeOnPointerOutside?: boolean;
+    onOpenChange: (open: boolean) => void;
+    open: boolean;
   }>) => {
-    mocks.modalOnClose = onClose;
-    mocks.modalLifecycleProps = {
-      closeOnOverlayClick,
-      showCloseButton,
+    mocks.dialogOnOpenChange = onOpenChange;
+    mocks.dialogLifecycleProps = {
+      closeOnPointerOutside,
+      showCloseButton: false,
     };
-    return isOpen ? <div>{children}</div> : null;
+    return open ? <div role="dialog">{children}</div> : null;
   },
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => {
+    if (mocks.dialogLifecycleProps) mocks.dialogLifecycleProps.showCloseButton = true;
+    return <button type="button" {...props} />;
+  },
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
 }));
 
 function createDeferred<T>() {
@@ -145,8 +149,8 @@ describe('DispatchInstallDialog target preparation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.modalOnClose = null;
-    mocks.modalLifecycleProps = null;
+    mocks.dialogOnOpenChange = null;
+    mocks.dialogLifecycleProps = null;
     mocks.probeTarget.mockResolvedValue({
       cliInstalled: false,
       os: 'linux',
@@ -249,8 +253,8 @@ describe('DispatchInstallDialog target preparation', () => {
     expect(container.textContent).toContain('abc123');
     expect(container.querySelector('details')?.open).toBe(false);
     expect(container.textContent).not.toContain('dispatch.installAutomaticDescription');
-    expect(mocks.modalLifecycleProps).toEqual({
-      closeOnOverlayClick: true,
+    expect(mocks.dialogLifecycleProps).toEqual({
+      closeOnPointerOutside: true,
       showCloseButton: true,
     });
     const includeUncommitted = container.querySelector<HTMLInputElement>('input[type="checkbox"]');

@@ -1,7 +1,5 @@
  
 
-@use '../../../../component-library/styles/tokens' as *;
-@use '../../../../component-library/styles/_extended-mixins' as mixins;
 @use './config-page-layout.tokens' as configLayout;
 
 
@@ -114,11 +112,6 @@
 
 .bitfun-config-page-section__body {
   min-width: 0;
-  background: var(--bf-component-config-page-section-background);
-  border: 0;
-  border-radius: var(--bf-radius-md);
-  overflow: visible;
-  box-shadow: none;
 }
 
 // Sections whose children own their own cards should not render a second surface.
@@ -126,6 +119,7 @@
   background: transparent;
   border: 0;
   border-radius: 0;
+  overflow: visible;
   box-shadow: none;
 }
 
@@ -209,35 +203,50 @@
   justify-content: flex-end;
   justify-self: stretch;
 
-  > [data-bf-component='input'],
-  > :is([data-bf-component='combobox'], [data-bf-component='select']),
-  > [data-bf-component='number-input'] {
-    width: 100%;
-    min-width: 0;
-  }
-
-  /*
-   * Safety net for pages that wrap a control in a positioning/state div: an
-   * unstyled wrapper is a flex item, so it would shrink to content width and
-   * that row's dropdown would render narrower than every other row's.
-   */
-  > div:has(> :is([data-bf-component='combobox'], [data-bf-component='select'])),
-  > div:has(> [data-bf-component='input']),
-  > div:has(> [data-bf-component='number-input']) {
-    width: 100%;
-    min-width: 0;
-
-    > :is([data-bf-component='combobox'], [data-bf-component='select']),
-    > [data-bf-component='input'],
-    > [data-bf-component='number-input'] {
-      width: 100%;
-      min-width: 0;
-    }
-  }
-
-  > [data-bf-component='number-input'] [data-bf-part='input'],
-  > div:has(> [data-bf-component='number-input']) > [data-bf-component='number-input'] [data-bf-part='input'] {
-    text-align: left;
+  // Only field-like controls consume the full control column. Intrinsic
+  // controls such as Switch, Button, Checkbox, and StatusPill keep the
+  // geometry owned by their design-system component.
+  > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='textarea'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select'],
+    [data-bf-component='select'],
+    [data-bf-component='number-input']
+  ),
+  > div:has(
+    > :where(
+      [data-bf-component='input'],
+      [data-bf-component='search-field'],
+      [data-bf-component='textarea'],
+      [data-bf-component='combobox'],
+      [data-bf-component='multi-select'],
+      [data-bf-component='select'],
+      [data-bf-component='number-input']
+    )
+  ),
+  > div:has(
+    > :where(
+      [data-bf-component='input'],
+      [data-bf-component='search-field'],
+      [data-bf-component='textarea'],
+      [data-bf-component='combobox'],
+      [data-bf-component='multi-select'],
+      [data-bf-component='select'],
+      [data-bf-component='number-input']
+    )
+  ) > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='textarea'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select'],
+    [data-bf-component='select'],
+    [data-bf-component='number-input']
+  ) {
+    inline-size: 100%;
+    min-inline-size: 0;
   }
 }
 

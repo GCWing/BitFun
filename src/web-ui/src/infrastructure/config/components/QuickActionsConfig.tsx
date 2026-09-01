@@ -1,8 +1,22 @@
-import { Button, Icon, IconButton, Input, Modal, Switch, Textarea, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  Switch,
+  Textarea,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, GitCommitHorizontal, GitPullRequest } from 'lucide-react';
-import { ConfigPageLoading } from '@/component-library';
+import { ConfigLoadingState } from '@/infrastructure/config/components/common';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -73,13 +87,18 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
   const isEdit = !!target;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEdit ? t('modal.editTitle') : t('modal.addTitle')}
-      size="medium"
-      contentPadding="lg"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{isEdit ? t('modal.editTitle') : t('modal.addTitle')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div className="quick-actions-config__modal-body" onKeyDown={handleKeyDown} data-bf-component="quick-actions-config" data-bf-part="dialog">
         {target && (
           <div data-bf-component="quick-actions-config" data-bf-part="dialogIcon" className="quick-actions-config__modal-icon-preview">
@@ -134,7 +153,8 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
           </Button>
         </div>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 
@@ -264,7 +284,7 @@ const QuickActionsConfig: React.FC = () => {
       <ConfigPageLayout className="quick-actions-config" data-bf-component="quick-actions-config" data-bf-part="root">
         <ConfigPageHeader title={t('page.title')} subtitle={t('page.subtitle')} />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('loading')} />
+          <ConfigLoadingState label={t('loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );

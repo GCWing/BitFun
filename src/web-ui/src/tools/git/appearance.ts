@@ -8,7 +8,6 @@ export const gitToolAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'graphContent' },
     { id: 'graphCanvas' },
     { id: 'graphStatus' },
-    { id: 'pushButton' },
     { id: 'diffEditor' },
     { id: 'createBranchDialog' },
   ],

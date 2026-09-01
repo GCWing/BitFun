@@ -2,7 +2,21 @@
  * Unified SSH authentication prompt.
  */
 
-import { Button, Field, Icon, IconButton, Input, Modal, Select, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Field,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 
@@ -149,14 +163,18 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
   }, [isConnecting, t]);
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={onCancel}
-      title={t('ssh.remote.authPromptTitle') || 'SSH authentication'}
-      size="small"
-      showCloseButton
-      contentPadding="lg"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onCancel(); }}
+      size="sm"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('ssh.remote.authPromptTitle') || 'SSH authentication'}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div className="ssh-auth-prompt-dialog" onKeyDown={handleKeyDown} data-bf-component="ssh-remote" data-bf-part="authDialog">
         <div className="ssh-auth-prompt-dialog__description" data-bf-component="ssh-remote" data-bf-part="authDescription">
           <div className="ssh-auth-prompt-dialog__description-icon">
@@ -319,7 +337,8 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
           </Button>
         </div>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

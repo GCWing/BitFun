@@ -1,10 +1,8 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .miniapp-submissions {
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   // Match GalleryLayout's $content-max / $gutter so switching tabs inside the
@@ -13,12 +11,6 @@
   &__remote-warning {
     width: min(100%, 1360px);
     margin-inline: auto;
-  }
-
-  // The shared Input renders its value at 14px while Select renders 13px; pin
-  // both to 13px so every control in the form reads at the same size.
-  [data-bf-component='input'] {
-    font-size: var(--bf-font-size-sm);
   }
 
   &__loading {
@@ -31,8 +23,8 @@
   &__remote-warning {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: 0 clamp(28px, 4vw, 64px) $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: 0 clamp(28px, 4vw, 64px) var(--bf-space-3);
     color: var(--bf-color-status-warning-content);
     font-size: var(--bf-font-size-sm);
 
@@ -47,19 +39,19 @@
     // stretch the full 1360px, and keep the history pinned to the right edge.
     grid-template-columns: minmax(0, 620px) minmax(280px, 380px);
     justify-content: space-between;
-    gap: $size-gap-5;
-    padding: $size-gap-3 clamp(28px, 4vw, 64px) 56px;
+    gap: var(--bf-space-5);
+    padding: var(--bf-space-3) clamp(28px, 4vw, 64px) 56px;
   }
 
   &__form,
   &__history {
     align-content: start;
     display: grid;
-    gap: $size-gap-4;
+    gap: var(--bf-space-4);
   }
 
   &__history {
-    padding-left: $size-gap-5;
+    padding-left: var(--bf-space-5);
     border-left: 1px solid var(--bf-color-border-subtle);
   }
 
@@ -75,7 +67,7 @@
     h3 {
       display: flex;
       align-items: center;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
       color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-semibold);
@@ -96,7 +88,7 @@
   &__form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__field {
@@ -117,7 +109,7 @@
       // single-line fields above it.
       padding: 8px 12px;
       border: 1px solid var(--bf-color-border-default);
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
       outline: none;
       background: transparent;
       color: var(--bf-color-content-primary);
@@ -126,8 +118,8 @@
       line-height: var(--bf-line-height-base);
       resize: vertical;
       transition:
-        border-color $motion-fast ease,
-        box-shadow $motion-fast ease;
+        border-color var(--bf-motion-duration-fast) ease,
+        box-shadow var(--bf-motion-duration-fast) ease;
 
       &::placeholder {
         color: color-mix(in srgb, var(--bf-color-content-muted) 40%, var(--bf-color-surface-canvas));
@@ -153,8 +145,8 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: $size-gap-3;
-    padding-top: $size-gap-3;
+    gap: var(--bf-space-3);
+    padding-top: var(--bf-space-3);
     border-top: 1px solid var(--bf-color-border-subtle);
   }
 
@@ -181,7 +173,7 @@
     display: flex;
     align-items: center;
     flex: 0 0 auto;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__files {
@@ -192,9 +184,9 @@
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
       padding: 7px 10px;
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
       background: var(--bf-color-action-quiet-hover);
       color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
@@ -209,61 +201,20 @@
         white-space: nowrap;
       }
 
-      button {
-        display: grid;
-        padding: 3px;
-        border: 0;
-        border-radius: $size-radius-sm;
-        background: transparent;
+      [data-bf-component='icon-button'] {
         color: var(--bf-color-content-muted);
-        cursor: pointer;
-        place-items: center;
-
-        &:hover {
-          background: var(--bf-color-action-neutral-surface-hover);
-          color: var(--bf-color-content-primary);
-        }
       }
     }
   }
 
-  &__advanced-toggle {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    cursor: pointer;
-    justify-self: start;
+  &__advanced-disclosure {
     max-width: 100%;
-
-    &:hover {
-      color: var(--bf-color-content-primary);
-    }
-
-    svg {
-      flex: 0 0 auto;
-      color: var(--bf-color-content-muted);
-    }
-
-    small {
-      overflow: hidden;
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-regular);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   }
 
   &__advanced {
     display: grid;
-    gap: $size-gap-3;
-    padding-left: $size-gap-4;
+    gap: var(--bf-space-3);
+    padding-left: var(--bf-space-4);
     border-left: 1px solid var(--bf-color-border-subtle);
   }
 
@@ -271,7 +222,7 @@
     display: grid;
     gap: 7px;
     padding: 10px 12px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: var(--bf-color-action-quiet-hover);
 
     > div {
@@ -300,8 +251,8 @@
 
     article {
       display: grid;
-      gap: $size-gap-2;
-      padding: $size-gap-3 0;
+      gap: var(--bf-space-2);
+      padding: var(--bf-space-3) 0;
       border-bottom: 1px solid var(--bf-color-border-subtle);
     }
   }
@@ -309,7 +260,7 @@
   &__list-head {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
 
     > div {
       display: grid;
@@ -341,7 +292,7 @@
     width: 32px;
     height: 32px;
     flex: 0 0 auto;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-primary);
     place-items: center;
@@ -351,7 +302,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__rejection {
@@ -377,7 +328,7 @@
     }
 
     &__history {
-      padding-top: $size-gap-5;
+      padding-top: var(--bf-space-5);
       padding-left: 0;
       border-top: 1px solid var(--bf-color-border-subtle);
       border-left: 0;

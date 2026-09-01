@@ -8,7 +8,7 @@ const svgRoot = path.join(iconographyRoot, 'svg');
 const manifestPath = path.join(iconographyRoot, 'manifest.json');
 const outputPath = path.join(
   repositoryRoot,
-  'src/web-ui/src/component-library/icons/generated/iconRegistry.generated.ts',
+  'src/web-ui/src/app/icons/generated/iconRegistry.generated.ts',
 );
 const checkOnly = process.argv.includes('--check');
 

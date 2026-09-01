@@ -1,18 +1,15 @@
-import { Children, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
+import { Children, useState, type HTMLAttributes, type ReactNode } from "react";
 import { classNames } from "../../internal/classNames";
 import styles from "./Avatar.module.css";
 
-export type AvatarSize = "sm" | "md" | "lg" | "small" | "medium" | "large" | number;
+export type AvatarSize = "sm" | "md" | "lg";
 export interface AvatarProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> { alt?: string; children?: ReactNode; icon?: ReactNode; onError?: () => void; shape?: "circle" | "square"; size?: AvatarSize; src?: string; }
 export interface AvatarGroupProps extends HTMLAttributes<HTMLDivElement> { children: ReactNode; maxCount?: number; }
-function normalizedSize(size: AvatarSize) { return size === "small" ? "sm" : size === "large" ? "lg" : size === "medium" ? "md" : size; }
 
-export function Avatar({ alt = "", children, className, icon, onError, shape = "circle", size = "md", src, style, ...props }: AvatarProps) {
+export function Avatar({ alt = "", children, className, icon, onError, shape = "circle", size = "md", src, ...props }: AvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
-  const resolvedSize = normalizedSize(size);
-  const customStyle: CSSProperties | undefined = typeof resolvedSize === "number" ? { ...style, blockSize: resolvedSize, inlineSize: resolvedSize } : style;
   return (
-    <span {...props} className={classNames(styles.root, className)} data-bf-component="avatar" data-bf-shape={shape} data-size={typeof resolvedSize === "number" ? "custom" : resolvedSize} style={customStyle}>
+    <span {...props} className={classNames(styles.root, className)} data-bf-component="avatar" data-bf-shape={shape} data-size={size}>
       {src && !imageFailed
         ? <img alt={alt} className={styles.image} data-bf-part="image" onError={() => { setImageFailed(true); onError?.(); }} src={src} />
         : icon !== undefined

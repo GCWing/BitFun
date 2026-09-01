@@ -37,7 +37,7 @@
 | 16 | R | 内容搜索每行无条件分配 String(未命中行也分配);结果收尾整体 clone | `crates/services/services-core/src/filesystem/tree.rs:1485-1491,1140,1275` | 中 | 低 |
 | 17 | R | grep 工具:每文件冗余 `is_file()` stat;输出 split→逐行 alloc→join 往返 | `crates/execution/tool-execution/src/search/grep_search.rs:743,776,835-840,875` | 中 | 低 |
 | 18 | F | 桌宠打字机:interval 依赖自身 setState 目标,每 28ms 销毁重建 effect + 全部气泡强制布局 | `web-ui/src/app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx:308-339` | 中 | 低 |
-| 19 | F | Tooltip 捕获阶段 scroll 监听未节流:2×getBoundingClientRect + 3×setState/滚动帧 | `web-ui/src/component-library/components/Tooltip/Tooltip.tsx:171-205,294-296` | 中 | 低 |
+| 19 | F | （已关闭）统一 Tooltip 定位通过 rAF 合并 scroll/resize 重算，每帧最多一次布局读取 | `design-system/packages/ui/src/components/Tooltip/Tooltip.tsx` | 不再适用 | 已关闭 |
 | 20 | F | （已关闭）历史鼠标跟随光效的 pointermove 分配问题；功能已退役 | 已删除 | 不再适用 | 已关闭 |
 | 21 | F/I | SnapshotAPI 逐 turn 串行 `get_turn_files`,长会话 N 次串行 IPC 往返 | `web-ui/src/infrastructure/api/service-api/SnapshotAPI.ts:514-531` | 中 | 低 |
 | 22 | R | PTY chunk `from_utf8_lossy(..).to_string()` 强制整串拷贝(最大 64KB);tap 分发逐个 clone | `crates/services/terminal/src/session/manager.rs:285,429` | 中低 | 低 |

@@ -5,12 +5,9 @@
  * Width is owned by WorkspaceBody and remains resizable.
  * Sessions supports inline accordion expansion.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 @use '../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../styles/workspace-shell-surfaces' as shell-surfaces;
-@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 $_item-height: 30px;
 $_section-header-height: 22px;
@@ -153,8 +150,8 @@ $_section-header-height: 22px;
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: $size-gap-2;
-    margin: $size-gap-2;
+    gap: var(--bf-space-2);
+    margin: var(--bf-space-2);
     padding: 0;
     overflow: visible;
   }
@@ -198,10 +195,10 @@ $_section-header-height: 22px;
     cursor: pointer;
     text-align: center;
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-    transition: transform $motion-fast $easing-standard,
-                box-shadow $motion-fast $easing-standard,
-                border-color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       transform: translateY(-1px);
@@ -293,7 +290,7 @@ $_section-header-height: 22px;
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
     color: var(--bf-color-content-muted);
-    transition: color $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &-text {
       display: inline-flex;
@@ -343,8 +340,8 @@ $_section-header-height: 22px;
     position: absolute;
     inset: 0;
     padding: 2px;
-    transition: opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &--hover {
       opacity: 0;
@@ -374,7 +371,7 @@ $_section-header-height: 22px;
     gap: 1px;
     height: 36px;
     min-width: 0;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     overflow: hidden;
   }
 
@@ -385,17 +382,17 @@ $_section-header-height: 22px;
     justify-content: center;
     gap: 6px;
     min-width: 0;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
     border: none;
-    border-radius: $size-radius-base 0 0 $size-radius-base;
+    border-radius: var(--bf-radius-base) 0 0 var(--bf-radius-base);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
     cursor: pointer;
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     span {
       overflow: hidden;
@@ -425,13 +422,13 @@ $_section-header-height: 22px;
     }
 
     &--split-left {
-      border-top-left-radius: $size-radius-base;
-      border-bottom-left-radius: $size-radius-base;
+      border-top-left-radius: var(--bf-radius-base);
+      border-bottom-left-radius: var(--bf-radius-base);
     }
 
     &--split-right {
-      border-top-right-radius: $size-radius-base;
-      border-bottom-right-radius: $size-radius-base;
+      border-top-right-radius: var(--bf-radius-base);
+      border-bottom-right-radius: var(--bf-radius-base);
 
       &:hover {
         color: var(--bf-color-content-primary);
@@ -439,7 +436,7 @@ $_section-header-height: 22px;
     }
 
     &--single {
-      border-radius: $size-radius-base;
+      border-radius: var(--bf-radius-base);
     }
   }
 
@@ -451,13 +448,13 @@ $_section-header-height: 22px;
     justify-content: center;
     padding: 0;
     border: none;
-    border-radius: 0 $size-radius-base $size-radius-base 0;
+    border-radius: 0 var(--bf-radius-base) var(--bf-radius-base) 0;
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-primary);
     cursor: pointer;
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       background: var(--bf-color-action-neutral-surface-hover);
@@ -465,7 +462,7 @@ $_section-header-height: 22px;
     }
 
     &.is-active {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--bf-color-selection-surface);
       color: var(--bf-color-content-primary);
     }
 
@@ -487,7 +484,7 @@ $_section-header-height: 22px;
     max-width: 100%;
     // No padding-top: separation from top-actions is only .bitfun-nav-panel__top-actions padding-bottom.
     // Top padding here stacked with that and read as “extra” gap above the first section header.
-    padding: 0 0 $size-gap-3 0;
+    padding: 0 0 var(--bf-space-3) 0;
 
     // Synced with button ripple: fade list out, swap group, fade in
     &.is-mode-switching {
@@ -538,14 +535,14 @@ $_section-header-height: 22px;
   &__section-header {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     height: $_section-header-height;
-    padding: 0 $size-gap-2;
-    margin: 0 $size-gap-1;
+    padding: 0 var(--bf-space-2);
+    margin: 0 var(--bf-space-1);
     border-radius: 4px;
     opacity: 0.92;
-    transition: background $motion-fast $easing-standard,
-                opacity $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &--interactive {
       cursor: pointer;
@@ -581,7 +578,7 @@ $_section-header-height: 22px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: color $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &__section-header--current-scene &__section-label {
@@ -596,8 +593,8 @@ $_section-header-height: 22px;
     flex-shrink: 0;
     display: flex;
     align-items: stretch;
-    gap: $size-gap-1;
-    padding: $size-gap-1 $size-gap-2 $size-gap-1;
+    gap: var(--bf-space-1);
+    padding: var(--bf-space-1) var(--bf-space-2) var(--bf-space-1);
   }
 
   &__miniapp-navigation {
@@ -610,7 +607,7 @@ $_section-header-height: 22px;
     min-height: 42px;
     display: inline-flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 8px 12px;
     border: 1px solid transparent;
     border-radius: 10px;
@@ -619,10 +616,10 @@ $_section-header-height: 22px;
     cursor: pointer;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-regular);
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard,
-                box-shadow $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     svg {
       flex-shrink: 0;
@@ -653,7 +650,7 @@ $_section-header-height: 22px;
 
   &__assistant-footer {
     flex-shrink: 0;
-    padding: 0 $size-gap-2 $size-gap-1;
+    padding: 0 var(--bf-space-2) var(--bf-space-1);
   }
 
   &__assistant-entry {
@@ -661,17 +658,17 @@ $_section-header-height: 22px;
     min-height: 38px;
     display: inline-flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 0 12px;
     border: none;
     border-radius: 10px;
     background: transparent;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard,
-                box-shadow $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -715,18 +712,18 @@ $_section-header-height: 22px;
     min-height: 42px;
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: 8px 10px 8px $size-gap-2;
+    gap: var(--bf-space-2);
+    padding: 8px 10px 8px var(--bf-space-2);
     border: 1px solid transparent;
     border-radius: 10px;
     background: transparent;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     text-align: left;
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard,
-                box-shadow $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -775,7 +772,7 @@ $_section-header-height: 22px;
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     flex: 1;
   }
 
@@ -809,7 +806,7 @@ $_section-header-height: 22px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex: 0 0 auto;
     margin-left: auto;
     min-width: 0;
@@ -828,10 +825,10 @@ $_section-header-height: 22px;
     border: none;
     box-shadow: none;
     overflow: hidden;
-    transition: transform $motion-fast $easing-standard,
-                box-shadow $motion-fast $easing-standard,
-                filter $motion-fast $easing-standard,
-                opacity $motion-fast $easing-standard;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                filter var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:not(.is-active):not(.bitfun-nav-panel__miniapp-bubble--more) {
       filter: saturate(0.72);
@@ -907,7 +904,7 @@ $_section-header-height: 22px;
     border: 1px solid transparent;
     border-radius: 4px;
     background: transparent;
-    transition: background $motion-fast $easing-standard;
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover,
     &.is-active {
@@ -926,8 +923,8 @@ $_section-header-height: 22px;
     background: transparent;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -963,7 +960,7 @@ $_section-header-height: 22px;
     min-inline-size: 200px;
     max-inline-size: min(280px, calc(100vw - 24px));
     max-block-size: calc(100vh - 16px);
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
   }
 
   &__assistant-session-menu-name {
@@ -980,9 +977,9 @@ $_section-header-height: 22px;
     justify-content: center;
     color: var(--bf-color-content-muted);
     opacity: 0.7;
-    transition: color $motion-fast $easing-standard,
-                opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     .bitfun-nav-panel__section-header--opens-scene:hover & {
       color: var(--bf-color-content-secondary);
@@ -1003,8 +1000,8 @@ $_section-header-height: 22px;
     background: transparent;
     color: var(--bf-color-content-primary);
     cursor: pointer;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -1040,10 +1037,10 @@ $_section-header-height: 22px;
     max-height: min(560px, calc(100vh - 16px));
     z-index: 9999;
     transform-origin: top left;
-    animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
+    animation: bitfun-footer-menu-in var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate) forwards;
 
     &.is-closing {
-      animation: bitfun-footer-menu-out $motion-fast $easing-accelerate forwards;
+      animation: bitfun-footer-menu-out var(--bf-motion-duration-fast) var(--bf-motion-easing-accelerate) forwards;
     }
   }
 
@@ -1082,7 +1079,7 @@ $_section-header-height: 22px;
   }
 
   &__workspace-menu-empty {
-    padding: $size-gap-2 $size-gap-3;
+    padding: var(--bf-space-2) var(--bf-space-3);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
@@ -1101,9 +1098,9 @@ $_section-header-height: 22px;
     grid-template-rows: 1fr;
     min-width: 0;
     max-width: 100%;
-    transition: grid-template-rows $motion-base $easing-standard,
-                transform $motion-base $easing-decelerate,
-                opacity $motion-base $easing-decelerate;
+    transition: grid-template-rows var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate),
+                opacity var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate);
 
     &.is-hidden {
       display: none;
@@ -1131,8 +1128,8 @@ $_section-header-height: 22px;
     flex-direction: column;
     min-width: 0;
     max-width: 100%;
-    padding: 2px $size-gap-1;
-    gap: 2px;
+    gap: calc(var(--bf-space-1) / 2);
+    padding: 2px var(--bf-space-1);
 
     // Multiple SessionsSection siblings: match vertical rhythm of __workspace-list (gap 0 + 2px row padding).
     &--session-blocks {
@@ -1164,12 +1161,12 @@ $_section-header-height: 22px;
   // Item slots depart with the split-open animation used by scene navs.
 
   &__section {
-    margin-bottom: calc(#{$size-gap-5} * 0.75);
+    margin-bottom: calc(var(--bf-space-5) * 0.75);
     transition: transform $_depart-duration $_depart-easing,
                 opacity $_depart-duration $_depart-easing;
 
     &:last-child {
-      margin-bottom: $size-gap-5;
+      margin-bottom: var(--bf-space-5);
     }
 
     &.is-departing-up {
@@ -1218,9 +1215,9 @@ $_section-header-height: 22px;
   &__item {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     height: $_item-height;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -1232,9 +1229,9 @@ $_section-header-height: 22px;
     width: 100%;
     position: relative;
     opacity: 1;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard,
-                opacity $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       opacity: 1;
@@ -1291,8 +1288,8 @@ $_section-header-height: 22px;
     align-items: center;
     flex-shrink: 0;
     opacity: 0.78;
-    transition: opacity $motion-fast $easing-standard,
-                color $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     .bitfun-nav-panel__item:hover & {
       opacity: 1;
@@ -1325,11 +1322,11 @@ $_section-header-height: 22px;
     &--clickable {
       cursor: pointer;
       padding: 2px 5px;
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
       border: 1px solid transparent;
-      transition: color $motion-fast $easing-standard,
-                  background $motion-fast $easing-standard,
-                  border-color $motion-fast $easing-standard;
+      transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                  background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                  border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
       &:hover {
         color: var(--bf-color-content-primary);
@@ -1356,11 +1353,11 @@ $_section-header-height: 22px;
     width: 20px;
     height: 20px;
     margin-left: auto;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-primary);
     cursor: pointer;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-secondary);
@@ -1493,16 +1490,16 @@ $_section-header-height: 22px;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  padding: 2px $size-gap-2;
+  padding: 2px var(--bf-space-2);
   border-top: 1px solid;
   @include shell-surfaces.sidebar-hairline-color;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
 }
 
 .bitfun-nav-panel__footer-left {
   display: flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -1510,7 +1507,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__footer-right {
   display: flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   flex-shrink: 0;
 }
 
@@ -1521,7 +1518,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__footer-device-status {
   display: flex;
   align-items: center;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
@@ -1529,14 +1526,14 @@ $_section-header-height: 22px;
   height: 30px;
   padding: 0 6px;
   border: none;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: transparent;
   color: var(--bf-color-content-muted);
   cursor: pointer;
   font-size: var(--bf-font-size-xs);
   text-align: left;
-  transition: color $motion-fast $easing-standard,
-              background $motion-fast $easing-standard;
+  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+              background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   > svg {
     flex-shrink: 0;
@@ -1588,7 +1585,7 @@ $_section-header-height: 22px;
   gap: 1px;
   box-sizing: border-box;
   border: 1px solid var(--bf-color-border-subtle);
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
   line-height: var(--bf-line-height-none);
 
@@ -1625,12 +1622,12 @@ $_section-header-height: 22px;
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: transparent;
   color: var(--bf-color-content-muted);
   cursor: pointer;
-  transition: color $motion-fast $easing-standard,
-              background $motion-fast $easing-standard;
+  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+              background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
     color: var(--bf-color-content-primary);
@@ -1663,7 +1660,7 @@ $_section-header-height: 22px;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    transition: opacity $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 }
 
@@ -1718,10 +1715,10 @@ $_section-header-height: 22px;
   max-height: calc(100vh - 16px);
   z-index: 9999;
   transform-origin: bottom right;
-  animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
+  animation: bitfun-footer-menu-in var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate) forwards;
 
   &.is-closing {
-    animation: bitfun-footer-menu-out $motion-fast $easing-accelerate forwards;
+    animation: bitfun-footer-menu-out var(--bf-motion-duration-fast) var(--bf-motion-easing-accelerate) forwards;
   }
 }
 
@@ -1808,7 +1805,7 @@ $_section-header-height: 22px;
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
 
   strong {
     flex: 1 1 auto;
@@ -1833,7 +1830,7 @@ $_section-header-height: 22px;
   max-width: 112px;
   overflow: hidden;
   padding: 2px 7px;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: transparent;
   color: var(--bf-color-accent-default);
   font-size: var(--bf-font-size-micro);
@@ -1924,24 +1921,10 @@ $_section-header-height: 22px;
   flex-shrink: 0;
   gap: var(--bf-space-2);
   padding: var(--bf-space-5);
+}
 
-  > [data-bf-component='button'] {
-    width: 100%;
-    height: auto;
-    min-height: var(--bf-control-height-sm);
-    font-size: var(--bf-font-size-sm);
-    white-space: normal;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
-    outline-offset: 1px;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: wait;
-  }
+.bitfun-device-overview__action {
+  width: 100%;
 }
 
 @keyframes bitfun-device-overview-spin {
@@ -2056,7 +2039,7 @@ $_section-header-height: 22px;
   row-gap: var(--bf-space-1);
   min-height: 42px;
   padding: 4px 6px;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
 
   &[data-bf-device-kind='message-app'] .bitfun-device-overview__device-icon {
     background: transparent;
@@ -2089,7 +2072,7 @@ $_section-header-height: 22px;
       width: 5px;
       height: 5px;
       margin-right: 5px;
-      border-radius: $size-radius-full;
+      border-radius: var(--bf-radius-pill);
       background: var(--bf-color-status-success-content);
       vertical-align: 1px;
     }
@@ -2104,7 +2087,7 @@ $_section-header-height: 22px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: var(--bf-color-action-quiet-hover);
   color: var(--bf-color-content-primary);
 
@@ -2121,7 +2104,7 @@ $_section-header-height: 22px;
   min-height: 34px;
   margin: var(--bf-space-4) var(--bf-space-5) 0;
   padding: 5px 8px;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-micro);
@@ -2197,11 +2180,11 @@ $_section-header-height: 22px;
   font-size: var(--bf-font-size-xs);
   cursor: pointer;
   transition:
-    background-color $motion-fast $easing-standard,
-    border-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard,
-    opacity $motion-fast $easing-standard,
-    transform $motion-fast $easing-standard;
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 }
 
 .bitfun-nav-panel__remote-disclaimer-btn--secondary {
@@ -2294,7 +2277,7 @@ $_section-header-height: 22px;
   z-index: 3;
   display: flex;
   flex-direction: column;
-  padding: 0 $size-gap-2 $size-gap-1;
+  padding: 0 var(--bf-space-2) var(--bf-space-1);
   flex-shrink: 0;
 }
 
@@ -2307,7 +2290,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__utility-row {
   display: flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   width: 100%;
   min-width: 0;
 }
@@ -2323,13 +2306,13 @@ $_section-header-height: 22px;
   padding: 0;
   border: 1px solid;
   @include shell-surfaces.sidebar-hairline-color;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: var(--bf-color-surface-scene);
   color: var(--bf-color-content-secondary);
   cursor: pointer;
-  transition: background $motion-fast $easing-standard,
-              border-color $motion-fast $easing-standard,
-              color $motion-fast $easing-standard;
+  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+              border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+              color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover,
   &:focus-visible {
@@ -2358,7 +2341,7 @@ $_section-header-height: 22px;
   justify-content: center;
   padding: 0 5px;
   border: 1px solid var(--bf-color-border-subtle);
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: var(--bf-color-action-quiet-hover);
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-meta);
@@ -2373,8 +2356,8 @@ $_section-header-height: 22px;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: $size-gap-2 $size-gap-2 calc(#{$size-gap-4} * 0.75);
+    gap: calc(var(--bf-space-1) / 2);
+    padding: var(--bf-space-2) var(--bf-space-2) calc(var(--bf-space-4) * 0.75);
   flex-shrink: 0;
 
   &::after {
@@ -2392,7 +2375,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__top-action-expand {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(var(--bf-space-1) / 2);
   width: 100%;
   min-width: 0;
 }
@@ -2400,12 +2383,12 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__top-action-sublist {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(var(--bf-space-1) / 2);
   overflow: hidden;
   max-height: 0;
   opacity: 0;
-  transition: max-height 0.22s $easing-standard,
-              opacity 0.15s $easing-standard;
+  transition: max-height 0.22s var(--bf-motion-easing-standard),
+              opacity 0.15s var(--bf-motion-easing-standard);
 
   &.is-open {
     max-height: 104px;
@@ -2426,18 +2409,18 @@ $_section-header-height: 22px;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 0 $size-gap-2 0 $size-gap-2;
+  padding: 0 var(--bf-space-2) 0 var(--bf-space-2);
   height: 32px;
   border: none;
-  border-radius: $size-radius-base;
+  border-radius: var(--bf-radius-base);
   background: transparent;
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   text-align: left;
-  transition: background $motion-fast $easing-standard,
-              color $motion-fast $easing-standard;
+  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+              color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   // Only the label span should grow; icon / chevron wrappers must NOT get flex: 1
   > span:not(.bitfun-nav-panel__top-action-icon-circle):not(.bitfun-nav-panel__top-action-icon-slot):not(.bitfun-nav-panel__top-action-expand-icons):not(.bitfun-nav-panel__count-badge):not(.bitfun-nav-panel__top-action-unseen) {
@@ -2478,7 +2461,7 @@ $_section-header-height: 22px;
   &--sub {
     // Start the visible 15px child icon on the parent label column:
     // parent inline padding (8px) + parent icon slot (22px) + gap (8px).
-    padding-left: calc(#{$size-gap-2} + 30px);
+    padding-left: calc(var(--bf-space-2) + 30px);
 
     .bitfun-nav-panel__top-action-icon-slot {
       width: 15px;
@@ -2493,7 +2476,7 @@ $_section-header-height: 22px;
   width: 6px;
   height: 6px;
   flex: 0 0 6px;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: var(--bf-color-accent-default);
 }
 
@@ -2511,8 +2494,8 @@ $_section-header-height: 22px;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    transition: opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   .bitfun-nav-panel__top-action-expand-icon-default {
@@ -2548,17 +2531,23 @@ $_section-header-height: 22px;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  @include btn-primary.btn-primary-surface-default;
+  background: var(--bf-color-action-primary-background);
+  color: var(--bf-color-action-primary-content);
+  box-shadow: var(--bf-shadow-sm);
   transform: scale(1);
   transform-origin: center;
 
   .bitfun-nav-panel__top-action-btn:hover & {
-    @include btn-primary.btn-primary-surface-hover;
+    background: var(--bf-color-action-primary-hover);
+    color: var(--bf-color-action-primary-content);
+    box-shadow: var(--bf-shadow-base);
     transform: none;
   }
 
   .bitfun-nav-panel__top-action-btn:active & {
-    @include btn-primary.btn-primary-surface-active;
+    background: var(--bf-color-action-primary-pressed);
+    color: var(--bf-color-action-primary-content);
+    box-shadow: var(--bf-shadow-xs);
     transform: scale(0.86);
   }
 }
@@ -2570,7 +2559,7 @@ $_section-header-height: 22px;
 // older navigation subsections without changing their information architecture.
 
 .bitfun-nav-panel {
-  border-radius: $size-radius-base;
+  border-radius: var(--bf-radius-base);
 
   &__content {
     overflow: visible;
@@ -2596,9 +2585,9 @@ $_section-header-height: 22px;
   }
 
   &__top-actions {
-    gap: 2px;
-    padding: 5px 6px $size-gap-3;
-    margin-bottom: $size-gap-3;
+    gap: calc(var(--bf-space-1) / 2);
+    padding: 5px 6px var(--bf-space-3);
+    margin-bottom: var(--bf-space-3);
   }
 
   &__smart-members-content {
@@ -2609,8 +2598,8 @@ $_section-header-height: 22px;
     min-height: 26px;
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
-    padding: 0 $size-gap-2 0 38px;
+    gap: var(--bf-space-1);
+    padding: 0 var(--bf-space-2) 0 38px;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-medium);
@@ -2627,13 +2616,13 @@ $_section-header-height: 22px;
   &__session-filter-menu,
   &__session-filter-submenu {
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
   }
 
   &__session-filter-menu-value {
     display: inline-flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__session-filter-active-dot {
@@ -2648,18 +2637,18 @@ $_section-header-height: 22px;
   }
 
   &__top-action-expand {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
   }
 
   &__top-action-sublist {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
     transition: none;
   }
 
   &__top-action-btn {
     height: 30px;
-    padding-inline: $size-gap-2;
-    border-radius: $size-radius-base;
+    padding-inline: var(--bf-space-2);
+    border-radius: var(--bf-radius-base);
     @include nav-font.nav-panel-text-row;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2673,7 +2662,7 @@ $_section-header-height: 22px;
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
-      @include shell-surfaces.navigation-feedback;
+      @include shell-surfaces.navigation-selection-feedback;
     }
 
     &:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {
@@ -2681,13 +2670,13 @@ $_section-header-height: 22px;
     }
 
     &--sub {
-      padding-left: calc(#{$size-gap-2} + 30px);
+      padding-left: calc(var(--bf-space-2) + 30px);
       color: var(--bf-color-content-muted);
     }
   }
 
   &__top-action-icon-circle {
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     .bitfun-nav-panel__top-action-btn:hover & {
@@ -2700,7 +2689,7 @@ $_section-header-height: 22px;
   }
 
   &__sections {
-    padding-bottom: $size-gap-2;
+    padding-bottom: var(--bf-space-2);
 
     &.is-mode-switching {
       animation: none;
@@ -2708,11 +2697,11 @@ $_section-header-height: 22px;
   }
 
   &__section {
-    margin-bottom: $size-gap-3;
+    margin-bottom: var(--bf-space-3);
     transition: none;
 
     &:last-child {
-      margin-bottom: $size-gap-3;
+      margin-bottom: var(--bf-space-3);
     }
 
     &.is-departing-up,
@@ -2725,8 +2714,8 @@ $_section-header-height: 22px;
   &__section-header {
     height: 22px;
     margin: 0 6px;
-    padding: 0 $size-gap-2;
-    border-radius: $size-radius-sm;
+    padding: 0 var(--bf-space-2);
+    border-radius: var(--bf-radius-sm);
     opacity: 1;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2745,7 +2734,7 @@ $_section-header-height: 22px;
 
   &__section-action,
   &__item-action {
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       color 120ms ease,
@@ -2772,14 +2761,14 @@ $_section-header-height: 22px;
   }
 
   &__items {
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
     padding: 2px 6px;
   }
 
   &__item {
     height: 30px;
-    padding: 0 $size-gap-2;
-    border-radius: $size-radius-base;
+    padding: 0 var(--bf-space-2);
+    border-radius: var(--bf-radius-base);
     @include nav-font.nav-panel-text-row;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2793,13 +2782,13 @@ $_section-header-height: 22px;
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
-      @include shell-surfaces.navigation-feedback;
+      @include shell-surfaces.navigation-selection-feedback;
 
       &::before {
         left: 3px;
         width: 2px;
         height: 14px;
-        border-radius: $size-radius-full;
+        border-radius: var(--bf-radius-pill);
       }
     }
   }
@@ -2812,7 +2801,7 @@ $_section-header-height: 22px;
 
   &__bottom-bar {
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     padding: 4px 6px;
     border-top: 1px solid;
     @include shell-surfaces.sidebar-hairline-color;
@@ -2822,10 +2811,10 @@ $_section-header-height: 22px;
   &__assistant-entry,
   &__miniapp-entry {
     min-height: 30px;
-    gap: $size-gap-2;
-    padding-inline: $size-gap-2;
+    gap: var(--bf-space-2);
+    padding-inline: var(--bf-space-2);
     padding-block: 0;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     @include nav-font.nav-panel-text-row;
     box-shadow: none;
     transition:
@@ -2849,7 +2838,7 @@ $_section-header-height: 22px;
   &__miniapp-entry.is-active {
     border-color: transparent;
     @include nav-font.nav-panel-text-row-active;
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-selection-feedback;
   }
 
   &__miniapp-bubble {
@@ -2871,7 +2860,7 @@ $_section-header-height: 22px;
   }
 
   &__mode-pill {
-    border-radius: $size-radius-lg;
+    border-radius: var(--bf-radius-lg);
     box-shadow: none;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2890,7 +2879,7 @@ $_section-header-height: 22px;
 
   &__mode-pill-inner,
   &__mode-pill-liquid {
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
   }
 
   &__mode-pill-liquid,
@@ -2912,7 +2901,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__footer .bitfun-notification-btn.bitfun-notification-btn--nav-hover-icon:not(.bitfun-notification-btn--has-progress) {
   width: 28px;
   height: 28px;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     background 120ms ease,
@@ -2935,7 +2924,7 @@ $_section-header-height: 22px;
 }
 
 .bitfun-nav-panel__remote-disclaimer-btn {
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     border-color 120ms ease,
@@ -2974,7 +2963,7 @@ $_section-header-height: 22px;
   .bitfun-nav-panel__top-action-btn:hover,
   .bitfun-nav-panel__item:hover,
   .bitfun-nav-panel__footer-btn--icon:hover {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-hover-feedback;
   }
 
   .bitfun-nav-panel__section-header--interactive:hover,
@@ -3014,11 +3003,11 @@ $_section-header-height: 22px;
 
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     width: 100%;
     min-width: 0;
     height: 34px;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
     border: 0;
     font-family: var(--bf-font-family-sans);
     font-size: var(--bf-font-size-sm);
@@ -3085,7 +3074,7 @@ $_section-header-height: 22px;
   &__pages-entry:hover,
   &__assistant-entry:hover,
   &__miniapp-entry:hover {
-    @include shell-surfaces.navigation-feedback;
+    @include shell-surfaces.navigation-hover-feedback;
   }
 
   &__assistant-entry-label,
@@ -3108,11 +3097,11 @@ $_section-header-height: 22px;
   flex: 1 1 auto;
   min-block-size: 0;
   height: 100%;
-  background: transparent;
 
-  > [data-bf-part="header"] {
-    padding: 0;
-  }
+}
+
+.bitfun-nav-panel__main-nav-header {
+  padding: 0;
 }
 
 .bitfun-nav-panel__main-nav-content {

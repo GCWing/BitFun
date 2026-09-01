@@ -462,6 +462,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                     </div>
                     {canWithdraw(submission) && (
                       <Button
+                        className="appearance-market__submission-action"
                         variant="outline"
                         size="sm"
                         loading={actingId === submission.submissionId}

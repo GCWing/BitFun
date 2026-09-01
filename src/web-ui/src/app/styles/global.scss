@@ -4,11 +4,8 @@
  */
 
 /* ========== Import design tokens ========== */
-@use '../../component-library/styles/tokens.scss' as *;
-
 /* ========== Global CSS variables ========== */
 :root {
-  @include apply-design-tokens;
 }
 
 /* ========== Global base styles ========== */
@@ -40,7 +37,7 @@ body {
 a {
   color: var(--bf-color-accent-default);
   text-decoration: none;
-  transition: color $motion-fast $easing-standard;
+  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 }
 
 a:hover {
@@ -63,7 +60,7 @@ a:hover {
 :focus-visible {
   outline: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
   outline-offset: 2px;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
 }
 }
 
@@ -83,7 +80,7 @@ a:hover {
 @layer bf.base {
 /* Disabled state */
 :disabled {
-  opacity: $opacity-disabled;
+  opacity: var(--bf-opacity-disabled);
   cursor: default;
 }
 
@@ -91,7 +88,7 @@ a:hover {
 img {
   max-width: 100%;
   height: auto;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
 }
 
 /* Table styles */
@@ -103,7 +100,7 @@ table {
 th,
 td {
   text-align: left;
-  padding: $size-gap-2 $size-gap-3;
+  padding: var(--bf-space-2) var(--bf-space-3);
   border-bottom: 1px solid var(--bf-color-border-default);
 }
 
@@ -120,7 +117,7 @@ pre {
   font-size: var(--bf-font-size-sm);
   background: var(--bf-color-action-neutral-surface);
   border: 1px solid var(--bf-color-border-default);
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
 }
 
 code {
@@ -128,7 +125,7 @@ code {
 }
 
 pre {
-  padding: $size-gap-3;
+  padding: var(--bf-space-3);
   overflow-x: auto;
   line-height: var(--bf-line-height-relaxed);
 }
@@ -141,11 +138,11 @@ pre code {
 
 /* Blockquote styles */
 blockquote {
-  margin: $size-gap-4 0;
-  padding: $size-gap-3 $size-gap-4;
+  margin: var(--bf-space-4) 0;
+  padding: var(--bf-space-3) var(--bf-space-4);
   border-left: 3px solid var(--bf-color-accent-default);
   background: var(--bf-color-action-neutral-surface);
-  border-radius: 0 $size-radius-base $size-radius-base 0;
+  border-radius: 0 var(--bf-radius-base) var(--bf-radius-base) 0;
   font-style: italic;
 }
 
@@ -154,17 +151,17 @@ hr:not(:is(.m-editor hr)) {
   border: none;
   height: 1px;
   background: var(--bf-color-border-default);
-  margin: $size-gap-5 0;
+  margin: var(--bf-space-5) 0;
 }
 
 /* List styles */
 ul,
 ol {
-  padding-left: $size-gap-5;
+  padding-left: var(--bf-space-5);
 }
 
 li {
-  margin-bottom: $size-gap-1;
+  margin-bottom: var(--bf-space-1);
 }
 }
 
@@ -181,7 +178,7 @@ li {
 /* Loading state */
 .loading {
   pointer-events: none;
-  opacity: $opacity-hover;
+  opacity: var(--bf-opacity-hover);
 }
 
 /* Error state */
@@ -290,26 +287,26 @@ body > div[style*="z-index:999999"] {
     box-shadow: none !important;
     text-shadow: none !important;
   }
-  
+
   a,
   a:visited {
     text-decoration: underline;
   }
-  
+
   a[href]::after {
     content: " (" attr(href) ")";
   }
-  
+
   pre,
   blockquote {
     border: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent);
     page-break-inside: avoid;
   }
-  
+
   img {
     page-break-inside: avoid;
   }
-  
+
   h2,
   h3 {
     page-break-after: avoid;

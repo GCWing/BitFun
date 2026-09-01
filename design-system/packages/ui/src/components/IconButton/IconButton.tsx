@@ -46,8 +46,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ref={ref}
       type={type}
     >
-      <span aria-hidden="true" className={styles.progress} />
-      <span aria-hidden="true" className={styles.icon}>{icon}</span>
+      <span aria-hidden="true" className={styles.progress} data-bf-part="progress" />
+      <span aria-hidden="true" className={styles.icon} data-bf-part="icon">{icon}</span>
     </button>
   );
 });

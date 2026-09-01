@@ -253,26 +253,16 @@
     align-items: stretch;
   }
 
-  &__path-input[data-bf-component='input'],
-  &__description [data-bf-component='textarea'] > [data-bf-part='input'] {
-    border-radius: 8px;
-  }
-
-  &__path-input[data-bf-component='input'] {
-    height: 32px;
-    background: color-mix(in srgb, var(--bf-color-action-neutral-surface) 72%, transparent);
+  &__path-input {
+    width: 100%;
   }
 
   &__select {
     min-width: 84px;
   }
 
-  &__description [data-bf-component='textarea'] > [data-bf-part='input'] {
-    min-height: 64px;
-    padding: 10px 12px;
-    background: transparent;
-    font-size: var(--bf-font-size-xs);
-    resize: none;
+  &__description {
+    min-width: 0;
   }
 
   &__error {

@@ -1,6 +1,3 @@
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/_extended-mixins' as mixins;
-
 $_node-height: 28px;
 $_node-padding-y: 4px;
 $_node-padding-x: 8px;
@@ -23,22 +20,22 @@ $_icon-size: 16px;
 .bitfun-search-results__empty {
   text-align: center;
   color: var(--bf-color-content-muted);
-  padding: $size-gap-8;
+  padding: var(--bf-space-8);
 
   &-icon {
-    margin-bottom: $size-gap-4;
-    opacity: $opacity-disabled;
+    margin-bottom: var(--bf-space-4);
+    opacity: var(--bf-opacity-disabled);
   }
 
   &-hint {
     font-size: var(--bf-font-size-xs);
     opacity: 0.7;
-    margin-top: $size-gap-2;
+    margin-top: var(--bf-space-2);
   }
 }
 
 .bitfun-search-results__header {
-  padding: $size-gap-2 $size-gap-3;
+  padding: var(--bf-space-2) var(--bf-space-3);
   border-bottom: 1px solid var(--bf-color-border-default);
   background: var(--bf-color-surface-canvas);
   flex-shrink: 0;
@@ -54,13 +51,13 @@ $_icon-size: 16px;
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
-  padding: $size-gap-2 0;
+  padding: var(--bf-space-2) 0;
   -webkit-overflow-scrolling: touch;
 
 }
 
 .bitfun-search-results__group {
-  margin-bottom: $size-gap-3;
+  margin-bottom: var(--bf-space-3);
   
   &:last-child {
     margin-bottom: 0;
@@ -68,12 +65,20 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__file {
-  @include mixins.flex-layout(row, center, start, $size-gap-1);
-  margin: 0 $size-gap-1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--bf-space-1);
+  margin: 0 var(--bf-space-1);
   position: relative;
 
   &-main {
-    @include mixins.flex-layout(row, center, start, $size-gap-2);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--bf-space-2);
     flex: 1;
     width: 100%;
     min-width: 0;
@@ -81,11 +86,11 @@ $_icon-size: 16px;
     cursor: pointer;
     min-height: $_node-height;
     border: none;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: transparent;
     transition:
-      background-color $motion-base $easing-standard,
-      color $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     color: var(--bf-color-content-secondary);
     text-align: left;
     font: inherit;
@@ -103,12 +108,15 @@ $_icon-size: 16px;
   }
 
   &-icon {
-    @include mixins.flex-layout(row, center, center, 0);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
     min-width: $_icon-size;
     width: 20px;
     height: 20px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-muted);
 
     &--directory {
@@ -120,14 +128,20 @@ $_icon-size: 16px;
   &-info {
     flex: 1;
     min-width: 0;
-    @include mixins.flex-layout(column, start, start, 2px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 2px;
   }
 
   &-name {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     color: inherit;
-    @include mixins.text-ellipsis;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     width: 100%;
   }
 
@@ -135,12 +149,18 @@ $_icon-size: 16px;
     font-size: var(--bf-font-size-xs);
     color: var(--bf-color-content-muted);
     opacity: 0.6;
-    @include mixins.text-ellipsis;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     width: 100%;
   }
 
   &-toggle {
-    @include mixins.flex-layout(row, center, center, 3px);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
     flex-shrink: 0;
     padding: 2px 6px;
     min-height: 20px;
@@ -150,9 +170,9 @@ $_icon-size: 16px;
     color: var(--bf-domain-git-branch);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     user-select: none;
     appearance: none;
 
@@ -182,24 +202,27 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__matches {
-  margin-top: $size-gap-1;
-  margin-left: $size-gap-1;
-  margin-right: $size-gap-1;
-  margin-bottom: $size-gap-1;
+  margin-top: var(--bf-space-1);
+  margin-left: var(--bf-space-1);
+  margin-right: var(--bf-space-1);
+  margin-bottom: var(--bf-space-1);
 }
 
 .bitfun-search-results__match {
-  @include mixins.flex-layout(row, center, start, 0);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
   width: 100%;
-  padding: $size-gap-1 $size-gap-2;
+  padding: var(--bf-space-1) var(--bf-space-2);
   margin: 0;
   cursor: pointer;
   transition:
-    transform $motion-fast $easing-standard,
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   border: none;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   min-height: 24px;
   background: transparent;
   position: relative;
@@ -251,8 +274,12 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__load-more {
-  @include mixins.flex-layout(row, center, center, $size-gap-1);
-  padding: $size-gap-1 $size-gap-2;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bf-space-1);
+  padding: var(--bf-space-1) var(--bf-space-2);
   flex-shrink: 0;
   border-top: 1px solid var(--bf-color-border-default);
   background: var(--bf-color-surface-subtle);
@@ -260,9 +287,9 @@ $_icon-size: 16px;
   font-size: var(--bf-font-size-xs);
   cursor: pointer;
   transition:
-    transform $motion-fast $easing-standard,
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   user-select: none;
 
   &:hover {

@@ -1,10 +1,10 @@
 /**
  * QuickLook component styles.
  */
-@use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .canvas-quick-look {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: fixed;
   z-index: 1100;

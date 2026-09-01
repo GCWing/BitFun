@@ -151,7 +151,6 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
       <div data-bf-component="mcp-resource-browser" data-bf-part="search" className="browser-search">
         <SearchField
           className="browser-search-field"
-          inputClassName="search-input"
           leadingIcon={<Icon name="search" size="sm" />}
           placeholder={t('resourceBrowser.search.placeholder')}
           value={searchQuery}

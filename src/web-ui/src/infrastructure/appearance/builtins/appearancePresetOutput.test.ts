@@ -129,15 +129,16 @@ describe('builtin appearance preset output', () => {
 
     expect(lightAppearance).toMatchObject({
       description: 'Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions',
-      version: '2.4.0',
+      version: '2.5.0',
       colors: {
         background: {
           primary: '#fdfdfd',
           secondary: '#ffffff',
-          tertiary: '#f3f3f5',
+          tertiary: '#f7f7f7',
           elevated: '#ffffff',
           workbench: '#f3f3f5',
           scene: '#ffffff',
+          chrome: '#f8f8f9',
         },
         text: {
           primary: '#1c1c1f',
@@ -187,7 +188,9 @@ describe('builtin appearance preset output', () => {
       },
     });
     expect(tokens).toMatchObject({
-      '--bf-component-config-page-section-background': 'rgba(16, 26, 39, 0.03)',
+      '--bf-color-surface-chrome': '#f8f8f9',
+      '--bf-color-selection-surface': 'rgba(0, 0, 0, 0.08)',
+      '--bf-component-config-page-section-background': '#f7f7f7',
       '--bf-component-config-page-section-border': 'rgba(16, 26, 39, 0.08)',
       '--bf-component-config-page-section-border-width': '1px',
       '--bf-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
@@ -318,12 +321,12 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "75cbe7cb36e533c988e9e7bfde6c81d5e2e1f54b693ae24deb137673cd218c3f",
+          "hash": "cf3b1df5872d83daab7f9dd33671a6f82537c1e07cb90d6a49ac7d7a416cd045",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "a13f4aa795fcc37be653167c195b6aaf50b2e66d999c7106ad69a4f50a65e975",
+          "hash": "21924d3ea4f17d63e89538e539ed7cdea263b0c31682e1378221e5ac46937d78",
           "id": "bitfun-monochrome",
           "type": "light",
         },

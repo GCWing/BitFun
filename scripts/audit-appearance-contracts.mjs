@@ -4,7 +4,6 @@ import ts from 'typescript';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const sourceRoot = path.join(repoRoot, 'src', 'web-ui', 'src');
-const componentRoot = path.join(sourceRoot, 'component-library', 'components');
 const sceneRoot = path.join(sourceRoot, 'app', 'scenes');
 const registryFile = path.join(sourceRoot, 'infrastructure', 'appearance', 'registry', 'defaultAppearanceRegistry.ts');
 const retiredOwnershipFile = path.join(sourceRoot, 'infrastructure', 'appearance', 'registry', 'appearanceSourceOwnership.ts');
@@ -636,14 +635,6 @@ for (const descriptor of descriptors) {
   }
 }
 
-for (const directory of fs.readdirSync(componentRoot, { withFileTypes: true }).filter(entry => entry.isDirectory())) {
-  const absolute = path.join(componentRoot, directory.name);
-  const productionTsx = walk(absolute).filter(file => file.endsWith('.tsx') && !/\.(?:test|spec)\.tsx$/.test(file));
-  if (productionTsx.length > 0 && !fs.existsSync(path.join(absolute, 'appearance.ts'))) {
-    failures.push(`${relative(absolute)}: production component directory must own appearance.ts`);
-  }
-}
-
 for (const sceneFile of walk(sceneRoot).filter(file => file.endsWith('Scene.tsx') && !/\.(?:test|spec)\.tsx$/.test(file))) {
   const appearanceFile = path.join(path.dirname(sceneFile), 'appearance.ts');
   if (!fs.existsSync(appearanceFile)) {
@@ -661,7 +652,6 @@ for (const sceneFile of walk(sceneRoot).filter(file => file.endsWith('Scene.tsx'
 
 const visualEntryPoints = new Set([
   'main.tsx',
-  'component-library/preview/main.tsx',
   'tools/bitfun-canvas/runtime/entry.tsx',
 ]);
 const styledProductionTsx = productionCodeSources.filter(([file, source]) => {

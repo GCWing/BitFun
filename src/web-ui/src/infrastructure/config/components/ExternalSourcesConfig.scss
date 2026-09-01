@@ -237,7 +237,7 @@
       }
     }
 
-    [data-bf-component='button'] {
+    .bitfun-external-sources-config__scope-reset {
       margin-left: auto;
     }
   }
@@ -315,8 +315,7 @@
    * Ecosystem mode and per-capability access are the same control at two
    * levels — one width so they read as a single column of dropdowns.
    */
-  &__policy-actions :is([data-bf-component='combobox'], [data-bf-component='select']),
-  &__capability-row :is([data-bf-component='combobox'], [data-bf-component='select']) {
+  &__policy-select {
     min-width: 142px;
   }
 
@@ -744,8 +743,7 @@
       width: 100%;
     }
 
-    &__policy-actions :is([data-bf-component='combobox'], [data-bf-component='select']),
-    &__capability-row :is([data-bf-component='combobox'], [data-bf-component='select']) {
+    &__policy-select {
       width: 100%;
     }
 
@@ -753,8 +751,8 @@
       grid-template-columns: 1fr;
     }
 
-    &__scope-bar [data-bf-component='button'],
-    &__policy-recovery [data-bf-component='button'] {
+    &__scope-reset,
+    &__policy-recovery-action {
       width: 100%;
       margin-left: 0;
     }

@@ -1,5 +1,3 @@
-@use '../../../component-library/styles/tokens' as *;
-
 // Gutter aligned with GalleryLayout ($gutter) so the tab strip lines up
 // with the page header content of every tab pane.
 $scene-gutter: clamp(28px, 4vw, 64px);
@@ -17,7 +15,7 @@ $scene-gutter: clamp(28px, 4vw, 64px);
 
   &__nav {
     flex: 0 0 auto;
-    padding: $size-gap-3 $scene-gutter;
+    padding: var(--bf-space-3) $scene-gutter;
     background: var(--bf-color-surface-scene);
     border-bottom: 1px solid var(--bf-color-border-subtle);
   }
@@ -42,6 +40,6 @@ $scene-gutter: clamp(28px, 4vw, 64px);
 
 @media (max-width: 560px) {
   .miniapp-gallery-scene__nav {
-    padding-inline: $size-gap-3;
+    padding-inline: var(--bf-space-3);
   }
 }

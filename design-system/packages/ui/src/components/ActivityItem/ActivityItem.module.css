@@ -149,7 +149,7 @@
 
   .root[data-appearance="surface"]:not([data-disabled="true"]):is(:hover, [data-bf-preview-state="hover"]) {
     border-color: var(--bf-color-border-default);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-action-neutral-surface-hover);
   }
 
   .root[data-appearance="surface"]:not([data-disabled="true"]):is(:active, [data-bf-preview-state="active"]) {

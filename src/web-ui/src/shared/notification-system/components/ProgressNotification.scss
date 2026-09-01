@@ -1,15 +1,12 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .progress-notification {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   display: flex;
   align-items: flex-start;
-  gap: $size-gap-2;
-  padding: $size-gap-3;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-3);
   min-width: 280px;
   max-width: 320px;
   animation: bitfun-progress-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -79,14 +76,14 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__title {

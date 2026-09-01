@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, type IconName } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip, type IconName } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
@@ -128,9 +128,10 @@ function HarnessProfileMark({
 
 /**
  * Before the first Turn this is the Session execution picker. Afterwards it
- * becomes a lightweight Session signature whose menu choices start a new
- * Session directly. ChatInput presents the signature as a disclosure row
- * inside its add menu; other consumers may keep the standalone trigger.
+ * becomes a lightweight Session signature whose menu choices ask for
+ * confirmation before starting a new Session. ChatInput presents the
+ * signature as a disclosure row inside its add menu; other consumers may keep
+ * the standalone trigger.
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
@@ -185,6 +186,20 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     onSelectionComplete?.();
   }, [close, onSelectionComplete]);
 
+  const confirmNewSession = useCallback(async (
+    selection: HarnessNewSessionSelection,
+    targetName: string,
+  ) => {
+    finishSelection();
+    const confirmed = await confirmDialog({
+      title: t('chatInput.harness.newSessionConfirmation.title', { name: targetName }),
+      message: t('chatInput.harness.newSessionConfirmation.message', { name: targetName }),
+      confirmText: t('chatInput.harness.newSessionConfirmation.confirm'),
+    });
+    if (!confirmed) return;
+    await onStartNewSession?.(selection);
+  }, [finishSelection, onStartNewSession, t]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -214,9 +229,13 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     }
     if (fixedSession) {
       if (isSelectableProfile(profileId)) {
-        void onStartNewSession?.({ kind: 'profile', id: profileId });
+        void confirmNewSession(
+          { kind: 'profile', id: profileId },
+          t(`chatInput.harness.profiles.${profileId}.name`),
+        );
+      } else {
+        finishSelection();
       }
-      finishSelection();
       return;
     }
     if (profileId === selectedProfile) {
@@ -227,7 +246,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       void onSelectProfile(profileId);
     }
     finishSelection();
-  }, [finishSelection, fixedSession, onSelectProfile, onStartNewSession, selectedProfile]);
+  }, [confirmNewSession, finishSelection, fixedSession, onSelectProfile, selectedProfile, t]);
 
   const handleSelectAgent = useCallback((agent: HarnessAgentOption) => {
     if (agent.available === false) {
@@ -237,8 +256,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       return;
     }
     if (fixedSession) {
-      void onStartNewSession?.({ kind: 'agent', id: agent.id });
-      finishSelection();
+      void confirmNewSession({ kind: 'agent', id: agent.id }, agent.name);
       return;
     }
     const connected = selectedProfile === 'other' && sameAgent(agent.id, selectedAgentId);
@@ -246,7 +264,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       void onSelectAgent?.(agent.id);
     }
     finishSelection();
-  }, [finishSelection, fixedSession, onSelectAgent, onStartNewSession, selectedAgentId, selectedProfile, t]);
+  }, [confirmNewSession, finishSelection, fixedSession, onSelectAgent, selectedAgentId, selectedProfile, t]);
 
   const knownSelectedProfile = PROFILE_IDS.find(id => id === selectedProfile);
   const selectedAgent = otherAgents.find(agent => sameAgent(agent.id, selectedAgentId));
@@ -308,6 +326,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       data-bf-component="harness-selector"
       data-bf-part="root"
       data-bf-presentation={presentation}
+      data-bf-profile={knownSelectedProfile}
     >
       <Tooltip content={triggerTooltip}>
         {presentation === 'menu-item' ? (
@@ -393,17 +412,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           onMouseDown={event => event.stopPropagation()}
           onKeyDown={handleMenuKeyDown}
         >
-          <MenuSection
-            title={fixedSession ? (
-              <span
-                data-bf-component="harness-selector"
-                data-bf-part="newSessionNotice"
-                data-testid="harness-new-session-notice"
-              >
-                {t('chatInput.harness.selectionCreatesNewSession')}
-              </span>
-            ) : undefined}
-          >
+          <MenuSection>
             {page === 'profiles' ? (
               <>
                 {PROFILE_IDS.map((id) => {

@@ -103,6 +103,28 @@ test("prominent error status opens error content without a separate failure flag
   assert.match(markup, /Command failed/);
 });
 
+test("prominent error status can opt into expandable supporting details", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ProminentToolCard, {
+      allowExpandedWhenFailed: true,
+      errorContent: createElement("div", null, "Command failed"),
+      expandedContent: createElement("div", null, "Invocation input"),
+      header: createElement(ProminentToolCardHeader, { action: "Run command" }),
+      isExpanded: true,
+      onClick() {},
+      status: "error",
+    }),
+  );
+
+  assert.match(markup, /data-bf-state="expanded failed"/);
+  assert.match(markup, /data-bf-expandable="true"/);
+  assert.match(markup, /aria-expanded="true"/);
+  assert.match(markup, /data-bf-part="expandedCollapse"[^>]+data-open="true"/);
+  assert.match(markup, /Invocation input/);
+  assert.match(markup, /data-bf-part="errorCollapse"[^>]+data-open="true"/);
+  assert.match(markup, /Command failed/);
+});
+
 test("prominent actions stay hidden until hover, preview-hover, or keyboard focus", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
@@ -117,6 +139,22 @@ test("prominent actions stay hidden until hover, preview-hover, or keyboard focu
   assert.match(styles, /--bf-space-6/);
   assert.match(styles, /--bf-radius-md/);
   assert.match(styles, /--bf-color-focus-ring/);
+});
+
+test("FlowChat tool-card shells stay flat at rest and on hover", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const prominentRule = styles.match(/\.prominentRoot\s*\{([^}]*)\}/s)?.[1];
+  const ambientExpandedRule = styles.match(/\.ambientExpandedShell\s*\{([^}]*)\}/s)?.[1];
+
+  assert.ok(prominentRule);
+  assert.ok(ambientExpandedRule);
+  assert.match(prominentRule, /box-shadow:\s*none/);
+  assert.match(ambientExpandedRule, /box-shadow:\s*none/);
+  assert.doesNotMatch(styles, /box-shadow:\s*var\(--bf-shadow-(?:xs|sm)\)/);
+  assert.doesNotMatch(styles, /box-shadow\s+var\(--_tool-card-transition\)/);
 });
 
 test("command text remains plain when a host applies inline-code chrome", async () => {

@@ -121,8 +121,8 @@ Web UI Appearance 的当前 schema 固定为 v2。颜色入口是 `theme-tokens`
 - Widget、Desktop 首屏 bootstrap 和生成式 UI 提示只消费同一 canonical 源生成的 allowlist 产物，
   不能反向成为主题 owner。
 
-`CssTokenAppearanceAdapter`、`appearanceTokenProjection`、`css-tokens` renderer 和
-`--bf-appearance-token-*` 运行时变量均已退休。不得为第三方包、旧组件或测试重新引入这些接口。
+旧 CSS-token adapter、Token 投影层、`css-tokens` renderer 和 `--bf-appearance-token-*`
+运行时变量均已退休并从源码删除。不得为第三方包、旧组件或测试重新引入这些接口。
 
 ### v1 读取不是兼容运行时
 

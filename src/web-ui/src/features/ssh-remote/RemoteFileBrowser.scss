@@ -1,7 +1,7 @@
 /**
  * Remote File Browser Styles
  */
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .remote-file-browser-overlay {
   position: fixed;
@@ -14,13 +14,6 @@
   z-index: 260;
   animation: remote-file-browser-fade-in 0.2s ease;
 
-  // Beat `.bitfun-app-layout *:focus-visible` (same specificity as a single-class :focus-visible; load order can win).
-  .remote-file-browser__path-input:focus,
-  .remote-file-browser__path-input:focus-visible {
-    outline: none !important;
-    outline-offset: 0 !important;
-    box-shadow: none !important;
-  }
 }
 
 @keyframes remote-file-browser-fade-in {
@@ -29,7 +22,7 @@
 }
 
 .remote-file-browser {
-  @include surfaces.dialog-surface;
+  @include surfaces.dialog;
 
   display: flex;
   flex-direction: column;
@@ -418,7 +411,7 @@
   }
 
   &__dialog {
-    @include surfaces.dialog-surface;
+    @include surfaces.dialog;
 
     width: 100%;
     max-width: 380px;

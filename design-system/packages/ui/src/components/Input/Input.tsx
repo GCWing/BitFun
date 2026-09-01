@@ -12,7 +12,6 @@ import styles from "./Input.module.css";
 export interface InputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size"> {
   className?: string;
-  inputClassName?: string;
   invalid?: boolean;
   leading?: ReactNode;
   onValueChange?: (value: string) => void;
@@ -24,7 +23,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   "aria-invalid": ariaInvalid,
   className,
   disabled,
-  inputClassName,
   invalid = false,
   leading,
   onChange,
@@ -61,7 +59,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
       <input
         {...props}
         aria-invalid={resolvedAriaInvalid}
-        className={classNames(styles.input, inputClassName)}
+        className={styles.input}
         disabled={disabled}
         onChange={handleChange}
         onCompositionEnd={(event) => {

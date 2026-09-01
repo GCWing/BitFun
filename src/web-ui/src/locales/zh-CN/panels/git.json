@@ -189,6 +189,7 @@
   },
   "quickSwitch": {
     "menuLabel": "切换分支",
+    "searchLabel": "搜索分支",
     "searchPlaceholder": "搜索分支...",
     "loading": "加载中...",
     "conflict": {

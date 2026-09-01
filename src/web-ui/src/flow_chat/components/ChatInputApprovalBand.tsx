@@ -15,7 +15,7 @@ import React, { useState } from 'react';
 import { Button } from '@bitfun/ui';
 import { Check, ShieldAlert, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import type {
   PermissionReplyKind,
   PermissionRequest,

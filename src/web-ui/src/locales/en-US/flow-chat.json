@@ -705,7 +705,11 @@
       "comingSoonNotice": "The {{name}} Harness execution framework is in development.",
       "legacySessionNotice": "This legacy session keeps its original Agent execution mode. Create a new session to use the Agent Harness execution framework.",
       "sessionStartedNotice": "Harness and main Agent are set before the first turn starts. Create a new session to use another selection.",
-      "selectionCreatesNewSession": "Switching modes creates a new session",
+      "newSessionConfirmation": {
+        "title": "Create a new session with {{name}}?",
+        "message": "The current session will remain unchanged. The new session will use {{name}}.",
+        "confirm": "Create new session"
+      },
       "unsupportedProfile": "Unsupported Harness ({{id}})",
       "unsupportedProfileNotice": "This session uses {{id}}, which this version cannot run. Select a supported Harness explicitly.",
       "profileChangeBusy": "Wait for the current turn to finish before changing Harness.",
@@ -1745,7 +1749,7 @@
     },
     "execProcess": {
       "executeCommand": "Run command:",
-      "writeStdin": "Write stdin:",
+      "writeStdin": "Send input:",
       "pollProcess": "Poll process:",
       "interruptProcess": "Interrupt process:",
       "killProcess": "Kill process:",

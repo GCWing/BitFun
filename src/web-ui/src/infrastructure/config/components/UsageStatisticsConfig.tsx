@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
 import {
-  ConfigPageLoading,
-  ConfigPageMessage,
-  ConfigPageRefreshButton,
-} from '@/component-library';
-import {
   TokenUsageStatisticsUnavailableError,
   tokenUsageStatisticsApi,
   type UsageGranularity,
@@ -21,6 +16,9 @@ import {
   ConfigPageLayout,
   ConfigPageSection,
   ConfigPageSectionStack,
+  ConfigLoadingState,
+  ConfigMessage,
+  ConfigRefreshButton,
 } from './common';
 import './UsageStatisticsConfig.scss';
 import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@bitfun/ui';
@@ -859,7 +857,7 @@ const UsageStatisticsConfig: React.FC = () => {
             title={t('overview.title')}
             description={t('overview.description')}
             extra={(
-              <ConfigPageRefreshButton
+              <ConfigRefreshButton
                 tooltip={t('refresh')}
                 onClick={() => void load(true)}
                 loading={refreshing}
@@ -947,13 +945,13 @@ const UsageStatisticsConfig: React.FC = () => {
               </div>
             </div>
 
-            <ConfigPageMessage
+            <ConfigMessage
               className="bitfun-usage-stats__message"
               message={message}
             />
 
             {loading ? (
-              <ConfigPageLoading text={t('loading')} />
+              <ConfigLoadingState label={t('loading')} />
             ) : empty ? (
               <div
                 className="bitfun-usage-stats__empty"

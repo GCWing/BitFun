@@ -39,8 +39,8 @@ vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', () => ({
-  DotMatrixLoader: () => <div data-testid="scene-loader" />,
+vi.mock('@bitfun/ui', () => ({
+  Spinner: () => <div data-testid="scene-loader" />,
 }));
 
 vi.mock('./session/SessionScene', () => ({

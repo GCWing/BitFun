@@ -28,7 +28,6 @@ export interface ActionCardProps
   leading?: ReactNode;
   selected?: boolean;
   size?: ActionCardSize;
-  triggerClassName?: string;
 }
 
 export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
@@ -41,7 +40,6 @@ export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
     leading,
     selected = false,
     size = "sm",
-    triggerClassName,
     type = "button",
     ...props
   }, ref) {
@@ -56,7 +54,7 @@ export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
       >
         <button
           {...props}
-          className={classNames(styles.trigger, triggerClassName)}
+          className={styles.trigger}
           data-bf-part="trigger"
           disabled={disabled}
           ref={ref}

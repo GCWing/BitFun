@@ -1,7 +1,6 @@
-@use '../../../../component-library/styles/tokens.scss' as *;
-@use '../../../../component-library/styles/overlay-surfaces' as surfaces;
-@use '../../../../component-library/styles/flowchat-markdown-code-vars' as markdownCode;
-@use '../../../../component-library/styles/flowchat-markdown-table-vars' as markdownTable;
+@use '@/shared/styles/surface-recipes' as surfaces;
+@use '@/infrastructure/markdown/code' as markdownCode;
+@use '@/infrastructure/markdown/table' as markdownTable;
 @use '../../styles/markdown-editor-layout' as markdownLayout;
 
 .m-editor-tiptap {
@@ -9,7 +8,7 @@
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  padding: $size-gap-4;
+  padding: var(--bf-space-4);
   border-radius: 0;
 
   /* Single contenteditable surface: suppress global :focus-visible ring on the whole editor */
@@ -29,10 +28,10 @@
 
     /* blockId lives on <hr> itself — do not use paragraph chrome (padding + radius + hover fill) on hr */
     > [data-block-id]:not(hr) {
-      margin-bottom: $size-gap-2;
-      padding: $size-gap-2;
+      margin-bottom: var(--bf-space-2);
+      padding: var(--bf-space-2);
       border-radius: 0;
-      transition: background $motion-base $easing-standard;
+      transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
       &:hover {
         background: var(--bf-color-surface-subtle);
@@ -58,7 +57,7 @@
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
-      transition: opacity $motion-fast $easing-standard;
+      transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     }
 
     > p.is-empty::before {
@@ -204,7 +203,7 @@
     hr {
       display: block;
       height: 0;
-      margin: $size-gap-4 0;
+      margin: var(--bf-space-4) 0;
       padding: 0;
       border: 0;
       border-top: 1px solid var(--bf-color-border-subtle);
@@ -215,7 +214,7 @@
       border-radius: 0;
 
       &[data-block-id] {
-        margin-bottom: $size-gap-2;
+        margin-bottom: var(--bf-space-2);
       }
 
       &[data-block-id].m-editor-tiptap-block-highlighted {
@@ -228,7 +227,7 @@
       width: 100%;
       border-collapse: collapse;
       border-spacing: 0;
-      margin: $size-gap-4 0;
+      margin: var(--bf-space-4) 0;
       table-layout: fixed;
       font-size: var(--bf-font-size-base);
       border: 1px solid markdownTable.$border;
@@ -240,7 +239,7 @@
 
     th,
     td {
-      padding: $size-gap-3 $size-gap-4;
+      padding: var(--bf-space-3) var(--bf-space-4);
       border: none;
       border-bottom: 1px solid markdownTable.$cell-border;
       vertical-align: top;
@@ -249,7 +248,7 @@
       overflow-wrap: anywhere;
       text-align: left;
       background: transparent;
-      transition: background-color $motion-fast $easing-standard;
+      transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     }
 
     th {
@@ -348,7 +347,7 @@
     > ol:not([data-type='taskList']) > li {
       list-style: none;
       position: relative;
-      margin-bottom: $size-gap-1;
+      margin-bottom: var(--bf-space-1);
       padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
     }
 
@@ -382,7 +381,7 @@
 
     li > ul:not([data-type='taskList']),
     li > ol:not([data-type='taskList']) {
-      margin-top: $size-gap-1;
+      margin-top: var(--bf-space-1);
       margin-bottom: 0;
       padding-left: markdownLayout.$list-indent;
     }
@@ -398,7 +397,7 @@
       grid-template-columns: markdownLayout.$list-marker-width 1fr;
       column-gap: markdownLayout.$list-gap;
       align-items: start;
-      margin-bottom: $size-gap-1;
+      margin-bottom: var(--bf-space-1);
     }
 
     > ul[data-type='taskList'] > li > label {
@@ -426,7 +425,7 @@
 
     ul[data-type='taskList'] li > ul,
     ul[data-type='taskList'] li > ol {
-      margin-top: $size-gap-1;
+      margin-top: var(--bf-space-1);
       margin-bottom: 0;
       padding-left: markdownLayout.$list-indent;
     }
@@ -437,7 +436,7 @@
     }
 
     li > p + p {
-      margin-top: $size-gap-2;
+      margin-top: var(--bf-space-2);
     }
 
     a {
@@ -453,7 +452,7 @@
       max-width: 100%;
       box-sizing: content-box;
       background-color: transparent;
-      border-radius: $size-radius-base;
+      border-radius: var(--bf-radius-base);
       vertical-align: middle;
     }
   }
@@ -462,7 +461,7 @@
     position: absolute;
     z-index: 20;
     width: auto;
-    max-width: calc(100% - #{$size-gap-8});
+    max-width: calc(100% - var(--bf-space-8));
     color: var(--bf-color-content-primary);
   }
 
@@ -471,36 +470,18 @@
   }
 
   .m-editor-inline-ai__panel {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
-    width: min(26rem, calc(100vw - #{$size-gap-8}));
+    width: min(26rem, calc(100vw - var(--bf-space-8)));
     padding: 10px 10px 8px;
   }
 
   .m-editor-inline-ai__composer {
-    margin-bottom: $size-gap-1;
+    margin-bottom: var(--bf-space-1);
   }
 
-  .m-editor-inline-ai__composer-input[data-bf-component='input'] {
-    height: 36px;
-    padding: 0 12px 0 14px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-
-    input {
-      font-size: var(--bf-font-size-sm);
-      line-height: var(--bf-line-height-compact);
-    }
-  }
-
-  :root[data-bf-appearance-mode='light'] &,
-  :root[data-bf-appearance-mode='light'] &,
-  .light & {
-    .m-editor-inline-ai__composer-input[data-bf-component='input'] {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent);
-      border-color: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
-    }
+  .m-editor-inline-ai__composer-input {
+    width: 100%;
   }
 
   .m-editor-inline-ai__composer-actions {
@@ -524,7 +505,7 @@
   }
 
   .m-editor-inline-ai__section-title {
-    margin: $size-gap-2 0 6px;
+    margin: var(--bf-space-2) 0 6px;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-medium);
@@ -547,7 +528,7 @@
   .m-editor-inline-ai__footer {
     display: flex;
     justify-content: flex-end;
-    margin-top: $size-gap-1;
+    margin-top: var(--bf-space-1);
   }
 
   .m-editor-inline-ai-widget {
@@ -556,7 +537,7 @@
   }
 
   .m-editor-inline-ai-preview {
-    margin: $size-gap-2 0 $size-gap-3;
+    margin: var(--bf-space-2) 0 var(--bf-space-3);
     padding: 0;
     color: var(--bf-color-content-secondary);
   }
@@ -569,7 +550,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     margin-bottom: 6px;
   }
 
@@ -590,7 +571,7 @@
     overflow: visible;
     position: relative;
     color: inherit;
-    padding-left: $size-gap-3;
+    padding-left: var(--bf-space-3);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-support);
   }
@@ -630,7 +611,7 @@
   }
 
   .m-editor-inline-ai-rendered__loading {
-    margin-bottom: $size-gap-2;
+    margin-bottom: var(--bf-space-2);
     color: var(--bf-color-content-disabled);
     font-size: var(--bf-font-size-xs);
   }
@@ -644,7 +625,7 @@
     margin: 0 0 6px;
     padding: 4px 8px;
     border-radius: 8px;
-    transition: background $motion-base $easing-standard;
+    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   .m-editor-inline-ai-rendered__content > *:first-child {
@@ -743,7 +724,7 @@
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body hr {
-    margin: $size-gap-2 0;
+    margin: var(--bf-space-2) 0;
     border: none;
     border-top: 1px solid color-mix(in srgb, currentColor 24%, transparent);
   }
@@ -775,11 +756,11 @@
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 6px;
-    margin-left: $size-gap-3;
+    margin-left: var(--bf-space-3);
   }
 
   .m-editor-inline-ai__error {
-    margin-top: $size-gap-2;
+    margin-top: var(--bf-space-2);
     color: var(--bf-color-status-danger-content);
     font-size: var(--bf-font-size-xs);
   }
@@ -787,10 +768,10 @@
   .m-editor-render-only-block,
   .m-editor-raw-html-block,
   .m-editor-frontmatter {
-    margin: $size-gap-3 0;
+    margin: var(--bf-space-3) 0;
     overflow: hidden;
     border: 1px solid var(--bf-color-border-default);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-secondary);
   }
@@ -798,7 +779,7 @@
   .m-editor-frontmatter__header {
     display: flex;
     align-items: center;
-    padding: $size-gap-2 $size-gap-3;
+    padding: var(--bf-space-2) var(--bf-space-3);
     border-bottom: 1px solid var(--bf-color-border-default);
     user-select: none;
   }
@@ -883,10 +864,10 @@
     min-height: 180px;
     resize: vertical;
     border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-surface-scene) 94%, var(--bf-color-content-on-light));
     color: var(--bf-color-content-primary);
-    padding: $size-gap-3;
+    padding: var(--bf-space-3);
     line-height: var(--bf-line-height-comfortable);
     word-break: break-word;
     outline: none;
@@ -931,7 +912,7 @@
 
   .m-editor-frontmatter__preview > .m-editor-frontmatter__source {
     margin: 0;
-    padding: $size-gap-3;
+    padding: var(--bf-space-3);
     overflow-x: auto;
     border: 0;
     border-radius: 0;
@@ -985,10 +966,10 @@
     white-space: pre-wrap;
     word-break: break-word;
     border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-surface-scene) 94%, var(--bf-color-content-on-light));
     color: var(--bf-color-content-primary);
-    padding: $size-gap-3;
+    padding: var(--bf-space-3);
     line-height: var(--bf-line-height-comfortable);
   }
 
@@ -1022,7 +1003,7 @@
 
   .m-editor-render-only-block__details-body,
   .m-editor-raw-html-block__details-body {
-    margin-top: $size-gap-3;
+    margin-top: var(--bf-space-3);
   }
 
   .m-editor-render-only-block__details-body > :first-child,
@@ -1039,11 +1020,11 @@
     display: grid;
     grid-template-columns: 20px minmax(0, 1fr);
     align-items: start;
-    gap: $size-gap-2;
-    margin: $size-gap-3 0;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    margin: var(--bf-space-3) 0;
+    padding: var(--bf-space-2) var(--bf-space-3);
     border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-surface-scene) 88%, var(--bf-color-content-on-dark));
   }
 
@@ -1087,7 +1068,7 @@
   }
 
   [data-type='details'] [data-type='detailsContent'] {
-    padding-top: $size-gap-3;
+    padding-top: var(--bf-space-3);
   }
 
   [data-type='details'] [data-type='detailsContent'] > :first-child {
@@ -1099,9 +1080,9 @@
   }
 
   .m-editor-details-block {
-    margin: $size-gap-3 0;
+    margin: var(--bf-space-3) 0;
     border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-surface-scene) 88%, var(--bf-color-content-on-dark));
     overflow: hidden;
   }
@@ -1109,8 +1090,8 @@
   .m-editor-details-block__header {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
     background: color-mix(in srgb, var(--bf-color-content-primary) 4%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
   }
@@ -1143,7 +1124,7 @@
   }
 
   .m-editor-details-block__body {
-    padding: $size-gap-3;
+    padding: var(--bf-space-3);
   }
 
   .m-editor-details-block__content > :first-child {

@@ -1,10 +1,8 @@
-@use '../../../component-library/styles/tokens' as *;
-
 .bitfun-skills-config {
   &__path-input {
     display: flex;
     align-items: flex-end;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
 
     > :first-child {
       flex: 1;
@@ -24,8 +22,8 @@
   }
 
   &__validation {
-    padding: $size-gap-2 $size-gap-3;
-    border-radius: $size-radius-base;
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border-radius: var(--bf-radius-base);
     font-size: var(--bf-font-size-sm);
 
     &.is-valid {
@@ -92,18 +90,19 @@
   &__market-toolbar {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    margin-bottom: $size-gap-3;
+    gap: var(--bf-space-2);
+    margin-bottom: var(--bf-space-3);
 
-    > [data-bf-component='search-field'] {
-      flex: 1;
-    }
+  }
+
+  &__market-search {
+    flex: 1;
   }
 
   &__market-state {
-    padding: $size-gap-4;
+    padding: var(--bf-space-4);
     border: 1px dashed var(--bf-color-border-default);
-    border-radius: $size-radius-lg;
+    border-radius: var(--bf-radius-lg);
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 0%,
@@ -122,24 +121,24 @@
   &__market-list {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__market-item {
     position: relative;
     overflow: hidden;
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-lg;
+    border-radius: var(--bf-radius-lg);
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent) 0%,
       color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 100%
     );
-    box-shadow: $shadow-xs;
+    box-shadow: var(--bf-shadow-xs);
     transition:
-      border-color $motion-fast $easing-standard,
-      box-shadow $motion-fast $easing-standard,
-      transform $motion-fast $easing-standard;
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &::before {
       content: '';
@@ -154,7 +153,7 @@
 
     &:hover {
       border-color: var(--bf-color-field-border-hover);
-      box-shadow: $shadow-sm;
+      box-shadow: var(--bf-shadow-sm);
       transform: translateY(-1px);
     }
 
@@ -171,7 +170,7 @@
 
       &:hover {
         border-color: var(--bf-color-border-subtle);
-        box-shadow: $shadow-xs;
+        box-shadow: var(--bf-shadow-xs);
         transform: none;
       }
     }
@@ -181,8 +180,8 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: $size-gap-4;
-    padding: $size-gap-4 $size-gap-4 $size-gap-4 $size-gap-5;
+    gap: var(--bf-space-4);
+    padding: var(--bf-space-4) var(--bf-space-4) var(--bf-space-4) var(--bf-space-5);
   }
 
   &__market-item-main {
@@ -194,14 +193,14 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: $size-gap-3;
-    margin-bottom: $size-gap-2;
+    gap: var(--bf-space-3);
+    margin-bottom: var(--bf-space-2);
   }
 
   &__market-item-name-wrap {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     flex-wrap: wrap;
     min-width: 0;
   }
@@ -218,7 +217,7 @@
     align-items: center;
     gap: 4px;
     padding: 2px 8px;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     border: 1px solid var(--bf-color-border-subtle);
@@ -236,7 +235,7 @@
     font-size: var(--bf-font-size-sm);
     color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-relaxed);
-    margin-bottom: $size-gap-3;
+    margin-bottom: var(--bf-space-3);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -246,7 +245,7 @@
 
   &__market-item-meta {
     display: flex;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     align-items: flex-start;
     flex-wrap: wrap;
   }
@@ -256,7 +255,7 @@
     align-items: center;
     max-width: 100%;
     padding: 2px 10px;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-compact);
     border: 1px solid var(--bf-color-border-subtle);
@@ -279,7 +278,7 @@
     gap: 4px;
     flex-shrink: 0;
     padding: 2px 10px;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     color: var(--bf-color-content-muted);
@@ -291,18 +290,19 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     flex-shrink: 0;
 
-    [data-bf-component='button'] {
-      min-width: 128px;
-    }
+  }
+
+  &__market-action-button {
+    min-width: 128px;
   }
 
   &__market-skeleton-main {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     width: min(620px, 100%);
   }
 
@@ -313,7 +313,7 @@
     overflow: hidden;
     background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
     border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
 
     &::after {
       content: '';
@@ -326,7 +326,7 @@
         color-mix(in srgb, var(--bf-color-content-on-dark) 18%, transparent) 48%,
         color-mix(in srgb, var(--bf-color-content-on-dark) 0%, transparent) 100%
       );
-      animation: bitfun-market-skeleton-shimmer 1.3s $easing-standard infinite;
+      animation: bitfun-market-skeleton-shimmer 1.3s var(--bf-motion-easing-standard) infinite;
     }
   }
 
@@ -350,8 +350,8 @@
   &__market-skeleton-chip {
     width: min(190px, 52%);
     height: 22px;
-    border-radius: $size-radius-full;
-    margin-top: $size-gap-1;
+    border-radius: var(--bf-radius-pill);
+    margin-top: var(--bf-space-1);
   }
 
   &__market-skeleton-btn {
@@ -370,16 +370,17 @@
     &__market-item-head {
       flex-direction: column;
       align-items: flex-start;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     &__market-item-action {
       justify-content: flex-start;
       flex-wrap: wrap;
 
-      [data-bf-component='button'] {
-        width: 100%;
-      }
+    }
+
+    &__market-action-button {
+      width: 100%;
     }
 
     &__market-skeleton-main {
@@ -395,8 +396,8 @@
 @container config-panel (max-width: 460px) {
   .bitfun-skills-config {
     &__market-item-body {
-      padding: $size-gap-3 $size-gap-3 $size-gap-3 $size-gap-4;
-      gap: $size-gap-3;
+      padding: var(--bf-space-3) var(--bf-space-3) var(--bf-space-3) var(--bf-space-4);
+      gap: var(--bf-space-3);
     }
 
     &__market-item-name {
@@ -404,7 +405,7 @@
     }
 
     &__market-item-description {
-      margin-bottom: $size-gap-2;
+      margin-bottom: var(--bf-space-2);
       -webkit-line-clamp: 4;
     }
   }

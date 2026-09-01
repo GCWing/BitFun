@@ -1,8 +1,30 @@
-import { Button, Card, Icon, IconButton, Input, Modal, NumberInput, SearchField, Select, Switch, Textarea, Tooltip, ScrollArea, type ComboboxOption } from '@bitfun/ui';
+import {
+  Button,
+  Card,
+  Combobox,
+  Icon,
+  IconButton,
+  Input,
+  MultiSelect,
+  NumberInput,
+  SearchField,
+  Select,
+  Switch,
+  Textarea,
+  Tooltip,
+  ScrollArea,
+  type ComboboxOption,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Wifi, Loader, AlertTriangle, EyeOff, FolderOpen } from 'lucide-react';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -2112,24 +2134,6 @@ const ModelSettingsPage: React.FC = () => {
               ? t('providerSelection.noPresetModels')
               : null;
     const selectedModelValues = selectedModelDrafts.map(draft => draft.modelName);
-    const renderModelPickerValue = (option?: ComboboxOption | ComboboxOption[]) => {
-      const selectedOptions = Array.isArray(option) ? option : option ? [option] : [];
-
-      if (selectedOptions.length === 0) {
-        return <span>{t('providerSelection.selectModel')}</span>;
-      }
-      const summaryText = selectedOptions
-        .map(item => String(item.label))
-        .join(', ');
-
-      return (
-        <span className="bitfun-model-settings__model-picker-value">
-          <span className="bitfun-model-settings__model-picker-value-text">
-            {summaryText}
-          </span>
-        </span>
-      );
-    };
     const apiKeyVisibilityLabel = showApiKey ? tComponents('hide') : tComponents('show');
     const apiKeySuffix = (
       <button
@@ -2284,27 +2288,12 @@ const ModelSettingsPage: React.FC = () => {
                   <div className="bitfun-model-settings__selected-model-grid">
                     <div className="bitfun-model-settings__selected-model-field">
                       <span>{t('category.label')}</span>
-                      <LocalizedCombobox
+                      <Combobox
                         value={draft.category}
                         onValueChange={(value) => updateModelDraft(draft.modelName, { category: value as ModelCategory })}
                         options={categoryOptions}
                         size="sm"
                         className="bitfun-model-settings__selected-model-category-select"
-                        dropdownClassName="bitfun-model-settings__selected-model-category-dropdown"
-                        matchTriggerWidth={false}
-                        renderValue={(option) => {
-                          if (!option || Array.isArray(option)) {
-                            return null;
-                          }
-
-                          const compactLabel = categoryCompactLabels[option.value as ModelCategory] ?? option.label;
-
-                          return (
-                            <span>
-                              <span>{compactLabel}</span>
-                            </span>
-                          );
-                        }}
                       />
                     </div>
                     <div className="bitfun-model-settings__selected-model-field">
@@ -2322,12 +2311,13 @@ const ModelSettingsPage: React.FC = () => {
                         </Tooltip>
                       </span>
                       <NumberInput
+                        className="bitfun-model-settings__selected-model-context-input"
                         value={draft.contextWindow}
-                        onChange={(value) => updateModelDraft(draft.modelName, { contextWindow: value })}
+                        onValueChange={(value) => updateModelDraft(draft.modelName, { contextWindow: value })}
                         min={32000}
                         max={2000000}
                         step={1000}
-                        size="small"
+                        size="sm"
                         disableWheel
                       />
                     </div>
@@ -2382,6 +2372,7 @@ const ModelSettingsPage: React.FC = () => {
       { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
       { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
       { value: 'subscription:grok', label: t('subscriptionAuth.options.grok') },
+      { value: 'subscription:hermes', label: t('subscriptionAuth.options.hermes') },
       { value: 'subscription:opencode:zen', label: t('subscriptionAuth.options.opencodeZen') },
       { value: 'subscription:opencode:go', label: t('subscriptionAuth.options.opencodeGo') },
     ];
@@ -2491,7 +2482,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
                   <div className="bitfun-model-settings__control-stack">
                     {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
-                      <LocalizedCombobox
+                      <Combobox
                         value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
                         onValueChange={(value) => {
                           const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
@@ -2559,27 +2550,19 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <LocalizedCombobox
+                      <MultiSelect
                         data-testid="settings-model-select"
-                        triggerTestId="settings-model-select-btn"
-                        dropdownTestId="settings-model-select-menu"
                         value={selectedModelValues}
                         onValueChange={(value) => {
-                          const nextModelNames = Array.isArray(value) ? value.map(item => String(item)) : [String(value)];
+                          const nextModelNames = value.map(item => String(item));
                           syncSelectedModelDrafts(nextModelNames, editingConfig);
                         }}
                         placeholder={t('providerSelection.selectModel')}
                         options={availableModelOptions}
-                        searchable
-                        multiple
                         loading={isFetchingRemoteModels}
-                        emptyText={t('providerSelection.noPresetModels')}
-                        searchPlaceholder={t('providerSelection.inputModelName')}
-                        allowCustomValue
-                        customValueHint={t('providerSelection.addSearchedModel')}
+                        onCreateValue={value => value}
                         size="sm"
                         onOpenChange={handleModelSelectionOpenChange}
-                        renderValue={renderModelPickerValue}
                       />
                     </div>
                     <div className="bitfun-model-settings__manual-model-entry">
@@ -2596,7 +2579,7 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         size="sm"
                       />
-                      <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
+                      <Button className="bitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2676,29 +2659,35 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <LocalizedCombobox
-                        data-testid="settings-model-select"
-                        triggerTestId="settings-model-select-btn"
-                        dropdownTestId="settings-model-select-menu"
-                        value={editingConfig.id ? (selectedModelValues[0] || '') : selectedModelValues}
-                        onValueChange={(value) => {
-                          const nextModelNames = Array.isArray(value)
-                            ? value.map(item => String(item))
-                            : [String(value)];
-                          syncSelectedModelDrafts(nextModelNames, editingConfig, !!editingConfig.id);
-                        }}
-                        placeholder="glm-5.2"
-                        options={availableModelOptions}
-                        searchable
-                        multiple={!editingConfig.id}
-                        loading={isFetchingRemoteModels}
-                        emptyText={t('providerSelection.noPresetModels')}
-                        searchPlaceholder={t('providerSelection.inputModelName')}
-                        allowCustomValue
-                        customValueHint={t('providerSelection.addSearchedModel')}
-                        size="sm"
-                        onOpenChange={handleModelSelectionOpenChange}
-                      />
+                      {editingConfig.id ? (
+                        <Combobox
+                          data-testid="settings-model-select"
+                          value={selectedModelValues[0] || ''}
+                          onValueChange={(value) => {
+                            syncSelectedModelDrafts([String(value)], editingConfig, true);
+                          }}
+                          placeholder="glm-5.2"
+                          options={availableModelOptions}
+                          loading={isFetchingRemoteModels}
+                          onCreateValue={value => value}
+                          size="sm"
+                          onOpenChange={handleModelSelectionOpenChange}
+                        />
+                      ) : (
+                        <MultiSelect
+                          data-testid="settings-model-select"
+                          value={selectedModelValues}
+                          onValueChange={(value) => {
+                            syncSelectedModelDrafts(value.map(item => String(item)), editingConfig, false);
+                          }}
+                          placeholder="glm-5.2"
+                          options={availableModelOptions}
+                          loading={isFetchingRemoteModels}
+                          onCreateValue={value => value}
+                          size="sm"
+                          onOpenChange={handleModelSelectionOpenChange}
+                        />
+                      )}
                     </div>
                     <div className="bitfun-model-settings__manual-model-entry">
                       <Input
@@ -2714,7 +2703,7 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         size="sm"
                       />
-                      <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
+                      <Button className="bitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2734,7 +2723,7 @@ const ModelSettingsPage: React.FC = () => {
             title={t('advancedSettings.title')}
             className="bitfun-model-settings__edit-section"
           >
-            <ConfigPageRow label={t('advancedSettings.title')} align="center">
+            <ConfigPageRow className="bitfun-model-settings__toggle-row" label={t('advancedSettings.title')} align="center">
               <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
             </ConfigPageRow>
 
@@ -3291,6 +3280,18 @@ const ModelSettingsPage: React.FC = () => {
                             : 'subscriptionAuth.login')}
                         </Button>
                       )}
+                      {account.management_url && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={anyLoginInProgress}
+                          onClick={() => void handleOpenSubscriptionAuthorization(
+                            account.management_url!,
+                          )}
+                        >
+                          {t('subscriptionAuth.manageSubscription')}
+                        </Button>
+                      )}
                       {isLoggingIn && (
                         <Button
                           size="sm"
@@ -3589,12 +3590,18 @@ const ModelSettingsPage: React.FC = () => {
         </ConfigPageSection>
       </ConfigPageContent>
 
-      <Modal
-        isOpen={showModelsDevDetails}
-        onClose={() => setShowModelsDevDetails(false)}
-        title={t('modelsDevCatalog.detailsTitle')}
-        size="small"
+      <Dialog
+        open={showModelsDevDetails}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setShowModelsDevDetails(false); }}
+        size="sm"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('modelsDevCatalog.detailsTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         <div className="bitfun-model-settings__catalog-details">
           <ConfigPageRow label={t('modelsDevCatalog.activeSource')} align="center">
             <span className="bitfun-model-settings__catalog-status-value">{modelsDevSourceLabel}</span>
@@ -3668,34 +3675,22 @@ const ModelSettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </Modal>
+              </DialogBody>
+      </Dialog>
 
-      <Modal
-        isOpen={!!subscriptionLogoutRequest}
-        onClose={() => setSubscriptionLogoutRequest(null)}
-        title={t('subscriptionAuth.logoutConfirmTitle')}
-        size="small"
-        closeOnOverlayClick={false}
-        footer={(
-          <>
-            <Button
-              size="sm"
-              variant="fill"
-              onClick={() => setSubscriptionLogoutRequest(null)}
-            >
-              {t('subscriptionAuth.cancel')}
-            </Button>
-            <Button
-              size="sm"
-              variant="fill"
-              tone="danger"
-              onClick={() => void confirmSubscriptionLogout()}
-            >
-              {t('subscriptionAuth.confirmLogout')}
-            </Button>
-          </>
-        )}
+      <Dialog
+        open={!!subscriptionLogoutRequest}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setSubscriptionLogoutRequest(null); }}
+        size="sm"
+        closeOnPointerOutside={false}
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('subscriptionAuth.logoutConfirmTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         <div className="bitfun-model-settings__subscription-logout-confirm" data-bf-component="model-settings" data-bf-part="logoutConfirm">
           <p>
             {subscriptionLogoutRequest?.affectedModels.length
@@ -3715,12 +3710,41 @@ const ModelSettingsPage: React.FC = () => {
           )}
           <p>{t('subscriptionAuth.logoutConsequence')}</p>
         </div>
-      </Modal>
+              </DialogBody>
+        <DialogFooter>{(
+          <>
+            <Button
+              size="sm"
+              variant="fill"
+              onClick={() => setSubscriptionLogoutRequest(null)}
+            >
+              {t('subscriptionAuth.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              variant="fill"
+              tone="danger"
+              onClick={() => void confirmSubscriptionLogout()}
+            >
+              {t('subscriptionAuth.confirmLogout')}
+            </Button>
+          </>
+        )}</DialogFooter>
+      </Dialog>
 
-      <Modal
-        isOpen={isEditing && !!editingConfig}
-        onClose={reasoningPanelDraft ? () => setReasoningPanelDraftKey(null) : closeEditingModal}
-        title={reasoningPanelDraft
+      <Dialog
+        open={isEditing && !!editingConfig}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            if (reasoningPanelDraft) setReasoningPanelDraftKey(null);
+            else closeEditingModal();
+          }
+        }}
+        size="2xl"
+      >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{reasoningPanelDraft
           ? t('reasoningPresets.dialogTitle', {
               provider: editingConfig?.name?.trim()
                 || currentTemplate?.name
@@ -3732,18 +3756,11 @@ const ModelSettingsPage: React.FC = () => {
             ? t('editModel')
             : (getProviderInstanceId(editingConfig)
               ? t('editProvider')
-              : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
-        size="xxlarge"
-        contentLayout="flex"
-        footer={reasoningPanelDraft ? undefined : (
-          <>
-            <Button variant="fill" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
-            <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>
-              {t('actions.save')}
-            </Button>
-          </>
-        )}
-      >
+              : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         {reasoningPanelDraft ? (
           <ReasoningConfigPanel
             key={reasoningPanelDraft.key}
@@ -3769,7 +3786,16 @@ const ModelSettingsPage: React.FC = () => {
             }}
           />
         ) : renderEditingForm()}
-      </Modal>
+              </DialogBody>
+        <DialogFooter>{reasoningPanelDraft ? undefined : (
+          <>
+            <Button variant="fill" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
+            <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>
+              {t('actions.save')}
+            </Button>
+          </>
+        )}</DialogFooter>
+      </Dialog>
     </ConfigPageLayout>
   );
 };
