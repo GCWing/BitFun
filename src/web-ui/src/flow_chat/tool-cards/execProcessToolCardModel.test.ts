@@ -25,7 +25,13 @@ function t(key: string, options?: Record<string, unknown>): string {
   return template.replace(/{{(\w+)}}/g, (_, name) => String(options?.[name] ?? ''));
 }
 
-function writeStdinItem(result: unknown): FlowToolItem {
+function writeStdinItem(
+  result: unknown,
+  input: Record<string, unknown> = {
+    session_id: 42,
+    chars: '',
+  },
+): FlowToolItem {
   return {
     id: 'tool-writestdin-1',
     type: 'tool',
@@ -34,10 +40,7 @@ function writeStdinItem(result: unknown): FlowToolItem {
     timestamp: Date.now(),
     toolCall: {
       id: 'call-writestdin-1',
-      input: {
-        session_id: 42,
-        chars: '',
-      },
+      input,
     },
     toolResult: {
       success: true,
@@ -65,6 +68,17 @@ function execControlItem(input: Record<string, unknown>, result: unknown): FlowT
 }
 
 describe('buildWriteStdinCardModel', () => {
+  it('does not display the appended enter after the input text', () => {
+    const model = buildWriteStdinCardModel(writeStdinItem({}, {
+      session_id: 42,
+      chars: 'yes',
+      append_enter: true,
+    }), t);
+
+    expect(model.primaryText).toBe('yes');
+    expect(model.copyText).toBe('yes');
+  });
+
   it('surfaces session-not-found results as a completed notice', () => {
     const model = buildWriteStdinCardModel(writeStdinItem({
       status: 'session_not_found',
