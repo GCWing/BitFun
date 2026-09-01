@@ -1,9 +1,25 @@
-import { Button, ConfirmDialog, Icon, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  ConfirmDialog,
+  Icon,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, FolderSearch, Trash2, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
+import { FolderOpen, FolderSearch, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { InputDialog, PresenceBoundary, BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
+import { BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon } from '@/app/icons';
+import { InputDialog } from '@/app/components/InputDialog';
 
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -972,7 +988,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     ) : null}
                     {isDeletableAssistantWorkspace ? (
                       <MenuItem
-                        leading={<Trash2 size={13} />}
+                        leading={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                         tone="danger"
                         onClick={handleRequestDeleteAssistant}
                         disabled={isDeletingAssistant}
@@ -1008,8 +1024,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         </div>
 
         <ConfirmDialog
-          isOpen={deleteDialogOpen}
-          onClose={() => setDeleteDialogOpen(false)}
+          open={deleteDialogOpen}
+          onOpenChange={() => setDeleteDialogOpen(false)}
           onConfirm={() => { void handleConfirmDeleteAssistant(); }}
           title={t('nav.workspaces.deleteAssistantDialog.title', { name: workspaceDisplayName })}
           message={t('nav.workspaces.deleteAssistantDialog.message')}
@@ -1018,8 +1034,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           confirmDanger
         />
         <ConfirmDialog
-          isOpen={resetDialogOpen}
-          onClose={() => setResetDialogOpen(false)}
+          open={resetDialogOpen}
+          onOpenChange={() => setResetDialogOpen(false)}
           onConfirm={() => { void handleConfirmResetWorkspace(); }}
           title={t('nav.workspaces.resetWorkspaceDialog.title', { name: workspaceDisplayName })}
           message={t('nav.workspaces.resetWorkspaceDialog.message')}
@@ -1028,7 +1044,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           confirmDanger
           preview={`${t('nav.workspaces.resetWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
         />
-        <PresenceBoundary active={scheduledJobsModalOpen}>
+        <RetainedMountBoundary present={scheduledJobsModalOpen}>
           <Suspense fallback={null}>
             <ScheduledJobsModal
               isOpen={scheduledJobsModalOpen}
@@ -1044,8 +1060,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               targetDescription={workspace.rootPath}
             />
           </Suspense>
-        </PresenceBoundary>
-        <PresenceBoundary active={projectPermissionsDialogOpen}>
+        </RetainedMountBoundary>
+        <RetainedMountBoundary present={projectPermissionsDialogOpen}>
           <Suspense fallback={null}>
             <WorkspaceProjectPermissionsDialog
               workspace={workspace}
@@ -1053,8 +1069,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               onClose={() => setProjectPermissionsDialogOpen(false)}
             />
           </Suspense>
-        </PresenceBoundary>
-        <PresenceBoundary active={portForwardDialogOpen}>
+        </RetainedMountBoundary>
+        <RetainedMountBoundary present={portForwardDialogOpen}>
           <Suspense fallback={null}>
             {portForwardConnectionId ? (
               <PortForwardDialog
@@ -1065,7 +1081,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               />
             ) : null}
           </Suspense>
-        </PresenceBoundary>
+        </RetainedMountBoundary>
         
       </div>
     );
@@ -1187,14 +1203,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       data-workspace-id={workspace.id}
                     />
                   </Tooltip>
-                  <Modal
-                    isOpen={searchIndexModalOpen}
-                    onClose={() => setSearchIndexModalOpen(false)}
-                    title={tFiles('search.index.indicator.label')}
-                    size="small"
-                    contentPadding="lg"
-                    contentClassName="bitfun-nav-panel__workspace-index-modal-content"
+                  <Dialog
+                    open={searchIndexModalOpen}
+                    onOpenChange={(nextOpen) => { if (!nextOpen) setSearchIndexModalOpen(false); }}
+                    size="sm"
                   >
+                    <DialogHeader>
+                      <DialogHeading>
+                        <DialogTitle>{tFiles('search.index.indicator.label')}</DialogTitle>
+                      </DialogHeading>
+                      <DialogClose />
+                    </DialogHeader>
+                    <DialogBody>
+                      <div className="bitfun-nav-panel__workspace-index-modal-content">
                     <div className={`bitfun-nav-panel__workspace-index-tooltip is-${searchIndexIndicator.tone}`} data-bf-component="workspace-item" data-bf-part="indexPanel">
                       <div className="bitfun-nav-panel__workspace-index-tooltip-header">
                         <div className="bitfun-nav-panel__workspace-index-tooltip-heading">
@@ -1263,6 +1284,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       {canRebuildSearchIndex ? (
                         <div className="bitfun-nav-panel__workspace-index-tooltip-actions">
                           <Button
+                            className="bitfun-nav-panel__workspace-index-tooltip-action"
                             size="sm"
                             variant="outline"
                             onClick={() => {
@@ -1281,7 +1303,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                         </div>
                       ) : null}
                     </div>
-                  </Modal>
+                                        </div>
+                                        </DialogBody>
+                  </Dialog>
                 </>
               )}
             </div>
@@ -1478,7 +1502,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         validator={validateWorkspaceName}
         required={false}
       />
-      <PresenceBoundary active={relatedPathsDialogOpen}>
+      <RetainedMountBoundary present={relatedPathsDialogOpen}>
         <Suspense fallback={null}>
           <WorkspaceRelatedPathsDialog
             workspace={workspace}
@@ -1486,8 +1510,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             onClose={() => setRelatedPathsDialogOpen(false)}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={projectPermissionsDialogOpen}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={projectPermissionsDialogOpen}>
         <Suspense fallback={null}>
           <WorkspaceProjectPermissionsDialog
             workspace={workspace}
@@ -1495,8 +1519,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             onClose={() => setProjectPermissionsDialogOpen(false)}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={portForwardDialogOpen}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={portForwardDialogOpen}>
         <Suspense fallback={null}>
           {portForwardConnectionId ? (
             <PortForwardDialog
@@ -1507,9 +1531,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             />
           ) : null}
         </Suspense>
-      </PresenceBoundary>
+      </RetainedMountBoundary>
       
-      <PresenceBoundary active={sessionBatchModalOpen}>
+      <RetainedMountBoundary present={sessionBatchModalOpen}>
         <Suspense fallback={null}>
           <WorkspaceSessionBatchModal
             isOpen={sessionBatchModalOpen}
@@ -1520,8 +1544,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={scheduledJobsModalOpen}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={scheduledJobsModalOpen}>
         <Suspense fallback={null}>
           <ScheduledJobsModal
             isOpen={scheduledJobsModalOpen}
@@ -1537,7 +1561,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             targetDescription={workspace.rootPath}
           />
         </Suspense>
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </div>
   );
 };

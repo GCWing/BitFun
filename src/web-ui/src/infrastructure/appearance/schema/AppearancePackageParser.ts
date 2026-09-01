@@ -6,6 +6,7 @@ import type {
   StoredAppearanceAsset,
   StoredAppearancePackage,
 } from '../types';
+import { APPEARANCE_SCHEMA_VERSION } from '../types';
 
 const MAX_ARCHIVE_BYTES = 96 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 128 * 1024 * 1024;
@@ -160,9 +161,24 @@ export class AppearancePackageParser {
       };
     }
 
+    const canonicalManifest = `${JSON.stringify(manifest, null, 2)}\n`;
+    if (new TextEncoder().encode(canonicalManifest).byteLength > MAX_MANIFEST_BYTES) {
+      throw new Error('Migrated Appearance manifest is too large');
+    }
+    zip.file(MANIFEST_PATH, canonicalManifest);
+    const canonicalArchive = await zip.generateAsync({
+      type: 'arraybuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 9 },
+    });
+    if (canonicalArchive.byteLength > MAX_ARCHIVE_BYTES) {
+      throw new Error('Migrated Appearance archive is too large');
+    }
+
     return {
       manifest,
-      archive: source.slice(0),
+      archive: canonicalArchive,
+      archiveSchemaVersion: APPEARANCE_SCHEMA_VERSION,
       assets,
       importedAt: new Date().toISOString(),
     };

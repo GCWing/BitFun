@@ -500,6 +500,8 @@ export function runManifestParserSelfTest({
         'bitfun-runtime-ports/runtime-event-port',
         'bitfun-runtime-ports/workspace-ports',
         'dep:dunce',
+        // WorkspaceFS metadata restoration is implemented by the local provider.
+        'dep:filetime',
         'process-runtime',
         'tokio/fs',
         'tokio/io-util',

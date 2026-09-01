@@ -28,11 +28,11 @@
 // Subagent container for items under the same parent task.
 .subagent-items-container {
   // Keep the expanded body on the card edge while preserving internal spacing.
-  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+  padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
 
   // Continue the task card border on left/right/bottom; top border is hidden.
-  background: var(--bf-appearance-token-color-bg-scene);
-  border: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-color-surface-scene);
+  border: 1px solid var(--bf-color-border-default);
   border-top: none;
   // Top corners are square to merge with the header card above.
   border-radius: 0 0 8px 8px;
@@ -76,13 +76,13 @@
     gap: 8px;
     padding: 6px 0;
     font-size: var(--bf-type-flow-control-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   .subagent-text-block__expand-btn {
     background: none;
     border: none;
-    color: var(--bf-appearance-token-flowchat-link-color);
+    color: var(--bf-color-link-default);
     cursor: pointer;
     font-size: var(--bf-type-flow-control-font-size);
     padding: 0;
@@ -90,33 +90,5 @@
     &:hover {
       text-decoration: underline;
     }
-  }
-}
-
-// Keep the legacy subagent-item class for compatibility.
-.subagent-item {
-  display: block;
-
-  &.subagent-item--collapsed {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transform: translateY(-2px);
-    transition:
-      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.18s ease,
-      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-  }
-
-  &.subagent-item--expanded {
-    max-height: 520px;
-    opacity: 1;
-    overflow: visible;
-    transform: translateY(0);
-    transition:
-      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.18s ease,
-      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }

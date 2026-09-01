@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  Check,
-  Clipboard,
-  Download,
-  RotateCcw,
-  Save,
-  Search,
-} from "lucide-react";
+import { themes } from "@bitfun/theme-bitfun";
+import { Icon } from "@bitfun/ui";
+import { Clipboard, RotateCcw, Save } from "lucide-react";
 import { componentRegistry } from "@bitfun/ui/registry";
 import { useI18n, type MessageKey } from "../i18n";
 import {
@@ -142,7 +137,9 @@ function TokenValueControl({
           className="token-color-picker"
           onChange={(event) => onChange(event.target.value)}
           type="color"
-          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#000000"}
+          value={/^#[0-9a-f]{6}$/i.test(value)
+            ? value
+            : String(themes.light["color.content.onLight"])}
         />
       )}
       <input
@@ -374,7 +371,7 @@ export function TokenWorkbench({
               {t("tokens.reset")}
             </button>
             <button disabled={changes.length === 0} onClick={exportDraft} type="button">
-              <Download aria-hidden="true" size={14} />
+              <Icon name="arrow-down" size="sm" aria-hidden="true" />
               {t("tokens.export")}
             </button>
             <button
@@ -409,7 +406,7 @@ export function TokenWorkbench({
         <div className="token-catalog-panel">
           <div className="token-tools">
             <label className="token-search-field">
-              <Search aria-hidden="true" size={15} />
+              <Icon name="search" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
               <input
                 aria-label={t("tokens.searchLabel")}
                 onChange={(event) => setQuery(event.target.value)}
@@ -507,7 +504,7 @@ export function TokenWorkbench({
                 </div>
                 {selectedEdited && (
                   <span className="edited-indicator">
-                    <Check aria-hidden="true" size={13} />{t("tokens.edited")}
+                    <Icon name="check-line" size="lg" aria-hidden="true" style={{ width: 13, height: 13 }} />{t("tokens.edited")}
                   </span>
                 )}
               </div>
@@ -540,7 +537,7 @@ export function TokenWorkbench({
                 >
                   <code>{selectedToken.cssVariable}</code>
                   {copyStatus === "variable"
-                    ? <Check aria-hidden="true" size={15} />
+                    ? <Icon name="check-line" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
                     : <Clipboard aria-hidden="true" size={15} />}
                 </button>
               </div>

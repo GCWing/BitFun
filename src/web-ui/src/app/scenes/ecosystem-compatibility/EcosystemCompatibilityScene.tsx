@@ -1,19 +1,7 @@
 import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import {
-  Bot,
-  Brain,
-  CircleUserRound,
-  MessageSquarePlus,
-  Network,
-  Package,
-  PawPrint,
-  RefreshCw,
-  Server,
-  Webhook,
-  Wrench,
-} from 'lucide-react';
+import { Bot, CircleUserRound, MessageSquarePlus, Network, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -89,7 +77,7 @@ const IMPORT_ITEM_ICONS: Record<EcosystemImportItemKind, LucideIcon> = {
   skill: Package,
   mcp: Server,
   hook: Webhook,
-  memory: Brain,
+  memory: catalogLucide('thinking'),
   plugin: catalogLucide('extension'),
   pet: PawPrint,
 };
@@ -120,7 +108,7 @@ const ACP_SUBAGENT_PROFILE_MAX_LENGTH = 320;
 function OwnerSurfaceLoading({ label }: { label: string }) {
   return (
     <div className="ecosystem-compatibility__owner-loading" role="status">
-      <RefreshCw size={15} aria-hidden="true" />
+      <Icon name="refresh" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
       <span>{label}</span>
     </div>
   );
@@ -515,6 +503,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                     </span>
                   ) : (
                     <Button
+                      className="ecosystem-compatibility__import-button"
                       size="sm"
                       variant="outline"
                       disabled={!ready || importing}
@@ -546,6 +535,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <p>{t('run.description', { name: selectedRuntime.spec.name })}</p>
           </div>
           <Button
+            className="ecosystem-compatibility__section-action"
             size="sm"
             variant="outline"
             onClick={() => setOwnerSurface(ownerSurface === 'acp' ? null : 'acp')}
@@ -597,6 +587,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                         <p>{t('run.session.description', { name: displayName })}</p>
                       </div>
                       <Button
+                        className="ecosystem-compatibility__runtime-mode-action"
                         size="sm"
                         variant="fill"
                         onClick={() => handleStartAcpClient(client)}
@@ -622,6 +613,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                           : t('run.subagent.bestForFallback')}</small>
                       </div>
                       <Button
+                        className="ecosystem-compatibility__runtime-mode-action"
                         size="sm"
                         variant="outline"
                         disabled={!profileSupported}
@@ -878,6 +870,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <span>{t('header.checksLabel')}</span>
             <strong title={headerCheckSummary}>{headerCheckSummary}</strong>
             <Button
+              className="ecosystem-compatibility__header-action"
               size="sm"
               variant="outline"
               onClick={() => setOwnerSurface(
@@ -898,7 +891,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
         >
           {loading ? (
             <div className="ecosystem-compatibility__loading" role="status">
-              <RefreshCw size={16} aria-hidden="true" />
+              <Icon name="refresh" size="md" aria-hidden="true" />
               {t('loading')}
             </div>
           ) : null}
@@ -909,7 +902,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                 sources: loadIssues.includes('externalSources') ? t('loadAreas.externalSources') : '',
                 acp: loadIssues.includes('acpClients') ? t('loadAreas.acpClients') : '',
               })}</span>
-              <Button variant="outline" size="sm" onClick={() => void loadCompatibility(true)}>
+              <Button className="ecosystem-compatibility__load-retry" variant="outline" size="sm" onClick={() => void loadCompatibility(true)}>
                 {t('retry')}
               </Button>
             </div>

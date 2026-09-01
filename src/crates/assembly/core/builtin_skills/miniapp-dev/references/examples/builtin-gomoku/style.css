@@ -18,23 +18,23 @@ body, html { margin: 0; padding: 0; height: 100%; }
 [hidden] { display: none !important; }
 
 :root {
-  --g-bg:           var(--bitfun-bg, #121214);
-  --g-bg-secondary: var(--bitfun-bg-secondary, #18181a);
-  --g-bg-elevated:  var(--bitfun-bg-elevated, #1f1f22);
+  --g-bg:           var(--bitfun-bg);
+  --g-bg-secondary: var(--bitfun-bg-secondary);
+  --g-bg-elevated:  var(--bitfun-bg-elevated);
 
-  --g-text:         var(--bitfun-text, #e8e8e8);
-  --g-text-soft:    var(--bitfun-text-secondary, #b0b0b0);
-  --g-text-mute:    var(--bitfun-text-muted, #858585);
+  --g-text:         var(--bitfun-text);
+  --g-text-soft:    var(--bitfun-text-secondary);
+  --g-text-mute:    var(--bitfun-text-muted);
 
-  --g-border:        var(--bitfun-border, #2e2e32);
-  --g-border-subtle: var(--bitfun-border-subtle, #27272a);
+  --g-border:        var(--bitfun-border);
+  --g-border-subtle: var(--bitfun-border-subtle);
 
-  --g-element:       var(--bitfun-element-bg, #27272a);
-  --g-element-hover: var(--bitfun-element-hover, #3f3f46);
+  --g-element:       var(--bitfun-element-bg);
+  --g-element-hover: var(--bitfun-element-hover);
 
-  --g-accent:        var(--bitfun-accent, #60a5fa);
-  --g-accent-hover:  var(--bitfun-accent-hover, #3b82f6);
-  --g-accent-soft:   color-mix(in srgb, var(--bitfun-accent, #60a5fa) 16%, transparent);
+  --g-accent:        var(--bitfun-accent);
+  --g-accent-hover:  var(--bitfun-accent-hover);
+  --g-accent-soft:   color-mix(in srgb, var(--bitfun-accent) 16%, transparent);
 
   /* Stones — dark theme defaults.
    * Black stones use a lighter rim so they read against the dark board surface;
@@ -44,12 +44,10 @@ body, html { margin: 0; padding: 0; height: 100%; }
   --g-stone-white:        #f1f1f3;
   --g-stone-white-stroke: rgba(0, 0, 0, 0.35);
 
-  --g-radius:    var(--bitfun-radius-lg, 8px);
-  --g-radius-sm: var(--bitfun-radius, 6px);
+  --g-radius:    var(--bitfun-radius-lg);
+  --g-radius-sm: var(--bitfun-radius);
 
-  --g-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "PingFang SC",
-            "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
-            "Helvetica Neue", Helvetica, Arial, sans-serif);
+  --g-sans: var(--bitfun-font-sans);
 
   --g-dur: 160ms;
   --g-ease: cubic-bezier(.2, .8, .2, 1);
@@ -422,7 +420,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .btn--primary {
   background: var(--g-accent);
-  color: #fff;
+  color: var(--bitfun-text-on-accent);
   border-color: var(--g-accent);
   flex: initial;
   padding: 8px 18px;
@@ -503,7 +501,7 @@ button { font-family: inherit; cursor: pointer; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--bitfun-scrollbar-thumb, rgba(255, 255, 255, 0.12));
+  background: var(--bitfun-scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {

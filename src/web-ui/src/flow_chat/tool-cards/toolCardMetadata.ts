@@ -89,7 +89,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Read file contents',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
+    primaryColor: 'var(--bf-color-accent-hover)'
   },
   'Write': {
     toolName: 'Write',
@@ -99,7 +99,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-appearance-token-color-success)'
+    primaryColor: 'var(--bf-color-status-success-content)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -109,7 +109,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Edit file contents',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-appearance-token-color-warning)'
+    primaryColor: 'var(--bf-color-status-warning-content)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -119,7 +119,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Delete a file',
     displayMode: 'detailed',
-    primaryColor: 'var(--bf-appearance-token-color-error)'
+    primaryColor: 'var(--bf-color-status-danger-content)'
   },
   'LS': {
     toolName: 'LS',
@@ -129,7 +129,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'List directory contents',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-appearance-token-color-indigo-500)'
+    primaryColor: 'var(--bf-domain-tool-search)'
   },
 
   // Search tools
@@ -314,7 +314,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Create and manage project plans',
     displayMode: 'detailed',
-    primaryColor: 'var(--bf-appearance-token-color-warning)'
+    primaryColor: 'var(--bf-color-status-warning-content)'
   },
 
   'SessionControl': {
@@ -325,7 +325,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Create, delete, or list sessions',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
+    primaryColor: 'var(--bf-color-accent-hover)'
   },
 
   'SessionMessage': {
@@ -382,7 +382,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Interrupt or kill a running command process',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-appearance-token-color-error)'
+    primaryColor: 'var(--bf-color-status-danger-content)'
   },
 
   // MiniApp tool
@@ -424,7 +424,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Submit an Appearance package to the Skin market for review',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
+    primaryColor: 'var(--bf-color-accent-hover)'
   },
   'PageDeploy': {
     toolName: 'PageDeploy',
@@ -465,7 +465,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Screen capture, mouse/keyboard, and accessibility control of the desktop',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
+    primaryColor: 'var(--bf-color-accent-hover)'
   },
 
   'view_image': {
@@ -476,7 +476,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: '',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
+    primaryColor: 'var(--bf-color-accent-hover)'
   },
 
   // BitFun Canvas tools
@@ -563,7 +563,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: `Run ${toolName} tool`,
     displayMode: 'standard',
-    primaryColor: 'var(--bf-appearance-token-color-text-muted)'
+    primaryColor: 'var(--bf-color-content-muted)'
   };
 }
 

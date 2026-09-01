@@ -1,25 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bf-design-system-root data-color-scheme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Review frontend update</title>
+    <link rel="stylesheet" href="/bootstrap-theme.css" />
     <style>
       :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       * { box-sizing: border-box; }
-      body { margin: 0; background: #17171a; color: #f3f3f5; }
+      body { margin: 0; background: var(--bf-color-surface-canvas); color: var(--bf-color-content-primary); }
       main { padding: 26px 28px 24px; }
-      .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #a9a9b2; font-size: 12px; }
-      .indicator { width: 8px; height: 8px; border-radius: 50%; background: #8b75ff; box-shadow: 0 0 0 4px rgb(139 117 255 / 14%); }
+      .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--bf-color-content-secondary); font-size: 12px; }
+      .indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--bf-color-accent-secondary); box-shadow: 0 0 0 4px var(--bf-color-accent-secondary-surface-strong); }
       .indicator.loading { animation: pulse 1.1s ease-in-out infinite; }
       h1 { margin: 0 0 9px; font-size: 20px; letter-spacing: -.01em; }
-      p { min-height: 48px; margin: 0 0 19px; color: #b2b2bb; line-height: 1.5; }
-      strong { color: #fff; font-variant-numeric: tabular-nums; }
+      p { min-height: 48px; margin: 0 0 19px; color: var(--bf-color-content-secondary); line-height: 1.5; }
+      strong { color: var(--bf-color-content-primary); font-variant-numeric: tabular-nums; }
       .actions { display: flex; gap: 10px; justify-content: flex-end; }
-      button { min-width: 94px; border: 1px solid #3c3c43; border-radius: 9px; padding: 9px 15px; background: #26262b; color: inherit; cursor: pointer; font: inherit; }
-      button.primary { border-color: #7657ff; background: #6547e8; }
+      button { min-width: 94px; border: 1px solid var(--bf-color-action-neutral-border); border-radius: 9px; padding: 9px 15px; background: var(--bf-color-action-neutral-surface); color: var(--bf-color-action-neutral-content); cursor: pointer; font: inherit; }
+      button.primary { border-color: var(--bf-color-accent-border); background: var(--bf-color-action-primary-background); color: var(--bf-color-action-primary-content); }
       button:disabled { opacity: .48; cursor: wait; }
-      #error { min-height: 18px; margin-top: 11px; color: #ff9292; font-size: 12px; }
+      #error { min-height: 18px; margin-top: 11px; color: var(--bf-color-status-danger-content); font-size: 12px; }
       @keyframes pulse { 0%, 100% { opacity: .4; transform: scale(.86); } 50% { opacity: 1; transform: scale(1); } }
       @media (prefers-reduced-motion: reduce) { .indicator.loading { animation: none; } }
     </style>

@@ -2,8 +2,7 @@ import { Button, NumberInput } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';
-import { ConfigPageLoading } from '@/component-library';
-import { ConfigPageRow, ConfigPageSection } from './common';
+import { ConfigLoadingState, ConfigPageRow, ConfigPageSection } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useNotification } from '@/shared/notification-system';
@@ -71,7 +70,7 @@ const ReviewCapacitySection: React.FC = () => {
     );
   }
 
-  if (loading) return <ConfigPageLoading text={t('loading')} />;
+  if (loading) return <ConfigLoadingState label={t('loading')} />;
 
   if (!team) {
     return (
@@ -94,11 +93,11 @@ const ReviewCapacitySection: React.FC = () => {
       >
         <NumberInput
           value={team.concurrencyPolicy.maxParallelInstances}
-          onChange={(value) => void updatePolicy('maxParallelInstances', value)}
+          onValueChange={(value) => void updatePolicy('maxParallelInstances', value)}
           min={1}
           max={2}
           step={1}
-          size="small"
+          size="sm"
           disabled={savingKey !== null}
         />
       </ConfigPageRow>
@@ -110,12 +109,12 @@ const ReviewCapacitySection: React.FC = () => {
       >
         <NumberInput
           value={team.concurrencyPolicy.maxQueueWaitSeconds}
-          onChange={(value) => void updatePolicy('maxQueueWaitSeconds', value)}
+          onValueChange={(value) => void updatePolicy('maxQueueWaitSeconds', value)}
           min={0}
           max={3600}
           step={60}
           unit="s"
-          size="small"
+          size="sm"
           disabled={savingKey !== null}
         />
       </ConfigPageRow>

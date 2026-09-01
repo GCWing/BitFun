@@ -1,117 +1,61 @@
-/*
- * The usage report is a single focused surface. Its dimensions are tuned to
- * the desktop reference at a 724 x 543 CSS viewport: 16px horizontal and 12px
- * vertical scene gutters leave a 692 x 519 dialog, while larger windows keep
- * the report at a comfortable 720 x 520 maximum.
- */
-/*
- * The Appearance runtime emits root-scoped generic Modal rules. Anchoring the
- * focused variant to the canonical overlay host keeps these product-specific
- * dimensions and paint above that generic contract without abandoning tokens.
- */
-#bitfun-appearance-overlay-host
-  > .session-usage-modal[data-bf-component='modal'][data-bf-part='overlay'] {
-  padding: 12px 16px;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
-    width: min(720px, 100%);
-    max-width: 720px;
-    height: min(520px, calc(100vh - 24px));
-    max-height: calc(100vh - 24px);
-  }
-
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-    > [data-bf-component='modal'][data-bf-part='headerShell'] {
-    border-bottom: 0;
-  }
-
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-    > [data-bf-component='modal'][data-bf-part='headerShell']
-    > [data-bf-component='modal'][data-bf-part='header'] {
-    padding: 22px 24px 8px;
-  }
-
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-    > [data-bf-component='modal'][data-bf-part='headerShell']
-    [data-bf-component='modal'][data-bf-part='titleGroup'] {
-    min-width: 0;
-  }
-
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-    > [data-bf-component='modal'][data-bf-part='headerShell']
-    [data-bf-component='modal'][data-bf-part='title'] {
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-font-size-3xl);
-    font-weight: var(--bf-font-weight-bold);
-    letter-spacing: var(--bf-letter-spacing-tight);
-    line-height: var(--bf-line-height-dense);
-  }
-
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-    > [data-bf-component='modal'][data-bf-part='content'] {
-    padding: 0 24px 16px;
-    overflow: hidden;
-    background: var(--bf-appearance-token-color-bg-secondary);
-  }
+.session-usage-dialog {
+  inline-size: min(720px, 100%);
+  block-size: min(520px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)));
+  max-block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
 }
 
-.session-usage-modal__content {
-  height: 100%;
-  min-height: 0;
+.session-usage-dialog__header {
+  padding: 22px 24px 8px;
+  border-block-end: 0;
+}
+
+.session-usage-dialog__heading {
+  min-inline-size: 0;
+}
+
+.session-usage-dialog__title {
+  color: var(--bf-color-content-primary);
+  font-size: var(--bf-font-size-3xl);
+  font-weight: var(--bf-font-weight-bold);
+  letter-spacing: var(--bf-letter-spacing-tight);
+  line-height: var(--bf-line-height-dense);
+}
+
+.session-usage-dialog__body {
+  min-block-size: 0;
+  padding: 0 24px 16px;
+  overflow: hidden;
+  background: var(--bf-color-surface-panel);
+}
+
+.session-usage-dialog__content {
+  display: flex;
+  min-block-size: 0;
+  flex: 1 1 auto;
 }
 
 @media (max-width: 640px) {
-  #bitfun-appearance-overlay-host
-    > .session-usage-modal[data-bf-component='modal'][data-bf-part='overlay'] {
-    padding: 10px 12px;
+  .session-usage-dialog {
+    block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
+  }
 
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
-      height: calc(100vh - 20px);
-      max-height: calc(100vh - 20px);
-    }
+  .session-usage-dialog__header {
+    padding: 18px 18px 9px;
+  }
 
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-      > [data-bf-component='modal'][data-bf-part='headerShell']
-      > [data-bf-component='modal'][data-bf-part='header'] {
-      padding: 18px 18px 9px;
-    }
-
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-      > [data-bf-component='modal'][data-bf-part='content'] {
-      padding: 0 18px 14px;
-      overflow-y: auto;
-    }
+  .session-usage-dialog__body {
+    padding: 0 18px 14px;
+    overflow-y: auto;
   }
 }
 
 @media (max-width: 420px) {
-  #bitfun-appearance-overlay-host
-    > .session-usage-modal[data-bf-component='modal'][data-bf-part='overlay'] {
-    padding: 8px;
+  .session-usage-dialog__header,
+  .session-usage-dialog__body {
+    padding-inline: 14px;
+  }
 
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
-      height: calc(100vh - 16px);
-      max-height: calc(100vh - 16px);
-    }
-
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-      > [data-bf-component='modal'][data-bf-part='headerShell']
-      > [data-bf-component='modal'][data-bf-part='header'] {
-      padding-inline: 14px;
-    }
-
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-      > [data-bf-component='modal'][data-bf-part='headerShell']
-      [data-bf-component='modal'][data-bf-part='title'] {
-      font-size: var(--bf-font-size-2xl);
-    }
-
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
-      > [data-bf-component='modal'][data-bf-part='content'] {
-      padding-inline: 14px;
-    }
+  .session-usage-dialog__title {
+    font-size: var(--bf-font-size-2xl);
   }
 }

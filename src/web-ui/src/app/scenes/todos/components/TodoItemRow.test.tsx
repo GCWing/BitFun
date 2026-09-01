@@ -15,7 +15,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactElement }) => children,
 }));
 

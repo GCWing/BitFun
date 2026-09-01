@@ -8,10 +8,10 @@
   box-sizing: border-box;
   width: min(100%, 900px);
   margin: 0 auto;
-  padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
+  padding: 0 var(--bf-control-flow-chat-content-padding-inline);
 
   @media (max-width: 768px) {
-    padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    padding: 0 var(--bf-control-flow-chat-content-padding-inline-mobile);
   }
 }
 
@@ -27,17 +27,17 @@
     align-items: center;
     gap: 4px;
     padding: 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-control-font-size);
     line-height: var(--bf-type-flow-support-line-height);
     cursor: pointer;
     user-select: none;
-    border-radius: var(--bf-appearance-token-size-radius-sm);
+    border-radius: var(--bf-radius-sm);
     transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
-    background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -79,11 +79,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-base);
+      background: var(--bf-color-border-default);
       border-radius: 2px;
 
       &:hover {
-        background: var(--bf-appearance-token-border-medium);
+        background: var(--bf-color-field-border-hover);
       }
     }
   }
@@ -117,8 +117,8 @@
     z-index: 3;
     background: linear-gradient(
       to bottom,
-      var(--bf-appearance-token-color-bg-scene) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 60%, transparent) 50%,
+      var(--bf-color-surface-scene) 0%,
+      color-mix(in srgb, var(--bf-color-surface-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }
@@ -136,8 +136,8 @@
     z-index: 3;
     background: linear-gradient(
       to top,
-      var(--bf-appearance-token-color-bg-scene) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 60%, transparent) 50%,
+      var(--bf-color-surface-scene) 0%,
+      color-mix(in srgb, var(--bf-color-surface-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }

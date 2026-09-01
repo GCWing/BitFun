@@ -50,13 +50,6 @@ export function bitfunCanvasRuntimeBundlePlugin(): Plugin {
       define: {
         'process.env.NODE_ENV': JSON.stringify('production'),
       },
-      resolve: {
-        alias: {
-          '@': path.resolve(webUiRoot, 'src'),
-          '@/component-library': path.resolve(webUiRoot, 'src/component-library'),
-          '@components': path.resolve(webUiRoot, 'src/component-library/components'),
-        },
-      },
       build: {
         write: false,
         cssCodeSplit: false,

@@ -49,6 +49,7 @@ import {
   AmbientToolCardHeader,
   AskUser,
   ChatComposer,
+  ChatComposerActionButton,
   ChatComposerQueue,
   ChatComposerQueueAttachmentBadge,
   ChatComposerQueueHeader,
@@ -162,22 +163,17 @@ function ChatComposerPreview({ interactive, state }: PreviewProps) {
               <span>deepseek-v4-pro</span>
               <small>high</small>
             </button>
-            <button
+            <ChatComposerActionButton
               aria-label="Voice input"
-              className="flow-chat-composer-preview__action"
               disabled={state === "disabled"}
-              type="button"
-            >
-              <Mic aria-hidden="true" />
-            </button>
-            <button
+              icon={<Mic aria-hidden="true" />}
+            />
+            <ChatComposerActionButton
               aria-label="Send"
-              className="flow-chat-composer-preview__action flow-chat-composer-preview__action--primary"
               disabled={state === "disabled"}
-              type="button"
-            >
-              <ArrowUp aria-hidden="true" />
-            </button>
+              icon={<ArrowUp aria-hidden="true" />}
+              variant="primary"
+            />
           </>
         )}
         layout={expanded ? "expanded" : "compact"}
@@ -220,14 +216,12 @@ function ChatComposerPreview({ interactive, state }: PreviewProps) {
           </ChatComposerQueue>
         ) : undefined}
         startActions={(
-          <button
+          <ChatComposerActionButton
             aria-label="Add context"
-            className="flow-chat-composer-preview__action flow-chat-composer-preview__action--fill"
             disabled={state === "disabled"}
-            type="button"
-          >
-            <Plus aria-hidden="true" />
-          </button>
+            icon={<Plus aria-hidden="true" />}
+            variant="fill"
+          />
         )}
       >
         <textarea
@@ -324,7 +318,7 @@ function FrameworkPreview({
             actions={actions}
             content={(
               <code className="flow-chat-tool-card-preview__command">
-                curl -s -o /dev/null -w "HTTP %&#123;http_code&#125;" https://openbitfun.com
+                {'curl -s -o /dev/null -w "HTTP %{http_code}" https://openbitfun.com'}
               </code>
             )}
             extra={(

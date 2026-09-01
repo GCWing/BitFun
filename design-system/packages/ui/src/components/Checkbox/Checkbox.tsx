@@ -9,25 +9,17 @@ import {
 import { classNames } from "../../internal/classNames";
 import styles from "./Checkbox.module.css";
 
-export type CheckboxSize = "sm" | "md" | "lg" | "small" | "medium" | "large";
+export type CheckboxSize = "sm" | "md" | "lg";
 
 export interface CheckboxProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "children" | "size" | "type"> {
   children?: ReactNode;
   description?: ReactNode;
-  error?: boolean;
   indeterminate?: boolean;
   invalid?: boolean;
   label?: ReactNode;
   onCheckedChange?: (checked: boolean) => void;
   size?: CheckboxSize;
-}
-
-function normalizeSize(size: CheckboxSize): "sm" | "md" | "lg" {
-  if (size === "small") return "sm";
-  if (size === "large") return "lg";
-  if (size === "medium") return "md";
-  return size;
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox({
@@ -37,7 +29,6 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   defaultChecked,
   description,
   disabled = false,
-  error = false,
   indeterminate = false,
   invalid = false,
   label,
@@ -53,7 +44,6 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
     if (inputRef.current) inputRef.current.indeterminate = indeterminate;
   }, [indeterminate]);
 
-  const resolvedInvalid = error || invalid;
   const hasContent = label !== undefined || description !== undefined || children !== undefined;
 
   return (
@@ -62,13 +52,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
       data-bf-component="checkbox"
       data-disabled={disabled ? "true" : "false"}
       data-indeterminate={indeterminate ? "true" : "false"}
-      data-invalid={resolvedInvalid ? "true" : "false"}
-      data-size={normalizeSize(size)}
+      data-invalid={invalid ? "true" : "false"}
+      data-size={size}
     >
       <span className={styles.control} data-bf-part="control">
         <input
           {...props}
-          aria-invalid={resolvedInvalid || undefined}
+          aria-invalid={invalid || undefined}
           checked={checked}
           className={styles.input}
           defaultChecked={defaultChecked}

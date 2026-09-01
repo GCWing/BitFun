@@ -125,7 +125,7 @@ function getMobileWebBuildMarkerPath(mobileWebDir) {
  * clean/install/build cycle can be skipped. Escape hatches:
  *   --force flag / BITFUN_MOBILE_WEB_FORCE_BUILD=1 env.
  */
-function getMobileWebRebuildPlan(mobileWebDir, force = false) {
+function getMobileWebRebuildPlan(mobileWebDir, force = false, rootDir = ROOT_DIR) {
   const fs = require('fs');
 
   if (force) {
@@ -145,6 +145,17 @@ function getMobileWebRebuildPlan(mobileWebDir, force = false) {
     path.join(mobileWebDir, 'index.html'),
     path.join(mobileWebDir, 'package.json'),
     path.join(mobileWebDir, 'tsconfig.json'),
+    path.join(rootDir, 'pnpm-lock.yaml'),
+    path.join(rootDir, 'pnpm-workspace.yaml'),
+    path.join(rootDir, 'design-system', 'package.json'),
+    path.join(rootDir, 'design-system', 'packages', 'design-tokens', 'package.json'),
+    path.join(rootDir, 'design-system', 'packages', 'design-tokens', 'scripts'),
+    path.join(rootDir, 'design-system', 'packages', 'design-tokens', 'src'),
+    path.join(rootDir, 'design-system', 'packages', 'theme-bitfun', 'package.json'),
+    path.join(rootDir, 'design-system', 'packages', 'theme-bitfun', 'scripts'),
+    path.join(rootDir, 'design-system', 'packages', 'theme-bitfun', 'src'),
+    path.join(rootDir, 'design-system', 'tooling', 'token-engine', 'package.json'),
+    path.join(rootDir, 'design-system', 'tooling', 'token-engine', 'src'),
   ];
   for (const entry of fs.readdirSync(mobileWebDir)) {
     if (entry.startsWith('vite.config.')) {
@@ -163,7 +174,7 @@ function getMobileWebRebuildPlan(mobileWebDir, force = false) {
   if (newestInput && newestInput.mtimeMs > markerMtimeMs) {
     return {
       shouldBuild: true,
-      reason: `mobile-web inputs changed since the last build (${path.relative(ROOT_DIR, newestInput.path)})`,
+      reason: `mobile-web inputs changed since the last build (${path.relative(rootDir, newestInput.path)})`,
     };
   }
 
@@ -262,4 +273,5 @@ if (require.main === module) {
 module.exports = {
   buildMobileWeb,
   cleanStaleMobileWebResources,
+  getMobileWebRebuildPlan,
 };

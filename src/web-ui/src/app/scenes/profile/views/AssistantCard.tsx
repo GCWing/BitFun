@@ -1,9 +1,6 @@
 import React from 'react';
 import { Button, Icon, IconButton, StatusPill, Tooltip } from '@bitfun/ui';
-import {
-  MessageSquarePlus,
-  Trash2,
-} from 'lucide-react';
+import { MessageSquarePlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
@@ -153,7 +150,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
                   aria-label={t('nursery.card.delete')}
                   loading={isDeleting}
                   disabled={isDeleting || isStartingSession || isSettingPrimary}
-                  icon={<Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />}
+                  icon={<Icon name="delete" size="sm" aria-hidden="true" />}
                 />
               </Tooltip>
             ) : null}

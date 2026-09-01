@@ -4,20 +4,20 @@
   align-items: flex-start;
   margin:
     8px
-    var(--bf-appearance-token-flowchat-content-inline-pad)
-    calc(var(--bf-appearance-token-flowchat-turn-gap) + 0.18rem)
-    var(--bf-appearance-token-flowchat-content-inline-pad);
+    var(--bf-control-flow-chat-content-padding-inline)
+    calc(var(--bf-control-flow-chat-turn-gap) + 0.18rem)
+    var(--bf-control-flow-chat-content-padding-inline);
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 45%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, var(--bf-appearance-token-color-bg-secondary));
-  color: var(--bf-appearance-token-color-text-primary);
+  background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, var(--bf-color-surface-panel));
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-xs);
   line-height: var(--bf-line-height-support);
 
   &--warning {
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 45%, transparent);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-color-bg-secondary));
+    border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 45%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, var(--bf-color-surface-panel));
   }
 }
 
@@ -25,10 +25,10 @@
   display: inline-flex;
   flex: 0 0 auto;
   margin-top: 4px;
-  color: var(--bf-appearance-token-color-error);
+  color: var(--bf-color-status-danger-content);
 
   .turn-failure-notice--warning & {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 }
 
@@ -63,7 +63,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 78%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-primary) 78%, transparent);
 }
 
 .turn-failure-notice__details-toggle {
@@ -78,13 +78,13 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font: inherit;
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
+    color: var(--bf-color-content-primary);
   }
 }
 
@@ -108,7 +108,7 @@
   min-width: 0;
 
   dt {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   dd {
@@ -128,7 +128,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .turn-failure-notice__copy {
@@ -145,8 +145,8 @@
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
+    color: var(--bf-color-content-primary);
   }
 }
 
@@ -156,8 +156,8 @@
   overflow: auto;
   padding: 8px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 75%, transparent);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 75%, transparent);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-font-family-mono);
   font-size: var(--bf-font-size-meta);
   line-height: var(--bf-line-height-support);
@@ -167,8 +167,8 @@
 
 @media (max-width: 900px) {
   .turn-failure-notice {
-    margin-left: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
-    margin-right: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
+    margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
   }
 
   .turn-failure-notice__facts {

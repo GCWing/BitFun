@@ -2,14 +2,12 @@
  * Status bar popover styles (Cursor/VS Code style).
  * Small popover, fade-in + subtle scale animation.
  */
-
- @use '@/component-library/styles/tokens' as *;
- @use '@/component-library/styles/overlay-surfaces' as surfaces;
+ @use '@/shared/styles/surface-recipes' as surfaces;
 
  $popover-z: 360;
  $popover-gap: 4px;
  .status-bar-popover {
-   @include surfaces.floating-surface;
+   @include surfaces.floating;
 
    position: fixed;
    z-index: $popover-z;
@@ -17,9 +15,9 @@
    max-width: 320px;
    font-size: var(--bf-font-size-xs);
    font-family: var(--bf-font-family-sans);
-   color: var(--bf-appearance-token-color-text-primary);
+   color: var(--bf-color-content-primary);
    transform: translateY(-100%);
-   animation: status-bar-popover-enter 0.15s $easing-decelerate forwards;
+   animation: status-bar-popover-enter 0.15s var(--bf-motion-easing-decelerate) forwards;
 
    &__input-wrap {
      padding: 8px 10px;
@@ -45,8 +43,8 @@
    &__hint {
      padding: 6px 12px;
      font-size: var(--bf-font-size-meta);
-     color: var(--bf-appearance-token-color-text-muted);
-     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+     color: var(--bf-color-content-muted);
+     border-bottom: 1px solid var(--bf-color-border-subtle);
    }
  }
 

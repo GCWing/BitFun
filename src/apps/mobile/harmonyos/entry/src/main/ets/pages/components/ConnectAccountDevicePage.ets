@@ -1,7 +1,7 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
-import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import { ACCENT, CARD, STATUS_SUCCESS, INK, LINE, MUTED, PAGE_BG, STATUS_DANGER, SOFT } from './Theme';
 import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
 import { NavigationBackButton } from './NavigationBackButton';
 
@@ -74,7 +74,7 @@ export struct ConnectAccountDevicePage {
           (this.accountDevicesError.length > 0 ? RemoteI18n.t('common.retry') : RemoteI18n.t('common.refresh')))
           .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(this.accountDevicesBusy ? MUTED :
-            (this.accountDevicesError.length > 0 ? RED : ACCENT))
+            (this.accountDevicesError.length > 0 ? STATUS_DANGER : ACCENT))
           .onClick(async () => { await this.refreshAccountDevices(); })
       }
       .width('100%').height(38)
@@ -148,7 +148,7 @@ export struct ConnectAccountDevicePage {
           .fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium).fontColor(INK)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.accountDeviceStatus(device))
-          .fontSize(MobileDesignTypography.bodySmall.size).fontColor(device.online ? GREEN : MUTED)
+          .fontSize(MobileDesignTypography.bodySmall.size).fontColor(device.online ? STATUS_SUCCESS : MUTED)
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)

@@ -21,10 +21,6 @@ vi.mock('@/shared/utils/tabUtils', () => ({
   createTab: vi.fn(),
 }));
 
-vi.mock('../../component-library', () => ({
-  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-}));
-
 function canvasToolItem(toolName: string): FlowToolItem {
   return {
     id: `tool-${toolName}`,

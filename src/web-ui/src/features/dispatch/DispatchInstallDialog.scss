@@ -1,5 +1,3 @@
-@use '../../component-library/styles/tokens' as *;
-
 // Three deliberate type steps, so "section" reads louder than "item" and
 // "item" reads louder than "explanation":
 //   title   18px/600  — the dialog's own heading
@@ -19,26 +17,26 @@
   min-height: 0;
   max-height: min(78vh, 720px);
   flex-direction: column;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-sm);
 
   &__header {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: $size-gap-4 $size-gap-4 $size-gap-3;
+    padding: var(--bf-space-4) var(--bf-space-4) var(--bf-space-3);
   }
 
   &__title {
     margin: 0;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-2xl);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-snug);
   }
 
   &__subtitle {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -49,7 +47,7 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    padding: 0 $size-gap-4 $size-gap-4;
+    padding: 0 var(--bf-space-4) var(--bf-space-4);
 
     // The body is a height-constrained column flex container, so its children
     // would otherwise shrink below their content instead of scrolling.
@@ -58,15 +56,15 @@
     }
 
     > [role='alert'] {
-      margin-bottom: $size-gap-3;
+      margin-bottom: var(--bf-space-3);
     }
   }
 
   &__section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-3 0;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3) 0;
 
     &:first-child {
       padding-top: 0;
@@ -77,7 +75,7 @@
     }
 
     + .dispatch-install-dialog__section {
-      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+      border-top: 1px solid var(--bf-color-border-subtle);
     }
   }
 
@@ -88,7 +86,7 @@
   }
 
   &__hint {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-support);
   }
@@ -96,11 +94,11 @@
   &__field {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__field-label {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
   }
@@ -112,7 +110,7 @@
     border: 0;
     background: none;
     overflow-wrap: anywhere;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-family:var(--bf-font-family-mono);
     font-size: var(--bf-font-size-xs);
   }
@@ -124,17 +122,17 @@
       box-sizing: border-box;
       width: 100%;
       min-height: 32px;
-      padding: 0 $size-gap-2;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-base;
-      background: var(--bf-appearance-token-color-bg-primary);
-      color: var(--bf-appearance-token-color-text-primary);
+      padding: 0 var(--bf-space-2);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-base);
+      background: var(--bf-color-surface-canvas);
+      color: var(--bf-color-content-primary);
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-font-size-xs);
 
       &:focus-visible {
-        border-color: var(--bf-appearance-token-color-accent-500);
-        outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
+        border-color: var(--bf-color-accent-default);
+        outline: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 24%, transparent);
         outline-offset: 1px;
       }
     }
@@ -151,15 +149,15 @@
     > div {
       display: grid;
       grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
-      gap: $size-gap-2;
-      padding: $size-gap-2 0;
+      gap: var(--bf-space-2);
+      padding: var(--bf-space-2) 0;
 
       + div {
-        border-top: 1px solid var(--bf-appearance-token-border-subtle);
+        border-top: 1px solid var(--bf-color-border-subtle);
       }
 
       > span {
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         font-size: var(--bf-font-size-xs);
       }
 
@@ -170,15 +168,15 @@
       }
 
       &[data-state='ok'] > strong {
-        color: var(--bf-appearance-token-color-success);
+        color: var(--bf-color-status-success-content);
       }
 
       &[data-state='blocked'] > strong {
-        color: var(--bf-appearance-token-color-warning);
+        color: var(--bf-color-status-warning-content);
       }
 
       &[data-state='pending'] > strong {
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
       }
     }
   }
@@ -187,8 +185,8 @@
   &__retry {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -202,28 +200,28 @@
 
   &__details {
     width: 100%;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
 
     summary {
       width: fit-content;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       cursor: pointer;
       user-select: none;
 
       &:hover,
       &:focus-visible {
-        color: var(--bf-appearance-token-color-text-primary);
+        color: var(--bf-color-content-primary);
       }
     }
 
     &[open] summary {
-      margin-bottom: $size-gap-2;
+      margin-bottom: var(--bf-space-2);
     }
 
     dl {
       display: grid;
-      gap: $size-gap-1;
+      gap: var(--bf-space-1);
       width: 100%;
       margin: 0;
     }
@@ -231,11 +229,11 @@
     dl > div {
       display: grid;
       grid-template-columns: 84px minmax(0, 1fr);
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     dt {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     dd {
@@ -250,10 +248,10 @@
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: $size-gap-2;
-    padding: $size-gap-3 $size-gap-4;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-primary);
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3) var(--bf-space-4);
+    border-top: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__spin {

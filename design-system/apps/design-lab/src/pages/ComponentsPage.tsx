@@ -1,25 +1,4 @@
-import {
-  AppWindow,
-  ArrowUp,
-  ArrowRight,
-  Check,
-  ChevronRight,
-  Command,
-  Eye,
-  Heading,
-  Keyboard,
-  List,
-  Rows3,
-  MessageCircle,
-  MousePointerClick,
-  PanelTop,
-  PanelLeft,
-  Plus,
-  Search as SearchIcon,
-  Settings,
-  Terminal,
-  ToggleLeft,
-} from "lucide-react";
+import { AppWindow, Heading, Keyboard, List, Rows3, MousePointerClick, PanelTop, ToggleLeft } from "lucide-react";
 import {
   ActionCard,
   ActionItem,
@@ -41,19 +20,25 @@ import {
   FieldGroup,
   FieldRow,
   FormSection,
-  Icon,
+  Icon as CatalogIcon,
   IconButton,
   Input,
   KeyHint,
   Listbox,
   ListboxOption,
+  LoadingState,
   Menu,
   MenuItem,
   MenuSection,
+  MultiSelect,
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
   NavigationPanelItem,
   NavigationPanelSection,
   NumberInput,
+  NumberBadge,
   PageHeader,
   Radio,
   ScrollArea,
@@ -62,6 +47,7 @@ import {
   Select,
   Stack,
   StatusPill,
+  Spinner,
   Switch,
   TabGroup,
   Textarea,
@@ -100,33 +86,37 @@ interface ComponentsPageProps {
 }
 
 const componentIcons = {
-  ActionCard: MousePointerClick,
-  ActionItem: List,
-  ActivityItem: Terminal,
-  Button: MousePointerClick,
-  Card: Rows3,
-  Combobox: SearchIcon,
-  Composer: ArrowUp,
-  Field: Rows3,
-  Icon: SearchIcon,
-  IconButton: List,
-  Input: Eye,
-  KeyHint: Keyboard,
-  Listbox: List,
-  Menu: List,
-  Modal: AppWindow,
-  NavigationPanel: PanelLeft,
-  PageHeader: Heading,
-  ScrollArea: Rows3,
-  SearchField: SearchIcon,
-  SegmentedControl: ToggleLeft,
-  Select: List,
-  StatusPill: Check,
-  Switch: ToggleLeft,
-  Disclosure: ChevronRight,
-  TabGroup: PanelTop,
-  Toolbar: PanelTop,
-  Tooltip: MessageCircle,
+  ActionCard: <MousePointerClick aria-hidden="true" size={19} />,
+  ActionItem: <List aria-hidden="true" size={19} />,
+  ActivityItem: <CatalogIcon name="terminal" style={{ width: 19, height: 19 }} />,
+  Button: <MousePointerClick aria-hidden="true" size={19} />,
+  Card: <Rows3 aria-hidden="true" size={19} />,
+  Combobox: <CatalogIcon name="search" style={{ width: 19, height: 19 }} />,
+  Composer: <CatalogIcon name="arrow-up" style={{ width: 19, height: 19 }} />,
+  Field: <Rows3 aria-hidden="true" size={19} />,
+  Icon: <CatalogIcon name="search" style={{ width: 19, height: 19 }} />,
+  IconButton: <List aria-hidden="true" size={19} />,
+  Input: <CatalogIcon name="eye" style={{ width: 19, height: 19 }} />,
+  KeyHint: <Keyboard aria-hidden="true" size={19} />,
+  Listbox: <List aria-hidden="true" size={19} />,
+  LoadingState: <AppWindow aria-hidden="true" size={19} />,
+  Menu: <List aria-hidden="true" size={19} />,
+  Dialog: <AppWindow aria-hidden="true" size={19} />,
+  Sheet: <AppWindow aria-hidden="true" size={19} />,
+  MultiSelect: <List aria-hidden="true" size={19} />,
+  NavigationPanel: <CatalogIcon name="sidebar-left" style={{ width: 19, height: 19 }} />,
+  PageHeader: <Heading aria-hidden="true" size={19} />,
+  ScrollArea: <Rows3 aria-hidden="true" size={19} />,
+  SearchField: <CatalogIcon name="search" style={{ width: 19, height: 19 }} />,
+  SegmentedControl: <ToggleLeft aria-hidden="true" size={19} />,
+  Select: <List aria-hidden="true" size={19} />,
+  Spinner: <AppWindow aria-hidden="true" size={19} />,
+  StatusPill: <CatalogIcon name="check-line" style={{ width: 19, height: 19 }} />,
+  Switch: <ToggleLeft aria-hidden="true" size={19} />,
+  Disclosure: <CatalogIcon name="chevron-right" style={{ width: 19, height: 19 }} />,
+  TabGroup: <PanelTop aria-hidden="true" size={19} />,
+  Toolbar: <PanelTop aria-hidden="true" size={19} />,
+  Tooltip: <CatalogIcon name="session" style={{ width: 19, height: 19 }} />,
 } as const;
 
 function ComponentCardPreview({ component }: { component: ComponentMeta }) {
@@ -149,7 +139,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <ActionCard
           className="component-action-card-card-preview"
           description={t("components.preview.actionCardDescription")}
-          leading={<MessageCircle aria-hidden="true" />}
+          leading={<CatalogIcon name="session" aria-hidden="true" />}
           tabIndex={-1}
         >
           {t("components.preview.actionCardTitle")}
@@ -158,7 +148,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
     case "ActionItem":
       return (
         <ActionItem
-          leading={<MessageCircle aria-hidden="true" />}
+          leading={<CatalogIcon name="session" aria-hidden="true" />}
           shortcut={<KeyHint>K</KeyHint>}
         >
           {t("components.preview.assistant")}
@@ -170,7 +160,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           appearance="surface"
           className="component-activity-item-card-preview"
           label={t("components.preview.activityAction")}
-          leading={<Terminal aria-hidden="true" />}
+          leading={<CatalogIcon name="terminal" aria-hidden="true" />}
           metadata={<ChangeCount additions={6} deletions={0} />}
         >
           {t("components.preview.activityDescription")}
@@ -195,7 +185,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           <CardHeader
             align="center"
             description={t("components.preview.cardDescription")}
-            leading={<Command aria-hidden="true" />}
+            leading={<CatalogIcon name="command-mac" size="lg" aria-hidden="true" />}
             title={t("components.preview.cardTitle")}
           />
         </Card>
@@ -210,12 +200,14 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           <Switch tabIndex={-1} />
         </Field>
       );
+    case "NumberBadge":
+      return <NumberBadge value={18} />;
     case "Icon":
       return (
         <Stack align="center" direction="horizontal" gap="3">
-          <Icon name="search" tone="primary" />
-          <Icon name="folder" tone="secondary" />
-          <Icon name="check-circle" tone="success" />
+          <CatalogIcon name="search" tone="primary" />
+          <CatalogIcon name="folder" tone="secondary" />
+          <CatalogIcon name="check-circle" tone="success" />
         </Stack>
       );
     case "IconButton":
@@ -239,11 +231,11 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Input
           aria-label={t("components.preview.inputLabel")}
           placeholder={t("components.preview.inputPlaceholder")}
-          trailing={<Eye aria-hidden="true" />}
+          trailing={<CatalogIcon name="eye" aria-hidden="true" />}
         />
       );
     case "KeyHint":
-      return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+      return <KeyHint icon={<CatalogIcon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>;
     case "Listbox":
       return (
         <Listbox aria-label={t("components.preview.appearance")}>
@@ -255,10 +247,10 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       return (
         <Menu aria-label={t("components.preview.menuLabel")} scrollbarVisibility="hidden">
           <MenuSection title={t("components.preview.menuSectionTitle")}>
-            <MenuItem leading={<MessageCircle aria-hidden="true" />} tabIndex={-1}>
+            <MenuItem leading={<CatalogIcon name="session" aria-hidden="true" />} tabIndex={-1}>
               {t("components.preview.menuItemOne")}
             </MenuItem>
-            <MenuItem leading={<MessageCircle aria-hidden="true" />} tabIndex={-1}>
+            <MenuItem leading={<CatalogIcon name="session" aria-hidden="true" />} tabIndex={-1}>
               {t("components.preview.menuItemTwo")}
             </MenuItem>
           </MenuSection>
@@ -268,7 +260,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       return (
         <FormSection
           headingAs="h3"
-          leading={<Settings aria-hidden="true" />}
+          leading={<CatalogIcon name="gear" size="lg" aria-hidden="true" />}
           title={t("components.preview.modalSectionTitle")}
         >
           <FieldGroup>
@@ -319,13 +311,23 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             { label: "Ask", value: "ask" },
             { label: "Plan", value: "plan" },
           ]}
-          searchable
-          triggerAriaLabel={t("components.preview.appearance")}
+          aria-label={t("components.preview.appearance")}
           value="ask"
         />
       );
+    case "MultiSelect":
+      return (
+        <MultiSelect
+          aria-label={t("components.preview.appearance")}
+          options={[
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+          ]}
+          value={["ask", "plan"]}
+        />
+      );
     case "NumberInput":
-      return <NumberInput onChange={() => undefined} value={8} />;
+      return <NumberInput onValueChange={() => undefined} value={8} />;
     case "Radio":
       return (
         <Radio
@@ -367,7 +369,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
               leading={(
                 <IconButton
                   aria-label={t("components.preview.composerAdd")}
-                  icon={<Plus aria-hidden="true" />}
+                  icon={<CatalogIcon name="plus" size="lg" aria-hidden="true" />}
                   size="sm"
                   tabIndex={-1}
                   variant="fill"
@@ -376,7 +378,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
               trailing={(
                 <IconButton
                   aria-label={t("components.preview.composerSend")}
-                  icon={<ArrowUp aria-hidden="true" />}
+                  icon={<CatalogIcon name="arrow-up" aria-hidden="true" />}
                   size="sm"
                   tabIndex={-1}
                   variant="primary"
@@ -390,16 +392,21 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           </span>
         </Composer>
       );
-    case "Modal":
+    case "Dialog":
+    case "Sheet":
       return (
         <Button
           leadingIcon={<AppWindow aria-hidden="true" />}
           size="sm"
           tabIndex={-1}
         >
-          {t("components.preview.openModal")}
+          {t("components.preview.openDialog")}
         </Button>
       );
+    case "LoadingState":
+      return <LoadingState>{t("detail.loading")}</LoadingState>;
+    case "Spinner":
+      return <Spinner aria-label={t("detail.loading")} size="sm" />;
     case "PageHeader":
       return (
         <PageHeader
@@ -415,17 +422,22 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <NavigationPanel
           aria-label={t("components.preview.navigationPanelLabel")}
           className="component-navigation-panel-card-preview"
-          footer={<span>{t("components.preview.navigationPanelDevice")}</span>}
-          scrollbarVisibility="hidden"
         >
-          <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
-            <NavigationPanelItem leading={<MessageCircle aria-hidden="true" />} selected tabIndex={-1}>
-              {t("components.preview.menuItemOne")}
-            </NavigationPanelItem>
-            <NavigationPanelItem reserveLeadingSpace tabIndex={-1}>
-              {t("components.preview.menuItemTwo")}
-            </NavigationPanelItem>
-          </NavigationPanelSection>
+          <NavigationPanelBody scrollbarVisibility="hidden">
+            <NavigationPanelContent>
+              <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
+                <NavigationPanelItem leading={<CatalogIcon name="session" aria-hidden="true" />} selected tabIndex={-1}>
+                  {t("components.preview.menuItemOne")}
+                </NavigationPanelItem>
+                <NavigationPanelItem reserveLeadingSpace tabIndex={-1}>
+                  {t("components.preview.menuItemTwo")}
+                </NavigationPanelItem>
+              </NavigationPanelSection>
+            </NavigationPanelContent>
+          </NavigationPanelBody>
+          <NavigationPanelFooter>
+            <span>{t("components.preview.navigationPanelDevice")}</span>
+          </NavigationPanelFooter>
         </NavigationPanel>
       );
     case "ScrollArea":
@@ -447,14 +459,14 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       return (
         <SearchField
           aria-label={t("components.preview.searchLabel")}
-          leadingIcon={<SearchIcon aria-hidden="true" />}
+          leadingIcon={<CatalogIcon name="search" aria-hidden="true" />}
           placeholder={t("components.preview.searchPlaceholder")}
-          shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
+          shortcut={<KeyHint icon={<CatalogIcon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>}
         />
       );
     case "StatusPill":
       return (
-        <StatusPill leading={<Icon name="circle" />}>
+        <StatusPill leading={<CatalogIcon name="unselected" />}>
           Ask
         </StatusPill>
       );
@@ -476,7 +488,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           defaultValue="chat"
           options={[
             {
-              icon: <MessageCircle aria-hidden="true" />,
+              icon: <CatalogIcon name="session" aria-hidden="true" />,
               label: t("components.preview.segmentedChat"),
               value: "chat",
             },
@@ -508,12 +520,12 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           defaultValue="welcome"
           items={[
             {
-              icon: <MessageCircle aria-hidden="true" />,
+              icon: <CatalogIcon name="session" aria-hidden="true" />,
               label: t("components.preview.welcome"),
               value: "welcome",
             },
             {
-              icon: <MessageCircle aria-hidden="true" />,
+              icon: <CatalogIcon name="session" aria-hidden="true" />,
               label: t("components.preview.settings"),
               value: "settings",
             },
@@ -532,7 +544,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           )}
           className="component-toolbar-card-preview"
           leading={(
-            <Button size="xs" tabIndex={-1} trailingIcon={<ArrowRight aria-hidden="true" />} variant="text">
+            <Button size="xs" tabIndex={-1} trailingIcon={<CatalogIcon name="arrow-right" size="lg" aria-hidden="true" />} variant="text">
               {t("components.preview.welcome")}
             </Button>
           )}
@@ -541,7 +553,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
               <ToolbarSeparator />
               <IconButton
                 aria-label={t("components.preview.searchLabel")}
-                icon={<SearchIcon aria-hidden="true" />}
+                icon={<CatalogIcon name="search" aria-hidden="true" />}
                 size="xs"
                 tabIndex={-1}
               />
@@ -606,11 +618,11 @@ export function ComponentsPage({
       <div className="component-summary-strip" aria-label={t("components.summaryLabel")}>
         <span><strong>{visibleComponents.length}</strong> {t("components.registeredCount")}</span>
         <span><strong>{visibleComponents.reduce((total, item) => total + item.states.length, 0)}</strong> {t("components.statesCount")}</span>
-        <span><Check aria-hidden="true" size={15} /> {t("components.accessibilityContracts")}</span>
+        <span><CatalogIcon name="check-line" aria-hidden="true" style={{ width: 15, height: 15 }} /> {t("components.accessibilityContracts")}</span>
       </div>
 
       {isFlowChatCategory && (
-        <section className="component-library-section-heading">
+        <section className="component-catalog-section-heading">
           <div>
             <span className="page-kicker">{t("components.flowChat.templatesKicker")}</span>
             <h2>{t("components.flowChat.templatesTitle")}</h2>
@@ -627,8 +639,9 @@ export function ComponentsPage({
         tokenOverrides={tokenOverrides}
       >
         {catalogComponents.map((component) => {
-          const Icon = getFlowChatPreviewDefinition(component.name)?.icon
-            ?? componentIcons[component.name as keyof typeof componentIcons];
+          const FlowIcon = getFlowChatPreviewDefinition(component.name)?.icon;
+          const glyph = FlowIcon ? <FlowIcon aria-hidden="true" size={19} />
+            : componentIcons[component.name as keyof typeof componentIcons];
           return (
             <button
               className="component-card"
@@ -638,7 +651,7 @@ export function ComponentsPage({
             >
               <span className="component-card__topline">
                 <span className="component-card__icon">
-                  {Icon ? <Icon aria-hidden="true" size={19} /> : null}
+                  {glyph ?? null}
                 </span>
               </span>
               <span className="component-card__preview">
@@ -654,7 +667,7 @@ export function ComponentsPage({
                   states: component.states.length,
                   tokens: component.tokens.length,
                 })}
-                <ArrowRight aria-hidden="true" size={16} />
+                <CatalogIcon name="arrow-right" size="md" aria-hidden="true" />
               </span>
             </button>
           );

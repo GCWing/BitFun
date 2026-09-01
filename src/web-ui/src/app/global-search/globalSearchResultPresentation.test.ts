@@ -26,23 +26,23 @@ const entityItems = [
 ];
 
 describe('global search result presentation', () => {
-  it('shows only two projects and two assistants in the default overview', () => {
+  it('shows one workspace and one assistant in the default overview', () => {
     const presentation = buildGlobalSearchResultPresentation(entityItems, {
       hasQuery: false,
       drilldownGroup: null,
     });
 
-    expect(DEFAULT_ENTITY_PREVIEW_LIMIT).toBe(2);
+    expect(DEFAULT_ENTITY_PREVIEW_LIMIT).toBe(1);
     expect(presentation.groups.map((group) => ({
       id: group.id,
       visible: group.items.length,
       total: group.totalCount,
       canOpenDetails: group.canOpenDetails,
     }))).toEqual([
-      { id: 'workspaces', visible: 2, total: 4, canOpenDetails: true },
-      { id: 'assistants', visible: 2, total: 3, canOpenDetails: true },
+      { id: 'workspaces', visible: 1, total: 4, canOpenDetails: true },
+      { id: 'assistants', visible: 1, total: 3, canOpenDetails: true },
     ]);
-    expect(presentation.navigableItems).toHaveLength(4);
+    expect(presentation.navigableItems).toHaveLength(2);
   });
 
   it('keeps all matching entities visible when the user searches', () => {

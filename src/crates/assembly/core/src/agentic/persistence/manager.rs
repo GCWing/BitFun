@@ -2417,6 +2417,30 @@ impl PersistenceManager {
         }
     }
 
+    /// Read identity/config facts without loading dialog content or restoring a
+    /// runtime. Callers needing a stable view hold the Session read permit.
+    pub(crate) async fn load_session_header(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        Self::validate_session_id(session_id)?;
+        let metadata = self
+            .load_session_metadata(storage_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {session_id}"))
+            })?;
+        let state = self
+            .load_stored_session_state(storage_path, session_id)
+            .await?;
+        Ok(Self::build_session_from_persisted_parts(
+            metadata,
+            state,
+            &[],
+        ))
+    }
+
     /// Load session and return the persisted turns read while rebuilding the session header.
     pub async fn load_session_with_turns(
         &self,

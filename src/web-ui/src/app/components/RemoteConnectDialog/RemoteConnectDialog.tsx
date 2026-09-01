@@ -17,7 +17,6 @@ import {
   Icon,
   IconButton,
   Input,
-  Modal,
   PageHeader,
   ScrollArea,
   Select,
@@ -25,6 +24,12 @@ import {
   Switch,
   TabGroup,
   type TabGroupItem,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
 } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -1174,7 +1179,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         {networkTab === 'custom_server' && (
           <Field
             className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
-            controlClassName="bitfun-remote-connect__field-control"
+            controlWidth="fill"
             label={t('remoteConnect.serverUrl')}
           >
             <Input
@@ -1292,7 +1297,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 )}
                 <Field
                   className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
-                  controlClassName="bitfun-remote-connect__field-control"
+                  controlWidth="fill"
                   label="Bot Token"
                 >
                   <Input
@@ -1345,7 +1350,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 )}
                 <Field
                   className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
-                  controlClassName="bitfun-remote-connect__field-control"
+                  controlWidth="fill"
                   label="App ID"
                 >
                   <Input
@@ -1359,7 +1364,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 </Field>
                 <Field
                   className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
-                  controlClassName="bitfun-remote-connect__field-control"
+                  controlWidth="fill"
                   label="App Secret"
                 >
                   <Input
@@ -1782,21 +1787,23 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   return (
     <>
-      <Modal
-        isOpen={isOpen && hasAgreedDisclaimer}
-        onClose={handleDialogClose}
-        ariaLabel={t('remoteConnect.centerTitle')}
-        showCloseButton
-        size="xxlarge"
-        overlayClassName="bitfun-remote-connect-modal-overlay"
-        contentClassName="bitfun-remote-connect-modal-content"
+      <Dialog
+        open={isOpen && hasAgreedDisclaimer}
+        onOpenChange={(nextOpen) => { if (!nextOpen) handleDialogClose(); }}
+        size="2xl"
+        aria-label={t('remoteConnect.centerTitle')}
+        className="bitfun-remote-connect-dialog"
       >
-        <div
-          className="bitfun-remote-connect"
-          data-bf-component="remote-connect-dialog"
-          data-bf-part="root"
-          data-bf-view={activeView}
-        >
+        <DialogHeader className="bitfun-remote-connect-dialog__header">
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody className="bitfun-remote-connect-dialog__body" inset="none">
+          <div
+            className="bitfun-remote-connect"
+            data-bf-component="remote-connect-dialog"
+            data-bf-part="root"
+            data-bf-view={activeView}
+          >
           <aside
             className="bitfun-remote-connect__sidebar"
             data-bf-component="remote-connect-dialog"
@@ -1923,23 +1930,29 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               </>
             )}
           </main>
-        </div>
-      </Modal>
+          </div>
+        </DialogBody>
+      </Dialog>
 
-      <Modal
-        isOpen={isOpen && (disclaimerIsGate || showDisclaimer)}
-        onClose={handleDisclaimerClose}
-        title={t('remoteConnect.disclaimerTitle')}
-        showCloseButton
-        size="large"
-        contentPadding="lg"
+      <Dialog
+        open={isOpen && (disclaimerIsGate || showDisclaimer)}
+        onOpenChange={(nextOpen) => { if (!nextOpen) handleDisclaimerClose(); }}
+        size="lg"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('remoteConnect.disclaimerTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         <RemoteConnectDisclaimerContent
           agreed={hasAgreedDisclaimer}
           onClose={handleDisclaimerClose}
           onAgree={hasAgreedDisclaimer ? undefined : handleAgreeDisclaimer}
         />
-      </Modal>
+              </DialogBody>
+      </Dialog>
 
       {showRelayDeploy && (
         <RelayDeployWizard

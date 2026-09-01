@@ -4,7 +4,6 @@ export interface PlanTodo {
   id: string;
   content: string;
   status?: string;
-  dependencies?: string[];
 }
 
 export interface PlanDocument {
@@ -36,13 +35,6 @@ function parseTodos(value: unknown): PlanTodo[] {
     }
 
     const todo = item as Record<string, unknown>;
-    const dependencies = todo.dependencies;
-    if (
-      dependencies != null
-      && (!Array.isArray(dependencies) || dependencies.some(value => typeof value !== 'string'))
-    ) {
-      throw new Error(`Plan todo '${String(todo.id ?? index)}' has invalid dependencies`);
-    }
     if (todo.status != null && typeof todo.status !== 'string') {
       throw new Error(`Plan todo '${String(todo.id ?? index)}' has an invalid status`);
     }
@@ -51,7 +43,6 @@ function parseTodos(value: unknown): PlanTodo[] {
       id: requireNonEmptyString(todo.id, `todos[${index}].id`),
       content: requireNonEmptyString(todo.content, `todos[${index}].content`),
       status: todo.status as string | undefined,
-      dependencies: dependencies as string[] | undefined,
     };
   });
 }

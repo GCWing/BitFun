@@ -9,6 +9,7 @@ packages:
   - "src/miniapp-market-web"
   - "src/skin-market-web"
   - "BitFun-Installer"
+  - "website"
   - "tests/e2e"
 
 patchedDependencies:

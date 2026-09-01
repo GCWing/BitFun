@@ -1,9 +1,7 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .skill-group-picker {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
 
   &__head,
   &__group-head,
@@ -16,11 +14,11 @@
 
   &__head {
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__selected-count {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-variant-numeric: tabular-nums;
   }
@@ -28,17 +26,17 @@
   &__sections {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__section-label {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
@@ -48,23 +46,23 @@
   &__group {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
-    padding: $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    gap: var(--bf-space-1);
+    padding: var(--bf-space-2);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__group-head {
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__group-title-wrap {
     display: inline-flex;
     align-items: center;
     min-width: 0;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__group-name {
@@ -72,7 +70,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
@@ -85,9 +83,9 @@
     justify-content: center;
     min-width: 22px;
     padding: 1px 6px;
-    border-radius: $size-radius-full;
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-muted);
+    border-radius: var(--bf-radius-pill);
+    background: var(--bf-color-action-neutral-surface-hover);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -95,7 +93,7 @@
 
   &__group-actions {
     flex-shrink: 0;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -104,7 +102,7 @@
   &__skills {
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__token {
@@ -114,9 +112,9 @@
     min-height: 26px;
     padding: 3px 8px;
     border: 1px solid transparent;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-meta);
     overflow: hidden;
@@ -124,19 +122,19 @@
     white-space: nowrap;
     cursor: pointer;
     transition:
-      border-color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-on):not(:disabled) {
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border-color: var(--bf-color-field-border-hover);
+      color: var(--bf-color-content-secondary);
     }
 
     &.is-on {
-      border-color: var(--bf-appearance-token-color-accent-400);
-      background: var(--bf-appearance-token-color-accent-100);
-      color: var(--bf-appearance-token-color-accent-500);
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      background: var(--bf-color-action-secondary-background);
+      color: var(--bf-color-accent-default);
     }
 
     &:disabled {
@@ -149,16 +147,16 @@
 .skill-group-summary {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
 
   &__group {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__label {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
   }
@@ -166,7 +164,7 @@
   &__skills {
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 }
 
@@ -174,9 +172,9 @@
   display: flex;
   box-sizing: border-box;
   max-height: min(620px, 70vh);
-  padding-block: $size-gap-3;
+  padding-block: var(--bf-space-3);
   flex-direction: column;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
 
   &__head,
   &__group-row,
@@ -188,23 +186,23 @@
 
   &__head {
     justify-content: space-between;
-    gap: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-3);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
   }
 
   &__list {
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
   }
 
   &__group-row {
     justify-content: space-between;
-    gap: $size-gap-3;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-2) var(--bf-space-3);
   }
 
   &__group-row + &__group-row {
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__group-copy {
@@ -216,14 +214,14 @@
   }
 
   &__group-name {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
   }
 
   &__group-meta,
   &__empty {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -237,14 +235,14 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__field {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-1);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
   }
@@ -254,9 +252,9 @@
     max-height: 360px;
     display: flex;
     flex-wrap: wrap;
-    gap: $size-gap-1;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    padding: $size-gap-2;
+    gap: var(--bf-space-1);
+    border: 1px solid var(--bf-color-border-subtle);
+    padding: var(--bf-space-2);
   }
 
   &__token {
@@ -266,9 +264,9 @@
     min-height: 26px;
     padding: 3px 8px;
     border: 1px solid transparent;
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-meta);
     overflow: hidden;
@@ -276,19 +274,19 @@
     white-space: nowrap;
     cursor: pointer;
     transition:
-      border-color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-on):not(:disabled) {
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border-color: var(--bf-color-field-border-hover);
+      color: var(--bf-color-content-secondary);
     }
 
     &.is-on {
-      border-color: var(--bf-appearance-token-color-accent-400);
-      background: var(--bf-appearance-token-color-accent-100);
-      color: var(--bf-appearance-token-color-accent-500);
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      background: var(--bf-color-action-secondary-background);
+      color: var(--bf-color-accent-default);
     }
 
     &:disabled {

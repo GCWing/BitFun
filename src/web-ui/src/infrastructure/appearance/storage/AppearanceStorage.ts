@@ -20,6 +20,8 @@ function catalogEntry(value: StoredAppearancePackage): StoredAppearanceCatalogEn
     importedAt: value.importedAt,
     marketOrigin: value.marketOrigin,
     localOverride: value.localOverride,
+    schemaVersion: value.manifest.schemaVersion,
+    archiveSchemaVersion: value.archiveSchemaVersion,
   };
 }
 

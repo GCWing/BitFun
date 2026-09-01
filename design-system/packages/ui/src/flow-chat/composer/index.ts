@@ -1,8 +1,10 @@
 export {
   ChatComposer,
+  ChatComposerActionButton,
   ChatComposerContent,
   ChatComposerEndActions,
   ChatComposerStartActions,
+  type ChatComposerActionButtonProps,
   type ChatComposerLayout,
   type ChatComposerProps,
   type ChatComposerSlotProps,

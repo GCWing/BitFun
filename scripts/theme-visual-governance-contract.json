@@ -9,7 +9,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system", "bitfun-monochrome"],
       "states": ["default", "hover", "focus", "selected", "disabled"],
-      "tokenFamilies": ["--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-chrome-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-border-*", "--bitfun-nav-*"],
+      "tokenFamilies": ["--bf-color-surface-*", "--bf-color-content-*", "--bf-color-border-*", "--bf-color-action-*", "--bf-component-scene-*", "--bitfun-nav-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -22,7 +22,7 @@
         }
       ],
       "risks": [
-        "Web UI visual values must remain owned by the active Appearance projection.",
+        "Web UI visual values must resolve through canonical design-system tokens projected by the active Appearance.",
         "System theme resolution must not assume desktop-only media query behavior."
       ]
     },
@@ -33,7 +33,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system", "bitfun-monochrome"],
       "states": ["default", "streaming", "hover", "focus", "selected", "error", "empty"],
-      "tokenFamilies": ["--bf-appearance-token-flowchat-*", "--bf-appearance-token-tool-card-*", "--bf-appearance-token-color-bg-scene", "--bf-appearance-token-color-text-*", "--bf-appearance-token-color-accent-*"],
+      "tokenFamilies": ["--bf-color-surface-*", "--bf-color-content-*", "--bf-color-accent-*", "--bf-color-action-*", "--bf-color-status-*", "--bf-domain-tool-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -47,7 +47,7 @@
       ],
       "risks": [
         "Streaming and virtualized items can hide token regressions until historical turns are rendered.",
-        "Flow Chat has many visual states; every shared token family must remain in the Appearance contract."
+        "Flow Chat has many visual states; shared colors must stay in the canonical theme contract and tool identity colors in the registered domain contract."
       ]
     },
     {
@@ -57,7 +57,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "expanded", "collapsed", "hover", "focus", "success", "warning", "error"],
-      "tokenFamilies": ["--bf-appearance-token-tool-card-*", "--bf-appearance-token-color-success*", "--bf-appearance-token-color-warning*", "--bf-appearance-token-color-error*"],
+      "tokenFamilies": ["--bf-color-surface-*", "--bf-color-border-*", "--bf-color-status-*", "--bf-color-action-*", "--bf-domain-tool-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -76,12 +76,12 @@
     },
     {
       "key": "code-editor-diff",
-      "owner": "src/web-ui/src/tools/editor; src/web-ui/src/component-library/components/CodeEditor",
+      "owner": "src/web-ui/src/tools/editor",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "focus", "selection", "search", "added", "deleted", "changed", "conflict"],
-      "tokenFamilies": ["Monaco palette", "--diff-editor-*", "--bf-appearance-token-git-color-*", "--bf-appearance-token-color-text-*"],
+      "tokenFamilies": ["Monaco palette", "--bf-domain-git-*", "--bf-color-content-*", "--bf-color-surface-*", "--bf-color-status-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -105,7 +105,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "focus", "selection", "ansi-normal", "ansi-bright", "error"],
-      "tokenFamilies": ["terminal ANSI palette", "--bf-appearance-token-color-text-*", "--bf-appearance-token-border-*"],
+      "tokenFamilies": ["terminal ANSI palette", "--bf-color-content-*", "--bf-color-surface-*", "--bf-color-border-*", "--bf-color-status-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -124,12 +124,12 @@
     },
     {
       "key": "markdown-mermaid",
-      "owner": "src/web-ui/src/component-library/components/Markdown; src/web-ui/src/tools/mermaid-editor",
+      "owner": "src/web-ui/src/infrastructure/markdown; src/web-ui/src/tools/mermaid-editor",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "code", "table", "link", "diagram", "error"],
-      "tokenFamilies": ["--markdown-*", "--markdown-primary-color", "Mermaid palette", "Prism palette"],
+      "tokenFamilies": ["--bf-color-content-*", "--bf-color-surface-*", "--bf-domain-mermaid-*", "--bf-domain-prism-*", "Mermaid renderer palette"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -142,7 +142,7 @@
         }
       ],
       "risks": [
-        "--markdown-primary-color is the embedded-content accent override and must remain distinct from generic app primary aliases.",
+        "Embedded Markdown uses canonical content and surface roles while Mermaid and Prism retain registered renderer-domain roles.",
         "Mermaid graph roles do not map directly to app status colors."
       ]
     },
@@ -153,7 +153,7 @@
       "formFactors": ["iframe", "desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["fallback-before-host-payload", "host-payload", "loading", "error"],
-      "tokenFamilies": ["--bf-appearance-token-color-*", "--bf-appearance-token-border-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-size-radius-*", "--bf-appearance-token-size-gap-*"],
+      "tokenFamilies": ["--bf-color-*", "--bf-shadow-*", "--bf-effect-*", "--bf-opacity-*", "--bf-radius-*", "--bf-space-*"],
       "evidence": [
         {
           "type": "boundary-render-review",
@@ -162,7 +162,7 @@
         {
           "type": "theme-color-audit",
           "command": "pnpm run theme:color-audit",
-          "requirement": "Generated widget fallback colors must be derived from a builtin Appearance package."
+          "requirement": "Generated widget values must come from the canonical theme package contract and the selected builtin Appearance projection."
         }
       ],
       "risks": [
@@ -177,7 +177,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system", "bitfun-monochrome"],
       "states": ["default", "selected", "hover", "focus", "imported-appearance", "system-appearance"],
-      "tokenFamilies": ["--bf-appearance-token-color-accent-*", "--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-border-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-config-page-*"],
+      "tokenFamilies": ["--bf-color-*", "--bf-shadow-*", "--bf-effect-*", "--bf-opacity-*", "--bf-component-config-page-*", "--bf-domain-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -191,17 +191,17 @@
       ],
       "risks": [
         "Theme selection can resolve differently under system mode.",
-        "Custom theme previews can expose missing runtime aliases before ordinary components do."
+        "Imported v2 theme-token packages must validate against the canonical root and scoped token registries before preview or activation."
       ]
     },
     {
       "key": "mobile-web-shell",
-      "owner": "src/mobile-web; src/web-ui/src/component-library/styles",
+      "owner": "src/mobile-web/src/theme; src/mobile-web/src/styles",
       "platforms": ["mobile-web"],
       "formFactors": ["mobile", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "loading", "error", "navigation"],
-      "tokenFamilies": ["shared web tokens", "--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-border-*"],
+      "tokenFamilies": ["@bitfun/theme-bitfun", "--bf-color-surface-*", "--bf-color-content-*", "--bf-color-border-*", "--bf-color-action-*", "--bf-color-status-*"],
       "evidence": [
         {
           "type": "mobile-build-review",
@@ -221,7 +221,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system", "bitfun-dark", "bitfun-light", "bitfun-midnight", "bitfun-china-style", "bitfun-china-night", "bitfun-cyber", "bitfun-slate", "bitfun-tokyo-night"],
       "states": ["theme-setup", "language", "options", "loading", "progress", "error", "completed", "hover", "focus"],
-      "tokenFamilies": ["--bf-appearance-token-color-bg-*", "--bf-appearance-token-color-text-*", "--bf-appearance-token-element-bg-*", "--bf-appearance-token-border-*", "--bf-appearance-token-color-accent-*", "--bf-appearance-token-color-success", "--bf-appearance-token-color-warning", "--bf-appearance-token-color-error"],
+      "tokenFamilies": ["@bitfun/theme-bitfun", "--bf-color-surface-*", "--bf-color-content-*", "--bf-color-border-*", "--bf-color-action-*", "--bf-color-accent-*", "--bf-color-status-*"],
       "evidence": [
         {
           "type": "theme-color-audit",

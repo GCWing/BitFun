@@ -1,9 +1,6 @@
 /**
  * SceneViewport styles — scene container.
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
-
 .bitfun-scene-viewport {
   flex: 1;
   position: relative;
@@ -12,7 +9,7 @@
   min-height: 0;
   border: 0;
   border-radius: 0;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
   box-shadow: none;
 
   &__clip {

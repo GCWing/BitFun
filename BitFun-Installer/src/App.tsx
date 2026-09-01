@@ -136,7 +136,7 @@ function App() {
       {!isFullscreen && (
         <div style={{
           height: 1,
-          background: 'repeating-linear-gradient(90deg, var(--element-bg-medium) 0 5px, transparent 5px 10px)',
+          background: 'repeating-linear-gradient(90deg, var(--bf-color-action-neutral-surface-pressed) 0 5px, transparent 5px 10px)',
           position: 'relative',
           flexShrink: 0,
           overflow: 'hidden',
@@ -145,8 +145,8 @@ function App() {
             height: '100%',
             width: `${((stepNum ?? 0) / 4) * 100}%`,
             background: useSuccessStepColor
-              ? 'repeating-linear-gradient(90deg, var(--color-success) 0 5px, transparent 5px 10px)'
-              : 'repeating-linear-gradient(90deg, var(--color-accent-500) 0 5px, transparent 5px 10px)',
+              ? 'repeating-linear-gradient(90deg, var(--bf-color-status-success-content) 0 5px, transparent 5px 10px)'
+              : 'repeating-linear-gradient(90deg, var(--bf-color-accent-default) 0 5px, transparent 5px 10px)',
             transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1), background 300ms ease',
           }} />
         </div>

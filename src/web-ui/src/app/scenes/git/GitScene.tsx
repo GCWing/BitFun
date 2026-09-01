@@ -6,12 +6,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { CubeLoading } from '@/component-library';
+import { LoadingState } from '@bitfun/ui';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { requestGitRepositoryTrust } from '@/shared/services/gitTrustService';
 import './GitScene.scss';
@@ -190,7 +190,7 @@ const GitScene: React.FC<GitSceneProps> = ({
               <IconButton
                 size="sm"
                 aria-label={t('actions.forceRefresh')}
-                icon={<RefreshCw />}
+                icon={<Icon name="refresh" size="lg" />}
                 onClick={() => {
                   setForceReset(true);
                   setTimeout(() => {
@@ -202,7 +202,7 @@ const GitScene: React.FC<GitSceneProps> = ({
             </Tooltip>
           </div>
           <div className="bitfun-git-scene__loading-state" data-bf-scene="git" data-bf-part="loading">
-            <CubeLoading size="medium" text={t('loading.text')} />
+            <LoadingState size="md">{t('loading.text')}</LoadingState>
             <p className="bitfun-git-scene__loading-hint">{t('loading.hint')}</p>
           </div>
         </div>

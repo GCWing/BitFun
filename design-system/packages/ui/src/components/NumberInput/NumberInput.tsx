@@ -4,7 +4,9 @@ import {
   useEffect,
   useRef,
   useState,
+  type FocusEventHandler,
   type InputHTMLAttributes,
+  type KeyboardEventHandler,
 } from "react";
 import { classNames } from "../../internal/classNames";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
@@ -17,17 +19,16 @@ export interface NumberInputProps extends Pick<InputHTMLAttributes<HTMLInputElem
   disableWheel?: boolean;
   draggable?: boolean;
   incrementLabel?: string;
-  inputProps?: Omit<
-    InputHTMLAttributes<HTMLInputElement>,
-    "className" | "defaultValue" | "disabled" | "onChange" | "type" | "value"
-  > & Record<`data-${string}`, string | number | boolean | undefined>;
   label?: string;
   max?: number;
   min?: number;
-  onChange: (value: number) => void;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
+  onValueChange: (value: number) => void;
+  onFocus?: FocusEventHandler<HTMLInputElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   precision?: number;
   showButtons?: boolean;
-  size?: "small" | "medium" | "large" | "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg";
   step?: number;
   unit?: string;
   value: number;
@@ -40,14 +41,16 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   disabled = false,
   disableWheel = false,
   incrementLabel = "Increase value",
-  inputProps,
   label,
   max = Number.POSITIVE_INFINITY,
   min = Number.NEGATIVE_INFINITY,
-  onChange,
+  onBlur,
+  onValueChange,
+  onFocus,
+  onKeyDown,
   precision = 0,
   showButtons = true,
-  size = "medium",
+  size = "md",
   step = 1,
   unit,
   value,
@@ -71,18 +74,16 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
     const parsed = Number.parseFloat(draft);
     if (Number.isFinite(parsed)) {
       const next = clamp(parsed);
-      onChange(next);
+      onValueChange(next);
       setDraft(format(next));
     } else {
       setDraft(format(value));
     }
     setEditing(false);
-  }, [clamp, draft, format, onChange, value]);
-  const changeBy = (amount: number) => onChange(clamp(value + amount));
-  const normalizedSize = size === "small" ? "sm" : size === "large" ? "lg" : size === "medium" ? "md" : size;
-
+  }, [clamp, draft, format, onValueChange, value]);
+  const changeBy = (amount: number) => onValueChange(clamp(value + amount));
   return (
-    <span className={classNames(styles.root, className)} data-bf-component="number-input" data-disabled={disabled ? "true" : "false"} data-size={normalizedSize} data-variant={variant}>
+    <span className={classNames(styles.root, className)} data-bf-component="number-input" data-disabled={disabled ? "true" : "false"} data-size={size} data-variant={variant}>
       {label && <span className={styles.label} data-bf-part="label">{label}</span>}
       <span
         className={styles.control}
@@ -99,31 +100,28 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
           aria-labelledby={ariaLabelledBy}
           aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
-          {...inputProps}
-          aria-label={inputProps?.["aria-label"] ?? ariaLabel ?? label}
+          aria-label={ariaLabel ?? label}
           className={styles.input}
           data-bf-part="input"
           disabled={disabled}
           inputMode="decimal"
           onBlur={(event) => {
-            inputProps?.onBlur?.(event);
+            onBlur?.(event);
             if (!event.defaultPrevented) commit();
           }}
           onChange={(event) => setDraft(event.currentTarget.value)}
           onCompositionEnd={(event) => {
             compositionActiveRef.current = false;
-            inputProps?.onCompositionEnd?.(event);
           }}
           onCompositionStart={(event) => {
             compositionActiveRef.current = true;
-            inputProps?.onCompositionStart?.(event);
           }}
           onFocus={(event) => {
             setEditing(true);
-            inputProps?.onFocus?.(event);
+            onFocus?.(event);
           }}
           onKeyDown={(event) => {
-            inputProps?.onKeyDown?.(event);
+            onKeyDown?.(event);
             if (event.defaultPrevented) return;
             if ((event.key === "Enter" || event.key === "Escape") && isImeOwnedKeyboardEvent(event, compositionActiveRef.current)) { event.stopPropagation(); return; }
             if (event.key === "ArrowUp") { event.preventDefault(); changeBy(step); }

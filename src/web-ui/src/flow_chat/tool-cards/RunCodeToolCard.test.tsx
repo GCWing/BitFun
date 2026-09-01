@@ -19,14 +19,6 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('../../component-library', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../component-library')>();
-  return {
-    ...actual,
-    ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-  };
-});
-
 // Prism loads asynchronously and paints nothing under jsdom; the plain fallback
 // is what the assertions below read.
 vi.mock('@/shared/utils/syntaxHighlighterLoader', () => ({

@@ -6,34 +6,13 @@ import {
 } from "react";
 import type { SystemTokenMode } from "@bitfun/design-tokens";
 import type { ThemeDataName } from "@bitfun/theme-bitfun";
-import {
-  AppWindow,
-  Blocks,
-  BookOpen,
-  Braces,
-  CircleDashed,
-  FileText,
-  House,
-  Languages,
-  Menu,
-  Moon,
-  MousePointerClick,
-  Palette,
-  PanelTop,
-  PanelsTopLeft,
-  Search,
-  Settings2,
-  SquareTerminal,
-  Sun,
-  ToggleLeft,
-  X,
-  type LucideIcon,
-} from "lucide-react";
-import {
+import { AppWindow, Blocks, BookOpen, Braces, CircleDashed, FileText, House, Languages, Menu, Moon, MousePointerClick, PanelTop, PanelsTopLeft, SquareTerminal, Sun, ToggleLeft, type LucideIcon } from "lucide-react";
+import { Icon as CatalogIcon,
   ThemeRoot,
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
+  type IconName,
 } from "@bitfun/ui";
 import { componentRegistry } from "@bitfun/ui/registry";
 import {
@@ -83,7 +62,7 @@ type LabRoute =
 
 interface SearchDestination {
   detail: string;
-  icon: LucideIcon;
+  icon: LucideIcon | IconName;
   keywords: string;
   label: string;
   route: LabRoute;
@@ -92,7 +71,8 @@ interface SearchDestination {
 const componentIcons: Record<string, LucideIcon> = {
   AmbientToolCard: SquareTerminal,
   Button: MousePointerClick,
-  Modal: AppWindow,
+  Dialog: AppWindow,
+  Sheet: AppWindow,
   ProminentToolCard: SquareTerminal,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
@@ -209,7 +189,7 @@ export function App() {
     },
     {
       detail: t("search.colorsDetail", { count: colorTokenCatalog.length }),
-      icon: Palette,
+      icon: "palette",
       keywords: `colors semantic palette scale reference theme ${t("nav.colors")}`,
       label: t("nav.colors"),
       route: { page: "colors" },
@@ -383,10 +363,12 @@ export function App() {
     || Boolean(activeComponent && activeComponent.category !== "flow-chat");
 
   return (
-    <div
+    <ThemeRoot
       className="lab-shell"
-      data-lab-scheme={colorScheme}
       data-sidebar-open={sidebarOpen || undefined}
+      colorScheme={colorScheme}
+      contrast={contrast}
+      density={density}
     >
       <button
         aria-label={t("app.closeNavigation")}
@@ -402,7 +384,7 @@ export function App() {
             <strong>BitFun Design</strong>
           </span>
           <button aria-label={t("app.closeNavigation")} onClick={() => setSidebarOpen(false)} type="button">
-            <X aria-hidden="true" size={18} />
+            <CatalogIcon name="xmark" size="lg" aria-hidden="true" style={{ width: 18, height: 18 }} />
           </button>
         </div>
 
@@ -451,7 +433,7 @@ export function App() {
               navigate({ page: "colors" });
             }}
           >
-            <Palette aria-hidden="true" size={17} />
+            <CatalogIcon name="palette" size="md" style={{ width: 17, height: 17 }} aria-hidden="true" />
             <span>{t("nav.colors")}</span>
             <small>{colorTokenCatalog.length}</small>
           </a>
@@ -545,7 +527,7 @@ export function App() {
             type="button"
           >
             {t(`settings.${density}` as MessageKey)}
-            <Settings2 aria-hidden="true" size={13} />
+            <CatalogIcon name="settings" size="sm" style={{ width: 13, height: 13 }} aria-hidden="true" />
           </button>
         </div>
       </aside>
@@ -562,7 +544,7 @@ export function App() {
           </button>
 
           <div className="lab-search">
-            <Search aria-hidden="true" size={17} />
+            <CatalogIcon name="search" size="lg" aria-hidden="true" style={{ width: 17, height: 17 }} />
             <input
               aria-autocomplete="list"
               aria-controls="lab-search-results"
@@ -592,7 +574,7 @@ export function App() {
                       role="option"
                       type="button"
                     >
-                      <span><Icon aria-hidden="true" size={16} /></span>
+                      <span>{typeof Icon === "string" ? <CatalogIcon name={Icon} size="md" /> : <Icon aria-hidden="true" size={16} />}</span>
                       <span>
                         <strong>{destination.label}</strong>
                         <small>{destination.detail}</small>
@@ -653,7 +635,7 @@ export function App() {
               onClick={() => setSettingsOpen((current) => !current)}
               type="button"
             >
-              <Settings2 aria-hidden="true" size={18} />
+              <CatalogIcon name="settings" size="lg" style={{ width: 18, height: 18 }} aria-hidden="true" />
             </button>
             {settingsOpen && (
               <div className="lab-settings-panel" id="lab-settings-panel">
@@ -663,7 +645,7 @@ export function App() {
                     <span>{t("settings.subtitle")}</span>
                   </div>
                   <button aria-label={t("settings.close")} onClick={() => setSettingsOpen(false)} type="button">
-                    <X aria-hidden="true" size={16} />
+                    <CatalogIcon name="xmark" size="md" aria-hidden="true" />
                   </button>
                 </div>
                 <label>
@@ -798,6 +780,6 @@ export function App() {
           {route.page === "resources" && <ResourcesPage />}
         </div>
       </div>
-    </div>
+    </ThemeRoot>
   );
 }

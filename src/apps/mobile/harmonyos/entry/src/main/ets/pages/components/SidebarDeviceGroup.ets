@@ -13,7 +13,14 @@ import {
 } from '../policy/SessionListProjection';
 import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
-import { GREEN, INK, MUTED, SOFT, SUBTLE } from './Theme';
+import {
+  INK,
+  MUTED,
+  SOFT,
+  STATUS_SUCCESS,
+  SUBTLE,
+  TRANSPARENT,
+} from './Theme';
 
 /**
  * One keyed disclosure boundary per workspace. Disclosure and request state
@@ -187,7 +194,7 @@ struct SidebarWorkspaceGroup {
           Text('')
             .width(7)
             .height(7)
-            .backgroundColor(GREEN)
+            .backgroundColor(STATUS_SUCCESS)
             .borderRadius(4)
         }
       }
@@ -205,7 +212,7 @@ struct SidebarWorkspaceGroup {
     .height(44)
     .padding({ left: this.bodyIndent + 34, right: 10 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(item.id === this.selectedSessionId ? SOFT : '#00000000')
+    .backgroundColor(item.id === this.selectedSessionId ? SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => {
       this.onOpenSession(item);

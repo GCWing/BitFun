@@ -19,7 +19,7 @@ import { activeEditTargetService, createMonacoEditTarget } from '../services/Act
 import type { MonacoEditorCoreProps } from './types';
 import type { EditorExtensionContext } from '../services/EditorExtensionManager';
 import type { EditorOptionsOverrides } from '../services/EditorOptionsBuilder';
-import type { LineRange } from '@/component-library/components/Markdown';
+import { type LineRange } from '@/shared/editor/LineRange';
 
 const log = createLogger('MonacoEditorCore');
 

@@ -75,6 +75,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
   return (
     <div className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
       <Input
+        className="bitfun-file-explorer__rename-input"
         type="text"
         size="sm"
         value={value}
@@ -157,8 +158,8 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     dragImage.style.position = 'absolute';
     dragImage.style.top = '-1000px';
     dragImage.style.padding = '8px';
-    dragImage.style.background = 'var(--bf-appearance-token-color-overlay-black-80)';
-    dragImage.style.color = 'var(--bf-appearance-token-color-static-white)';
+    dragImage.style.background = 'color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent)';
+    dragImage.style.color = 'var(--bf-color-content-on-dark)';
     dragImage.style.borderRadius = '4px';
     document.body.appendChild(dragImage);
     dragImageRef.current = dragImage;

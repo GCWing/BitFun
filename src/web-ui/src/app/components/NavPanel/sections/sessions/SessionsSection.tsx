@@ -8,8 +8,8 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Trash2, Bot, Loader2, Archive, FileDown, ChevronLeft, ChevronUp } from 'lucide-react';
-import { PresenceBoundary } from '@/component-library';
+import { Bot, Loader2, Archive, FileDown } from 'lucide-react';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
@@ -1867,7 +1867,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         <>
                           <MenuItem
                             type="button"
-                            leading={<ChevronLeft size={13} />}
+                            leading={<Icon name="chevron-left" size="lg" style={{ width: 13, height: 13 }} />}
                             onClick={e => {
                               e.stopPropagation();
                               setIsExportScopeMenu(false);
@@ -1957,7 +1957,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           <MenuItem
                             type="button"
                             tone="danger"
-                            leading={<Trash2 size={13} />}
+                            leading={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                             onClick={e => { closeSessionMenu(); void handleDelete(e, session.sessionId); }}
                             data-testid="nav-session-menu-delete"
                             data-session-id={session.sessionId}
@@ -2034,14 +2034,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           {metadataPageState.isLoading ? (
             <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" aria-hidden />
           ) : expandToggleLabels.remainingCount === null ? (
-            <ChevronUp size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            <Icon name="chevron-up" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           ) : (
             <Icon name="chevron-down" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           )}
         </button>
       )}
 
-      <PresenceBoundary active={scheduledJobsSession != null}>
+      <RetainedMountBoundary present={scheduledJobsSession != null}>
         {retainedScheduledJobsSession && (
           <Suspense fallback={null}>
             <ScheduledJobsModal
@@ -2060,7 +2060,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             />
           </Suspense>
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </div>
   );
 };

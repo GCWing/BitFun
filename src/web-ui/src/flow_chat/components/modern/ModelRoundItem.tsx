@@ -30,7 +30,7 @@ import {
   buildModelRoundItemGroups,
   type ModelRoundItemGroup,
 } from './modelRoundItemGrouping';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {

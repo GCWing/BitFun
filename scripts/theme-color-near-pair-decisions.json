@@ -3,7 +3,7 @@
   "description": "Explicit decisions for specialized theme near-color pairs. Keep this file in sync with scripts/audit-theme-colors.mjs output; lower the audit baseline when a pair is merged.",
   "decisions": [
     {
-      "root": "src/web-ui/src",
+      "root": "src/web-ui",
       "domain": "themePreset",
       "key": "#1a1b26 <-> #1c1c1f",
       "decision": "keep",
@@ -12,7 +12,7 @@
       "reevaluateWhen": "Only after a visual review proves Tokyo Night no longer needs a distinct primary background identity."
     },
     {
-      "root": "src/web-ui/src",
+      "root": "src/web-ui",
       "domain": "themePreset",
       "key": "#1c1c1f <-> #212019",
       "decision": "keep",
@@ -21,7 +21,7 @@
       "reevaluateWhen": "Only if China Night gets a separate editor lineHighlight token or visual review proves the current-line cue remains visible."
     },
     {
-      "root": "src/web-ui/src",
+      "root": "src/web-ui",
       "domain": "themePreset",
       "key": "#2b2d30 <-> #313335",
       "decision": "keep",
@@ -30,7 +30,7 @@
       "reevaluateWhen": "Only after a Midnight surface-ramp redesign removes the adjacent role split."
     },
     {
-      "root": "src/web-ui/src",
+      "root": "src/web-ui",
       "domain": "appearanceProjection",
       "key": "#0451a5 <-> #0550ae",
       "decision": "keep",
@@ -39,49 +39,13 @@
       "reevaluateWhen": "Reevaluate only when terminal ANSI and workbench link roles share a reviewed palette contract."
     },
     {
-      "root": "src/web-ui/src",
-      "domain": "appearanceProjection",
-      "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts",
-      "reason": "The black overlay ladder separates subtle and stronger elevation states in light Appearance packages; both stops are intentional adjacent-state values.",
-      "reevaluateWhen": "Reevaluate when the light Appearance overlay ladder is redesigned with focused surface-state screenshots."
-    },
-    {
-      "root": "src/web-ui/src",
+      "root": "src/web-ui",
       "domain": "appearanceProjection",
       "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins/buildBuiltinAppearance.ts",
       "reason": "The white overlay ladder separates subtle and stronger elevation states in dark Appearance packages; both stops are intentional adjacent-state values.",
       "reevaluateWhen": "Reevaluate when the dark Appearance overlay ladder is redesigned with focused surface-state screenshots."
-    },
-    {
-      "root": "BitFun-Installer/src",
-      "domain": "themePreset",
-      "key": "#0e0e10 <-> #121214",
-      "decision": "keep",
-      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
-      "reason": "ThemeSetup renders dark theme cards side by side with primary and secondary preview backgrounds. Cyber needs its own darker primary preview seed so the named theme is not distinguishable only by label and accent.",
-      "reevaluateWhen": "Only if installer theme selection adds a separate identity swatch or screenshots prove the primary preview no longer carries theme identity."
-    },
-    {
-      "root": "BitFun-Installer/src",
-      "domain": "themePreset",
-      "key": "#1a1b26 <-> #1a1c1e",
-      "decision": "keep",
-      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
-      "reason": "Tokyo Night appears as an adjacent installer preview card, and its primary background should preserve the Tokyo base hue while the shared installer card surface stays neutral.",
-      "reevaluateWhen": "Only after installer preview cards are redesigned to use a dedicated non-background theme identity affordance."
-    },
-    {
-      "root": "BitFun-Installer/src",
-      "domain": "themePreset",
-      "key": "#121214 <-> #1a1814",
-      "decision": "keep",
-      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
-      "reason": "Ink Night uses a warmer dark primary background in adjacent installer preview cards. Collapsing it into the canonical dark seed makes multiple dark choices visually flatter before the app is installed.",
-      "reevaluateWhen": "Only if visual review shows installer dark theme cards no longer rely on primary background identity."
     }
   ]
 }

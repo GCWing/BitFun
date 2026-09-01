@@ -5,10 +5,8 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Button, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
+import { Icon, Button, Combobox, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Trash2 } from 'lucide-react';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   cronAPI,
@@ -618,7 +616,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
 
       {loading ? (
         <div className="asv__empty" data-bf-component="scheduled-jobs-view" data-bf-part="empty" data-bf-state="loading">
-          <RefreshCw size={14} className="asv__spin" />
+          <Icon name="refresh" size="sm" className="asv__spin" />
         </div>
       ) : sortedJobs.length === 0 && expandedJobId !== NEW_JOB_ID ? (
         <div className="asv__empty" data-bf-component="scheduled-jobs-view" data-bf-part="empty">
@@ -657,6 +655,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                           role="presentation"
                         >
                           <Switch
+                            className="asv__switch"
                             checked={job.enabled}
                             onChange={e => {
                               void handleToggleEnabled(job, e.currentTarget.checked);
@@ -671,7 +670,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                             tone="danger"
                             aria-label={t('nav.scheduledJobs.actions.delete')}
                             onClick={e => { e.stopPropagation(); void handleDeleteJob(job); }}
-                            icon={<Trash2 size={13} />}
+                            icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                           />
                         </Tooltip>
                       </div>
@@ -776,6 +775,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <div className="asv__toggle-card" data-bf-component="scheduled-jobs-view" data-bf-part="toggle">
                 <span className="asv__toggle-label">{t('nav.scheduledJobs.fields.enabled')}</span>
                 <Switch
+                  className="asv__switch"
                   checked={draft.enabled}
                   onChange={e => {
                     const enabled = e.currentTarget.checked;
@@ -907,16 +907,14 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <LocalizedCombobox
+              <Combobox
                 size="sm"
                 options={sessionOptions}
                 value={draft.sessionId}
                 invalid={validationErrors.sessionId}
-                allowCustomValue
-                searchable
+                onCreateValue={value => value}
                 clearable
                 className="asv__session-select"
-                dropdownClassName="asv__session-select-dropdown"
                 onValueChange={value => {
                   setValidationErrors(current => ({ ...current, sessionId: false }));
                   setDraft(c => ({ ...c, sessionId: String(value) }));
@@ -931,22 +929,13 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.agentType')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <LocalizedCombobox
+              <Combobox
                 size="sm"
                 options={workspaceAgentOptions}
                 value={draft.agentType}
                 invalid={validationErrors.agentType}
                 disabled={workspaceKind === WorkspaceKind.Assistant}
                 className="asv__agent-select"
-                dropdownClassName="asv__agent-select-dropdown"
-                renderOption={option => (
-                  <div className="asv__agent-option">
-                    <span className="asv__agent-option-label">{option.label}</span>
-                    {option.description ? (
-                      <span className="asv__agent-option-description">{option.description}</span>
-                    ) : null}
-                  </div>
-                )}
                 onValueChange={value => {
                   const agentType = String(value);
                   setValidationErrors(current => ({ ...current, agentType: false }));
@@ -962,13 +951,12 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <LocalizedCombobox
+              <Combobox
                 size="sm"
                 options={sessionOptions}
                 value={draft.sessionId}
                 invalid={validationErrors.sessionId}
-                allowCustomValue
-                searchable
+                onCreateValue={value => value}
                 onValueChange={value => {
                   setValidationErrors(current => ({ ...current, sessionId: false }));
                   setDraft(c => ({ ...c, sessionId: String(value) }));
@@ -986,13 +974,14 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
             <Textarea
               className="asv__prompt-textarea"
+              rows={4}
               value={draft.text}
               onChange={e => {
                 const text = e.currentTarget.value;
                 setValidationErrors(current => ({ ...current, text: false }));
                 setDraft(c => ({ ...c, text }));
               }}
-              error={validationErrors.text}
+              invalid={validationErrors.text}
               autoResize
               showCount
               maxLength={4000}

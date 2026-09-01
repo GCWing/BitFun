@@ -1,4 +1,3 @@
-@use '../../../../component-library/styles/tokens' as *;
 @use './AgentSurfaceCard' as surface;
 
 .core-agent-card {
@@ -25,7 +24,7 @@
       inset-block: 12px;
       inset-inline-end: 0;
       width: 1px;
-      background: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-border-subtle);
     }
   }
 
@@ -35,13 +34,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    box-shadow: $shadow-xs;
-    color: var(--bf-appearance-token-color-text-primary);
+    border-radius: var(--bf-radius-lg);
+    background: var(--bf-color-surface-subtle);
+    box-shadow: var(--bf-shadow-xs);
+    color: var(--bf-color-content-primary);
     position: relative;
     z-index: 1;
-    transition: transform $motion-fast $easing-decelerate;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate);
   }
 
   &__dot-field {
@@ -63,7 +62,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     min-width: 0;
   }
 
@@ -80,20 +79,20 @@
   &__name {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-base);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  &__role[data-bf-component='status-pill'] {
+  &__role {
     max-width: 100%;
     padding: 1px 6px;
     overflow: hidden;
     border-color: transparent;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-micro);
     text-overflow: ellipsis;
   }
@@ -106,14 +105,14 @@
     flex: 0 1 auto;
     padding-top: 2px;
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-micro);
     line-height: var(--bf-line-height-base);
     white-space: nowrap;
 
-    [data-bf-component="icon"] {
+    .core-agent-card__status-icon {
       flex: none;
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
 
     > span {
@@ -122,10 +121,10 @@
     }
 
     &.is-disabled {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
 
-      [data-bf-component="icon"] {
-        color: var(--bf-appearance-token-color-warning);
+      .core-agent-card__status-icon {
+        color: var(--bf-color-status-warning-content);
       }
     }
   }
@@ -139,7 +138,7 @@
     margin: 0;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-relaxed);
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -176,7 +175,7 @@
     strong {
       min-width: 0;
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-meta);
       font-variant-numeric: tabular-nums;
       line-height: var(--bf-line-height-none);
@@ -196,13 +195,13 @@
     place-items: center;
     flex: none;
     border-radius: 5px;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-secondary);
   }
 
   &__meta-label {
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-2xs);
     line-height: var(--bf-line-height-none);
     text-overflow: ellipsis;

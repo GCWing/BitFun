@@ -28,7 +28,6 @@ export interface SelectProps
   defaultValue?: SelectValue;
   invalid?: boolean;
   leading?: ReactNode;
-  onChange?: ChangeEventHandler<HTMLSelectElement>;
   onValueChange?: (value: SelectValue) => void;
   options: readonly SelectOption[];
   placeholder?: string;
@@ -77,7 +76,6 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   disabled = false,
   invalid = false,
   leading,
-  onChange,
   onValueChange,
   options,
   placeholder,
@@ -88,9 +86,6 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   const { groups, ungrouped } = groupOptions(options);
 
   const handleChange: ChangeEventHandler<HTMLSelectElement> = (event) => {
-    onChange?.(event);
-    if (event.defaultPrevented) return;
-
     const option = options.find((candidate) => String(candidate.value) === event.currentTarget.value);
     if (option) onValueChange?.(option.value);
   };

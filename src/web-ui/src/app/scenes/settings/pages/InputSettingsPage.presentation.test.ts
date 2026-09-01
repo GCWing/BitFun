@@ -41,7 +41,7 @@ describe('InputSettingsPage structure', () => {
     expect(voiceSource).toContain('setLocalModelsOpen(true)');
     expect(voiceSource).toContain('isOpen={localModelsOpen}');
     expect(voiceSource).not.toContain('local-models-anchor');
-    expect(dialogSource).toContain('<Modal');
+    expect(dialogSource).toContain('<Dialog');
     expect(dialogSource).not.toContain('<ConfigPageSection');
     expect(dialogSource).not.toContain('{model.provider}');
     expect(dialogSource).not.toContain('{model.version}');

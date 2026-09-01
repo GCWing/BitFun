@@ -1,48 +1,46 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .miniapp-gallery {
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
   .gallery-page-header {
     position: relative;
-    padding-block: $size-gap-6 $size-gap-5;
-    background: var(--bf-appearance-token-color-bg-scene);
+    padding-block: var(--bf-space-6) var(--bf-space-5);
+    background: var(--bf-color-surface-scene);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
 
   .gallery-zones {
-    gap: $size-gap-6;
-    padding-top: $size-gap-3;
+    gap: var(--bf-space-6);
+    padding-top: var(--bf-space-3);
   }
 
   .gallery-zone {
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__running-zone {
     .gallery-zone__title {
       display: inline-flex;
       align-items: center;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
 
       &::before {
         content: '';
         flex: 0 0 auto;
         width: 8px;
         height: 8px;
-        border-radius: $size-radius-full;
-        background: var(--bf-appearance-token-color-text-primary);
-        box-shadow: 0 0 0 2px var(--bf-appearance-token-element-bg-medium);
+        border-radius: var(--bf-radius-pill);
+        background: var(--bf-color-content-primary);
+        box-shadow: 0 0 0 2px var(--bf-color-action-neutral-surface-hover);
       }
     }
 
     &:not(.is-empty) .gallery-zone__header {
       min-height: 58px;
-      padding: 0 $size-gap-4;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-lg;
-      background: var(--bf-appearance-token-element-bg-subtle);
+      padding: 0 var(--bf-space-4);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-lg);
+      background: var(--bf-color-surface-subtle);
       box-sizing: border-box;
     }
 
@@ -51,11 +49,11 @@
       grid-template-columns: max-content minmax(0, 1fr);
       align-items: center;
       min-height: 58px;
-      padding: 0 $size-gap-4;
-      column-gap: $size-gap-4;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-lg;
-      background: var(--bf-appearance-token-element-bg-subtle);
+      padding: 0 var(--bf-space-4);
+      column-gap: var(--bf-space-4);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-lg);
+      background: var(--bf-color-surface-subtle);
       box-sizing: border-box;
 
       .gallery-zone__header {
@@ -107,8 +105,8 @@
   .miniapp-gallery {
     &__running-zone.is-empty {
       grid-template-columns: max-content minmax(0, 1fr);
-      padding-inline: $size-gap-3;
-      column-gap: $size-gap-3;
+      padding-inline: var(--bf-space-3);
+      column-gap: var(--bf-space-3);
     }
 
     .gallery-page-header__actions {

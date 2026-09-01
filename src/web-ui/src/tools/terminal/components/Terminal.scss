@@ -5,7 +5,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background-color: var(--bf-appearance-token-color-bg-scene);
+  background-color: var(--bf-color-surface-scene);
   overflow: hidden;
 
   &__container {
@@ -26,7 +26,7 @@
 
       &:not(.allow-transparency) {
         .xterm-viewport {
-          background-color: var(--bf-appearance-token-color-bg-scene);
+          background-color: var(--bf-color-surface-scene);
         }
       }
 
@@ -44,14 +44,14 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     gap: 12px;
 
     &-spinner {
       width: 32px;
       height: 32px;
-      border: 3px solid var(--bf-appearance-token-element-bg-subtle);
-      border-top-color: var(--bf-appearance-token-color-accent-500);
+      border: 3px solid var(--bf-color-surface-subtle);
+      border-top-color: var(--bf-color-accent-default);
       border-radius: 50%;
       animation: terminal-spin 1s linear infinite;
     }
@@ -68,7 +68,7 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
     gap: 12px;
     padding: 20px;
 
@@ -92,8 +92,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 4px 8px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-panel);
+    border-bottom: 1px solid var(--bf-color-border-default);
 
     &-left {
       display: flex;
@@ -109,10 +109,10 @@
 
     &-title {
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
 
       .shell-type {
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         margin-left: 8px;
       }
     }
@@ -126,7 +126,7 @@
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       cursor: pointer;
       transition:
         transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -134,17 +134,17 @@
         color 140ms ease;
 
       &:hover {
-        background: var(--bf-appearance-token-element-bg-soft);
-        color: var(--bf-appearance-token-color-text-primary);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-content-primary);
       }
 
       &:active {
-        background: var(--bf-appearance-token-element-bg-base);
+        background: var(--bf-color-action-neutral-surface);
       }
 
       &--danger:hover {
-        background: var(--bf-appearance-token-color-error-bg);
-        color: var(--bf-appearance-token-color-error);
+        background: var(--bf-color-status-danger-surface);
+        color: var(--bf-color-status-danger-content);
       }
     }
   }
@@ -154,16 +154,16 @@
     align-items: center;
     justify-content: space-between;
     padding: 2px 8px;
-    background: var(--bf-appearance-token-color-info);
+    background: var(--bf-color-status-info-content);
     font-size: var(--bf-font-size-meta);
-    color: white;
+    color: var(--bf-color-content-on-dark);
 
     &--error {
-      background: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-content);
     }
 
     &--exited {
-      background: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-color-content-muted);
     }
 
     &-left {

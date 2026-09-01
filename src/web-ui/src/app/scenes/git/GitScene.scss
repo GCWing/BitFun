@@ -38,11 +38,11 @@
   &__init-line {
     width: 40px;
     height: 1px;
-    background: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-border-subtle);
 
     &--dashed {
       border: none;
-      background: repeating-linear-gradient(90deg, var(--bf-appearance-token-border-subtle) 0, var(--bf-appearance-token-border-subtle) 4px, transparent 4px, transparent 8px);
+      background: repeating-linear-gradient(90deg, var(--bf-color-border-subtle) 0, var(--bf-color-border-subtle) 4px, transparent 4px, transparent 8px);
     }
   }
 
@@ -50,7 +50,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-content-muted);
 
     &--muted {
       opacity: 0.5;
@@ -67,7 +67,7 @@
   }
 
   &__init-icon {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__init-text {
@@ -77,18 +77,18 @@
       margin: 0 0 4px;
       font-size: var(--bf-font-size-base);
       font-weight: var(--bf-font-weight-semibold);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
     p {
       margin: 0;
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
   &__init-hint {
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__loading-actions {

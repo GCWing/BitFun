@@ -79,7 +79,7 @@ export function Options({
     <div className="page-shell">
       <div className="page-scroll">
         <div className="page-container page-container--center" style={{ maxWidth: 560 }}>
-          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>
+          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--bf-color-content-muted)' }}>
             {t('options.subtitle')}
           </div>
           {existingInstall?.detected ? (
@@ -88,11 +88,11 @@ export function Options({
                 marginBottom: 16,
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid color-mix(in srgb, var(--color-accent-500) 45%, transparent)',
-                background: 'color-mix(in srgb, var(--color-accent-500) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--bf-color-accent-default) 45%, transparent)',
+                background: 'color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent)',
                 fontSize: 12,
                 lineHeight: 1.55,
-                color: 'var(--color-text-primary)',
+                color: 'var(--bf-color-content-primary)',
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('options.existingInstallTitle')}</div>
@@ -107,7 +107,7 @@ export function Options({
                 </div>
               ) : null}
               {!existingInstall.mainBinaryPresent ? (
-                <div style={{ marginBottom: 8, color: 'var(--color-warning)' }}>
+                <div style={{ marginBottom: 8, color: 'var(--bf-color-status-warning-content)' }}>
                   {t('options.existingInstallBinaryMissing')}
                 </div>
               ) : null}
@@ -173,7 +173,7 @@ export function Options({
                   gap: 16,
                   marginTop: 8,
                   fontSize: 11,
-                  color: 'var(--color-text-muted)',
+                  color: 'var(--bf-color-content-muted)',
                   opacity: 0.7,
                   flexWrap: 'wrap',
                 }}
@@ -184,7 +184,7 @@ export function Options({
                   {diskSpace.available < Number.MAX_SAFE_INTEGER ? formatBytes(diskSpace.available) : '-'}
                 </span>
                 {!diskSpace.sufficient && (
-                  <span style={{ color: 'var(--color-error)' }}>{t('options.insufficientSpace')}</span>
+                  <span style={{ color: 'var(--bf-color-status-danger-content)' }}>{t('options.insufficientSpace')}</span>
                 )}
               </div>
             )}

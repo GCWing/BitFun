@@ -38,12 +38,12 @@ function catalogSize(size: number): IconSize {
 }
 
 const ICON_GRADIENTS = [
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 35%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 25%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-success) 30%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 25%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 35%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-cyan-500) 30%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 25%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent) 0%, color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-accent-hover) 35%, transparent) 0%, color-mix(in srgb, var(--bf-color-accent-secondary) 25%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-status-success-content) 30%, transparent) 0%, color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent) 0%, color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-accent-secondary) 35%, transparent) 0%, color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--bf-domain-generative-ui) 30%, transparent) 0%, color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-status-danger-content) 25%, transparent) 0%, color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent) 100%)',
 ];
 
 const MINI_APP_ICONS = {

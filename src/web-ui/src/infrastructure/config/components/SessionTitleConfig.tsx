@@ -1,7 +1,6 @@
-import { Switch } from '@bitfun/ui';
+import { Combobox, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -36,7 +35,7 @@ export const SessionTitleConfig: React.FC = () => {
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [taskModels, setTaskModels] = useState<TaskModelsConfig>(DEFAULT_TASK_MODELS);
-  const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
+  const { buildModelOption } = useModelSelectPresentation();
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -174,18 +173,13 @@ export const SessionTitleConfig: React.FC = () => {
             data-bf-component="session-title-config"
             data-bf-part="modelControl"
           >
-            <LocalizedCombobox
+            <Combobox
               size="sm"
-              searchable
-              className="model-select-presentation__select"
-              dropdownClassName="model-select-presentation__dropdown"
               options={modelOptions}
               value={sessionTitleModelId}
               onValueChange={(value) => void handleModelChange(normalizeSelectValue(value))}
-              renderOption={renderModelOption}
-              renderValue={renderModelValue}
               disabled={isLoading}
-              triggerTestId="settings-session-title-model-select"
+              data-testid="settings-session-title-model-select"
             />
           </div>
         </ConfigPageRow>

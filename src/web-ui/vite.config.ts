@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { versionInjectionPlugin } from "./vite.config.version-plugin";
 import { bitfunCanvasRuntimeBundlePlugin } from "./vite.config.canvas-runtime-plugin";
+import { watchSourcePlugin } from "../../design-system/tooling/vite/watch-source.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 const designSystemUiSourceDirectory = path.resolve(
@@ -80,6 +81,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     plugins: [
       react(),
+      watchSourcePlugin(designSystemUiSourceDirectory),
       bitfunCanvasRuntimeBundlePlugin(),
       versionInjectionPlugin()
     ],
@@ -93,10 +95,8 @@ export default defineConfig(({ mode, command }) => {
         { find: "@/core", replacement: path.resolve(__dirname, "./src/core") },
         { find: "@/tools", replacement: path.resolve(__dirname, "./src/tools") },
         { find: "@/hooks", replacement: path.resolve(__dirname, "./src/hooks") },
-        { find: "@/styles", replacement: path.resolve(__dirname, "./src/component-library/styles") },
         { find: "@/types", replacement: path.resolve(__dirname, "./src/shared/types") },
         { find: "@/utils", replacement: path.resolve(__dirname, "./src/shared/utils") },
-        { find: "@components", replacement: path.resolve(__dirname, "./src/component-library/components") },
         { find: "@", replacement: path.resolve(__dirname, "./src") },
       ],
     },

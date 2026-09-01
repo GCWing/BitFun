@@ -1,15 +1,11 @@
-@use '../../../../component-library/styles/tokens' as tokens;
-
 .agent-capability-tooltip {
-  [data-bf-part='content'] {
+  &__body {
     width: min(360px, calc(100vw - 16px));
     max-width: min(360px, calc(100vw - 16px));
-    max-inline-size: none;
-    padding: tokens.$size-gap-2 tokens.$size-gap-3;
   }
 
   &__title {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-ui);
@@ -17,8 +13,8 @@
   }
 
   &__description {
-    margin-top: tokens.$size-gap-1;
-    color: var(--bf-appearance-token-color-text-secondary);
+    margin-top: var(--bf-space-1);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-support);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -26,20 +22,20 @@
 
   &__fields {
     display: grid;
-    gap: tokens.$size-gap-1;
-    margin: tokens.$size-gap-2 0 0;
-    padding-top: tokens.$size-gap-2;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    gap: var(--bf-space-1);
+    margin: var(--bf-space-2) 0 0;
+    padding-top: var(--bf-space-2);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__field {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    gap: tokens.$size-gap-3;
+    gap: var(--bf-space-3);
     align-items: baseline;
 
     dt {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
       line-height: var(--bf-line-height-ui);
     }
@@ -47,7 +43,7 @@
     dd {
       min-width: 0;
       margin: 0;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-xs);
       line-height: var(--bf-line-height-ui);
       overflow-wrap: anywhere;

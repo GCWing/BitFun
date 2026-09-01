@@ -343,7 +343,7 @@ private fun ManualPairing(
     val consumeTouches = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
-            .background(bitFunColors.modalScrim)
+            .background(MaterialTheme.colorScheme.scrim)
             .clickable(enabled = !connecting, onClick = onBack),
         contentAlignment = Alignment.Center,
     ) {
@@ -525,7 +525,7 @@ private fun CameraFrame() {
         modifier = Modifier
             .size(282.dp)
             .clip(RoundedCornerShape(40.dp))
-            .background(Color.Black.copy(alpha = 0.10f)),
+            .background(bitFunColors.shadowMedium),
     ) {
         ScanCorner(accent, Alignment.TopStart, true, true)
         ScanCorner(accent, Alignment.TopEnd, false, true)

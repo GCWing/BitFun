@@ -4,22 +4,22 @@ import { AppearanceRegistry } from '../registry/AppearanceRegistry';
 import type {
   AppearancePackage,
   AppearanceRendererAdapter,
-  CssTokenAppearanceSettings,
+  ThemeTokenAppearanceSettings,
 } from '../types';
 import { AppearanceRuntime } from './AppearanceRuntime';
 
 function pkg(id: string, background: string): AppearancePackage {
   return {
     schema: 'bitfun.appearance',
-    schemaVersion: 1,
+    schemaVersion: 2,
     id,
     name: id,
     version: '1.0.0',
     mode: 'dark',
     renderers: {
-      'css-tokens': {
+      'theme-tokens': {
         version: 1,
-        settings: { tokens: {}, background },
+        settings: { tokens: { '--bf-color-surface-canvas': background } },
       },
     },
   };
@@ -40,13 +40,13 @@ describe('AppearanceRuntime', () => {
   });
 
   it('commits revisions atomically and rolls renderer adapters back on failure', async () => {
-    const calls: Array<Readonly<CssTokenAppearanceSettings> | undefined> = [];
-    const adapter: AppearanceRendererAdapter<'css-tokens'> = {
-      id: 'css-tokens',
+    const calls: Array<Readonly<ThemeTokenAppearanceSettings> | undefined> = [];
+    const adapter: AppearanceRendererAdapter<'theme-tokens'> = {
+      id: 'theme-tokens',
       validate: () => [],
       apply: async next => {
         calls.push(next ? { ...next } : undefined);
-        if (next?.background === 'fail') throw new Error('renderer failed');
+        if (next?.tokens['--bf-color-surface-canvas'] === 'fail') throw new Error('renderer failed');
       },
     };
     const registry = new AppearanceRegistry().registerRenderer(adapter).freeze();
@@ -62,7 +62,7 @@ describe('AppearanceRuntime', () => {
     expect(runtime.getSnapshot()?.id).toBe('test.first');
     expect(document.documentElement.getAttribute('data-bf-appearance')).toBe('test.first');
     expect(document.querySelectorAll('style[data-bf-appearance-runtime]')).toHaveLength(1);
-    expect(calls.at(-1)).toEqual({ tokens: {}, background: 'first' });
+    expect(calls.at(-1)).toEqual({ tokens: { '--bf-color-surface-canvas': 'first' } });
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
@@ -75,7 +75,7 @@ describe('AppearanceRuntime', () => {
     const runtime = new AppearanceRuntime(registry);
     const assetPackage: AppearancePackage = {
       schema: 'bitfun.appearance',
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: 'test.assets',
       name: 'Assets',
       version: '1.0.0',
@@ -119,7 +119,7 @@ describe('AppearanceRuntime', () => {
     const runtime = new AppearanceRuntime(registry);
     const assetPackage: AppearancePackage = {
       schema: 'bitfun.appearance',
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: 'test.assets',
       name: 'Assets',
       version: '1.0.0',
@@ -165,7 +165,7 @@ describe('AppearanceRuntime', () => {
     const runtime = new AppearanceRuntime(new AppearanceRegistry().freeze());
     const assetPackage: AppearancePackage = {
       schema: 'bitfun.appearance',
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: 'test.video-background',
       name: 'Video Background',
       version: '1.0.0',
@@ -195,11 +195,11 @@ describe('AppearanceRuntime', () => {
 
   it('keeps a staged revision inactive until renderer transactions commit', async () => {
     const observations: Array<{ rootRevision: string | null; stagedCss: string }> = [];
-    const adapter: AppearanceRendererAdapter<'css-tokens'> = {
-      id: 'css-tokens',
+    const adapter: AppearanceRendererAdapter<'theme-tokens'> = {
+      id: 'theme-tokens',
       validate: () => [],
       apply: next => {
-        if (next?.background !== 'second') return;
+        if (next?.tokens['--bf-color-surface-canvas'] !== 'second') return;
         const stagedStyle = document.querySelector<HTMLStyleElement>(
           'style[data-bf-appearance-runtime="2"]',
         );
@@ -225,21 +225,21 @@ describe('AppearanceRuntime', () => {
   });
 
   it('applies normal cascade after legacy styles and reserves important for explicit overrides', async () => {
-    document.head.innerHTML = '<style>.legacy-card { color: rgb(255, 0, 0); }</style>';
-    document.body.innerHTML = '<div class="legacy-card" data-bf-component="card" data-bf-part="root">Run</div>';
+    document.head.innerHTML = '<style>.legacy-gallery { color: rgb(255, 0, 0); }</style>';
+    document.body.innerHTML = '<div class="legacy-gallery" data-bf-component="gallery-layout" data-bf-part="root">Run</div>';
     const registry = new AppearanceRegistry()
-      .registerComponent({ id: 'card', parts: [{ id: 'root' }] })
+      .registerComponent({ id: 'gallery-layout', parts: [{ id: 'root' }] })
       .freeze();
     const runtime = new AppearanceRuntime(registry);
     const basePackage: AppearancePackage = {
       schema: 'bitfun.appearance',
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: 'test.computed-style',
       name: 'Computed Style',
       version: '1.0.0',
       mode: 'dark',
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: { base: { color: { kind: 'hex', value: '#00ff00' } } },
           },
@@ -248,14 +248,14 @@ describe('AppearanceRuntime', () => {
     };
 
     await runtime.initialize(basePackage);
-    const card = document.querySelector('[data-bf-component="card"]') as HTMLDivElement;
-    expect(window.getComputedStyle(card).color).toBe('rgb(0, 255, 0)');
+    const gallery = document.querySelector('[data-bf-component="gallery-layout"]') as HTMLDivElement;
+    expect(window.getComputedStyle(gallery).color).toBe('rgb(0, 255, 0)');
 
-    card.style.color = 'rgb(255, 0, 0)';
+    gallery.style.color = 'rgb(255, 0, 0)';
     await runtime.applyPackage({
       ...basePackage,
       components: {
-        card: {
+        'gallery-layout': {
           parts: {
             root: {
               cascade: 'override',
@@ -265,6 +265,6 @@ describe('AppearanceRuntime', () => {
         },
       },
     });
-    expect(window.getComputedStyle(card).color).toBe('rgb(0, 0, 255)');
+    expect(window.getComputedStyle(gallery).color).toBe('rgb(0, 0, 255)');
   });
 });

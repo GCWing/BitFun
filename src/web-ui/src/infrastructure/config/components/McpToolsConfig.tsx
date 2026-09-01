@@ -4,19 +4,22 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
-import { Button, Icon, IconButton, Modal, Textarea, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Textarea,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FileJson,
-  RefreshCw,
-  Play,
-  Square,
-  AlertTriangle,
-  MinusCircle,
-  KeyRound,
-  Trash2,
-} from 'lucide-react';
+import { FileJson, Play, Square, AlertTriangle, MinusCircle, KeyRound } from 'lucide-react';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import {
@@ -1169,7 +1172,7 @@ const McpToolsConfig: React.FC = () => {
               size="sm"
               onClick={() => void loadServers()}
               aria-label={tMcp('actions.refresh')}
-              icon={<RefreshCw size={16} aria-hidden="true" />}
+              icon={<Icon name="refresh" size="md" aria-hidden="true" />}
             />
           </Tooltip>
         </>
@@ -1203,12 +1206,12 @@ const McpToolsConfig: React.FC = () => {
       <>
         {isRemoteServer(server) && (
           <Tooltip content={tMcp('actions.remoteAuth')}>
-          <IconButton
-            size="sm"
-            onClick={() => handleOpenAuthDialog(server)}
-            disabled={lifecyclePending}
-            data-testid="mcp-server-auth"
-            aria-label={tMcp('actions.remoteAuth')}
+            <IconButton
+              size="sm"
+              onClick={() => handleOpenAuthDialog(server)}
+              disabled={lifecyclePending}
+              data-testid="mcp-server-auth"
+              aria-label={tMcp('actions.remoteAuth')}
               icon={pendingAction === 'authorize'
                 ? <ToolProcessingDots size={10} />
                 : <KeyRound size={14} />}
@@ -1216,13 +1219,13 @@ const McpToolsConfig: React.FC = () => {
           </Tooltip>
         )}
         <Tooltip content={tMcp('actions.delete')}>
-        <IconButton
-          size="sm"
-          onClick={() => handleDeleteServer(server)}
-          disabled={lifecyclePending}
-          data-testid="mcp-server-delete"
-          aria-label={tMcp('actions.delete')}
-            icon={<Trash2 size={14} />}
+          <IconButton
+            size="sm"
+            onClick={() => handleDeleteServer(server)}
+            disabled={lifecyclePending}
+            data-testid="mcp-server-delete"
+            aria-label={tMcp('actions.delete')}
+            icon={<Icon name="delete" size="sm" />}
           />
         </Tooltip>
         {isStopped(server.status) ? (
@@ -1234,9 +1237,9 @@ const McpToolsConfig: React.FC = () => {
             <IconButton
               size="sm"
               variant="primary"
-            onClick={() => handleStartServer(server)}
-            disabled={lifecyclePending}
-            data-testid="mcp-server-start"
+              onClick={() => handleStartServer(server)}
+              disabled={lifecyclePending}
+              data-testid="mcp-server-start"
               aria-label={
                 canStartServer(server)
                   ? tMcp('actions.start')
@@ -1252,9 +1255,9 @@ const McpToolsConfig: React.FC = () => {
             <IconButton
               size="sm"
               tone="danger"
-            onClick={() => handleStopServer(server.id)}
-            disabled={lifecyclePending}
-            data-testid="mcp-server-stop"
+              onClick={() => handleStopServer(server.id)}
+              disabled={lifecyclePending}
+              data-testid="mcp-server-stop"
               aria-label={tMcp('actions.stop')}
               icon={pendingAction === 'stop'
                 ? <ToolProcessingDots size={10} />
@@ -1269,9 +1272,9 @@ const McpToolsConfig: React.FC = () => {
         }>
           <IconButton
             size="sm"
-          onClick={() => handleRestartServer(server)}
-          disabled={lifecyclePending}
-          data-testid="mcp-server-restart"
+            onClick={() => handleRestartServer(server)}
+            disabled={lifecyclePending}
+            data-testid="mcp-server-restart"
             aria-label={
               canStartServer(server)
                 ? tMcp('actions.restart')
@@ -1279,7 +1282,7 @@ const McpToolsConfig: React.FC = () => {
             }
             icon={pendingAction === 'restart'
               ? <ToolProcessingDots size={10} />
-              : <RefreshCw size={14} />}
+              : <Icon name="refresh" size="sm" />}
           />
         </Tooltip>
       </>
@@ -1415,7 +1418,7 @@ const McpToolsConfig: React.FC = () => {
                   size="sm"
                   onClick={() => void loadJsonConfig()}
                   aria-label={tMcp('actions.refresh')}
-                  icon={<RefreshCw size={16} aria-hidden="true" />}
+                  icon={<Icon name="refresh" size="md" aria-hidden="true" />}
                 />
               </Tooltip>
             </div>
@@ -1441,7 +1444,7 @@ const McpToolsConfig: React.FC = () => {
                 data-bf-component="mcp-tools-config"
                 data-bf-part="jsonTextarea"
                 spellCheck={false}
-                error={!!jsonLintError}
+                invalid={Boolean(jsonLintError)}
                 errorMessage={
                   jsonLintError
                     ? tMcp('jsonEditor.lintError', {
@@ -1523,17 +1526,20 @@ const McpToolsConfig: React.FC = () => {
 
         <ExternalMcpOverview />
       </ConfigPageContent>
-      <Modal
-        isOpen={desktopConfigAvailable && !!authDialogServer}
-        onClose={handleCloseAuthDialog}
-        title={
-          authDialogServer
-            ? tMcp('modal.remoteAuthTitle', { serverName: authDialogServer.name })
-            : tMcp('actions.remoteAuth')
-        }
-        size="medium"
-        showCloseButton={!authSubmitting && !oauthCancelling}
+      <Dialog
+        open={desktopConfigAvailable && !!authDialogServer}
+        onOpenChange={(nextOpen) => { if (!nextOpen) handleCloseAuthDialog(); }}
+        size="md"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{authDialogServer
+            ? tMcp('modal.remoteAuthTitle', { serverName: authDialogServer.name })
+            : tMcp('actions.remoteAuth')}</DialogTitle>
+          </DialogHeading>
+          {!authSubmitting && !oauthCancelling && <DialogClose />}
+        </DialogHeader>
+        <DialogBody inset="none">
         {authDialogServer && (
           <div className="bitfun-mcp-tools__json-editor" data-bf-component="mcp-tools-config" data-bf-part="authEditor">
             {authDialogServer.oauthEnabled && (
@@ -1615,7 +1621,8 @@ const McpToolsConfig: React.FC = () => {
             </div>
           </div>
         )}
-      </Modal>
+              </DialogBody>
+      </Dialog>
     </ConfigPageLayout>
   );
 };

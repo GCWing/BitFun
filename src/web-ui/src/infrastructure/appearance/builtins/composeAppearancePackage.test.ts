@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppearancePackage } from '../types';
-import { APPEARANCE_CSS_TOKEN_NAMES } from './catalog';
+import { APPEARANCE_THEME_TOKEN_NAMES } from './catalog';
 import { composeAppearancePackage } from './composeAppearancePackage';
 
 describe('composeAppearancePackage', () => {
@@ -43,8 +43,8 @@ describe('composeAppearancePackage', () => {
     expect(resolved.renderers?.mermaid).toBeDefined();
     expect(resolved.renderers?.['generative-widget']).toBeDefined();
     expect(resolved.renderers?.['bitfun-canvas']).toBeDefined();
-    expect(Object.keys(resolved.renderers?.['css-tokens']?.settings.tokens ?? {})).toEqual(
-      expect.arrayContaining(APPEARANCE_CSS_TOKEN_NAMES),
+    expect(Object.keys(resolved.renderers?.['theme-tokens']?.settings.tokens ?? {})).toEqual(
+      expect.arrayContaining(APPEARANCE_THEME_TOKEN_NAMES),
     );
   });
 });

@@ -26,13 +26,11 @@ src/web-ui/
 ├── README.zh-CN.md               # 本文件（中文版）
 ├── LOGGING.md                    # 日志与调试说明
 ├── index.html                    # 入口 HTML
-├── preview.html                  # 预览页（可选）
 ├── package.json                  # 依赖与脚本
 ├── package-lock.json             # 锁定依赖版本
 ├── public/                       # 静态资源
 ├── src/                          # 前端源代码
 │   ├── app/                      # 应用主界面
-│   ├── component-library/        # 组件库
 │   ├── features/                 # 按功能拆分的模块
 │   ├── flow_chat/                # 对话/工作流聊天界面
 │   ├── generated/                # 生成内容（占位/产物）
@@ -46,7 +44,6 @@ src/web-ui/
 ├── tsconfig.json                 # TS 配置
 ├── tsconfig.node.json            # Node/Vite TS 配置
 ├── vite.config.ts                # Vite 构建配置
-├── vite.config.preview.ts        # 预览构建配置
 └── vite.config.version-plugin.ts # 版本插件
 ```
 
@@ -94,7 +91,7 @@ VITE_BUILD_TARGET=web pnpm --dir src/web-ui run build
 ## 相关文档（本包内）
 
 - [日志说明](LOGGING.md)
-- [组件库 README](src/component-library/README.md)
+- [独立设计系统](../../design-system/README.md)
 - [i18n README](src/infrastructure/i18n/README.md)
 
 ## 注意事项

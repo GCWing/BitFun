@@ -10,43 +10,43 @@
   --bitfun-canvas-warning: CanvasText;
   --bitfun-canvas-danger: Mark;
   --bitfun-canvas-info: LinkText;
-  --bf-appearance-token-color-static-white: Canvas;
-  --bf-appearance-token-color-bg-primary: var(--bitfun-canvas-bg);
-  --bf-appearance-token-color-bg-secondary: var(--bitfun-canvas-panel);
-  --bf-appearance-token-color-bg-elevated: color-mix(in srgb, var(--bitfun-canvas-bg) 86%, var(--bitfun-canvas-panel) 14%);
-  --bf-appearance-token-color-bg-chrome: color-mix(in srgb, var(--bitfun-canvas-panel) 92%, var(--bitfun-canvas-bg) 8%);
-  --bf-appearance-token-color-bg-scene: var(--bf-appearance-token-color-bg-secondary);
-  --bf-appearance-token-color-text-primary: var(--bitfun-canvas-fg);
-  --bf-appearance-token-color-text-secondary: color-mix(in srgb, var(--bitfun-canvas-fg) 76%, transparent);
-  --bf-appearance-token-color-text-muted: var(--bitfun-canvas-muted);
-  --bf-appearance-token-color-accent-500: var(--bitfun-canvas-accent);
-  --bf-appearance-token-color-accent-200: color-mix(in srgb, var(--bitfun-canvas-accent) 18%, transparent);
-  --bf-appearance-token-color-success: var(--bitfun-canvas-success);
-  --bf-appearance-token-color-warning: var(--bitfun-canvas-warning);
-  --bf-appearance-token-color-error: var(--bitfun-canvas-danger);
-  --bf-appearance-token-border-subtle: color-mix(in srgb, var(--bitfun-canvas-border) 70%, transparent);
-  --bf-appearance-token-border-base: var(--bitfun-canvas-border);
-  --bf-appearance-token-element-bg-subtle: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 5%, transparent);
-  --bf-appearance-token-element-bg-soft: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
-  --bf-appearance-token-element-bg-base: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
-  --bf-appearance-token-element-bg-medium: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
-  --bf-appearance-token-size-radius-sm: 6px;
-  --bf-appearance-token-size-radius-base: 8px;
-  --bf-appearance-token-size-radius-md: var(--bf-appearance-token-size-radius-base);
-  --bf-appearance-token-size-radius-lg: 12px;
-  --bf-appearance-token-size-radius-xl: 16px;
-  --bf-appearance-token-size-radius-2xl: 20px;
-  --bf-appearance-token-size-radius-full: 9999px;
-  --bf-appearance-token-size-gap-1: 4px;
-  --bf-appearance-token-size-gap-2: 8px;
-  --bf-appearance-token-size-gap-3: 12px;
-  --bf-appearance-token-size-gap-4: 16px;
-  --bf-appearance-token-size-gap-5: 20px;
-  --bf-appearance-token-size-gap-6: 24px;
-  --bf-appearance-token-size-gap-8: 32px;
-  --bf-appearance-token-size-gap-10: 40px;
-  --bf-appearance-token-size-gap-12: 48px;
-  --bf-appearance-token-size-gap-16: 64px;
+  --bf-color-content-on-dark: Canvas;
+  --bf-color-surface-canvas: var(--bitfun-canvas-bg);
+  --bf-color-surface-panel: var(--bitfun-canvas-panel);
+  --bf-color-surface-raised: color-mix(in srgb, var(--bitfun-canvas-bg) 86%, var(--bitfun-canvas-panel) 14%);
+  --bf-color-surface-chrome: color-mix(in srgb, var(--bitfun-canvas-panel) 92%, var(--bitfun-canvas-bg) 8%);
+  --bf-color-surface-scene: var(--bf-color-surface-panel);
+  --bf-color-content-primary: var(--bitfun-canvas-fg);
+  --bf-color-content-secondary: color-mix(in srgb, var(--bitfun-canvas-fg) 76%, transparent);
+  --bf-color-content-muted: var(--bitfun-canvas-muted);
+  --bf-color-accent-default: var(--bitfun-canvas-accent);
+  --bf-color-action-secondary-hover: color-mix(in srgb, var(--bitfun-canvas-accent) 18%, transparent);
+  --bf-color-status-success-content: var(--bitfun-canvas-success);
+  --bf-color-status-warning-content: var(--bitfun-canvas-warning);
+  --bf-color-status-danger-content: var(--bitfun-canvas-danger);
+  --bf-color-border-subtle: color-mix(in srgb, var(--bitfun-canvas-border) 70%, transparent);
+  --bf-color-border-default: var(--bitfun-canvas-border);
+  --bf-color-surface-subtle: color-mix(in srgb, var(--bf-color-content-primary) 5%, transparent);
+  --bf-color-action-quiet-hover: color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
+  --bf-color-action-neutral-surface: color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
+  --bf-color-action-neutral-surface-hover: color-mix(in srgb, var(--bf-color-content-primary) 16%, transparent);
+  --bf-radius-sm: 6px;
+  --bf-radius-base: 8px;
+  --bf-radius-md: var(--bf-radius-base);
+  --bf-radius-lg: 12px;
+  --bf-radius-xl: 16px;
+  --bf-radius-2xl: 20px;
+  --bf-radius-pill: 9999px;
+  --bf-space-1: 4px;
+  --bf-space-2: 8px;
+  --bf-space-3: 12px;
+  --bf-space-4: 16px;
+  --bf-space-5: 20px;
+  --bf-space-6: 24px;
+  --bf-space-8: 32px;
+  --bf-space-10: 40px;
+  --bf-space-12: 48px;
+  --bf-space-16: 64px;
 }
 
 * { box-sizing: border-box; }
@@ -65,8 +65,8 @@ html {
 
 body {
   margin: 0;
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-font-family-sans);
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-regular);
@@ -95,10 +95,10 @@ button {
   max-width: 860px;
   margin: 0 auto;
   padding: 12px;
-  border: 1px solid var(--bf-appearance-token-border-base);
+  border: 1px solid var(--bf-color-border-default);
   border-radius: 8px;
-  color: var(--bf-appearance-token-color-text-muted);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 72%, transparent);
+  color: var(--bf-color-content-muted);
+  background: color-mix(in srgb, var(--bf-color-surface-panel) 72%, transparent);
 }
 
 .bf-canvas-stack {
@@ -120,14 +120,14 @@ html[data-bitfun-canvas-design-mode] body {
 }
 
 [data-bitfun-canvas-hovered='true'] {
-  outline: 2px solid var(--bf-appearance-token-color-accent-500) !important;
+  outline: 2px solid var(--bf-color-accent-default) !important;
   outline-offset: 2px !important;
 }
 
 .bf-card {
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 8px;
-  background: var(--bf-appearance-token-color-bg-elevated);
+  background: var(--bf-color-surface-raised);
   overflow: hidden;
 }
 
@@ -138,8 +138,8 @@ html[data-bitfun-canvas-design-mode] body {
   justify-content: space-between;
   gap: 10px;
   padding: 9px 12px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-  color: var(--bf-appearance-token-color-text-primary);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-line-height-dense);
@@ -150,14 +150,14 @@ html[data-bitfun-canvas-design-mode] body {
 }
 
 .bf-callout {
-  --bf-callout-accent: var(--bf-appearance-token-color-accent-500);
+  --bf-callout-accent: var(--bf-color-accent-default);
 
   position: relative;
   border-radius: 8px;
   padding: 12px 14px 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 76%, transparent);
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 58%, transparent);
-  color: var(--bf-appearance-token-color-text-primary);
+  border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 76%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 58%, transparent);
+  color: var(--bf-color-content-primary);
 }
 
 .bf-callout::before {
@@ -174,14 +174,14 @@ html[data-bitfun-canvas-design-mode] body {
 
 .bf-callout-title {
   margin-bottom: 6px;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-line-height-compact);
 }
 
 .bf-callout-body {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-sm);
   line-height: var(--bf-line-height-comfortable);
 }
@@ -201,16 +201,16 @@ html[data-bitfun-canvas-design-mode] body {
   border: 0;
   border-radius: 999px;
   padding: 3px 9px;
-  background: var(--bf-appearance-token-element-bg-base);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-action-neutral-surface);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-xs);
   line-height: var(--bf-line-height-base);
   white-space: nowrap;
 }
 
 .bf-pill--active {
-  background: var(--bf-appearance-token-color-accent-200);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-action-secondary-hover);
+  color: var(--bf-color-content-primary);
 }
 
 .bf-button {
@@ -221,35 +221,35 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 0 11px;
   border: 0;
   border-radius: 6px;
-  background: var(--bf-appearance-token-element-bg-base);
-  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-color-action-neutral-surface);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
 }
 
 .bf-button:hover {
-  background: var(--bf-appearance-token-element-bg-medium);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-action-neutral-surface-hover);
+  color: var(--bf-color-content-primary);
 }
 
 .bf-button--primary {
-  background: var(--bf-appearance-token-color-accent-500);
-  color: var(--bf-appearance-token-color-static-white);
+  background: var(--bf-color-accent-default);
+  color: var(--bf-color-content-on-dark);
 }
 
 .bf-code {
   border-radius: 5px;
   padding: 1px 5px;
-  background: var(--bf-appearance-token-element-bg-base);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-action-neutral-surface);
+  color: var(--bf-color-content-primary);
   font-family:var(--bf-font-family-mono);
   font-size: var(--bf-font-size-sm);
 }
 
 .bf-table-wrap {
   overflow: auto;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 8px;
-  background: var(--bf-appearance-token-color-bg-elevated);
+  background: var(--bf-color-surface-raised);
 }
 
 .bf-table {
@@ -261,24 +261,24 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-table th,
 .bf-table td {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   text-align: left;
   vertical-align: top;
 }
 
 .bf-table th {
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-weight: var(--bf-font-weight-semibold);
-  background: var(--bf-appearance-token-color-bg-chrome);
+  background: var(--bf-color-surface-chrome);
 }
 
 .bf-table td {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .bf-diff {
   overflow: auto;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 54%, transparent);
+  background: color-mix(in srgb, var(--bf-color-surface-canvas) 54%, transparent);
   font-family: var(--bf-font-family-mono);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-regular);
@@ -286,9 +286,9 @@ html[data-bitfun-canvas-design-mode] body {
 }
 
 .bf-chart {
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 8px;
-  background: var(--bf-appearance-token-color-bg-elevated);
+  background: var(--bf-color-surface-raised);
   padding: 12px;
   min-width: 0;
 }
@@ -305,7 +305,7 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-chart__title {
   min-width: 0;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-semibold);
   line-height: var(--bf-line-height-dense);
@@ -317,7 +317,7 @@ html[data-bitfun-canvas-design-mode] body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 10px;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-meta);
 }
 
@@ -355,30 +355,30 @@ html[data-bitfun-canvas-design-mode] body {
 }
 
 .bf-canvas-toggle__label {
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-sm);
 }
 
 .bf-canvas-toggle__description,
 .bf-canvas-toggle__status {
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
 }
 
 .bf-input,
 .bf-textarea {
   width: 100%;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 6px;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-primary);
   padding: 7px 9px;
   outline: none;
 }
 
 .bf-input:focus,
 .bf-textarea:focus {
-  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, var(--bf-appearance-token-border-base));
+  border-color: color-mix(in srgb, var(--bf-color-accent-default) 55%, var(--bf-color-border-default));
 }
 
 .bf-select {

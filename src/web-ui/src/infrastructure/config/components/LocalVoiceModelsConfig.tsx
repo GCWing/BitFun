@@ -1,12 +1,20 @@
-import { Button, Icon, IconButton, Modal, StatusPill, type StatusPillTone, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  StatusPill,
+  type StatusPillTone,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FolderOpen,
-  RefreshCw,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { FolderOpen, ShieldCheck } from 'lucide-react';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
@@ -24,7 +32,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { useAIExperienceSettings } from '../hooks';
 import { aiExperienceConfigService } from '../services/AIExperienceConfigService';
 import type { VoiceInputSettings } from '../types';
-import { ConfigPageLoading, ConfigPageMessage } from './common';
+import { ConfigLoadingState, ConfigMessage } from './common';
 import './VoiceInputConfig.scss';
 
 const log = createLogger('LocalVoiceModelsConfig');
@@ -260,7 +268,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
       {
         id: `voice-model-delete:${model.modelId}`,
         label: t('model.delete'),
-        icon: <Trash2 size={14} />,
+        icon: <Icon name="delete" size="sm" />,
         className: 'context-menu-item--danger',
         disabled: busyAction !== null,
         onClick: () => handleDelete(model),
@@ -288,11 +296,11 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
 
   let content: React.ReactNode;
   if (!speechRuntimeSupported) {
-    content = <ConfigPageMessage message={{ type: 'info', text: t('messages.unsupported') }} />;
+    content = <ConfigMessage message={{ type: 'info', text: t('messages.unsupported') }} />;
   } else if ((loading || settingsLoading) && models.length === 0) {
-    content = <ConfigPageLoading text={t('localModels.loading')} />;
+    content = <ConfigLoadingState label={t('localModels.loading')} />;
   } else if (loadError || settingsError || !settings || !voiceInput) {
-    content = <ConfigPageMessage message={{ type: 'error', text: t('messages.loadFailed') }} />;
+    content = <ConfigMessage message={{ type: 'error', text: t('messages.loadFailed') }} />;
   } else if (models.length === 0) {
     content = <div className="voice-input-config__model-empty">{t('model.empty')}</div>;
   } else {
@@ -416,14 +424,20 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
   }
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={closeDialog}
-      title={t('localModels.title')}
-      size="medium"
-      contentClassName="voice-input-config__model-dialog-content"
-      testId="local-voice-models-dialog"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) closeDialog(); }}
+      size="md"
+      data-testid="local-voice-models-dialog"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('localModels.title')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
+        <div className="voice-input-config__model-dialog-content">
       <div
         className="voice-input-config__model-dialog"
         data-bf-component="voice-input-config"
@@ -437,13 +451,15 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
               size="sm"
               onClick={() => void loadModels()}
               disabled={loading || busyAction !== null || anyDownloading}
-              icon={<RefreshCw size={14} />}
+              icon={<Icon name="refresh" size="sm" />}
             />
           </Tooltip>
         </div>
         {content}
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 };
 

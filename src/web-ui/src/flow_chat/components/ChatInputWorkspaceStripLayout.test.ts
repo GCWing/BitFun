@@ -100,7 +100,7 @@ describe('composer context track layout', () => {
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?border-radius: 999px;/);
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?cursor: default;/);
     expect(stylesheet).toMatch(
-      /&__workspace--switchable \{[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-appearance-token-element-bg-soft\);/,
+      /&__workspace--switchable \{[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-color-action-quiet-hover\);/,
     );
 
     // Branch wears the same pill so the three left-rail segments keep one
@@ -120,7 +120,7 @@ describe('composer context track layout', () => {
     expect(staticBranch).toContain('padding: 0 7px;');
     expect(staticBranch).toContain('border-radius: 999px;');
     expect(chip).toMatch(
-      /&--branch-switchable \{[\s\S]*?cursor: pointer;[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-appearance-token-element-bg-soft\);/,
+      /&--branch-switchable \{[\s\S]*?cursor: pointer;[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-color-action-quiet-hover\);/,
     );
 
     // A hairline parts the segments; inside a segment spacing is the only
@@ -150,10 +150,10 @@ describe('composer context track layout', () => {
     expect(component).toContain('contextBar={workspaceStrip}');
     expect(component).toContain('<ChatInputWorkspaceStrip');
     expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 \$size-gap-2;/,
+      /\.bitfun-context-drop-zone\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 var\(--bf-space-2\);/,
     );
     expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: \$size-gap-6;/,
+      /\.bitfun-context-drop-zone\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: var\(--bf-space-6\);/,
     );
     expect(stripRoot).toContain('position: relative;');
     expect(stripRoot).toContain('padding: 0;');
@@ -280,6 +280,14 @@ describe('composer context track layout', () => {
     expect(chatInput).not.toContain("selectSlashCommandAction('review')");
   });
 
+  it('keeps custom Agent creation out of the add menu', () => {
+    const chatInput = readLocalFile('ChatInput.tsx');
+
+    expect(chatInput).not.toContain('handleOpenCreateCustomMode');
+    expect(chatInput).not.toContain("t('chatInput.createCustomMode')");
+    expect(chatInput).not.toContain('BotMessageSquare');
+  });
+
   it('moves Harness beside add in expanded layout and keeps the model pair trailing', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
@@ -300,8 +308,13 @@ describe('composer context track layout', () => {
     expect(chatInput).not.toContain('harnessControl');
     // Reasoning belongs beside the model it configures; context usage remains
     // a ring in the upper context track rather than repeating as a number.
+    const modelSelector = readLocalFile('ModelSelector.tsx');
     expect(stylesheet).not.toContain('.bitfun-reasoning-preset-selector,');
-    expect(stylesheet).toContain('.bitfun-model-selector__ctx-usage {');
+    expect(modelSelector).not.toContain('tokenPercentage');
+    expect(modelSelector).not.toContain('data-bf-part="contextUsage"');
+    expect(modelSelector).toContain('buildContextUsageTooltip');
+    expect(modelSelector).toContain('buildModelSelectorTooltipDetails');
+    expect(stylesheet).not.toContain('.bitfun-model-selector__ctx-usage {');
     expect(stylesheet).toContain(
       ".bitfun-reasoning-preset-selector[data-bf-presentation='label']",
     );
@@ -311,7 +324,7 @@ describe('composer context track layout', () => {
     const component = readLocalFile('ChatInput.tsx');
 
     expect(component).toContain(
-      "clone.querySelector(\n      '.bitfun-chat-input__composer-surface'",
+      'clone.querySelector(\n      \'[data-bf-component="chat-composer"] [data-bf-part="surface"]\'',
     );
     expect(component).toContain("cloneComposerSurfaceEl.dataset.bfLayout = 'compact';");
     expect(component).toContain('const singleLineThreshold = paddingBlock + singleLineHeight * 1.5;');
@@ -352,32 +365,26 @@ describe('composer context track layout', () => {
 
     expect(modelPair).toContain('border: 0;');
     expect(modelPair).toMatch(
-      /&:hover,\s*&\[data-bf-state='open'\] \{\s*background: var\(--bf-appearance-token-element-bg-soft\);/,
+      /&:hover,\s*&\[data-bf-state='open'\] \{\s*background: var\(--bf-color-action-quiet-hover\);/,
     );
     expect(modelPair).not.toContain('border-color:');
   });
 
-  it('gives the add icon a background without adding a border', () => {
+  it('uses the shared composer action contract for add and send controls', () => {
+    const component = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
-    const addControl = stylesheet.slice(
-      stylesheet.indexOf('    .bitfun-chat-input__agent-boost-add {'),
-      stylesheet.indexOf('    .bitfun-chat-input__model-usage-group,'),
-    );
 
-    expect(addControl).toContain(
-      'width: var(--bf-control-chat-composer-control-height) !important;',
+    expect(component).toContain('ChatComposerActionButton');
+    expect(component).toMatch(
+      /className="bitfun-chat-input__agent-boost-add"[\s\S]*?variant="fill"/,
     );
-    expect(addControl).toContain(
-      'height: var(--bf-control-chat-composer-control-height) !important;',
+    expect(component).toMatch(
+      /className="bitfun-chat-input__send-button"[\s\S]*?variant="primary"/,
     );
-    expect(addControl).toContain('border: 0 !important;');
-    expect(addControl).toContain(
-      'background: var(--bf-appearance-token-element-bg-subtle) !important;',
+    expect(stylesheet).not.toContain('.bitfun-chat-input__agent-boost-add {');
+    expect(stylesheet).not.toContain(
+      '.bitfun-chat-input__box:focus-within &:not(:disabled)',
     );
-    expect(addControl).toMatch(
-      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?element-bg-soft/,
-    );
-    expect(addControl).not.toContain('border-color:');
   });
 
   it('uses the scaled 45px capsule and keeps 25px controls stable across layouts', () => {
@@ -406,18 +413,19 @@ describe('composer context track layout', () => {
     );
   });
 
-  it('keeps Harness profile icons in the list instead of the ChatInput trigger', () => {
+  it('shows the current mode icon in the compact add menu while keeping profile icons in the list', () => {
     const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
-    expect(component).toMatch(/minimal: Scan,[\s\S]*?balanced: Grid2X2,[\s\S]*?ultimate: Grid3X3,/);
+    expect(component).toMatch(/minimal: 'minimal',[\s\S]*?balanced: 'standard',[\s\S]*?ultimate: 'ultimate',[\s\S]*?creative: 'creative',/);
     expect(component).toContain(
       'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
     );
-    expect(component).toContain('className="bitfun-harness-selector__density-core"');
+    expect(component).toContain('name={PROFILE_ICONS[profile]}');
+    expect(component).not.toContain('className="bitfun-harness-selector__density-core"');
     expect(component).toContain('<HarnessProfileMark profile={id} />');
-    expect(component).not.toContain('<HarnessProfileMark profile={knownSelectedProfile}');
-    expect(component).not.toContain('compact');
+    expect(component).toContain('<HarnessProfileMark profile={knownSelectedProfile} />');
+    expect(component).not.toContain('compact=');
     expect(stylesheet).not.toMatch(/__trigger-value \{[\s\S]*?display: none;/);
   });
 
@@ -446,15 +454,15 @@ describe('composer context track layout', () => {
       stylesheet.indexOf('&__permission-label {'),
     );
     expect(riskRamp).toContain('permission-trigger--ask &');
-    expect(riskRamp).toContain('var(--bf-appearance-token-color-success)');
+    expect(riskRamp).toContain('var(--bf-color-status-success-content)');
     expect(riskRamp).toContain('permission-trigger--auto &');
-    expect(riskRamp).toContain('var(--bf-appearance-token-color-warning)');
+    expect(riskRamp).toContain('var(--bf-color-status-warning-content)');
     expect(riskRamp).toContain('permission-trigger--full_access &');
-    expect(riskRamp).toContain('var(--bf-appearance-token-color-error)');
+    expect(riskRamp).toContain('var(--bf-color-status-danger-content)');
     // Full access keeps a body of its own so the risk survives the label being
     // dropped on a narrow composer.
     expect(stylesheet).toMatch(
-      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-error\) 10%/,
+      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-status-danger-content\) 10%/,
     );
   });
 
@@ -496,7 +504,7 @@ describe('composer context track layout', () => {
     // On/off is a colour, not an outline: one bordered item in a borderless
     // row reads as an error state rather than a mode.
     expect(stylesheet).toMatch(
-      /&--on \{\n\s*color: var\(--bf-appearance-token-color-accent-500\);/,
+      /&--on \{\n\s*color: var\(--bf-color-accent-default\);/,
     );
     expect(stylesheet).not.toMatch(/&__worktree-toggle \{[\s\S]*?border: 1px/);
   });

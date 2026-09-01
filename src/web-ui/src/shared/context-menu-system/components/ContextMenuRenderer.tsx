@@ -5,7 +5,6 @@ import {
   ArchiveRestore,
   Clipboard,
   Code,
-  Edit,
   FileInput,
   FileOutput,
   FilePlus,
@@ -16,25 +15,25 @@ import {
   Highlighter,
   Lightbulb,
   List,
-  MessageSquare,
   MessageSquarePlus,
   Navigation,
   PanelRightOpen,
-  RefreshCw,
   Scissors,
-  Trash2,
   type LucideIcon,
 } from 'lucide-react';
 
 const CONTEXT_MENU_CATALOG: Record<string, IconName> = {
   Copy: 'duplicate',
-  Download: 'download',
+  Download: 'arrow-down',
+  Trash2: 'delete',
+  ChevronLeft: 'chevron-left',
   Edit: 'edit',
   ExternalLink: 'arrow-up-right',
   MessageSquare: 'side-chat',
   Pin: 'pin',
   Plus: 'plus',
   Search: 'search',
+  RefreshCw: 'refresh',
   X: 'xmark',
 };
 import { ContextMenu } from './ui/ContextMenu';
@@ -47,7 +46,6 @@ const CONTEXT_MENU_ICONS = {
   ArchiveRestore,
   Clipboard,
   Code,
-  Edit,
   FileInput,
   FileOutput,
   FilePlus,
@@ -58,13 +56,10 @@ const CONTEXT_MENU_ICONS = {
   Highlighter,
   Lightbulb,
   List,
-  MessageSquare,
   MessageSquarePlus,
   Navigation,
   PanelRightOpen,
-  RefreshCw,
   Scissors,
-  Trash2,
 } satisfies Record<string, LucideIcon>;
 
 function getIconComponent(icon: any): string | React.ReactNode | undefined {

@@ -6,7 +6,7 @@
 import { Button, Icon, IconButton, SearchField, Select, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, ChevronUp, Square, CheckSquare } from 'lucide-react';
+import { Square, CheckSquare } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
@@ -391,7 +391,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
             size="sm"
             onClick={loadCommits}
             title={t('branchHistory.refresh')}
-            icon={<RefreshCw size={14} />}
+            icon={<Icon name="refresh" size="sm" />}
           />
         </div>
       </div>
@@ -469,7 +469,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                       aria-label={isExpanded ? t('tooltips.collapseDetails') : t('tooltips.expandDetails')}
                       className="git-branch-history-view__expand-btn"
                       size="sm"
-                      icon={isExpanded ? <ChevronUp size={14} /> : <Icon name="chevron-down" size="sm" />}
+                      icon={isExpanded ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-down" size="sm" />}
                     />
                   </div>
                   

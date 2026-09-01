@@ -372,7 +372,7 @@ Required change:
 - Use locale keys in `src/web-ui/src/locales/*/flow-chat.json` or a new localized report namespace.
 - Render Desktop reports from structured data through the frontend i18n layer, not from hard-coded backend prose.
 - CLI can start with English if the CLI has no locale pipeline, but the report DTO should not make localization impossible later.
-- Use existing component-library and theme tokens for colors; do not hard-code status colors except through semantic variables.
+- Use `@bitfun/ui` and semantic theme tokens for colors; do not hard-code status colors except through semantic variables.
 
 ### 11. Report scope and workspace identity
 
@@ -946,7 +946,7 @@ This section turns the milestone plan into implementation-sized tasks. Each task
 - P0 reports tokens and available timing only. P0 does not introduce charts, cross-session summaries, or live header UI.
 - Runtime metrics collection must be append-only or summary-only; do not add per-token persistence.
 - Shared report logic belongs in its current platform-agnostic Rust owner. Desktop, server, and CLI keep only their entry adapters.
-- Desktop UI must use existing i18n, theme tokens, and component-library primitives.
+- Desktop UI must use existing i18n, semantic theme tokens, and `@bitfun/ui` primitives.
 - Every report field that can be incomplete must carry coverage metadata instead of silently showing `0`.
 - Existing file diff behavior must not change while adding report links.
 - Report APIs must be scoped by workspace identity and remote identity, not only by session id.

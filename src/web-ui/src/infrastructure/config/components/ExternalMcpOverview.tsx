@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, Button, Checkbox, IconButton, ScrollArea, Tooltip } from '@bitfun/ui';
-import { RefreshCw } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
@@ -461,7 +461,7 @@ const ExternalMcpOverview: React.FC = () => {
                 size="sm"
                 onClick={() => void loadSnapshot()}
                 aria-label={t('external.retry')}
-                icon={<RefreshCw />}
+                icon={<Icon name="refresh" size="lg" />}
               />
             </Tooltip>
           ) : null}

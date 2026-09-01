@@ -5,8 +5,8 @@
 .canvas-anchor-zone {
   display: flex;
   flex-direction: column;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-color-surface-canvas);
+  border: 1px solid var(--bf-color-border-default);
   overflow: hidden;
 
   // Bottom position
@@ -56,7 +56,7 @@
   // Resizing state
   &.is-resizing {
     .canvas-anchor-zone__resizer-line {
-      background: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-accent-default);
     }
   }
 
@@ -89,13 +89,13 @@
 
     &:hover {
       .canvas-anchor-zone__resizer-line {
-        background: var(--bf-appearance-token-color-accent-500);
+        background: var(--bf-color-accent-default);
       }
     }
   }
 
   &__resizer-line {
-    background: var(--bf-appearance-token-border-base);
+    background: var(--bf-color-border-default);
     transition: background-color 0.15s ease;
   }
 
@@ -105,8 +105,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 12px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-panel);
+    border-bottom: 1px solid var(--bf-color-border-default);
     flex-shrink: 0;
   }
 
@@ -116,10 +116,10 @@
     gap: 8px;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     svg {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -138,19 +138,19 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
   }
 
   &__close-btn:hover {
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
   }
 
   // Content area

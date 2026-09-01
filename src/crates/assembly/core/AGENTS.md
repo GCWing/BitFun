@@ -53,6 +53,14 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Tool changes must preserve expanded/collapsed exposure, prompt-visible
   manifests, `GetToolSpec`, permission behavior, `ToolUseContext` semantics, and
   desktop/MCP/ACP catalog behavior.
+- Workspace file tools select IO through `ToolUseContext::file_system_for_path`.
+  Read/Write/Edit/Delete/LS must not add per-tool SSH branches. Shared algorithms
+  belong in `tool-execution`; concrete filesystem/stream handling belongs in
+  Services providers. Session artifacts stay host-local. A missing remote
+  provider must fail without falling back to the controller filesystem.
+- Snapshot preparation/completion may fail independently of the file tool.
+  Never replay a mutation to repair tracking. A recorded operation is not proof
+  of complete Session coverage; remote Session Undo retains its coverage gate.
 - Runtime-owner migrations must keep concrete lifecycle, IO, event delivery,
   permission orchestration, and remote/platform implementations in core until
   the target owner has a reviewed port/adapter/service design plus
@@ -212,4 +220,14 @@ Agent-profile canonicalization in the focused configuration suite:
 ```bash
 cargo test -p bitfun-core --no-default-features --features remote-connect --lib service::config::
 cargo test -p bitfun-core --no-default-features --features remote-connect --lib service::remote_connect::settings_sync::tests
+```
+
+Focused workspace-IO and snapshot regression entry points (use the matching
+filter rather than a product-wide build):
+
+```bash
+cargo test -p bitfun-core --no-default-features --features agent-runtime,git,document-read --lib file_read_tool::tests
+cargo test -p bitfun-core --no-default-features --features agent-runtime,git --lib file_write_tool::tests
+cargo test -p bitfun-core --no-default-features --features agent-runtime,git --lib delete_file_tool::tests
+cargo test -p bitfun-core --no-default-features --features agent-runtime,remote-workspace,git --lib service::snapshot::
 ```

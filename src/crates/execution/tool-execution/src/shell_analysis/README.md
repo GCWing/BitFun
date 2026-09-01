@@ -45,8 +45,8 @@ A purpose-built lexer and recursive-descent parser keep the supported language
 small and explicit. Tree-sitter Bash 0.25.1 was evaluated but not adopted: its
 error recovery on multiple here-docs could expose literal body data as commands.
 `shlex`/`shell-words` do not preserve the required syntax contexts. No new external
-dependency is needed; the owner-local `shell-analysis` feature selects the existing
-workspace regex dependency for the retained interpreter recognizers.
+dependency is needed; the owner-local `shell-analysis` feature gates the parser,
+while the interpreter recognizers reuse the baseline filename matcher's regex dependency.
 
 Limits: 1 MiB source, 32 group/program/control nesting levels, 32,768 tokens,
 4,096 file or descriptor facts, 8 possible directories, and 64 diagnostic facts.

@@ -4,7 +4,7 @@ export const applicationSettingsAppearanceDescriptor: AppearanceSurfaceDescripto
   id: 'application-settings',
   parts: [
     { id: 'root' }, { id: 'content' }, { id: 'launchAtLogin' }, { id: 'autoUpdate' },
-    { id: 'logging' }, { id: 'logPath' }, { id: 'terminal' }, { id: 'shellOption' },
+    { id: 'logging' }, { id: 'logPath' }, { id: 'terminal' },
     { id: 'windowBehavior' }, { id: 'notifications' },
   ],
 };

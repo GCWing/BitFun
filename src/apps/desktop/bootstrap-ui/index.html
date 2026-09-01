@@ -1,15 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bf-design-system-root data-color-scheme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>BitFun recovery</title>
+    <link rel="stylesheet" href="/bootstrap-theme.css" />
     <style>
-      :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #121214; color: #f2f2f5; }
-      main { width: min(520px, calc(100vw - 48px)); padding: 32px; border: 1px solid #34343a; border-radius: 16px; background: #1b1b1f; }
+      :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: var(--bf-color-surface-canvas); color: var(--bf-color-content-primary); }
+      main { width: min(520px, calc(100vw - 48px)); padding: 32px; border: 1px solid var(--bf-color-border-default); border-radius: 16px; background: var(--bf-color-surface-panel); }
       h1 { margin: 0 0 12px; font-size: 22px; }
-      p { margin: 0; color: #aaaab3; line-height: 1.6; }
+      p { margin: 0; color: var(--bf-color-content-secondary); line-height: 1.6; }
     </style>
   </head>
   <body>

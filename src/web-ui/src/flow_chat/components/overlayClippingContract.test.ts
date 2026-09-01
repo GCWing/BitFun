@@ -26,17 +26,19 @@ const ANCHORED_OVERLAYS = [
 ];
 
 describe('shared Combobox clipping contract', () => {
-  it('uses the public portal positioner and the product overlay host', () => {
+  it('uses the public Portal, positioner and product overlay host', () => {
     const source = readSource('../../../../../design-system/packages/ui/src/components/Combobox/Combobox.tsx');
     const positioner = readSource('../../../../../design-system/packages/ui/src/internal/useAnchoredLayer.ts');
-    const app = readSource('../../app/App.tsx');
-    expect(source).toContain('createPortal');
-    expect(source).toContain('resolveLayerPortal');
+    const portal = readSource('../../../../../design-system/packages/ui/src/overlay/Portal.tsx');
+    const designSystemHost = readSource('../../infrastructure/design-system/BitFunDesignSystemProvider.tsx');
+    expect(source).toContain('import { Portal }');
+    expect(source).toContain('<Portal');
     expect(source).toContain('useAnchoredLayer');
+    expect(portal).toContain('resolvePortalTarget');
     expect(positioner).toContain('getBoundingClientRect');
     expect(positioner).toContain('view.addEventListener("scroll", update, true)');
-    expect(app).toContain('ComboboxProvider');
-    expect(app).toContain('portalContainer={getAppearanceOverlayHost}');
+    expect(designSystemHost).toContain('<DesignSystemProvider');
+    expect(designSystemHost).toContain('portalHost={getAppearanceOverlayHost}');
   });
 });
 

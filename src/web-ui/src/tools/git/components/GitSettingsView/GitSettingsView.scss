@@ -1,64 +1,57 @@
-@use '../../../../component-library/styles/tokens' as *;
-
-$size-gap-1-5: 6px !default;
-$size-radius-xs: 4px !default;
-$opacity-secondary: 0.7 !default;
-$opacity-high: 0.8 !default;
-
 .bitfun-git-settings-view {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-primary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-canvas);
+  color: var(--bf-color-content-primary);
   font-family: var(--bf-font-family-sans);
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: $size-gap-4;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-element-bg-soft);
+    padding: var(--bf-space-4);
+    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &__header-left {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
 
     h3 {
       margin: 0;
       font-size: var(--bf-font-size-lg);
       font-weight: var(--bf-font-weight-semibold);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 
   &__header-right {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__status-banner {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-4;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-4);
     font-size: var(--bf-font-size-xs);
     position: relative;
 
     &--success {
-      background: var(--bf-appearance-token-color-success-bg);
-      border-bottom: 1px solid var(--bf-appearance-token-color-success);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      border-bottom: 1px solid var(--bf-color-status-success-content);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-appearance-token-color-error-bg);
-      border-bottom: 1px solid var(--bf-appearance-token-color-error);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      border-bottom: 1px solid var(--bf-color-status-danger-content);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -67,12 +60,12 @@ $opacity-high: 0.8 !default;
     border: none;
     color: inherit;
     cursor: pointer;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
     margin-left: auto;
     font-size: var(--bf-font-size-xl);
     line-height: var(--bf-line-height-none);
-    opacity: $opacity-secondary;
-    transition: opacity $motion-fast $easing-standard;
+    opacity: var(--bf-opacity-muted);
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       opacity: 1;
@@ -88,20 +81,20 @@ $opacity-high: 0.8 !default;
 
   &__tab-list {
     flex: 0 0 auto;
-    margin: $size-gap-3 $size-gap-4 0;
+    margin: var(--bf-space-3) var(--bf-space-4) 0;
   }
 
   &__content {
     flex: 1;
-    padding: $size-gap-4;
+    padding: var(--bf-space-4);
 
   }
 
   &__form-group {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
-    margin-bottom: $size-gap-4;
+    gap: var(--bf-space-2);
+    margin-bottom: var(--bf-space-4);
 
     &:last-child {
       margin-bottom: 0;
@@ -111,38 +104,38 @@ $opacity-high: 0.8 !default;
   &__form-label {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__form-description {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
-    margin-top: -$size-gap-1;
+    color: var(--bf-color-content-muted);
+    margin-top: -var(--bf-space-1);
   }
 
   &__form-input {
-    padding: $size-gap-2 $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    color: var(--bf-appearance-token-color-text-primary);
+    padding: var(--bf-space-2) var(--bf-space-3);
+    background: var(--bf-color-action-neutral-surface);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-base);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-family: var(--bf-font-family-mono);
     transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:focus {
       outline: none;
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-medium);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &::placeholder {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     &:disabled {
@@ -152,22 +145,22 @@ $opacity-high: 0.8 !default;
   }
 
   &__form-select {
-    padding: $size-gap-2 $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    color: var(--bf-appearance-token-color-text-primary);
+    padding: var(--bf-space-2) var(--bf-space-3);
+    background: var(--bf-color-action-neutral-surface);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-base);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     cursor: pointer;
     transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:focus {
       outline: none;
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-medium);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:disabled {
@@ -179,7 +172,7 @@ $opacity-high: 0.8 !default;
   &__form-checkbox {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     cursor: pointer;
 
     input[type="checkbox"] {
@@ -191,14 +184,14 @@ $opacity-high: 0.8 !default;
     label {
       margin: 0;
       font-size: var(--bf-font-size-sm);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       cursor: pointer;
       user-select: none;
     }
   }
 
   &__section {
-    margin-bottom: $size-gap-6;
+    margin-bottom: var(--bf-space-6);
 
     &:last-child {
       margin-bottom: 0;
@@ -208,38 +201,38 @@ $opacity-high: 0.8 !default;
   &__section-header {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    margin-bottom: $size-gap-4;
-    padding-bottom: $size-gap-2;
-    border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+    gap: var(--bf-space-2);
+    margin-bottom: var(--bf-space-4);
+    padding-bottom: var(--bf-space-2);
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
   }
 
   &__section-title {
     font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin: 0;
   }
 
   &__section-description {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-secondary);
-    margin-top: $size-gap-1;
+    color: var(--bf-color-content-secondary);
+    margin-top: var(--bf-space-1);
   }
 
   &__config-item {
-    padding: $size-gap-4;
-    background: var(--bf-appearance-token-element-bg-soft);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
-    margin-bottom: $size-gap-3;
+    padding: var(--bf-space-4);
+    background: var(--bf-color-action-quiet-hover);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-base);
+    margin-bottom: var(--bf-space-3);
     transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      border-color: var(--bf-appearance-token-border-medium);
+      background: var(--bf-color-action-neutral-surface);
+      border-color: var(--bf-color-field-border-hover);
     }
 
     &:last-child {
@@ -255,14 +248,14 @@ $opacity-high: 0.8 !default;
   &__config-key {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
-    margin-bottom: $size-gap-1;
+    color: var(--bf-color-content-primary);
+    margin-bottom: var(--bf-space-1);
     font-family: var(--bf-font-family-mono);
   }
 
   &__config-value {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-family: var(--bf-font-family-mono);
     white-space: nowrap;
     overflow: hidden;
@@ -272,7 +265,7 @@ $opacity-high: 0.8 !default;
   &__config-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex-shrink: 0;
   }
 
@@ -282,20 +275,20 @@ $opacity-high: 0.8 !default;
     align-items: center;
     justify-content: center;
     height: 100%;
-    padding: $size-gap-10;
+    padding: var(--bf-space-10);
     text-align: center;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
 
     h3 {
       font-size: var(--bf-font-size-lg);
       font-weight: var(--bf-font-weight-medium);
-      margin: $size-gap-4 0 $size-gap-2 0;
-      color: var(--bf-appearance-token-color-text-primary);
+      margin: var(--bf-space-4) 0 var(--bf-space-2) 0;
+      color: var(--bf-color-content-primary);
     }
 
     p {
       font-size: var(--bf-font-size-sm);
-      margin-bottom: $size-gap-4;
+      margin-bottom: var(--bf-space-4);
     }
   }
 
@@ -305,36 +298,36 @@ $opacity-high: 0.8 !default;
 
   &__error-message {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-error);
-    margin-bottom: $size-gap-4;
+    color: var(--bf-color-status-danger-content);
+    margin-bottom: var(--bf-space-4);
   }
 
   &__advanced-toggle {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
-    background: var(--bf-appearance-token-element-bg-base);
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-base;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3);
+    background: var(--bf-color-action-neutral-surface);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-base);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard;
-    margin-top: $size-gap-4;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    margin-top: var(--bf-space-4);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      border-color: var(--bf-appearance-token-border-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
+      border-color: var(--bf-color-field-border-hover);
     }
   }
 
   &__advanced-content {
-    margin-top: $size-gap-3;
-    padding: $size-gap-4;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-radius: $size-radius-base;
+    margin-top: var(--bf-space-3);
+    padding: var(--bf-space-4);
+    background: var(--bf-color-surface-subtle);
+    border-radius: var(--bf-radius-base);
   }
 }
 
@@ -357,8 +350,8 @@ $opacity-high: 0.8 !default;
   .bitfun-git-settings-view {
     &__header {
       flex-direction: column;
-      gap: $size-gap-2;
-      padding: $size-gap-3;
+      gap: var(--bf-space-2);
+      padding: var(--bf-space-3);
     }
 
     &__header-left,
@@ -369,7 +362,7 @@ $opacity-high: 0.8 !default;
 
     &__config-item {
       flex-direction: column;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     &__config-actions {

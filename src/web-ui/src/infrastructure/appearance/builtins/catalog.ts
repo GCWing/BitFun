@@ -3,7 +3,11 @@ import {
   DEFAULT_DARK_APPEARANCE_ID,
   DEFAULT_LIGHT_APPEARANCE_ID,
 } from './palettes';
-import type { AppearanceCatalogEntry, AppearancePackage } from '../types';
+import type {
+  AppearanceCatalogEntry,
+  AppearancePackage,
+  AppearanceThemeTokenName,
+} from '../types';
 import { buildBuiltinAppearance } from './buildBuiltinAppearance';
 export { WIDGET_APPEARANCE_VARIABLE_NAMES } from '../adapters/widgetAppearanceVariables';
 
@@ -16,12 +20,12 @@ export const builtinAppearancePackages: readonly AppearancePackage[] = Object.fr
 const builtinById = new Map(builtinAppearancePackages.map(pkg => [pkg.id, pkg]));
 
 function collectRendererVariableNames(
-  rendererId: 'css-tokens' | 'generative-widget',
+  rendererId: 'theme-tokens' | 'generative-widget',
 ): readonly string[] {
   const names = new Set<string>();
   builtinAppearancePackages.forEach(pkg => {
-    const values = rendererId === 'css-tokens'
-      ? pkg.renderers?.['css-tokens']?.settings.tokens
+    const values = rendererId === 'theme-tokens'
+      ? pkg.renderers?.['theme-tokens']?.settings.tokens
       : pkg.renderers?.['generative-widget']?.settings.vars;
     if (values && typeof values === 'object' && !Array.isArray(values)) {
       Object.keys(values).forEach(name => names.add(name));
@@ -30,7 +34,7 @@ function collectRendererVariableNames(
   return Object.freeze([...names].sort());
 }
 
-export const APPEARANCE_CSS_TOKEN_NAMES = collectRendererVariableNames('css-tokens');
+export const APPEARANCE_THEME_TOKEN_NAMES = collectRendererVariableNames('theme-tokens');
 
 export const builtinAppearanceCatalog: readonly AppearanceCatalogEntry[] = Object.freeze(
   builtinAppearancePackages.map(pkg => Object.freeze({
@@ -48,22 +52,22 @@ export function getBuiltinAppearance(id: string): AppearancePackage | null {
   return builtinById.get(id) ?? null;
 }
 
-export function getBuiltinAppearanceCssTokens(
+export function getBuiltinAppearanceThemeTokens(
   id: string = DEFAULT_DARK_APPEARANCE_ID,
-): Readonly<Record<string, string>> {
-  const settings = getBuiltinAppearance(id)?.renderers?.['css-tokens']?.settings;
+): Readonly<Partial<Record<AppearanceThemeTokenName, string>>> {
+  const settings = getBuiltinAppearance(id)?.renderers?.['theme-tokens']?.settings;
   const tokens = settings?.tokens;
   if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)) {
-    throw new Error(`Builtin Appearance ${id} has no css-tokens renderer settings`);
+    throw new Error(`Builtin Appearance ${id} has no theme-tokens renderer settings`);
   }
   return tokens;
 }
 
-export function getBuiltinAppearanceCssToken(
-  name: string,
+export function getBuiltinAppearanceThemeToken(
+  name: AppearanceThemeTokenName,
   id: string = DEFAULT_DARK_APPEARANCE_ID,
 ): string {
-  const value = getBuiltinAppearanceCssTokens(id)[name];
+  const value = getBuiltinAppearanceThemeTokens(id)[name];
   if (!value) throw new Error(`Builtin Appearance ${id} does not define ${name}`);
   return value;
 }

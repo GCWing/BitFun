@@ -23,16 +23,7 @@ import {
   confirmDanger,
   confirmWarning,
 } from '@/infrastructure/confirm-dialog';
-import {
-  Lock,
-  Server,
-  LogIn,
-  Monitor,
-  CloudDownload,
-  RefreshCw,
-  EyeOff,
-  Rocket,
-} from 'lucide-react';
+import { Lock, Server, LogIn, Monitor, CloudDownload, EyeOff, Rocket } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
   AccountHint,
@@ -1065,14 +1056,13 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       <div data-bf-component="remote-account-panel" data-bf-part="root" data-bf-view={view} className="account-panel">
         {error && (
           <div className="account-panel__error-banner" data-bf-component="remote-account-panel" data-bf-part="error">
-            <Alert type="error" message={error} closable onClose={() => setError(null)}
-              className="account-panel__error-alert" />
+            <Alert tone="error" message={error} closable onClose={() => setError(null)} />
           </div>
         )}
 
         {loading && view === 'devices' && (
           <div className="account-panel__loading-overlay" data-bf-component="remote-account-panel" data-bf-part="loading">
-            <RefreshCw size={20} className="spinning" />
+            <Icon name="refresh" size="lg" className="spinning" style={{ width: 20, height: 20 }} />
             <span>{t('accountLogin.processing')}</span>
           </div>
         )}
@@ -1083,7 +1073,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             <div className="account-panel__form" data-bf-component="remote-account-panel" data-bf-part="form">
               <Field
                 className="account-panel__field"
-                controlClassName="account-panel__field-control"
+                controlWidth="fill"
                 label={t('accountLogin.username')}
               >
                 <Input
@@ -1098,7 +1088,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Field>
               <Field
                 className="account-panel__field"
-                controlClassName="account-panel__field-control"
+                controlWidth="fill"
                 label={t('accountLogin.password')}
               >
                 <Input
@@ -1124,7 +1114,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </Field>
               <Field
                 className="account-panel__field"
-                controlClassName="account-panel__field-control"
+                controlWidth="fill"
                 label={t('accountLogin.authServer')}
               >
                 <Input
@@ -1229,7 +1219,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             {syncStatus !== 'idle' && !relayError && (
               <div className={`account-panel__sync-indicator ${syncStatus}`} data-bf-component="remote-account-panel" data-bf-part="syncStatus" data-bf-state={syncStatus === 'syncing' ? 'syncing' : undefined}>
                 <div className="account-panel__sync-indicator-row">
-                  {syncStatus === 'syncing' && <RefreshCw size={14} className="spinning" />}
+                  {syncStatus === 'syncing' && <Icon name="refresh" size="sm" className="spinning" />}
                   {syncStatus === 'done' && <span>✓</span>}
                   {syncStatus === 'failed' && <span>⚠</span>}
                   <span className="account-panel__sync-indicator-text">
@@ -1246,7 +1236,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     <Button
                       variant="outline"
                       size="sm"
-                      leadingIcon={<RefreshCw />}
+                      leadingIcon={<Icon name="refresh" size="lg" />}
                       className="account-panel__sync-retry"
                       onClick={handleRetrySync}
                       disabled={loading}
@@ -1283,9 +1273,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
             {relayError && (
               <div className="account-panel__error-banner" data-bf-component="remote-account-panel" data-bf-part="error">
                 <Alert
-                  type="error"
+                  tone="error"
                   message={relayError}
-                  className="account-panel__error-alert"
                 />
               </div>
             )}
@@ -1295,7 +1284,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               )}
               {!relayError && !devicesReady && (
                 <div className="account-panel__empty account-panel__empty--loading" role="status">
-                  <RefreshCw size={14} className="spinning" />
+                  <Icon name="refresh" size="sm" className="spinning" />
                   {t('accountLogin.loadingDevices')}
                 </div>
               )}
@@ -1369,7 +1358,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <Button
                   variant="fill"
                   size="sm"
-                  leadingIcon={<RefreshCw />}
+                  leadingIcon={<Icon name="refresh" size="lg" />}
                   onClick={handleRetryConnect}
                   disabled={loading}
                 >
@@ -1380,7 +1369,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  leadingIcon={<RefreshCw />}
+                  leadingIcon={<Icon name="refresh" size="lg" />}
                   onClick={refreshDevices}
                   disabled={loading}
                 >

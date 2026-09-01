@@ -1,9 +1,5 @@
 import React from 'react';
-import {
-  BITFUN_ICON_SIZE,
-  NavigationSessionViewAllIcon,
-  NavigationSessionViewGroupedIcon,
-} from '@/component-library';
+import { BITFUN_ICON_SIZE, NavigationSessionViewAllIcon, NavigationSessionViewGroupedIcon } from '@/app/icons';
 import { useI18n } from '@/infrastructure/i18n';
 import { IconButton, Tooltip } from '@bitfun/ui';
 import {

@@ -33,26 +33,26 @@
     z-index: 1;
     width: max(6px, calc(var(--subagent-avatar-size) * 0.24));
     height: max(6px, calc(var(--subagent-avatar-size) * 0.24));
-    border: 1.5px solid var(--bf-appearance-token-color-bg-elevated);
+    border: 1.5px solid var(--bf-color-surface-raised);
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-content-muted);
   }
 
   &--running &__status,
   &--finishing &__status {
-    background: var(--bf-appearance-token-color-success);
+    background: var(--bf-color-status-success-content);
   }
 
   &--waiting &__status {
-    background: var(--bf-appearance-token-color-warning);
+    background: var(--bf-color-status-warning-content);
   }
 
   &--error &__status,
   &--cancelled &__status {
-    background: var(--bf-appearance-token-color-error);
+    background: var(--bf-color-status-danger-content);
   }
 
   &--completed &__status {
-    background: var(--bf-appearance-token-color-info);
+    background: var(--bf-color-status-info-content);
   }
 }

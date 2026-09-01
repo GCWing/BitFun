@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { flowChatStore } from '../store/FlowChatStore';
 import { FlowChatState, Session } from '../types/flow-chat';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '../utils/sessionTitle';
 import './CurrentSessionTitle.scss';

@@ -1,10 +1,8 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .archived-sessions-config {
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-6;
+    gap: var(--bf-space-6);
   }
 
   &__loading {
@@ -12,7 +10,7 @@
     align-items: center;
     justify-content: center;
     padding: 32px 16px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
   }
 
@@ -22,7 +20,7 @@
     align-items: center;
     gap: 10px;
     padding: 32px 16px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-align: center;
     font-size: var(--bf-font-size-sm);
   }
@@ -36,35 +34,35 @@
     flex-direction: column;
 
     & + & {
-      border-top: 1px solid var(--bf-appearance-token-border-subtle);
-      margin-top: $size-gap-2;
-      padding-top: $size-gap-2;
+      border-top: 1px solid var(--bf-color-border-subtle);
+      margin-top: var(--bf-space-2);
+      padding-top: var(--bf-space-2);
     }
   }
 
   &__group-header {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 6px 16px;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
     width: 100%;
     border: none;
     background: transparent;
     cursor: pointer;
-    transition: background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
   }
 
   &__group-chevron {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
   }
 
@@ -84,10 +82,10 @@
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: var(--bf-appearance-token-element-bg-soft);
+    background: var(--bf-color-action-quiet-hover);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__group-list {
@@ -99,12 +97,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     padding: 8px 16px;
-    transition: background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
+      background: var(--bf-color-action-neutral-surface-hover);
 
       .archived-sessions-config__row-actions {
         opacity: 1;
@@ -122,7 +120,7 @@
   &__row-name {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-ui);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -131,22 +129,22 @@
 
   &__row-date {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     line-height: var(--bf-line-height-ui);
   }
 
   &__row-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 }

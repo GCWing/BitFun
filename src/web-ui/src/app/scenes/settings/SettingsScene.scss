@@ -11,32 +11,32 @@
 
   &__loading {
     flex: 1;
-    padding: var(--bf-appearance-token-size-gap-6);
+    padding: var(--bf-space-6);
   }
 
   &__loading-line,
   &__loading-block {
-    border-radius: var(--bf-appearance-token-size-radius-md);
-    background: var(--bf-appearance-token-element-bg-soft);
+    border-radius: var(--bf-radius-md);
+    background: var(--bf-color-action-quiet-hover);
     opacity: 0.65;
   }
 
   &__loading-line {
     height: 14px;
     max-width: 360px;
-    margin-bottom: var(--bf-appearance-token-size-gap-3);
+    margin-bottom: var(--bf-space-3);
 
     &--title {
       height: 20px;
       max-width: 220px;
-      margin-bottom: var(--bf-appearance-token-size-gap-5);
+      margin-bottom: var(--bf-space-5);
     }
   }
 
   &__loading-block {
     height: 160px;
     max-width: 720px;
-    margin-top: var(--bf-appearance-token-size-gap-6);
+    margin-top: var(--bf-space-6);
   }
 
   &__content-stack {

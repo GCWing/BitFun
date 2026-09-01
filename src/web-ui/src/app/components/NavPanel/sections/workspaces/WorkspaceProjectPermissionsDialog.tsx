@@ -1,6 +1,20 @@
-import { Button, Icon, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  type SelectOption,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { Save, ShieldCheck } from 'lucide-react';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
@@ -226,19 +240,21 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        if (!isBusy) {
-          onClose();
-        }
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isBusy) onClose();
       }}
-      title={workspace.name}
-      size="xlarge"
-      contentPadding="lg"
-      contentClassName="workspace-project-permissions-dialog__modal"
-      overlayClassName="workspace-project-permissions-dialog-overlay"
+      size="xl"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{workspace.name}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
+        <div className="workspace-project-permissions-dialog__modal">
       <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="root" className="workspace-project-permissions-dialog">
         <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="intro" className="workspace-project-permissions-dialog__intro">
           <ShieldCheck size={18} aria-hidden="true" />
@@ -254,7 +270,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                 variant="outline"
                 onClick={() => void handleClearPermissionGrants()}
                 disabled={isBusy}
-                leadingIcon={<Trash2 size={14} />}
+                leadingIcon={<Icon name="delete" size="sm" />}
               >
 
                 {t('projectPermissions.clearGrants')}
@@ -283,7 +299,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                       aria-label={t('projectPermissions.removeGrant')}
                       disabled={isBusy}
                       onClick={() => void handleRemovePermissionGrant(grant)}
-                      icon={<Trash2 size={14} />}
+                      icon={<Icon name="delete" size="sm" />}
                     />
                   </Tooltip>
                 </div>
@@ -366,7 +382,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                         aria-label={t('projectPermissions.moveRuleDown')}
                         disabled={isBusy || index === draftRules.length - 1}
                         onClick={() => moveDraftRule(index, 1)}
-                        icon={<ArrowDown size={14} />}
+                        icon={<Icon name="arrow-down" size="sm" />}
                       />
                     </Tooltip>
                     <Tooltip content={t('projectPermissions.removeRule')}>
@@ -376,7 +392,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                         aria-label={t('projectPermissions.removeRule')}
                         disabled={isBusy}
                         onClick={() => setDraftRules((rules) => rules.filter(({ localId }) => localId !== rule.localId))}
-                        icon={<Trash2 size={14} />}
+                        icon={<Icon name="delete" size="sm" />}
                       />
                     </Tooltip>
                   </div>
@@ -405,7 +421,9 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
           ) : null}
         </section>
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 };
 

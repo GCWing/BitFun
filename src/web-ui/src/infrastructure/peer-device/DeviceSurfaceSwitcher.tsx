@@ -10,7 +10,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActionItem, Icon, Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { ChevronUp, Monitor, MonitorSmartphone, Loader2, Unplug } from 'lucide-react';
+import { Monitor, MonitorSmartphone, Loader2, Unplug } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useNotification } from '@/shared/notification-system';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -161,7 +161,6 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
           'bitfun-device-switcher',
           isRemote && 'is-remote',
         ].filter(Boolean).join(' ')}
-        triggerClassName="bitfun-device-switcher__trigger"
         data-testid="device-surface-switcher"
         data-bf-component="peer-device"
         data-bf-part="switcher"
@@ -187,7 +186,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                 {busyElsewhereCount}
               </span>
             )}
-            <ChevronUp size={13} className="bitfun-device-switcher__chevron" aria-hidden="true" />
+            <Icon name="chevron-up" size="lg" className="bitfun-device-switcher__chevron" aria-hidden="true" style={{ width: 13, height: 13 }} />
           </>
         )}
         onClick={() => setOpen(value => !value)}

@@ -1,7 +1,7 @@
 import { Button, IconButton } from '@bitfun/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, Download, Loader2, Mic, VolumeX, X } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;

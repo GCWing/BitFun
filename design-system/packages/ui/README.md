@@ -18,6 +18,11 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+Use `OverflowText` for single-line labels that should fade at the inline end only
+when their rendered content is actually clipped. The primitive keeps the full
+text in the accessibility tree, supports right-to-left direction, and leaves
+width constraints and any tooltip content to the consumer.
+
 `Disclosure` is the shared expandable-content primitive. It owns controlled or
 uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.
@@ -29,13 +34,31 @@ matching component slot, just as for SVG icons. These slots constrain catalog
 icons to the component's size; a standalone `Icon` retains its explicit size
 (24px by default). Do not shrink the catalog globally to correct a slot mismatch.
 
+The catalog uses exported vectors, including their view boxes and per-path
+opacity. Theme colors remain caller-owned through `currentColor`. Asset
+fingerprints are reviewed with intentional resource updates so replacing a
+glyph with a similarly named substitute cannot pass unnoticed.
+
+Use `canonicalIconNames` for galleries and pickers. `iconNames` also keeps the
+legacy `download`, `circle` and `turn` entries for compatibility; prefer
+`arrow-down`, `unselected` and `<NumberBadge value={18} />` respectively.
+`turn` is only the old empty background, not a complete numbered marker.
+`NumberBadge` owns a 24px slot, a 20px surface and 11px medium text; longer
+values grow horizontally. Callers supply formatted values and contextual
+accessible labels. `ToolbarBadge` delegates to the same anatomy.
+
+Use `Icon name="session"` in new consumers. `SessionIcon` retains its SVG
+interface for existing integrations, with geometry checked against the same
+catalog asset.
+
 ## Advanced selection and menus
 
-Use native `Select` for simple options. `Combobox` adds search, grouped options,
-multiple selection with removable tags, custom values and async loading states.
-`value` is authoritative when controlled; option discovery remains host-owned.
-Wrap consumers in `ComboboxProvider` to supply translated labels and the host's
-overlay container. Explicit `portalContainer` overrides that default.
+Use native `Select` for simple options. `Combobox` adds searchable single
+selection, grouped options, explicit custom-value creation and async loading
+states. `MultiSelect` owns multiple selection, removable tags and select-all.
+Controlled values are authoritative; option discovery remains host-owned.
+Wrap the product once in `DesignSystemProvider` to supply translated messages,
+the portal host, theme facts and the shared overlay layer stack.
 The Web UI's legacy Select implementation is retired. Like retired Button and
 Switch overrides, legacy `components.select` Appearance rules are ignored at
 the existing read-only migration boundary; original packages are not rewritten.
@@ -49,11 +72,11 @@ restores focus before dispatching `onSelect`; the host owns asynchronous work
 and error handling. The popup flips and clamps to the viewport, keeps keyboard
 navigation in the active menu, and supports safe pointer travel to either side.
 
-Portals default to the nearest ThemeRoot. Supply `portalContainer` for a
-host-managed overlay layer; use `portalled={false}` only inside an existing
-overlay host. Stable `parts` wrappers preserve host data hooks; they must forward
-all props and refs and retain public component ownership. `useSubmenuIntent` is available
-for staged migration of other product popovers using the same pointer corridor.
+Portals resolve through `DesignSystemProvider.portalHost`, then fall back to the
+nearest design-system root. Stable `parts` wrappers preserve host data hooks;
+they must forward all props and refs and retain public component ownership.
+`useSubmenuIntent` is available for product popovers that need the same pointer
+corridor behavior.
 
 ## FlowChat tool cards
 

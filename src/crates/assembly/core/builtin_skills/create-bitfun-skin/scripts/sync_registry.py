@@ -19,7 +19,9 @@ CONTRACT_KEYS = (
     "scenes",
     "renderers",
     "defaultForceableProperties",
-    "cssTokenNames",
+    "themeTokenNames",
+    "scopedThemeTokenNames",
+    "themeScopeIds",
     "widgetVariableNames",
 )
 EXPORT_MARKER = "__BITFUN_APPEARANCE_REGISTRY__"
@@ -53,7 +55,7 @@ import { createServer } from 'vite';
 const server = await createServer({ root: process.cwd(), logLevel: 'silent', appType: 'custom', server: { middlewareMode: true } });
 try {
   const registryModule = await server.ssrLoadModule('/src/infrastructure/appearance/registry/defaultAppearanceRegistry.ts');
-  const catalog = await server.ssrLoadModule('/src/infrastructure/appearance/builtins/catalog.ts');
+  const tokenContract = await server.ssrLoadModule('/src/infrastructure/appearance/appearanceTokenContract.ts');
   const widget = await server.ssrLoadModule('/src/infrastructure/appearance/adapters/widgetAppearanceVariables.ts');
   const profiles = await server.ssrLoadModule('/src/infrastructure/appearance/appearancePropertyProfiles.ts');
   const registry = registryModule.createDefaultAppearanceRegistry();
@@ -79,7 +81,9 @@ try {
     scenes: registry.getScenes().map(descriptor),
     renderers: registry.getRendererAdapters().map(adapter => adapter.id),
     defaultForceableProperties,
-    cssTokenNames: [...catalog.APPEARANCE_CSS_TOKEN_NAMES],
+    themeTokenNames: [...tokenContract.APPEARANCE_ROOT_TOKEN_NAMES],
+    scopedThemeTokenNames: [...tokenContract.APPEARANCE_SCOPED_TOKEN_NAMES],
+    themeScopeIds: Object.keys(tokenContract.APPEARANCE_THEME_SCOPE_SELECTORS),
     widgetVariableNames: [...widget.WIDGET_APPEARANCE_VARIABLE_NAMES],
   }));
 } finally {
@@ -119,7 +123,7 @@ def main() -> int:
         snapshot = export_registry(repo)
         output_value = {
             "schema": "bitfun.appearance.registry",
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "generatedFrom": revision,
             "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
             "sourceRevision": revision,

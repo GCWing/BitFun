@@ -1,0 +1,26 @@
+/**
+ * Shared markdown table values for MarkdownRenderer and m-editor tables.
+ * These are Sass-only to avoid turning editor table internals into theme keys.
+ */
+
+$border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+$shadow: none;
+$surface: transparent;
+$cell-border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+$col-divider: transparent;
+$th-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+$th-fg: var(--bf-color-content-primary);
+$row-base: transparent;
+$row-stripe: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+$hover: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+
+$border-light: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+$shadow-light: 0 4px 14px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+$surface-light: var(--bf-color-content-on-dark);
+$cell-border-light: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+$col-divider-light: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+$th-bg-light: var(--bf-color-surface-tertiary);
+$th-fg-light: var(--bf-color-content-primary);
+$row-base-light: var(--bf-color-content-on-dark);
+$row-stripe-light: color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent);
+$hover-light: var(--bf-color-action-neutral-surface-hover);

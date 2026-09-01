@@ -19,9 +19,11 @@ import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
 import { listboxMeta } from "./components/Listbox/Listbox.meta";
 import { menuMeta } from "./components/Menu/Menu.meta";
-import { modalMeta } from "./components/Modal/Modal.meta";
+import { dialogMeta, sheetMeta } from "./components/Dialog/Dialog.meta";
+import { multiSelectMeta } from "./components/MultiSelect/MultiSelect.meta";
 import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPanel.meta";
 import { numberInputMeta } from "./components/NumberInput/NumberInput.meta";
+import { numberBadgeMeta } from "./components/NumberBadge/NumberBadge.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
 import { radioMeta } from "./components/Radio/Radio.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
@@ -29,6 +31,7 @@ import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { segmentedControlMeta } from "./components/SegmentedControl/SegmentedControl.meta";
 import { selectMeta } from "./components/Select/Select.meta";
 import { statusPillMeta } from "./components/StatusPill/StatusPill.meta";
+import { loadingStateMeta, spinnerMeta } from "./components/Spinner/Spinner.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { textareaMeta } from "./components/Textarea/Textarea.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
@@ -111,10 +114,13 @@ export const componentRegistry = [
   inputMeta,
   keyHintMeta,
   listboxMeta,
+  loadingStateMeta,
   menuMeta,
-  modalMeta,
+  dialogMeta,
+  multiSelectMeta,
   navigationPanelMeta,
   numberInputMeta,
+  numberBadgeMeta,
   pageDeployToolCardMeta,
   pageHeaderMeta,
   radioMeta,
@@ -127,10 +133,12 @@ export const componentRegistry = [
   searchFieldMeta,
   segmentedControlMeta,
   selectMeta,
+  sheetMeta,
   sessionControlToolCardMeta,
   sessionMessageToolCardMeta,
   skillToolCardMeta,
   statusPillMeta,
+  spinnerMeta,
   switchMeta,
   tabGroupMeta,
   textareaMeta,

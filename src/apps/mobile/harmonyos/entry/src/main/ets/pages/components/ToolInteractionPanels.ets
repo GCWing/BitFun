@@ -1,7 +1,7 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
-import { ACCENT, CARD, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
+import { ACCENT, CARD, INK, LINE, MUTED, CONTENT_ON_ACTION, STATUS_DANGER, SOFT } from './Theme';
 
 interface QuestionOption {
   label: string;
@@ -42,7 +42,7 @@ export struct ToolConfirmationPanel {
       Row({ space: 8 }) {
         Text(RemoteI18n.t('chat.approve'))
           .fontSize(MobileDesignTypography.labelMedium.size)
-          .fontColor(PRIMARY_ACTION_TEXT)
+          .fontColor(CONTENT_ON_ACTION)
           .textAlign(TextAlign.Center)
           .height(32)
           .layoutWeight(1)
@@ -89,7 +89,7 @@ export struct ToolConfirmationPanel {
         .backgroundColor(SOFT)
         .borderRadius(14)
         .padding(10)
-        .border({ width: 1, color: this.inputError.length > 0 ? RED : LINE })
+        .border({ width: 1, color: this.inputError.length > 0 ? STATUS_DANGER : LINE })
         .defaultFocus(false)
         .enabled(true)
         .onChange((value: string) => {
@@ -97,7 +97,7 @@ export struct ToolConfirmationPanel {
           this.inputError = '';
         })
       if (this.inputError.length > 0) {
-        Text(this.inputError).fontSize(MobileDesignTypography.labelSmall.size).fontColor(RED)
+        Text(this.inputError).fontSize(MobileDesignTypography.labelSmall.size).fontColor(STATUS_DANGER)
       }
     }
     .width('100%')
@@ -160,7 +160,7 @@ export struct ToolQuestionAnswerPanel {
       Row() {
         Text(RemoteI18n.t('chat.submitAnswer'))
           .fontSize(MobileDesignTypography.labelMedium.size)
-          .fontColor(this.canSubmit() ? PRIMARY_ACTION_TEXT : MUTED)
+          .fontColor(this.canSubmit() ? CONTENT_ON_ACTION : MUTED)
           .textAlign(TextAlign.Center)
           .height(32)
           .layoutWeight(1)

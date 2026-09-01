@@ -10,15 +10,10 @@
   padding: 0;
   column-gap: 0;
   overflow: visible;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
   container-name: scene-top-bar;
   container-type: inline-size;
   user-select: none;
-
-  > [data-bf-part='leading'],
-  > [data-bf-part='trailing'] {
-    height: 100%;
-  }
 
   &__actions {
     display: flex;

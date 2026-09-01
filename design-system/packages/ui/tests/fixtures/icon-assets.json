@@ -1,0 +1,386 @@
+[
+  {
+    "name": "arrow-left",
+    "node": "4:6429",
+    "asset": "arrow-left.svg",
+    "sha256": "0fcd1249776f3842bce37483ceb963f942938a4c05d4a2bfc70d5349aa8f8f4f"
+  },
+  {
+    "name": "arrow-right",
+    "node": "4:6434",
+    "asset": "arrow-right.svg",
+    "sha256": "4e114a3411a13f1b615f6243515ce15754bd0d1fb4b355ed2ab2af14c6f678fa"
+  },
+  {
+    "name": "arrow-up",
+    "node": "4:5421",
+    "asset": "arrow-up.svg",
+    "sha256": "43f352d34a3b98581c3897acee5adfe8c97e9491a6104132aa76ab4b37708802"
+  },
+  {
+    "name": "arrow-up-right",
+    "node": "304:6218",
+    "asset": "arrow-upright.svg",
+    "sha256": "85a3fb37680504c7c174253b00e9f269539aa10a35cde1eb1b8d7e6d7bd8bea9"
+  },
+  {
+    "name": "bell",
+    "node": "149:12640",
+    "asset": "bell.svg",
+    "sha256": "83b00d2152acb2cae8fdbff6eefd7c28a683efe8227c38d599e3f49f8846ccf2"
+  },
+  {
+    "name": "browser",
+    "node": "215:15205",
+    "asset": "browser.svg",
+    "sha256": "c28930d4714d2d13dce37527ecd0729108a21694216992891907c5a2a1d3692b"
+  },
+  {
+    "name": "check-circle",
+    "node": "331:8163",
+    "asset": "check-circle.svg",
+    "sha256": "2ad48574aaf3b0ee2002fb1326c372ce206d2f2ee1ddc7255c18047779151492"
+  },
+  {
+    "name": "check-fill",
+    "node": "61:793",
+    "asset": "check-fill.svg",
+    "sha256": "3e4f0ebdad52633133988a63dd14baf2edc140e93a208538dbb4cbccfe896547"
+  },
+  {
+    "name": "check-line",
+    "node": "138:7903",
+    "asset": "check-line.svg",
+    "sha256": "c811a3c2bd8ebc57641b10ddd609af4f11d6024c028c44ac88dd2d642bb65cdc"
+  },
+  {
+    "name": "chevron-down",
+    "node": "4:5478",
+    "asset": "chevron-down.svg",
+    "sha256": "f83716f24ba4c3f01653c168234375ab462d014d097e6cddadbd327ba89df37a"
+  },
+  {
+    "name": "chevron-left",
+    "node": "569:22643",
+    "asset": "chevron-left.svg",
+    "sha256": "70e444bf495a0fb1d168897c75c966e1cac09f101bc96da737c05bcc660f951f"
+  },
+  {
+    "name": "chevron-right",
+    "node": "138:8191",
+    "asset": "chevron-right.svg",
+    "sha256": "2f50a7c2342c1fdeab221029f43e23344ec0c6f2411561e1e4fb4fa05dd53c92"
+  },
+  {
+    "name": "chevron-up",
+    "node": "394:12354",
+    "asset": "chevron-up.svg",
+    "sha256": "8ab731fd4d56ea1b1574db3f80d977fe18d0a6acbf9a0c1e32150b6a52f24a54"
+  },
+  {
+    "name": "circle",
+    "node": "4:5613",
+    "asset": "circle.svg",
+    "sha256": "0299b18eaafb3a3247b57f50334a575510a73c13b5a37219811cdc7e1ba4a114"
+  },
+  {
+    "name": "clock",
+    "node": "2:180",
+    "asset": "clock.svg",
+    "sha256": "6628b50990e19d633d3eecc2b9d3d7054be132a27f2cb4ddd91495d95cbb905c"
+  },
+  {
+    "name": "command-mac",
+    "node": "2:21",
+    "asset": "command-mac.svg",
+    "sha256": "949261f9d97ed2ab54f8afb1b24c31898733a976aeb556bc2348479402158b15"
+  },
+  {
+    "name": "commit",
+    "node": "333:9186",
+    "asset": "commit.svg",
+    "sha256": "0c6898e7d5901b5d3b10763a328baa97b8191149aba8375cf65cb1998a54a940"
+  },
+  {
+    "name": "creative",
+    "node": "538:19712",
+    "asset": "creative.svg",
+    "sha256": "f46c554b62ec66b1570763f5919bdf420860796614b02df294c9337d18df772f"
+  },
+  {
+    "name": "delete",
+    "node": "449:15746",
+    "asset": "delete.svg",
+    "sha256": "ea204da0081acc8ed5d0c0bfad6b321bc6058392a05b08872e44b0a5fdd008f3"
+  },
+  {
+    "name": "device-mac",
+    "node": "2:871",
+    "asset": "device-mac.svg",
+    "sha256": "b0c585ad1aeaa6a17a334a50cab56e9483f4936c9bef8fa9c7fe0400a656f4c8"
+  },
+  {
+    "name": "download",
+    "node": "449:14984",
+    "asset": "download.svg",
+    "sha256": "e33f9ddb6ae99cf70cb4276121419b5038bf134ef78c3705f72d63010ca3d773"
+  },
+  {
+    "name": "duplicate",
+    "node": "312:6518",
+    "asset": "duplicate.svg",
+    "sha256": "015f3119253407c839eff37413d106cd4174a5647083734688ac957efc241705"
+  },
+  {
+    "name": "edit",
+    "node": "261:17716",
+    "asset": "edit.svg",
+    "sha256": "2c1672a583746134cc21e83b7bccd8670b512d1fbb61a19d7228f7e24e1d7d39"
+  },
+  {
+    "name": "extension",
+    "node": "2:265",
+    "asset": "extension.svg",
+    "sha256": "abd4b72a90c3c04a615c977beb0a034afb374150e232f5656fb0cbfd0474a7fa"
+  },
+  {
+    "name": "eye",
+    "node": "215:16207",
+    "asset": "eye.svg",
+    "sha256": "bd581416531b877d71d2f57260b983b2e5b5d74feacbf8ea2503508f28affb13"
+  },
+  {
+    "name": "files",
+    "node": "215:15189",
+    "asset": "files.svg",
+    "sha256": "68d998514b0c81b319a9d1fc3e3f99236caa6775ec528cb1431cc71da23d343a"
+  },
+  {
+    "name": "filter",
+    "node": "2:365",
+    "asset": "filter.svg",
+    "sha256": "b1a26628b065660522640df18f59e7d0b5f18d58689f68df4ac2f2694e0f5702"
+  },
+  {
+    "name": "floating-window",
+    "node": "149:12654",
+    "asset": "floating-window.svg",
+    "sha256": "f10ef045e6ff72cd2f14c26ff127496a8042c8a56edb10b40d6d8e9e06e98cd3"
+  },
+  {
+    "name": "folder",
+    "node": "2:341",
+    "asset": "folder.svg",
+    "sha256": "e1823afe8e6006b2b29004deb7eaab696347a7f02ee3b412082e6de7b572da70"
+  },
+  {
+    "name": "gear",
+    "node": "2:897",
+    "asset": "gear.svg",
+    "sha256": "3cf24ecae9afec8cda617b2470b1e3ad7c1cd7b6774247755a61b0057343db59"
+  },
+  {
+    "name": "git",
+    "node": "4:5583",
+    "asset": "git.svg",
+    "sha256": "bbf48ffa1171d24c11ef4f5e2a3a216b7e25192a6af5413bd7a1bce24cdddc92"
+  },
+  {
+    "name": "image",
+    "node": "78:875",
+    "asset": "image.svg",
+    "sha256": "7dd202b0f7f83b81c9fa7f5e4bd9f3abb648b28dfa2733a2f14fe95eb6b9d86c"
+  },
+  {
+    "name": "info",
+    "node": "149:12670",
+    "asset": "info.svg",
+    "sha256": "e76b526f86940319099141fd062b990e918293e61e17977095eac3899bfd39f7"
+  },
+  {
+    "name": "level",
+    "node": "4:5654",
+    "asset": "level.svg",
+    "sha256": "03612177ccdac13266243e951017dc86544e6c8df7797f66012185d18cbfa6b1"
+  },
+  {
+    "name": "link",
+    "node": "138:7352",
+    "asset": "link.svg",
+    "sha256": "783f6a67e14470cfc3b804b5ad1b6dd6c9288c06b7b70a3ab5850e10341a2908"
+  },
+  {
+    "name": "mic",
+    "node": "4:5455",
+    "asset": "mic.svg",
+    "sha256": "62daf266269447fddcc524c423565f5404261febe759c4756cb64742495fed23"
+  },
+  {
+    "name": "mini-app",
+    "node": "2:195",
+    "asset": "mini-app.svg",
+    "sha256": "a64c25bc12454e1b2ce2c2b8bbb1ca79867100bbfb89c07135c713b6e9601c89"
+  },
+  {
+    "name": "minimal",
+    "node": "538:22189",
+    "asset": "minimal.svg",
+    "sha256": "2f86b2b882233cf1478fde0154b982d705cd0432a2722c7154f64c449c1eb79f"
+  },
+  {
+    "name": "more",
+    "node": "4:518",
+    "asset": "more.svg",
+    "sha256": "72e20b9bd55d97edd22c2a369b4f81afcfc80452814a355ce4e1ab805a6f8922"
+  },
+  {
+    "name": "palette",
+    "node": "149:12687",
+    "asset": "palette.svg",
+    "sha256": "2041f3d931453bb01e3ca408d648daf5ae3500a978a50242a94e0c99dcbf0420"
+  },
+  {
+    "name": "pin",
+    "node": "149:14668",
+    "asset": "pin.svg",
+    "sha256": "19e5e60cc9d51276b4641d2086e57c85b6db38c5fb4d3f379baecc3cbe13ba21"
+  },
+  {
+    "name": "plus",
+    "node": "2:76",
+    "asset": "plus.svg",
+    "sha256": "050948f4a8e337da6452e3689fa6b647df4f53e34402c0c3dc6ecb74cf6667f3"
+  },
+  {
+    "name": "progress-25",
+    "node": "4:5675",
+    "asset": "progress-25.svg",
+    "sha256": "39396a96b01660b5fc899e495c82dcb8718dc95cbf1a6942c961abcdeada6944"
+  },
+  {
+    "name": "refresh",
+    "node": "443:12692",
+    "asset": "refresh.svg",
+    "sha256": "7e987ffaa6905344f6c21eedba5b89bac2a318b9e9d202cf97bb4ed424431afd"
+  },
+  {
+    "name": "search",
+    "node": "2:16",
+    "asset": "search.svg",
+    "sha256": "f8794b01ee09370d1ef9a00129e38fa594127b05df9ee0427a1279e30a54b1d5"
+  },
+  {
+    "name": "selected",
+    "node": "394:12289",
+    "asset": "selected.svg",
+    "sha256": "dd4c025fb8752da6635e770eaaf68e8e11e3f87de0fc0ae4d519cf099d8e1508"
+  },
+  {
+    "name": "session",
+    "node": "4:5305",
+    "asset": "session.svg",
+    "sha256": "60f54aabab4fa76b83267c9e28e525451effa2e25f6276aeb4e5737cf45b63b4"
+  },
+  {
+    "name": "settings",
+    "node": "312:6581",
+    "asset": "settings.svg",
+    "sha256": "c9be3d2ce5bb894c655967d77b530724e481d44708395ebd091c4a7574ba91d4"
+  },
+  {
+    "name": "show-session",
+    "node": "2:379",
+    "asset": "show-session.svg",
+    "sha256": "a8a909e9b2a2ce25b5e9848dbeaa88914eae6354a6b1522bad2bfdfb11e031bf"
+  },
+  {
+    "name": "side-chat",
+    "node": "138:9791",
+    "asset": "side-chat.svg",
+    "sha256": "9a225878df2ac6ef062fd5faaf8b4b109ffc0580dd13db530923bfd2f1cb8105"
+  },
+  {
+    "name": "sidebar-left",
+    "node": "4:6069",
+    "asset": "sidebar-left.svg",
+    "sha256": "2a0a19600e5ba10a1a7982778a35f818e722e93b9210492f98b4ba4fffa9e74b"
+  },
+  {
+    "name": "sidebar-right",
+    "node": "312:7422",
+    "asset": "sidebar-right.svg",
+    "sha256": "c9a6ea1abad072fc71ea4c7544007fb7563b95c275fe979eaa1bd0ea2b2ac96d"
+  },
+  {
+    "name": "spark",
+    "node": "138:9808",
+    "asset": "spark.svg",
+    "sha256": "2f0bab403e9c7bd13838dcf814eeb9f382d38b097b18ff6cf5709a6e88ce9ff9"
+  },
+  {
+    "name": "standard",
+    "node": "538:22179",
+    "asset": "standard.svg",
+    "sha256": "1de70c9d13bf1d12abd2f7d17ee2cbcbac6f6c9e4d51d04af494abd963f95b0b"
+  },
+  {
+    "name": "star",
+    "node": "2:947",
+    "asset": "star.svg",
+    "sha256": "558ce1c57daa9b7d97c0db059f0f7cabafb7724c49973f4617a3eebc83619179"
+  },
+  {
+    "name": "store",
+    "node": "78:889",
+    "asset": "store.svg",
+    "sha256": "8a01fb32acaa1c819213b595a3b4cda38cd4e97bde2b654a201d6b91c74e0703"
+  },
+  {
+    "name": "terminal",
+    "node": "215:15224",
+    "asset": "terminal.svg",
+    "sha256": "636c77e9b8e0db861883697b33430acd9524ccb7e9105715c9da749cad63b457"
+  },
+  {
+    "name": "thinking",
+    "node": "261:17686",
+    "asset": "thinking.svg",
+    "sha256": "0ff7eeb81c10f615050a109ba5300a47d33026cabe4d0e3981854766f699673d"
+  },
+  {
+    "name": "turn",
+    "node": "312:7669",
+    "asset": "turn.svg",
+    "sha256": "0df7eef073f9086f0141c9084d858d128bca633774fbf7f22b60ce48d45b0940"
+  },
+  {
+    "name": "ultimate",
+    "node": "538:19950",
+    "asset": "ultimate.svg",
+    "sha256": "d300bb5dc3160880a316987d0c594cd2b1a24fdf1fe3f799c307c463fd13f8c8"
+  },
+  {
+    "name": "upload",
+    "node": "78:897",
+    "asset": "upload.svg",
+    "sha256": "23ecd2a049d5631892b5c238bba3e5dd97b0de3ffe24343c4561afb8b0d1b19b"
+  },
+  {
+    "name": "user",
+    "node": "2:148",
+    "asset": "user.svg",
+    "sha256": "1aa1cde9bbfe4d4ef01c96ee2bff5a88ee8fcf81537a91d39dbc2c2c39d66ef8"
+  },
+  {
+    "name": "waitlist-message",
+    "node": "449:17065",
+    "asset": "waitlist-message.svg",
+    "sha256": "de97e9820a15db91060e8263453e6e528d3559369cda63f98d4fc647f42a75d1"
+  },
+  {
+    "name": "xmark",
+    "node": "215:15809",
+    "asset": "xmark.svg",
+    "sha256": "09b974cec9f749f93373cef4c7b37f5c4f378da5ef4255ef809ffba76e036c9f"
+  }
+]

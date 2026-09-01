@@ -19,10 +19,6 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('../../component-library', () => ({
-  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-}));
-
 const config: ToolCardConfig = {
   toolName: 'WebFetch',
   displayName: 'WebFetch',

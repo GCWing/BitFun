@@ -15,12 +15,19 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({
   getAppearanceOverlayHost: () => document.body,
+}));
+
+const confirmation = vi.hoisted(() => ({ dialog: vi.fn(async () => true) }));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
+  confirmDialog: confirmation.dialog,
 }));
 
 const notify = vi.hoisted(() => ({ info: vi.fn() }));
@@ -122,7 +129,7 @@ describe('HarnessProfileSelector', () => {
     ).toBe(true);
   });
 
-  it('nests the menu-item picker inside its parent menu and closes it after an Agent choice', async () => {
+  it('portals the menu-item picker outside its parent scroll boundary and closes it after an Agent choice', async () => {
     const onSelectAgent = vi.fn();
     const onSelectionComplete = vi.fn();
     await act(async () => {
@@ -147,26 +154,41 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(selectorRoot?.dataset.bfPresentation).toBe('menu-item');
+    expect(selectorRoot?.dataset.bfProfile).toBe('balanced');
     expect(trigger?.querySelector('.bitfun-harness-selector__trigger-chevron')).not.toBeNull();
+    const triggerMark = trigger?.querySelector<HTMLElement>(
+      '.bitfun-harness-selector__density-mark',
+    );
+    expect(triggerMark?.dataset.harnessProfile).toBe('balanced');
+    expect(triggerMark?.dataset.harnessDensity).toBe('2');
+    expect(triggerMark?.querySelector('[data-bf-name="standard"][data-size="md"]')).not.toBeNull();
     expect(
-      trigger?.querySelector('.bitfun-harness-selector__trigger-label')?.textContent,
-    ).toBe('chatInput.harness.menuLabel');
-    expect(
-      trigger?.querySelector('.bitfun-harness-selector__trigger-current')?.textContent,
-    ).toContain('chatInput.current');
-    expect(
-      trigger?.querySelector('.bitfun-harness-selector__trigger-current-value')?.textContent,
+      trigger?.querySelector('[data-bf-part="label"]')?.textContent,
     ).toBe('chatInput.harness.profiles.balanced.name');
+    expect(trigger?.textContent).not.toContain('chatInput.harness.menuLabel');
+    expect(trigger?.textContent).not.toContain('chatInput.current');
+    expect(trigger?.getAttribute('aria-controls')).toBeTruthy();
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const menu = selectorRoot?.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
+    const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
     expect(menu).not.toBeNull();
     expect(menu?.dataset.bfPlacement).toBe('side');
+    expect(menu?.id).toBe(trigger?.getAttribute('aria-controls'));
+    expect(menu?.querySelector('[data-testid="harness-new-session-notice"]')).toBeNull();
     expect(container.querySelector('[data-testid="parent-add-menu"]')?.contains(menu ?? null))
-      .toBe(true);
+      .toBe(false);
+    expect(document.body.contains(menu)).toBe(true);
+
+    const parentOutsideMouseDown = vi.fn();
+    document.addEventListener('mousedown', parentOutsideMouseDown);
+    await act(async () => {
+      menu?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    document.removeEventListener('mousedown', parentOutsideMouseDown);
+    expect(parentOutsideMouseDown).not.toHaveBeenCalled();
 
     await act(async () => {
       menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')
@@ -181,7 +203,36 @@ describe('HarnessProfileSelector', () => {
     });
     expect(onSelectAgent).toHaveBeenCalledWith('DeepResearch');
     expect(onSelectionComplete).toHaveBeenCalledTimes(1);
-    expect(selectorRoot?.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+  });
+
+  it('opens the menu-item picker with Right Arrow and returns focus with Left Arrow', async () => {
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          presentation="menu-item"
+          selectedProfile="balanced"
+          onSelectProfile={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-selector"]',
+    );
+    await act(async () => {
+      trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+    const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
+    expect(menu).not.toBeNull();
+
+    await act(async () => {
+      menu?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    });
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('offers three Harness gears, Creative, and the second-level Agents entry', async () => {
@@ -214,13 +265,14 @@ describe('HarnessProfileSelector', () => {
       'other',
     ]);
     expect(rows.map(row => density(row))).toEqual([1, 2, 3, 0, 0]);
-    for (const row of rows.slice(0, 3)) {
-      expect(row.querySelector('.bitfun-harness-selector__density-core')).not.toBeNull();
-    }
+    expect(rows.slice(0, 4).map(row => row.querySelector<HTMLElement>(
+      '.bitfun-harness-selector__density-mark [data-bf-component="icon"]',
+    )?.dataset.bfName)).toEqual(['minimal', 'standard', 'ultimate', 'creative']);
+    expect(menu?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
     expect(menu?.querySelector('.bitfun-harness-selector__profile-promise')).toBeNull();
     const creative = rows[3];
     expect(creative?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
-    expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).not.toBeNull();
+    expect(creative?.querySelector('[data-bf-name="creative"][data-size="md"]')).not.toBeNull();
     expect(creative?.dataset.bfState).toBe('available');
     const other = rows[4];
     expect(other?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
@@ -325,7 +377,7 @@ describe('HarnessProfileSelector', () => {
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
-  it('collapses a started Session into its signature before exposing new-Session choices', async () => {
+  it('confirms a new Session after a profile choice in a started Session', async () => {
     const onSelectProfile = vi.fn();
     const onStartNewSession = vi.fn();
     await act(async () => {
@@ -353,22 +405,10 @@ describe('HarnessProfileSelector', () => {
     });
     const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
     expect(menu).not.toBeNull();
-    expect(menu?.dataset.bfPage).toBe('summary');
-    expect(menu?.querySelector('[data-bf-part="profile"]')).toBeNull();
-    expect(
-      menu?.querySelector('[data-testid="harness-session-summary"]')?.textContent,
-    ).toContain('chatInput.harness.profiles.balanced.name');
-    expect(menu?.querySelector('.bitfun-harness-selector__session-scope')).toBeNull();
-    const startNewSession = menu?.querySelector<HTMLButtonElement>(
-      '[data-testid="harness-start-new-session"]',
-    );
-    expect(startNewSession?.querySelector('.lucide-message-square-plus')).toBeNull();
-    expect(startNewSession?.querySelectorAll('svg')).toHaveLength(1);
-
-    await act(async () => {
-      startNewSession?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
     expect(menu?.dataset.bfPage).toBe('profiles');
+    expect(menu?.querySelector('[data-testid="harness-new-session-notice"]')).toBeNull();
+    expect(menu?.querySelector('[data-testid="harness-session-summary"]')).toBeNull();
+    expect(menu?.querySelector('[data-testid="harness-start-new-session"]')).toBeNull();
     expect(
       menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
         ?.getAttribute('role'),
@@ -377,13 +417,17 @@ describe('HarnessProfileSelector', () => {
       menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
         ?.dataset.bfState,
     ).toBe('available');
-    expect(menu?.textContent).not.toContain('chatInput.harness.newSessionOnly');
 
     await act(async () => {
       menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).not.toHaveBeenCalled();
+    expect(confirmation.dialog).toHaveBeenCalledWith({
+      title: 'chatInput.harness.newSessionConfirmation.title',
+      message: 'chatInput.harness.newSessionConfirmation.message',
+      confirmText: 'chatInput.harness.newSessionConfirmation.confirm',
+    });
     expect(onStartNewSession).toHaveBeenCalledWith(
       { kind: 'profile', id: 'minimal' },
     );
@@ -413,13 +457,8 @@ describe('HarnessProfileSelector', () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(
-      document.querySelector('[data-testid="harness-session-summary"]')?.textContent,
-    ).toContain('Plan');
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-start-new-session"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    expect(document.querySelector('.bitfun-harness-selector__menu')?.getAttribute('data-bf-page'))
+      .toBe('profiles');
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -436,9 +475,43 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectAgent).not.toHaveBeenCalled();
+    expect(confirmation.dialog).toHaveBeenCalledWith({
+      title: 'chatInput.harness.newSessionConfirmation.title',
+      message: 'chatInput.harness.newSessionConfirmation.message',
+      confirmText: 'chatInput.harness.newSessionConfirmation.confirm',
+    });
     expect(onStartNewSession).toHaveBeenCalledWith(
       { kind: 'agent', id: 'Cowork' },
     );
+  });
+
+  it('keeps the current Session unchanged when new-Session confirmation is cancelled', async () => {
+    confirmation.dialog.mockResolvedValueOnce(false);
+    const onStartNewSession = vi.fn();
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          sessionStarted
+          selectedProfile="balanced"
+          onSelectProfile={vi.fn()}
+          onStartNewSession={onStartNewSession}
+        />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(confirmation.dialog).toHaveBeenCalledTimes(1);
+    expect(onStartNewSession).not.toHaveBeenCalled();
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
   it.each(['creative'] as const)(
@@ -482,10 +555,6 @@ describe('HarnessProfileSelector', () => {
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-start-new-session"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-balanced"]')

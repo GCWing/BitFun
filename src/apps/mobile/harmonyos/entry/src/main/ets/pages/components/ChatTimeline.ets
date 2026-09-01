@@ -13,7 +13,14 @@ import {
   ObservableChatTimelineItem
 } from '../../model/ChatTimelineModels';
 import { ChatSurface } from '../state/ChatSurface';
-import { CARD, INK, LINE, MUTED, RED } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  SHADOW_SUBTLE,
+  STATUS_DANGER,
+} from './Theme';
 import { ChatMessageBubble, ChatUserMessageRow } from './ChatMessageBubble';
 import { RemoteLogger } from '../../services/RemoteLogger';
 
@@ -324,7 +331,7 @@ export struct ChatTimeline {
         .height(42)
         .backgroundColor(CARD)
         .borderRadius(21)
-        .shadow({ radius: 14, color: '#14000000', offsetY: 5 })
+        .shadow({ radius: 14, color: SHADOW_SUBTLE, offsetY: 5 })
         .margin({ bottom: 4 })
         .onClick(() => {
           this.stickToBottom = true;
@@ -346,7 +353,7 @@ export struct ChatTimeline {
         .width(38)
         .height(38)
         .fontSize(MobileDesignTypography.headlineSmall.size)
-        .fontColor(this.connectionState === 'failed' ? RED : MUTED)
+        .fontColor(this.connectionState === 'failed' ? STATUS_DANGER : MUTED)
         .textAlign(TextAlign.Center)
         .backgroundColor(CARD)
         .borderRadius(14)

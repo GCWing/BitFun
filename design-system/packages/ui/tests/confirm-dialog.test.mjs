@@ -1,95 +1,47 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { ConfirmDialog, ConfirmDialogProvider } from "../dist/index.js";
 
-test("ConfirmDialog composes semantic content and actions on Modal", () => {
-  const markup = renderToStaticMarkup(createElement(ConfirmDialog, {
-    cancelText: "Cancel",
-    confirmDanger: true,
-    confirmText: "Delete",
-    isOpen: true,
-    message: "This cannot be undone.",
-    onClose: () => undefined,
-    onConfirm: () => undefined,
-    portalled: false,
-    preventScroll: false,
-    preview: "/workspace/project",
-    secondaryText: "Archive",
-    showCloseButton: false,
-    title: "Delete project?",
-    type: "error",
-  }));
+const sourceUrl = new URL("../src/components/ConfirmDialog/ConfirmDialog.tsx", import.meta.url);
 
-  assert.match(markup, /role="alertdialog"/);
-  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="content"/);
-  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="messageRow"/);
-  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="message"[^>]*>This cannot be undone/);
-  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="icon"[^>]+data-bf-status="danger"/);
-  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="preview"/);
-  assert.match(markup, /<pre>\/workspace\/project<\/pre>/);
-  assert.match(markup, />Cancel<\/span><\/span><\/button>/);
-  assert.match(markup, />Archive<\/span><\/span><\/button>/);
-  assert.match(markup, />Delete<\/span><\/span><\/button>/);
-  assert.match(markup, /data-bf-tone="danger"/);
-  assert.match(markup, /data-bf-variant="primary"/);
+test("ConfirmDialog composes semantic content and actions on Dialog", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.match(source, /<Dialog/);
+  assert.match(source, /role="alertdialog"/);
+  assert.match(source, /<DialogHeader>/);
+  assert.match(source, /<DialogTitle>\{title\}<\/DialogTitle>/);
+  assert.match(source, /<DialogBody>/);
+  assert.match(source, /<DialogFooter>/);
+  assert.match(source, /data-bf-component="confirm-dialog" data-bf-part="content"/);
+  assert.match(source, /data-bf-part="messageRow"/);
+  assert.match(source, /data-bf-part="preview"/);
+  assert.match(source, /data-bf-status=\{type === "error" \? "danger" : type\}/);
+  assert.match(source, /tone=\{confirmDanger \|\| type === "error" \? "danger" : "neutral"\}/);
 });
 
-test("ConfirmDialog can omit the icon and cancel action", () => {
-  const markup = renderToStaticMarkup(createElement(ConfirmDialog, {
-    confirmText: "OK",
-    icon: false,
-    isOpen: true,
-    message: "Complete",
-    onClose: () => undefined,
-    onConfirm: () => undefined,
-    portalled: false,
-    preventScroll: false,
-    showCancel: false,
-    title: "Finished",
-    type: "success",
-  }));
+test("ConfirmDialog uses the canonical controlled API without geometry or portal escape hatches", async () => {
+  const source = await readFile(sourceUrl, "utf8");
 
-  assert.doesNotMatch(markup, /data-bf-part="icon"/);
-  assert.doesNotMatch(markup, />Cancel<\/span>/);
-  assert.match(markup, />OK<\/span>/);
-});
-
-test("ConfirmDialogProvider supplies product-localized action defaults", () => {
-  const markup = renderToStaticMarkup(
-    createElement(ConfirmDialogProvider, {
-      cancelLabel: "取消",
-      confirmLabel: "确定",
-    }, createElement(ConfirmDialog, {
-      isOpen: true,
-      message: "继续吗？",
-      onClose: () => undefined,
-      onConfirm: () => undefined,
-      portalled: false,
-      preventScroll: false,
-      title: "确认",
-    })),
-  );
-
-  assert.match(markup, />取消<\/span>/);
-  assert.match(markup, />确定<\/span>/);
+  assert.match(source, /open: boolean/);
+  assert.match(source, /onOpenChange: \(open: false, reason: ConfirmDialogCloseReason\) => void/);
+  assert.match(source, /closeOnPointerOutside/);
+  assert.doesNotMatch(source, /\bisOpen\b|\bonClose\b|previewMaxHeight|dialogClassName|overlayClassName|portalContainer|portalled|preventScroll/);
 });
 
 test("ConfirmDialog owns async pending and dismissal guards", async () => {
-  const source = await readFile(
-    new URL("../src/components/ConfirmDialog/ConfirmDialog.tsx", import.meta.url),
-    "utf8",
-  );
+  const source = await readFile(sourceUrl, "utf8");
 
   assert.match(source, /pendingAction/);
   assert.match(source, /typeof result\.then === "function"/);
   assert.match(source, /loading=\{pendingAction === "confirm"\}/);
   assert.match(source, /loading=\{pendingAction === "secondary"\}/);
   assert.match(source, /closeOnEscape=\{!busy && closeOnEscape\}/);
-  assert.match(source, /closeOnOverlayClick=\{!busy && closeOnOverlayClick\}/);
+  assert.match(source, /closeOnPointerOutside=\{!busy && closeOnPointerOutside\}/);
   assert.match(source, /onActionError\?\.\(error, actionName\)/);
+  assert.match(source, /onOpenChange\(false, reason\)/);
+  assert.match(source, /designSystem\.messages\.confirmCancel/);
+  assert.match(source, /designSystem\.messages\.confirmAction/);
 });
 
 test("ConfirmDialog styles use public status, layout, and typography tokens", async () => {
@@ -97,6 +49,7 @@ test("ConfirmDialog styles use public status, layout, and typography tokens", as
 
   assert.match(styles, /--bf-layout-confirm-dialog-content-gap/);
   assert.match(styles, /--bf-layout-confirm-dialog-icon-size/);
+  assert.match(styles, /--bf-layout-confirm-dialog-preview-max-block-size/);
   assert.match(styles, /--bf-layout-confirm-dialog-preview-padding-inline/);
   assert.match(styles, /--bf-color-status-warning-content/);
   assert.match(styles, /--bf-color-status-danger-surface/);

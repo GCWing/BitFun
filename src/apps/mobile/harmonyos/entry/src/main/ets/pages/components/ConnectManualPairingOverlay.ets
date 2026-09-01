@@ -1,6 +1,6 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MODAL_SCRIM, MUTED, SOFT } from './Theme';
+import { CARD, INK, LINE, MUTED, SCRIM, SHADOW_FAINT } from './Theme';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
 
 @ComponentV2
@@ -21,7 +21,7 @@ export struct ConnectManualPairingOverlay {
       Text('')
         .width('100%')
         .height('100%')
-        .backgroundColor(MODAL_SCRIM)
+        .backgroundColor(SCRIM)
         .onClick(this.onCancel)
 
       Column({ space: 20 }) {
@@ -41,8 +41,10 @@ export struct ConnectManualPairingOverlay {
           .height(62)
           .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontColor(INK)
-          .backgroundColor(SOFT)
+          .backgroundColor(CARD)
+          .border({ width: 0.5, color: LINE })
           .borderRadius(31)
+          .shadow({ radius: 14, color: SHADOW_FAINT, offsetY: 5 })
           .padding({ left: 20, right: 20 })
           .defaultFocus(true)
           .onChange(this.onRemoteUrlChange)
@@ -54,16 +56,20 @@ export struct ConnectManualPairingOverlay {
             .height(56)
             .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontColor(INK)
-            .backgroundColor(SOFT)
+            .backgroundColor(CARD)
+            .border({ width: 0.5, color: LINE })
             .borderRadius(28)
+            .shadow({ radius: 14, color: SHADOW_FAINT, offsetY: 5 })
             .padding({ left: 20, right: 20 })
             .onChange(this.onUserIdChange)
           TextInput({ placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'), text: this.password })
             .height(56)
             .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontColor(INK)
-            .backgroundColor(SOFT)
+            .backgroundColor(CARD)
+            .border({ width: 0.5, color: LINE })
             .borderRadius(28)
+            .shadow({ radius: 14, color: SHADOW_FAINT, offsetY: 5 })
             .padding({ left: 20, right: 20 })
             .type(InputType.Password)
             .onChange(this.onPasswordChange)

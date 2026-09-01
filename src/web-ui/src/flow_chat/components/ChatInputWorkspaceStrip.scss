@@ -21,9 +21,7 @@
  * form. Inside one segment, grouping is spacing alone, at a fixed 2.5:1 —
  * $track-item-gap between segments, $track-part-gap inside one.
  */
-
-@use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 // The only two spacings on the track. Their ratio is what replaces the
 // separators: parts of one segment sit close, segments sit apart.
@@ -46,7 +44,7 @@ $track-item-gap: 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font: inherit;
   // The whole track speaks at one size: facts inherit it from the rail and
   // controls restate it here. Shape — the pill and its hover fill — is what
@@ -57,17 +55,17 @@ $track-item-gap: 10px;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover:not(:disabled),
   &[aria-expanded='true']:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-secondary);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 1px;
   }
 
@@ -103,7 +101,7 @@ $track-item-gap: 10px;
   line-height: var(--bf-type-flow-support-line-height);
   font-weight: var(--bf-font-weight-regular);
   letter-spacing: var(--bf-letter-spacing-subtle);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   user-select: text;
   pointer-events: auto;
 
@@ -155,7 +153,7 @@ $track-item-gap: 10px;
     flex: none;
     width: 1px;
     height: 10px;
-    background: var(--bf-appearance-token-border-medium);
+    background: var(--bf-color-field-border-hover);
     opacity: 0.6;
   }
 
@@ -172,12 +170,12 @@ $track-item-gap: 10px;
     @include strip-control;
 
     max-width: 140px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
-    color: var(--bf-appearance-token-color-accent-500);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 14%, transparent);
+    color: var(--bf-color-accent-default);
 
     &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
-      color: var(--bf-appearance-token-color-accent-500);
+      background: color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
+      color: var(--bf-color-accent-default);
     }
 
     > span {
@@ -196,22 +194,22 @@ $track-item-gap: 10px;
     // The one control whose value decides what the next turn may do, so it is
     // the row's anchor: it rests on a soft body before it is ever hovered,
     // while the quieter controls around it stay ghost until touched.
-    background: var(--bf-appearance-token-element-bg-soft);
+    background: var(--bf-color-action-quiet-hover);
 
     &:hover:not(:disabled),
     &--open:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     // Full access is the one mode whose risk must stay visible after the label
     // is dropped on a narrow composer, so its soft body turns to the error
     // tint — the track's only risk-coloured body, which is the point.
     &--full_access {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
 
       &:hover:not(:disabled),
       &--open:not(:disabled) {
-        background: color-mix(in srgb, var(--bf-appearance-token-color-error) 16%, transparent);
+        background: color-mix(in srgb, var(--bf-color-status-danger-content) 16%, transparent);
       }
     }
   }
@@ -219,23 +217,23 @@ $track-item-gap: 10px;
   // The risk ramp lives on the trigger too, not only inside the menu: this is
   // the one control on the strip whose wrong value is expensive.
   &__permission-overview-icon {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     .bitfun-chat-input-workspace-strip__permission-trigger--ask & {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
 
     .bitfun-chat-input-workspace-strip__permission-trigger--auto & {
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     .bitfun-chat-input-workspace-strip__permission-trigger--full_access & {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
 
     .bitfun-chat-input-workspace-strip__permission-trigger--reject &,
     .bitfun-chat-input-workspace-strip__permission-trigger--acp & {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -255,15 +253,15 @@ $track-item-gap: 10px;
     flex: none;
 
     &--ask {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
 
     &--auto {
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     &--full_access {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -274,12 +272,12 @@ $track-item-gap: 10px;
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-color-accent-default);
   }
 
   &__permission-menu {
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     width: min(240px, calc(100vw - 16px));
   }
 
@@ -305,11 +303,11 @@ $track-item-gap: 10px;
     }
 
     .is-track {
-      color: var(--bf-appearance-token-border-medium);
+      color: var(--bf-color-field-border-hover);
     }
 
     .is-value {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
       transform: rotate(-90deg);
       transform-origin: center;
     }
@@ -353,17 +351,17 @@ $track-item-gap: 10px;
     &--branch-switchable {
       cursor: pointer;
       transition:
-        background-color $motion-fast $easing-standard,
-        color $motion-fast $easing-standard;
+        background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
       &:hover:not(:disabled),
       &[aria-expanded='true']:not(:disabled) {
-        background: var(--bf-appearance-token-element-bg-soft);
-        color: var(--bf-appearance-token-color-text-secondary);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-content-secondary);
       }
 
       &:focus-visible {
-        outline: 2px solid var(--bf-appearance-token-color-accent-500);
+        outline: 2px solid var(--bf-color-accent-default);
         outline-offset: 1px;
       }
     }
@@ -374,17 +372,17 @@ $track-item-gap: 10px;
   &__worktree-toggle {
     @include strip-control;
 
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     &--on {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
       // An engaged isolation is a state, not a resting control, so it keeps a
       // whisper of the accent body the hover state will deepen.
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+      background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
 
       &:hover:not(:disabled) {
-        color: var(--bf-appearance-token-color-accent-500);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+        color: var(--bf-color-accent-default);
+        background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
       }
     }
   }
@@ -438,17 +436,17 @@ $track-item-gap: 10px;
   &__workspace--switchable {
     cursor: pointer;
     transition:
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(:disabled),
     &[aria-expanded='true']:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-secondary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
   }
@@ -459,7 +457,7 @@ $track-item-gap: 10px;
     flex: none;
     width: 12px;
     height: 12px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__branch {
@@ -479,7 +477,7 @@ $track-item-gap: 10px;
   // workspace names with a check on the active one.
   &__workspace-menu {
     position: fixed;
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     width: min(220px, calc(100vw - 16px));
   }
 

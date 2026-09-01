@@ -15,7 +15,7 @@ import {
   SettingsSheetKind
 } from '../policy/SettingsPlacementPolicy';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
-import { GREEN, INK, MUTED, SUBTLE } from './Theme';
+import { STATUS_SUCCESS, INK, MUTED, SUBTLE } from './Theme';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
 import {
   SidebarChevronIcon,
@@ -165,7 +165,7 @@ export struct SidebarWorkspaceSection {
         Text('')
           .width(8)
           .height(8)
-          .backgroundColor(entry.online ? GREEN : SUBTLE)
+          .backgroundColor(entry.online ? STATUS_SUCCESS : SUBTLE)
           .borderRadius(4)
           .hitTestBehavior(HitTestMode.None)
       }

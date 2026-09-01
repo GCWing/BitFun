@@ -19,10 +19,9 @@ import type {
 } from './types';
 
 function controlSize(size: 'sm' | 'small' | 'md' | 'medium' | 'lg' | 'large' | undefined) {
-  if (size === 'sm') return 'small';
-  if (size === 'md') return 'medium';
-  if (size === 'lg') return 'large';
-  return size ?? 'medium';
+  if (size === 'sm' || size === 'small') return 'sm';
+  if (size === 'lg' || size === 'large') return 'lg';
+  return 'md';
 }
 
 function designSystemControlSize(
@@ -91,10 +90,11 @@ export function Toggle({
   );
 }
 
-export function Checkbox({ onChange, size, ...props }: CanvasCheckboxProps) {
+export function Checkbox({ error, onChange, size, ...props }: CanvasCheckboxProps) {
   return (
     <BitFunCheckbox
       {...props}
+      invalid={error}
       size={controlSize(size)}
       onChange={event => onChange?.(event.target.checked)}
     />
@@ -164,10 +164,11 @@ export function TextInput({
   );
 }
 
-export function TextArea({ onChange, ...props }: CanvasTextAreaProps) {
+export function TextArea({ error, onChange, ...props }: CanvasTextAreaProps) {
   return (
     <BitFunTextarea
       {...props}
+      invalid={error}
       onChange={event => onChange?.(event.target.value)}
     />
   );

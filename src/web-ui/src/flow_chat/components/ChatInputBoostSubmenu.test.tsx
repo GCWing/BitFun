@@ -2,11 +2,53 @@
  * @vitest-environment jsdom
  */
 
-import { act } from 'react';
+import { act, useState, type ComponentProps } from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Menu, MenuItem } from '@bitfun/ui';
 
 import { ChatInputBoostSubmenu } from './ChatInputBoostSubmenu';
+import { HarnessProfileSelector } from './HarnessProfileSelector';
+
+vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: vi.fn() },
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: { info: vi.fn() },
+}));
+
+function ControlledSubmenu(props: Omit<ComponentProps<typeof ChatInputBoostSubmenu>, 'open' | 'onOpenChange'>) {
+  const [open, setOpen] = useState(false);
+  return <ChatInputBoostSubmenu {...props} open={open} onOpenChange={setOpen} />;
+}
+
+function SiblingMenus() {
+  const [active, setActive] = useState<string | null>(null);
+  const disclosure = (id: string) => ({
+    open: active === id,
+    onOpenChange: (open: boolean) => setActive(current => open ? id : current === id ? null : current),
+  });
+  return (
+    <Menu>
+      <ChatInputBoostSubmenu {...disclosure('modes')} label="Additional modes" icon={null} testId="modes">
+        <MenuItem>Plan</MenuItem>
+      </ChatInputBoostSubmenu>
+      <ChatInputBoostSubmenu {...disclosure('skills')} label="Skills" icon={null} testId="skills">
+        <MenuItem>Skill A</MenuItem>
+      </ChatInputBoostSubmenu>
+      <HarnessProfileSelector
+        {...disclosure('harness')}
+        presentation="menu-item"
+        selectedProfile="balanced"
+        otherAgents={[{ id: 'research', name: 'Research' }]}
+        onSelectProfile={() => {}}
+      />
+    </Menu>
+  );
+}
 
 describe('ChatInputBoostSubmenu', () => {
   let container: HTMLDivElement;
@@ -30,9 +72,9 @@ describe('ChatInputBoostSubmenu', () => {
   it('opens by click or keyboard and closes with the reverse arrow', async () => {
     await act(async () => {
       root.render(
-        <ChatInputBoostSubmenu label="Additional modes" icon={<span>+</span>}>
+        <ControlledSubmenu label="Additional modes" icon={<span>+</span>}>
           <button type="button" role="menuitem">Plan</button>
-        </ChatInputBoostSubmenu>,
+        </ControlledSubmenu>,
       );
     });
 
@@ -62,9 +104,9 @@ describe('ChatInputBoostSubmenu', () => {
     { label: 'Additional modes' },
   ])('keeps the extracted $label submenu open across pointer movement', ({ label }) => {
     act(() => root.render(
-      <ChatInputBoostSubmenu label={label} icon={<span>+</span>}>
+      <ControlledSubmenu label={label} icon={<span>+</span>}>
         <button type="button" role="menuitem">Plan</button>
-      </ChatInputBoostSubmenu>,
+      </ControlledSubmenu>,
     ));
 
     const trigger = container.querySelector<HTMLElement>('[aria-haspopup="menu"]')!;
@@ -79,5 +121,79 @@ describe('ChatInputBoostSubmenu', () => {
 
     act(() => trigger.click());
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it.each(['click', 'keyboard'])('keeps one flyout open when switching siblings by %s', (input) => {
+    act(() => root.render(<SiblingMenus />));
+    const modes = container.querySelector<HTMLButtonElement>('[data-testid="modes"] [aria-haspopup="menu"]')!;
+    const skills = container.querySelector<HTMLButtonElement>('[data-testid="skills"] [aria-haspopup="menu"]')!;
+    const harness = container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')!;
+    const triggers = [modes, skills, harness];
+
+    // Exercise both directions, including switching back from the Agent page.
+    for (const trigger of [modes, skills, modes, harness, skills, harness, modes]) {
+      act(() => {
+        if (input === 'click') {
+          trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+          trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          trigger.focus();
+          trigger.click();
+        } else {
+          trigger.focus();
+          trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        }
+      });
+      act(() => vi.advanceTimersByTime(20));
+
+      expect(triggers.map(item => item.getAttribute('aria-expanded')))
+        .toEqual(triggers.map(item => item === trigger ? 'true' : 'false'));
+      const panels = document.querySelectorAll('.bitfun-chat-input__boost-submenu-panel, .bitfun-harness-selector__menu');
+      expect(panels).toHaveLength(1);
+      expect(panels[0].id).toBe(trigger.getAttribute('aria-controls'));
+      if (trigger === harness) {
+        expect((panels[0] as HTMLElement).dataset.bfPage).toBe('profiles');
+        act(() => document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')!.click());
+        expect((panels[0] as HTMLElement).dataset.bfPage).toBe('agents');
+      }
+    }
+
+    act(() => modes.click());
+    expect(modes.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+  });
+
+  it.each(['Escape', 'ArrowLeft'])('closes only the active flyout with %s and returns focus', key => {
+    act(() => root.render(<SiblingMenus />));
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="skills"] [aria-haspopup="menu"]')!;
+    act(() => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    act(() => vi.advanceTimersByTime(20));
+    const panel = document.querySelector<HTMLElement>('.bitfun-chat-input__boost-submenu-panel')!;
+    expect(panel.contains(document.activeElement)).toBe(true);
+    act(() => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })));
+    act(() => vi.advanceTimersByTime(20));
+    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+  });
+
+  it('removes portalled flyouts when the parent menu unmounts', () => {
+    act(() => root.render(<SiblingMenus />));
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="skills"] [aria-haspopup="menu"]')!.click());
+    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).not.toBeNull();
+    act(() => root.render(null));
+    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+    act(() => root.render(<SiblingMenus />));
+    expect(container.querySelector('[aria-expanded="true"]')).toBeNull();
+  });
+
+  it('wires all ChatInput flyouts to one owner and clears it when the add menu closes', () => {
+    const source = readFileSync(path.join(__dirname, 'ChatInput.tsx'), 'utf8');
+    for (const id of ['harness', 'additional-modes', 'skills']) {
+      expect(source).toContain(`open={activeBoostSubmenu === '${id}'}`);
+      expect(source).toContain(`onOpenChange={open => setBoostSubmenuOpen('${id}', open)}`);
+    }
+    expect(source).toContain('if (!modeState.dropdownOpen) setActiveBoostSubmenu(null);');
+    expect(source).toContain('current => open ? id : current === id ? null : current');
   });
 });

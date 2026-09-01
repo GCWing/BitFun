@@ -1,8 +1,24 @@
-import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, TabGroup, Tooltip, type ComboboxOption } from '@bitfun/ui';
+import {
+  Button,
+  Combobox,
+  Field,
+  Icon,
+  IconButton,
+  Input as DesignInput,
+  ScrollArea,
+  TabGroup,
+  Tooltip,
+  type ComboboxOption,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, CircleDot, Code2, GitCommitHorizontal, GitPullRequest, GitPullRequestClosed, KeyRound, Loader2, MessageSquareText, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
-import { MarkdownRenderer } from '@/component-library';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
+import { CircleDot, Code2, GitCommitHorizontal, GitPullRequest, GitPullRequestClosed, KeyRound, Loader2, MessageSquareText, ShieldCheck } from 'lucide-react';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1274,7 +1290,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             size="sm"
             disabled={page.pageIndex === 0}
             onClick={() => onPageChange(page.pageIndex - 1)}
-            icon={<ChevronLeft size={14} />}
+            icon={<Icon name="chevron-left" size="sm" />}
           />
         </Tooltip>
         <span>
@@ -1727,7 +1743,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
             {selectedRemote.platform === 'github' ? 'Authenticate' : authChallenge.state === 'missing' ? 'Add token' : 'Update token'}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => refreshAuthSnapshot(selectedRemote.id)} disabled={authSaving || loading} leadingIcon={<RefreshCw size={13} />}>
+          <Button size="sm" variant="outline" onClick={() => refreshAuthSnapshot(selectedRemote.id)} disabled={authSaving || loading} leadingIcon={<Icon name="refresh" size="lg" style={{ width: 13, height: 13 }} />}>
 
             Retry
           </Button>
@@ -1850,13 +1866,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
           <div className="review-platform__topbar-actions" data-bf-component="review-platform" data-bf-part="actions">
             <div className="review-platform__remote-select">
-              <LocalizedCombobox
+              <Combobox
                 size="sm"
                 value={selectedRemoteId ?? ''}
                 options={remoteOptions}
                 placeholder="Select remote"
                 disabled={!remoteOptions.length || loading}
-                searchable
                 onValueChange={handleRemoteChange}
               />
             </div>
@@ -1886,7 +1901,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   size="sm"
                   disabled={!selectedRemote || loading || authSaving}
                   onClick={handleClearAuthToken}
-                  icon={<Trash2 size={14} />}
+                  icon={<Icon name="delete" size="sm" />}
                 />
               </Tooltip>
             )}
@@ -1897,7 +1912,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 size="sm"
                 onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}
                 loading={loading}
-                icon={<RefreshCw size={14} />}
+                icon={<Icon name="refresh" size="sm" />}
               />
             </Tooltip>
           </div>
@@ -2029,7 +2044,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   size="sm"
                   disabled={currentPageIndex === 0}
                   onClick={() => handlePageChange(currentPageIndex - 1)}
-                  icon={<ChevronLeft size={14} />}
+                  icon={<Icon name="chevron-left" size="sm" />}
                 />
               </Tooltip>
               <span>
@@ -2182,7 +2197,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       disabled={detailLoading}
                       onClick={handleRefreshDetail}
                       loading={detailLoading}
-                      icon={<RefreshCw size={14} />}
+                      icon={<Icon name="refresh" size="sm" />}
                     />
                   </Tooltip>
                 </div>
@@ -2534,18 +2549,23 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           )}
         </main>
       </div>
-      <Modal
-        isOpen={authModalOpen}
-        onClose={() => {
-          if (!authSaving) {
+      <Dialog
+        open={authModalOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !authSaving) {
             setAuthModalOpen(false);
             setAuthError(null);
           }
         }}
-        title={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : `${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}
-        size="small"
-        contentPadding="lg"
+        size="sm"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : `${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         <form
           className="review-platform__auth-form"
           onSubmit={(event) => {
@@ -2629,7 +2649,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
           </div>
         </form>
-      </Modal>
+              </DialogBody>
+      </Dialog>
       {deepReviewConsentDialog}
     </div>
   );

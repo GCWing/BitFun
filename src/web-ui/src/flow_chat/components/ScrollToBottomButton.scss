@@ -16,19 +16,19 @@
   padding: 0;
 
   // Theme-aware surface so the control separates from the transcript; icon uses primary text (SVG stroke)
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 92%, transparent);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 92%, transparent);
+  color: var(--bf-color-content-primary);
 
-  border: 2px solid var(--bf-appearance-token-color-text-primary);
+  border: 2px solid var(--bf-color-content-primary);
   border-radius: 10px;
 
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 
   box-shadow:
-    0 4px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.38),
-    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 28%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
+    0 4px 18px color-mix(in srgb, var(--bf-color-content-on-light) 38%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--bf-color-content-primary) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
   
   cursor: pointer;
   transition:
@@ -54,7 +54,7 @@
   }
 
   &:focus-visible {
-    outline: 3px solid var(--bf-appearance-token-color-text-primary);
+    outline: 3px solid var(--bf-color-content-primary);
     outline-offset: 3px;
   }
 
@@ -76,10 +76,10 @@
     justify-content: center;
     
     // Glass-like badge
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 92%, var(--bf-appearance-token-color-static-black));
-    color: white;
+    background: color-mix(in srgb, var(--bf-color-accent-hover) 92%, var(--bf-color-content-on-light));
+    color: var(--bf-color-content-on-dark);
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
     
     // Frosted effect
     backdrop-filter: blur(8px);
@@ -90,22 +90,22 @@
     line-height: var(--bf-line-height-none);
     
     box-shadow: 
-      0 2px 8px var(--bf-appearance-token-border-accent),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-20);
+      0 2px 8px color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .scroll-to-bottom-button[data-visible='true']:hover {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
-    color: var(--bf-appearance-token-color-text-primary);
-    border-color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-color-surface-raised) 98%, transparent);
+    color: var(--bf-color-content-primary);
+    border-color: var(--bf-color-content-primary);
     transform: translateY(-2px);
 
     box-shadow:
-      0 8px 22px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.42),
-      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 40%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
+      0 8px 22px color-mix(in srgb, var(--bf-color-content-on-light) 42%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--bf-color-content-primary) 40%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-primary) 16%, transparent);
   }
 }
 

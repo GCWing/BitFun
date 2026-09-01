@@ -1,7 +1,10 @@
+use super::plan_artifact_diagnostics::{
+    diagnose_plan_artifact, is_plan_artifact_path, PlanArtifactIssue,
+};
 use crate::agentic::tools::file_permissions::file_permission_intents_allowing_managed_plan_edits;
 use crate::agentic::tools::file_read_state_runtime::{
-    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
-    local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
+    assert_file_not_unexpectedly_modified, file_modification_time_ms, file_mutation_timestamp_ms,
+    get_stored_file_read_state, read_current_file_content, read_state_tracking_enabled,
     update_file_read_state_after_mutation, validate_existing_file_read_before_write,
     FILE_UNEXPECTEDLY_MODIFIED_ERROR,
 };
@@ -17,11 +20,8 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::strip_invalid_windows_drive_path_prefix;
 use serde_json::{json, Value};
-use std::path::Path;
-use tokio::fs;
 use tool_runtime::fs::{
-    write_file_success_outcome, write_local_file, write_same_content_outcome,
-    WriteLocalFileOutcome, WriteLocalFileRequest,
+    write_file_success_outcome, write_same_content_outcome, WriteLocalFileOutcome,
 };
 
 pub struct FileWriteTool;
@@ -77,42 +77,45 @@ impl FileWriteTool {
         }
     }
 
-    async fn file_exists(context: &ToolUseContext, resolved: &ToolPathResolution) -> bool {
-        if resolved.uses_remote_workspace_backend() {
-            if let Some(ws_fs) = context.ws_fs() {
-                ws_fs.exists(&resolved.resolved_path).await.unwrap_or(false)
-            } else {
-                false
-            }
-        } else {
-            Path::new(&resolved.resolved_path).exists()
-        }
+    async fn file_exists(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+    ) -> BitFunResult<bool> {
+        context
+            .file_system_for_path(resolved)?
+            .exists(&resolved.resolved_path)
+            .await
+            .map_err(|error| {
+                BitFunError::tool(format!("Failed to check whether file exists: {:#}", error))
+            })
     }
 
     async fn existing_file_matches_content(
         context: &ToolUseContext,
         resolved: &ToolPathResolution,
         content: &str,
-    ) -> Option<bool> {
-        let existing = if resolved.uses_remote_workspace_backend() {
-            context
-                .ws_fs()?
-                .read_file(&resolved.resolved_path)
-                .await
-                .ok()?
-        } else {
-            fs::read(&resolved.resolved_path).await.ok()?
-        };
-
-        Some(existing == content.as_bytes())
+    ) -> BitFunResult<bool> {
+        let existing = context
+            .file_system_for_path(resolved)?
+            .read_file(&resolved.resolved_path)
+            .await
+            .map_err(|error| {
+                BitFunError::tool(format!(
+                    "Failed to read existing file {} before writing: {:#}",
+                    resolved.logical_path, error
+                ))
+            })?;
+        Ok(existing == content.as_bytes())
     }
 
     async fn existing_file_write_freshness_error(
         context: &ToolUseContext,
         resolved: &ToolPathResolution,
     ) -> Option<String> {
-        if !Self::file_exists(context, resolved).await {
-            return None;
+        match Self::file_exists(context, resolved).await {
+            Ok(false) => return None,
+            Ok(true) => {}
+            Err(error) => return Some(error.to_string()),
         }
         if !read_state_tracking_enabled(context) {
             return None;
@@ -123,13 +126,7 @@ impl FileWriteTool {
             Err(error) => return Some(error.to_string()),
         };
         let read_state = get_stored_file_read_state(context, resolved);
-        let current_mtime_ms = if resolved.uses_remote_workspace_backend() {
-            None
-        } else {
-            Some(local_file_modification_time_ms(Path::new(
-                &resolved.resolved_path,
-            )))
-        };
+        let current_mtime_ms = file_modification_time_ms(context, resolved).await;
 
         assert_file_not_unexpectedly_modified(
             read_state.as_ref(),
@@ -140,7 +137,7 @@ impl FileWriteTool {
         .map(|error| Self::format_write_freshness_guidance(&resolved.logical_path, error))
     }
 
-    async fn assert_atomic_write_freshness_if_exists(
+    async fn assert_write_freshness_if_exists(
         context: &ToolUseContext,
         resolved: &ToolPathResolution,
     ) -> BitFunResult<()> {
@@ -155,8 +152,10 @@ impl FileWriteTool {
         context: &ToolUseContext,
         resolved: &ToolPathResolution,
     ) -> Option<String> {
-        if !Self::file_exists(context, resolved).await {
-            return None;
+        match Self::file_exists(context, resolved).await {
+            Ok(false) => return None,
+            Ok(true) => {}
+            Err(error) => return Some(error.to_string()),
         }
 
         if let Some(message) = validate_existing_file_read_before_write(context, resolved).await {
@@ -240,6 +239,7 @@ impl FileWriteTool {
         missing_path_fallback: bool,
         path_format_warning: Option<&str>,
         ignored_parameter_names: &[String],
+        plan_artifact_issues: Option<&[PlanArtifactIssue]>,
     ) -> ToolResult {
         let mut assistant_message = if missing_path_fallback {
             format!(
@@ -264,19 +264,41 @@ impl FileWriteTool {
                 formatted_names
             ));
         }
+        if let Some(issues) = plan_artifact_issues.filter(|issues| !issues.is_empty()) {
+            assistant_message.push_str("\nThe `.plan.md` artifact does not match the plan format:");
+            for issue in issues {
+                assistant_message.push_str("\n- ");
+                assistant_message.push_str(&issue.message);
+            }
+            assistant_message
+                .push_str("\nUse Edit on the written file to fix these issues before finishing.");
+        }
+        let mut data = json!({
+            "file_path": logical_path,
+            "bytes_written": outcome.bytes_written,
+            "lines_written": outcome.lines_written,
+            "success": true,
+            "status": outcome.status.as_str(),
+            "missing_path_fallback": missing_path_fallback,
+            "rename_required": missing_path_fallback,
+            "path_format_corrected": path_format_warning.is_some(),
+            "path_format_warning": path_format_warning,
+            "message": assistant_message,
+        });
+        if let Some(issues) = plan_artifact_issues {
+            data["plan_format"] = json!({
+                "valid": issues.is_empty(),
+                "issues": issues
+                    .iter()
+                    .map(|issue| json!({
+                        "code": issue.code,
+                        "message": issue.message.as_str(),
+                    }))
+                    .collect::<Vec<_>>(),
+            });
+        }
         ToolResult::Result {
-            data: json!({
-                "file_path": logical_path,
-                "bytes_written": outcome.bytes_written,
-                "lines_written": outcome.lines_written,
-                "success": true,
-                "status": outcome.status.as_str(),
-                "missing_path_fallback": missing_path_fallback,
-                "rename_required": missing_path_fallback,
-                "path_format_corrected": path_format_warning.is_some(),
-                "path_format_warning": path_format_warning,
-                "message": assistant_message,
-            }),
+            data,
             result_for_assistant: Some(assistant_message),
             image_attachments: None,
         }
@@ -543,6 +565,8 @@ impl Tool for FileWriteTool {
 
         let resolved = context.resolve_tool_path(&file_path)?;
         let path_format_warning = Self::path_format_correction_warning(&resolved);
+        let plan_artifact_issues =
+            is_plan_artifact_path(&resolved.logical_path).then(|| diagnose_plan_artifact(&content));
         context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
         context
             .record_light_checkpoint(
@@ -552,9 +576,9 @@ impl Tool for FileWriteTool {
             )
             .await?;
 
-        let file_already_exists = Self::file_exists(context, &resolved).await;
+        let file_already_exists = Self::file_exists(context, &resolved).await?;
         if file_already_exists
-            && Self::existing_file_matches_content(context, &resolved, &content).await == Some(true)
+            && Self::existing_file_matches_content(context, &resolved, &content).await?
         {
             let result = Self::write_success_result(
                 &resolved.logical_path,
@@ -562,55 +586,25 @@ impl Tool for FileWriteTool {
                 missing_path_fallback,
                 path_format_warning.as_deref(),
                 &ignored_parameter_names,
+                plan_artifact_issues.as_deref(),
             );
             return Ok(vec![result]);
         }
 
-        Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
+        Self::assert_write_freshness_if_exists(context, &resolved).await?;
 
-        if resolved.uses_remote_workspace_backend() {
-            let ws_fs = context.ws_fs().ok_or_else(|| {
-                BitFunError::tool("Remote workspace file system is unavailable".to_string())
-            })?;
-            ws_fs
-                .write_file(&resolved.resolved_path, content.as_bytes())
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
-            let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-            update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
-            crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
-                context,
-                "Write",
-                "write",
-                &resolved.logical_path,
-            );
-            if !file_already_exists {
-                crate::agentic::execution::edit_constraint_guard::remember_agent_created_file(
-                    context,
-                    &resolved.logical_path,
-                )
-                .await;
-            }
-
-            let result = Self::write_success_result(
-                &resolved.logical_path,
-                write_file_success_outcome(&resolved.logical_path, file_already_exists, &content),
-                missing_path_fallback,
-                path_format_warning.as_deref(),
-                &ignored_parameter_names,
-            );
-            return Ok(vec![result]);
-        }
-
-        let write_request = WriteLocalFileRequest {
-            logical_path: resolved.logical_path.clone(),
-            resolved_path: Path::new(&resolved.resolved_path).to_path_buf(),
-            content: content.clone(),
-        };
-        let outcome = tokio::task::spawn_blocking(move || write_local_file(write_request))
+        context
+            .file_system_for_path(&resolved)?
+            .write_file(&resolved.resolved_path, content.as_bytes())
             .await
-            .map_err(|error| BitFunError::tool(format!("Write task failed: {}", error)))?
-            .map_err(BitFunError::tool)?;
+            .map_err(|error| {
+                BitFunError::tool(format!(
+                    "Failed to write file {}: {:#}",
+                    resolved.logical_path, error
+                ))
+            })?;
+        let outcome =
+            write_file_success_outcome(&resolved.logical_path, file_already_exists, &content);
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
         update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
@@ -634,6 +628,7 @@ impl Tool for FileWriteTool {
             missing_path_fallback,
             path_format_warning.as_deref(),
             &ignored_parameter_names,
+            plan_artifact_issues.as_deref(),
         );
 
         Ok(vec![result])
@@ -642,16 +637,23 @@ impl Tool for FileWriteTool {
 
 #[cfg(test)]
 mod tests {
-    use super::FileWriteTool;
+    use super::{diagnose_plan_artifact, FileWriteTool};
     use crate::agentic::tools::file_tool_guidance::{
         file_tool_guidance_message, is_file_tool_guidance_message, FILE_TOOL_GUIDANCE_PREFIX,
     };
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
+    use async_trait::async_trait;
+    use bitfun_runtime_ports::{
+        ToolRuntimeHandles, WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry,
+        WorkspaceFileSystem, WorkspaceServices, WorkspaceShell,
+    };
     use serde_json::json;
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     fn local_context(root: PathBuf) -> ToolUseContext {
         ToolUseContext {
@@ -667,6 +669,220 @@ mod tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
+    }
+
+    struct RemoteWriteFs {
+        expected_path: String,
+        read_error: Option<&'static str>,
+        exists: Result<bool, &'static str>,
+        writes: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl WorkspaceFileSystem for RemoteWriteFs {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            assert_eq!(path, self.expected_path);
+            if let Some(error) = self.read_error {
+                anyhow::bail!(error);
+            }
+            Ok(b"original content".to_vec())
+        }
+
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            assert_eq!(path, self.expected_path);
+            Ok("original content".to_string())
+        }
+
+        async fn write_file(&self, path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            assert_eq!(path, self.expected_path);
+            self.writes.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            assert_eq!(path, self.expected_path);
+            self.exists.map_err(anyhow::Error::msg)
+        }
+
+        async fn is_file(&self, _path: &str) -> anyhow::Result<bool> {
+            panic!("Write must use its existence probe")
+        }
+
+        async fn is_dir(&self, _path: &str) -> anyhow::Result<bool> {
+            panic!("Write must use its existence probe")
+        }
+
+        async fn read_dir(&self, _path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            panic!("Write must not list directories")
+        }
+    }
+
+    struct UnusedRemoteShell;
+
+    #[async_trait]
+    impl WorkspaceShell for UnusedRemoteShell {
+        async fn exec_with_options(
+            &self,
+            _command: &str,
+            _options: WorkspaceCommandOptions,
+        ) -> anyhow::Result<WorkspaceCommandResult> {
+            panic!("Write must not fall back to a shell")
+        }
+    }
+
+    fn remote_context(fs: Arc<RemoteWriteFs>) -> ToolUseContext {
+        let root = "/remote/workspace";
+        let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
+            root,
+            Some("write-test-ssh"),
+            Some("write-test-host"),
+        )
+        .expect("remote identity");
+        let mut context = local_context(PathBuf::from(root));
+        context.workspace = Some(WorkspaceBinding::new_remote(
+            None,
+            PathBuf::from(root),
+            "write-test-ssh".to_string(),
+            "write-test-host".to_string(),
+            identity,
+        ));
+        context.runtime_handles = ToolRuntimeHandles::new(
+            Some(WorkspaceServices {
+                fs,
+                shell: Arc::new(UnusedRemoteShell),
+            }),
+            None,
+        );
+        context
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn local_and_remote_write_edit_share_the_bound_filesystem_and_results() {
+        use crate::agentic::tools::implementations::file_edit_tool::FileEditTool;
+        let mut outcomes = Vec::new();
+        for remote in [false, true] {
+            let fs = Arc::new(RemoteWriteFs {
+                expected_path: "/remote/workspace/result.txt".into(),
+                read_error: None,
+                exists: Ok(false),
+                writes: AtomicUsize::new(0),
+            });
+            let mut context = remote_context(fs.clone());
+            if !remote {
+                context.workspace = Some(WorkspaceBinding::new(
+                    None,
+                    PathBuf::from("/remote/workspace"),
+                ));
+            }
+            let write = FileWriteTool::new()
+                .call_impl(&json!({"payload": "+++ result.txt\nnew content"}), &context)
+                .await
+                .expect("Write must use the injected provider for either workspace kind");
+            let edit = FileEditTool::new().call_impl(
+                &json!({"file_path": "result.txt", "old_string": "original", "new_string": "updated"}),
+                &context,
+            ).await.expect("Edit must use the injected provider for either workspace kind");
+            assert_eq!(fs.writes.load(Ordering::SeqCst), 2);
+            outcomes.push((write[0].content(), edit[0].content()));
+        }
+        assert_eq!(outcomes[0], outcomes[1]);
+    }
+
+    #[tokio::test]
+    async fn write_never_overwrites_an_unreadable_existing_file_without_read_state() {
+        for remote in [false, true] {
+            let root = if remote {
+                PathBuf::from("/remote/workspace")
+            } else {
+                std::env::temp_dir().join("bitfun-write-unreadable-fixture")
+            };
+            let expected_path = if remote {
+                "/remote/workspace/result.txt".to_string()
+            } else {
+                root.join("result.txt").to_string_lossy().into_owned()
+            };
+            let fs = Arc::new(RemoteWriteFs {
+                expected_path,
+                exists: Ok(true),
+                read_error: Some("Permission denied"),
+                writes: AtomicUsize::new(0),
+            });
+            let mut context = remote_context(fs.clone());
+            if !remote {
+                context.workspace = Some(WorkspaceBinding::new(None, root));
+            }
+            let result = FileWriteTool::new()
+                .call_impl(&json!({"payload":"+++ result.txt\nreplacement"}), &context)
+                .await;
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("Permission denied"));
+            assert_eq!(fs.writes.load(Ordering::SeqCst), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_write_does_not_treat_probe_failures_as_new_files() {
+        for error in ["Permission denied", "SSH connection lost"] {
+            let fs = Arc::new(RemoteWriteFs {
+                expected_path: "/remote/workspace/result.txt".into(),
+                read_error: None,
+                exists: Err(error),
+                writes: AtomicUsize::new(0),
+            });
+            let context = remote_context(fs.clone());
+            let input = json!({"payload": "+++ result.txt\nreplacement"});
+            let tool = FileWriteTool::new();
+            let validation = tool.validate_input(&input, Some(&context)).await;
+            assert!(!validation.result);
+            assert!(validation.message.unwrap().contains(error));
+            let failure = tool
+                .call_impl(&input, &context)
+                .await
+                .expect_err("failed metadata must prevent write even without preflight");
+            assert!(failure.to_string().contains(error));
+            assert_eq!(fs.writes.load(Ordering::SeqCst), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_write_preserves_new_file_and_identical_retry_behavior() {
+        for (exists, content, expected_writes) in
+            [(false, "new content", 1), (true, "original content", 0)]
+        {
+            let fs = Arc::new(RemoteWriteFs {
+                expected_path: "/remote/workspace/result.txt".into(),
+                read_error: None,
+                exists: Ok(exists),
+                writes: AtomicUsize::new(0),
+            });
+            let context = remote_context(fs.clone());
+            FileWriteTool::new()
+                .call_impl(
+                    &json!({"payload": format!("+++ result.txt\n{content}")}),
+                    &context,
+                )
+                .await
+                .expect("successful existence probe should retain Write behavior");
+            assert_eq!(fs.writes.load(Ordering::SeqCst), expected_writes);
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_write_requires_its_workspace_filesystem() {
+        let mut context = remote_context(Arc::new(RemoteWriteFs {
+            expected_path: "/remote/workspace/result.txt".into(),
+            read_error: None,
+            exists: Ok(false),
+            writes: AtomicUsize::new(0),
+        }));
+        context.runtime_handles = ToolRuntimeHandles::default();
+        let failure = FileWriteTool::preflight_write_error(&context, "result.txt")
+            .await
+            .expect("missing remote provider must fail preflight");
+        assert!(failure.contains("Remote workspace file system is unavailable"));
     }
 
     #[test]
@@ -893,6 +1109,39 @@ mod tests {
         assert!(validation.message.is_none());
     }
 
+    #[test]
+    fn write_success_result_reports_non_blocking_plan_issues() {
+        let logical_path = ".bitfun/plans/example.plan.md";
+        let content = "---\nname: Example\noverview: Overview\ntodos: []\n---\n";
+        let issues = diagnose_plan_artifact(content);
+
+        let result = FileWriteTool::write_success_result(
+            logical_path,
+            super::write_file_success_outcome(logical_path, false, content),
+            false,
+            None,
+            &[],
+            Some(&issues),
+        );
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = result
+        else {
+            panic!("expected result");
+        };
+
+        assert_eq!(data["success"], true);
+        assert_eq!(data["plan_format"]["valid"], false);
+        assert_eq!(
+            data["plan_format"]["issues"][0]["code"],
+            "missing_markdown_body"
+        );
+        let assistant_message = result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant_message.contains("does not match the plan format"));
+    }
+
     #[cfg(windows)]
     #[tokio::test]
     async fn write_result_reports_normalized_windows_drive_path() {
@@ -927,6 +1176,7 @@ mod tests {
             false,
             Some(&warning),
             &[],
+            None,
         );
         let ToolResult::Result {
             data,

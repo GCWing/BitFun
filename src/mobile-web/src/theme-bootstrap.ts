@@ -1,6 +1,8 @@
+import { themes } from '@bitfun/theme-bitfun';
+
 // Apply the saved theme before React and the main stylesheet load, avoiding a
 // light/dark flash without requiring an inline script under the mobile CSP.
-let initialTheme = 'dark';
+let initialTheme: 'dark' | 'light' = 'dark';
 try {
   const savedTheme = localStorage.getItem('bitfun-mobile-theme');
   if (savedTheme === 'dark' || savedTheme === 'light') {
@@ -11,5 +13,12 @@ try {
     initialTheme = 'light';
   }
 }
-document.documentElement.setAttribute('data-theme', initialTheme);
-document.documentElement.style.colorScheme = initialTheme;
+const root = document.documentElement;
+root.setAttribute('data-bf-design-system-root', '');
+root.setAttribute('data-color-scheme', initialTheme);
+root.setAttribute('data-contrast', 'standard');
+root.setAttribute('data-density', 'comfortable');
+root.style.colorScheme = initialTheme;
+
+const themeColor = document.querySelector('meta[name="theme-color"]');
+themeColor?.setAttribute('content', String(themes[initialTheme]['color.surface.canvas']));

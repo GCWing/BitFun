@@ -1,5 +1,12 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  SHADOW_SUBTLE,
+  TRANSPARENT,
+} from './Theme';
 
 @ComponentV2
 export struct SidebarToggleButton {
@@ -33,12 +40,12 @@ export struct SidebarToggleButton {
     }
     .width(this.controlSize)
     .height(this.controlSize)
-    .backgroundColor(this.restore ? CARD : '#00000000')
+    .backgroundColor(this.restore ? CARD : TRANSPARENT)
     .border({ width: this.restore ? 1 : 0, color: LINE })
     .borderRadius(this.restore ? this.controlSize / 2 : 8)
     .shadow({
       radius: this.restore ? 14 : 0,
-      color: this.restore ? '#12000000' : '#00000000',
+      color: this.restore ? SHADOW_SUBTLE : TRANSPARENT,
       offsetY: this.restore ? 5 : 0
     })
     .accessibilityText(RemoteI18n.t(this.restore ? 'sidebar.restore' : 'sidebar.collapse'))

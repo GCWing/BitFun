@@ -111,7 +111,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'anyhow', ownerFeatures: ['workspace-ports'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['agent-api', 'ts'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'product-search', 'ts'] },
-      { depName: 'tokio', ownerFeatures: ['remote-exec-port', 'terminal-port'] },
+      { depName: 'tokio', ownerFeatures: ['remote-exec-port', 'terminal-port', 'workspace-ports'] },
       { depName: 'tokio-util', ownerFeatures: ['workspace-ports'] },
       { depName: 'ts-rs', ownerFeatures: ['ts'] },
     ],
@@ -396,7 +396,7 @@ export const capabilityContractDependencyRules = [
         'bitfun-core-types/ts',
         'bitfun-product-domains?/ts',
       ],
-      'workspace-ports': ['dep:anyhow', 'dep:tokio-util'],
+      'workspace-ports': ['dep:anyhow', 'dep:tokio-util', 'dep:tokio', 'tokio/io-util'],
     },
     consumers: new Map([
       ['bitfun-agent-runtime', capabilityConsumer([
@@ -506,7 +506,7 @@ export const capabilityContractDependencyRules = [
       ['terminal-core', capabilityConsumer([
         capabilityEdge(['terminal-port']),
       ])],
-      ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+      ['tool-runtime', capabilityConsumer([capabilityEdge(['workspace-ports'])])],
     ]),
   },
   {
@@ -1514,6 +1514,7 @@ export const coreClosedFeatureProfileRules = [
       'bitfun-runtime-ports/runtime-event-port',
       'bitfun-runtime-ports/workspace-ports',
       'dep:dunce',
+      'dep:filetime',
       'process-runtime',
       'tokio/fs',
       'tokio/io-util',

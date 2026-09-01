@@ -1,10 +1,10 @@
 /**
  * QuickLook component styles.
  */
-@use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .canvas-quick-look {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: fixed;
   z-index: 1100;
@@ -33,8 +33,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-panel);
+    border-bottom: 1px solid var(--bf-color-border-default);
   }
 
   &__title {
@@ -50,7 +50,7 @@
       white-space: nowrap;
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 
@@ -63,14 +63,14 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     border-radius: 3px;
     flex-shrink: 0;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
   }
 
@@ -90,23 +90,23 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
   }
 
   &__pin-btn:hover {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &__close-btn:hover {
-    color: var(--bf-appearance-token-color-error);
+    color: var(--bf-color-status-danger-content);
   }
 
   // Content area
@@ -137,9 +137,9 @@
     gap: 4px;
     padding: 6px 12px;
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-muted);
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    color: var(--bf-color-content-muted);
+    background: var(--bf-color-surface-panel);
+    border-top: 1px solid var(--bf-color-border-subtle);
   }
 
   &__separator {

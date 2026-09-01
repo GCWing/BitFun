@@ -4,10 +4,7 @@ import React, {
   Suspense,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FileText,
-  RefreshCw,
-} from 'lucide-react';
+import { FileText } from 'lucide-react';
 
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { notificationService } from '@/shared/notification-system';
@@ -61,19 +58,18 @@ interface PersonaDocState {
 interface AutoResizeTextareaProps {
   value: string;
   onChange: (value: string) => void;
-  className?: string;
 }
 
 const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
   value,
   onChange,
-  className = '',
 }) => {
   return (
     <Textarea
       autoResize
       className="acp-persona-editor__frontmatter-control"
-      textareaClassName={`m-editor-textarea ${className}`.trim()}
+      font="mono"
+      resize="none"
       value={value}
       onValueChange={onChange}
       spellCheck={false}
@@ -372,7 +368,7 @@ const AssistantConfigPage: React.FC = () => {
               <Suspense
                 fallback={(
                   <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading">
-                    <RefreshCw size={14} className="nursery-spinning" />
+                    <Icon name="refresh" size="sm" className="nursery-spinning" />
                   </div>
                 )}
               >
@@ -432,7 +428,7 @@ const AssistantConfigPage: React.FC = () => {
             <div className="acp-persona-editor__body" data-bf-component="assistant-config-page" data-bf-part="editorBody">
               {error && <p className="acp-persona-editor__error" data-bf-component="assistant-config-page" data-bf-part="error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
               {loading ? (
-                <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading"><RefreshCw size={14} className="nursery-spinning" /></div>
+                <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading"><Icon name="refresh" size="sm" className="nursery-spinning" /></div>
               ) : usesHybridEditor ? (
                 <div className="acp-persona-editor__hybrid">
                   <section className="acp-persona-editor__frontmatter" data-bf-component="assistant-config-page" data-bf-part="frontmatter">
@@ -440,7 +436,6 @@ const AssistantConfigPage: React.FC = () => {
                       key={`${fileName}-frontmatter`}
                       value={sections.frontmatter}
                       onChange={handlePersonaDocFrontmatterChange}
-                      className="acp-persona-editor__frontmatter-textarea"
                     />
                   </section>
                   <div className="acp-persona-editor__divider" aria-hidden="true" />

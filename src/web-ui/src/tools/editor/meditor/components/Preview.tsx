@@ -1,5 +1,5 @@
 import React from 'react';
-import { MarkdownRenderer } from '@/component-library';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { useI18n } from '@/infrastructure/i18n';
 import { splitMarkdownFrontmatter } from '../utils/markdownFrontmatter';
 import './Preview.scss';

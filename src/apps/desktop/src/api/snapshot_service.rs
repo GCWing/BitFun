@@ -3,11 +3,13 @@
 use bitfun_core::product_runtime::{
     CoreSessionMaintenancePermit, CoreSessionMutationPermit, CoreSessionReadPermit,
 };
-use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_core::service::remote_ssh::workspace_state::{
+    is_remote_path, workspace_session_identity,
+};
 use bitfun_core::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_snapshot_manager_for_workspace,
-    initialize_snapshot_manager_for_workspace, open_snapshot_manager_for_view, FileChangeEntry,
-    OperationType, SnapshotManager,
+    initialize_snapshot_manager_for_workspace, open_snapshot_history_for_workspace,
+    open_snapshot_manager_for_view, FileChangeEntry, OperationType, SnapshotManager,
 };
 use bitfun_runtime_ports::{AgentSessionWorkspaceLocation, SessionStoragePathRequest};
 use log::{info, warn};
@@ -308,7 +310,7 @@ async fn ensure_complete_rollback_supported(
         || (explicit_location.is_none() && is_remote_path(workspace_path).await);
     if is_remote {
         return Err(format!(
-            "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: {workspace_path}"
+            "Complete rollback is not supported for remote workspaces because complete file snapshot coverage is unavailable. No workspace files or session messages were changed: {workspace_path}"
         ));
     }
     Ok(())
@@ -330,6 +332,38 @@ async fn snapshot_manager_for_view(
         .map_err(|error| format!("Failed to open snapshot view: {error}"))
 }
 
+/// Only immutable, persisted operation facts are available without a live
+/// workspace. The full Session rollback and current-file view keep their own
+/// coverage requirements.
+async fn snapshot_manager_for_recorded_operation(
+    workspace_path: &str,
+    remote_scope: &SnapshotRemoteScope,
+) -> Result<Arc<SnapshotManager>, String> {
+    if !remote_scope.declares_remote() {
+        return snapshot_manager_for_view(workspace_path, remote_scope).await;
+    }
+    let connection_id = remote_scope
+        .remote_connection_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let hostname = remote_scope
+        .remote_ssh_host
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if connection_id.is_none() || hostname.is_none() {
+        return Err("Snapshot operation view unavailable: the remote Session requires its saved connection id and host; no local fallback was attempted".into());
+    }
+    let identity =
+        workspace_session_identity(workspace_path, connection_id, hostname).ok_or_else(|| {
+            "Snapshot operation view unavailable: invalid remote workspace identity".to_string()
+        })?;
+    open_snapshot_history_for_workspace(&identity)
+        .await
+        .map_err(|error| format!("Snapshot operation view unavailable: {error}"))
+}
+
 struct SnapshotHistoryMutation {
     _maintenance: CoreSessionMaintenancePermit,
     _mutation: CoreSessionMutationPermit,
@@ -341,12 +375,29 @@ async fn begin_snapshot_history_read(
     workspace_path: &str,
     session_id: &str,
 ) -> Result<CoreSessionReadPermit, String> {
+    begin_snapshot_history_read_for_scope(
+        runtime,
+        workspace_path,
+        session_id,
+        &SnapshotRemoteScope::default(),
+    )
+    .await
+}
+
+async fn begin_snapshot_history_read_for_scope(
+    runtime: &DesktopRuntimeContext,
+    workspace_path: &str,
+    session_id: &str,
+    remote_scope: &SnapshotRemoteScope,
+) -> Result<CoreSessionReadPermit, String> {
     // Warm the snapshot view before taking the exclusive session read permit.
     // The first view open for a workspace loads the entire snapshot index from
     // disk; holding the session mutation lock across that load stalls every
     // waiter on the same session, including the next dialog-turn start. After
     // warming, the caller's in-permit view lookup is a cache hit.
-    if !is_remote_path(workspace_path).await {
+    if remote_scope.declares_remote() {
+        snapshot_manager_for_recorded_operation(workspace_path, remote_scope).await?;
+    } else if !is_remote_path(workspace_path).await {
         let workspace_dir = resolve_workspace_dir(workspace_path).await?;
         open_snapshot_manager_for_view(&workspace_dir)
             .await
@@ -356,17 +407,31 @@ async fn begin_snapshot_history_read(
     let storage_path = compatibility
         .resolve_persisted_session_storage_path(SessionStoragePathRequest {
             workspace_path: PathBuf::from(workspace_path),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id: remote_scope.remote_connection_id.clone(),
+            remote_ssh_host: remote_scope.remote_ssh_host.clone(),
         })
         .await
         .map_err(|error| {
             format!("Failed to resolve session storage before snapshot view: {error}")
         })?;
-    compatibility
-        .begin_persisted_session_read(&storage_path, session_id)
-        .await
-        .map_err(|error| format!("Failed to open a consistent snapshot view: {error}"))
+    let read = if remote_scope.declares_remote() {
+        let identity = workspace_session_identity(
+            workspace_path,
+            remote_scope.remote_connection_id.as_deref(),
+            remote_scope.remote_ssh_host.as_deref(),
+        )
+        .ok_or_else(|| {
+            "Snapshot operation view unavailable: invalid Session identity".to_string()
+        })?;
+        compatibility
+            .begin_persisted_session_read_for_workspace(&storage_path, session_id, &identity)
+            .await
+    } else {
+        compatibility
+            .begin_persisted_session_read(&storage_path, session_id)
+            .await
+    };
+    read.map_err(|error| format!("Failed to open a consistent snapshot view: {error}"))
 }
 
 async fn begin_snapshot_history_mutation(
@@ -695,21 +760,48 @@ pub async fn get_operation_diff(
     runtime: State<'_, DesktopRuntimeContext>,
     request: GetOperationDiffRequest,
 ) -> Result<serde_json::Value, String> {
-    ensure_local_snapshot_mutation_path(&request.workspace_path, &request.remote_scope).await?;
-    let read =
-        begin_snapshot_history_read(runtime.inner(), &request.workspace_path, &request.sessionId)
+    if request.remote_scope.declares_remote()
+        && request
+            .operationId
+            .as_deref()
+            .is_none_or(|id| id.trim().is_empty())
+    {
+        return Err("Remote snapshot views require a recorded operationId; a current-workspace diff is not available offline".into());
+    }
+    let read = begin_snapshot_history_read_for_scope(
+        runtime.inner(),
+        &request.workspace_path,
+        &request.sessionId,
+        &request.remote_scope,
+    )
+    .await?;
+    let manager =
+        snapshot_manager_for_recorded_operation(&request.workspace_path, &request.remote_scope)
             .await?;
-    let manager = snapshot_manager_for_view(&request.workspace_path, &request.remote_scope).await?;
 
-    let diff = manager
-        .get_file_diff_before(
-            &request.sessionId,
-            &request.filePath,
-            request.operationId.as_deref(),
-            read.visible_turn_end(),
-        )
-        .await
-        .map_err(|e| format!("Failed to get file diff: {}", e))?;
+    let diff = match request.operationId.as_deref() {
+        Some(operation_id) => {
+            manager
+                .get_operation_diff_before(
+                    &request.sessionId,
+                    &request.filePath,
+                    operation_id,
+                    read.visible_turn_end(),
+                )
+                .await
+        }
+        None => {
+            manager
+                .get_file_diff_before(
+                    &request.sessionId,
+                    &request.filePath,
+                    None,
+                    read.visible_turn_end(),
+                )
+                .await
+        }
+    }
+    .map_err(|error| format!("Failed to get operation diff: {error}"))?;
 
     let original = diff
         .get("original_content")
@@ -766,11 +858,16 @@ pub async fn get_operation_summary(
     runtime: State<'_, DesktopRuntimeContext>,
     request: GetOperationSummaryRequest,
 ) -> Result<serde_json::Value, String> {
-    ensure_local_snapshot_mutation_path(&request.workspace_path, &request.remote_scope).await?;
-    let read =
-        begin_snapshot_history_read(runtime.inner(), &request.workspace_path, &request.sessionId)
+    let read = begin_snapshot_history_read_for_scope(
+        runtime.inner(),
+        &request.workspace_path,
+        &request.sessionId,
+        &request.remote_scope,
+    )
+    .await?;
+    let manager =
+        snapshot_manager_for_recorded_operation(&request.workspace_path, &request.remote_scope)
             .await?;
-    let manager = snapshot_manager_for_view(&request.workspace_path, &request.remote_scope).await?;
 
     let summary = manager
         .get_operation_summary_before(
@@ -1139,6 +1236,56 @@ mod tests {
         get_snapshot_manager_for_workspace, snapshot_manager_for_view, SnapshotRemoteScope,
     };
 
+    #[tokio::test]
+    async fn incomplete_remote_operation_scope_never_opens_colliding_local_history() {
+        let workspace = tempfile::tempdir().unwrap();
+        for scope in [
+            SnapshotRemoteScope {
+                remote_connection_id: Some("connection-1".into()),
+                remote_ssh_host: None,
+            },
+            SnapshotRemoteScope {
+                remote_connection_id: None,
+                remote_ssh_host: Some("host-1".into()),
+            },
+        ] {
+            let result = super::snapshot_manager_for_recorded_operation(
+                &workspace.path().to_string_lossy(),
+                &scope,
+            )
+            .await;
+            let error = result.err().expect("incomplete identity must fail closed");
+            assert!(error.contains("saved connection id and host"));
+            assert!(get_snapshot_manager_for_workspace(workspace.path()).is_none());
+            assert_eq!(std::fs::read_dir(workspace.path()).unwrap().count(), 0);
+        }
+    }
+
+    #[test]
+    fn operation_scope_keeps_legacy_payload_compatibility_and_round_trips_identity() {
+        let legacy: super::GetOperationSummaryRequest = serde_json::from_value(serde_json::json!({
+            "sessionId": "session-1", "operationId": "operation-1", "workspacePath": "/srv/project",
+        }))
+        .unwrap();
+        assert!(!legacy.remote_scope.declares_remote());
+        let remote: super::GetOperationSummaryRequest = serde_json::from_value(serde_json::json!({
+            "sessionId": "session-1", "operationId": "operation-1", "workspacePath": "/srv/project",
+            "remoteConnectionId": "ssh:user@host:22", "remoteSshHost": "host",
+        }))
+        .unwrap();
+        let restored: super::GetOperationSummaryRequest =
+            serde_json::from_value(serde_json::to_value(remote).unwrap()).unwrap();
+        assert_eq!(
+            restored.remote_scope.remote_connection_id.as_deref(),
+            Some("ssh:user@host:22")
+        );
+        assert_eq!(
+            restored.remote_scope.remote_ssh_host.as_deref(),
+            Some("host")
+        );
+        assert_eq!(restored.workspace_path, "/srv/project");
+    }
+
     #[test]
     fn targeted_rollback_request_preserves_stable_identity_and_remote_facts() {
         let request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest =
@@ -1222,7 +1369,7 @@ mod tests {
 
         assert_eq!(
             error,
-            "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: /root/repos"
+            "Complete rollback is not supported for remote workspaces because complete file snapshot coverage is unavailable. No workspace files or session messages were changed: /root/repos"
         );
     }
 

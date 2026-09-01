@@ -30,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
@@ -53,6 +52,7 @@ import com.bitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
 import com.bitfun.mobile.core.feature.shell.RemoteSidebarWorkspaceRow
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
+import com.bitfun.mobile.app.ui.theme.bitFunColors
 
 private const val SESSIONS_PER_WORKSPACE = 3
 private const val WORKSPACES_PER_BATCH = 3
@@ -629,7 +629,7 @@ private fun RemoteSessionRow(
             .fillMaxWidth()
             .height(44.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else bitFunColors.transparent)
             .onGloballyPositioned { coordinates ->
                 anchorBounds = coordinates.boundsInWindow().toIntRect()
             }

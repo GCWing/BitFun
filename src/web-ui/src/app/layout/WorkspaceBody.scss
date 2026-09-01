@@ -3,8 +3,6 @@
  * elevated scene surface on the right. Panel visibility is intentionally
  * immediate because it is commonly toggled from the keyboard.
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
 @use '../styles/workspace-shell-surfaces' as shell-surfaces;
 
 $_nav-width: 300px;
@@ -26,7 +24,7 @@ $_resize-target-width: 6px;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   padding: 0;
   gap: 0;
 }
@@ -56,7 +54,7 @@ $_resize-target-width: 6px;
   position: absolute;
   top: 0;
   left: 0;
-  z-index: $z-dropdown;
+  z-index: var(--bf-layer-dropdown);
   width: $_nav-collapsed-width;
   height: $_nav-bar-height;
 }
@@ -93,17 +91,17 @@ $_resize-target-width: 6px;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: $size-gap-4;
+  gap: var(--bf-space-4);
   min-width: 0;
   min-height: 0;
-  padding: $size-gap-4 $size-gap-4 0;
+  padding: var(--bf-space-4) var(--bf-space-4) 0;
   overflow: hidden;
   border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
-  background: var(--bf-appearance-token-color-bg-scene);
-  box-shadow: -4px 0 12px -6px var(--bf-appearance-token-color-overlay-slate-08);
+  background: var(--bf-color-surface-scene);
+  box-shadow: -4px 0 12px -6px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
 
   :root[data-bf-appearance-mode='dark'] & {
-    box-shadow: -5px 0 16px -7px var(--bf-appearance-token-color-overlay-black-30);
+    box-shadow: -5px 0 16px -7px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
   }
 
   // Resize feedback follows only the rounded boundary shared with navigation.
@@ -113,7 +111,7 @@ $_resize-target-width: 6px;
     content: '';
     position: absolute;
     inset: 0 auto 0 0;
-    z-index: $z-decoration;
+    z-index: var(--bf-layer-decoration);
     box-sizing: border-box;
     width: var(--_scene-surface-radius);
     border: 1px solid transparent;
@@ -128,21 +126,21 @@ $_resize-target-width: 6px;
 @media (hover: hover) and (pointer: fine) {
   .bitfun-workspace-body__nav-divider:hover ~ .bitfun-workspace-body__scene-area {
     .bitfun-workspace-body__scene-surface::after {
-      border-color: var(--bf-appearance-token-border-subtle);
+      border-color: var(--bf-color-border-subtle);
       opacity: 1;
     }
   }
 }
 
 .bitfun-is-resizing-nav .bitfun-workspace-body__scene-surface::after {
-  border-color: var(--bf-appearance-token-border-base);
+  border-color: var(--bf-color-border-default);
   opacity: 1;
 }
 
 // The compact toolbar remains reachable when the navigation panel is hidden.
 .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
   .bitfun-workspace-body__scene-surface .bitfun-scene-top-bar {
-    padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1});
+    padding-left: calc(#{$_nav-collapsed-width} + var(--bf-space-1));
   }
 }
 
@@ -152,7 +150,7 @@ $_resize-target-width: 6px;
 
 .bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
   .bitfun-workspace-body__scene-surface .bitfun-scene-top-bar {
-    padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1} + 72px);
+    padding-left: calc(#{$_nav-collapsed-width} + var(--bf-space-1) + 72px);
   }
 }
 

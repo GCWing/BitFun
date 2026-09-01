@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { themes } from '@bitfun/theme-bitfun';
 
 export type Theme = 'light' | 'dark';
 
@@ -21,11 +22,16 @@ function readStoredTheme(): string | null {
 }
 
 function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
+  const root = document.documentElement;
+  root.setAttribute('data-bf-design-system-root', '');
+  root.dataset.colorScheme = theme;
+  root.dataset.contrast = 'standard';
+  root.dataset.density = 'comfortable';
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', theme === 'dark' ? '#0e0e10' : '#f7f8fa');
+    ?.setAttribute('content', String(themes[theme]['color.surface.canvas']));
 }
 
 function initialTheme(): Theme {

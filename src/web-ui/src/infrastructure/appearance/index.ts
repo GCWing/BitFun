@@ -31,7 +31,7 @@ export * from './appearancePropertyProfiles';
 export * from './adapters/MermaidAppearanceAdapter';
 export * from './adapters/WidgetAppearanceAdapter';
 export * from './adapters/CanvasAppearanceAdapter';
-export * from './adapters/CssTokenAppearanceAdapter';
+export * from './adapters/ThemeTokenAppearanceAdapter';
 export * from './adapters/PluginAppearanceProjection';
 export * from './hooks/useAppearance';
 

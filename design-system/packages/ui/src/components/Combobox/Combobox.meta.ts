@@ -2,19 +2,18 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const comboboxMeta = {
   category: "form",
-  description: "An anchored searchable selector with single, multiple, grouped, clearable, and custom-value modes.",
+  description: "An anchored searchable single-value selector with grouped, clearable, and explicit value-creation support.",
   maturity: "stable",
   name: "Combobox",
   props: [
     { name: "options", type: "readonly ComboboxOption[]" },
-    { name: "value", type: "ComboboxValue | ComboboxValue[]" },
-    { defaultValue: "false", name: "searchable", type: "boolean" },
-    { defaultValue: "false", name: "multiple", type: "boolean" },
+    { name: "value", type: "ComboboxValue" },
+    { name: "onValueChange", type: "(value: ComboboxValue) => void" },
+    { name: "onCreateValue", type: "(input: string) => ComboboxValue | void" },
     { defaultValue: "false", name: "clearable", type: "boolean" },
-    { defaultValue: "false", name: "allowCustomValue", type: "boolean" },
     { defaultValue: "md", name: "size", type: "sm | md | lg" },
   ],
-  states: ["default", "open", "searching", "multiple", "invalid", "disabled", "loading"],
+  states: ["default", "open", "searching", "custom", "invalid", "disabled", "loading"],
   tokens: [
     "color.field.background",
     "color.field.backgroundHover",

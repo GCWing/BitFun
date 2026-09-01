@@ -2,7 +2,7 @@
 import { Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Trash2, RefreshCw, FolderOpen, TrendingUp } from 'lucide-react';
+import { FolderOpen, TrendingUp } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
@@ -339,7 +339,7 @@ const SkillsConfig: React.FC = () => {
           onClick={() => setDeleteConfirm({ show: true, skill })}
           title={t('list.item.deleteTooltip')}
         >
-          <Trash2 size={14} />
+          <Icon name="delete" size="sm" />
         </button>
     ) : null;
     const details = (
@@ -487,7 +487,13 @@ const SkillsConfig: React.FC = () => {
                   {isInstalled ? (
                     <Tooltip content={installedTooltipText}>
                       <span>
-                        <Button variant="fill" size="sm" disabled leadingIcon={<Icon name="check-circle" size="sm" />}>
+                        <Button
+                          className="bitfun-skills-config__market-action-button"
+                          variant="fill"
+                          size="sm"
+                          disabled
+                          leadingIcon={<Icon name="check-circle" size="sm" />}
+                        >
 
                           {t('market.item.installed')}
                         </Button>
@@ -499,6 +505,7 @@ const SkillsConfig: React.FC = () => {
                         <Tooltip content={projectTooltipText}>
                           <span>
                             <Button
+                              className="bitfun-skills-config__market-action-button"
                               variant="fill"
                               size="sm"
                               onClick={() => handleDownload(skill, 'project')}
@@ -514,6 +521,7 @@ const SkillsConfig: React.FC = () => {
                       <Tooltip content={userTooltipText}>
                         <span>
                           <Button
+                            className="bitfun-skills-config__market-action-button"
                             variant={isRemote ? 'fill' : 'outline'}
                             size="sm"
                             onClick={() => handleDownload(skill, 'user')}
@@ -542,7 +550,7 @@ const SkillsConfig: React.FC = () => {
         aria-label={t('toolbar.refreshTooltip')}
         size="sm"
         onClick={() => loadSkills(true)}
-        icon={<RefreshCw size={16} />}
+        icon={<Icon name="refresh" size="md" />}
       />
     </Tooltip>
   );
@@ -654,13 +662,14 @@ const SkillsConfig: React.FC = () => {
                 aria-label={t('market.refreshTooltip')}
                 size="sm"
                 onClick={() => loadMarketSkills(marketKeyword)}
-                icon={<RefreshCw size={16} />}
+                icon={<Icon name="refresh" size="md" />}
               />
             </Tooltip>
           )}
         >
           <div className="bitfun-skills-config__market-toolbar" data-bf-component="skills-config" data-bf-part="marketToolbar">
             <SearchField
+              className="bitfun-skills-config__market-search"
               placeholder={t('market.searchPlaceholder')}
               aria-label={t('market.searchPlaceholder')}
               leadingIcon={<Icon name="search" size="sm" aria-hidden />}
@@ -715,14 +724,14 @@ const SkillsConfig: React.FC = () => {
       </ConfigPageContent>
 
       <ConfirmDialog
-        isOpen={deleteConfirm.show && !!deleteConfirm.skill}
-        onClose={() => setDeleteConfirm({ show: false, skill: null })}
+        open={deleteConfirm.show && !!deleteConfirm.skill}
+        onOpenChange={() => setDeleteConfirm({ show: false, skill: null })}
         onConfirm={confirmDelete}
         title={t('deleteModal.title')}
         message={
           <>
             <p>{t('deleteModal.message', { name: deleteConfirm.skill?.name })}</p>
-            <p style={{ marginTop: '8px', color: 'var(--bf-appearance-token-color-warning)' }}>{t('deleteModal.warning')}</p>
+            <p style={{ marginTop: '8px', color: 'var(--bf-color-status-warning-content)' }}>{t('deleteModal.warning')}</p>
           </>
         }
         type="warning"

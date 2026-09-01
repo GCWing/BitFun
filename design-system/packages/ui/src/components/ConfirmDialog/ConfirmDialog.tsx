@@ -1,86 +1,49 @@
 import {
-  createContext,
   forwardRef,
   useCallback,
-  useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
   AlertCircle,
-  CheckCircle2,
-  Info,
   TriangleAlert,
 } from "lucide-react";
+import { Icon } from "../Icon";
+import { useDesignSystem } from "../../overlay/useDesignSystem";
 import { Button } from "../Button";
 import {
-  Modal,
-  type ModalCloseReason,
-  type ModalPortalTarget,
-} from "../Modal";
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+  type DialogCloseReason,
+} from "../Dialog";
 import styles from "./ConfirmDialog.module.css";
 
-export type ConfirmDialogCloseReason = ModalCloseReason | "cancel-button";
+export type ConfirmDialogCloseReason = DialogCloseReason | "cancel-button";
 export type ConfirmDialogType = "info" | "warning" | "error" | "success";
 export type ConfirmDialogAction = () => void | Promise<void>;
-
-interface ConfirmDialogContextValue {
-  cancelLabel: ReactNode;
-  confirmLabel: ReactNode;
-}
-
-const ConfirmDialogContext = createContext<ConfirmDialogContextValue>({
-  cancelLabel: "Cancel",
-  confirmLabel: "Confirm",
-});
-
-export interface ConfirmDialogProviderProps {
-  cancelLabel?: ReactNode;
-  children: ReactNode;
-  confirmLabel?: ReactNode;
-}
-
-export function ConfirmDialogProvider({
-  cancelLabel = "Cancel",
-  children,
-  confirmLabel = "Confirm",
-}: ConfirmDialogProviderProps) {
-  const value = useMemo(
-    () => ({ cancelLabel, confirmLabel }),
-    [cancelLabel, confirmLabel],
-  );
-  return (
-    <ConfirmDialogContext.Provider value={value}>
-      {children}
-    </ConfirmDialogContext.Provider>
-  );
-}
 
 export interface ConfirmDialogProps {
   cancelText?: ReactNode;
   closeOnEscape?: boolean;
-  closeOnOverlayClick?: boolean;
+  closeOnPointerOutside?: boolean;
   confirmDanger?: boolean;
   confirmText?: ReactNode;
   icon?: ReactNode | false;
-  isOpen: boolean;
   message?: ReactNode;
-  dialogClassName?: string;
-  onCancel?: () => void;
   onActionError?: (error: unknown, action: "confirm" | "secondary") => void;
-  onClose: (reason: ConfirmDialogCloseReason) => void;
   onConfirm: ConfirmDialogAction;
+  onOpenChange: (open: false, reason: ConfirmDialogCloseReason) => void;
   onSecondary?: ConfirmDialogAction;
-  portalContainer?: ModalPortalTarget;
-  overlayClassName?: string;
+  open: boolean;
   pendingAction?: "confirm" | "secondary" | null;
-  portalled?: boolean;
-  preventScroll?: boolean;
   preview?: ReactNode;
-  previewMaxHeight?: number | string;
   secondaryText?: ReactNode;
   showCancel?: boolean;
   showCloseButton?: boolean;
@@ -91,8 +54,8 @@ export interface ConfirmDialogProps {
 
 const defaultIcons: Record<ConfirmDialogType, ReactNode> = {
   error: <AlertCircle aria-hidden="true" />,
-  info: <Info aria-hidden="true" />,
-  success: <CheckCircle2 aria-hidden="true" />,
+  info: <Icon name="info" />,
+  success: <Icon name="check-circle" />,
   warning: <TriangleAlert aria-hidden="true" />,
 };
 
@@ -100,25 +63,18 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
   function ConfirmDialog({
     cancelText,
     closeOnEscape = true,
-    closeOnOverlayClick = true,
+    closeOnPointerOutside = true,
     confirmDanger = false,
     confirmText,
     icon,
-    isOpen,
     message,
-    dialogClassName,
-    onCancel,
     onActionError,
-    onClose,
     onConfirm,
+    onOpenChange,
     onSecondary,
-    portalContainer,
-    overlayClassName,
+    open,
     pendingAction: controlledPendingAction,
-    portalled = true,
-    preventScroll = true,
     preview,
-    previewMaxHeight = 240,
     secondaryText,
     showCancel = true,
     showCloseButton = false,
@@ -126,7 +82,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
     title,
     type = "warning",
   }, ref) {
-    const labels = useContext(ConfirmDialogContext);
+    const designSystem = useDesignSystem();
     const confirmButtonRef = useRef<HTMLButtonElement>(null);
     const mountedRef = useRef(true);
     const [internalPendingAction, setInternalPendingAction] = useState<"confirm" | "secondary" | null>(null);
@@ -135,16 +91,16 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
     const resolvedIcon = icon === false ? null : icon ?? defaultIcons[type];
     const hasMessage = message !== undefined && message !== null && message !== "";
     const hasPreview = preview !== undefined && preview !== null && preview !== "";
-    const resolvedCancelText = cancelText ?? labels.cancelLabel;
-    const resolvedConfirmText = confirmText ?? labels.confirmLabel;
+    const resolvedCancelText = cancelText ?? designSystem.messages.confirmCancel;
+    const resolvedConfirmText = confirmText ?? designSystem.messages.confirmAction;
 
     useEffect(() => () => {
       mountedRef.current = false;
     }, []);
 
     useEffect(() => {
-      if (!isOpen) setInternalPendingAction(null);
-    }, [isOpen]);
+      if (!open) setInternalPendingAction(null);
+    }, [open]);
 
     const runAction = useCallback(async (
       actionName: "confirm" | "secondary",
@@ -164,103 +120,98 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
       }
     }, [busy, onActionError]);
 
-    const requestCancel = useCallback((reason: ConfirmDialogCloseReason) => {
+    const requestClose = useCallback((reason: ConfirmDialogCloseReason) => {
       if (busy) return;
-      onCancel?.();
-      onClose(reason);
-    }, [busy, onCancel, onClose]);
+      onOpenChange(false, reason);
+    }, [busy, onOpenChange]);
 
     return (
-      <Modal
+      <Dialog
         closeOnEscape={!busy && closeOnEscape}
-        closeOnOverlayClick={!busy && closeOnOverlayClick}
-        contentPadding="lg"
-        dialogClassName={dialogClassName}
-        footer={(
-          <>
-            {showCancel && (
-              <Button disabled={busy} onClick={() => requestCancel("cancel-button")} variant="fill">
-                {resolvedCancelText}
-              </Button>
-            )}
-            {secondaryText !== undefined && secondaryText !== null && (
-              <Button
-                disabled={busy}
-                loading={pendingAction === "secondary"}
-                onClick={() => void runAction("secondary", onSecondary)}
-                variant="outline"
-              >
-                {secondaryText}
-              </Button>
-            )}
-            <Button
-              disabled={busy}
-              loading={pendingAction === "confirm"}
-              onClick={() => void runAction("confirm", onConfirm)}
-              ref={confirmButtonRef}
-              tone={confirmDanger || type === "error" ? "danger" : "neutral"}
-              variant={confirmDanger || type === "error" ? "primary" : "fill"}
-            >
-              {resolvedConfirmText}
-            </Button>
-          </>
-        )}
+        closeOnPointerOutside={!busy && closeOnPointerOutside}
+        data-testid={testId}
         initialFocusRef={confirmButtonRef}
-        isOpen={isOpen}
-        onClose={requestCancel}
-        overlayClassName={overlayClassName}
-        portalContainer={portalContainer}
-        portalled={portalled}
-        preventScroll={preventScroll}
+        onOpenChange={(_nextOpen, reason) => requestClose(reason)}
+        open={open}
         ref={ref}
         role="alertdialog"
-        showCloseButton={showCloseButton}
-        showScrollbar={false}
-        size="small"
-        testId={testId}
-        title={title}
+        size="sm"
       >
-        {(hasMessage || hasPreview) && (
-          <div className={styles.content} data-bf-component="confirm-dialog" data-bf-part="content">
-            {hasMessage && (
-              <div
-                className={styles.messageRow}
-                data-bf-component="confirm-dialog"
-                data-bf-part="messageRow"
-              >
-                {resolvedIcon !== null && (
-                  <span
-                    aria-hidden="true"
-                    className={styles.icon}
-                    data-bf-component="confirm-dialog"
-                    data-bf-part="icon"
-                    data-bf-status={type === "error" ? "danger" : type}
-                  >
-                    {resolvedIcon}
-                  </span>
-                )}
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeading>
+          {showCloseButton ? <DialogClose disabled={busy} /> : null}
+        </DialogHeader>
+        {hasMessage || hasPreview ? (
+          <DialogBody>
+            <div className={styles.content} data-bf-component="confirm-dialog" data-bf-part="content">
+              {hasMessage ? (
                 <div
-                  className={styles.message}
+                  className={styles.messageRow}
                   data-bf-component="confirm-dialog"
-                  data-bf-part="message"
+                  data-bf-part="messageRow"
                 >
-                  {message}
+                  {resolvedIcon !== null ? (
+                    <span
+                      aria-hidden="true"
+                      className={styles.icon}
+                      data-bf-component="confirm-dialog"
+                      data-bf-part="icon"
+                      data-bf-status={type === "error" ? "danger" : type}
+                    >
+                      {resolvedIcon}
+                    </span>
+                  ) : null}
+                  <div
+                    className={styles.message}
+                    data-bf-component="confirm-dialog"
+                    data-bf-part="message"
+                  >
+                    {message}
+                  </div>
                 </div>
-              </div>
-            )}
-            {hasPreview && (
-              <div
-                className={styles.preview}
-                data-bf-component="confirm-dialog"
-                data-bf-part="preview"
-                style={{ maxBlockSize: previewMaxHeight }}
-              >
-                {typeof preview === "string" ? <pre>{preview}</pre> : preview}
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+              ) : null}
+              {hasPreview ? (
+                <div
+                  className={styles.preview}
+                  data-bf-component="confirm-dialog"
+                  data-bf-part="preview"
+                >
+                  {typeof preview === "string" ? <pre>{preview}</pre> : preview}
+                </div>
+              ) : null}
+            </div>
+          </DialogBody>
+        ) : null}
+        <DialogFooter>
+          {showCancel ? (
+            <Button disabled={busy} onClick={() => requestClose("cancel-button")} variant="fill">
+              {resolvedCancelText}
+            </Button>
+          ) : null}
+          {secondaryText !== undefined && secondaryText !== null ? (
+            <Button
+              disabled={busy}
+              loading={pendingAction === "secondary"}
+              onClick={() => void runAction("secondary", onSecondary)}
+              variant="outline"
+            >
+              {secondaryText}
+            </Button>
+          ) : null}
+          <Button
+            disabled={busy}
+            loading={pendingAction === "confirm"}
+            onClick={() => void runAction("confirm", onConfirm)}
+            ref={confirmButtonRef}
+            tone={confirmDanger || type === "error" ? "danger" : "neutral"}
+            variant={confirmDanger || type === "error" ? "primary" : "fill"}
+          >
+            {resolvedConfirmText}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     );
   },
 );

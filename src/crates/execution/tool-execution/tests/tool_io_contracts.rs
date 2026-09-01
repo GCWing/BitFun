@@ -1,32 +1,34 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tool_runtime::fs::read_file::{build_remote_read_command, parse_remote_read_output};
 use tool_runtime::fs::{
-    build_remote_delete_command, build_remote_list_commands, delete_local_path, edit_local_file,
-    inspect_local_delete_target, parse_remote_list_entries, write_local_file,
-    DeleteLocalPathRequest, EditLocalFileRequest, LocalDeleteTarget, WriteLocalFileRequest,
-    WriteLocalFileStatus,
+    build_remote_delete_command, delete_local_path, edit_local_file, inspect_local_delete_target,
+    write_local_file, DeleteLocalPathRequest, EditLocalFileRequest, LocalDeleteTarget,
+    WriteLocalFileRequest, WriteLocalFileStatus,
 };
 use tool_runtime::search::glob_search::{
-    build_remote_find_command, build_remote_rg_command, collect_remote_glob_matches,
-    collect_remote_glob_result, execute_local_glob, LocalGlobRequest,
+    build_remote_rg_command, collect_remote_glob_matches, collect_remote_glob_result,
+    execute_local_glob, LocalGlobRequest,
 };
-use tool_runtime::search::grep_search::{
-    apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches,
-    relativize_result_text, render_remote_grep_result_text, OutputMode, RemoteGrepCommandRequest,
-};
+use tool_runtime::search::grep_search::{apply_offset_and_limit, relativize_result_text};
 use tool_runtime::shell::noninteractive_terminal_env;
 use tool_runtime::util::string::shell_single_quote;
 
 fn make_temp_dir(name: &str) -> PathBuf {
+    static NEXT_TEMP_DIR_ID: AtomicU64 = AtomicU64::new(0);
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time went backwards")
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("bitfun-tool-io-{name}-{unique}"));
-    fs::create_dir_all(&dir).expect("temp dir should be created");
+    // Clock resolution alone cannot distinguish parallel fixtures on every host.
+    let sequence = NEXT_TEMP_DIR_ID.fetch_add(1, Ordering::Relaxed);
+    let process_id = std::process::id();
+    let dir = std::env::temp_dir().join(format!(
+        "bitfun-tool-io-{name}-{process_id}-{unique}-{sequence}"
+    ));
+    fs::create_dir(&dir).expect("isolated temp dir should be created");
     dir
 }
 
@@ -163,7 +165,10 @@ fn execute_local_glob_keeps_shallowest_matches() {
         .map(|path| normalized(path))
         .collect::<Vec<_>>();
     assert_eq!(matches.len(), 2);
-    assert_eq!(normalized(&result.walk_root), normalized(&root));
+    assert_eq!(
+        normalized(&result.walk_root),
+        normalized(&dunce::canonicalize(&root).unwrap())
+    );
     assert_eq!(result.total_matches, Some(3));
     assert!(result.truncated);
     assert!(matches.iter().any(|path| path == "src/lib.rs"));
@@ -192,7 +197,10 @@ fn execute_local_glob_returns_matches_relative_to_derived_walk_root() {
         .iter()
         .map(|path| normalized(path))
         .collect::<Vec<_>>();
-    assert_eq!(normalized(&result.walk_root), normalized(&root.join("src")));
+    assert_eq!(
+        normalized(&result.walk_root),
+        normalized(&dunce::canonicalize(root.join("src")).unwrap())
+    );
     assert!(matches.iter().any(|path| path == "lib.rs"));
     assert!(matches.iter().any(|path| path == "deep/mod.rs"));
     assert!(matches.iter().all(|path| !path.starts_with("src/")));
@@ -302,7 +310,9 @@ fn remote_glob_result_ignores_walk_root_self_match() {
 fn remote_glob_commands_preprocess_static_pattern_prefix() {
     let rg_command = build_remote_rg_command("/home/user/repo", "src/*.rs");
     assert!(
-        rg_command.starts_with("cd '/home/user/repo/src' && rg --files --glob '*.rs'"),
+        rg_command.starts_with(
+            "(cd '/home/user/repo/src' || exit 2; rg --no-config --files --null --glob '*.rs'"
+        ),
         "{rg_command}"
     );
     assert!(!rg_command.contains("--no-ignore"));
@@ -313,13 +323,6 @@ fn remote_glob_commands_preprocess_static_pattern_prefix() {
     assert!(bitfun_rg_command.contains("--no-ignore"));
     assert!(bitfun_rg_command.contains("--hidden"));
     assert!(!bitfun_rg_command.contains("--sort"));
-
-    let find_command = build_remote_find_command("/home/user/repo", "src/*.rs", 100);
-    assert!(
-        find_command.starts_with("find '/home/user/repo/src' -maxdepth 10 -type f -name '*.rs'"),
-        "{find_command}"
-    );
-    assert!(find_command.ends_with("head -n 101"));
 }
 
 #[test]
@@ -344,58 +347,6 @@ fn noninteractive_terminal_env_preserves_agent_session_contract() {
 }
 
 #[test]
-fn remote_read_command_and_parser_preserve_existing_window_markers() {
-    let command =
-        build_remote_read_command("C:/repo/a'b.txt", 2, 3, 120, 1_000).expect("command builds");
-
-    assert!(command.starts_with(
-        "if [ ! -f 'C:/repo/a'\\''b.txt' ]; then exit 3; fi; awk -v start=2 -v end=4 -v max=120 -v budget=1000"
-    ));
-    assert!(command.contains("__BITFUN_TOTAL_LINES__="));
-    assert!(command.contains("__BITFUN_HIT_TOTAL_CHAR_LIMIT__="));
-    assert!(command.ends_with("'C:/repo/a'\\''b.txt'"));
-
-    let result = parse_remote_read_output(
-        "     2\talpha\n",
-        "__BITFUN_TOTAL_LINES__=5\n__BITFUN_HIT_TOTAL_CHAR_LIMIT__=1\n",
-        0,
-        "C:/repo/a'b.txt",
-        2,
-    )
-    .expect("remote output parses");
-
-    assert_eq!(result.start_line, 2);
-    assert_eq!(result.end_line, 2);
-    assert_eq!(result.total_lines, 5);
-    assert_eq!(result.content, "     2\talpha");
-    assert!(result.hit_total_char_limit);
-}
-
-#[test]
-fn remote_ls_command_plan_and_stdout_parser_preserve_existing_shape() {
-    let plan = build_remote_list_commands("/repo/a'b", 10);
-
-    assert_eq!(
-        plan.scan_command,
-        "find '/repo/a'\\''b' -maxdepth 1 -not -name '.*' -not -path '/repo/a'\\''b' | head -n 11 | sort"
-    );
-    assert_eq!(
-        plan.listing_command,
-        "ls -la --time-style=long-iso '/repo/a'\\''b' 2>/dev/null || ls -la '/repo/a'\\''b'"
-    );
-
-    let entries = parse_remote_list_entries("/repo/a'b/file.txt\n/repo/a'b/dir/\n\n");
-
-    assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0].name, "file.txt");
-    assert_eq!(entries[0].path, "/repo/a'b/file.txt");
-    assert!(!entries[0].is_dir);
-    assert_eq!(entries[1].name, "dir");
-    assert_eq!(entries[1].path, "/repo/a'b/dir/");
-    assert!(entries[1].is_dir);
-}
-
-#[test]
 fn remote_delete_command_preserves_existing_recursive_flag_and_escaping() {
     assert_eq!(
         build_remote_delete_command("/repo/a'b.txt", false),
@@ -407,42 +358,25 @@ fn remote_delete_command_preserves_existing_recursive_flag_and_escaping() {
     );
 }
 
+#[cfg(unix)]
 #[test]
-fn remote_grep_command_preserves_rg_fallback_filters_and_windowing() {
-    let command = build_remote_grep_command(&RemoteGrepCommandRequest {
-        pattern: "panic('x')".to_string(),
-        path: "/repo/src app".to_string(),
-        case_insensitive: true,
-        output_mode: OutputMode::Content,
-        show_line_numbers: true,
-        context: Some(2),
-        before_context: Some(1),
-        after_context: Some(1),
-        glob_patterns: vec!["*.rs".to_string(), "**/*.ts".to_string()],
-        file_type: Some("rust".to_string()),
-        head_limit: Some(7),
-        offset: 3,
-    });
-
-    assert_eq!(
-        command,
-        "if command -v rg >/dev/null 2>&1; then rg --no-heading --hidden --max-columns 500 -i --line-number -C 2 --glob '*.rs' --glob '**/*.ts' --type 'rust' -e 'panic('\\''x'\\'')' '/repo/src app' 2>/dev/null | tail -n +4 | head -n 7; else grep -rni -e 'panic('\\''x'\\'')' '/repo/src app' 2>/dev/null | tail -n +4 | head -n 7; fi"
+fn remote_glob_missing_scope_is_an_error_and_rg_no_match_is_success() {
+    let root = make_temp_dir("remote-glob-scope");
+    let missing = root.join("missing").to_string_lossy().into_owned();
+    let output = std::process::Command::new("sh")
+        .args(["-c", &build_remote_rg_command(&missing, "*.rs")])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        tool_runtime::search::glob_search::validate_remote_glob_exit(
+            2,
+            &String::from_utf8_lossy(&output.stderr)
+        )
+        .is_err()
     );
-}
-
-#[test]
-fn remote_grep_result_rendering_preserves_counts_and_display_paths() {
-    let stdout = "/repo/src/main.rs:12:panic!(\"x\")\n/repo/src/lib.rs:3:pub fn lib() {}\n";
-
-    assert_eq!(count_remote_grep_matches(stdout), 2);
-    assert_eq!(
-        render_remote_grep_result_text(stdout, "panic", Some("/repo")),
-        "src/main.rs:12:panic!(\"x\")\nsrc/lib.rs:3:pub fn lib() {}"
-    );
-    assert_eq!(
-        render_remote_grep_result_text("", "panic", Some("/repo")),
-        "No matches found for pattern 'panic'"
-    );
+    assert!(tool_runtime::search::glob_search::validate_remote_glob_exit(1, "").is_ok());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

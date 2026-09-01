@@ -6,8 +6,8 @@
  * 2. Consistent size, color, and interactions.
  * 3. Components inherit global styles without customization.
  * 4. Theme CSS variables adapt to different themes.
- *    - --bf-appearance-token-scrollbar-thumb: thumb color when container is hovered
- *    - --bf-appearance-token-scrollbar-thumb-hover: thumb color on thumb hover
+ *    - --bf-color-scrollbar-thumb: thumb color when container is hovered
+ *    - --bf-color-scrollbar-thumb-hover: thumb color on thumb hover
  */
 
 /* ==================== Scrollbar base size ==================== */
@@ -33,17 +33,17 @@
 
 /* ==================== Show thumb on hover ==================== */
 *:hover::-webkit-scrollbar-thumb {
-  background: var(--bf-appearance-token-scrollbar-thumb);
+  background: var(--bf-color-scrollbar-thumb);
 }
 
 /* Stronger thumb color on thumb hover */
 *:hover::-webkit-scrollbar-thumb:hover {
-  background: var(--bf-appearance-token-scrollbar-thumb-hover);
+  background: var(--bf-color-scrollbar-thumb-hover);
 }
 
 /* ==================== Show while scrolling ==================== */
 *.is-scrolling::-webkit-scrollbar-thumb {
-  background: var(--bf-appearance-token-scrollbar-thumb);
+  background: var(--bf-color-scrollbar-thumb);
 }
 
 /* ==================== Firefox scrollbar ==================== */
@@ -53,5 +53,5 @@
 }
 
 *:hover {
-  scrollbar-color: var(--bf-appearance-token-scrollbar-thumb) transparent;
+  scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
 }

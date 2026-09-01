@@ -23,7 +23,7 @@ describe('Nursery gallery presentation', () => {
     const stylesheet = readSibling('./NurseryView.scss');
 
     expect(stylesheet).toMatch(
-      /\.nursery-gallery \{\s+background: var\(--bf-appearance-token-color-static-white\);/,
+      /\.nursery-gallery \{\s+background: var\(--bf-color-content-on-dark\);/,
     );
     expect(stylesheet).toContain('.nursery-gallery__assistant-showcase--with-companion');
     expect(stylesheet).toContain('grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));');
@@ -51,7 +51,7 @@ describe('Nursery gallery presentation', () => {
     expect(actionSection).toContain('width: 168px;');
     expect(actionSection).toContain('height: 48px;');
     expect(actionSection).toContain('border: 0;');
-    expect(actionSection).toContain('border-radius: $size-radius-full;');
+    expect(actionSection).toContain('border-radius: var(--bf-radius-pill);');
     expect(actionSection).toContain('width: 44px;');
     expect(actionSection).toContain('background-image: radial-gradient(');
     expect(actionSection).toContain('mask-image: radial-gradient(');
@@ -66,10 +66,10 @@ describe('Nursery gallery presentation', () => {
 
     expect(cardSection).toContain('&__main {');
     expect(cardSection).toContain('min-height: 168px;');
-    expect(cardSection).toContain('padding: $size-gap-3 14px;');
+    expect(cardSection).toContain('padding: var(--bf-space-3) 14px;');
     expect(cardSection).toContain('min-height: 52px;');
     expect(cardSection).toContain('&__session-actions {');
-    expect(cardSection).toContain('border-top: 1px solid var(--bf-appearance-token-color-overlay-black-12);');
+    expect(cardSection).toContain('border-top: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);');
     expect(cardSection).not.toContain('min-height: clamp(310px, 23.8vw, 366px);');
     expect(cardSection).not.toContain('height: 100%;');
     expect(cardSection).not.toContain('--assistant-card-action-bg');

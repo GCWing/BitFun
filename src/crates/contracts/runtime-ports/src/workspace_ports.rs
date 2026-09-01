@@ -1,6 +1,7 @@
 use super::*;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,6 +133,7 @@ pub struct WorkspaceDirEntry {
     pub path: String,
     pub is_dir: bool,
     pub is_symlink: bool,
+    pub modified: Option<SystemTime>,
 }
 
 /// File type for one exact path without following its final symbolic link.
@@ -143,9 +145,43 @@ pub enum WorkspacePathKind {
     Other,
 }
 
+/// Metadata for workspace content, independent of the controller's OS.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceMetadata {
+    pub kind: WorkspacePathKind,
+    pub size: Option<u64>,
+    pub modified: Option<SystemTime>,
+    /// POSIX permission bits when supplied by the provider.
+    pub permissions: Option<u32>,
+}
+
+/// An opened byte stream. Providers without random access return
+/// `io::ErrorKind::Unsupported` from seek, while sequential reads remain usable.
+pub trait WorkspaceReadHandle: tokio::io::AsyncRead + tokio::io::AsyncSeek + Unpin + Send {}
+
+impl<T> WorkspaceReadHandle for T where T: tokio::io::AsyncRead + tokio::io::AsyncSeek + Unpin + Send
+{}
+
+pub type WorkspaceReader = Box<dyn WorkspaceReadHandle>;
+
 /// Unified file system operations that work for both local and remote workspaces.
 #[async_trait::async_trait]
 pub trait WorkspaceFileSystem: Send + Sync {
+    /// Open a stream without downloading the entire file before returning.
+    async fn open_read(&self, _path: &str) -> anyhow::Result<WorkspaceReader> {
+        anyhow::bail!("streaming reads are not supported by this workspace filesystem")
+    }
+
+    /// Missing paths return None. Permission, transport and malformed-metadata
+    /// errors must remain errors. `follow_symlinks` applies to the final path.
+    async fn metadata(
+        &self,
+        _path: &str,
+        _follow_symlinks: bool,
+    ) -> anyhow::Result<Option<WorkspaceMetadata>> {
+        anyhow::bail!("metadata is not supported by this workspace filesystem")
+    }
+
     /// Join path components using the syntax understood by this provider.
     ///
     /// Local providers inherit the host path syntax. Remote providers must
@@ -183,6 +219,26 @@ pub trait WorkspaceFileSystem: Send + Sync {
         Ok((content.len() <= max_bytes).then_some(content))
     }
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()>;
+    async fn remove_file(&self, _path: &str) -> anyhow::Result<()> {
+        anyhow::bail!("file removal is not supported by this workspace filesystem")
+    }
+    async fn remove_dir(&self, _path: &str, _recursive: bool) -> anyhow::Result<()> {
+        anyhow::bail!("directory removal is not supported by this workspace filesystem")
+    }
+    async fn create_dir_all(&self, _path: &str) -> anyhow::Result<()> {
+        anyhow::bail!("directory creation is not supported by this workspace filesystem")
+    }
+    async fn set_permissions(&self, _path: &str, _permissions: u32) -> anyhow::Result<()> {
+        anyhow::bail!("POSIX permissions are not supported by this workspace filesystem")
+    }
+    async fn set_modified(&self, _path: &str, _modified: SystemTime) -> anyhow::Result<()> {
+        anyhow::bail!("modification times are not supported by this workspace filesystem")
+    }
+    /// Move a path using provider-native rename semantics. This is not a
+    /// compare-and-swap or a guarantee of cross-filesystem atomicity.
+    async fn rename(&self, _from: &str, _to: &str) -> anyhow::Result<()> {
+        anyhow::bail!("rename is not supported by this workspace filesystem")
+    }
     async fn exists(&self, path: &str) -> anyhow::Result<bool>;
     async fn is_file(&self, path: &str) -> anyhow::Result<bool>;
     async fn is_dir(&self, path: &str) -> anyhow::Result<bool>;
@@ -356,6 +412,7 @@ pub(crate) mod tests {
                 path: "/workspace/file.txt".to_string(),
                 is_dir: false,
                 is_symlink: false,
+                modified: None,
             }])
         }
     }

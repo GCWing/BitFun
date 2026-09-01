@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { DotMatrixLoader } from '@/component-library';
+import { Spinner } from '@bitfun/ui';
 import { useRuntimeStatusStore } from '../../store/runtimeStatusStore';
 import './RuntimeStatusSlot.scss';
 
@@ -49,7 +49,7 @@ export const RuntimeStatusSlot: React.FC<RuntimeStatusSlotProps> = ({
         data-bf-component="runtime-status-slot"
         data-bf-part="content"
       >
-        <DotMatrixLoader size="small" />
+        <Spinner size="sm" />
         <span
           className="runtime-status-slot__hint"
           data-bf-component="runtime-status-slot"

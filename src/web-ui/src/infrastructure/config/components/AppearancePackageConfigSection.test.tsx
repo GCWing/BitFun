@@ -50,7 +50,7 @@ describe('AppearancePackageConfigSection', () => {
     getPreviewAssetMock.mockReset();
   });
 
-  it('renders the selected package card and component-library management actions', () => {
+  it('renders the selected package card and appearance management actions', () => {
     const html = renderToStaticMarkup(<AppearancePackageConfigSection />);
     expect(html).toContain('Sample Appearance');
     expect(html).toContain('data-testid="appearance-package-card"');

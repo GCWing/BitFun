@@ -4,7 +4,6 @@
   .center,
   .trailing,
   .group,
-  .badge,
   .separator {
     box-sizing: border-box;
   }
@@ -49,7 +48,6 @@
   .center,
   .trailing,
   .group,
-  .badge,
   .separator {
     display: flex;
     align-items: center;
@@ -112,21 +110,6 @@
     gap: var(--bf-layout-toolbar-group-gap-md);
   }
 
-  .badge {
-    justify-content: center;
-    inline-size: var(--bf-layout-toolbar-badge-size);
-    block-size: var(--bf-layout-toolbar-badge-size);
-    overflow: hidden;
-    border-radius: var(--bf-radius-pill);
-    color: var(--bf-color-content-secondary);
-    background: var(--bf-color-action-neutral-surface);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-none);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
   .separator {
     inline-size: var(--bf-border-width-default);
@@ -135,14 +118,16 @@
     background: var(--bf-color-border-subtle);
   }
 
+  .badge {
+    min-inline-size: var(--bf-layout-toolbar-badge-size);
+    min-block-size: var(--bf-layout-toolbar-badge-size);
+  }
+
   @media (forced-colors: active) {
     .root[data-bordered="true"] {
       border-color: ButtonText;
     }
 
-    .badge {
-      border: var(--bf-border-width-default) solid ButtonText;
-    }
 
     .separator {
       background: CanvasText;

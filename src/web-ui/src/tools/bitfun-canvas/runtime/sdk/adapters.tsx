@@ -224,6 +224,18 @@ export function Input({
   );
 }
 
-export function Empty(props: CanvasEmptyProps) {
-  return <BitFunEmpty {...props} description={props.description ?? 'No data'} />;
+function emptyMediaSize(size: CanvasEmptyProps['imageSize']): React.ComponentProps<typeof BitFunEmpty>['imageSize'] {
+  if (size === 'small' || (typeof size === 'number' && size <= 32)) return 'sm';
+  if (size === 'large' || (typeof size === 'number' && size >= 48)) return 'lg';
+  return size === undefined ? undefined : 'md';
+}
+
+export function Empty({ imageSize, ...props }: CanvasEmptyProps) {
+  return (
+    <BitFunEmpty
+      {...props}
+      description={props.description ?? 'No data'}
+      imageSize={emptyMediaSize(imageSize)}
+    />
+  );
 }

@@ -3,8 +3,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--bf-appearance-token-color-bg-primary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-canvas);
+  color: var(--bf-color-content-primary);
 
   &--loading,
   &--error,
@@ -24,7 +24,7 @@
 
     p {
       margin: 0;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
 
   }
@@ -32,8 +32,8 @@
   &__spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--bf-appearance-token-color-overlay-white-12);
-    border-top-color: var(--bf-appearance-token-color-accent-500);
+    border: 3px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+    border-top-color: var(--bf-color-accent-default);
     border-radius: 50%;
     animation: bitfun-git-graph-spin 0.8s linear infinite;
   }
@@ -43,8 +43,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-color-bg-secondary);
+    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-panel);
     flex-shrink: 0;
   }
 
@@ -65,8 +65,8 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    background: var(--bf-appearance-token-color-accent-500);
-    color: var(--bf-appearance-token-color-static-white);
+    background: var(--bf-color-accent-default);
+    color: var(--bf-color-content-on-dark);
     border-radius: 4px;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
@@ -90,13 +90,13 @@
 
   &__search-count {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     padding: 0 8px;
     font-family: var(--bf-font-family-mono);
 
     &--no-results {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -110,7 +110,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
       transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -118,8 +118,8 @@
       color 140ms ease;
 
     &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &:active:not(:disabled) {
@@ -150,54 +150,54 @@
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     
     &:hover {
-      background: var(--bf-appearance-token-color-overlay-white-04);
+      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
     }
 
     &--selected {
-      background: var(--bf-appearance-token-color-accent-100);
-      border-left: 2px solid var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-action-secondary-background);
+      border-left: 2px solid var(--bf-color-accent-default);
       z-index: 2;
 
       &:hover {
-        background: var(--bf-appearance-token-color-accent-200);
+        background: var(--bf-color-action-secondary-hover);
       }
     }
 
     &--search-match {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 6%, transparent);
-      border-left: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 6%, transparent);
+      border-left: 2px solid color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
 
       &:hover {
-        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, transparent);
+        background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, transparent);
       }
     }
 
     &--current-search-match {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
-      border-left: 3px solid var(--bf-appearance-token-color-warning);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
+      border-left: 3px solid var(--bf-color-status-warning-content);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent);
       z-index: 3;
 
       &:hover {
-        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent);
+        background: color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
       }
 
       &.git-graph-view__hit-area--selected {
         background: linear-gradient(
           90deg,
-          color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent),
-          var(--bf-appearance-token-color-accent-200)
+          color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
+          var(--bf-color-action-secondary-hover)
         );
-        border-left: 3px solid var(--bf-appearance-token-color-warning);
+        border-left: 3px solid var(--bf-color-status-warning-content);
         box-shadow:
-          inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent),
-          inset 3px 0 0 0 var(--bf-appearance-token-color-accent-500);
+          inset 0 0 0 1px color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent),
+          inset 3px 0 0 0 var(--bf-color-accent-default);
 
         &:hover {
           background: linear-gradient(
             90deg,
-            color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent),
-            var(--bf-appearance-token-color-accent-200)
+            color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
+            var(--bf-color-action-secondary-hover)
           );
         }
       }
@@ -210,19 +210,19 @@
     gap: 12px;
     padding: 0 16px;
     cursor: pointer;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    border-bottom: 1px solid var(--bf-color-border-default);
     transition: background 0.15s, box-shadow 0.15s;
-    background: var(--bf-appearance-token-color-bg-primary);
+    background: var(--bf-color-surface-canvas);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
-      box-shadow: 0 1px 3px var(--bf-appearance-token-color-overlay-black-12);
+      background: var(--bf-color-action-neutral-surface-hover);
+      box-shadow: 0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
       z-index: 1;
     }
 
     &--selected {
-      background: var(--bf-appearance-token-color-accent-100) !important;
-      box-shadow: 0 2px 4px var(--bf-appearance-token-color-overlay-black-15);
+      background: var(--bf-color-action-secondary-background) !important;
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--bf-color-content-on-light) 15%, transparent);
       z-index: 2;
     }
 
@@ -255,22 +255,22 @@
     cursor: help;
 
     &--branch {
-      background: var(--bf-appearance-token-color-accent-600);
-      color: var(--bf-appearance-token-color-static-white);
+      background: var(--bf-color-accent-hover);
+      color: var(--bf-color-content-on-dark);
     }
 
     &--remote {
-      background: var(--bf-appearance-token-color-purple-600);
-      color: var(--bf-appearance-token-color-static-white);
+      background: var(--bf-color-accent-secondary-hover);
+      color: var(--bf-color-content-on-dark);
     }
 
     &--tag {
-      background: var(--bf-appearance-token-git-color-changes);
-      color: var(--bf-appearance-token-color-static-white);
+      background: var(--bf-domain-git-changes);
+      color: var(--bf-color-content-on-dark);
     }
 
     &--current {
-      box-shadow: 0 0 0 2px var(--bf-appearance-token-color-bg-primary),
+      box-shadow: 0 0 0 2px var(--bf-color-surface-canvas),
                   0 0 0 4px currentColor;
     }
   }
@@ -293,7 +293,7 @@
     align-items: center;
     gap: 12px;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     flex-shrink: 0;
   }
 
@@ -311,7 +311,7 @@
   &__commit-hash {
     font-family: var(--bf-font-family-mono);
     padding: 2px 6px;
-    background: var(--bf-appearance-token-color-bg-tertiary);
+    background: var(--bf-color-surface-tertiary);
     border-radius: 4px;
     white-space: nowrap;
   }
@@ -331,15 +331,15 @@
       padding: 4px;
       background: transparent;
       border: none;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       cursor: pointer;
       display: flex;
       align-items: center;
       border-radius: 4px;
 
       &:hover {
-        background: var(--bf-appearance-token-element-bg-hover);
-        color: var(--bf-appearance-token-color-text-primary);
+        background: var(--bf-color-action-neutral-surface-hover);
+        color: var(--bf-color-content-primary);
       }
     }
   }

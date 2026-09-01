@@ -1,17 +1,14 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .loading-notification {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   min-width: 260px;
   max-width: 320px;
-  padding: $size-gap-2 $size-gap-3;
+  padding: var(--bf-space-2) var(--bf-space-3);
   display: flex;
   align-items: flex-start;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   animation: bitfun-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   
   
@@ -39,7 +36,7 @@
 
   
   &__spinner {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     animation: bitfun-loading-notification-spin 1s linear infinite;
   }
 
@@ -55,13 +52,13 @@
     font-weight: var(--bf-font-weight-semibold);
 
     &--success {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -74,13 +71,13 @@
   &__title {
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin-bottom: 2px;
   }
 
   &__message {
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-ui);
   }
 

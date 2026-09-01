@@ -1,12 +1,5 @@
-import {
-  ArrowUpRight,
-  BookOpen,
-  Boxes,
-  FileCode2,
-  FileText,
-  Palette,
-  ShieldCheck,
-} from "lucide-react";
+import { Icon as CatalogIcon, type IconName } from "@bitfun/ui";
+import { BookOpen, Boxes, FileCode2, FileText, ShieldCheck } from "lucide-react";
 import { componentRegistry } from "@bitfun/ui/registry";
 import { useI18n, type MessageKey } from "../i18n";
 import { editableTokenCatalog } from "../token-editor/catalog";
@@ -16,7 +9,7 @@ const repositoryBase = "https://github.com/GCWing/BitFun/blob/main/design-system
 const resources: readonly {
   description: MessageKey;
   href: string;
-  icon: typeof BookOpen;
+  icon: typeof BookOpen | IconName;
   title: MessageKey;
 }[] = [
   {
@@ -40,7 +33,7 @@ const resources: readonly {
   {
     description: "resources.themeDescription",
     href: `${repositoryBase}/packages/theme-bitfun/README.md`,
-    icon: Palette,
+    icon: "palette",
     title: "resources.themeTitle",
   },
   {
@@ -79,12 +72,12 @@ export function ResourcesPage() {
           const Icon = resource.icon;
           return (
             <a href={resource.href} key={resource.title} rel="noreferrer" target="_blank">
-              <span className="resource-card-icon"><Icon aria-hidden="true" size={19} /></span>
+              <span className="resource-card-icon">{typeof Icon === "string" ? <CatalogIcon name={Icon} size="lg" style={{ width: 19, height: 19 }} /> : <Icon aria-hidden="true" size={19} />}</span>
               <span>
                 <strong>{t(resource.title)}</strong>
                 <small>{t(resource.description)}</small>
               </span>
-              <ArrowUpRight aria-hidden="true" size={16} />
+              <CatalogIcon name="arrow-up-right" size="md" aria-hidden="true" />
             </a>
           );
         })}

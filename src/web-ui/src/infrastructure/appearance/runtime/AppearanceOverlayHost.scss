@@ -6,8 +6,8 @@
  * moves the contest: the overlay's own z-index then competes, in the root
  * stacking context, with whatever container it escaped from. A container that
  * legitimately floats above app content — the floating mini chat panel at
- * `$z-overlay + 1`, a maximized canvas — therefore paints over popovers that
- * use the ordinary `$z-dropdown` level, which reads as a dead control: the menu
+ * `var(--bf-layer-overlay) + 1`, a maximized canvas — therefore paints over popovers that
+ * use the ordinary `var(--bf-layer-dropdown)` level, which reads as a dead control: the menu
  * opens behind the panel, and the panel's own backdrop takes the clicks.
  *
  * So the host itself takes one level, above every container that hosts app UI
@@ -21,13 +21,10 @@
  * no transform, filter, backdrop-filter, will-change or contain — or every
  * viewport-anchored overlay would shift.
  */
-
-@use '../../../component-library/styles/tokens' as *;
-
 #bitfun-appearance-overlay-host {
   position: fixed;
   inset: 0;
-  z-index: $z-overlay-host;
+  z-index: var(--bf-layer-overlay-host);
   // The layer spans the viewport; only the overlays in it are hit-testable.
   pointer-events: none;
 }

@@ -71,7 +71,7 @@ test("Card styles use public surface, spacing, radius, and elevation tokens", as
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-color-surface-raised/);
-  assert.match(styles, /--bf-color-surface-subtle/);
+  assert.match(styles, /--bf-color-surface-tertiary/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-shadow-overlay/);
   assert.match(styles, /--bf-layout-card-padding-sm/);

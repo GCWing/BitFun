@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button, Icon, IconButton, ScrollArea, type ComboboxOption } from '@bitfun/ui';
-import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge, Brain } from 'lucide-react';
+import { Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption } from '@bitfun/ui';
+import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import type { AIModelConfig } from '@/infrastructure/config/types';
@@ -79,11 +78,6 @@ interface GenerationProgress {
   current: number;
   total: number;
   isRetrying: boolean;
-}
-
-interface InsightsModelOption extends ComboboxOption {
-  modelName: string;
-  meta: string;
 }
 
 const GenerationPanel: React.FC<{ progress: GenerationProgress }> = ({ progress }) => {
@@ -192,45 +186,18 @@ const InsightsScene: React.FC = () => {
     };
   }, [setSelectedModel]);
 
-  const modelOptions = useMemo<InsightsModelOption[]>(() => [
+  const modelOptions = useMemo<ComboboxOption[]>(() => [
     {
       value: 'primary',
       label: t('insights.modelPrimary'),
       description: t('insights.modelPrimaryDescription'),
-      modelName: t('insights.modelPrimary'),
-      meta: t('insights.modelPrimaryDescription'),
     },
     ...availableModels.map((model) => ({
       value: model.id || '',
       label: model.model_name,
       description: `${model.name} · ${getProviderDisplayName(model)}`,
-      modelName: model.model_name,
-      meta: `${model.name} · ${getProviderDisplayName(model)}`,
     })),
   ], [availableModels, t]);
-
-  const renderModelValue = useCallback((option?: ComboboxOption | ComboboxOption[]) => {
-    const selected = (Array.isArray(option) ? option[0] : option) as InsightsModelOption | undefined;
-    if (!selected) return null;
-    const fullLabel = selected.meta ? `${selected.modelName} · ${selected.meta}` : selected.modelName;
-    return (
-      <span className="insights-model-select__value" title={fullLabel}>
-        <span className="insights-model-select__value-name">{selected.modelName}</span>
-        {selected.meta && <span className="insights-model-select__value-meta">{selected.meta}</span>}
-      </span>
-    );
-  }, []);
-
-  const renderModelOption = useCallback((option: ComboboxOption) => {
-    const model = option as InsightsModelOption;
-    const fullLabel = model.meta ? `${model.modelName} · ${model.meta}` : model.modelName;
-    return (
-      <div className="insights-model-select__option" title={fullLabel}>
-        <div className="insights-model-select__option-name">{model.modelName}</div>
-        {model.meta && <div className="insights-model-select__option-meta">{model.meta}</div>}
-      </div>
-    );
-  }, []);
 
   if (view === 'report' && currentReport) {
     return <ReportView report={currentReport} onBack={backToList} />;
@@ -246,19 +213,14 @@ const InsightsScene: React.FC = () => {
         <div className="insights-scene__header-actions">
           <div className="insights-scene__model-control">
             <span className="insights-scene__control-label">{t('insights.modelLabel')}</span>
-            <LocalizedCombobox
+            <Combobox
               className="insights-scene__model-select"
-              dropdownClassName="insights-scene__model-select-dropdown"
-              matchTriggerWidth={false}
               value={selectedModel}
               options={modelOptions}
-              renderValue={renderModelValue}
-              renderOption={renderModelOption}
-              onValueChange={(value) => setSelectedModel(String(Array.isArray(value) ? value[0] : value))}
-              size="sm"
-              searchable={availableModels.length > 6}
+              onValueChange={(value) => setSelectedModel(String(value))}
+              size="lg"
               disabled={generating}
-              triggerTestId="insights-model-select"
+              data-testid="insights-model-select"
             />
           </div>
           <div className="insights-scene__day-filters">
@@ -439,7 +401,7 @@ const ReportMetaCard: React.FC<{
         <div className="insights-meta-card__generation-meta">
           {generationModels.length > 0 && (
             <span title={generationModels.join(', ')}>
-              <Brain size={10} /> {generationModels.join(' + ')}
+              <Icon name="thinking" size="lg" style={{ width: 10, height: 10 }} /> {generationModels.join(' + ')}
             </span>
           )}
           {hasGenerationCalls && (
@@ -1038,9 +1000,9 @@ const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) 
 
 // Bar chart palette (default + semantic roles)
 const CHART_COLORS = {
-  blue: 'var(--bf-appearance-token-color-accent-500)',      // default / primary series
+  blue: 'var(--bf-color-accent-default)',      // default / primary series
   green: APPEARANCE_DOMAIN_TOKENS.insights.positive,     // positive / success
-  purple: 'var(--bf-appearance-token-color-purple-500)',    // distribution / category
+  purple: 'var(--bf-color-accent-secondary)',    // distribution / category
   indigo: APPEARANCE_DOMAIN_TOKENS.insights.time,    // time-related
   orange: APPEARANCE_DOMAIN_TOKENS.insights.neutral,    // time-of-day / neutral
   red: APPEARANCE_DOMAIN_TOKENS.insights.issue,       // issues / errors

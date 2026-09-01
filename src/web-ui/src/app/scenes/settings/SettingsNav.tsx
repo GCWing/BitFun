@@ -8,7 +8,16 @@ import React, {
 } from 'react';
 import type { i18n as I18nApi } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { Icon, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from '@bitfun/ui';
+import {
+  Icon,
+  NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelHeader,
+  NavigationPanelItem,
+  NavigationPanelSection,
+  SearchField,
+} from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getInteractionMotion } from '@/shared/utils/motionPreference';
 import {
@@ -206,11 +215,11 @@ const SettingsNav: React.FC = () => {
   return (
     <NavigationPanel
       className="bitfun-settings-nav"
-      contentClassName="bitfun-settings-nav__content"
       data-testid="settings-nav"
       data-bf-component="settings-nav"
       data-bf-part="root"
-      header={(
+    >
+      <NavigationPanelHeader className="bitfun-settings-nav__panel-header">
         <>
           <div className="bitfun-settings-nav__header" data-bf-component="settings-nav" data-bf-part="header">
             <span className="bitfun-settings-nav__title">{t('shared:features.settings')}</span>
@@ -236,9 +245,10 @@ const SettingsNav: React.FC = () => {
             />
           </div>
         </>
-      )}
-    >
-      {isSearchMode ? (
+      </NavigationPanelHeader>
+      <NavigationPanelBody>
+        <NavigationPanelContent className="bitfun-settings-nav__content">
+          {isSearchMode ? (
         results.length ? (
           <div
             ref={resultsRef}
@@ -271,6 +281,7 @@ const SettingsNav: React.FC = () => {
                   className={[
                     'bitfun-settings-nav__search-result-item',
                     selected && 'is-highlighted',
+                    active && 'is-active',
                   ].filter(Boolean).join(' ')}
                   onClick={() => activate(row.destination, true)}
                   onMouseEnter={() => {
@@ -279,11 +290,13 @@ const SettingsNav: React.FC = () => {
                   }}
                   onFocus={() => preload(row.destination.pageId)}
                 >
-                  <span className="bitfun-settings-nav__search-result-line">
-                    {highlightFirstMatch(path, searchQuery)}
-                  </span>
-                  <span className="bitfun-settings-nav__search-result-desc">
-                    {highlightFirstMatch(row.description, searchQuery)}
+                  <span className="bitfun-settings-nav__search-result-copy">
+                    <span className="bitfun-settings-nav__search-result-line">
+                      {highlightFirstMatch(path, searchQuery)}
+                    </span>
+                    <span className="bitfun-settings-nav__search-result-desc">
+                      {highlightFirstMatch(row.description, searchQuery)}
+                    </span>
                   </span>
                 </NavigationPanelItem>
               );
@@ -330,7 +343,9 @@ const SettingsNav: React.FC = () => {
           ))}
           </div>
         </NavigationPanelSection>
-      ))}
+          ))}
+        </NavigationPanelContent>
+      </NavigationPanelBody>
     </NavigationPanel>
   );
 };

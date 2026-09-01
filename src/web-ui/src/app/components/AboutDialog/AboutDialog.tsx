@@ -4,17 +4,22 @@
  * persistent GitHub repository entry point.
  */
 
-import { Alert, Button, Icon, Modal, ScrollArea, Tooltip } from '@bitfun/ui';
+import {
+  Alert,
+  Button,
+  Icon,
+  ScrollArea,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import {
-  CalendarDays,
-  Code2,
-  RefreshCw,
-  ShieldCheck,
-  Sparkle,
-  Tag,
-} from 'lucide-react';
+import { CalendarDays, Code2, ShieldCheck, Sparkle, Tag } from 'lucide-react';
 import {
   formatBuildDate,
   formatDisplayedVersion,
@@ -187,16 +192,19 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
   return (
     <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        title={t('about.dialogTitle')}
-        showCloseButton={true}
-        size="xxlarge"
-        overlayClassName="bitfun-about-dialog-overlay"
-        contentClassName="bitfun-about-dialog__modal-content"
-        testId="about-dialog-modal"
+      <Dialog
+        open={isOpen}
+        onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+        size="2xl"
+        data-testid="about-dialog-modal"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('about.dialogTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody className="bitfun-about-dialog__modal-content" inset="none">
         <div
           className="bitfun-about-dialog__content"
           data-bf-component="about-dialog"
@@ -259,7 +267,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<RefreshCw size={14} aria-hidden="true" />}
+                          leadingIcon={<Icon name="refresh" size="sm" aria-hidden="true" />}
                           loading={manualCheckBusy}
                           disabled={updateBusy}
                           onClick={() => void handleCheckForUpdates()}
@@ -277,7 +285,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                     >
                       {manualCheckStatus === 'error' && manualCheckErrorMessage ? (
                         <Alert
-                          type="error"
+                          tone="error"
                           message={manualCheckErrorMessage}
                           showIcon
                           className="bitfun-about-dialog__update-alert"
@@ -332,7 +340,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                       ) : null}
                       {updateStatus === 'error' && updateError ? (
                         <Alert
-                          type="error"
+                          tone="error"
                           message={formatUpdateInstallError(updateError, t)}
                           showIcon
                           className="bitfun-about-dialog__update-alert"
@@ -487,7 +495,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             </p>
           </footer>
         </div>
-      </Modal>
+        </DialogBody>
+      </Dialog>
 
       <UpdateAvailableDialog
         isOpen={manualOpen}

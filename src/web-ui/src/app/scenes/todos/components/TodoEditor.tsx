@@ -6,10 +6,9 @@
  * scheduled without knowing which workspace it runs in.
  */
 
-import { Button, Icon, Input, Select, Switch, ScrollArea, Textarea } from '@bitfun/ui';
+import { Button, Combobox, Icon, Input, Select, Switch, ScrollArea, Textarea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bot, CalendarClock, ClipboardList, RefreshCw } from 'lucide-react';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
+import { Bot, CalendarClock, ClipboardList } from 'lucide-react';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
@@ -236,23 +235,14 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                 <Icon name="folder" size="md" aria-hidden="true" />
                 {t('shared:features.workspace')}
               </span>
-              <LocalizedCombobox
+              <Combobox
                 size="md"
                 className="bf-todos__field-control"
                 options={workspaceSelectOptions}
                 value={selectedWorkspaceId}
-                searchable
                 placeholder={t('editor.placeholders.workspace')}
-                triggerAriaLabel={t('shared:features.workspace')}
+                aria-label={t('shared:features.workspace')}
                 onValueChange={(value) => onSelectedWorkspaceIdChange(String(value))}
-                renderOption={(option) => (
-                  <div className="bf-todos__workspace-option">
-                    <span className="bf-todos__workspace-option-label">{option.label}</span>
-                    {option.description ? (
-                      <span className="bf-todos__workspace-option-path">{option.description}</span>
-                    ) : null}
-                  </div>
-                )}
               />
             </div>
 
@@ -291,7 +281,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
 
             <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
               <span className="bf-todos__field-label">
-                <RefreshCw size={16} aria-hidden="true" />
+                <Icon name="refresh" size="md" aria-hidden="true" />
                 {t('editor.fields.scheduleKind')}
               </span>
               <Select
@@ -429,7 +419,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
           <Textarea
             className="bf-todos__editor-prompt"
             value={draft.text}
-            error={validationErrors.text}
+            invalid={validationErrors.text}
             showCount
             rows={5}
             maxLength={1000}

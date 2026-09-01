@@ -22,21 +22,21 @@ describe('global search ownership', () => {
     expect(contentCanvas).toContain('<EmptyState onClose={disablePopOut ? undefined : collapsePanel}>');
   });
 
-  it('keeps reference-specific command icon colors local to the modal presentation', () => {
+  it('routes modal action icon identities through canonical theme tokens', () => {
     const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
     const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
     const actionCatalog = source('src/app/global-search/productActionCatalog.ts');
 
-    expect(globalSearch).toContain('const MODAL_ACTION_ICON_TONES: Partial<Record<ProductActionId');
-    expect(globalSearch).toContain("'session.new': 'red'");
-    expect(globalSearch).toContain("'surface.browser.open': 'orange'");
-    expect(globalSearch).toContain("'surface.terminal.open': 'green'");
-    expect(globalSearch).toContain("'project.open': 'cyan'");
-    expect(globalSearch).toContain("'project.new': 'blue'");
-    expect(globalSearch).toContain("'surface.files.open': 'purple'");
+    expect(globalSearch).toContain('const MODAL_ACTION_ICON_ROLES: Partial<Record<ProductActionId');
+    expect(globalSearch).toContain("'session.new': 'new-session'");
+    expect(globalSearch).toContain("'surface.browser.open': 'open-browser'");
+    expect(globalSearch).toContain("'surface.terminal.open': 'open-terminal'");
+    expect(globalSearch).toContain("'project.open': 'open-project'");
+    expect(globalSearch).toContain("'project.new': 'new-project'");
+    expect(globalSearch).toContain("'surface.files.open': 'open-files'");
     expect(globalSearch).toContain('variant === \'modal\' && itemVariant === \'action\'');
     expect(globalSearch).toContain('className="global-search__action-icon"');
-    expect(globalSearch).toContain('data-icon-tone={modalActionIconTone}');
+    expect(globalSearch).toContain('data-icon-role={modalActionIconRole}');
     expect(actionCatalog).toMatch(/id: 'session\.new',[\s\S]*?icon: 'message-circle'/);
     expect(actionCatalog).toMatch(/id: 'project\.open',[\s\S]*?icon: 'folder'/);
     expect(actionCatalog).toMatch(/id: 'project\.new',[\s\S]*?icon: 'plus'/);
@@ -45,18 +45,19 @@ describe('global search ownership', () => {
     expect(globalSearchStyles).toMatch(
       /\.global-search--modal\s*\{[\s\S]*\.global-search__action-icon\s*\{/,
     );
-    expect(globalSearchStyles).toContain('--_global-search-command-red: var(--bf-appearance-token-color-error)');
-    expect(globalSearchStyles).toContain('--_global-search-command-orange: var(--bf-appearance-token-color-warning)');
-    expect(globalSearchStyles).toContain('--_global-search-command-green: var(--bf-appearance-token-color-success)');
-    expect(globalSearchStyles).toContain('--_global-search-command-cyan: var(--bf-appearance-token-color-cyan-500)');
-    expect(globalSearchStyles).toContain('--_global-search-command-blue: var(--bf-appearance-token-color-accent-500)');
-    expect(globalSearchStyles).toContain('--_global-search-command-purple: var(--bf-appearance-token-color-purple-500)');
-    expect(globalSearchStyles).toContain("&[data-icon-tone='red']");
-    expect(globalSearchStyles).toContain("&[data-icon-tone='orange']");
-    expect(globalSearchStyles).toContain("&[data-icon-tone='green']");
-    expect(globalSearchStyles).toContain("&[data-icon-tone='cyan']");
-    expect(globalSearchStyles).toContain("&[data-icon-tone='blue']");
-    expect(globalSearchStyles).toContain("&[data-icon-tone='purple']");
+    for (const role of [
+      'new-session',
+      'open-browser',
+      'open-terminal',
+      'open-project',
+      'new-project',
+      'open-files',
+    ]) {
+      expect(globalSearchStyles).toContain(`&[data-icon-role='${role}']`);
+      expect(globalSearchStyles).toContain(`var(--bf-color-identity-global-search-${role})`);
+    }
+    expect(globalSearchStyles).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(globalSearchStyles).not.toContain('--bf-color-status-');
     expect(actionCatalog).not.toMatch(/iconTone|iconColor|leadingTone/);
   });
 

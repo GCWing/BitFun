@@ -17,7 +17,7 @@
   height: min(76vh, 820px);
   max-height: 100%;
   padding-block: 2px 4px;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 
   &__content-shell {
     overflow: hidden;
@@ -32,11 +32,11 @@
     gap: 12px;
     padding: 12px 14px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 80%, transparent);
     border-radius: 14px;
     background:
-      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent), transparent 34%),
-      linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 78%, transparent), color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 72%, transparent));
+      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent), transparent 34%),
+      linear-gradient(180deg, color-mix(in srgb, var(--bf-color-action-quiet-hover) 78%, transparent), color-mix(in srgb, var(--bf-color-surface-subtle) 72%, transparent));
 
     &::after {
       content: '';
@@ -44,7 +44,7 @@
       inset: 0;
       pointer-events: none;
       border-radius: inherit;
-      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
     }
   }
 
@@ -56,10 +56,10 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 24%, transparent);
     border-radius: 11px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-element-bg-subtle));
-    color: var(--bf-appearance-token-color-accent-500);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 10%, var(--bf-color-surface-subtle));
+    color: var(--bf-color-accent-default);
   }
 
   &__hero-copy {
@@ -75,13 +75,13 @@
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-bold);
     line-height: var(--bf-line-height-dense);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
   &__description {
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-support);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     max-width: 56ch;
   }
 
@@ -92,9 +92,9 @@
     justify-content: flex-start;
     gap: 10px;
     padding: 8px 12px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 86%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 86%, transparent);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 80%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-subtle) 80%, transparent);
   }
 
   &__toolbar-main {
@@ -117,7 +117,7 @@
     min-width: 0;
     flex: 1 1 180px;
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -128,10 +128,10 @@
     min-height: 0;
     padding: 6px;
     padding-bottom: 10px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 84%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 84%, transparent);
     border-radius: 14px;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 78%, transparent), color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 74%, transparent));
+      linear-gradient(180deg, color-mix(in srgb, var(--bf-color-action-quiet-hover) 78%, transparent), color-mix(in srgb, var(--bf-color-surface-subtle) 74%, transparent));
   }
 
   &__state {
@@ -142,7 +142,7 @@
     justify-content: center;
     gap: 12px;
     padding: 16px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     text-align: center;
 
     &.is-error {
@@ -161,9 +161,9 @@
     gap: 10px;
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 72%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 72%, transparent);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 72%, transparent);
+    background: color-mix(in srgb, var(--bf-color-action-neutral-surface) 72%, transparent);
     cursor: pointer;
     transition:
       transform 0.16s ease,
@@ -177,16 +177,16 @@
 
     &:hover {
       transform: translateY(-1px);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-border-medium) 74%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 74%, transparent);
-      box-shadow: 0 10px 18px color-mix(in srgb, var(--bf-appearance-token-color-static-black) 6%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-field-border-hover) 74%, transparent);
+      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 74%, transparent);
+      box-shadow: 0 10px 18px color-mix(in srgb, var(--bf-color-content-on-light) 6%, transparent);
     }
 
     &.is-selected {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 34%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 34%, transparent);
       background:
-        linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, var(--bf-appearance-token-element-bg-base)), color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 5%, var(--bf-appearance-token-element-bg-soft)));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+        linear-gradient(180deg, color-mix(in srgb, var(--bf-color-accent-default) 9%, var(--bf-color-action-neutral-surface)), color-mix(in srgb, var(--bf-color-accent-default) 5%, var(--bf-color-action-quiet-hover)));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
     }
 
     &.is-child {
@@ -207,17 +207,17 @@
     width: 30px;
     height: 30px;
     border-radius: 10px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 84%, transparent);
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 76%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
+    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 84%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-subtle) 76%, transparent);
+    color: var(--bf-color-content-secondary);
     flex-shrink: 0;
 
     &.is-project {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 76%, var(--bf-appearance-token-color-text-primary));
+      color: color-mix(in srgb, var(--bf-color-accent-default) 76%, var(--bf-color-content-primary));
     }
 
     &.is-assistant {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -239,7 +239,7 @@
     min-width: 0;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -249,7 +249,7 @@
   &__row-updated {
     flex-shrink: 0;
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
   }
 
@@ -265,8 +265,8 @@
     min-height: 18px;
     padding: 0 7px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 78%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: color-mix(in srgb, var(--bf-color-surface-subtle) 78%, transparent);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-none);
@@ -281,7 +281,7 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 8px 0 0;
-    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 92%, transparent) 36%);
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bf-color-surface-canvas) 92%, transparent) 36%);
   }
 
 }

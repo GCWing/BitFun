@@ -1,11 +1,14 @@
 /**
  * FlowTextBlock styles
  */
-@use '../../component-library/styles/markdown-layout' as markdown;
+@use '@/infrastructure/markdown/layout' as markdown;
+@use '../flat-markdown-surfaces' as flatMarkdownSurfaces;
 
 .flow-text-block {
+  @include flatMarkdownSurfaces.apply;
+
   width: 100%;
-  margin: 0 0 var(--bf-appearance-token-flowchat-flow-item-gap) 0;
+  margin: 0 0 var(--bf-control-flow-chat-flow-item-gap) 0;
   font-size: var(--bf-type-flow-body-font-size);
   line-height: var(--bf-type-flow-body-line-height);
   /* Transparent border to match the box-sizing of bordered FlowChat cards,
@@ -30,7 +33,7 @@
   .markdown-renderer .file-link,
   .markdown-renderer .visualization-link,
   .markdown-renderer .tab-link {
-    color: var(--bf-appearance-token-flowchat-link-color);
+    color: var(--bf-color-link-default);
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 2px;
@@ -40,7 +43,7 @@
   .markdown-renderer .file-link:hover,
   .markdown-renderer .visualization-link:hover,
   .markdown-renderer .tab-link:hover {
-    color: var(--bf-appearance-token-flowchat-link-hover-color);
+    color: var(--bf-color-link-hover);
     text-decoration-thickness: 1.5px;
   }
 
@@ -99,28 +102,23 @@
 
   .markdown-renderer .code-block-wrapper .copy-button:hover {
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transform: scale(1.08);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:active {
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transform: scale(1.02);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-color-status-success-content);
     transform: scale(1.08);
   }
 
-  /* MermaidBlock.scss adds a heavy hover shadow; keep chat diagrams flat. */
-  .markdown-renderer .mermaid-block:hover {
-    box-shadow: none;
-  }
-
   .text-content {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-type-flow-body-line-height);
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -135,9 +133,9 @@
   &--runtime-status {
     display: flex;
     align-items: center;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
+    gap: var(--bf-control-flow-chat-control-gap);
     min-height: 1.5rem;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-body-font-size);
     line-height: var(--bf-type-flow-support-line-height);
     opacity: 0.86;
@@ -152,11 +150,11 @@
 
 /* Light theme: copy button icon color (scoped to flow chat). */
 :root[data-bf-appearance-mode='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover {
-  color: var(--bf-appearance-token-color-overlay-black-50);
+  color: var(--bf-color-overlay-scrim);
 }
 
 :root[data-bf-appearance-mode='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-  color: var(--bf-appearance-token-color-success);
+  color: var(--bf-color-status-success-content);
 }
 
 :root[data-bf-appearance-mode='light'] .flow-text-block .markdown-renderer .inline-code {

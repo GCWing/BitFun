@@ -14,7 +14,6 @@ import React, { useCallback, useMemo, useRef } from 'react';
 
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
-import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
@@ -85,7 +84,7 @@ const NavBar: React.FC<NavBarProps> = ({
 
   if (isCollapsed) {
     return (
-      <div data-bf-component="nav-bar" data-bf-part="root" data-bf-state="collapsed" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+      <div data-bf-component="nav-bar" data-bf-part="root" data-bf-state="collapsed" data-bf-theme-scope="chrome" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
         <Tooltip content={t('header.expandLeftPanel')} placement="bottom" followCursor>
           <button
             type="button"
@@ -95,7 +94,7 @@ const NavBar: React.FC<NavBarProps> = ({
             onClick={onExpandNav}
             aria-label={t('header.expandLeftPanel')}
           >
-            <PanelLeftIcon size={13} />
+            <Icon name="sidebar-left" size="sm" style={{ width: 13, height: 13 }} />
           </button>
         </Tooltip>
       </div>
@@ -103,7 +102,7 @@ const NavBar: React.FC<NavBarProps> = ({
   }
 
   return (
-    <div data-bf-component="nav-bar" data-bf-part="root" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+    <div data-bf-component="nav-bar" data-bf-part="root" data-bf-theme-scope="chrome" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
       <Tooltip content={t('header.collapseLeftPanel')} placement="bottom" followCursor>
         <button
           type="button"
@@ -113,7 +112,7 @@ const NavBar: React.FC<NavBarProps> = ({
           onClick={onExpandNav}
           aria-label={t('header.collapseLeftPanel')}
         >
-          <PanelLeftIcon size={13} />
+          <Icon name="sidebar-left" size="sm" style={{ width: 13, height: 13 }} />
         </button>
       </Tooltip>
 

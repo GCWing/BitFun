@@ -3,7 +3,7 @@
   margin: 0 !important;
   border: 0 !important;
   outline: 0 !important;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   background: transparent !important;
   box-shadow: none !important;
   font-family:var(--bf-font-family-mono);
@@ -15,8 +15,8 @@
 
 .terminal-output-renderer {
   overflow: hidden;
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  background: var(--bf-appearance-token-color-bg-scene);
+  border-radius: var(--bf-radius-sm);
+  background: var(--bf-color-surface-scene);
 
   .xterm {
     height: 100%;
@@ -27,7 +27,7 @@
     }
 
     &:not(.allow-transparency) .xterm-viewport {
-      background-color: var(--bf-appearance-token-color-bg-scene);
+      background-color: var(--bf-color-surface-scene);
     }
 
     .xterm-screen {

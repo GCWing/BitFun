@@ -1,4 +1,20 @@
-import { Button, FieldGroup, FormSection, Icon, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  FieldGroup,
+  FormSection,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  type SelectOption,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -7,7 +23,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ArrowDown, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { Save, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { PermissionEffect, PermissionRule } from '../types';
@@ -334,20 +350,24 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        if (!isSaving) {
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isSaving) {
           invalidatePendingRuleWork();
           onClose();
         }
       }}
-      title={t('permissionPolicy.globalRulesDialogTitle')}
-      size="xlarge"
-      contentPadding="lg"
-      contentClassName="global-permission-rules-dialog__modal"
-      overlayClassName="global-permission-rules-dialog-overlay"
+      size="xl"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('permissionPolicy.globalRulesDialogTitle')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
+        <div className="global-permission-rules-dialog__modal">
       <div ref={dialogRootRef} className="global-permission-rules-dialog" data-bf-component="global-permission-rules-dialog" data-bf-part="root">
         <div data-bf-component="global-permission-rules-dialog" data-bf-part="intro" className="global-permission-rules-dialog__intro">
           <ShieldCheck size={18} aria-hidden="true" />
@@ -465,7 +485,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                             || activeIndex === activeDraftRules.length - 1
                           }
                           onClick={() => moveDraftRule(rule.localId, 1)}
-                          icon={<ArrowDown size={14} />}
+                          icon={<Icon name="arrow-down" size="sm" />}
                         />
                       </Tooltip>
                       <Tooltip content={t('permissionPolicy.removeGlobalRule')}>
@@ -475,7 +495,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                           aria-label={t('permissionPolicy.removeGlobalRule')}
                           disabled={isSaving || exiting}
                           onClick={() => handleRemoveRule(rule.localId)}
-                          icon={<Trash2 size={14} />}
+                          icon={<Icon name="delete" size="sm" />}
                         />
                       </Tooltip>
                     </div>
@@ -510,6 +530,8 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
           ) : null}
         </FormSection>
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 };

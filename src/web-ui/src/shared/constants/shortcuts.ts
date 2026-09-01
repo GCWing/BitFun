@@ -79,12 +79,6 @@ export const APP_SHORTCUTS: ShortcutDef[] = [
     descriptionKey: 'keyboard.shortcuts.scene.openTerminal',
   },
 
-  // App-level UI
-  {
-    id: 'app.closePreview',
-    config: { key: 'Escape', scope: 'app', allowInInput: true },
-    descriptionKey: 'keyboard.shortcuts.app.closePreview',
-  },
 ];
 
 // ─── Scene-bar navigation (scope: 'app', allowInInput: true) ──────────────
@@ -129,12 +123,6 @@ export const CANVAS_SHORTCUTS: ShortcutDef[] = [
     config: mod('M', { shift: true, scope: 'canvas' }),
     descriptionKey: 'keyboard.shortcuts.canvas.maximize',
   },
-  {
-    id: 'canvas.closePreview',
-    config: { key: 'Escape', scope: 'canvas', allowInInput: true },
-    descriptionKey: 'keyboard.shortcuts.canvas.closePreview',
-  },
-
   // Tab management
   {
     id: 'tab.close',

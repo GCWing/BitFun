@@ -1,13 +1,9 @@
- 
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .default-model-config {
   padding: 0;
 
   &__optional-label {
     margin-left: 4px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
     opacity: 0.75;
@@ -18,8 +14,8 @@
   &__section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
-    margin-bottom: $size-gap-6;
+    gap: var(--bf-space-3);
+    margin-bottom: var(--bf-space-6);
     
     &:last-child {
       margin-bottom: 0;
@@ -32,12 +28,12 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    color: var(--bf-appearance-token-color-text-muted);
-    transition: color $motion-base $easing-standard;
+    color: var(--bf-color-content-muted);
+    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
   
   &__section-content {
-    padding-left: $size-gap-1;
+    padding-left: var(--bf-space-1);
     animation: default-model-fade-in 0.2s ease;
   }
   
@@ -66,11 +62,11 @@
     
     &:hover {
       .default-model-config__expand-text {
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
       }
       
       .default-model-config__expand-line {
-        border-color: var(--bf-appearance-token-border-base);
+        border-color: var(--bf-color-border-default);
       }
     }
     
@@ -87,14 +83,14 @@
     width: calc(40% - 40px);
     height: 0;
     border: none;
-    border-top: 1px dashed var(--bf-appearance-token-border-subtle);
+    border-top: 1px dashed var(--bf-color-border-subtle);
     transition: border-color 0.15s ease;
   }
   
   &__expand-text {
     flex-shrink: 0;
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transition: color 0.15s ease;
     white-space: nowrap;
   }
@@ -112,25 +108,25 @@
   &__core-section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-5;
+    gap: var(--bf-space-5);
   }
   
   &__model-slot {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
   
   &__slot-header {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
   
   &__slot-label {
     font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
   
   &__slot-badge {
@@ -139,27 +135,27 @@
     padding: 2px 8px;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    border-radius: $size-radius-sm;
-    background: var(--bf-appearance-token-color-success-bg);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-status-success-surface);
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     
     &--optional {
-      background: var(--bf-appearance-token-color-warning-bg);
-      color: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-color-status-warning-surface);
+      color: var(--bf-color-content-muted);
     }
   }
   
   &__slot-description {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-base);
     margin: 0;
   }
   
   &__slot-hint {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin: 0;
     font-style: italic;
   }
@@ -173,24 +169,24 @@
   &__capability-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
   
   &__capability-item {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-2 0;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) 0;
     background: transparent;
     border: none;
     transition:
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      opacity $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     
     &--configured {
       .default-model-config__capability-status {
-        color: var(--bf-appearance-token-color-accent-500);
+        color: var(--bf-color-accent-default);
         font-weight: var(--bf-font-weight-medium);
       }
     }
@@ -200,26 +196,26 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
   
   &__capability-label {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     
     svg {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       flex-shrink: 0;
     }
   }
   
   &__capability-status {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -228,7 +224,7 @@
   
   &__capability-description {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-ui);
     margin: 0;
   }
@@ -236,35 +232,35 @@
   
   
   &__advanced-settings {
-    margin-top: $size-gap-4;
-    border-top: 1px dashed var(--bf-appearance-token-border-base);
-    padding-top: $size-gap-2;
+    margin-top: var(--bf-space-4);
+    border-top: 1px dashed var(--bf-color-border-default);
+    padding-top: var(--bf-space-2);
   }
   
   &__advanced-toggle {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:active {
       transform: scale(0.985);
     }
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-color-content-primary);
+      background: var(--bf-color-surface-subtle);
     }
     
     svg {
@@ -279,14 +275,14 @@
   &__advanced-content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-4;
-    margin-top: $size-gap-3;
-    padding-left: $size-gap-2;
+    gap: var(--bf-space-4);
+    margin-top: var(--bf-space-3);
+    padding-left: var(--bf-space-2);
     animation: default-model-fade-in 0.2s ease;
   }
   
   &__override-section {
-    margin-bottom: $size-gap-5;
+    margin-bottom: var(--bf-space-5);
     
     &:last-child {
       margin-bottom: 0;
@@ -296,33 +292,33 @@
   &__override-title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
-    margin: 0 0 $size-gap-1 0;
+    color: var(--bf-color-content-primary);
+    margin: 0 0 var(--bf-space-1) 0;
   }
   
   &__override-description {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
-    margin: 0 0 $size-gap-3 0;
+    color: var(--bf-color-content-secondary);
+    margin: 0 0 var(--bf-space-3) 0;
   }
   
   &__override-list {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
   
   &__override-row {
     display: flex;
     align-items: center;
-    gap: $size-gap-4;
+    gap: var(--bf-space-4);
   }
   
   &__override-name {
     flex: 0 0 140px;
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -340,14 +336,14 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: $size-gap-10 $size-gap-5;
+    padding: var(--bf-space-10) var(--bf-space-5);
     text-align: center;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     
     svg {
-      margin-bottom: $size-gap-3;
+      margin-bottom: var(--bf-space-3);
       opacity: 0.4;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
     
     p {
@@ -364,11 +360,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: $size-gap-12 $size-gap-5;
+    padding: var(--bf-space-12) var(--bf-space-5);
     
     p {
-      margin-top: $size-gap-4;
-      color: var(--bf-appearance-token-color-text-secondary);
+      margin-top: var(--bf-space-4);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
     }
   }
@@ -392,16 +388,16 @@
 @container config-panel (max-width: 520px) {
   .default-model-config {
     &__section {
-      gap: $size-gap-2;
-      margin-bottom: $size-gap-4;
+      gap: var(--bf-space-2);
+      margin-bottom: var(--bf-space-4);
     }
     
     &__core-section {
-      gap: $size-gap-3;
+      gap: var(--bf-space-3);
     }
     
     &__model-slot {
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
     
     &__slot-label {
@@ -414,17 +410,17 @@
     
     &__capability-grid {
       grid-template-columns: 1fr;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
     
     &__capability-item {
-      padding: $size-gap-2 0;
+      padding: var(--bf-space-2) 0;
     }
     
     &__override-row {
       flex-direction: column;
       align-items: stretch;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
     
     &__override-name {

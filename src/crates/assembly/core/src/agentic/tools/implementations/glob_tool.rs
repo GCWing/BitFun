@@ -10,8 +10,9 @@ use log::{info, warn};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tool_runtime::search::glob_search::{
-    build_remote_find_command, build_remote_rg_command, collect_remote_glob_result,
-    derive_walk_root, execute_local_glob, extract_glob_base_directory, normalize_path,
+    build_remote_rg_command, collect_remote_glob_result, collect_workspace_glob,
+    derive_remote_walk_root, derive_walk_root, execute_local_glob, extract_glob_base_directory,
+    extract_remote_glob_base_directory, normalize_path, validate_remote_glob_exit,
     LocalGlobRequest,
 };
 
@@ -45,7 +46,11 @@ fn resolve_effective_glob_search(
     pattern: &str,
     is_remote_workspace: bool,
 ) -> EffectiveGlobSearch {
-    let (base_dir, relative_pattern) = extract_glob_base_directory(pattern);
+    let (base_dir, relative_pattern) = if is_remote_workspace {
+        extract_remote_glob_base_directory(pattern)
+    } else {
+        extract_glob_base_directory(pattern)
+    };
     let is_absolute_base = if is_remote_workspace {
         base_dir.starts_with('/')
     } else {
@@ -94,7 +99,17 @@ fn render_glob_result_text(
         return format!("No files found matching pattern '{pattern}'{relative_note}");
     }
 
-    let result_text = matches.join("\n");
+    let result_text = matches
+        .iter()
+        .map(|path| {
+            if path.chars().any(char::is_control) || path.contains('\\') {
+                serde_json::to_string(path).expect("strings serialize")
+            } else {
+                path.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
     if !truncated {
         return format!(
             "Found {} matches{relative_note}\n<matches>\n{result_text}\n</matches>",
@@ -132,7 +147,9 @@ fn remote_shell_result_relative_base(
     original_search_path: &str,
     remote_walk_root: &Path,
 ) -> Option<String> {
-    relative_base_note(Path::new(original_search_path), remote_walk_root)
+    let remote_walk_root = remote_walk_root.to_string_lossy();
+    (original_search_path.trim_end_matches('/') != remote_walk_root.trim_end_matches('/'))
+        .then(|| remote_walk_root.into_owned())
 }
 
 fn relative_json_field(base_note: Option<&str>) -> Value {
@@ -329,67 +346,69 @@ impl Tool for GlobTool {
                 }
             }
 
-            // Remote workspace fallback: prefer `rg --files --glob`, but fall back to `find`.
+            // Existing rg is an accelerator. Without it, consume the typed workspace filesystem.
             let ws_shell = context
                 .ws_shell()
                 .ok_or_else(|| BitFunError::tool("Workspace shell not available".to_string()))?;
 
             let search_dir = effective_glob.search_path.clone();
-            let search_dir_path = PathBuf::from(&search_dir);
             let (remote_walk_root, _remote_pattern) =
-                resolve_effective_glob_scope(&search_dir_path, &effective_glob.pattern);
-            let relative_base =
-                remote_shell_result_relative_base(&resolved.resolved_path, &remote_walk_root);
+                derive_remote_walk_root(&search_dir, &effective_glob.pattern);
+            let relative_base = remote_shell_result_relative_base(
+                &resolved.resolved_path,
+                Path::new(&remote_walk_root),
+            );
             let (_stdout, _stderr, exit_code) = ws_shell
                 .exec("command -v rg >/dev/null 2>&1", Some(5_000))
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to detect rg on remote: {}", e)))?;
 
-            let (remote_cmd, exact_total) = if exit_code == 0 {
+            let uses_ripgrep = exit_code == 0;
+            let glob_result = if uses_ripgrep {
                 info!(
                     "Glob backend selected: backend=remote_rg, search_path={}, pattern={}",
                     search_dir, pattern
                 );
-                (
-                    build_remote_rg_command(&search_dir, &effective_glob.pattern),
-                    true,
-                )
+                let command = build_remote_rg_command(&search_dir, &effective_glob.pattern);
+                let (stdout, stderr, exit_code) = ws_shell
+                    .exec(&command, Some(30_000))
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(format!("Failed to glob on remote: {error}"))
+                    })?;
+                validate_remote_glob_exit(exit_code, &stderr).map_err(BitFunError::tool)?;
+                collect_remote_glob_result(&remote_walk_root, &stdout, limit, true)
             } else {
                 info!(
-                    "Glob backend selected: backend=remote_find, reason=rg_not_found, search_path={}, pattern={}",
+                    "Glob backend selected: backend=workspace_io, reason=rg_not_found, search_path={}, pattern={}",
                     search_dir, pattern
                 );
-                (
-                    build_remote_find_command(&search_dir, &effective_glob.pattern, limit),
-                    false,
-                )
+                let fs = context.file_system_for_path(&resolved)?;
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    collect_workspace_glob(fs.as_ref(), &search_dir, &effective_glob.pattern, limit),
+                ).await
+                    .map_err(|_| BitFunError::tool("Workspace glob timed out after 30000ms; narrow the search path or use an existing target rg installation".to_string()))?
+                    .map_err(BitFunError::tool)?
             };
-
-            let (stdout, _stderr, _exit_code) = ws_shell
-                .exec(&remote_cmd, Some(30_000))
-                .await
-                .map_err(|e| {
-                    BitFunError::tool(format!("Failed to glob on remote with rg: {}", e))
-                })?;
-
-            let remote_walk_root_str = remote_walk_root.to_string_lossy().to_string();
-            let glob_result =
-                collect_remote_glob_result(&remote_walk_root_str, &stdout, limit, exact_total);
             let total_matches = glob_result.total_matches;
             let truncated = glob_result.truncated;
             let matches = glob_result
                 .matches
                 .into_iter()
-                .map(|path| normalize_path(&path))
+                .map(|path| path.to_string_lossy().into_owned())
                 .collect::<Vec<_>>();
             let match_count = matches.len();
-            let result_text = render_glob_result_text(
+            let mut result_text = render_glob_result_text(
                 pattern,
                 &matches,
                 total_matches,
                 truncated,
                 relative_base.as_deref(),
             );
+            if !uses_ripgrep {
+                result_text.push_str("\nIgnore rules are limited to .gitignore/.ignore files under the search path; other target Git/global excludes are not applied.");
+            }
 
             return Ok(vec![ToolResult::Result {
                 data: json!({
@@ -399,7 +418,9 @@ impl Tool for GlobTool {
                     "matches": matches,
                     "match_count": match_count,
                     "total_matches": total_matches,
-                    "truncated": truncated
+                    "truncated": truncated,
+                    "search_backend": if uses_ripgrep { "rg" } else { "workspace_io" },
+                    "ignore_scope": if uses_ripgrep { "target_git_configuration" } else { "search_path" }
                 }),
                 result_for_assistant: Some(result_text),
                 image_attachments: None,
@@ -544,8 +565,8 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
     use tool_runtime::search::glob_search::{
-        derive_walk_root, execute_local_glob, extract_glob_base_directory, normalize_path,
-        LocalGlobRequest,
+        collect_workspace_glob, derive_walk_root, execute_local_glob, extract_glob_base_directory,
+        normalize_path, LocalGlobRequest,
     };
 
     fn make_temp_dir(name: &str) -> PathBuf {
@@ -821,6 +842,234 @@ mod tests {
         assert!(matches.iter().all(|path| !path.ends_with("/src")));
         assert!(!matches.is_empty());
 
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn workspace_io_glob_filters_before_limiting_and_keeps_exact_totals() {
+        let root = make_temp_dir("workspace-io-order");
+        fs::create_dir_all(root.join("src/deep")).unwrap();
+        fs::write(root.join(".gitignore"), "ignored.rs\n").unwrap();
+        fs::write(root.join(".ignore"), "*.tmp\n").unwrap();
+        fs::write(root.join("src/.gitignore"), "private.rs\n").unwrap();
+        for name in [
+            "top.rs",
+            "ignored.rs",
+            ".hidden.rs",
+            "src/lib.rs",
+            "src/private.rs",
+            "src/deep/mod.rs",
+        ] {
+            fs::write(root.join(name), "").unwrap();
+        }
+        let result = collect_workspace_glob(
+            &crate::agentic::workspace::LocalWorkspaceFs,
+            &root.to_string_lossy(),
+            "**/*.rs",
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result.matches,
+            vec![PathBuf::from("src/lib.rs"), PathBuf::from("top.rs")]
+        );
+        assert_eq!(result.total_matches, Some(3));
+        assert!(result.truncated);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn workspace_io_glob_preserves_static_scope_and_bitfun_hidden_exception() {
+        let root = make_temp_dir("workspace-io-scope");
+        fs::create_dir_all(root.join("src/deep")).unwrap();
+        fs::create_dir_all(root.join(".bitfun")).unwrap();
+        fs::write(root.join("src/lib.rs"), "").unwrap();
+        fs::write(root.join("src/deep/mod.rs"), "").unwrap();
+        fs::write(root.join(".gitignore"), ".bitfun/\n").unwrap();
+        fs::write(root.join(".bitfun/.hidden.json"), "{}").unwrap();
+        let fs_provider = crate::agentic::workspace::LocalWorkspaceFs;
+        let result = collect_workspace_glob(&fs_provider, &root.to_string_lossy(), "src/*.rs", 10)
+            .await
+            .unwrap();
+        assert_eq!(result.walk_root, root.join("src"));
+        assert_eq!(
+            result.matches,
+            vec![PathBuf::from("deep/mod.rs"), PathBuf::from("lib.rs")]
+        );
+        let result = collect_workspace_glob(
+            &fs_provider,
+            &root.to_string_lossy(),
+            ".bitfun/**/*.json",
+            10,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.matches, vec![PathBuf::from(".hidden.json")]);
+        assert_eq!(result.total_matches, Some(1));
+        assert!(!result.truncated);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn workspace_io_glob_distinguishes_missing_root_from_no_matches() {
+        let root = make_temp_dir("workspace-io-missing");
+        let fs_provider = crate::agentic::workspace::LocalWorkspaceFs;
+        let missing_root = collect_workspace_glob(
+            &fs_provider,
+            &root.join("missing").to_string_lossy(),
+            "*.rs",
+            10,
+        )
+        .await
+        .unwrap_err();
+        assert!(missing_root.contains("does not exist"));
+        let result =
+            collect_workspace_glob(&fs_provider, &root.to_string_lossy(), "missing/*.rs", 10)
+                .await
+                .unwrap();
+        assert!(result.matches.is_empty());
+        assert_eq!(result.total_matches, Some(0));
+        assert!(!result.truncated);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn workspace_io_glob_preserves_newline_and_backslash_file_names() {
+        let root = make_temp_dir("workspace-io-posix");
+        for name in ["line\nname.rs", "a\\b.rs"] {
+            fs::write(root.join(name), "").unwrap();
+        }
+        let result = collect_workspace_glob(
+            &crate::agentic::workspace::LocalWorkspaceFs,
+            &root.to_string_lossy(),
+            "*.rs",
+            10,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            result.matches,
+            vec![PathBuf::from("a\\b.rs"), PathBuf::from("line\nname.rs")]
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn escaped_glob_directories_keep_native_and_workspace_searches_in_scope() {
+        use crate::agentic::workspace::{LocalWorkspaceFs, LocalWorkspaceShell};
+        use bitfun_runtime_ports::WorkspaceShell;
+        use tool_runtime::search::glob_search::{
+            build_remote_rg_command, collect_remote_glob_result, validate_remote_glob_exit,
+        };
+
+        let root = make_temp_dir("workspace-io-escaped-prefix")
+            .canonicalize()
+            .unwrap();
+        fs::create_dir(root.join(r"a\b")).unwrap();
+        fs::write(root.join(r"a\b/source.rs"), "").unwrap();
+        let pattern = r"a\\b/*.rs";
+        let expected = vec![PathBuf::from(r"a\b/source.rs")];
+        let portable =
+            collect_workspace_glob(&LocalWorkspaceFs, &root.to_string_lossy(), pattern, 10)
+                .await
+                .unwrap();
+        assert_eq!(portable.walk_root, root);
+        assert_eq!(portable.matches, expected);
+        assert_eq!(portable.total_matches, Some(1));
+        let native = execute_local_glob(LocalGlobRequest {
+            search_path: root.clone(),
+            pattern: pattern.to_string(),
+            limit: 10,
+        })
+        .unwrap();
+        assert_eq!(native.walk_root, root);
+        assert_eq!(native.matches, expected);
+
+        let shell = LocalWorkspaceShell::new(root.to_string_lossy().into_owned());
+        if shell
+            .exec("command -v rg >/dev/null 2>&1", Some(1000))
+            .await
+            .unwrap()
+            .2
+            == 0
+        {
+            let command = build_remote_rg_command(&root.to_string_lossy(), pattern);
+            let (stdout, stderr, status) = shell.exec(&command, Some(1000)).await.unwrap();
+            validate_remote_glob_exit(status, &stderr).unwrap();
+            let actual = collect_remote_glob_result(&root.to_string_lossy(), &stdout, 10, true);
+            assert_eq!(actual.matches, expected);
+            assert_eq!(actual.total_matches, Some(1));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn remote_glob_without_rg_executes_the_workspace_io_fallback() {
+        use bitfun_runtime_ports::{
+            ToolRuntimeHandles, WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceServices,
+            WorkspaceShell,
+        };
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        struct MissingRg(Arc<AtomicUsize>);
+        #[async_trait::async_trait]
+        impl WorkspaceShell for MissingRg {
+            async fn exec_with_options(
+                &self,
+                command: &str,
+                _options: WorkspaceCommandOptions,
+            ) -> anyhow::Result<WorkspaceCommandResult> {
+                assert_eq!(
+                    command, "command -v rg >/dev/null 2>&1",
+                    "no find or other fallback command may execute"
+                );
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(WorkspaceCommandResult {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    exit_code: 1,
+                    interrupted: false,
+                    timed_out: false,
+                })
+            }
+        }
+        let root = make_temp_dir("remote-workspace-io");
+        fs::write(root.join("line\nname\\file.rs"), "").unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut context = remote_context(&root.to_string_lossy());
+        context.runtime_handles = ToolRuntimeHandles::new(
+            Some(WorkspaceServices {
+                fs: Arc::new(crate::agentic::workspace::LocalWorkspaceFs),
+                shell: Arc::new(MissingRg(calls.clone())),
+            }),
+            None,
+        );
+        let result = GlobTool::new()
+            .call_impl(&json!({"pattern": "*.rs"}), &context)
+            .await
+            .unwrap();
+        let crate::agentic::tools::framework::ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &result[0]
+        else {
+            panic!("expected glob result");
+        };
+        assert_eq!(data["search_backend"], "workspace_io");
+        assert_eq!(data["ignore_scope"], "search_path");
+        assert_eq!(data["matches"], json!(["line\nname\\file.rs"]));
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap()
+            .contains("line\\nname\\\\file.rs"));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
         let _ = fs::remove_dir_all(root);
     }
 }

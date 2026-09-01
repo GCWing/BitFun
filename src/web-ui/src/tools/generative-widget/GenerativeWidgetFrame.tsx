@@ -4,7 +4,6 @@ import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/Wi
 import { fontPreferenceService } from '@/infrastructure/font-preference';
 import {
   createWidgetAppearanceFallbackCss,
-  createWidgetAppearanceStaticShellCss,
   readWidgetAppearancePayload,
   type WidgetAppearancePayload,
 } from './appearancePayload';
@@ -94,9 +93,6 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
     * { box-sizing: border-box; }
     :root {
 ${createWidgetAppearanceFallbackCss()}
-${createWidgetAppearanceStaticShellCss()}
-      --bf-appearance-token-motion-fast: 0.15s;
-      --bf-appearance-token-easing-standard: ease;
     }
     html, body {
       margin: 0;
@@ -104,7 +100,7 @@ ${createWidgetAppearanceStaticShellCss()}
       width: 100%;
       min-height: 0;
       background: transparent;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-family: var(--bf-font-family-sans);
       overflow-x: hidden;
       overflow-y: hidden;
@@ -143,11 +139,11 @@ ${createWidgetAppearanceStaticShellCss()}
       font: inherit;
     }
     a {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
       text-decoration: none;
     }
     a:hover {
-      color: var(--bf-appearance-token-color-accent-600);
+      color: var(--bf-color-accent-hover);
     }
     [data-file-path],
     [data-bitfun-open-file] {
@@ -168,25 +164,25 @@ ${createWidgetAppearanceStaticShellCss()}
       max-width: 100%;
       display: flex;
       flex-direction: column;
-      gap: var(--bf-appearance-token-size-gap-4);
-      color: var(--bf-appearance-token-color-text-primary);
+      gap: var(--bf-space-4);
+      color: var(--bf-color-content-primary);
     }
     .bf-stack {
       display: flex;
       flex-direction: column;
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
     }
     .bf-row {
       display: flex;
       align-items: center;
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
       min-width: 0;
     }
     .bf-row-wrap {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
       min-width: 0;
     }
     .bf-toolbar {
@@ -194,37 +190,37 @@ ${createWidgetAppearanceStaticShellCss()}
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: var(--bf-appearance-token-size-gap-3);
-      padding: var(--bf-appearance-token-size-gap-3) var(--bf-appearance-token-size-gap-4);
-      border-radius: var(--bf-appearance-token-size-radius-lg);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 82%, transparent);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      box-shadow: var(--bf-appearance-token-shadow-xs);
+      gap: var(--bf-space-3);
+      padding: var(--bf-space-3) var(--bf-space-4);
+      border-radius: var(--bf-radius-lg);
+      background: color-mix(in srgb, var(--bf-color-surface-panel) 82%, transparent);
+      border: 1px solid var(--bf-color-border-subtle);
+      box-shadow: var(--bf-shadow-xs);
     }
     .bf-section {
       display: flex;
       flex-direction: column;
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
     }
     .bf-section-header {
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
     }
     .bf-title {
       margin: 0;
       font-size: var(--bf-font-size-lg);
       font-weight: var(--bf-font-weight-semibold);
       line-height: var(--bf-line-height-tight);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       letter-spacing: var(--bf-letter-spacing-snug);
     }
     .bf-subtitle {
       margin: 0;
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       line-height: var(--bf-line-height-base);
     }
     .bf-eyebrow {
@@ -233,45 +229,45 @@ ${createWidgetAppearanceStaticShellCss()}
       font-weight: var(--bf-font-weight-medium);
       letter-spacing: var(--bf-letter-spacing-widest);
       text-transform: uppercase;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
     .bf-card,
     .bf-panel {
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
       width: 100%;
-      padding: var(--bf-appearance-token-size-gap-4);
-      border-radius: var(--bf-appearance-token-size-radius-lg);
-      background: var(--bf-appearance-token-color-bg-secondary);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      box-shadow: var(--bf-appearance-token-shadow-sm);
+      padding: var(--bf-space-4);
+      border-radius: var(--bf-radius-lg);
+      background: var(--bf-color-surface-panel);
+      border: 1px solid var(--bf-color-border-subtle);
+      box-shadow: var(--bf-shadow-sm);
       overflow: hidden;
     }
     .bf-panel {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 74%, var(--bf-appearance-token-element-bg-subtle));
+      background: color-mix(in srgb, var(--bf-color-surface-panel) 74%, var(--bf-color-surface-subtle));
     }
     [data-bitfun-prompt-selected="true"],
     [data-bitfun-context-selected="true"] {
       position: relative;
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 2px;
       box-shadow:
-        0 0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent),
-        0 10px 24px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
-      border-radius: min(var(--bf-appearance-token-size-radius-base), 12px);
+        0 0 0 4px color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent),
+        0 10px 24px color-mix(in srgb, var(--bf-color-accent-default) 14%, transparent);
+      border-radius: min(var(--bf-radius-base), 12px);
       transition: outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
       transform: translateY(-1px);
     }
     .bf-card-accent {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-color-bg-secondary));
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, var(--bf-appearance-token-border-subtle));
+      background: color-mix(in srgb, var(--bf-color-accent-default) 10%, var(--bf-color-surface-panel));
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 30%, var(--bf-color-border-subtle));
     }
     .bf-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-      gap: var(--bf-appearance-token-size-gap-3);
+      gap: var(--bf-space-3);
       width: 100%;
       min-width: 0;
     }
@@ -280,27 +276,27 @@ ${createWidgetAppearanceStaticShellCss()}
       flex-direction: column;
       gap: 6px;
       min-width: 0;
-      padding: var(--bf-appearance-token-size-gap-3);
-      border-radius: var(--bf-appearance-token-size-radius-base);
-      background: var(--bf-appearance-token-element-bg-base);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      padding: var(--bf-space-3);
+      border-radius: var(--bf-radius-base);
+      background: var(--bf-color-action-neutral-surface);
+      border: 1px solid var(--bf-color-border-subtle);
     }
     .bf-kpi-label {
       font-size: var(--bf-font-size-meta);
       font-weight: var(--bf-font-weight-medium);
       text-transform: uppercase;
       letter-spacing: var(--bf-letter-spacing-widest);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
     .bf-kpi-value {
       font-size: var(--bf-font-size-2xl);
       font-weight: var(--bf-font-weight-semibold);
       line-height: var(--bf-line-height-display);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
     .bf-kpi-meta {
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
     .bf-badge {
       display: inline-flex;
@@ -310,32 +306,32 @@ ${createWidgetAppearanceStaticShellCss()}
       min-height: 24px;
       padding: 0 10px;
       border-radius: 999px;
-      background: var(--bf-appearance-token-element-bg-base);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-action-neutral-surface);
+      border: 1px solid var(--bf-color-border-subtle);
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       white-space: nowrap;
     }
     .bf-badge-accent {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, var(--bf-appearance-token-border-subtle));
-      color: var(--bf-appearance-token-color-accent-500);
+      background: color-mix(in srgb, var(--bf-color-accent-default) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 28%, var(--bf-color-border-subtle));
+      color: var(--bf-color-accent-default);
     }
     .bf-badge-success {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 14%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, var(--bf-appearance-token-border-subtle));
-      color: var(--bf-appearance-token-color-success);
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 28%, var(--bf-color-border-subtle));
+      color: var(--bf-color-status-success-content);
     }
     .bf-badge-warning {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 28%, var(--bf-appearance-token-border-subtle));
-      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 28%, var(--bf-color-border-subtle));
+      color: var(--bf-color-status-warning-content);
     }
     .bf-badge-error {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 14%, transparent);
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, var(--bf-appearance-token-border-subtle));
-      color: var(--bf-appearance-token-color-error);
+      background: color-mix(in srgb, var(--bf-color-status-danger-content) 14%, transparent);
+      border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 28%, var(--bf-color-border-subtle));
+      color: var(--bf-color-status-danger-content);
     }
     .bf-button {
       display: inline-flex;
@@ -345,33 +341,33 @@ ${createWidgetAppearanceStaticShellCss()}
       min-height: 32px;
       max-width: 100%;
       padding: 0 12px;
-      border: 1px solid var(--bf-appearance-token-border-base);
-      border-radius: var(--bf-appearance-token-size-radius-sm);
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border: 1px solid var(--bf-color-border-default);
+      border-radius: var(--bf-radius-sm);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-secondary);
       text-decoration: none;
       white-space: nowrap;
       transition:
         transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-        background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-        border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-        color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-        box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+        background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     }
     .bf-button:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-      border-color: var(--bf-appearance-token-border-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
+      border-color: var(--bf-color-field-border-hover);
     }
     .bf-button-primary {
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-static-white);
+      background: var(--bf-color-accent-default);
+      color: var(--bf-color-content-on-dark);
       border-color: transparent;
-      box-shadow: var(--bf-appearance-token-shadow-xs);
+      box-shadow: var(--bf-shadow-xs);
     }
     .bf-button-primary:hover {
-      background: var(--bf-appearance-token-color-accent-600);
-      color: var(--bf-appearance-token-color-static-white);
+      background: var(--bf-color-accent-hover);
+      color: var(--bf-color-content-on-dark);
       border-color: transparent;
     }
     .bf-input,
@@ -381,15 +377,15 @@ ${createWidgetAppearanceStaticShellCss()}
       max-width: 100%;
       min-width: 0;
       padding: 0 12px;
-      border-radius: var(--bf-appearance-token-size-radius-sm);
-      border: 1px solid var(--bf-appearance-token-border-base);
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-radius: var(--bf-radius-sm);
+      border: 1px solid var(--bf-color-border-default);
+      background: var(--bf-color-surface-subtle);
+      color: var(--bf-color-content-primary);
       transition:
-        background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-        border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-        color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-        box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+        background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     }
     .bf-input,
     .bf-select {
@@ -403,14 +399,14 @@ ${createWidgetAppearanceStaticShellCss()}
     }
     .bf-input::placeholder,
     .bf-textarea::placeholder {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 55%, transparent);
+      color: color-mix(in srgb, var(--bf-color-content-muted) 55%, transparent);
     }
     .bf-input:focus,
     .bf-textarea:focus,
     .bf-select:focus {
       outline: none;
-      border-color: var(--bf-appearance-token-color-accent-500);
-      background: var(--bf-appearance-token-element-bg-soft);
+      border-color: var(--bf-color-accent-default);
+      background: var(--bf-color-action-quiet-hover);
     }
     .bf-list {
       display: flex;
@@ -422,25 +418,25 @@ ${createWidgetAppearanceStaticShellCss()}
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--bf-appearance-token-size-gap-3);
-      padding: var(--bf-appearance-token-size-gap-3);
-      border-radius: var(--bf-appearance-token-size-radius-base);
-      background: var(--bf-appearance-token-element-bg-subtle);
+      gap: var(--bf-space-3);
+      padding: var(--bf-space-3);
+      border-radius: var(--bf-radius-base);
+      background: var(--bf-color-surface-subtle);
       border: 1px solid transparent;
     }
     .bf-list-item[data-file-path]:hover,
     .bf-list-item[data-bitfun-open-file]:hover,
     .bf-card[data-file-path]:hover,
     .bf-panel[data-file-path]:hover {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, var(--bf-appearance-token-border-subtle));
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 76%, var(--bf-appearance-token-color-accent-500));
+      border-color: color-mix(in srgb, var(--bf-color-accent-default) 35%, var(--bf-color-border-subtle));
+      background: color-mix(in srgb, var(--bf-color-action-neutral-surface) 76%, var(--bf-color-accent-default));
     }
     .bf-table-wrap {
       width: 100%;
       overflow-x: auto;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: var(--bf-appearance-token-size-radius-base);
-      background: var(--bf-appearance-token-color-bg-secondary);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-base);
+      background: var(--bf-color-surface-panel);
     }
     .bf-table {
       width: 100%;
@@ -452,15 +448,15 @@ ${createWidgetAppearanceStaticShellCss()}
       padding: 10px 12px;
       text-align: left;
       vertical-align: top;
-      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-      color: var(--bf-appearance-token-color-text-secondary);
+      border-bottom: 1px solid var(--bf-color-border-subtle);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-sm);
       word-break: break-word;
     }
     .bf-table th {
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       text-transform: uppercase;
       letter-spacing: var(--bf-letter-spacing-wider);
     }
@@ -471,25 +467,25 @@ ${createWidgetAppearanceStaticShellCss()}
       justify-content: center;
       gap: 8px;
       min-height: 140px;
-      padding: var(--bf-appearance-token-size-gap-5);
-      border-radius: var(--bf-appearance-token-size-radius-lg);
-      border: 1px dashed var(--bf-appearance-token-border-base);
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 80%, transparent);
-      color: var(--bf-appearance-token-color-text-muted);
+      padding: var(--bf-space-5);
+      border-radius: var(--bf-radius-lg);
+      border: 1px dashed var(--bf-color-border-default);
+      background: color-mix(in srgb, var(--bf-color-surface-subtle) 80%, transparent);
+      color: var(--bf-color-content-muted);
       text-align: center;
     }
     .bf-divider {
       width: 100%;
       height: 1px;
-      background: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-border-subtle);
       border: 0;
       margin: 0;
     }
     .bf-code {
       padding: 2px 6px;
       border-radius: 6px;
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
       font-family: var(--bf-font-family-mono);
       font-size: var(--bf-font-size-xs);
     }
@@ -500,7 +496,7 @@ ${createWidgetAppearanceStaticShellCss()}
       .bf-card,
       .bf-panel,
       .bf-toolbar {
-        padding: var(--bf-appearance-token-size-gap-3);
+        padding: var(--bf-space-3);
       }
       .bf-grid {
         grid-template-columns: 1fr;
@@ -742,10 +738,10 @@ ${createWidgetAppearanceStaticShellCss()}
         });
         var body = document.body;
         if (body) {
-          body.style.background = vars['--bf-appearance-token-color-bg-primary'] || 'transparent';
+          body.style.background = vars['--bf-color-surface-canvas'] || 'transparent';
           body.style.color =
-            vars['--bf-appearance-token-color-text-primary'] ||
-            getComputedStyle(root).getPropertyValue('--bf-appearance-token-color-text-primary') ||
+            vars['--bf-color-content-primary'] ||
+            getComputedStyle(root).getPropertyValue('--bf-color-content-primary') ||
             body.style.color;
           body.style.fontFamily =
             vars['--bf-font-family-sans'] ||

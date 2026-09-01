@@ -4,7 +4,6 @@ import ts from 'typescript';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const sourceRoot = path.join(repoRoot, 'src', 'web-ui', 'src');
-const componentRoot = path.join(sourceRoot, 'component-library', 'components');
 const sceneRoot = path.join(sourceRoot, 'app', 'scenes');
 const registryFile = path.join(sourceRoot, 'infrastructure', 'appearance', 'registry', 'defaultAppearanceRegistry.ts');
 const retiredOwnershipFile = path.join(sourceRoot, 'infrastructure', 'appearance', 'registry', 'appearanceSourceOwnership.ts');
@@ -636,14 +635,6 @@ for (const descriptor of descriptors) {
   }
 }
 
-for (const directory of fs.readdirSync(componentRoot, { withFileTypes: true }).filter(entry => entry.isDirectory())) {
-  const absolute = path.join(componentRoot, directory.name);
-  const productionTsx = walk(absolute).filter(file => file.endsWith('.tsx') && !/\.(?:test|spec)\.tsx$/.test(file));
-  if (productionTsx.length > 0 && !fs.existsSync(path.join(absolute, 'appearance.ts'))) {
-    failures.push(`${relative(absolute)}: production component directory must own appearance.ts`);
-  }
-}
-
 for (const sceneFile of walk(sceneRoot).filter(file => file.endsWith('Scene.tsx') && !/\.(?:test|spec)\.tsx$/.test(file))) {
   const appearanceFile = path.join(path.dirname(sceneFile), 'appearance.ts');
   if (!fs.existsSync(appearanceFile)) {
@@ -661,7 +652,6 @@ for (const sceneFile of walk(sceneRoot).filter(file => file.endsWith('Scene.tsx'
 
 const visualEntryPoints = new Set([
   'main.tsx',
-  'component-library/preview/main.tsx',
   'tools/bitfun-canvas/runtime/entry.tsx',
 ]);
 const styledProductionTsx = productionCodeSources.filter(([file, source]) => {
@@ -764,9 +754,9 @@ for (const [file, source] of adapterFiles) {
   }
 }
 
-const cssTokenAdapterSource = fs.readFileSync(path.join(sourceRoot, 'infrastructure', 'appearance', 'adapters', 'CssTokenAppearanceAdapter.ts'), 'utf8');
-if (!cssTokenAdapterSource.includes('APPEARANCE_CSS_TOKEN_NAMES') || cssTokenAdapterSource.includes("startsWith(ALLOWED_TOKEN_PREFIX)")) {
-  failures.push('CssTokenAppearanceAdapter must validate against the closed host token registry');
+const themeTokenAdapterSource = fs.readFileSync(path.join(sourceRoot, 'infrastructure', 'appearance', 'adapters', 'ThemeTokenAppearanceAdapter.ts'), 'utf8');
+if (!themeTokenAdapterSource.includes('APPEARANCE_ROOT_TOKEN_NAMES') || themeTokenAdapterSource.includes("startsWith(ALLOWED_TOKEN_PREFIX)")) {
+  failures.push('ThemeTokenAppearanceAdapter must validate against the closed canonical token registry');
 }
 const widgetAdapterSource = fs.readFileSync(path.join(sourceRoot, 'infrastructure', 'appearance', 'adapters', 'WidgetAppearanceAdapter.ts'), 'utf8');
 if (!widgetAdapterSource.includes('WIDGET_APPEARANCE_VARIABLE_NAMES')) {
@@ -803,7 +793,7 @@ for (const [file, source] of productionSources) {
   if (/\bThemeService\b|\bthemeService\b|\buseTheme\b|\buseThemeStore\b|ThemeAppearanceBridge/.test(source)) {
     failures.push(`${relative(file)}: legacy Theme runtime reference is forbidden`);
   }
-  if (/data-theme(?:-type)?|data-bf-theme|bitfun\/request-theme|themeChange|onThemeChange/.test(source)) {
+  if (/data-theme(?:-type)?|data-bf-theme(?!-scope(?=$|[="'\]\s]))|bitfun\/request-theme|themeChange|onThemeChange/.test(source)) {
     failures.push(`${relative(file)}: legacy Theme DOM or bridge contract is forbidden`);
   }
   if (/--(?:color|border|element|git-color|scrollbar|shadow|blur|size|opacity|motion|easing|font|line-height|btn|flowchat|scene)-/.test(source)) {

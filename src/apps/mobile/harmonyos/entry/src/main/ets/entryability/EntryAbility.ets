@@ -1,6 +1,7 @@
 import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { MobileDesignColors } from '../generated/MobileDesignTokens';
 
 const DOMAIN = 0x0000;
 const TAG = 'BitFunRemote';
@@ -87,12 +88,14 @@ export default class EntryAbility extends UIAbility {
       return;
     }
     const dark = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
+    const background = dark ? MobileDesignColors.pageBg.dark : MobileDesignColors.pageBg.light;
+    const content = dark ? MobileDesignColors.ink.dark : MobileDesignColors.ink.light;
     try {
       this.mainWindow.setWindowSystemBarProperties({
-        statusBarColor: dark ? '#151514' : '#FDFDFB',
-        navigationBarColor: dark ? '#151514' : '#FDFDFB',
-        statusBarContentColor: dark ? '#F4F3EF' : '#171717',
-        navigationBarContentColor: dark ? '#F4F3EF' : '#171717'
+        statusBarColor: background,
+        navigationBarColor: background,
+        statusBarContentColor: content,
+        navigationBarContentColor: content
       });
     } catch (err) {
       hilog.error(DOMAIN, TAG, 'Failed to update system bars. Cause: %{public}s', JSON.stringify(err));

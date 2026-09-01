@@ -1,61 +1,62 @@
-const appearanceToken = (name: string): string => 'var(' + '--bf-appearance-token-' + name + ')';
+const cssVariable = (name: string): string => `var(${name})`;
+const domainToken = (name: string): string => cssVariable(`--bf-domain-${name}`);
 
 export const APPEARANCE_DOMAIN_TOKENS = {
-  contextCompression: appearanceToken('domain-context-compression'),
-  generativeUi: appearanceToken('domain-generative-ui'),
-  miniApp: appearanceToken('domain-mini-app'),
-  mermaidDiagram: appearanceToken('domain-mermaid-diagram'),
-  gitGraphLane: Array.from({ length: 8 }, (_, index) => appearanceToken(`domain-git-lane-${index}`)),
+  contextCompression: domainToken('context-compression'),
+  generativeUi: domainToken('generative-ui'),
+  miniApp: domainToken('mini-app'),
+  mermaidDiagram: domainToken('mermaid-diagram'),
+  gitGraphLane: Array.from({ length: 8 }, (_, index) => domainToken(`git-lane-${index}`)),
   toolIdentity: {
-    search: appearanceToken('domain-tool-search'),
-    webSearch: appearanceToken('domain-tool-web-search'),
-    git: appearanceToken('domain-tool-git'),
-    terminal: appearanceToken('domain-tool-terminal'),
-    mcp: appearanceToken('domain-tool-mcp'),
-    assistantAction: appearanceToken('domain-tool-assistant-action'),
-    reviewSummary: appearanceToken('domain-tool-review-summary'),
+    search: domainToken('tool-search'),
+    webSearch: domainToken('tool-web-search'),
+    git: domainToken('tool-git'),
+    terminal: domainToken('tool-terminal'),
+    mcp: domainToken('tool-mcp'),
+    assistantAction: domainToken('tool-assistant-action'),
+    reviewSummary: domainToken('tool-review-summary'),
   },
   agentCapability: {
-    docs: appearanceToken('domain-capability-docs'),
-    testing: appearanceToken('domain-capability-testing'),
-    creative: appearanceToken('domain-capability-creative'),
-    ops: appearanceToken('domain-capability-ops'),
+    docs: domainToken('capability-docs'),
+    testing: domainToken('capability-testing'),
+    creative: domainToken('capability-creative'),
+    ops: domainToken('capability-ops'),
   },
   insights: {
-    positive: appearanceToken('domain-insights-positive'),
-    time: appearanceToken('domain-insights-time'),
-    neutral: appearanceToken('domain-insights-neutral'),
-    issue: appearanceToken('domain-insights-issue'),
+    positive: domainToken('insights-positive'),
+    time: domainToken('insights-time'),
+    neutral: domainToken('insights-neutral'),
+    issue: domainToken('insights-issue'),
   },
   progress: {
-    compacting: appearanceToken('domain-progress-compacting'),
+    compacting: domainToken('progress-compacting'),
   },
   templateContext: {
-    memories: appearanceToken('domain-template-memories'),
+    memories: domainToken('template-memories'),
   },
   reviewTeam: {
-    memberDefault: appearanceToken('domain-review-member-default'),
-    worker: appearanceToken('domain-review-worker'),
-    judge: appearanceToken('domain-review-judge'),
+    memberDefault: domainToken('review-member-default'),
+    worker: domainToken('review-worker'),
+    judge: domainToken('review-judge'),
   },
-  tealAction: appearanceToken('domain-teal-action'),
-  todo: appearanceToken('domain-todo'),
-  textStroke: Array.from({ length: 5 }, (_, index) => appearanceToken(`domain-text-stroke-${index}`)),
+  tealAction: domainToken('teal-action'),
+  todo: domainToken('todo'),
+  textStroke: Array.from({ length: 5 }, (_, index) => domainToken(`text-stroke-${index}`)),
   inspectorOverlay: {
-    activeBorder: appearanceToken('domain-inspector-active-border'),
-    activeBackground: appearanceToken('domain-inspector-active-background'),
-    activeBorderSubtle: appearanceToken('domain-inspector-active-border-subtle'),
-    selectedBorder: appearanceToken('domain-inspector-selected-border'),
-    selectedBackground: appearanceToken('domain-inspector-selected-background'),
-    browserTooltipBackground: appearanceToken('domain-inspector-browser-tooltip-background'),
-    mainTooltipBackground: appearanceToken('domain-inspector-main-tooltip-background'),
-    tooltipText: appearanceToken('domain-inspector-tooltip-text'),
-    tooltipShadow: appearanceToken('domain-inspector-tooltip-shadow'),
-    staticWhite: appearanceToken('color-static-white'),
+    activeBorder: domainToken('inspector-active-border'),
+    activeBackground: domainToken('inspector-active-background'),
+    activeBorderSubtle: domainToken('inspector-active-border-subtle'),
+    selectedBorder: domainToken('inspector-selected-border'),
+    selectedBackground: domainToken('inspector-selected-background'),
+    browserTooltipBackground: domainToken('inspector-browser-tooltip-background'),
+    mainTooltipBackground: domainToken('inspector-main-tooltip-background'),
+    tooltipText: domainToken('inspector-tooltip-text'),
+    tooltipShadow: domainToken('inspector-tooltip-shadow'),
+    staticWhite: cssVariable('--bf-color-content-on-dark'),
   },
 } as const;
 
-const languageToken = (name: string): string => appearanceToken(`language-${name}`);
+const languageToken = (name: string): string => domainToken(`language-${name}`);
 
 export const APPEARANCE_LANGUAGE_TOKENS = {
   typescript: languageToken('blue'),
@@ -127,7 +128,7 @@ export function getCodeSnippetLanguageAccent(language?: string): string {
     ?? CODE_SNIPPET_LANGUAGE_TOKENS.fallback;
 }
 
-const prismToken = (mode: 'light' | 'dark', role: string): string => appearanceToken(`prism-${mode}-${role}`);
+const prismToken = (mode: 'light' | 'dark', role: string): string => domainToken(`prism-${mode}-${role}`);
 
 export const APPEARANCE_PRISM_TOKENS = {
   light: {

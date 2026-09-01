@@ -2,9 +2,7 @@
  * Toolbar Mode styles.
  * Compact floating bar with a two-row layout.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 $transition-duration: 0.25s;
 $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
@@ -18,9 +16,9 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   bottom: 0;
   width: 100vw;
   height: 100vh;
-  background: var(--bf-appearance-token-color-bg-primary);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  box-shadow: var(--bf-appearance-token-shadow-lg);
+  background: var(--bf-color-surface-canvas);
+  border: 1px solid var(--bf-color-border-subtle);
+  box-shadow: var(--bf-shadow-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -29,7 +27,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
   font-family:var(--bf-font-family-sans);
   font-size: var(--bf-type-flow-control-font-size);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
 
   animation: toolbar-mode-enter $transition-duration $transition-timing;
 
@@ -38,7 +36,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &--processing {
-    border-color: var(--bf-appearance-token-color-accent-300);
+    border-color: var(--bf-color-action-secondary-pressed);
 
     &::before {
       content: '';
@@ -47,7 +45,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
       left: 0;
       right: 0;
       height: 2px;
-      background: linear-gradient(90deg, var(--bf-appearance-token-color-accent-600), var(--bf-appearance-token-color-purple-500), var(--bf-appearance-token-color-accent-600));
+      background: linear-gradient(90deg, var(--bf-color-accent-hover), var(--bf-color-accent-secondary), var(--bf-color-accent-hover));
       background-size: 200% 100%;
       animation: toolbar-progress-flow 2s linear infinite;
       z-index: 10;
@@ -55,11 +53,11 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &--error {
-    border-color: var(--bf-appearance-token-color-error-border);
+    border-color: var(--bf-color-status-danger-border);
   }
 
   &--confirm {
-    border-color: var(--bf-appearance-token-color-warning-border);
+    border-color: var(--bf-color-status-warning-border);
     animation: toolbar-attention-pulse 1s ease-in-out infinite;
   }
 }
@@ -72,7 +70,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   align-items: stretch;
   padding: 0 12px;
   gap: 8px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   transition: border-color 0.2s ease;
 
   animation: title-fade-in 0.2s $transition-timing;
@@ -97,8 +95,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-toolbar-mode__session-menu-trigger--open {
-  background: var(--bf-appearance-token-element-bg-base);
-  color: var(--bf-appearance-token-color-accent-500);
+  background: var(--bf-color-action-neutral-surface);
+  color: var(--bf-color-accent-default);
 }
 
 .bitfun-toolbar-mode__header-right {
@@ -136,8 +134,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
-  border-radius: var(--bf-appearance-token-size-radius-sm);
+  color: var(--bf-color-content-muted);
+  border-radius: var(--bf-radius-sm);
   cursor: pointer;
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -146,8 +144,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     opacity 160ms ease;
 
   &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-color-accent-200);
-    color: var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-color-action-secondary-hover);
+    color: var(--bf-color-accent-default);
     transform: scale(1.1);
   }
 
@@ -157,7 +155,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
   &:disabled {
     cursor: not-allowed;
-    opacity: var(--bf-appearance-token-opacity-disabled);
+    opacity: var(--bf-opacity-disabled);
     transform: none;
   }
 }
@@ -192,10 +190,10 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   justify-content: center;
   padding: 4px 8px;
   box-sizing: border-box;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-medium);
-  border-radius: var(--bf-appearance-token-size-radius-sm);
+  border-radius: var(--bf-radius-sm);
 }
 
 .bitfun-toolbar-mode__title-text {
@@ -229,7 +227,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   scrollbar-gutter: stable;
 
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 45%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--bf-color-content-muted) 45%, transparent) transparent;
   -ms-overflow-style: auto;
 
   &::-webkit-scrollbar {
@@ -238,7 +236,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
   &::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 40%, transparent);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 40%, transparent);
   }
 
   &::-webkit-scrollbar-track {
@@ -247,7 +245,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-toolbar-mode__session-dropdown {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: absolute;
   top: 100%;
@@ -284,7 +282,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   flex-direction: column;
   overflow: hidden;
   overflow-x: hidden;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   animation: session-picker-expand 0.25s $transition-timing;
 
   .bitfun-toolbar-mode__session-menu {
@@ -308,7 +306,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   padding: 6px 12px;
   border: none;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-control-font-size);
   text-align: left;
   cursor: pointer;
@@ -318,13 +316,13 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-primary);
   }
 
   &--active {
-    background: var(--bf-appearance-token-color-accent-200);
-    color: var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-color-action-secondary-hover);
+    color: var(--bf-color-accent-default);
   }
 
   &--new {
@@ -332,11 +330,11 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     align-items: center;
     gap: 8px;
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     &:hover .bitfun-toolbar-mode__session-item-icon {
-      background: var(--bf-appearance-token-color-accent-300);
-      color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-action-secondary-pressed);
+      color: var(--bf-color-accent-default);
     }
   }
 }
@@ -350,8 +348,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--bf-appearance-token-color-accent-200);
-  color: var(--bf-appearance-token-color-accent-500);
+  background: var(--bf-color-action-secondary-hover);
+  color: var(--bf-color-accent-default);
   transition: background 0.1s ease, color 0.1s ease;
 }
 
@@ -366,13 +364,13 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 .bitfun-toolbar-mode__session-list-divider {
   height: 1px;
   margin: 4px 8px;
-  background: var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-border-subtle);
   flex-shrink: 0;
 }
 
 .bitfun-toolbar-mode__overflow-menu {
   position: fixed;
-  z-index: $z-popover;
+  z-index: var(--bf-layer-popover);
 }
 
 
@@ -401,7 +399,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     .bitfun-toolbar-mode__text,
     .bitfun-toolbar-mode__tool-summary,
     .bitfun-toolbar-mode__todo-current {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 }
@@ -411,17 +409,17 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 
   &--streaming {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     // Inline streaming cursor.
     &::after {
       content: '▌';
       animation: toolbar-cursor-blink 0.8s ease-in-out infinite;
       margin-left: 2px;
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 }
@@ -435,9 +433,9 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &-name {
     flex-shrink: 0;
     padding: 2px 8px;
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    background: var(--bf-appearance-token-color-purple-200);
-    color: var(--bf-appearance-token-color-purple-500);
+    border-radius: var(--bf-radius-sm);
+    background: color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent);
+    color: var(--bf-color-accent-secondary);
     font-size: var(--bf-type-flow-meta-font-size);
     font-weight: var(--bf-font-weight-medium);
   }
@@ -448,7 +446,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 }
 
@@ -461,9 +459,9 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &-progress {
     flex-shrink: 0;
     padding: 2px 8px;
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    background: var(--bf-appearance-token-color-accent-200);
-    color: var(--bf-appearance-token-color-accent-500);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-action-secondary-hover);
+    color: var(--bf-color-accent-default);
     font-size: var(--bf-type-flow-meta-font-size);
     font-weight: var(--bf-font-weight-medium);
   }
@@ -474,7 +472,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 }
 
@@ -494,7 +492,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border: none;
   border-radius: 0;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-control-font-size);
   outline: none;
   box-shadow: none;
@@ -507,7 +505,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &::placeholder {
-    color: var(--bf-appearance-token-color-text-disabled);
+    color: var(--bf-color-content-disabled);
   }
 }
 
@@ -519,9 +517,9 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border: none !important;
   outline: none !important;
   box-shadow: none;
-  border-radius: var(--bf-appearance-token-size-radius-base);
-  background: var(--bf-appearance-token-element-bg-base);
-  color: var(--bf-appearance-token-color-text-secondary);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-action-neutral-surface);
+  color: var(--bf-color-content-secondary);
   cursor: pointer !important;
   display: flex;
   align-items: center;
@@ -541,8 +539,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-strong);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface-pressed);
+    color: var(--bf-color-content-primary);
   }
 
   &:active {
@@ -550,15 +548,15 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &--confirm {
-    background: var(--bf-appearance-token-color-success-bg);
-    color: var(--bf-appearance-token-color-success);
-    &:hover { background: var(--bf-appearance-token-color-success-border); }
+    background: var(--bf-color-status-success-surface);
+    color: var(--bf-color-status-success-content);
+    &:hover { background: var(--bf-color-status-success-border); }
   }
 
   &--reject {
-    background: var(--bf-appearance-token-color-error-bg);
-    color: var(--bf-appearance-token-color-error);
-    &:hover { background: var(--bf-appearance-token-color-error-border); }
+    background: var(--bf-color-status-danger-surface);
+    color: var(--bf-color-status-danger-content);
+    &:hover { background: var(--bf-color-status-danger-border); }
   }
 
   &--cancel {
@@ -566,10 +564,10 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     width: 12px;
     height: 12px;
     border-radius: 50% !important;
-    background: var(--bf-appearance-token-color-warning) !important;
-    border: 1px solid var(--bf-appearance-token-color-warning) !important;
-    color: white !important;
-    box-shadow: 0 0 3px var(--bf-appearance-token-color-warning) !important;
+    background: var(--bf-color-status-warning-content) !important;
+    border: 1px solid var(--bf-color-status-warning-content) !important;
+    color: var(--bf-color-content-on-dark) !important;
+    box-shadow: 0 0 3px var(--bf-color-status-warning-content) !important;
     animation: toolbar-cancel-pulse 2s ease-in-out infinite;
     position: relative;
 
@@ -584,11 +582,11 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: white;
+      background: var(--bf-color-content-on-dark);
     }
 
     &:hover {
-      box-shadow: 0 0 5px var(--bf-appearance-token-color-warning) !important;
+      box-shadow: 0 0 5px var(--bf-color-status-warning-content) !important;
     }
   }
 
@@ -596,10 +594,10 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     // Compact-mode stop button.
     width: 22px;
     height: 22px;
-    border-radius: var(--bf-appearance-token-size-radius-sm) !important;
-    background: var(--bf-appearance-token-color-error-bg) !important;
+    border-radius: var(--bf-radius-sm) !important;
+    background: var(--bf-color-status-danger-surface) !important;
     border: none !important;
-    color: var(--bf-appearance-token-color-error) !important;
+    color: var(--bf-color-status-danger-content) !important;
 
     svg {
       width: 12px;
@@ -607,24 +605,24 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     &:hover {
-      background: var(--bf-appearance-token-color-error-border) !important;
+      background: var(--bf-color-status-danger-border) !important;
     }
   }
 
   &--input {
-    background: var(--bf-appearance-token-color-accent-200);
-    color: var(--bf-appearance-token-color-accent-500);
-    &:hover { background: var(--bf-appearance-token-color-accent-300); }
+    background: var(--bf-color-action-secondary-hover);
+    color: var(--bf-color-accent-default);
+    &:hover { background: var(--bf-color-action-secondary-pressed); }
   }
 
   &--expand {
     width: 24px;
     height: 24px;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     &:hover {
-      background: var(--bf-appearance-token-color-accent-200);
-      color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-action-secondary-hover);
+      color: var(--bf-color-accent-default);
     }
   }
 
@@ -632,29 +630,29 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     width: 24px;
     height: 24px;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
     }
   }
 
   &--send {
-    background: var(--bf-appearance-token-color-accent-600);
+    background: var(--bf-color-accent-hover);
     // Match icon color with the create-session button.
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     svg {
       color: currentColor;
     }
 
     &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-color-accent-default);
+      color: var(--bf-color-accent-default);
     }
 
     &:disabled {
-      opacity: var(--bf-appearance-token-opacity-disabled);
+      opacity: var(--bf-opacity-disabled);
       cursor: default;
     }
   }
@@ -671,8 +669,8 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes toolbar-attention-pulse {
-  0%, 100% { box-shadow: var(--bf-appearance-token-shadow-xl), 0 0 0 1px var(--bf-appearance-token-color-warning-border); }
-  50% { box-shadow: var(--bf-appearance-token-shadow-xl), 0 0 0 2px var(--bf-appearance-token-color-warning); }
+  0%, 100% { box-shadow: var(--bf-shadow-xl), 0 0 0 1px var(--bf-color-status-warning-border); }
+  50% { box-shadow: var(--bf-shadow-xl), 0 0 0 2px var(--bf-color-status-warning-content); }
 }
 
 .animate-spin {
@@ -723,7 +721,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   cursor: default;
 
   .bitfun-toolbar-mode__header {
-    border-bottom-color: var(--bf-appearance-token-border-base);
+    border-bottom-color: var(--bf-color-border-default);
   }
 
   .bitfun-toolbar-mode__content-row {
@@ -740,27 +738,27 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
   animation: input-slide-up $transition-duration $transition-timing;
   padding: 8px 12px;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
-  background: var(--bf-appearance-token-element-bg-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-subtle);
 
   .bitfun-toolbar-mode__input-field--expanded {
     flex: 1;
     height: 36px;
     padding: 0 12px;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: var(--bf-appearance-token-size-radius-base);
-    background: var(--bf-appearance-token-color-bg-primary);
-    color: var(--bf-appearance-token-color-text-primary);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-canvas);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
     outline: none;
     transition: border-color 0.15s ease;
 
     &:focus {
-      border-color: var(--bf-appearance-token-color-accent-500);
+      border-color: var(--bf-color-accent-default);
     }
 
     &::placeholder {
-      color: var(--bf-appearance-token-color-text-disabled);
+      color: var(--bf-color-content-disabled);
     }
   }
 }

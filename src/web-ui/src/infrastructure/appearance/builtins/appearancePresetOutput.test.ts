@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { builtinAppearancePalettes } from './palettes';
-import { getBuiltinAppearanceCssTokens } from './catalog';
+import {
+  getBuiltinAppearance,
+  getBuiltinAppearanceThemeTokens,
+} from './catalog';
 import {
   PLUGIN_APPEARANCE_COLOR_KEYS,
   createPluginAppearanceColorProjection,
@@ -122,19 +125,20 @@ describe('builtin appearance preset output', () => {
 
   it('keeps the default light appearance on the neutral, navy, and restrained semantic palette', () => {
     const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'bitfun-light');
-    const tokens = getBuiltinAppearanceCssTokens('bitfun-light');
+    const tokens = getBuiltinAppearanceThemeTokens('bitfun-light');
 
     expect(lightAppearance).toMatchObject({
       description: 'Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions',
-      version: '2.4.0',
+      version: '2.5.0',
       colors: {
         background: {
           primary: '#fdfdfd',
           secondary: '#ffffff',
-          tertiary: '#f3f3f5',
+          tertiary: '#f7f7f7',
           elevated: '#ffffff',
           workbench: '#f3f3f5',
           scene: '#ffffff',
+          chrome: '#f8f8f9',
         },
         text: {
           primary: '#1c1c1f',
@@ -184,10 +188,12 @@ describe('builtin appearance preset output', () => {
       },
     });
     expect(tokens).toMatchObject({
-      '--bf-appearance-token-config-page-section-bg': 'rgba(16, 26, 39, 0.03)',
-      '--bf-appearance-token-config-page-section-border': 'rgba(16, 26, 39, 0.08)',
-      '--bf-appearance-token-config-page-section-border-width': '1px',
-      '--bf-appearance-token-config-page-divider': 'rgba(16, 26, 39, 0.08)',
+      '--bf-color-surface-chrome': '#f8f8f9',
+      '--bf-color-selection-surface': 'rgba(0, 0, 0, 0.08)',
+      '--bf-component-config-page-section-background': '#f7f7f7',
+      '--bf-component-config-page-section-border': 'rgba(16, 26, 39, 0.08)',
+      '--bf-component-config-page-section-border-width': '1px',
+      '--bf-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
     });
   });
 
@@ -195,7 +201,9 @@ describe('builtin appearance preset output', () => {
     const monochrome = builtinAppearancePalettes.find(
       appearance => appearance.id === 'bitfun-monochrome',
     );
-    const tokens = getBuiltinAppearanceCssTokens('bitfun-monochrome');
+    const monochromePackage = getBuiltinAppearance('bitfun-monochrome');
+    const tokens = getBuiltinAppearanceThemeTokens('bitfun-monochrome');
+    const chromeTokens = monochromePackage?.renderers?.['theme-tokens']?.settings.scopes?.chrome;
 
     expect(monochrome).toMatchObject({
       type: 'light',
@@ -259,22 +267,24 @@ describe('builtin appearance preset output', () => {
       },
     });
     expect(tokens).toMatchObject({
-      '--bf-appearance-token-color-bg-primary': '#ffffff',
-      '--bf-appearance-token-color-text-primary': '#1c1c1f',
-      '--bf-appearance-token-color-text-secondary': '#555555',
-      '--bf-appearance-token-border-subtle': 'rgba(16, 26, 39, 0.08)',
-      '--bf-appearance-token-border-base': 'rgba(16, 26, 39, 0.15)',
-      '--bf-appearance-token-element-bg-subtle': 'rgba(16, 26, 39, 0.03)',
-      '--bf-appearance-token-element-bg-soft': '#f3f3f5',
-      '--bf-appearance-token-scrollbar-thumb': 'rgba(16, 26, 39, 0.15)',
-      '--bf-appearance-token-config-page-section-bg': '#f3f3f5',
-      '--bf-appearance-token-config-page-section-border': 'transparent',
-      '--bf-appearance-token-config-page-section-border-width': '0',
-      '--bf-appearance-token-config-page-section-shadow': 'none',
-      '--bf-appearance-token-config-page-divider': 'rgba(16, 26, 39, 0.08)',
-      '--bf-appearance-token-chrome-bg-primary': '#1c1c1f',
-      '--bf-appearance-token-chrome-text-primary': '#f3f3f5',
-      '--bf-appearance-token-chrome-element-bg-soft': 'rgba(255, 255, 255, 0.06)',
+      '--bf-color-surface-canvas': '#ffffff',
+      '--bf-color-content-primary': '#1c1c1f',
+      '--bf-color-content-secondary': '#555555',
+      '--bf-color-border-subtle': 'rgba(16, 26, 39, 0.08)',
+      '--bf-color-border-default': 'rgba(16, 26, 39, 0.15)',
+      '--bf-color-surface-subtle': 'rgba(16, 26, 39, 0.03)',
+      '--bf-color-action-quiet-hover': '#f3f3f5',
+      '--bf-color-scrollbar-thumb': 'rgba(16, 26, 39, 0.15)',
+      '--bf-component-config-page-section-background': '#f3f3f5',
+      '--bf-component-config-page-section-border': 'transparent',
+      '--bf-component-config-page-section-border-width': '0',
+      '--bf-component-config-page-section-shadow': 'none',
+      '--bf-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
+    });
+    expect(chromeTokens).toMatchObject({
+      '--bf-color-surface-canvas': '#1c1c1f',
+      '--bf-color-content-primary': '#f3f3f5',
+      '--bf-color-action-quiet-hover': 'rgba(255, 255, 255, 0.06)',
     });
   });
 
@@ -311,12 +321,12 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "5e6e3166c2fccaeacee9ee3d8ac2f12da1db5123effeaf10dcb73ec068acf20a",
+          "hash": "cf3b1df5872d83daab7f9dd33671a6f82537c1e07cb90d6a49ac7d7a416cd045",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "b7b66bb445ae92237ba9f34d4530d8f17d92dc7b3a71951542b667ca679b3c29",
+          "hash": "21924d3ea4f17d63e89538e539ed7cdea263b0c31682e1378221e5ac46937d78",
           "id": "bitfun-monochrome",
           "type": "light",
         },

@@ -9,7 +9,7 @@
   right: 0;
   bottom: 0;
   z-index: 999999;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 95%, transparent);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 95%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -27,7 +27,7 @@
 .diff-fullscreen-container {
   width: 100vw;
   height: 100vh;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 96%, var(--bf-appearance-token-color-static-white));
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
   display: flex;
   flex-direction: column;
   position: relative;
@@ -64,8 +64,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, transparent);
-  border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-12);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 90%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
   z-index: 2;
@@ -82,7 +82,7 @@
 }
 
 .file-icon {
-  color: var(--bf-appearance-token-color-overlay-white-70);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
   flex-shrink: 0;
 }
 
@@ -91,7 +91,7 @@
 }
 
 .file-name {
-  color: var(--bf-appearance-token-color-overlay-white-95);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
   font-size: var(--bf-font-size-base);
   font-weight: var(--bf-font-weight-semibold);
   font-family: var(--bf-font-family-mono);
@@ -99,7 +99,7 @@
 }
 
 .file-path-full {
-  color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 50%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 50%, transparent);
   font-size: var(--bf-font-size-xs);
   font-family: var(--bf-font-family-mono);
   white-space: nowrap;
@@ -117,7 +117,7 @@
 .header-divider {
   width: 1px;
   height: 20px;
-  background: var(--bf-appearance-token-color-overlay-white-12);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
   margin: 0 4px;
 }
 
@@ -126,7 +126,7 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 96%, var(--bf-appearance-token-color-static-white));
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
   pointer-events: auto;
   z-index: 1;
 }
@@ -173,13 +173,13 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bf-appearance-token-color-overlay-black-80);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--bf-appearance-token-color-overlay-white-90);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
   font-size: var(--bf-font-size-base);
   backdrop-filter: blur(4px);
   z-index: 1000;
@@ -188,8 +188,8 @@
 .fullscreen-loading-overlay .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-static-white) 30%, transparent);
-  border-top: 2px solid var(--bf-appearance-token-color-overlay-white-90);
+  border: 2px solid color-mix(in srgb, var(--bf-color-content-on-dark) 30%, transparent);
+  border-top: 2px solid color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
   border-radius: 50%;
   animation: bitfun-diff-fullscreen-spin 1s linear infinite;
 }
@@ -243,14 +243,14 @@
 }
 
 :root[data-bf-appearance-mode='dark'] .diff-fullscreen-container {
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 }
 
 :root[data-bf-appearance-mode='dark'] .diff-fullscreen-header {
-  background: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 95%, transparent);
-  border-bottom-color: var(--bf-appearance-token-color-overlay-white-15);
+  background: color-mix(in srgb, var(--bf-color-content-on-light) 95%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
 }
 
 :root[data-bf-appearance-mode='dark'] .diff-fullscreen-content {
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
 }

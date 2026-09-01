@@ -1,7 +1,20 @@
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SOFT, SUBTLE } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  PAGE_BG,
+  PAGE_BG_FADE,
+  SCRIM,
+  SHADOW_FAINT,
+  SHADOW_SUBTLE,
+  SOFT,
+  SUBTLE,
+  TRANSPARENT
+} from './Theme';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
@@ -103,17 +116,19 @@ export struct AppSidebar {
         .scrollable(ScrollDirection.Vertical)
         .scrollBar(BarState.Off)
 
-        // The footer floats over the scroll, so rows have to fade out under it
-        // rather than run into it. Without this a workspace row mid-scroll gets
-        // visually sliced by the chat button sitting on top of it.
-        Column()
-          .width('100%')
-          .height(this.usesCompactFooter() ? 92 : 120)
-          .hitTestBehavior(HitTestMode.None)
-          .linearGradient({
-            angle: 180,
-            colors: [[PAGE_BG_FADE, 0.0], [PAGE_BG, 0.62]]
-          })
+        // Signed-out actions form a conventional footer and retain a fade.
+        // Authenticated navigation uses two independent floating controls, so
+        // the scroll remains visible all the way to the bottom behind them.
+        if (!this.isAccountAuthenticated()) {
+          Column()
+            .width('100%')
+            .height(this.usesCompactFooter() ? 92 : 120)
+            .hitTestBehavior(HitTestMode.None)
+            .linearGradient({
+              angle: 180,
+              colors: [[PAGE_BG_FADE, 0.0], [PAGE_BG, 0.62]]
+            })
+        }
 
         if (this.isAccountAuthenticated()) {
           this.AuthenticatedFooter()
@@ -215,7 +230,7 @@ export struct AppSidebar {
           .width(MobileDesignGeometry.controlTouchSize)
           .height(MobileDesignGeometry.controlTouchSize)
           .padding(0)
-          .backgroundColor('#00000000')
+          .backgroundColor(TRANSPARENT)
           .borderRadius(12)
           .stateEffect(true)
           .accessibilityText(RemoteI18n.t('remote.actions'))
@@ -227,11 +242,13 @@ export struct AppSidebar {
         Button() {
           SidebarGlyph({ kind: 'search' })
         }
-        .width(MobileDesignGeometry.controlTouchSize)
-        .height(MobileDesignGeometry.controlTouchSize)
+        .width(44)
+        .height(44)
         .padding(0)
-        .backgroundColor('#00000000')
-        .borderRadius(12)
+        .backgroundColor(CARD)
+        .border({ width: 0.5, color: LINE })
+        .borderRadius(22)
+        .shadow({ radius: 18, color: SHADOW_FAINT, offsetY: 5 })
         .stateEffect(true)
         .accessibilityText(RemoteI18n.t('common.search'))
         .onClick(() => {
@@ -312,19 +329,21 @@ export struct AppSidebar {
   private AuthenticatedFooter() {
     Row() {
       Button() {
-        Row({ space: 9 }) {
+        Row({ space: 8 }) {
           SidebarGlyph({ kind: 'edit' })
           Text(RemoteI18n.t('sidebar.newChat'))
-            .fontSize(MobileDesignTypography.titleSmall.size)
+            .fontSize(MobileDesignTypography.titleMedium.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
         }
       }
-      .width(116)
-      .height(48)
+      .width(98)
+      .height(44)
       .padding(0)
-      .backgroundColor(SOFT)
-      .borderRadius(16)
+      .backgroundColor(CARD)
+      .border({ width: 0.5, color: LINE })
+      .borderRadius(22)
+      .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetY: 7 })
       .stateEffect(true)
       .onClick(() => {
         this.onNewChat();
@@ -335,11 +354,12 @@ export struct AppSidebar {
       Button() {
         SidebarGlyph({ kind: 'settings' })
       }
-        .width(48)
-        .height(48)
+        .width(44)
+        .height(44)
         .padding(0)
-        .backgroundColor('#00000000')
-        .borderRadius(12)
+        .backgroundColor(CARD)
+        .borderRadius(22)
+        .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetY: 7 })
         .stateEffect(true)
         .onClick(() => {
           this.onOpenSettings();
@@ -347,6 +367,7 @@ export struct AppSidebar {
     }
     .width('100%')
     .height(56)
+    .padding({ left: 12 })
     .alignItems(VerticalAlign.Center)
     .zIndex(2)
   }
@@ -440,7 +461,7 @@ export struct AppSidebar {
     .height(46)
     .padding({ left: 12, right: 68 })
     .margin({ top: 8 })
-    .backgroundColor(this.archivedSessionsExpanded ? SOFT : '#00000000')
+    .backgroundColor(this.archivedSessionsExpanded ? SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => {
       this.archivedSessionsExpanded = !this.archivedSessionsExpanded;
@@ -460,14 +481,14 @@ export struct AppSidebar {
     }
     .width('100%').height(44)
     .padding({ left: 12, right: 4 })
-    .backgroundColor(this.selectedSessionId === session.id ? SOFT : '#00000000')
+    .backgroundColor(this.selectedSessionId === session.id ? SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => this.openSession(session))
     .gesture(LongPressGesture({ repeat: false }).onAction(() => this.openSessionActions(session)))
     .bindPopup(this.showCollapseButton && this.activeActionSessionId === session.id, {
       builder: () => { this.SessionActionPopover() },
       placement: Placement.Right,
-      popupColor: '#00000000',
+      popupColor: TRANSPARENT,
       enableArrow: false,
       autoCancel: true,
       mask: false,
@@ -496,7 +517,7 @@ export struct AppSidebar {
     .height(44)
     .padding({ left: 12, right: 4 })
     .backgroundColor(this.selectedSessionId === item.id || this.activeActionSessionId === item.id ?
-      SOFT : '#00000000')
+      SOFT : TRANSPARENT)
     .borderRadius(10)
     .onClick(() => {
       this.openSession(item);
@@ -505,7 +526,7 @@ export struct AppSidebar {
     .bindPopup(this.showCollapseButton && this.activeActionSessionId === item.id, {
       builder: () => { this.SessionActionPopover() },
       placement: Placement.Right,
-      popupColor: '#00000000',
+      popupColor: TRANSPARENT,
       enableArrow: false,
       autoCancel: true,
       mask: false,
@@ -711,8 +732,8 @@ export struct AppSidebar {
   private sessionActionSheetOptions(): SheetOptions {
     return {
       height: this.actionSessionIsGeneralChat() ? 380 : 300,
-      backgroundColor: '#00000000',
-      maskColor: '#44000000',
+      backgroundColor: TRANSPARENT,
+      maskColor: SCRIM,
       showClose: false,
       dragBar: false
     };

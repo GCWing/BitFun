@@ -1,3 +1,5 @@
+import { themeCssVariables, themes, type ThemeTokenName } from '@bitfun/theme-bitfun';
+
 import type { AppearancePalette } from './AppearancePalette';
 import type {
   AppearanceColorValue,
@@ -5,8 +7,7 @@ import type {
   AppearanceLengthValue,
   AppearanceNumberValue,
   AppearancePackage,
-  AppearanceReference,
-  AppearanceStyle,
+  AppearanceThemeTokenName,
 } from '../types';
 import {
   WIDGET_APPEARANCE_VARIABLE_NAMES,
@@ -14,12 +15,6 @@ import {
 } from '../adapters/widgetAppearanceVariables';
 
 const OVERLAY_WHITE_04 = 'rgba(255, 255, 255, 0.04)';
-
-const ref = (path: string): AppearanceReference => ({ kind: 'ref', path });
-const colorRef = (id: string): AppearanceReference => ref(`globals.colors.${id}`);
-const lengthRef = (id: string): AppearanceReference => ref(`globals.lengths.${id}`);
-const durationRef = (id: string): AppearanceReference => ref(`globals.durations.${id}`);
-const easingRef = (id: string): AppearanceReference => ref(`globals.easings.${id}`);
 
 function color(value: string): AppearanceColorValue {
   const trimmed = value.trim();
@@ -68,23 +63,19 @@ function number(value: number): AppearanceNumberValue {
   return { kind: 'number', value };
 }
 
-function transition(property: 'all' | 'background-color' | 'border-color' | 'box-shadow' | 'color' | 'opacity' | 'transform' = 'all'): NonNullable<AppearanceStyle['transition']> {
-  return [{ property, duration: durationRef('base'), easing: easingRef('standard') }];
+type ThemeValue = string | number | boolean;
+
+function themeValuesToCssTokens(
+  values: Readonly<Record<ThemeTokenName, ThemeValue>>,
+): Record<AppearanceThemeTokenName, string> {
+  return Object.fromEntries(
+    (Object.entries(values) as [ThemeTokenName, ThemeValue][])
+      .map(([name, value]) => [themeCssVariables[name], String(value)]),
+  ) as Record<AppearanceThemeTokenName, string>;
 }
 
-function colorToRgbChannels(value: string): string | null {
-  const trimmed = value.trim();
-  const hex = /^#([0-9a-f]{6})$/i.exec(trimmed);
-  if (hex) {
-    const numeric = Number.parseInt(hex[1], 16);
-    return `${(numeric >> 16) & 255} ${(numeric >> 8) & 255} ${numeric & 255}`;
-  }
-  const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(trimmed);
-  return rgb ? `${rgb[1]} ${rgb[2]} ${rgb[3]}` : null;
-}
-
-function createCssTokens(palette: AppearancePalette): Record<string, string> {
-  const { colors, effects, motion } = palette;
+function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenName, ThemeValue> {
+  const { colors, effects } = palette;
   const purple = colors.purple ?? {
     100: colors.element.subtle,
     200: colors.element.soft,
@@ -95,315 +86,264 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
     thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)',
   };
-  const chrome = colors.chrome ?? {
-    background: colors.background,
-    text: colors.text,
-    accent: colors.accent,
-    border: colors.border,
-    element: colors.element,
-    scrollbar,
-  };
-  const chromeScrollbar = chrome.scrollbar ?? scrollbar;
-  const configPage = palette.components?.configPage;
-  const tokens: Record<string, string> = {
-    '--bf-appearance-token-color-bg-primary': colors.background.primary,
-    '--bf-appearance-token-color-bg-secondary': colors.background.secondary,
-    '--bf-appearance-token-color-bg-tertiary': colors.background.tertiary,
-    '--bf-appearance-token-color-bg-elevated': colors.background.elevated,
-    '--bf-appearance-token-color-bg-workbench': colors.background.workbench,
-    '--bf-appearance-token-color-bg-scene': colors.background.scene,
-    '--bf-appearance-token-chrome-bg-primary': chrome.background.primary,
-    '--bf-appearance-token-chrome-bg-secondary': chrome.background.secondary,
-    '--bf-appearance-token-chrome-bg-tertiary': chrome.background.tertiary,
-    '--bf-appearance-token-chrome-bg-elevated': chrome.background.elevated,
-    '--bf-appearance-token-chrome-bg-workbench': chrome.background.workbench,
-    '--bf-appearance-token-chrome-bg-scene': chrome.background.scene,
-    '--bf-appearance-token-chrome-text-primary': chrome.text.primary,
-    '--bf-appearance-token-chrome-text-secondary': chrome.text.secondary,
-    '--bf-appearance-token-chrome-text-muted': chrome.text.muted,
-    '--bf-appearance-token-chrome-text-disabled': chrome.text.disabled,
-    '--bf-appearance-token-chrome-accent-50': chrome.accent[50],
-    '--bf-appearance-token-chrome-accent-100': chrome.accent[100],
-    '--bf-appearance-token-chrome-accent-200': chrome.accent[200],
-    '--bf-appearance-token-chrome-accent-300': chrome.accent[300],
-    '--bf-appearance-token-chrome-accent-400': chrome.accent[400],
-    '--bf-appearance-token-chrome-accent-500': chrome.accent[500],
-    '--bf-appearance-token-chrome-accent-600': chrome.accent[600],
-    '--bf-appearance-token-chrome-accent-700': chrome.accent[700],
-    '--bf-appearance-token-chrome-border-subtle': chrome.border.subtle,
-    '--bf-appearance-token-chrome-border-base': chrome.border.base,
-    '--bf-appearance-token-chrome-border-medium': chrome.border.medium,
-    '--bf-appearance-token-chrome-border-strong': chrome.border.strong,
-    '--bf-appearance-token-chrome-border-prominent': chrome.border.prominent,
-    '--bf-appearance-token-chrome-border-accent-soft': `color-mix(in srgb, ${chrome.accent[600]} 30%, transparent)`,
-    '--bf-appearance-token-chrome-border-accent-subtle': `color-mix(in srgb, ${chrome.accent[600]} 15%, transparent)`,
-    '--bf-appearance-token-chrome-border-accent': `color-mix(in srgb, ${chrome.accent[600]} 40%, transparent)`,
-    '--bf-appearance-token-chrome-border-accent-strong': `color-mix(in srgb, ${chrome.accent[600]} 60%, transparent)`,
-    '--bf-appearance-token-chrome-element-bg-subtle': chrome.element.subtle,
-    '--bf-appearance-token-chrome-element-bg-soft': chrome.element.soft,
-    '--bf-appearance-token-chrome-element-bg-base': chrome.element.base,
-    '--bf-appearance-token-chrome-element-bg-medium': chrome.element.medium,
-    '--bf-appearance-token-chrome-element-bg-strong': chrome.element.strong,
-    '--bf-appearance-token-chrome-scrollbar-thumb': chromeScrollbar.thumb,
-    '--bf-appearance-token-chrome-scrollbar-thumb-hover': chromeScrollbar.thumbHover,
-    '--bf-appearance-token-color-static-white': '#ffffff',
-    '--bf-appearance-token-color-static-black': '#000000',
-    '--bf-appearance-token-color-static-white-rgb': '255, 255, 255',
-    '--bf-appearance-token-color-static-black-rgb': '0, 0, 0',
-    '--bf-appearance-token-color-accent-50': colors.accent[50],
-    '--bf-appearance-token-color-accent-100': colors.accent[100],
-    '--bf-appearance-token-color-accent-200': colors.accent[200],
-    '--bf-appearance-token-color-accent-300': colors.accent[300],
-    '--bf-appearance-token-color-accent-400': colors.accent[400],
-    '--bf-appearance-token-color-accent-500': colors.accent[500],
-    '--bf-appearance-token-color-accent-600': colors.accent[600],
-    '--bf-appearance-token-color-accent-700': colors.accent[700],
-    '--bf-appearance-token-color-accent-500-rgb': colorToRgbChannels(colors.accent[500])
-      ?? colorToRgbChannels(colors.accent[600])
-      ?? '96 165 250',
-    '--bf-appearance-token-color-purple-100': purple[100],
-    '--bf-appearance-token-color-purple-200': purple[200],
-    '--bf-appearance-token-color-purple-500': purple[500],
-    '--bf-appearance-token-color-purple-600': purple[600],
-    '--bf-appearance-token-color-overlay-slate-rgb': '15, 23, 42',
-    '--bf-appearance-token-color-text-primary': colors.text.primary,
-    '--bf-appearance-token-color-text-secondary': colors.text.secondary,
-    '--bf-appearance-token-color-text-muted': colors.text.muted,
-    '--bf-appearance-token-color-text-disabled': colors.text.disabled,
-    '--bf-appearance-token-color-success': colors.semantic.success,
-    '--bf-appearance-token-color-success-bg': colors.semantic.successBg,
-    '--bf-appearance-token-color-success-border': colors.semantic.successBorder,
-    '--bf-appearance-token-color-warning': colors.semantic.warning,
-    '--bf-appearance-token-color-warning-bg': colors.semantic.warningBg,
-    '--bf-appearance-token-color-warning-border': colors.semantic.warningBorder,
-    '--bf-appearance-token-color-error': colors.semantic.error,
-    '--bf-appearance-token-color-error-bg': colors.semantic.errorBg,
-    '--bf-appearance-token-color-error-border': colors.semantic.errorBorder,
-    '--bf-appearance-token-color-info': colors.semantic.info,
-    '--bf-appearance-token-color-info-bg': colors.semantic.infoBg,
-    '--bf-appearance-token-color-info-border': colors.semantic.infoBorder,
-    '--bf-appearance-token-border-subtle': colors.border.subtle,
-    '--bf-appearance-token-border-base': colors.border.base,
-    '--bf-appearance-token-border-medium': colors.border.medium,
-    '--bf-appearance-token-border-strong': colors.border.strong,
-    '--bf-appearance-token-border-prominent': colors.border.prominent,
-    '--bf-appearance-token-border-accent-soft': `color-mix(in srgb, ${colors.accent[600]} 30%, transparent)`,
-    '--bf-appearance-token-border-accent-subtle': `color-mix(in srgb, ${colors.accent[600]} 15%, transparent)`,
-    '--bf-appearance-token-border-accent': `color-mix(in srgb, ${colors.accent[600]} 40%, transparent)`,
-    '--bf-appearance-token-border-accent-strong': `color-mix(in srgb, ${colors.accent[600]} 60%, transparent)`,
-    '--bf-appearance-token-scene-viewport-border-width': palette.layout?.sceneViewportBorder === false ? '0' : '1px',
-    '--bf-appearance-token-element-bg-subtle': colors.element.subtle,
-    '--bf-appearance-token-element-bg-soft': colors.element.soft,
-    '--bf-appearance-token-element-bg-base': colors.element.base,
-    '--bf-appearance-token-element-bg-medium': colors.element.medium,
-    '--bf-appearance-token-element-bg-strong': colors.element.strong,
-    '--bf-appearance-token-element-bg-hover': colors.element.medium,
-    '--bf-appearance-token-config-page-section-bg': configPage?.section.background ?? colors.element.subtle,
-    '--bf-appearance-token-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
-    '--bf-appearance-token-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',
-    '--bf-appearance-token-config-page-section-shadow': configPage?.section.shadow
-      ?? `inset 0 1px 0 ${OVERLAY_WHITE_04}`,
-    '--bf-appearance-token-config-page-divider': configPage?.divider ?? colors.border.subtle,
-    '--bf-appearance-token-config-page-row-hover-bg': configPage?.rowHover ?? OVERLAY_WHITE_04,
-    '--bf-appearance-token-git-color-branch': colors.git.branch,
-    '--bf-appearance-token-git-color-branch-bg': colors.git.branchBg,
-    '--bf-appearance-token-git-color-branch-bg-hover': colors.element.medium,
-    '--bf-appearance-token-git-color-changes': colors.git.changes,
-    '--bf-appearance-token-git-color-added': colors.git.added,
-    '--bf-appearance-token-git-color-deleted': colors.git.deleted,
-    '--bf-appearance-token-git-color-staged': colors.git.staged,
-    '--bf-appearance-token-scrollbar-thumb': scrollbar.thumb,
-    '--bf-appearance-token-scrollbar-thumb-hover': scrollbar.thumbHover,
-    '--bf-appearance-token-opacity-disabled': String(effects.opacity.disabled),
-    '--bf-appearance-token-opacity-hover': String(effects.opacity.hover),
-    '--bf-appearance-token-badge-padding-y': '2px',
-    '--bf-appearance-token-glow-shadow-blue': `0 12px 32px color-mix(in srgb, ${colors.accent[600]} 25%, transparent), 0 6px 16px color-mix(in srgb, ${colors.accent[500]} 18%, transparent), 0 3px 8px rgba(0, 0, 0, 0.12)`,
-    '--bf-appearance-token-inner-glow-top': 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
-    '--bf-appearance-token-inner-glow-top-hover': 'inset 0 1px 0 rgba(255, 255, 255, 0.24)',
-    '--bf-appearance-token-glass-blue-subtle': `color-mix(in srgb, ${colors.accent[600]} 8%, transparent)`,
-    '--bf-appearance-token-glass-red-subtle': `color-mix(in srgb, ${colors.semantic.error} 5%, transparent)`,
-    '--bf-appearance-token-glass-red-base': colors.semantic.errorBg,
-    '--bf-appearance-token-glass-red-hover': `color-mix(in srgb, ${colors.semantic.error} 15%, transparent)`,
-    '--bf-appearance-token-glass-bg-base': `linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.04) 100%)`,
-    '--bf-appearance-token-glass-bg-hover': colors.element.medium,
-    '--bf-appearance-token-glass-bg-active': colors.element.strong,
-    '--bf-appearance-token-glass-border-base': colors.border.base,
-    '--bf-appearance-token-glass-border-hover': colors.border.medium,
-    '--bf-appearance-token-color-indigo-500': '#6366f1',
-    '--bf-appearance-token-color-cyan-500': '#06b6d4',
-    '--bf-appearance-token-domain-context-compression': purple[500],
-    '--bf-appearance-token-domain-generative-ui': '#06b6d4',
-    '--bf-appearance-token-domain-mini-app': purple[500],
-    '--bf-appearance-token-domain-mermaid-diagram': colors.semantic.success,
-    '--bf-appearance-token-domain-tool-search': colors.accent[600],
-    '--bf-appearance-token-domain-tool-web-search': '#06b6d4',
-    '--bf-appearance-token-domain-tool-git': colors.semantic.warning,
-    '--bf-appearance-token-domain-tool-terminal': '#14b8a6',
-    '--bf-appearance-token-domain-tool-mcp': purple[500],
-    '--bf-appearance-token-domain-tool-assistant-action': purple[500],
-    '--bf-appearance-token-domain-tool-review-summary': '#06b6d4',
-    '--bf-appearance-token-domain-capability-docs': colors.semantic.success,
-    '--bf-appearance-token-domain-capability-testing': colors.semantic.warning,
-    '--bf-appearance-token-domain-capability-creative': purple[500],
-    '--bf-appearance-token-domain-capability-ops': '#06b6d4',
-    '--bf-appearance-token-domain-insights-positive': colors.semantic.success,
-    '--bf-appearance-token-domain-insights-time': purple[500],
-    '--bf-appearance-token-domain-insights-neutral': colors.semantic.warning,
-    '--bf-appearance-token-domain-insights-issue': colors.semantic.error,
-    '--bf-appearance-token-domain-progress-compacting': '#14b8a6',
-    '--bf-appearance-token-domain-template-memories': purple[500],
-    '--bf-appearance-token-domain-review-member-default': '#64748b',
-    '--bf-appearance-token-domain-review-worker': colors.accent[600],
-    '--bf-appearance-token-domain-review-judge': purple[500],
-    '--bf-appearance-token-domain-teal-action': '#14b8a6',
-    '--bf-appearance-token-domain-todo': '#14b8a6',
-    '--bf-appearance-token-domain-git-lane-0': colors.accent[600],
-    '--bf-appearance-token-domain-git-lane-1': colors.semantic.success,
-    '--bf-appearance-token-domain-git-lane-2': colors.semantic.warning,
-    '--bf-appearance-token-domain-git-lane-3': purple[500],
-    '--bf-appearance-token-domain-git-lane-4': colors.semantic.error,
-    '--bf-appearance-token-domain-git-lane-5': '#06b6d4',
-    '--bf-appearance-token-domain-git-lane-6': '#14b8a6',
-    '--bf-appearance-token-domain-git-lane-7': '#64748b',
-    '--bf-appearance-token-domain-text-stroke-0': colors.semantic.warning,
-    '--bf-appearance-token-domain-text-stroke-1': colors.semantic.error,
-    '--bf-appearance-token-domain-text-stroke-2': colors.accent[600],
-    '--bf-appearance-token-domain-text-stroke-3': '#06b6d4',
-    '--bf-appearance-token-domain-text-stroke-4': purple[500],
-    '--bf-appearance-token-domain-inspector-active-border': colors.accent[600],
-    '--bf-appearance-token-domain-inspector-active-background': `color-mix(in srgb, ${colors.accent[600]} 15%, transparent)`,
-    '--bf-appearance-token-domain-inspector-active-border-subtle': `color-mix(in srgb, ${colors.accent[600]} 40%, transparent)`,
-    '--bf-appearance-token-domain-inspector-selected-border': colors.semantic.success,
-    '--bf-appearance-token-domain-inspector-selected-background': `color-mix(in srgb, ${colors.semantic.success} 18%, transparent)`,
-    '--bf-appearance-token-domain-inspector-browser-tooltip-background': 'rgba(10, 10, 10, 0.92)',
-    '--bf-appearance-token-domain-inspector-main-tooltip-background': 'rgba(15, 23, 42, 0.95)',
-    '--bf-appearance-token-domain-inspector-tooltip-text': '#e2e8f0',
-    '--bf-appearance-token-domain-inspector-tooltip-shadow': 'rgba(0, 0, 0, 0.5)',
-    '--bf-appearance-token-language-blue': '#3178c6',
-    '--bf-appearance-token-language-cyan': '#00add8',
-    '--bf-appearance-token-language-yellow': '#f7df1e',
-    '--bf-appearance-token-language-orange': '#e38c00',
-    '--bf-appearance-token-language-red': colors.semantic.error,
-    '--bf-appearance-token-language-green': colors.semantic.success,
-    '--bf-appearance-token-language-purple': purple[500],
-    '--bf-appearance-token-language-slate': '#64748b',
-    '--bf-appearance-token-prism-light-foreground': '#24292f',
-    '--bf-appearance-token-prism-light-comment': '#6e7781',
-    '--bf-appearance-token-prism-light-keyword': '#cf222e',
-    '--bf-appearance-token-prism-light-string': '#0550ae',
-    '--bf-appearance-token-prism-light-function': '#8250df',
-    '--bf-appearance-token-prism-light-number': '#0550ae',
-    '--bf-appearance-token-prism-light-tag': '#116329',
-    '--bf-appearance-token-prism-light-punctuation': '#57606a',
-    '--bf-appearance-token-prism-light-property': '#953800',
-    '--bf-appearance-token-prism-dark-foreground': '#d4d4d4',
-    '--bf-appearance-token-prism-dark-comment': '#6a9955',
-    '--bf-appearance-token-prism-dark-keyword': '#c586c0',
-    '--bf-appearance-token-prism-dark-string': '#ce9178',
-    '--bf-appearance-token-prism-dark-function': '#dcdcaa',
-    '--bf-appearance-token-prism-dark-number': '#b5cea8',
-    '--bf-appearance-token-prism-dark-tag': '#569cd6',
-    '--bf-appearance-token-prism-dark-punctuation': '#d4d4d4',
-    '--bf-appearance-token-prism-dark-property': '#9cdcfe',
-    '--bf-appearance-token-blur-medium': 'blur(12px) saturate(1.2)',
-    '--bf-appearance-token-blur-subtle': effects.blur.subtle,
-    '--bf-appearance-token-blur-base': effects.blur.base,
-    '--bf-appearance-token-motion-lazy': '1s',
-    '--bf-appearance-token-motion-instant': motion.duration.instant,
-    '--bf-appearance-token-easing-accelerate': 'cubic-bezier(0.4, 0, 1, 1)',
-    '--bf-appearance-token-easing-decelerate': motion.easing.decelerate,
-    '--bf-appearance-token-easing-smooth': motion.easing.smooth,
-    '--bf-appearance-token-flowchat-flow-item-gap': '0.42rem',
-    '--bf-appearance-token-flowchat-turn-gap': '0.46rem',
-    '--bf-appearance-token-flowchat-inline-gap': '0.35rem',
-    '--bf-appearance-token-flowchat-control-gap': '0.5rem',
-    '--bf-appearance-token-flowchat-control-pad-y': '0.35rem',
-    '--bf-appearance-token-flowchat-control-pad-x': '0.75rem',
-    '--bf-appearance-token-flowchat-content-inline-pad': '3rem',
-    '--bf-appearance-token-flowchat-content-inline-pad-mobile': '1.5rem',
-    '--bf-appearance-token-flowchat-card-gap': '0.42rem',
-    '--bf-appearance-token-flowchat-card-radius': effects.radius.base,
-    '--bf-appearance-token-flowchat-card-pad-y': '0.625rem',
-    '--bf-appearance-token-flowchat-card-pad-x': '0.75rem',
-    '--bf-appearance-token-flowchat-card-expanded-pad-y': '0.5rem',
-    '--bf-appearance-token-flowchat-card-expanded-pad-x': '0.625rem',
-    '--bf-appearance-token-flowchat-code-block-pad-y': '0.55rem',
-    '--bf-appearance-token-flowchat-code-block-pad-x': '0.75rem',
-    '--bf-appearance-token-flowchat-link-color': palette.type === 'dark' ? '#60a5fa' : '#0969da',
-    '--bf-appearance-token-flowchat-link-hover-color': palette.type === 'dark' ? '#93c5fd' : '#0550ae',
-    '--bf-appearance-token-tool-card-header-pad-y': '0.44rem',
-    '--bf-appearance-token-tool-card-header-pad-right': '0.625rem',
-    '--bf-appearance-token-tool-card-header-icon-slot': '34px',
-    '--bf-appearance-token-tool-card-expanded-pad-x': '0.625rem',
+  const button = palette.components?.button;
+  const values: Record<ThemeTokenName, ThemeValue> = { ...themes[palette.type] };
+
+  Object.assign(values, {
+    'color.surface.canvas': colors.background.primary,
+    'color.surface.panel': colors.background.secondary,
+    'color.surface.raised': colors.background.elevated,
+    'color.surface.scene': colors.background.scene,
+    'color.surface.workbench': colors.background.workbench,
+    'color.surface.tertiary': colors.background.tertiary,
+    'color.surface.chrome': colors.background.chrome
+      ?? colors.chrome?.background.chrome
+      ?? colors.chrome?.background.primary
+      ?? colors.background.primary,
+    'color.surface.subtle': colors.element.subtle,
+    'color.scrollbar.thumb': scrollbar.thumb,
+    'color.scrollbar.thumbHover': scrollbar.thumbHover,
+    'color.content.primary': colors.text.primary,
+    'color.content.secondary': colors.text.secondary,
+    'color.content.muted': colors.text.muted,
+    'color.content.disabled': colors.text.disabled,
+    'color.accent.default': colors.accent[500],
+    'color.accent.hover': colors.accent[600],
+    'color.accent.secondary': purple[500],
+    'color.accent.secondaryHover': purple[600],
+    'color.border.subtle': colors.border.subtle,
+    'color.border.default': colors.border.base,
+    'color.border.strong': colors.border.strong,
+    'color.action.neutral.border': colors.border.base,
+    'color.action.neutral.content': colors.text.secondary,
+    'color.action.neutral.contentDisabled': colors.text.disabled,
+    'color.action.neutral.fillBorder': colors.element.base,
+    'color.action.neutral.surface': colors.element.base,
+    'color.action.neutral.surfaceHover': colors.element.medium,
+    'color.action.neutral.surfacePressed': colors.element.strong,
+    'color.action.primary.background': button?.primary.default.background ?? colors.accent[500],
+    'color.action.primary.hover': button?.primary.hover.background ?? colors.accent[600],
+    'color.action.primary.pressed': button?.primary.active.background ?? colors.accent[700],
+    'color.action.primary.content': button?.primary.default.color ?? values['color.content.inverse'],
+    'color.action.secondary.background': colors.accent[100],
+    'color.action.secondary.hover': colors.accent[200],
+    'color.action.secondary.pressed': colors.accent[300],
+    'color.action.secondary.content': colors.accent[600],
+    'color.action.quiet.hover': colors.element.soft,
+    'color.action.quiet.pressed': colors.element.base,
+    'color.action.quiet.content': colors.text.secondary,
+    'color.selection.surface': colors.element.medium,
+    'color.field.background': colors.background.secondary,
+    'color.field.backgroundHover': colors.element.subtle,
+    'color.field.border': colors.border.base,
+    'color.field.borderHover': colors.border.medium,
+    'color.field.borderFocus': colors.accent[500],
+    'color.focus.ring': colors.accent[500],
+    'color.status.info.content': colors.semantic.info,
+    'color.status.info.surface': colors.semantic.infoBg,
+    'color.status.info.border': colors.semantic.infoBorder,
+    'color.status.success.content': colors.semantic.success,
+    'color.status.success.surface': colors.semantic.successBg,
+    'color.status.success.border': colors.semantic.successBorder,
+    'color.status.warning.content': colors.semantic.warning,
+    'color.status.warning.surface': colors.semantic.warningBg,
+    'color.status.warning.border': colors.semantic.warningBorder,
+    'color.status.danger.content': colors.semantic.error,
+    'color.status.danger.surface': colors.semantic.errorBg,
+    'color.status.danger.border': colors.semantic.errorBorder,
+    'shadow.xs': effects.shadow.xs,
+    'shadow.sm': effects.shadow.sm,
+    'shadow.base': effects.shadow.base,
+    'shadow.lg': effects.shadow.lg,
+    'shadow.xl': effects.shadow.xl,
+    'shadow.raised': effects.shadow.sm,
+    'effect.blur.subtle': effects.blur.subtle,
+    'effect.blur.base': effects.blur.base,
+    'opacity.disabled': effects.opacity.disabled,
+    'opacity.hover': effects.opacity.hover,
+    'opacity.focus': effects.opacity.focus,
+    'opacity.muted': effects.opacity.hover,
+  } satisfies Partial<Record<ThemeTokenName, ThemeValue>>);
+
+  return values;
+}
+
+function createChromeThemeTokens(
+  palette: AppearancePalette,
+): Record<AppearanceThemeTokenName, string> | undefined {
+  const chrome = palette.colors.chrome;
+  if (!chrome) return undefined;
+  const values = createThemeTokenValues(palette);
+  const scrollbar = chrome.scrollbar ?? palette.colors.scrollbar ?? {
+    thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
+    thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)',
   };
 
-  const overlays = {
-    '--bf-appearance-token-color-overlay-white-04': OVERLAY_WHITE_04,
-    '--bf-appearance-token-color-overlay-white-08': 'rgba(255, 255, 255, 0.08)',
-    '--bf-appearance-token-color-overlay-white-12': 'rgba(255, 255, 255, 0.12)',
-    '--bf-appearance-token-color-overlay-white-15': 'rgba(255, 255, 255, 0.15)',
-    '--bf-appearance-token-color-overlay-white-20': 'rgba(255, 255, 255, 0.2)',
-    '--bf-appearance-token-color-overlay-white-24': 'rgba(255, 255, 255, 0.24)',
-    '--bf-appearance-token-color-overlay-white-60': 'rgba(255, 255, 255, 0.6)',
-    '--bf-appearance-token-color-overlay-white-70': 'rgba(255, 255, 255, 0.7)',
-    '--bf-appearance-token-color-overlay-white-80': 'rgba(255, 255, 255, 0.8)',
-    '--bf-appearance-token-color-overlay-white-90': 'rgba(255, 255, 255, 0.9)',
-    '--bf-appearance-token-color-overlay-white-95': 'rgba(255, 255, 255, 0.95)',
-    '--bf-appearance-token-color-overlay-black-08': 'rgba(0, 0, 0, 0.08)',
-    '--bf-appearance-token-color-overlay-black-12': 'rgba(0, 0, 0, 0.12)',
-    '--bf-appearance-token-color-overlay-black-15': 'rgba(0, 0, 0, 0.15)',
-    '--bf-appearance-token-color-overlay-black-20': 'rgba(0, 0, 0, 0.2)',
-    '--bf-appearance-token-color-overlay-black-30': 'rgba(0, 0, 0, 0.3)',
-    '--bf-appearance-token-color-overlay-black-40': 'rgba(0, 0, 0, 0.4)',
-    '--bf-appearance-token-color-overlay-black-50': 'rgba(0, 0, 0, 0.5)',
-    '--bf-appearance-token-color-overlay-black-80': 'rgba(0, 0, 0, 0.8)',
-    '--bf-appearance-token-color-overlay-slate-04': 'rgba(15, 23, 42, 0.04)',
-    '--bf-appearance-token-color-overlay-slate-08': 'rgba(15, 23, 42, 0.08)',
-    '--bf-appearance-token-color-overlay-slate-12': 'rgba(15, 23, 42, 0.12)',
+  Object.assign(values, {
+    'color.surface.canvas': chrome.background.primary,
+    'color.surface.panel': chrome.background.secondary,
+    'color.surface.raised': chrome.background.elevated,
+    'color.surface.scene': chrome.background.scene,
+    'color.surface.workbench': chrome.background.workbench,
+    'color.surface.tertiary': chrome.background.tertiary,
+    'color.surface.chrome': chrome.background.chrome ?? chrome.background.primary,
+    'color.surface.subtle': chrome.element.subtle,
+    'color.content.primary': chrome.text.primary,
+    'color.content.secondary': chrome.text.secondary,
+    'color.content.muted': chrome.text.muted,
+    'color.content.disabled': chrome.text.disabled,
+    'color.accent.default': chrome.accent[500],
+    'color.accent.hover': chrome.accent[600],
+    'color.border.subtle': chrome.border.subtle,
+    'color.border.default': chrome.border.base,
+    'color.border.strong': chrome.border.strong,
+    'color.action.neutral.border': chrome.border.base,
+    'color.action.neutral.content': chrome.text.secondary,
+    'color.action.neutral.contentDisabled': chrome.text.disabled,
+    'color.action.neutral.fillBorder': chrome.element.base,
+    'color.action.neutral.surface': chrome.element.base,
+    'color.action.neutral.surfaceHover': chrome.element.medium,
+    'color.action.neutral.surfacePressed': chrome.element.strong,
+    'color.action.secondary.background': chrome.accent[100],
+    'color.action.secondary.hover': chrome.accent[200],
+    'color.action.secondary.pressed': chrome.accent[300],
+    'color.action.secondary.content': chrome.accent[600],
+    'color.action.quiet.hover': chrome.element.soft,
+    'color.action.quiet.pressed': chrome.element.base,
+    'color.action.quiet.content': chrome.text.secondary,
+    'color.selection.surface': chrome.element.medium,
+    'color.field.background': chrome.background.secondary,
+    'color.field.backgroundHover': chrome.element.subtle,
+    'color.field.border': chrome.border.base,
+    'color.field.borderHover': chrome.border.medium,
+    'color.field.borderFocus': chrome.accent[500],
+    'color.focus.ring': chrome.accent[500],
+    'color.scrollbar.thumb': scrollbar.thumb,
+    'color.scrollbar.thumbHover': scrollbar.thumbHover,
+  } satisfies Partial<Record<ThemeTokenName, ThemeValue>>);
+
+  return themeValuesToCssTokens(values);
+}
+
+function createAppearanceOwnedTokens(
+  palette: AppearancePalette,
+): Record<AppearanceThemeTokenName, string> {
+  const { colors } = palette;
+  const purple = colors.purple ?? {
+    100: colors.element.subtle,
+    200: colors.element.soft,
+    500: colors.accent[500],
+    600: colors.accent[600],
   };
-  Object.assign(tokens, overlays);
-  Object.entries(purple).forEach(([key, value]) => { tokens[`--bf-appearance-token-color-purple-${key}`] = value; });
-  Object.entries(effects.shadow).forEach(([key, value]) => { tokens[`--bf-appearance-token-shadow-${key}`] = value; });
-  Object.entries(effects.blur).forEach(([key, value]) => { tokens[`--bf-appearance-token-blur-${key}`] = value; });
-  Object.entries(effects.radius).forEach(([key, value]) => { tokens[`--bf-appearance-token-size-radius-${key}`] = value; });
-  tokens['--bf-appearance-token-size-radius-md'] = effects.radius.base;
-  Object.entries(effects.spacing).forEach(([key, value]) => { tokens[`--bf-appearance-token-size-gap-${key}`] = value; });
-  Object.entries(motion.duration).forEach(([key, value]) => { tokens[`--bf-appearance-token-motion-${key}`] = value; });
-  Object.entries(motion.easing).forEach(([key, value]) => { tokens[`--bf-appearance-token-easing-${key}`] = value; });
-  const button = palette.components?.button;
-  tokens['--bf-appearance-token-btn-primary-bg'] = button?.primary.default.background ?? colors.accent[200];
-  tokens['--bf-appearance-token-btn-primary-color'] = button?.primary.default.color ?? colors.accent[600];
-  tokens['--bf-appearance-token-btn-primary-border'] = button?.primary.default.border ?? 'transparent';
-  tokens['--bf-appearance-token-btn-primary-shadow'] = button?.primary.default.shadow ?? 'none';
-  tokens['--bf-appearance-token-btn-primary-hover-bg'] = button?.primary.hover.background ?? colors.accent[300];
-  tokens['--bf-appearance-token-btn-primary-hover-color'] = button?.primary.hover.color ?? colors.text.primary;
-  tokens['--bf-appearance-token-btn-primary-hover-border'] = button?.primary.hover.border ?? 'transparent';
-  tokens['--bf-appearance-token-btn-primary-hover-shadow'] = button?.primary.hover.shadow ?? 'none';
-  tokens['--bf-appearance-token-btn-primary-hover-transform'] = button?.primary.hover.transform ?? 'none';
-  tokens['--bf-appearance-token-btn-primary-active-bg'] = button?.primary.active.background ?? colors.accent[200];
-  tokens['--bf-appearance-token-btn-primary-active-color'] = button?.primary.active.color ?? colors.text.primary;
-  tokens['--bf-appearance-token-btn-primary-active-border'] = button?.primary.active.border ?? 'transparent';
-  tokens['--bf-appearance-token-btn-primary-active-shadow'] = button?.primary.active.shadow ?? 'none';
-  tokens['--bf-appearance-token-btn-primary-active-transform'] = button?.primary.active.transform ?? 'none';
-  tokens['--bf-appearance-token-btn-ghost-color'] = button?.ghost.default.color ?? colors.text.muted;
-  tokens['--bf-appearance-token-btn-ghost-hover-bg'] = button?.ghost.hover.background ?? colors.element.subtle;
-  tokens['--bf-appearance-token-btn-ghost-hover-color'] = button?.ghost.hover.color ?? colors.text.primary;
-  tokens['--bf-appearance-token-btn-ghost-hover-border'] = button?.ghost.hover.border ?? 'transparent';
-  return tokens;
+  const configPage = palette.components?.configPage;
+  return {
+    ...themeValuesToCssTokens(createThemeTokenValues(palette)),
+    '--bf-component-config-page-section-background': configPage?.section.background ?? colors.background.tertiary,
+    '--bf-component-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
+    '--bf-component-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',
+    '--bf-component-config-page-section-shadow': configPage?.section.shadow
+      ?? `inset 0 1px 0 ${OVERLAY_WHITE_04}`,
+    '--bf-component-config-page-divider': configPage?.divider ?? colors.border.subtle,
+    '--bf-component-config-page-row-hover-background': configPage?.rowHover ?? colors.element.soft,
+    '--bf-component-scene-viewport-border-width': palette.layout?.sceneViewportBorder === false ? '0' : '1px',
+    '--bf-component-badge-padding-block': '2px',
+    '--bf-domain-context-compression': purple[500],
+    '--bf-domain-generative-ui': '#06b6d4',
+    '--bf-domain-mini-app': purple[500],
+    '--bf-domain-mermaid-diagram': colors.semantic.success,
+    '--bf-domain-tool-search': colors.accent[600],
+    '--bf-domain-tool-web-search': '#06b6d4',
+    '--bf-domain-tool-git': colors.semantic.warning,
+    '--bf-domain-tool-terminal': '#14b8a6',
+    '--bf-domain-tool-mcp': purple[500],
+    '--bf-domain-tool-assistant-action': purple[500],
+    '--bf-domain-tool-review-summary': '#06b6d4',
+    '--bf-domain-capability-docs': colors.semantic.success,
+    '--bf-domain-capability-testing': colors.semantic.warning,
+    '--bf-domain-capability-creative': purple[500],
+    '--bf-domain-capability-ops': '#06b6d4',
+    '--bf-domain-insights-positive': colors.semantic.success,
+    '--bf-domain-insights-time': purple[500],
+    '--bf-domain-insights-neutral': colors.semantic.warning,
+    '--bf-domain-insights-issue': colors.semantic.error,
+    '--bf-domain-progress-compacting': '#14b8a6',
+    '--bf-domain-template-memories': purple[500],
+    '--bf-domain-review-member-default': '#64748b',
+    '--bf-domain-review-worker': colors.accent[600],
+    '--bf-domain-review-judge': purple[500],
+    '--bf-domain-teal-action': '#14b8a6',
+    '--bf-domain-todo': '#14b8a6',
+    '--bf-domain-git-branch': colors.git.branch,
+    '--bf-domain-git-branch-background': colors.git.branchBg,
+    '--bf-domain-git-branch-background-hover': colors.element.medium,
+    '--bf-domain-git-changes': colors.git.changes,
+    '--bf-domain-git-added': colors.git.added,
+    '--bf-domain-git-deleted': colors.git.deleted,
+    '--bf-domain-git-staged': colors.git.staged,
+    '--bf-domain-git-lane-0': colors.accent[600],
+    '--bf-domain-git-lane-1': colors.semantic.success,
+    '--bf-domain-git-lane-2': colors.semantic.warning,
+    '--bf-domain-git-lane-3': purple[500],
+    '--bf-domain-git-lane-4': colors.semantic.error,
+    '--bf-domain-git-lane-5': '#06b6d4',
+    '--bf-domain-git-lane-6': '#14b8a6',
+    '--bf-domain-git-lane-7': '#64748b',
+    '--bf-domain-text-stroke-0': colors.semantic.warning,
+    '--bf-domain-text-stroke-1': colors.semantic.error,
+    '--bf-domain-text-stroke-2': colors.accent[600],
+    '--bf-domain-text-stroke-3': '#06b6d4',
+    '--bf-domain-text-stroke-4': purple[500],
+    '--bf-domain-inspector-active-border': colors.accent[600],
+    '--bf-domain-inspector-active-background': `color-mix(in srgb, ${colors.accent[600]} 15%, transparent)`,
+    '--bf-domain-inspector-active-border-subtle': `color-mix(in srgb, ${colors.accent[600]} 40%, transparent)`,
+    '--bf-domain-inspector-selected-border': colors.semantic.success,
+    '--bf-domain-inspector-selected-background': `color-mix(in srgb, ${colors.semantic.success} 18%, transparent)`,
+    '--bf-domain-inspector-browser-tooltip-background': 'rgba(10, 10, 10, 0.92)',
+    '--bf-domain-inspector-main-tooltip-background': 'rgba(15, 23, 42, 0.95)',
+    '--bf-domain-inspector-tooltip-text': '#e2e8f0',
+    '--bf-domain-inspector-tooltip-shadow': 'rgba(0, 0, 0, 0.5)',
+    '--bf-domain-language-blue': '#3178c6',
+    '--bf-domain-language-cyan': '#00add8',
+    '--bf-domain-language-yellow': '#f7df1e',
+    '--bf-domain-language-orange': '#e38c00',
+    '--bf-domain-language-red': colors.semantic.error,
+    '--bf-domain-language-green': colors.semantic.success,
+    '--bf-domain-language-purple': purple[500],
+    '--bf-domain-language-slate': '#64748b',
+    '--bf-domain-prism-light-foreground': '#24292f',
+    '--bf-domain-prism-light-comment': '#6e7781',
+    '--bf-domain-prism-light-keyword': '#cf222e',
+    '--bf-domain-prism-light-string': '#0550ae',
+    '--bf-domain-prism-light-function': '#8250df',
+    '--bf-domain-prism-light-number': '#0550ae',
+    '--bf-domain-prism-light-tag': '#116329',
+    '--bf-domain-prism-light-punctuation': '#57606a',
+    '--bf-domain-prism-light-property': '#953800',
+    '--bf-domain-prism-dark-foreground': '#d4d4d4',
+    '--bf-domain-prism-dark-comment': '#6a9955',
+    '--bf-domain-prism-dark-keyword': '#c586c0',
+    '--bf-domain-prism-dark-string': '#ce9178',
+    '--bf-domain-prism-dark-function': '#dcdcaa',
+    '--bf-domain-prism-dark-number': '#b5cea8',
+    '--bf-domain-prism-dark-tag': '#569cd6',
+    '--bf-domain-prism-dark-punctuation': '#d4d4d4',
+    '--bf-domain-prism-dark-property': '#9cdcfe',
+  };
 }
 
 function createWidgetAppearanceVars(
-  cssTokens: Readonly<Record<string, string>>,
+  themeTokens: Readonly<Record<string, string>>,
 ): Record<WidgetAppearanceVariableName, string> {
   return Object.fromEntries(WIDGET_APPEARANCE_VARIABLE_NAMES.map(name => {
-    const value = cssTokens[name];
+    const value = themeTokens[name];
     if (!value) throw new Error(`Builtin Appearance does not define Widget token ${name}`);
     return [name, value];
   })) as Record<WidgetAppearanceVariableName, string>;
 }
 
 export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePackage {
-  const cssTokens = createCssTokens(palette);
+  const themeTokens = createAppearanceOwnedTokens(palette);
+  const chromeThemeTokens = createChromeThemeTokens(palette);
   const purple = palette.colors.purple ?? {
     100: palette.colors.element.subtle,
     200: palette.colors.element.soft,
@@ -470,12 +410,12 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
 
   return {
     schema: 'bitfun.appearance',
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: palette.id,
     name: palette.name,
     version: /^\d+\.\d+\.\d+/.test(palette.version ?? '') ? palette.version! : '1.0.0',
     mode: palette.type,
-    requiredCapabilities: ['components.v1', 'renderers.v1'],
+    requiredCapabilities: ['renderers.v1'],
     globals: {
       colors,
       lengths: {
@@ -500,74 +440,12 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
         standard: { kind: 'easing', value: 'standard' },
       },
     },
-    materials: {
-      control: {
-        visualRole: 'control',
-        style: {
-          backgroundColor: colorRef('element-base'),
-          color: colorRef('text-secondary'),
-          borderRadius: lengthRef('radius-sm'),
-          transition: transition(),
-        },
-      },
-      surface: {
-        visualRole: 'card',
-        style: {
-          backgroundColor: colorRef('element-subtle'),
-          color: colorRef('text-secondary'),
-          borderRadius: lengthRef('radius-base'),
-          transition: transition(),
-        },
-      },
-    },
-    components: {
-      card: {
-        parts: {
-          root: {
-            materials: ['surface'],
-            base: { display: 'flex', flexDirection: 'column' },
-            facets: {
-              variant: {
-                default: { backgroundColor: colorRef('element-subtle') },
-                elevated: { backgroundColor: colorRef('element-soft') },
-                subtle: { backgroundColor: { kind: 'transparent' } },
-                accent: { backgroundColor: colorRef('element-soft') },
-                purple: { backgroundColor: colorRef('purple-bg') },
-              },
-              padding: {
-                none: { padding: { kind: 'zero' } },
-                small: { padding: lengthRef('gap-2') },
-                medium: { padding: lengthRef('gap-4') },
-                large: { padding: lengthRef('gap-6') },
-              },
-              radius: {
-                small: { borderRadius: lengthRef('radius-sm') },
-                medium: { borderRadius: lengthRef('radius-base') },
-                large: { borderRadius: lengthRef('radius-lg') },
-              },
-            },
-            states: {
-              fullWidth: { width: { kind: 'percent', value: 100 } },
-            },
-            contexts: [
-              { when: { states: ['interactive', 'hover'] }, style: { backgroundColor: colorRef('element-soft'), cursor: 'pointer' } },
-              { when: { states: ['interactive', 'active'] }, style: { backgroundColor: colorRef('element-base') } },
-            ],
-          },
-          header: { base: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: lengthRef('gap-3') } },
-          title: { base: { color: colorRef('text-primary') } },
-          subtitle: { base: { color: colorRef('text-muted') } },
-          body: { base: { color: colorRef('text-secondary') } },
-          footer: { base: { display: 'flex', alignItems: 'center', gap: lengthRef('gap-2') }, facets: { align: { left: { justifyContent: 'flex-start' }, center: { justifyContent: 'center' }, right: { justifyContent: 'flex-end' }, between: { justifyContent: 'space-between' } } } },
-        },
-      },
-    },
     renderers: {
-      'css-tokens': {
+      'theme-tokens': {
         version: 1,
         settings: {
-          tokens: cssTokens,
-          background: palette.colors.chrome?.background.primary ?? palette.colors.background.primary,
+          tokens: themeTokens,
+          ...(chromeThemeTokens ? { scopes: { chrome: chromeThemeTokens } } : {}),
         },
       },
       monaco: {
@@ -645,7 +523,7 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
         settings: {
           id: `builtin.${palette.id}`,
           mode: palette.type,
-          vars: createWidgetAppearanceVars(cssTokens),
+          vars: createWidgetAppearanceVars(themeTokens),
         },
       },
       'bitfun-canvas': {

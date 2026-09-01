@@ -1,9 +1,6 @@
 /**
  * Virtualized message list styles.
  */
-
-@use '../../../component-library/styles/_extended-mixins' as mixins;
-
 .virtual-message-list {
   width: 100%;
   height: 100%;
@@ -25,8 +22,8 @@
   .subagent-projection-container--expanded {
     margin-inline-start: 0;
   }
-  
-  
+
+
   /*
    * The scroller. It spans the full panel width even though message content
    * inside it is max-width constrained, and `overflow-anchor: none` keeps the
@@ -53,7 +50,7 @@
     width: 100%;
     overflow-anchor: none;
   }
-  
+
   /*
    * The opening viewport settles over several frames as items measure and
    * history pages in. Keep it laid out and measurable but unpainted until then;
@@ -67,15 +64,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bf-appearance-token-color-bg-scene); /* FlowChat background. */
+    background: var(--bf-color-surface-scene); /* FlowChat background. */
   }
-  
+
   .empty-state {
     text-align: center;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     padding: 2rem;
   }
-  
+
   // FlowChatHeader sits above the list in normal flow, so only a small
   // breathing gap is needed before the first item. Its height is supplied
   // inline from `FLOWCHAT_TURN_TOP_GAP_PX`, which every top-aligned Turn also
@@ -94,10 +91,10 @@
     max-width: calc(100% - 32px);
     margin: 0 auto 8px;
     padding: 4px 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
     border-radius: 6px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     text-align: center;
@@ -113,7 +110,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     pointer-events: none;
@@ -129,7 +126,7 @@
   &__history-paging-spinner {
     animation: history-paging-spin 0.9s linear infinite;
   }
-  
+
   .message-list-footer {
     /* Current input-stack inset is supplied inline by VirtualMessageList. */
     overflow-anchor: none;

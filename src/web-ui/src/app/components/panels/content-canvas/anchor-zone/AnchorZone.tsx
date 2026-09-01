@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { AnchorPosition } from '../types';
@@ -135,7 +135,7 @@ export const AnchorZone: React.FC<AnchorZoneProps> = ({
               onClick={toggleCollapse}
             >
               {isCollapsed ? (
-                isBottom ? <ChevronUp size={14} /> : <ChevronUp size={14} />
+                isBottom ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-up" size="sm" />
               ) : (
                 isBottom ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-down" size="sm" />
               )}

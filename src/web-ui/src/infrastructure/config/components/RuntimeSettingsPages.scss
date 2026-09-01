@@ -1,11 +1,9 @@
 // Shared presentation for runtime-owned settings pages and their embedded sections.
-@use '../../../component-library/styles/tokens' as *;
-
 .bitfun-runtime-settings {
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-6;
+    gap: var(--bf-space-6);
   }
 
   &__row-control {
@@ -13,12 +11,12 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   /** Computer use: authorized status label (Granted / 已授权) */
   &__perm-status--granted {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   /** Computer use permission row: keep label short, avoid squashing action buttons (nowrap). */
@@ -33,9 +31,9 @@
   &__warning {
     max-width: 100%;
     padding: 6px 10px;
-    border-radius: $size-radius-sm;
-    border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
-    color: var(--bf-appearance-token-color-warning);
+    border-radius: var(--bf-radius-sm);
+    border: 1px dashed color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
+    color: var(--bf-color-status-warning-content);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-relaxed);
     background: transparent;
@@ -51,7 +49,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__pet-row-copy {
@@ -62,14 +60,14 @@
   }
 
   &__pet-row-title {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     line-height: var(--bf-line-height-base);
   }
 
   &__pet-row-description {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-relaxed);
@@ -82,7 +80,7 @@
   &__pet-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     white-space: nowrap;
   }
 
@@ -90,7 +88,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__pet-expand-button {
@@ -100,12 +98,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     padding: 5px 10px 5px 8px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-subtle);
     cursor: pointer;
     transition:
       border-color 0.16s ease,
@@ -114,12 +112,12 @@
   }
 
   &__pet-expand-button:hover {
-    border-color: var(--bf-appearance-token-border-medium);
-    background: var(--bf-appearance-token-element-bg-soft);
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-action-quiet-hover);
   }
 
   &__pet-expand-button:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline: 2px solid var(--bf-color-accent-default);
     outline-offset: 2px;
   }
 
@@ -136,24 +134,24 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__pet-list {
     max-height: min(360px, 52vh);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 12px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 52%, transparent);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-sm);
+    background: color-mix(in srgb, var(--bf-color-surface-subtle) 52%, transparent);
   }
 
   &__pet-list-group {
     grid-column: 1 / -1;
     padding: 6px 2px 2px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     line-height: var(--bf-line-height-tight);
@@ -167,13 +165,13 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 9px 10px;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    color: var(--bf-appearance-token-color-text-primary);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-primary);
     text-align: left;
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 74%, transparent);
+    background: color-mix(in srgb, var(--bf-color-action-neutral-surface) 74%, transparent);
     cursor: pointer;
     transition:
       border-color 0.16s ease,
@@ -183,18 +181,18 @@
 
   &__pet-select-option:hover,
   &__pet-select-option:focus-visible {
-    border-color: var(--bf-appearance-token-border-medium);
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 84%, transparent);
+    border-color: var(--bf-color-field-border-hover);
+    background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 84%, transparent);
     outline: none;
   }
 
   &__pet-select-option:focus-visible {
-    box-shadow: 0 0 0 2px var(--bf-appearance-token-color-accent-500);
+    box-shadow: 0 0 0 2px var(--bf-color-accent-default);
   }
 
   &__pet-select-option--selected {
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 58%, var(--bf-appearance-token-border-subtle));
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-element-bg-base));
+    border-color: color-mix(in srgb, var(--bf-color-accent-default) 58%, var(--bf-color-border-subtle));
+    background: color-mix(in srgb, var(--bf-color-accent-default) 10%, var(--bf-color-action-neutral-surface));
   }
 
   &__pet-select-option-main {
@@ -202,7 +200,7 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__pet-select-delete {
@@ -220,7 +218,7 @@
 
   &__pet-select-check {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     transition: opacity 0.14s ease;
   }
 
@@ -316,7 +314,7 @@
 
     &__pet-row-heading {
       flex-direction: column;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     &__pet-actions {

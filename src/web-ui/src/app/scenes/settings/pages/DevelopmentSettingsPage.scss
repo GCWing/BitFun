@@ -3,11 +3,11 @@
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
   &__section {
     min-width: 0;
-    scroll-margin-top: var(--bf-appearance-token-size-gap-4);
+    scroll-margin-top: var(--bf-space-4);
 
     > .bitfun-config-page-layout {
       height: auto;
@@ -20,20 +20,20 @@
     }
 
     &--editor {
-      margin-top: var(--bf-appearance-token-size-gap-4);
+      margin-top: var(--bf-space-4);
     }
   }
 
   &__loading {
     display: grid;
-    gap: var(--bf-appearance-token-size-gap-3);
-    padding: var(--bf-appearance-token-size-gap-8);
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-8);
 
     > span {
       width: min(320px, 70%);
       height: 12px;
-      border-radius: var(--bf-appearance-token-size-radius-sm);
-      background: var(--bf-appearance-token-element-bg-subtle);
+      border-radius: var(--bf-radius-sm);
+      background: var(--bf-color-surface-subtle);
     }
 
     > .bitfun-development-settings-page__loading-block {

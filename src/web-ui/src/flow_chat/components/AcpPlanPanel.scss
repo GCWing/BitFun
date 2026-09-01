@@ -4,9 +4,9 @@
   gap: 4px;
   margin: 0 0 8px;
   padding: 8px 10px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 8px;
-  background: var(--bf-appearance-token-element-bg-medium);
+  background: var(--bf-color-action-neutral-surface-hover);
   font-size: var(--bf-type-flow-support-font-size);
 
   &__header {
@@ -16,7 +16,7 @@
   }
 
   &__title {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-meta-font-size);
     font-weight: var(--bf-font-weight-semibold);
     letter-spacing: var(--bf-letter-spacing-wide);
@@ -24,7 +24,7 @@
   }
 
   &__progress {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-variant-numeric: tabular-nums;
   }
 
@@ -42,10 +42,10 @@
     align-items: flex-start;
     gap: 6px;
     padding: 2px 0;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
 
     &--completed {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
 
       .bitfun-acp-plan__content {
         text-decoration: line-through;
@@ -53,7 +53,7 @@
     }
 
     &--pending {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -62,11 +62,11 @@
     margin-top: 2px;
 
     &--done {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
 
     &--active {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
       animation: bitfun-acp-plan-spin 1.2s linear infinite;
     }
 

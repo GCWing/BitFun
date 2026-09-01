@@ -36,8 +36,8 @@ const accountLoginStateSource = readFileSync(
 
 describe('Remote Connect safety contracts', () => {
   it('gates the complete dialog surface behind disclaimer agreement', () => {
-    expect(dialogSource).toContain('isOpen={isOpen && hasAgreedDisclaimer}');
-    expect(dialogSource).toContain('isOpen={isOpen && (disclaimerIsGate || showDisclaimer)}');
+    expect(dialogSource).toContain('open={isOpen && hasAgreedDisclaimer}');
+    expect(dialogSource).toContain('open={isOpen && (disclaimerIsGate || showDisclaimer)}');
   });
 
   it('presents one overview with account and account-free destinations', () => {
@@ -57,9 +57,10 @@ describe('Remote Connect safety contracts', () => {
   });
 
   it('keeps persistent connection context beside a single task surface', () => {
-    expect(dialogSource).toContain('size="xxlarge"');
-    expect(dialogSource).toContain('overlayClassName="bitfun-remote-connect-modal-overlay"');
-    expect(dialogSource).toContain('contentClassName="bitfun-remote-connect-modal-content"');
+    expect(dialogSource).toContain('size="2xl"');
+    expect(dialogSource).toContain('className="bitfun-remote-connect-dialog"');
+    expect(dialogSource).toContain('className="bitfun-remote-connect-dialog__header"');
+    expect(dialogSource).toContain('className="bitfun-remote-connect-dialog__body"');
     expect(dialogSource).toContain('data-bf-part="sidebar"');
     expect(dialogSource).toContain('data-bf-part="sidebarBrand"');
     expect(dialogSource).toContain('data-bf-part="main"');
@@ -68,13 +69,13 @@ describe('Remote Connect safety contracts', () => {
 
   it('keeps the dialog height stable while selected content scrolls inside it', () => {
     const desktopGeometry = dialogStyleSource.slice(
-      dialogStyleSource.indexOf('.bitfun-remote-connect-modal-overlay'),
-      dialogStyleSource.indexOf('.bitfun-remote-connect-modal-content'),
+      dialogStyleSource.indexOf('.bitfun-remote-connect-dialog {'),
+      dialogStyleSource.indexOf('.bitfun-remote-connect-dialog__header'),
     );
 
-    expect(desktopGeometry).toContain('height: min(620px, calc(100vh - 40px))');
-    expect(desktopGeometry).toContain('min-height: min(620px, calc(100vh - 40px))');
-    expect(desktopGeometry).toContain('max-height: min(620px, calc(100vh - 40px))');
+    expect(desktopGeometry).toContain('block-size: min(620px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)))');
+    expect(desktopGeometry).toContain('min-block-size: min(620px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)))');
+    expect(desktopGeometry).toContain('max-block-size: min(620px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)))');
     expect(dialogStyleSource).toContain(".bitfun-remote-connect [data-bf-part='panel']");
     expect(dialogSource).toContain('<ScrollArea');
   });
@@ -146,9 +147,9 @@ describe('Remote Connect safety contracts', () => {
     expect(connectedBrandStyle).not.toContain('background:');
     expect(footerMessageBrandStyle).toContain('border: 0');
     expect(footerMessageBrandStyle).toContain('background: transparent');
-    expect(footerMessageBrandStyle).toContain('--bf-appearance-token-color-text-primary');
+    expect(footerMessageBrandStyle).toContain('--bf-color-content-primary');
     expect(overviewMessageBrandStyle).toContain('background: transparent');
-    expect(overviewMessageBrandStyle).toContain('--bf-appearance-token-color-text-primary');
+    expect(overviewMessageBrandStyle).toContain('--bf-color-content-primary');
     expect(dialogSource).not.toContain('<Send size={28} />');
     expect(dialogSource).not.toContain('<MessageSquareText size={28} />');
     expect(dialogSource).not.toContain('<MessagesSquare size={28} />');

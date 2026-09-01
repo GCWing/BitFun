@@ -5,7 +5,17 @@ import { ToolFileReference, ToolFileReferenceResolver } from '../policy/ToolFile
 import { ActivityGroupPolicy, ActivityRowPlan, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
 import { ToolCollapseGroup, ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
 import { ToolStatusPresentationPolicy } from '../policy/ToolStatusPresentationPolicy';
-import { CARD, FILE_LINK, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import {
+  CARD,
+  FILE_LINK,
+  INK,
+  LINE,
+  MUTED,
+  SOFT,
+  STATUS_DANGER,
+  STATUS_SUCCESS,
+  TRANSPARENT,
+} from './Theme';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolGlyph } from './ToolGlyphs';
 import { ToolConfirmationPanel, ToolQuestionAnswerPanel } from './ToolInteractionPanels';
@@ -120,7 +130,7 @@ export struct ToolStatusList {
         this.ToolStatusIcon(tool)
         Text(this.toolLineLabel(tool))
           .fontSize(MobileDesignTypography.bodySmall.size)
-          .fontColor(this.hasToolError(tool) ? RED :
+          .fontColor(this.hasToolError(tool) ? STATUS_DANGER :
             (this.toolFilePath(tool).length > 0 ? FILE_LINK : MUTED))
           .layoutWeight(1)
           .maxLines(1)
@@ -235,7 +245,7 @@ export struct ToolStatusList {
     .height(18)
     .backgroundColor(this.summaryTypeBg(entry))
     .borderRadius(5)
-    .border({ width: 1, color: '#00000000' })
+    .border({ width: 1, color: TRANSPARENT })
   }
 
   @Builder
@@ -288,7 +298,7 @@ export struct ToolStatusList {
       Text(value)
         .fontSize(MobileDesignTypography.labelSmall.size)
         .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
-        .fontColor(isError ? RED : MUTED)
+        .fontColor(isError ? STATUS_DANGER : MUTED)
         .width('100%')
         .maxLines(5)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -329,7 +339,7 @@ export struct ToolStatusList {
     if (this.isEmphasizedToolRow(tool, index)) {
       return SOFT;
     }
-    return '#00000000';
+    return TRANSPARENT;
   }
 
   private toolRowBorderWidth(tool: ConversationUiToolStatus, index: number): number {
@@ -719,10 +729,10 @@ export struct ToolStatusList {
 
   private toolTypeColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.isDeleteTool(tool)) {
-      return RED;
+      return STATUS_DANGER;
     }
     if (this.isTodoTool(tool) || this.isFileCreateTool(tool)) {
-      return GREEN;
+      return STATUS_SUCCESS;
     }
     return MUTED;
   }
@@ -733,7 +743,7 @@ export struct ToolStatusList {
 
   private toolTypeBorderColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.hasToolError(tool)) {
-      return RED;
+      return STATUS_DANGER;
     }
     return LINE;
   }
@@ -757,7 +767,7 @@ export struct ToolStatusList {
 
   private toolStatusColor(tool: ConversationUiToolStatus): ResourceColor {
     if (this.hasToolError(tool)) {
-      return RED;
+      return STATUS_DANGER;
     }
     return MUTED;
   }

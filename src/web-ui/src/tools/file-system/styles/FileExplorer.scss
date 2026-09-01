@@ -1,6 +1,3 @@
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/_extended-mixins' as mixins;
-
 $_node-height: 24px;
 $_node-padding-y: 3px;
 $_node-padding-x: 8px;
@@ -10,9 +7,12 @@ $_indent-width: 8px;
 .bitfun-file-explorer {
   height: 100%;
   overflow: hidden;
-  @include mixins.flex-layout(column, stretch, start, 0);
-  background: var(--bf-appearance-token-color-bg-secondary);
-  border-radius: $size-radius-sm;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  background: var(--bf-color-surface-panel);
+  border-radius: var(--bf-radius-sm);
   position: relative;
 
   &--empty {
@@ -23,13 +23,17 @@ $_indent-width: 8px;
 
 .bitfun-file-explorer__toolbar {
   position: absolute;
-  top: $size-gap-2;
-  right: $size-gap-1;
-  @include mixins.flex-layout(row, center, center, 2px);
+  top: var(--bf-space-2);
+  right: var(--bf-space-1);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   z-index: 10;
   opacity: 0;
   pointer-events: none;
-  transition: opacity $motion-base $easing-standard;
+  transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   background: transparent;
   border: none;
   border-radius: 0;
@@ -45,13 +49,13 @@ $_indent-width: 8px;
 
 .bitfun-file-explorer__empty {
   text-align: center;
-  color: var(--bf-appearance-token-color-text-muted);
-  padding: $size-gap-8;
+  color: var(--bf-color-content-muted);
+  padding: var(--bf-space-8);
 }
 
 .bitfun-file-explorer__empty-icon {
-  margin-bottom: $size-gap-4;
-  opacity: $opacity-disabled;
+  margin-bottom: var(--bf-space-4);
+  opacity: var(--bf-opacity-disabled);
 }
 
 .bitfun-file-explorer__breadcrumb {
@@ -61,11 +65,11 @@ $_indent-width: 8px;
   padding: 4px 8px;
   height: 24px;
   font-size: var(--bf-font-size-meta);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   background: linear-gradient(
     180deg,
-    rgba(var(--bf-appearance-token-color-static-white-rgb), 0.025) 0%,
-    rgba(var(--bf-appearance-token-color-static-white-rgb), 0.015) 100%
+    color-mix(in srgb, var(--bf-color-content-on-dark) 2.5%, transparent) 0%,
+    color-mix(in srgb, var(--bf-color-content-on-dark) 1.5%, transparent) 100%
   );
   overflow: hidden;
   
@@ -75,7 +79,7 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__breadcrumb-separator {
-  color: var(--bf-appearance-token-color-text-disabled);
+  color: var(--bf-color-content-disabled);
   flex-shrink: 0;
   opacity: 0.4;
   margin: 0 1px;
@@ -89,21 +93,21 @@ $_indent-width: 8px;
   padding: 2px 2px 3px;
   border-radius: 3px;
   transition:
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   
   &--clickable {
     cursor: pointer;
     
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-color-overlay-white-08);
+      color: var(--bf-color-content-primary);
+      background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
     }
   }
   
   &:last-child {
-    color: var(--bf-appearance-token-color-text-secondary);
-    background: var(--bf-appearance-token-color-overlay-white-04);
+    color: var(--bf-color-content-secondary);
+    background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
   }
 }
 
@@ -111,7 +115,7 @@ $_indent-width: 8px;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: $size-gap-2 0;
+  padding: var(--bf-space-2) 0;
   -webkit-overflow-scrolling: touch;
 
 }
@@ -125,48 +129,52 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__node-content {
-  @include mixins.flex-layout(row, center, start, $size-gap-1);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--bf-space-1);
   padding: $_node-padding-y $_node-padding-x;
   cursor: pointer;
   min-height: $_node-height;
-  border-radius: $size-radius-sm;
-  margin: 0 $size-gap-1;
+  border-radius: var(--bf-radius-sm);
+  margin: 0 var(--bf-space-1);
   position: relative;
   
   background: transparent;
   transition:
-    background-color $motion-base $easing-standard,
-    color $motion-base $easing-standard;
-  color: var(--bf-appearance-token-color-text-secondary);
+    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  color: var(--bf-color-content-secondary);
   
   &:focus {
     outline: none;
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-primary);
   }
   
   &:focus-visible {
-    outline: 1px solid var(--bf-appearance-token-color-accent-500);
+    outline: 1px solid var(--bf-color-accent-default);
     outline-offset: -1px;
   }
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-primary);
   }
 
   &--selected {
-    background: var(--bf-appearance-token-git-color-branch-bg);
-    color: var(--bf-appearance-token-git-color-branch);
+    background: var(--bf-domain-git-branch-background);
+    color: var(--bf-domain-git-branch);
 
     .bitfun-file-explorer__node-name {
-      color: var(--bf-appearance-token-git-color-branch);
+      color: var(--bf-domain-git-branch);
       font-weight: var(--bf-font-weight-medium);
     }
 
     &:hover {
-      background: var(--bf-appearance-token-git-color-branch-bg-hover);
-      color: var(--bf-appearance-token-git-color-branch);
+      background: var(--bf-domain-git-branch-background-hover);
+      color: var(--bf-domain-git-branch);
     }
   }
 
@@ -174,7 +182,7 @@ $_indent-width: 8px;
     font-style: italic;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
+      background: var(--bf-color-action-neutral-surface);
     }
   }
 
@@ -185,7 +193,7 @@ $_indent-width: 8px;
       inset: 0;
       z-index: 0;
       border-radius: inherit;
-      background: var(--bf-appearance-token-git-color-branch-bg);
+      background: var(--bf-domain-git-branch-background);
       pointer-events: none;
       animation: file-node-highlight-fade 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
     }
@@ -196,7 +204,7 @@ $_indent-width: 8px;
     }
     
     .bitfun-file-explorer__node-name {
-      color: var(--bf-appearance-token-git-color-branch);
+      color: var(--bf-domain-git-branch);
       font-weight: var(--bf-font-weight-medium);
     }
   }
@@ -208,9 +216,13 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__expand-icon {
-  @include mixins.flex-layout(row, center, center, 0);
-  @include mixins.size($_icon-size);
-  color: var(--bf-appearance-token-color-text-muted);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: $_icon-size;
+  height: $_icon-size;
+  color: var(--bf-color-content-muted);
   flex-shrink: 0;
   min-width: $_icon-size;
 
@@ -235,23 +247,26 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__icon {
-  @include mixins.flex-layout(row, center, center, 0);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   transition:
-    transform $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   min-width: $_icon-size;
 
   &--folder {
-    color: var(--bf-appearance-token-git-color-branch);
+    color: var(--bf-domain-git-branch);
   }
 
   &--folder-open {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &--file {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &--code,
@@ -265,37 +280,41 @@ $_indent-width: 8px;
   &--java,
   &--c-cpp,
   &--font {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &--html,
   &--css,
   &--sass,
   &--markdown {
-    color: var(--bf-appearance-token-color-purple-500);
+    color: var(--bf-color-accent-secondary);
   }
 
   &--image,
   &--audio,
   &--video {
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-color-status-success-content);
   }
 
   &--config,
   &--json,
   &--database,
   &--archive {
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
   }
 
   &--text,
   &--binary {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 }
 
 .bitfun-file-explorer__node-wrapper {
-  @include mixins.flex-layout(row, center, start, $size-gap-2);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--bf-space-2);
   flex: 1;
   min-width: 0;
 }
@@ -304,7 +323,9 @@ $_indent-width: 8px;
   flex: 1;
   font-size: var(--bf-font-size-sm);
   font-weight: var(--bf-font-weight-regular);
-  @include mixins.text-ellipsis;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   position: relative;
   z-index: 2;
   color: inherit;
@@ -314,56 +335,21 @@ $_indent-width: 8px;
   flex: 1;
   min-width: 0;
   z-index: 10;
-  
-  [data-bf-component='input'] {
-    width: 100%;
-    height: 26px;
-    padding: 0 8px;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: none !important;
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent),
-      0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 10%, transparent);
+}
 
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, transparent),
-        0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
-    }
-
-    &:focus-within {
-      background: var(--bf-appearance-token-color-bg-elevated);
-      box-shadow:
-        0 0 0 1px var(--bf-appearance-token-color-accent-500),
-        0 4px 12px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
-    }
-
-    input {
-      font-size: var(--bf-font-size-sm);
-      color: var(--bf-appearance-token-color-text-primary);
-      font-weight: var(--bf-font-weight-medium);
-      border: none !important;
-      outline: none !important;
-    }
-
-    [data-bf-part='leading'] {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 85%, transparent);
-    }
-  }
+.bitfun-file-explorer__rename-input {
+  width: 100%;
 }
 
 .bitfun-file-explorer__compressed-path {
   font-style: italic;
   opacity: 0.85;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .bitfun-file-explorer__node-size {
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   opacity: 0.7;
   flex-shrink: 0;
   position: relative;
@@ -372,7 +358,7 @@ $_indent-width: 8px;
 
 .bitfun-file-explorer__node-modified {
   font-size: var(--bf-font-size-xs);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   opacity: 0.7;
   flex-shrink: 0;
   position: relative;
@@ -380,9 +366,13 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__node-actions {
-  @include mixins.flex-layout(row, center, start, $size-gap-1);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--bf-space-1);
   opacity: 0;
-  transition: opacity $motion-fast $easing-standard;
+  transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   position: relative;
   z-index: 2;
 
@@ -397,25 +387,29 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__load-more {
-  @include mixins.flex-layout(row, center, start, $size-gap-2);
-  width: calc(100% - #{$size-gap-2});
-  margin: 0 $size-gap-1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--bf-space-2);
+  width: calc(100% - var(--bf-space-2));
+  margin: 0 var(--bf-space-1);
   min-height: $_node-height;
   padding: $_node-padding-y $_node-padding-x;
   border: none;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   text-align: left;
   transition:
-    transform $motion-fast $easing-standard,
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-primary);
   }
 
   &:disabled {
@@ -425,13 +419,16 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__empty-message {
-  @include mixins.flex-layout(row, center, center, 0);
-  padding: $size-gap-8;
-  color: var(--bf-appearance-token-color-text-muted);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: var(--bf-space-8);
+  color: var(--bf-color-content-muted);
   font-style: italic;
 }
 
-@include mixins.respond-to('mobile') {
+@media (max-width: 767px) {
   .bitfun-file-explorer__node-content {
     padding: 6px $_node-padding-x;
     min-height: 32px;

@@ -20,7 +20,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 20px 16px;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
 }
 
 .terminal-edit-dialog__btn {
@@ -38,11 +38,11 @@
     box-shadow 140ms ease;
 
   &--cancel {
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-secondary);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
     
     &:active {
@@ -51,11 +51,11 @@
   }
 
   &--confirm {
-    background: var(--bf-appearance-token-color-accent-500);
-    color: white;
+    background: var(--bf-color-accent-default);
+    color: var(--bf-color-content-on-dark);
 
     &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-color-accent-600);
+      background: var(--bf-color-accent-hover);
     }
     
     &:active:not(:disabled) {

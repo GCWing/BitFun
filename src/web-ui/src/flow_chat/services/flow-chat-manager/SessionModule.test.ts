@@ -4,6 +4,7 @@ import {
   createChatSession,
   deleteChatSession,
   ensureBackendSession,
+  forkChatSession,
   hydrateSessionHistoryForDetail,
   pendingHistoryLoadKey,
   preloadHistoricalSessionForOpen,
@@ -42,6 +43,7 @@ const configManagerMocks = vi.hoisted(() => ({
 
 const sessionApiMocks = vi.hoisted(() => ({
   archiveSession: vi.fn(),
+  forkSession: vi.fn(),
   loadSessionMetadata: vi.fn(),
 }));
 
@@ -530,6 +532,52 @@ describe('createChatSession', () => {
       }),
     );
     expect(configManagerMocks.getConfigs).not.toHaveBeenCalled();
+  });
+});
+
+describe('forkChatSession', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('keeps the source SSH identity through fork creation and history restore', async () => {
+    const source = createSession({
+      sessionId: 'remote-source',
+      workspacePath: '/workspace/repo',
+      remoteConnectionId: 'ssh-source',
+      remoteSshHost: 'source-host',
+    });
+    const other = createSession({
+      sessionId: 'other-host-session',
+      workspacePath: '/workspace/repo',
+      remoteConnectionId: 'ssh-other',
+      remoteSshHost: 'other-host',
+    });
+    const { context, flowChatStore } = createContext(source, {
+      additionalSessions: [other],
+      activeSessionId: other.sessionId,
+    });
+    sessionApiMocks.forkSession.mockResolvedValueOnce({
+      sessionId: 'remote-fork',
+      sessionName: 'Remote fork',
+      agentType: 'agentic',
+    });
+
+    await expect(forkChatSession(context, source.sessionId, 'turn-1'))
+      .resolves.toBe('remote-fork');
+
+    expect(sessionApiMocks.forkSession).toHaveBeenCalledWith(
+      'remote-source', 'turn-1', '/workspace/repo', 'ssh-source', 'source-host',
+    );
+    expect(flowChatStore.getState().sessions.get('remote-fork')).toMatchObject({
+      workspacePath: '/workspace/repo',
+      remoteConnectionId: 'ssh-source',
+      remoteSshHost: 'source-host',
+    });
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledWith(
+      'remote-fork', '/workspace/repo', undefined, 'ssh-source', 'source-host',
+      { deferFullHistoryUntilActive: true },
+    );
   });
 });
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import './SessionRuntimeStatusEntry.scss';
 
 interface SessionRuntimeStatusEntryProps {

@@ -3412,8 +3412,12 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /web-readable = \["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"\]/,
+          /web-readable = \["dep:htmd", "dep:legible", "dep:readability-js"\]/,
         message: 'tool-runtime web-readable feature must own exactly the Web extractor deps',
+      },
+      {
+        regex: /^regex = \{ workspace = true \}$/m,
+        message: 'tool-runtime POSIX filename byte matching must use the shared regex dependency independently of Web extraction',
       },
       {
         regex: /htmd = \{[^}]*optional = true[^}]*\}/,

@@ -1,36 +1,35 @@
-@use '../../../../component-library/styles/tokens' as *;
 @use '../../../styles/surface-stagger';
 
 @mixin agent-surface-card() {
   width: 100%;
   min-width: 0;
   height: 148px;
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-color-bg-elevated);
-  box-shadow: $shadow-xs;
+  border: 1px solid var(--bf-color-border-default);
+  border-radius: var(--bf-radius-lg);
+  background: var(--bf-color-surface-raised);
+  box-shadow: var(--bf-shadow-xs);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  animation: agent-surface-card-in 0.28s $easing-decelerate both;
+  animation: agent-surface-card-in 0.28s var(--bf-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(60ms);
   transition:
-    transform $motion-fast $easing-decelerate,
-    border-color $motion-fast $easing-standard,
-    background-color $motion-fast $easing-standard,
-    box-shadow $motion-fast $easing-standard;
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
     transform: translateY(-1px);
-    border-color: var(--bf-appearance-token-border-medium);
-    background: var(--bf-appearance-token-element-bg-subtle);
-    box-shadow: $shadow-sm;
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-surface-subtle);
+    box-shadow: var(--bf-shadow-sm);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-text-primary);
+    outline: 2px solid var(--bf-color-content-primary);
     outline-offset: 2px;
   }
 }
@@ -38,8 +37,8 @@
 @mixin agent-surface-footer() {
   box-sizing: border-box;
   min-height: 34px;
-  border-radius: $size-radius-base;
-  background: var(--bf-appearance-token-element-bg-subtle);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-surface-subtle);
   overflow: hidden;
   position: relative;
   z-index: 1;
@@ -53,7 +52,7 @@
   height: 68px;
   background-image: radial-gradient(
     circle,
-    var(--bf-appearance-token-border-base) 0 1px,
+    var(--bf-color-border-default) 0 1px,
     transparent 1.25px
   );
   background-position: center top;
@@ -61,8 +60,8 @@
   opacity: 0.72;
   pointer-events: none;
   transform: translateX(-50%);
-  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);
 }
 
 @keyframes agent-surface-card-in {

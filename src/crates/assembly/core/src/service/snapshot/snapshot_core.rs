@@ -9,6 +9,7 @@ use bitfun_services_core::json_store::JsonFileStore;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 use uuid::Uuid;
@@ -160,7 +161,7 @@ impl SnapshotCore {
                 operation_id
             )));
         }
-        let before_snapshot_id = if file_path.exists() {
+        let before_snapshot_id = if self.snapshot_system.workspace_exists(&file_path).await? {
             Some(
                 self.snapshot_system
                     .create_owned_snapshot(&file_path)
@@ -236,6 +237,7 @@ impl SnapshotCore {
             },
             before_snapshot_id,
             after_snapshot_id: None,
+            completed: Some(false),
             timestamp: SystemTime::now(),
             diff_summary: DiffSummary::default(),
             path_before: None,
@@ -312,7 +314,7 @@ impl SnapshotCore {
             )));
         }
 
-        let (before_snapshot_id, file_path) = {
+        let (before_snapshot_id, after_snapshot_id) = {
             let session = self
                 .sessions
                 .get_mut(session_id)
@@ -327,7 +329,7 @@ impl SnapshotCore {
 
             op.tool_context.execution_time_ms = execution_time_ms;
 
-            let after_snapshot_id = if op.file_path.exists() {
+            let after_snapshot_id = if self.snapshot_system.workspace_exists(&op.file_path).await? {
                 Some(
                     self.snapshot_system
                         .create_owned_snapshot(&op.file_path)
@@ -338,14 +340,16 @@ impl SnapshotCore {
             };
             op.after_snapshot_id = after_snapshot_id;
 
-            (op.before_snapshot_id.clone(), op.file_path.clone())
+            (op.before_snapshot_id.clone(), op.after_snapshot_id.clone())
         };
 
         let before_text = self.load_snapshot_text(before_snapshot_id.as_deref()).await;
-        let after_text = self.load_path_text(&file_path).await;
+        // Diff the exact bytes just recorded, avoiding a second workspace
+        // transfer and a race with edits after the after-snapshot was taken.
+        let after_text = self.load_snapshot_text(after_snapshot_id.as_deref()).await;
         let diff_summary = compute_diff_summary(&before_text, &after_text);
 
-        let completed_op = {
+        let (completed_op, previous_completed) = {
             let session = self
                 .sessions
                 .get_mut(session_id)
@@ -359,11 +363,25 @@ impl SnapshotCore {
             })?;
 
             op.diff_summary = diff_summary;
+            let previous_completed = op.completed;
+            op.completed = Some(true);
             session.last_updated = SystemTime::now();
-            op.clone()
+            (op.clone(), previous_completed)
         };
 
-        self.persist_session(session_id).await?;
+        if let Err(error) = self.persist_session(session_id).await {
+            // A reader must not observe completion when its durable record
+            // failed to commit. The tool itself has already executed once.
+            if let Some(op) = self
+                .sessions
+                .get_mut(session_id)
+                .and_then(|session| session.turns.get_mut(&turn_index))
+                .and_then(|turn| turn.operations.get_mut(seq))
+            {
+                op.completed = previous_completed;
+            }
+            return Err(error);
+        }
 
         Ok(completed_op)
     }
@@ -550,13 +568,7 @@ impl SnapshotCore {
             String::new()
         };
 
-        let current_content = if file_path.exists() {
-            tokio::fs::read_to_string(file_path)
-                .await
-                .map_err(SnapshotError::Io)?
-        } else {
-            String::new()
-        };
+        let current_content = self.load_path_text(file_path).await?;
 
         Ok((baseline_content, current_content))
     }
@@ -621,6 +633,48 @@ impl SnapshotCore {
             .await
     }
 
+    /// Read one operation's immutable snapshots, without consulting current
+    /// workspace files or another operation on the same file.
+    pub async fn get_operation_diff_before(
+        &self,
+        file_path: &Path,
+        session_id: &str,
+        operation_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<(String, String, Option<usize>)> {
+        let operation = self.get_operation_before(session_id, operation_id, max_turn_exclusive)?;
+        if operation.file_path.as_os_str() != file_path.as_os_str() {
+            return Err(SnapshotError::ConfigError(format!(
+                "Snapshot operation does not refer to the requested file: operation_id={operation_id}, file_path={}",
+                file_path.display()
+            )));
+        }
+        if !operation_is_completed_for_session_file(&operation) {
+            return Err(SnapshotError::ConfigError(format!(
+                "Snapshot operation has no completed file snapshot: {operation_id}"
+            )));
+        }
+        let before = self
+            .read_recorded_snapshot_text(operation.before_snapshot_id.as_deref())
+            .await?;
+        let after = self
+            .read_recorded_snapshot_text(operation.after_snapshot_id.as_deref())
+            .await?;
+        let anchor = compute_anchor_line(&before, &after).or(Some(1));
+        Ok((before, after, anchor))
+    }
+
+    async fn read_recorded_snapshot_text(
+        &self,
+        snapshot_id: Option<&str>,
+    ) -> SnapshotResult<String> {
+        match snapshot_id {
+            None => Ok(String::new()),
+            Some(id) if id.starts_with("empty_snapshot_") => Ok(String::new()),
+            Some(id) => self.snapshot_system.get_snapshot_content(id).await,
+        }
+    }
+
     pub async fn get_file_diff_with_anchor_before(
         &self,
         file_path: &Path,
@@ -637,7 +691,7 @@ impl SnapshotCore {
         };
 
         let op = self.get_operation_before(session_id, operation_id, max_turn_exclusive)?;
-        if op.file_path != file_path {
+        if op.file_path.as_os_str() != file_path.as_os_str() {
             return Ok((before, after, None));
         }
 
@@ -772,7 +826,7 @@ impl SnapshotCore {
         let mut entries = Vec::new();
         for session in self.sessions.values() {
             for op in session.all_operations_iter() {
-                if op.file_path == file_path {
+                if op.file_path.as_os_str() == file_path.as_os_str() {
                     entries.push(FileChangeEntry {
                         session_id: op.session_id.clone(),
                         turn_index: op.turn_index,
@@ -862,7 +916,7 @@ impl SnapshotCore {
         let existing = state
             .workspace_checkpoint
             .iter()
-            .map(|checkpoint| checkpoint.path.clone())
+            .map(|checkpoint| checkpoint.path.as_os_str().to_os_string())
             .collect::<HashSet<_>>();
         let mut affected = session
             .all_operations_iter()
@@ -879,13 +933,13 @@ impl SnapshotCore {
                         .unwrap_or_else(|| operation.file_path.clone()),
                 ]
             })
-            .filter(|path| !existing.contains(path))
+            .filter(|path| !existing.contains(path.as_os_str()))
             .collect::<Vec<_>>();
-        affected.sort();
-        affected.dedup();
+        affected.sort_by(|left, right| left.as_os_str().cmp(right.as_os_str()));
+        affected.dedup_by(|left, right| left.as_os_str() == right.as_os_str());
 
         for path in affected {
-            let snapshot_id = if path.exists() {
+            let snapshot_id = if self.snapshot_system.workspace_exists(&path).await? {
                 Some(self.snapshot_system.create_owned_snapshot(&path).await?)
             } else {
                 None
@@ -896,7 +950,7 @@ impl SnapshotCore {
         }
         state
             .workspace_checkpoint
-            .sort_by(|left, right| left.path.cmp(&right.path));
+            .sort_by(|left, right| left.path.as_os_str().cmp(right.path.as_os_str()));
         Ok(())
     }
 
@@ -918,10 +972,7 @@ impl SnapshotCore {
             .collect::<Vec<_>>();
         operations.sort_by_key(|operation| (operation.turn_index, operation.seq_in_turn));
         operations.reverse();
-        restored.extend(
-            self.apply_rollback_ops_with_policy(&operations, true)
-                .await?,
-        );
+        restored.extend(self.apply_rollback_ops(&operations).await?);
         Ok(unique_paths(restored.into_iter()))
     }
 
@@ -938,8 +989,14 @@ impl SnapshotCore {
                         .await?;
                     restored.push(checkpoint.path.clone());
                 }
-                None if checkpoint.path.exists() => {
-                    tokio::fs::remove_file(&checkpoint.path).await?;
+                None if self
+                    .snapshot_system
+                    .workspace_exists(&checkpoint.path)
+                    .await? =>
+                {
+                    self.snapshot_system
+                        .remove_workspace_file(&checkpoint.path)
+                        .await?;
                     restored.push(checkpoint.path.clone());
                 }
                 None => {}
@@ -1120,83 +1177,54 @@ impl SnapshotCore {
     }
 
     fn operation_matches_file_path(op: &FileOperation, file_path: &Path) -> bool {
-        op.file_path == file_path
-            || op.path_before.as_deref() == Some(file_path)
-            || op.path_after.as_deref() == Some(file_path)
+        op.file_path.as_os_str() == file_path.as_os_str()
+            || op
+                .path_before
+                .as_ref()
+                .is_some_and(|path| path.as_os_str() == file_path.as_os_str())
+            || op
+                .path_after
+                .as_ref()
+                .is_some_and(|path| path.as_os_str() == file_path.as_os_str())
     }
 
     async fn apply_rollback_ops(&self, ops: &[FileOperation]) -> SnapshotResult<Vec<PathBuf>> {
-        self.apply_rollback_ops_with_policy(ops, false).await
-    }
-
-    async fn apply_rollback_ops_with_policy(
-        &self,
-        ops: &[FileOperation],
-        fail_on_delete_error: bool,
-    ) -> SnapshotResult<Vec<PathBuf>> {
-        let mut restored_files: Vec<PathBuf> = Vec::new();
-
+        let mut restored_files = Vec::new();
         for op in ops {
-            let before_path = op
-                .path_before
-                .as_ref()
-                .unwrap_or(&op.file_path)
-                .to_path_buf();
-            let after_path = op
-                .path_after
-                .as_ref()
-                .unwrap_or(&op.file_path)
-                .to_path_buf();
-
-            if before_path != after_path && after_path.exists() {
-                if let Err(e) = tokio::fs::remove_file(&after_path).await {
-                    if fail_on_delete_error {
-                        return Err(SnapshotError::Io(e));
-                    }
-                    warn!(
-                        "Failed to delete after_path: path={} error={}",
-                        after_path.display(),
-                        e
-                    );
-                }
+            let before_path = op.path_before.as_ref().unwrap_or(&op.file_path);
+            let after_path = op.path_after.as_ref().unwrap_or(&op.file_path);
+            if before_path.as_os_str() != after_path.as_os_str()
+                && self.snapshot_system.workspace_exists(after_path).await?
+            {
+                self.snapshot_system
+                    .remove_workspace_file(after_path)
+                    .await?;
             }
-
             match op.before_snapshot_id.as_deref() {
                 None => {
-                    if after_path.exists() {
-                        if let Err(e) = tokio::fs::remove_file(&after_path).await {
-                            if fail_on_delete_error {
-                                return Err(SnapshotError::Io(e));
-                            }
-                            warn!(
-                                "Failed to delete file: path={} error={}",
-                                after_path.display(),
-                                e
-                            );
-                        } else {
-                            restored_files.push(after_path.clone());
-                        }
+                    if self.snapshot_system.workspace_exists(after_path).await? {
+                        self.snapshot_system
+                            .remove_workspace_file(after_path)
+                            .await?;
+                        restored_files.push(after_path.clone());
                     }
                 }
                 Some(snapshot_id) if snapshot_id.starts_with("empty_snapshot_") => {
-                    if after_path.exists() {
-                        if let Err(error) = tokio::fs::remove_file(&after_path).await {
-                            if fail_on_delete_error {
-                                return Err(SnapshotError::Io(error));
-                            }
-                        }
+                    if self.snapshot_system.workspace_exists(after_path).await? {
+                        self.snapshot_system
+                            .remove_workspace_file(after_path)
+                            .await?;
                         restored_files.push(after_path.clone());
                     }
                 }
                 Some(snapshot_id) => {
                     self.snapshot_system
-                        .restore_file(snapshot_id, &before_path)
+                        .restore_file(snapshot_id, before_path)
                         .await?;
                     restored_files.push(before_path.clone());
                 }
             }
         }
-
         Ok(unique_paths(restored_files.into_iter()))
     }
 
@@ -1213,11 +1241,11 @@ impl SnapshotCore {
             .unwrap_or_default()
     }
 
-    async fn load_path_text(&self, path: &Path) -> String {
-        if !path.exists() {
-            return String::new();
+    async fn load_path_text(&self, path: &Path) -> SnapshotResult<String> {
+        if !self.snapshot_system.workspace_exists(path).await? {
+            return Ok(String::new());
         }
-        tokio::fs::read_to_string(path).await.unwrap_or_default()
+        self.snapshot_system.read_workspace_text(path).await
     }
 
     async fn load_all_sessions(&mut self) -> SnapshotResult<()> {
@@ -1310,6 +1338,10 @@ impl SnapshotCore {
 }
 
 fn operation_is_completed_for_session_file(op: &FileOperation) -> bool {
+    if let Some(completed) = op.completed {
+        return completed;
+    }
+
     if op.after_snapshot_id.is_some() {
         return true;
     }
@@ -1404,10 +1436,10 @@ fn sanitize_id(id: &str) -> String {
 }
 
 fn unique_paths<I: Iterator<Item = PathBuf>>(iter: I) -> Vec<PathBuf> {
-    let mut seen = HashSet::<PathBuf>::new();
+    let mut seen = HashSet::<OsString>::new();
     let mut out = Vec::new();
     for p in iter {
-        if seen.insert(p.clone()) {
+        if seen.insert(p.as_os_str().to_os_string()) {
             out.push(p);
         }
     }

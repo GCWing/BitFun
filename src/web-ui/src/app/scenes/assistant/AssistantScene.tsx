@@ -2,17 +2,13 @@ import React, { Suspense, lazy, useMemo, useEffect } from 'react';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { WorkspaceKind } from '@/shared/types';
-import { DotMatrixLoader } from '@/component-library';
+import { Spinner } from '@bitfun/ui';
 import { useMyAgentStore } from '../my-agent/myAgentStore';
 import './AssistantScene.scss';
 
 const ProfileScene = lazy(() => import('../profile/ProfileScene'));
 
-interface AssistantSceneProps {
-  workspacePath?: string;
-}
-
-const AssistantScene: React.FC<AssistantSceneProps> = ({ workspacePath }) => {
+const AssistantScene: React.FC = () => {
   const { t } = useI18n('common');
   const selectedAssistantWorkspaceId = useMyAgentStore((s) => s.selectedAssistantWorkspaceId);
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
@@ -83,13 +79,12 @@ const AssistantScene: React.FC<AssistantSceneProps> = ({ workspacePath }) => {
             aria-busy="true"
             aria-label={t('loading.scenes')}
           >
-            <DotMatrixLoader size="medium" />
+            <Spinner size="md" />
           </div>
         )}
       >
         <ProfileScene
           key={resolvedAssistantWorkspace?.id ?? 'default-assistant-workspace'}
-          workspacePath={resolvedAssistantWorkspace?.rootPath ?? workspacePath}
         />
       </Suspense>
     </div>

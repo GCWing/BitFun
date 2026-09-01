@@ -30,8 +30,8 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
     borderRadius: 12,
     padding: 8,
     background: active
-      ? 'color-mix(in srgb, var(--color-accent-500) 8%, transparent)'
-      : 'var(--element-bg-subtle)',
+      ? 'color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent)'
+      : 'var(--bf-color-surface-subtle)',
     border: 'none',
     cursor: 'pointer',
     transition: 'background 0.2s ease',
@@ -74,7 +74,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
         <div className="page-container page-container--center" style={{ maxWidth: 760 }}>
           <p style={{
             fontSize: 14,
-            color: 'var(--color-text-secondary)',
+            color: 'var(--bf-color-content-secondary)',
             marginBottom: 12,
           }}>
             {t('themeSetup.subtitle')}
@@ -98,7 +98,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                 <div style={{ flex: 1, background: lightPreview.colors.background.primary }} />
                 <div style={{ flex: 1, background: darkPreview.colors.background.primary }} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-primary)' }}>
+              <div style={{ fontSize: 11, color: 'var(--bf-color-content-primary)' }}>
                 {t('themeSetup.followSystem')}
               </div>
             </button>
@@ -115,7 +115,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                     </div>
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-primary)' }}>
+                <div style={{ fontSize: 11, color: 'var(--bf-color-content-primary)' }}>
                   {t(`themeSetup.themeNames.${theme.id}`, { defaultValue: theme.name })}
                 </div>
               </button>
@@ -132,7 +132,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
 
           {finishError && (
             <div style={{
-              color: 'var(--color-error)',
+              color: 'var(--bf-color-status-danger-content)',
               marginBottom: 12,
               fontSize: 12,
               width: '100%',

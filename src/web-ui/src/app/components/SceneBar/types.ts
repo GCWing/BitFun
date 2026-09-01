@@ -39,9 +39,9 @@ export interface SceneTabDef {
   /** i18n key resolved through the common namespace, or an explicit namespace key such as shared:features.settings. */
   labelKey?: string;
   Icon?: SceneTabIcon;
-  /** Pinned tabs cannot be closed. */
+  /** Keep this tab ahead of regular tabs while it is open. */
   pinned: boolean;
-  /** If false, user cannot close the tab. Default true for non-pinned scenes. */
+  /** If false, the user cannot close the tab. Defaults to true. */
   closable?: boolean;
   /** Only one instance allowed */
   singleton: boolean;

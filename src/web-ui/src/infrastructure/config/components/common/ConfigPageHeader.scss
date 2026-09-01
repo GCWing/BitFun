@@ -1,12 +1,9 @@
- 
-
-@use '../../../../component-library/styles/tokens' as *;
 @use './config-page-layout.tokens' as configLayout;
 
 
 .bitfun-config-page-header {
   flex-shrink: 0;
-  padding: var(--bf-appearance-token-size-gap-5) 0 0;
+  padding: var(--bf-space-5) 0 0;
   margin-bottom: 36px;
 }
 
@@ -19,13 +16,13 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--bf-appearance-token-size-gap-4);
+  gap: var(--bf-space-4);
 }
 
 .bitfun-config-page-header__left {
   display: flex;
   align-items: center;
-  gap: var(--bf-appearance-token-size-gap-4);
+  gap: var(--bf-space-4);
   flex: 1;
   min-width: 0;
 }
@@ -35,20 +32,11 @@
   min-width: 0;
 }
 
-.bitfun-config-page-header__title {
-  margin: 0;
-  font-size: var(--bf-font-size-4xl);
-  font-weight: var(--bf-font-weight-bold);
-  color: var(--bf-appearance-token-color-text-primary);
-  line-height: var(--bf-line-height-dense);
-  font-family:var(--bf-font-family-sans);
-}
-
 .bitfun-config-page-header__subtitle {
   display: block;
   margin: 0;
   font-size: var(--bf-font-size-lg);
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   line-height: var(--bf-line-height-compact);
   font-family:var(--bf-font-family-sans);
   max-width: 100%;
@@ -58,7 +46,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--bf-appearance-token-size-gap-2);
+  gap: var(--bf-space-2);
 }
 
 @media (max-width: 768px) {
@@ -79,11 +67,7 @@
 
 @media (max-width: 600px) {
   .bitfun-config-page-header__left {
-    gap: var(--bf-appearance-token-size-gap-3);
-  }
-
-  .bitfun-config-page-header__title {
-    font-size: var(--bf-font-size-3xl);
+    gap: var(--bf-space-3);
   }
 
   .bitfun-config-page-header__subtitle {
@@ -95,12 +79,12 @@
 .bitfun-config-page-header-divider {
   flex-shrink: 0;
   height: 1px;
-  background: var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-border-subtle);
   width: min(
     calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
     #{configLayout.$config-page-content-max-width}
   );
-  margin: var(--bf-appearance-token-size-gap-4) auto;
+  margin: var(--bf-space-4) auto;
   display: none;
 }
 
@@ -119,27 +103,23 @@
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-header {
-    padding-top: var(--bf-appearance-token-size-gap-4);
-    margin-bottom: var(--bf-appearance-token-size-gap-8);
+    padding-top: var(--bf-space-4);
+    margin-bottom: var(--bf-space-8);
   }
 
   .bitfun-config-page-header__inner {
-    gap: var(--bf-appearance-token-size-gap-3);
+    gap: var(--bf-space-3);
     flex-direction: column;
     align-items: flex-start;
   }
 
   .bitfun-config-page-header__left {
-    gap: var(--bf-appearance-token-size-gap-3);
+    gap: var(--bf-space-3);
     width: 100%;
   }
 
-  .bitfun-config-page-header__title {
-    font-size: var(--bf-font-size-3xl);
-  }
-
   .bitfun-config-page-header__subtitle {
-    margin-top: var(--bf-appearance-token-size-gap-1);
+    margin-top: var(--bf-space-1);
     font-size: var(--bf-font-size-sm);
     max-width: 100%;
     overflow: hidden;
@@ -150,17 +130,17 @@
   .bitfun-config-page-header__extra {
     width: 100%;
     justify-content: flex-start;
-    margin-top: var(--bf-appearance-token-size-gap-2);
+    margin-top: var(--bf-space-2);
   }
 
   .bitfun-config-page-header-divider {
-    margin: var(--bf-appearance-token-size-gap-3) auto;
+    margin: var(--bf-space-3) auto;
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .bitfun-config-page-header {
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

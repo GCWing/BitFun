@@ -26,7 +26,7 @@ import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInte
 import { workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
-import { PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import { DailyAppUpdateGate } from '@/infrastructure/update';
@@ -777,7 +777,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}
-      <PresenceBoundary active={showNewProjectDialog}>
+      <RetainedMountBoundary present={showNewProjectDialog}>
         <Suspense fallback={null}>
           <NewProjectDialog
             isOpen={showNewProjectDialog}
@@ -786,16 +786,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : undefined}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={showAboutDialog}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={showAboutDialog}>
         <Suspense fallback={null}>
           <AboutDialog
             isOpen={showAboutDialog}
             onClose={() => setShowAboutDialog(false)}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={showWorkspaceStatus}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={showWorkspaceStatus}>
         <Suspense fallback={null}>
           <WorkspaceManager
             isVisible={showWorkspaceStatus}
@@ -803,7 +803,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             onWorkspaceSelect={() => {}}
           />
         </Suspense>
-      </PresenceBoundary>
+      </RetainedMountBoundary>
       <MCPInteractionDialog />
     </>
   );

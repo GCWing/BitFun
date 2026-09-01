@@ -1,6 +1,8 @@
 export {
   Icon,
   iconNames,
+  canonicalIconNames,
+  iconAliases,
   type IconName,
   type IconProps,
   type IconSize,

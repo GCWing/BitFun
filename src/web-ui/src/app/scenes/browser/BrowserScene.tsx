@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { Icon, IconButton, Input } from '@bitfun/ui';
-import { AlertTriangle, ChevronLeft, RefreshCw } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -46,7 +46,7 @@ const BrowserScene: React.FC = () => {
           size="sm"
           onClick={browser.goBack}
           aria-label={t('nav.back')}
-          icon={<ChevronLeft />}
+          icon={<Icon name="chevron-left" size="lg" />}
           data-testid="browser-back-button"
         />
         <IconButton
@@ -64,10 +64,7 @@ const BrowserScene: React.FC = () => {
           disabled={browser.isLoading}
           aria-label={t('actions.refresh')}
           icon={(
-            <RefreshCw
-              className={browser.isLoading ? 'browser-scene__spinning' : undefined}
-              data-testid={browser.isLoading ? 'browser-loading-indicator' : undefined}
-            />
+            <Icon name="refresh" size="lg" className={browser.isLoading ? 'browser-scene__spinning' : undefined} data-testid={browser.isLoading ? 'browser-loading-indicator' : undefined} />
           )}
           data-testid="browser-refresh-button"
         />

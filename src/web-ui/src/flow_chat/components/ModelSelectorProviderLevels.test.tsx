@@ -44,7 +44,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Switch: () => null,
 }));
@@ -143,6 +144,14 @@ describe('ModelSelector provider levels', () => {
       )?.click();
     });
   };
+
+  const nativeSubmenu = () => document.body.querySelector<HTMLElement>(
+    '[data-testid="chat-model-selector-submenu"]',
+  );
+
+  const sharedSubmenuItems = () => nativeSubmenu()?.querySelector<HTMLElement>(
+    '[data-bf-part="section-items"]',
+  ) ?? null;
 
   const renderSelector = async (
     models: unknown[] = CATALOG_MODELS,
@@ -299,9 +308,15 @@ describe('ModelSelector provider levels', () => {
       )?.click();
     });
 
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    )).not.toBeNull();
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('reasoning');
     const options = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
       '[data-testid="chat-model-selector-reasoning-option"]',
     ));
+    expect(sharedSubmenuItems()).not.toBeNull();
+    expect(options.every(option => sharedSubmenuItems()?.contains(option))).toBe(true);
     expect(options.map(option => option.dataset.presetId))
       .toEqual(['auto', 'medium', 'high']);
     expect(options.every(option => (
@@ -316,6 +331,14 @@ describe('ModelSelector provider levels', () => {
     await renderSelector();
     await openMenu();
 
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    )).not.toBeNull();
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
+    expect(sharedSubmenuItems()).not.toBeNull();
+    expect(providerRows().every(row => sharedSubmenuItems()?.contains(row))).toBe(true);
+    expect(sharedSubmenuItems()?.contains(modelOption('primary'))).toBe(true);
+    expect(sharedSubmenuItems()?.contains(modelOption('fast'))).toBe(true);
     expect(providerRows().map(row => row.dataset.providerKey))
       .toEqual(['provider-acme', 'provider-umbra']);
     expect(modelOption('primary')).not.toBeNull();
@@ -338,6 +361,9 @@ describe('ModelSelector provider levels', () => {
     expect(modelOption('acme-fast')).not.toBeNull();
     expect(modelOption('acme-deep')).not.toBeNull();
     expect(modelOption('umbra-main')).toBeNull();
+    expect(sharedSubmenuItems()).not.toBeNull();
+    expect(sharedSubmenuItems()?.contains(modelOption('acme-fast'))).toBe(true);
+    expect(sharedSubmenuItems()?.contains(modelOption('acme-deep'))).toBe(true);
     // The symbolic selectors belong to the provider level and are not repeated.
     expect(modelOption('primary')).toBeNull();
 
@@ -408,15 +434,15 @@ describe('ModelSelector provider levels', () => {
     expect(modelOption('acme-deep')).toBeNull();
   });
 
-  it('lets Escape step out of a provider before closing the menu', async () => {
+  it('lets Escape step out of a provider, then the submenu, before closing the menu', async () => {
     await renderSelector();
     await openMenu();
     await openProvider('provider-acme');
 
     const pressEscape = async () => {
       await act(async () => {
-        document.body
-          .querySelector('[data-testid="chat-model-selector-menu"]')
+        (nativeSubmenu() ?? document.body
+          .querySelector('[data-testid="chat-model-selector-menu"]'))
           ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
     };
@@ -427,6 +453,7 @@ describe('ModelSelector provider levels', () => {
     expect(providerRows()).toHaveLength(2);
 
     await pressEscape();
+    expect(nativeSubmenu()).toBeNull();
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-settings"]',
     )).not.toBeNull();
@@ -438,6 +465,98 @@ describe('ModelSelector provider levels', () => {
         .querySelector('[data-testid="chat-model-selector-menu"]')
         ?.getAttribute('data-open'),
     ).toBe('false');
+  });
+
+  it('opens native submenus only by click, keeps the parent stable, and toggles them explicitly', async () => {
+    flowChatStoreMocks.sessions.set('session-a', {
+      config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
+    });
+    aiApiMocks.getModelCatalog.mockResolvedValue({
+      version: 1,
+      default_models: { primary: 'acme-fast' },
+      models: [{
+        id: 'umbra-main',
+        reasoning: {
+          status: 'known',
+          default_preset: 'medium',
+          presets: [
+            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+          ],
+        },
+      }],
+    });
+
+    await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
+    await openSettingsMenu();
+    const modelRow = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-model"]',
+    );
+    const reasoningRow = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
+    );
+
+    await act(async () => {
+      modelRow?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      modelRow?.focus();
+    });
+    expect(nativeSubmenu()).toBeNull();
+
+    await act(async () => modelRow?.click());
+    expect(modelRow?.getAttribute('aria-expanded')).toBe('true');
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    )).not.toBeNull();
+
+    await act(async () => {
+      modelRow?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+      reasoningRow?.focus();
+    });
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
+
+    await act(async () => reasoningRow?.click());
+    expect(modelRow?.getAttribute('aria-expanded')).toBe('false');
+    expect(reasoningRow?.getAttribute('aria-expanded')).toBe('true');
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('reasoning');
+
+    await act(async () => reasoningRow?.click());
+    expect(nativeSubmenu()).toBeNull();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    )).not.toBeNull();
+  });
+
+  it('supports Right and Left Arrow navigation and closes both menus on outside click', async () => {
+    await renderSelector();
+    await openSettingsMenu();
+    const modelRow = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-model"]',
+    );
+    modelRow?.focus();
+
+    await act(async () => {
+      modelRow?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await new Promise(resolve => window.setTimeout(resolve, 25));
+    });
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
+    expect(nativeSubmenu()?.contains(document.activeElement)).toBe(true);
+
+    await act(async () => {
+      nativeSubmenu()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+    expect(nativeSubmenu()).toBeNull();
+    expect(document.activeElement).toBe(modelRow);
+
+    await act(async () => modelRow?.click());
+    expect(nativeSubmenu()).not.toBeNull();
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(nativeSubmenu()).toBeNull();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-menu"]',
+    )?.getAttribute('data-open')).toBe('false');
   });
 
   it('keeps a config written before the provider-instance migration visible', async () => {

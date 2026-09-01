@@ -1,32 +1,32 @@
 /* styles/tokens.css */
 /* Git Graph MiniApp — theme tokens (host --bitfun-* when running in BitFun) */
 :root {
-  --bg:          var(--bitfun-bg, #0d1117);
-  --bg-surface:  var(--bitfun-bg-secondary, #161b22);
-  --bg-hover:    var(--bitfun-element-hover, #1c2333);
-  --bg-active:   var(--bitfun-element-bg, #1f2a3d);
-  --border:      var(--bitfun-border, #30363d);
-  --border-light: var(--bitfun-border-subtle, #21262d);
-  --text:        var(--bitfun-text, #e6edf3);
-  --text-sec:    var(--bitfun-text-secondary, #8b949e);
-  --text-dim:    var(--bitfun-text-muted, #484f58);
-  --accent:      var(--bitfun-accent, #58a6ff);
-  --accent-dim:  var(--bitfun-accent-hover, #1f6feb);
-  --green:       var(--bitfun-success, #3fb950);
-  --red:         var(--bitfun-error, #f85149);
-  --orange:      var(--bitfun-warning, #d29922);
-  --purple:      var(--bitfun-info, #bc8cff);
-  --branch-1:    var(--bitfun-accent, #58a6ff);
-  --branch-2:    var(--bitfun-success, #3fb950);
-  --branch-3:    var(--bitfun-info, #bc8cff);
-  --branch-4:    var(--bitfun-warning, #f0883e);
+  --bg:          var(--bitfun-bg);
+  --bg-surface:  var(--bitfun-bg-secondary);
+  --bg-hover:    var(--bitfun-element-hover);
+  --bg-active:   var(--bitfun-element-bg);
+  --border:      var(--bitfun-border);
+  --border-light: var(--bitfun-border-subtle);
+  --text:        var(--bitfun-text);
+  --text-sec:    var(--bitfun-text-secondary);
+  --text-dim:    var(--bitfun-text-muted);
+  --accent:      var(--bitfun-accent);
+  --accent-dim:  var(--bitfun-accent-hover);
+  --green:       var(--bitfun-success);
+  --red:         var(--bitfun-error);
+  --orange:      var(--bitfun-warning);
+  --purple:      var(--bitfun-accent-secondary);
+  --branch-1:    var(--bitfun-accent);
+  --branch-2:    var(--bitfun-success);
+  --branch-3:    var(--bitfun-accent-secondary);
+  --branch-4:    var(--bitfun-warning);
   --branch-5:    #f778ba;
   --branch-6:    #79c0ff;
   --branch-7:    #56d364;
-  --radius:      var(--bitfun-radius, 6px);
-  --radius-lg:   var(--bitfun-radius-lg, 10px);
-  --graph-node-stroke: var(--bitfun-bg, #0d1117);
-  --graph-uncommitted: var(--text-dim, #808080);
+  --radius:      var(--bitfun-radius);
+  --radius-lg:   var(--bitfun-radius-lg);
+  --graph-node-stroke: var(--bitfun-bg);
+  --graph-uncommitted: var(--text-dim);
   --graph-lane-width: 18px;
   --graph-row-height: 28px;
 }
@@ -34,7 +34,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+  font-family: var(--bitfun-font-sans);
   font-size: 13px;
   color: var(--text);
   background: var(--bg);
@@ -70,7 +70,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 280px;
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
 }
 .toolbar__branch-filter { position: relative; }
 .toolbar__branch-filter .chevron { margin-left: 4px; opacity: .8; }
@@ -85,7 +85,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  box-shadow: var(--bitfun-shadow-overlay);
   z-index: 200;
   padding: 4px 0;
 }
@@ -121,8 +121,8 @@ body {
 }
 .btn--primary {
   background: var(--accent-dim);
-  color: #fff;
-  border-color: rgba(88,166,255,.4);
+  color: var(--bitfun-text-on-accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .btn--primary:hover { background: var(--accent); }
 .btn--primary:active { background: var(--accent-dim); }
@@ -177,19 +177,19 @@ body {
   line-height: 1.4;
 }
 .badge--branch {
-  background: rgba(88,166,255,.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
-  border: 1px solid rgba(88,166,255,.25);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .badge--status {
-  background: rgba(63,185,80,.12);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
   color: var(--green);
-  border: 1px solid rgba(63,185,80,.2);
+  border: 1px solid color-mix(in srgb, var(--green) 20%, transparent);
 }
 .badge--status.has-changes {
-  background: rgba(210,153,34,.12);
+  background: color-mix(in srgb, var(--orange) 12%, transparent);
   color: var(--orange);
-  border-color: rgba(210,153,34,.2);
+  border-color: color-mix(in srgb, var(--orange) 20%, transparent);
 }
 
 /* ── Empty state ─────────────────── */
@@ -260,7 +260,7 @@ body {
 }
 .commit-row:hover { background: var(--bg-hover); }
 .commit-row.selected { background: var(--bg-active); }
-.commit-row.find-highlight { background: rgba(88,166,255,.15); }
+.commit-row.find-highlight { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .commit-row.compare-selected { box-shadow: inset 0 0 0 2px var(--accent); }
 .commit-row.commit-row--stash .graph-node--stash-outer {
   fill: none;
@@ -289,7 +289,7 @@ body {
 }
 .commit-row__hash {
   flex-shrink: 0;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bitfun-font-mono);
   font-size: 11px;
   color: var(--accent);
   width: 56px;
@@ -318,19 +318,19 @@ body {
   white-space: nowrap;
 }
 .ref-tag--head {
-  background: rgba(88,166,255,.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
 }
 .ref-tag--branch {
-  background: rgba(63,185,80,.14);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
   color: var(--green);
 }
 .ref-tag--tag {
-  background: rgba(210,153,34,.14);
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
   color: var(--orange);
 }
 .ref-tag--remote {
-  background: rgba(188,140,255,.14);
+  background: color-mix(in srgb, var(--purple) 14%, transparent);
   color: var(--purple);
 }
 
@@ -350,7 +350,7 @@ body {
   font-size: 11px;
   color: var(--text-dim);
   text-align: right;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bitfun-font-mono);
 }
 
 /* styles/graph.css */
@@ -392,7 +392,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: -4px 0 12px rgba(0,0,0,.08);
+  box-shadow: var(--bitfun-shadow-card);
 }
 .detail-panel-resizer {
   width: 6px;
@@ -485,7 +485,7 @@ body {
   flex-shrink: 0;
 }
 .detail-code-preview__filename {
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
   font-size: 12px;
   color: var(--text);
   overflow: hidden;
@@ -513,7 +513,7 @@ body {
 .detail-code-preview__error { color: var(--red); }
 .detail-code-preview__diff {
   margin: 0;
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
   font-size: 11px;
   line-height: 1.6;
   white-space: pre;
@@ -522,8 +522,8 @@ body {
   color: var(--text);
 }
 .detail-code-preview__diff .diff-line { display: block; }
-.detail-code-preview__diff .diff-line.diff-add { color: var(--green); background: rgba(63,185,80,.08); }
-.detail-code-preview__diff .diff-line.diff-del { color: var(--red); background: rgba(248,81,73,.08); }
+.detail-code-preview__diff .diff-line.diff-add { color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.detail-code-preview__diff .diff-line.diff-del { color: var(--red); background: color-mix(in srgb, var(--red) 8%, transparent); }
 .detail-code-preview__diff .diff-line.diff-hunk { color: var(--text-dim); }
 
 .detail-section {
@@ -541,7 +541,7 @@ body {
   margin-bottom: 8px;
 }
 .detail-hash {
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
   font-size: 12px;
   color: var(--accent);
   word-break: break-all;
@@ -588,7 +588,7 @@ body {
   background: var(--bg);
   border-radius: var(--radius);
   border: 1px solid var(--border-light);
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -597,8 +597,8 @@ body {
   overflow: auto;
 }
 .diff-line { display: block; }
-.diff-line.diff-add { color: var(--green); background: rgba(63,185,80,.08); }
-.diff-line.diff-del { color: var(--red); background: rgba(248,81,73,.08); }
+.diff-line.diff-add { color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.diff-line.diff-del { color: var(--red); background: color-mix(in srgb, var(--red) 8%, transparent); }
 .diff-line.diff-hunk { color: var(--text-dim); }
 .detail-file__name {
   flex: 1;
@@ -606,7 +606,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--bitfun-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--bitfun-font-mono);
   color: var(--text-sec);
 }
 .detail-file__stat { display: flex; gap: 6px; flex-shrink: 0; font-size: 11px; }
@@ -651,7 +651,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  box-shadow: var(--bitfun-shadow-overlay);
 }
 .find-widget__input {
   width: 220px;
@@ -680,7 +680,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  box-shadow: var(--bitfun-shadow-overlay);
   font-size: 12px;
 }
 .context-menu[aria-hidden="true"] { display: none; }
@@ -722,7 +722,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px rgba(0,0,0,.35);
+  box-shadow: var(--bitfun-shadow-overlay);
 }
 .modal-dialog__header {
   display: flex;

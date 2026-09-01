@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { Input, Switch } from '@bitfun/ui';
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
@@ -79,10 +80,38 @@ describe('ConfigPageLayout', () => {
     expect(layout).toContain('--config-page-section-gap: 36px;');
     expect(layout).toContain('--row-grid-cols: minmax(0, 1fr) minmax(0, 150px);');
     expect(layout).toContain('gap: 40px;');
-    expect(layout).toContain('background: var(--bf-appearance-token-config-page-section-bg);\n  border: 0;');
-    expect(layout).toContain('overflow: visible;\n  box-shadow: none;');
+    const sectionBodyRule = layout.match(/\.bitfun-config-page-section__body\s*\{([\s\S]*?)\}/)?.[1];
+    expect(sectionBodyRule?.trim()).toBe('min-width: 0;');
+    expect(layout).not.toContain('--bf-component-config-page-section-background');
     expect(header).toContain('margin-bottom: 36px;');
-    expect(header).toContain('font-size: var(--bf-font-size-4xl);');
+  });
+
+  it('keeps intrinsic controls out of the full-width field contract', () => {
+    const layout = readStyleFixture('ConfigPageLayout.scss');
+
+    act(() => {
+      root.render(
+        <>
+          <ConfigPageRow label="Automatic updates">
+            <Switch aria-label="Automatic updates" />
+          </ConfigPageRow>
+          <ConfigPageRow label="Workspace name">
+            <Input aria-label="Workspace name" />
+          </ConfigPageRow>
+        </>,
+      );
+    });
+
+    const controls = container.querySelectorAll('.bitfun-config-page-row__control');
+    const switchRoot = controls[0]?.querySelector('[data-bf-component="switch"]');
+    const inputRoot = controls[1]?.querySelector('[data-bf-component="input"]');
+
+    expect(controls[0]?.firstElementChild).toBe(switchRoot);
+    expect(controls[1]?.firstElementChild).toBe(inputRoot);
+    expect(layout).toContain("[data-bf-component='input']");
+    expect(layout).toContain("[data-bf-component='number-input']");
+    expect(layout).not.toContain("[data-bf-component='switch']");
+    expect(layout).not.toContain('> :where(span, div)');
   });
 
   it('strips the body surface chrome when the section opts out of the standard surface', () => {
@@ -98,6 +127,7 @@ describe('ConfigPageLayout', () => {
     const body = container.querySelector('.bitfun-config-page-section__body');
 
     expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(true);
+    expect(body?.getAttribute('data-appearance')).toBe('plain');
     // The prop drives styling only; it must never leak onto the DOM node.
     expect(section?.hasAttribute('bodysurface')).toBe(false);
   });
@@ -113,6 +143,8 @@ describe('ConfigPageLayout', () => {
 
     const body = container.querySelector('.bitfun-config-page-section__body');
     expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(false);
+    expect(body?.getAttribute('data-appearance')).toBe('subtle');
+    expect(body?.getAttribute('data-bf-component')).toBe('field-group');
   });
 
   it('lets copy use the full row when there is no control', () => {

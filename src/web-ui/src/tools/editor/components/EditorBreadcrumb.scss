@@ -2,9 +2,6 @@
  * EditorBreadcrumb Styles
  * Modern design with clean aesthetics
  */
-
-@use '@/component-library/styles/tokens' as *;
-
 // Variables
 $_breadcrumb-height: 24px;
 $_dropdown-max-height: 300px;
@@ -12,73 +9,71 @@ $_dropdown-width: 220px;
 
 // Breadcrumb Navigation
 .editor-breadcrumb {
-  --editor-breadcrumb-folder-rgb: 232, 181, 65;
-
   display: flex;
   align-items: center;
   height: $_breadcrumb-height;
-  padding: 0 $size-gap-3;
-  background: var(--bf-appearance-token-color-bg-scene);
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  padding: 0 var(--bf-space-3);
+  background: var(--bf-color-surface-scene);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   overflow: hidden;
   flex-shrink: 0;
   gap: 2px;
-  
+
   &__separator {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.5;
   }
-  
+
   &__item {
     display: inline-flex;
     align-items: center;
     gap: 3px;
     font-size: var(--bf-font-size-xs);
     font-family: var(--bf-font-family-mono);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     border-radius: 3px;
     padding: 2px 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
-    
+
     &-icon {
       display: flex;
       align-items: center;
-      color: var(--bf-appearance-token-color-text-muted);
-      
+      color: var(--bf-color-content-muted);
+
       svg { width: 12px; height: 12px; }
     }
-    
+
     &-text {
       max-width: 120px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    
+
     &--ellipsis {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       cursor: default;
     }
-    
+
     &--folder .editor-breadcrumb__item-icon {
-      color: rgb(var(--editor-breadcrumb-folder-rgb));
+      color: var(--bf-color-content-muted);
     }
-    
+
     &--file .editor-breadcrumb__item-icon {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
-    
+
     &--clickable {
       cursor: pointer;
-      
+
       &:hover {
-        color: var(--bf-appearance-token-color-text-primary);
+        color: var(--bf-color-content-primary);
       }
     }
-    
+
     &--active {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
     }
   }
 }
@@ -89,28 +84,28 @@ $_dropdown-width: 220px;
   max-height: $_dropdown-max-height;
   z-index: 10000;
   animation: breadcrumb-dropdown-in 0.12s ease-out;
-  
+
   &__loading {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 16px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
-  
+
   &__spinner {
     animation: breadcrumb-spin 0.8s linear infinite;
   }
-  
+
   &__empty {
     padding: 16px;
     text-align: center;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
-  
+
 }
 
 // Animations

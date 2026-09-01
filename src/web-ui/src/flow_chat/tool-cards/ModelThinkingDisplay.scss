@@ -8,7 +8,7 @@
  */
 
 @use './_tool-card-common.scss';
-@use '../../component-library/styles/markdown-layout' as markdown;
+@use '@/infrastructure/markdown/layout' as markdown;
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:
@@ -19,7 +19,7 @@
 .flow-thinking-item {
   padding: 0;
   /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
-  margin: 0 0 var(--bf-appearance-token-flowchat-flow-item-gap) 0;
+  margin: 0 0 var(--bf-control-flow-chat-flow-item-gap) 0;
   background: transparent;
   /* Transparent border to match the box-sizing of bordered cards so that thinking
    * items and card content share the same left edge. */
@@ -34,7 +34,7 @@
 .thinking-collapsed-header {
   display: flex;
   align-items: center;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  gap: var(--bf-control-flow-chat-inline-gap);
   padding: 0;
   border-radius: 4px;
   cursor: pointer;
@@ -44,7 +44,7 @@
 
   &:hover {
     .thinking-label {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       opacity: 1;
     }
 
@@ -55,7 +55,7 @@
 
   .thinking-chevron {
     flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
     display: block;
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
@@ -66,7 +66,7 @@
     min-width: 0;
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-regular);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.8;
     line-height: var(--bf-type-flow-support-line-height);
   }
@@ -86,7 +86,7 @@
 }
 
 .flow-thinking-item.summary .thinking-label {
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   opacity: 0.9;
 }
 
@@ -122,8 +122,8 @@
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
   font-family:var(--bf-font-family-sans);
   word-break: break-word;
-  color: var(--bf-appearance-token-color-text-muted);
-  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-y) 0;
+  color: var(--bf-color-content-muted);
+  padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-block) 0;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -137,9 +137,7 @@
 }
 
 .flow-thinking-item.streaming .thinking-content {
-  --model-thinking-streaming-text-rgb: 156, 163, 175;
-
-  color: rgb(var(--model-thinking-streaming-text-rgb));
+  color: var(--bf-color-content-muted);
 }
 
 /* Content wrapper with fade gradients */
@@ -151,7 +149,7 @@
    * Use a solid fill + mask fade so we never interpolate theme colors with `transparent` in sRGB
    * (that pulls toward black and looks wrong on near-black themes).
    */
-  --thinking-scroll-fade-base: var(--bf-appearance-token-color-bg-scene);
+  --thinking-scroll-fade-base: var(--bf-color-surface-scene);
 
   /* Top fade */
   &::before {
@@ -167,8 +165,8 @@
     transition: opacity 0.2s ease;
 
     background: var(--thinking-scroll-fade-base);
-    -webkit-mask-image: linear-gradient(to bottom, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
-    mask-image: linear-gradient(to bottom, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, var(--bf-color-content-on-light) 0%, var(--bf-color-content-on-light) 22%, transparent 100%);
+    mask-image: linear-gradient(to bottom, var(--bf-color-content-on-light) 0%, var(--bf-color-content-on-light) 22%, transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;
@@ -189,8 +187,8 @@
     transition: opacity 0.2s ease;
 
     background: var(--thinking-scroll-fade-base);
-    -webkit-mask-image: linear-gradient(to top, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
-    mask-image: linear-gradient(to top, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, var(--bf-color-content-on-light) 0%, var(--bf-color-content-on-light) 22%, transparent 100%);
+    mask-image: linear-gradient(to top, var(--bf-color-content-on-light) 0%, var(--bf-color-content-on-light) 22%, transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;
@@ -229,12 +227,12 @@
   font-family:var(--bf-font-family-sans);
   font-size: var(--bf-type-flow-body-font-size);
   line-height: var(--bf-type-flow-body-line-height);
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   animation: none;
 
   h1, h2, h3, h4, h5, h6,
   strong {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   p,
@@ -243,20 +241,20 @@
   li,
   blockquote,
   .custom-blockquote {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   em {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   hr {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 25%, transparent);
   }
 
   blockquote,
   .custom-blockquote {
-    border-left: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 35%, transparent);
+    border-left: 2px solid color-mix(in srgb, var(--bf-color-content-muted) 35%, transparent);
     background: transparent;
   }
 
@@ -265,13 +263,13 @@
     border-radius: 0;
     background: transparent;
     border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   .code-block-wrapper {
     border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 18%, transparent);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-content-muted) 18%, transparent);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
   }
 
   .code-block-toolbar {
@@ -301,7 +299,7 @@
 
   .code-block-wrapper .copy-button:hover {
     background: transparent !important;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     transform: scale(0.93);
   }
 
@@ -311,7 +309,7 @@
   }
 
   .code-block-wrapper .copy-button.copy-success:hover {
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-color-status-success-content);
     transform: scale(0.93);
   }
 
@@ -321,16 +319,16 @@
 
   .table-wrapper th,
   .table-wrapper td {
-    color: var(--bf-appearance-token-color-text-muted);
-    border-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 22%, transparent);
+    color: var(--bf-color-content-muted);
+    border-color: color-mix(in srgb, var(--bf-color-content-muted) 22%, transparent);
   }
 
   .table-wrapper th {
-    color: var(--bf-appearance-token-color-text-secondary);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 6%, transparent);
+    color: var(--bf-color-content-secondary);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 6%, transparent);
   }
 
   .table-wrapper tbody tr:nth-child(2n) {
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 5%, transparent);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 5%, transparent);
   }
 }

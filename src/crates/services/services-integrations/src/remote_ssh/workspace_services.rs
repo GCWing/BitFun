@@ -10,6 +10,9 @@ use bitfun_runtime_ports::{
     WorkspacePathKind, WorkspaceServices, WorkspaceShell,
 };
 use std::sync::Arc;
+#[cfg(feature = "remote-ssh-concrete")]
+use std::time::SystemTime;
+use std::time::{Duration, UNIX_EPOCH};
 
 use super::{
     RemoteFileEntry, RemoteFileService, SSHCommandOptions, SSHCommandResult, SSHConnectionManager,
@@ -98,6 +101,22 @@ fn join_posix_path(root: &str, components: &[&str]) -> String {
 
 #[async_trait]
 impl WorkspaceFileSystem for RemoteWorkspaceFs {
+    #[cfg(feature = "remote-ssh-concrete")]
+    async fn open_read(&self, path: &str) -> anyhow::Result<bitfun_runtime_ports::WorkspaceReader> {
+        self.file_service.open_read(&self.connection_id, path).await
+    }
+
+    #[cfg(feature = "remote-ssh-concrete")]
+    async fn metadata(
+        &self,
+        path: &str,
+        follow_symlinks: bool,
+    ) -> anyhow::Result<Option<bitfun_runtime_ports::WorkspaceMetadata>> {
+        self.file_service
+            .workspace_metadata(&self.connection_id, path, follow_symlinks)
+            .await
+    }
+
     fn join_path(&self, root: &str, components: &[&str]) -> String {
         join_posix_path(root, components)
     }
@@ -122,7 +141,7 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
 
     async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
         let bytes = self.read_file(path).await?;
-        Ok(String::from_utf8_lossy(&bytes).to_string())
+        Ok(String::from_utf8(bytes)?)
     }
 
     async fn read_file_text_bounded(
@@ -155,39 +174,87 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
                 .create_dir_all(&self.connection_id, parent)
                 .await?;
         }
+        #[cfg(feature = "remote-ssh-concrete")]
+        {
+            self.file_service
+                .write_workspace_file(&self.connection_id, path, contents)
+                .await
+        }
+        #[cfg(not(feature = "remote-ssh-concrete"))]
+        {
+            self.file_service
+                .write_file(&self.connection_id, path, contents)
+                .await
+        }
+    }
+
+    async fn remove_file(&self, path: &str) -> anyhow::Result<()> {
         self.file_service
-            .write_file(&self.connection_id, path, contents)
+            .remove_file(&self.connection_id, path)
+            .await
+    }
+
+    async fn remove_dir(&self, path: &str, recursive: bool) -> anyhow::Result<()> {
+        if recursive {
+            self.file_service
+                .remove_dir_all(&self.connection_id, path)
+                .await
+        } else {
+            self.file_service
+                .remove_dir(&self.connection_id, path)
+                .await
+        }
+    }
+
+    async fn create_dir_all(&self, path: &str) -> anyhow::Result<()> {
+        self.file_service
+            .create_dir_all(&self.connection_id, path)
+            .await
+    }
+
+    #[cfg(feature = "remote-ssh-concrete")]
+    async fn set_permissions(&self, path: &str, permissions: u32) -> anyhow::Result<()> {
+        self.file_service
+            .set_permissions(&self.connection_id, path, permissions)
+            .await
+    }
+
+    #[cfg(feature = "remote-ssh-concrete")]
+    async fn set_modified(&self, path: &str, modified: SystemTime) -> anyhow::Result<()> {
+        self.file_service
+            .set_modified(&self.connection_id, path, modified)
+            .await
+    }
+
+    async fn rename(&self, from: &str, to: &str) -> anyhow::Result<()> {
+        self.file_service
+            .rename(&self.connection_id, from, to)
             .await
     }
 
     async fn exists(&self, path: &str) -> anyhow::Result<bool> {
-        self.file_service.exists(&self.connection_id, path).await
+        Ok(self.metadata(path, true).await?.is_some())
     }
 
     async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
-        self.file_service.is_file(&self.connection_id, path).await
+        Ok(self
+            .metadata(path, true)
+            .await?
+            .is_some_and(|metadata| metadata.kind == WorkspacePathKind::File))
     }
 
     async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
-        self.file_service.is_dir(&self.connection_id, path).await
+        Ok(self
+            .metadata(path, true)
+            .await?
+            .is_some_and(|metadata| metadata.kind == WorkspacePathKind::Directory))
     }
 
     async fn path_kind_no_follow(&self, path: &str) -> anyhow::Result<Option<WorkspacePathKind>> {
         Ok(self
-            .file_service
-            .symlink_stat(&self.connection_id, path)
+            .metadata(path, false)
             .await?
-            .map(|entry| {
-                if entry.is_symlink {
-                    WorkspacePathKind::Symlink
-                } else if entry.is_dir {
-                    WorkspacePathKind::Directory
-                } else if entry.is_file {
-                    WorkspacePathKind::File
-                } else {
-                    WorkspacePathKind::Other
-                }
-            }))
+            .map(|metadata| metadata.kind))
     }
 
     async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
@@ -202,6 +269,9 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
                 path: entry.path,
                 is_dir: entry.is_dir,
                 is_symlink: entry.is_symlink,
+                modified: entry.modified.and_then(|milliseconds| {
+                    UNIX_EPOCH.checked_add(Duration::from_millis(milliseconds))
+                }),
             })
             .collect())
     }
@@ -222,6 +292,9 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
                 path: entry.path,
                 is_dir: entry.is_dir,
                 is_symlink: entry.is_symlink,
+                modified: entry.modified.and_then(|milliseconds| {
+                    UNIX_EPOCH.checked_add(Duration::from_millis(milliseconds))
+                }),
             })
             .collect())
     }

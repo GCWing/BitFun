@@ -24,7 +24,18 @@ import {
 import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationHeaderPolicy, ConversationHeaderPresentation } from '../policy/ConversationHeaderPolicy';
-import { FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  PAGE_BG,
+  SHADOW_SUBTLE,
+  SOFT,
+  STATUS_DANGER,
+  STATUS_SUCCESS,
+  TRANSPARENT,
+} from './Theme';
 
 @ComponentV2
 export struct ConversationView {
@@ -290,10 +301,10 @@ export struct ConversationView {
     }
     .width(292)
     .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-    .backgroundColor(FLOATING_PANEL_BG)
-    .border({ width: 1, color: LINE })
+    .backgroundColor(CARD)
+    .border({ width: 0.5, color: LINE })
     .borderRadius(16)
-    .shadow({ radius: 18, color: LINE, offsetY: 7 })
+    .shadow({ radius: 18, color: SHADOW_SUBTLE, offsetY: 7 })
     .transition(TransitionEffect.translate({ x: 8, y: -8 })
       .combine(TransitionEffect.opacity(0))
       .animation({ duration: 180, curve: Curve.EaseOut }))
@@ -334,7 +345,7 @@ export struct ConversationView {
     .width('100%').height(48)
     .padding({ left: 8, right: 8 })
     .borderRadius(10)
-    .backgroundColor(selected ? SOFT : '#00000000')
+    .backgroundColor(selected ? SOFT : TRANSPARENT)
     .onClick(() => {
       action()
       this.showHeaderActions = false
@@ -375,7 +386,7 @@ export struct ConversationView {
 
   private statusColor(): ResourceColor {
     if (this.canStop && this.connectionState === 'connected') {
-      return GREEN;
+      return STATUS_SUCCESS;
     }
     return this.connectionColor();
   }
@@ -440,10 +451,10 @@ export struct ConversationView {
   private connectionColor(): ResourceColor {
     const tone = ConnectionStatusPresenter.tone(this.connectionState);
     if (tone === 'ok') {
-      return GREEN;
+      return STATUS_SUCCESS;
     }
     if (tone === 'error') {
-      return RED;
+      return STATUS_DANGER;
     }
     return MUTED;
   }

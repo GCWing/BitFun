@@ -225,23 +225,25 @@ vi.mock('react-i18next', async (importOriginal) => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   IconButton: React.forwardRef<
     HTMLButtonElement,
-    React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }
+    React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: React.ReactNode; variant?: string; size?: string }
   >(function MockIconButton({
     children,
+    icon,
     variant: _variant,
     size: _size,
     ...props
   }, ref) {
     return (
       <button ref={ref} type="button" {...props}>
+        {icon}
         {children}
       </button>
     );
   }),
-  MarkdownRenderer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
   Tooltip: ({ children, content }: { children: React.ReactNode; content?: React.ReactNode }) => {
     const tooltipContent = typeof content === 'string' ? content : undefined;
     let trigger = children;
@@ -257,6 +259,13 @@ vi.mock('@/component-library', () => ({
     }
     return <span data-tooltip={tooltipContent}>{trigger}</span>;
   },
+}));
+
+vi.mock('@/infrastructure/markdown', () => ({
+  MarkdownRenderer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+}));
+
+vi.mock('@bitfun/ui/flow-chat', () => ({
   ToolProcessingDots: ({ className }: { className?: string }) => <span className={className}>...</span>,
 }));
 
@@ -1390,7 +1399,7 @@ describe('Session usage report UI components', () => {
 
   it('keeps file diff actions visible and exposes full paths for long file rows', () => {
     dom.window.localStorage.setItem(USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY, 'false');
-    const longPath = 'src/web-ui/src/component-library/components/Markdown/Markdown.tsx';
+    const longPath = 'src/web-ui/src/infrastructure/markdown/MarkdownRenderer.tsx';
     const report = usageReport({
       files: {
         scope: 'snapshot_summary',
@@ -1429,8 +1438,8 @@ describe('Session usage report UI components', () => {
     expect(container.querySelector('.session-usage-panel__table--files')).not.toBeNull();
     expect(container.querySelector(`[data-tooltip="${longPath}"]`)).not.toBeNull();
     const pathCell = container.querySelector('.session-usage-panel__file-path-cell');
-    expect(pathCell?.textContent).toBe('.../Markdown/Markdown.tsx');
-    expect(pathCell?.textContent).not.toContain('component-library/components');
+    expect(pathCell?.textContent).toBe('.../markdown/MarkdownRenderer.tsx');
+    expect(pathCell?.textContent).not.toContain('src/web-ui/src/infrastructure');
     expect(pathCell?.textContent).not.toBe(longPath);
     expect(container.textContent).not.toContain('Operation IDs');
     expect(container.textContent).not.toContain('operation-1');
@@ -1744,10 +1753,10 @@ describe('Session usage report i18n and theme guards', () => {
       .map(stylePath => fs.readFileSync(path.resolve(stylePath), 'utf8'))
       .join('\n');
 
-    expect(styleText).toContain('var(--bf-appearance-token-color-text-primary)');
+    expect(styleText).toContain('var(--bf-color-content-primary)');
     expect(styleText).toContain('width: auto;');
     expect(styleText).toContain('margin: 0.12rem 3rem');
-    expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base)');
+    expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--bf-color-border-default)');
     expect(styleText).toContain('grid-template-columns: repeat(3, minmax(116px, 1fr));');
     expect(styleText).toContain('width: clamp(180px, 26vw, 280px);');
     expect(styleText).toContain('max-width: 280px;');

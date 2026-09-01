@@ -5,6 +5,10 @@
       "value": "#FFFFFF"
     },
     {
+      "name": "transparent",
+      "value": "#00000000"
+    },
+    {
       "name": "page_bg",
       "value": "#FFFFFF"
     },
@@ -45,7 +49,7 @@
       "value": "#111111"
     },
     {
-      "name": "primary_action_text",
+      "name": "content_on_action",
       "value": "#FFFFFF"
     },
     {
@@ -69,8 +73,48 @@
       "value": "#FFD021"
     },
     {
-      "name": "modal_scrim",
+      "name": "scrim",
       "value": "#44000000"
+    },
+    {
+      "name": "shell_scrim",
+      "value": "#24000000"
+    },
+    {
+      "name": "media_background",
+      "value": "#FF000000"
+    },
+    {
+      "name": "media_scrim",
+      "value": "#B8000000"
+    },
+    {
+      "name": "media_control_background",
+      "value": "#8C000000"
+    },
+    {
+      "name": "toast_background",
+      "value": "#D1171717"
+    },
+    {
+      "name": "shadow_faint",
+      "value": "#08000000"
+    },
+    {
+      "name": "shadow_subtle",
+      "value": "#12000000"
+    },
+    {
+      "name": "shadow_medium",
+      "value": "#18000000"
+    },
+    {
+      "name": "shadow_strong",
+      "value": "#24000000"
+    },
+    {
+      "name": "floating_border",
+      "value": "#18000000"
     },
     {
       "name": "soft",
@@ -81,11 +125,11 @@
       "value": "#F7F7F5"
     },
     {
-      "name": "green",
+      "name": "status_success",
       "value": "#27C46A"
     },
     {
-      "name": "red",
+      "name": "status_danger",
       "value": "#E04F4F"
     },
     {

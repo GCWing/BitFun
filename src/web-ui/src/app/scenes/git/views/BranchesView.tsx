@@ -5,11 +5,7 @@
 import { Button, Icon, IconButton, SearchField, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Trash2,
-  RotateCcw,
-  FileText,
-} from 'lucide-react';
+import { RotateCcw, FileText } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitService } from '@/tools/git/services';
@@ -290,7 +286,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                         size="sm"
                         onClick={() => handleDeleteBranch(branch.name, !!branch.current)}
                         disabled={isOperating}
-                        icon={<Trash2 size={14} />}
+                        icon={<Icon name="delete" size="sm" />}
                       />
                     </Tooltip>
                   )}

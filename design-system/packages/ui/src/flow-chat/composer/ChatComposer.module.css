@@ -169,6 +169,23 @@
     gap: var(--bf-space-1);
   }
 
+  .actionButton[data-bf-component="icon-button"] {
+    inline-size: var(--bf-control-chat-composer-control-height);
+    block-size: var(--bf-control-chat-composer-control-height);
+    min-inline-size: var(--bf-control-chat-composer-control-height);
+    min-block-size: var(--bf-control-chat-composer-control-height);
+    border-radius: var(--bf-radius-pill);
+  }
+
+  .actionButton[data-bf-component="icon-button"] [data-bf-part="icon"] {
+    inline-size: var(--bf-control-chat-composer-action-icon-size);
+    block-size: var(--bf-control-chat-composer-action-icon-size);
+  }
+
+  .actionButton[data-bf-variant="fill"][aria-expanded="true"] {
+    background: var(--bf-color-action-neutral-surface-hover);
+  }
+
   .surface[data-bf-layout="compact"] .startActions,
   .surface[data-bf-layout="compact"] .endActions {
     block-size: var(--bf-control-chat-composer-compact-track-height);

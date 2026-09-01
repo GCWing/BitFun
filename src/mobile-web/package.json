@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare:design-system": "pnpm --dir ../../design-system run prepare:consumer-dev",
+    "predev": "pnpm run prepare:design-system",
+    "pretype-check": "pnpm run prepare:design-system",
+    "prebuild": "pnpm run prepare:design-system",
     "dev": "vite",
     "type-check": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@bitfun/theme-bitfun": "workspace:^",
     "@noble/ciphers": "^2.1.1",
     "@noble/curves": "^2.0.1",
     "react": "^18.3.1",

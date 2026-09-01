@@ -1,10 +1,9 @@
-import { Button, ConfirmDialog, Icon, Select, Switch, Tooltip } from '@bitfun/ui';
+import { Button, Combobox, ConfirmDialog, Icon, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, RefreshCw, ShieldCheck } from 'lucide-react';
-import { ConfigPageLoading } from '@/component-library';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
+import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, ShieldCheck } from 'lucide-react';
+import { ConfigLoadingState } from '@/infrastructure/config/components/common';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';
@@ -1442,7 +1441,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
           subtitle={pageSubtitle}
         />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('loading')} />
+          <ConfigLoadingState label={t('loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -1516,7 +1515,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 void loadSnapshot(true, true);
               }}
             >
-              <RefreshCw size={15} aria-hidden="true" />
+              <Icon name="refresh" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </Button>
           </Tooltip>
         )}
@@ -1738,6 +1737,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     <AlertTriangle size={16} aria-hidden="true" />
                     <span>{t('policy.recoveryRequired')}</span>
                     <Button
+                      className="bitfun-external-sources-config__policy-recovery-action"
                       variant="outline"
                       size="sm"
                       disabled={busyKey !== null || !hostCapabilities.canMutatePolicy}
@@ -1812,6 +1812,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   ) : null}
                   {policyScope === 'workspace' && policy.workspaceOverride ? (
                     <Button
+                      className="bitfun-external-sources-config__scope-reset"
                       variant="outline"
                       size="sm"
                       disabled={busyKey !== null || !policyCompatible
@@ -1844,6 +1845,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             </div>
                             <div className="bitfun-external-sources-config__policy-actions" data-bf-component="external-sources-config" data-bf-part="policyActions">
                               <Select
+                                className="bitfun-external-sources-config__policy-select"
                                 size="sm"
                                 value={selectedPolicyEnabled ? ecosystem.mode : 'disabled'}
                                 aria-label={t('policy.modeLabel', {
@@ -1983,6 +1985,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                       ) : null}
                                     </div>
                                     <Select
+                                      className="bitfun-external-sources-config__policy-select"
                                       size="sm"
                                       value={accessKnown
                                         ? selectedCapabilityAccess(ecosystem, capabilityId)
@@ -2063,6 +2066,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   </div>
                   <div className="bitfun-external-sources-config__policy-actions" data-bf-component="external-sources-config" data-bf-part="policyActions">
                     <Select
+                      className="bitfun-external-sources-config__policy-select"
                       size="sm"
                       value={selectedPolicyEnabled ? ecosystem.mode : 'disabled'}
                       aria-label={t('policy.modeLabel', {
@@ -2139,6 +2143,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             ) : null}
                           </div>
                           <Select
+                            className="bitfun-external-sources-config__policy-select"
                             size="sm"
                             value={accessKnown
                               ? selectedCapabilityAccess(ecosystem, capabilityId)
@@ -2713,10 +2718,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       align="center"
                     >
                       {canEdit ? (
-                        <LocalizedCombobox
+                        <Combobox
                           size="sm"
                           value={selectedKey}
-                          triggerAriaLabel={t('agentModelBindings.selectLabel', {
+                          aria-label={t('agentModelBindings.selectLabel', {
                             request: externalAgentRequestedModelLabel(group.request, t),
                           })}
                           disabled={!policyCompatible || busyKey !== null
@@ -3492,8 +3497,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         )}
       </ConfigPageContent>
       <ConfirmDialog
-        isOpen={resetPolicyConfirmation !== null}
-        onClose={() => setResetPolicyConfirmation(null)}
+        open={resetPolicyConfirmation !== null}
+        onOpenChange={() => setResetPolicyConfirmation(null)}
         onConfirm={() => {
           const confirmation = resetPolicyConfirmation;
           setResetPolicyConfirmation(null);

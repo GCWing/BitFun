@@ -1,6 +1,24 @@
-import { Button, ConfirmDialog, Field, Icon, IconButton, Input, Modal, ScrollArea, SearchField, Select, StatusPill, Switch } from '@bitfun/ui';
+import {
+  Button,
+  ConfirmDialog,
+  Field,
+  Icon,
+  IconButton,
+  Input,
+  ScrollArea,
+  SearchField,
+  Select,
+  StatusPill,
+  Switch,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, Trash2, TrendingUp, Zap } from 'lucide-react';
+import { FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
@@ -495,7 +513,7 @@ const SkillsScene: React.FC = () => {
                                 data-bf-scene="skills"
                                 data-bf-part="installedCardSource"
                               >
-                                <StatusPill tone="neutral">
+                                <StatusPill className="skills-card__source-pill" tone="neutral">
                                   {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
                                 </StatusPill>
                               </span>
@@ -567,7 +585,7 @@ const SkillsScene: React.FC = () => {
                                   title={t('list.item.deleteTooltip')}
                                   data-bf-scene="skills"
                                   data-bf-part="installedCardDelete"
-                                  icon={<Trash2 size={13} />}
+                                  icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                                 />
                               )}
                             </div>
@@ -726,7 +744,7 @@ const SkillsScene: React.FC = () => {
                         data-bf-scene="skills"
                         data-bf-part="pageButton"
                       >
-                        <ChevronLeft size={14} />
+                        <Icon name="chevron-left" size="sm" />
                       </button>
                       <span className="skills-discover__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
                         {market.hasMore
@@ -817,7 +835,7 @@ const SkillsScene: React.FC = () => {
               setDeleteTarget(selectedInstalledSkill);
               setSelectedDetail(null);
             }}
-            leadingIcon={<Trash2 size={14} />}
+            leadingIcon={<Icon name="delete" size="sm" />}
           >
 
             {t('deleteModal.delete')}
@@ -921,15 +939,23 @@ const SkillsScene: React.FC = () => {
         ) : null}
       </GalleryDetailModal>
 
-      <Modal
-        isOpen={desktopConfigAvailable && isAddFormOpen}
-        onClose={() => {
-          installed.resetForm();
-          setAddFormOpen(false);
+      <Dialog
+        open={desktopConfigAvailable && isAddFormOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            installed.resetForm();
+            setAddFormOpen(false);
+          }
         }}
-        title={t('form.title')}
-        size="small"
+        size="sm"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('form.title')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         <div className="bitfun-skills-scene__modal-form">
           <Field label={t('form.level.label')} controlWidth="fill">
             <Select
@@ -1022,11 +1048,12 @@ const SkillsScene: React.FC = () => {
             </Button>
           </div>
         </div>
-      </Modal>
+              </DialogBody>
+      </Dialog>
 
       <ConfirmDialog
-        isOpen={desktopConfigAvailable && Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
+        open={desktopConfigAvailable && Boolean(deleteTarget)}
+        onOpenChange={() => setDeleteTarget(null)}
         onConfirm={async () => {
           if (!desktopConfigAvailable || !deleteTarget || !canDeleteSkill(deleteTarget)) {
             setDeleteTarget(null);

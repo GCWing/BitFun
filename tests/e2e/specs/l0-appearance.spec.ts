@@ -156,13 +156,13 @@ describe('L0 Appearance', () => {
     const appearanceStyles = await browser.execute(() => {
       const styles = window.getComputedStyle(document.documentElement);
       const appearanceVariables = Array.from(styles)
-        .filter(property => property.startsWith('--bf-appearance-'));
+        .filter(property => property.startsWith('--bf-color-'));
 
       return {
         variableCount: appearanceVariables.length,
-        background: styles.getPropertyValue('--bf-appearance-token-color-bg-primary').trim(),
-        text: styles.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
-        accent: styles.getPropertyValue('--bf-appearance-token-color-accent-500').trim(),
+        background: styles.getPropertyValue('--bf-color-surface-canvas').trim(),
+        text: styles.getPropertyValue('--bf-color-content-primary').trim(),
+        accent: styles.getPropertyValue('--bf-color-accent-default').trim(),
       };
     });
 
@@ -180,16 +180,16 @@ describe('L0 Appearance', () => {
       const styles = window.getComputedStyle(document.documentElement);
       const navPanel = document.querySelector<HTMLElement>('[data-testid="nav-panel"]');
       return {
-        primary: styles.getPropertyValue('--bf-appearance-token-color-bg-primary').trim(),
-        scene: styles.getPropertyValue('--bf-appearance-token-color-bg-scene').trim(),
-        softSurface: styles.getPropertyValue('--bf-appearance-token-color-accent-100').trim(),
-        text: styles.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
-        mutedText: styles.getPropertyValue('--bf-appearance-token-color-text-muted').trim(),
-        accent: styles.getPropertyValue('--bf-appearance-token-color-accent-500').trim(),
-        primaryButton: styles.getPropertyValue('--bf-appearance-token-btn-primary-bg').trim(),
-        successBackground: styles.getPropertyValue('--bf-appearance-token-color-success-bg').trim(),
-        errorBackground: styles.getPropertyValue('--bf-appearance-token-color-error-bg').trim(),
-        border: styles.getPropertyValue('--bf-appearance-token-border-base').trim(),
+        primary: styles.getPropertyValue('--bf-color-surface-canvas').trim(),
+        scene: styles.getPropertyValue('--bf-color-surface-scene').trim(),
+        softSurface: styles.getPropertyValue('--bf-color-action-secondary-background').trim(),
+        text: styles.getPropertyValue('--bf-color-content-primary').trim(),
+        mutedText: styles.getPropertyValue('--bf-color-content-muted').trim(),
+        accent: styles.getPropertyValue('--bf-color-accent-default').trim(),
+        primaryButton: styles.getPropertyValue('--bf-color-action-primary-background').trim(),
+        successBackground: styles.getPropertyValue('--bf-color-status-success-surface').trim(),
+        errorBackground: styles.getPropertyValue('--bf-color-status-danger-surface').trim(),
+        border: styles.getPropertyValue('--bf-color-border-default').trim(),
         navBackground: navPanel ? window.getComputedStyle(navPanel).backgroundColor : null,
       };
     });
@@ -248,8 +248,8 @@ describe('L0 Appearance', () => {
 
       return {
         appearanceMode: document.documentElement.getAttribute('data-bf-appearance-mode'),
-        textPrimary: rootStyle.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
-        scene: rootStyle.getPropertyValue('--bf-appearance-token-color-bg-scene').trim(),
+        textPrimary: rootStyle.getPropertyValue('--bf-color-content-primary').trim(),
+        scene: rootStyle.getPropertyValue('--bf-color-surface-scene').trim(),
         buttonBackground: buttonRule?.style.background ?? null,
         buttonBorder: buttonRule?.style.borderColor ?? null,
         iconColor: iconRule?.style.color ?? null,
@@ -261,9 +261,9 @@ describe('L0 Appearance', () => {
       appearanceMode: 'light',
       textPrimary: '#1c1c1f',
       scene: '#ffffff',
-      buttonBackground: 'var(--bf-appearance-token-color-text-primary)',
-      buttonBorder: 'var(--bf-appearance-token-color-text-primary)',
-      iconColor: 'var(--bf-appearance-token-color-bg-scene)',
+      buttonBackground: 'var(--bf-color-content-primary)',
+      buttonBorder: 'var(--bf-color-content-primary)',
+      iconColor: 'var(--bf-color-surface-scene)',
       iconStroke: 'currentcolor',
     });
   });
@@ -449,7 +449,7 @@ describe('L0 Appearance', () => {
                   ? window.getComputedStyle(cardPrimaryAction).backgroundColor
                   : null,
                 neutralActionBackground: window.getComputedStyle(card)
-                  .getPropertyValue('--bf-appearance-token-element-bg-base')
+                  .getPropertyValue('--bf-color-action-neutral-surface')
                   .trim(),
                 primaryActionLabel: cardPrimaryAction?.textContent?.trim() ?? '',
                 width: cardRect.width,
@@ -688,16 +688,16 @@ describe('L0 Appearance', () => {
       };
     });
     expect(miniAppHoverContract).toEqual({
-      cardBackground: 'var(--bf-appearance-token-element-bg-subtle)',
-      cardBorder: 'var(--bf-appearance-token-border-base)',
-      cardShadow: 'var(--bf-appearance-token-shadow-sm)',
+      cardBackground: 'var(--bf-color-surface-subtle)',
+      cardBorder: 'var(--bf-color-border-default)',
+      cardShadow: 'var(--bf-shadow-sm)',
       cardTransform: 'translateY(-3px)',
       primaryBackground: 'var(--miniapp-card-inverse-bg)',
       primaryColor: 'var(--miniapp-card-inverse-color)',
       deleteBackground: 'var(--miniapp-card-inverse-bg)',
       deleteColor: 'var(--miniapp-card-inverse-color)',
-      lightInverseBackground: 'var(--bf-appearance-token-color-static-black)',
-      lightInverseColor: 'var(--bf-appearance-token-color-static-white)',
+      lightInverseBackground: 'var(--bf-color-content-on-light)',
+      lightInverseColor: 'var(--bf-color-content-on-dark)',
     });
 
     const importAction = await $('[data-testid="miniapp-import-action"]');
@@ -770,21 +770,21 @@ describe('L0 Appearance', () => {
       return {
         appearanceId: document.documentElement.getAttribute('data-bf-appearance'),
         appearanceMode: document.documentElement.getAttribute('data-bf-appearance-mode'),
-        contentBackgroundToken: rootStyles.getPropertyValue('--bf-appearance-token-color-bg-primary').trim(),
-        contentTextToken: rootStyles.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
-        contentSecondaryTextToken: rootStyles.getPropertyValue('--bf-appearance-token-color-text-secondary').trim(),
-        contentBorderToken: rootStyles.getPropertyValue('--bf-appearance-token-border-subtle').trim(),
-        contentSurfaceToken: rootStyles.getPropertyValue('--bf-appearance-token-element-bg-subtle').trim(),
-        configSectionBackgroundToken: rootStyles.getPropertyValue('--bf-appearance-token-config-page-section-bg').trim(),
-        configSectionBorderToken: rootStyles.getPropertyValue('--bf-appearance-token-config-page-section-border').trim(),
-        configSectionBorderWidthToken: rootStyles.getPropertyValue('--bf-appearance-token-config-page-section-border-width').trim(),
-        configDividerToken: rootStyles.getPropertyValue('--bf-appearance-token-config-page-divider').trim(),
-        chromeBackgroundToken: rootStyles.getPropertyValue('--bf-appearance-token-chrome-bg-primary').trim(),
-        chromeTextToken: rootStyles.getPropertyValue('--bf-appearance-token-chrome-text-primary').trim(),
+        contentBackgroundToken: rootStyles.getPropertyValue('--bf-color-surface-canvas').trim(),
+        contentTextToken: rootStyles.getPropertyValue('--bf-color-content-primary').trim(),
+        contentSecondaryTextToken: rootStyles.getPropertyValue('--bf-color-content-secondary').trim(),
+        contentBorderToken: rootStyles.getPropertyValue('--bf-color-border-subtle').trim(),
+        contentSurfaceToken: rootStyles.getPropertyValue('--bf-color-surface-subtle').trim(),
+        configSectionBackgroundToken: rootStyles.getPropertyValue('--bf-component-config-page-section-background').trim(),
+        configSectionBorderToken: rootStyles.getPropertyValue('--bf-component-config-page-section-border').trim(),
+        configSectionBorderWidthToken: rootStyles.getPropertyValue('--bf-component-config-page-section-border-width').trim(),
+        configDividerToken: rootStyles.getPropertyValue('--bf-component-config-page-divider').trim(),
+        chromeBackgroundToken: navStyles.getPropertyValue('--bf-color-surface-canvas').trim(),
+        chromeTextToken: navStyles.getPropertyValue('--bf-color-content-primary').trim(),
         bodyBackground: bodyStyles.backgroundColor,
         workbenchBackground: workbenchStyles.backgroundColor,
         navBackground: navStyles.backgroundColor,
-        navTextToken: navStyles.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
+        navTextToken: navStyles.getPropertyValue('--bf-color-content-primary').trim(),
         settingsTitleColor: window.getComputedStyle(settingsTitle).color,
         settingsActiveItemColor: window.getComputedStyle(settingsActiveItem).color,
         settingsSectionBackground: window.getComputedStyle(settingsSectionBody).backgroundColor,
@@ -793,9 +793,9 @@ describe('L0 Appearance', () => {
         settingsSectionShadow: window.getComputedStyle(settingsSectionBody).boxShadow,
         settingsRowDivider: window.getComputedStyle(settingsRowDivider).borderTopColor,
         appearanceSelectBorder: window.getComputedStyle(appearanceSelect).borderTopColor,
-        sceneBarTextToken: sceneBarStyles.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
+        sceneBarTextToken: sceneBarStyles.getPropertyValue('--bf-color-content-primary').trim(),
         viewportBackground: viewportStyles.backgroundColor,
-        viewportTextToken: viewportStyles.getPropertyValue('--bf-appearance-token-color-text-primary').trim(),
+        viewportTextToken: viewportStyles.getPropertyValue('--bf-color-content-primary').trim(),
         viewportRadius: viewportStyles.borderTopLeftRadius,
       };
     });
@@ -925,7 +925,7 @@ describe('L0 Appearance', () => {
         id: root.getAttribute('data-bf-appearance'),
         mode: root.getAttribute('data-bf-appearance-mode'),
         revision: root.getAttribute('data-bf-appearance-revision'),
-        background: styles.getPropertyValue('--bf-appearance-token-color-bg-primary').trim(),
+        background: styles.getPropertyValue('--bf-color-surface-canvas').trim(),
       };
     });
 

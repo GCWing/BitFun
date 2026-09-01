@@ -7,8 +7,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-appearance-token-color-bg-primary);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-canvas);
+  color: var(--bf-color-content-primary);
   overflow: hidden;
 
   // Loading and error states
@@ -31,11 +31,11 @@
       .error-icon {
         width: 48px;
         height: 48px;
-        color: var(--bf-appearance-token-color-error);
+        color: var(--bf-color-status-danger-content);
       }
 
       p {
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
         font-size: var(--bf-font-size-base);
         margin: 0;
       }
@@ -49,19 +49,19 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-panel);
+    border-bottom: 1px solid var(--bf-color-border-default);
     flex-shrink: 0;
 
     &--collapsible {
       cursor: pointer;
 
       &:hover {
-        background: var(--bf-appearance-token-color-bg-tertiary);
+        background: var(--bf-color-surface-tertiary);
 
         .header-expand-indicator {
-          color: var(--bf-appearance-token-color-text-primary);
-          background: var(--bf-appearance-token-color-overlay-white-08);
+          color: var(--bf-color-content-primary);
+          background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
         }
       }
     }
@@ -78,9 +78,9 @@
         justify-content: center;
         width: 18px;
         height: 18px;
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         border-radius: 4px;
-        background: var(--bf-appearance-token-color-overlay-white-04);
+        background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
         transition:
           background-color 0.15s ease,
           color 0.15s ease,
@@ -101,13 +101,13 @@
 
       .file-icon {
         flex-shrink: 0;
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
       }
 
       .file-name {
         font-size: var(--bf-font-size-base);
         font-weight: var(--bf-font-weight-medium);
-        color: var(--bf-appearance-token-color-text-primary);
+        color: var(--bf-color-content-primary);
         font-family:var(--bf-font-family-mono);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -116,9 +116,9 @@
 
       .unsaved-indicator {
         font-size: var(--bf-font-size-meta);
-        color: var(--bf-appearance-token-color-warning);
+        color: var(--bf-color-status-warning-content);
         padding: 2px 6px;
-        background: var(--bf-appearance-token-color-warning-bg);
+        background: var(--bf-color-status-warning-surface);
         border-radius: 4px;
         margin-left: 4px;
       }
@@ -133,11 +133,11 @@
       .todos-count {
         font-size: var(--bf-font-size-meta);
         font-weight: var(--bf-font-weight-medium);
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         padding: 2px 8px;
         border-radius: 999px;
-        border: 1px solid var(--bf-appearance-token-border-base);
-        background: var(--bf-appearance-token-color-bg-primary);
+        border: 1px solid var(--bf-color-border-default);
+        background: var(--bf-color-surface-canvas);
         letter-spacing: var(--bf-letter-spacing-subtle);
       }
 
@@ -147,8 +147,8 @@
   // Todo Section
   .plan-viewer-todos {
     padding: 8px 12px;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-color-surface-panel);
+    border-bottom: 1px solid var(--bf-color-border-default);
     flex-shrink: 0;
 
     .todo-inline-toolbar,
@@ -196,7 +196,7 @@
 
     &--trailing {
       border: none;
-      border-top: 1px dashed var(--bf-appearance-token-border-base);
+      border-top: 1px dashed var(--bf-color-border-default);
       background: transparent;
       padding: 6px 16px 10px;
 
@@ -223,20 +223,20 @@
         margin-top: 2px;
 
         &--pending {
-          color: var(--bf-appearance-token-color-text-muted);
+          color: var(--bf-color-content-muted);
           opacity: 0.5;
         }
 
         &--in-progress {
-          color: var(--bf-appearance-token-color-info);
+          color: var(--bf-color-status-info-content);
         }
 
         &--completed {
-          color: var(--bf-appearance-token-color-success);
+          color: var(--bf-color-status-success-content);
         }
 
         &--cancelled {
-          color: var(--bf-appearance-token-color-error);
+          color: var(--bf-color-status-danger-content);
           opacity: 0.6;
         }
       }
@@ -244,26 +244,9 @@
       .todo-content {
         font-size: var(--bf-font-size-sm);
         line-height: var(--bf-line-height-base);
-        color: var(--bf-appearance-token-color-text-secondary);
+        color: var(--bf-color-content-secondary);
         flex: 1;
         min-width: 0;
-      }
-
-      .todo-content-input {
-        flex: 1;
-        min-width: 0;
-        font-size: var(--bf-font-size-sm);
-        line-height: var(--bf-line-height-base);
-        color: var(--bf-appearance-token-color-text-primary);
-        background: var(--bf-appearance-token-color-bg-primary);
-        border: 1px solid var(--bf-appearance-token-border-base);
-        border-radius: 4px;
-        padding: 4px 8px;
-        outline: none;
-
-        &:focus {
-          border-color: var(--bf-appearance-token-color-info);
-        }
       }
 
       .todo-content-input-field {
@@ -274,15 +257,15 @@
       // Status styles
       &.status-pending {
         .todo-content {
-          color: var(--bf-appearance-token-color-text-secondary);
+          color: var(--bf-color-content-secondary);
         }
       }
 
       &.status-in_progress {
-        background: var(--bf-appearance-token-glass-blue-subtle);
+        background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
 
         .todo-content {
-          color: var(--bf-appearance-token-color-text-primary);
+          color: var(--bf-color-content-primary);
           font-weight: var(--bf-font-weight-medium);
         }
       }
@@ -290,7 +273,7 @@
       &.status-completed {
         .todo-content {
           text-decoration: line-through;
-          color: var(--bf-appearance-token-color-text-muted);
+          color: var(--bf-color-content-muted);
           opacity: 0.6;
         }
       }
@@ -300,7 +283,7 @@
 
         .todo-content {
           text-decoration: line-through;
-          color: var(--bf-appearance-token-color-text-muted);
+          color: var(--bf-color-content-muted);
         }
       }
     }

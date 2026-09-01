@@ -52,6 +52,7 @@ pub mod miniapp_publish_tool;
 pub mod page_deploy_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_publish_tool;
+mod plan_artifact_diagnostics;
 #[cfg(feature = "tools-miniapp")]
 pub mod playbook_tool;
 #[cfg(feature = "tools-agent-control")]

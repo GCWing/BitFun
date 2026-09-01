@@ -4,7 +4,7 @@ import { notificationService } from '@/shared/notification-system';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { getBuiltinAppearanceCssToken } from '@/infrastructure/appearance/builtins/catalog';
+import { getBuiltinAppearanceThemeToken } from '@/infrastructure/appearance/builtins/catalog';
 import { withTimeout } from '@/shared/utils/timing';
 
 const log = createLogger('captureElementToDownloadsPng');
@@ -19,8 +19,8 @@ export async function captureElementToDownloadsPng(
   fileNamePrefix: string,
 ): Promise<void> {
   const computedStyle = getComputedStyle(document.documentElement);
-  const bgColor = computedStyle.getPropertyValue('--bf-appearance-token-color-bg-scene').trim()
-    || getBuiltinAppearanceCssToken('--bf-appearance-token-color-bg-scene');
+  const bgColor = computedStyle.getPropertyValue('--bf-color-surface-scene').trim()
+    || getBuiltinAppearanceThemeToken('--bf-color-surface-scene');
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 

@@ -1,6 +1,6 @@
 import { Button, Field, Icon, Input, Select, ScrollArea, Textarea } from '@bitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Inbox, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Inbox, ShieldCheck } from 'lucide-react';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   appearanceMarketAPI,
@@ -401,7 +401,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 {t('package.market.submissions.manual.open')}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => void loadSubmissions()} disabled={loading} leadingIcon={<RefreshCw size={14} aria-hidden="true" />}>
+            <Button variant="outline" size="sm" onClick={() => void loadSubmissions()} disabled={loading} leadingIcon={<Icon name="refresh" size="sm" aria-hidden="true" />}>
 
               {t('package.market.submissions.refresh')}
             </Button>
@@ -462,6 +462,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                     </div>
                     {canWithdraw(submission) && (
                       <Button
+                        className="appearance-market__submission-action"
                         variant="outline"
                         size="sm"
                         loading={actingId === submission.submissionId}
@@ -491,7 +492,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           <h3 id="appearance-market-review-title">{t('package.market.review.title')}</h3>
           <p>{t('package.market.review.hint')}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void loadReviewQueue()} disabled={loading} leadingIcon={<RefreshCw size={14} aria-hidden="true" />}>
+        <Button variant="outline" size="sm" onClick={() => void loadReviewQueue()} disabled={loading} leadingIcon={<Icon name="refresh" size="sm" aria-hidden="true" />}>
 
           {t('package.market.review.refresh')}
         </Button>

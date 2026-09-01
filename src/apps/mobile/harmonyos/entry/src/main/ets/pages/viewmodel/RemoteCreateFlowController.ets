@@ -66,7 +66,6 @@ export class RemoteCreateFlowController {
       if (!device) {
         throw new Error(RemoteI18n.t('remote.settings.deviceUnavailable'));
       }
-      runtime.hooks.showToast(RemoteI18n.f('remote.settings.deviceSwitching', device.deviceName || target));
       await runtime.settings.selectCloudAccountDevice(device, false);
     } catch (err) {
       this.remote.setLoadingHome(false);

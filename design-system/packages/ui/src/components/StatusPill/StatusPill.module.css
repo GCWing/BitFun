@@ -40,11 +40,13 @@
 
   .label {
     min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .root[data-tone="neutral"] {
     color: var(--bf-color-content-secondary);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-action-neutral-surface);
   }
 
   .root[data-tone="accent"] {

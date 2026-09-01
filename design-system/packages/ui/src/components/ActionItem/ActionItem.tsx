@@ -33,7 +33,6 @@ export interface ActionItemProps
   reserveLeadingSpace?: boolean;
   shortcut?: ReactNode;
   tone?: ActionItemTone;
-  triggerClassName?: string;
 }
 
 export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(function ActionItem({
@@ -46,7 +45,6 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
   reserveLeadingSpace = false,
   shortcut,
   tone = "neutral",
-  triggerClassName,
   type = "button",
   ...props
 }, ref) {
@@ -61,7 +59,7 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
     >
       <button
         {...props}
-        className={classNames(styles.trigger, triggerClassName)}
+        className={styles.trigger}
         data-bf-part="trigger"
         disabled={disabled}
         ref={ref}

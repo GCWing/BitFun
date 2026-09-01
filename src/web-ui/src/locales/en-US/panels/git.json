@@ -189,6 +189,7 @@
   },
   "quickSwitch": {
     "menuLabel": "Switch branch",
+    "searchLabel": "Search branches",
     "searchPlaceholder": "Search branches...",
     "loading": "Loading...",
     "conflict": {

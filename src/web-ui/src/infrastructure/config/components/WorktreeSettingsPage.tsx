@@ -6,17 +6,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
-  FolderGit2,
-  LoaderCircle,
-  MessageSquareText,
-  RotateCcw,
-  Save,
-  Trash2,
-} from 'lucide-react';
+import { FolderGit2, LoaderCircle, MessageSquareText, RotateCcw, Save } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
-import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton } from '@/component-library';
-
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { configAPI, worktreeAPI } from '@/infrastructure/api';
@@ -36,6 +27,9 @@ import {
   ConfigPageLayout,
   ConfigPageRow,
   ConfigPageSection,
+  ConfigLoadingState,
+  ConfigMessage,
+  ConfigRefreshButton,
 } from './common';
 import './WorktreeSettingsPage.scss';
 
@@ -398,12 +392,12 @@ const WorktreeSettingsPage: React.FC = () => {
 
   const renderSettings = () => {
     if (settingsLoading) {
-      return <ConfigPageLoading text={t('settings.loading')} />;
+      return <ConfigLoadingState label={t('settings.loading')} />;
     }
 
     return (
       <>
-        <ConfigPageMessage message={settingsMessage} />
+        <ConfigMessage message={settingsMessage} />
         <ConfigPageSection
           title={t('settings.isolation.title')}
           description={t('settings.isolation.description')}
@@ -469,7 +463,7 @@ const WorktreeSettingsPage: React.FC = () => {
           >
             <NumberInput
               value={settings.autoDeleteLimit}
-              onChange={value => setSettings(current => ({
+              onValueChange={value => setSettings(current => ({
                 ...current,
                 autoDeleteLimit: value,
               }))}
@@ -483,6 +477,7 @@ const WorktreeSettingsPage: React.FC = () => {
         </ConfigPageSection>
         <div className="bitfun-worktree-settings__actions">
           <Button
+            className="bitfun-worktree-settings__action"
             variant="outline"
             size="sm"
             onClick={() => setSettings(DEFAULT_SETTINGS)}
@@ -493,6 +488,7 @@ const WorktreeSettingsPage: React.FC = () => {
             {t('settings.reset')}
           </Button>
           <Button
+            className="bitfun-worktree-settings__action"
             variant="fill"
             size="sm"
             onClick={() => void save()}
@@ -623,7 +619,7 @@ const WorktreeSettingsPage: React.FC = () => {
                   worktree,
                 })}
                 aria-label={t('management.delete.actionLabel', { path: worktree.path })}
-                icon={<Trash2 size={14} aria-hidden />}
+                icon={<Icon name="delete" size="sm" aria-hidden />}
               />
             </Tooltip>
           </div>
@@ -741,7 +737,7 @@ const WorktreeSettingsPage: React.FC = () => {
           title={t('management.title')}
           description={t('management.description')}
           extra={(
-            <ConfigPageRefreshButton
+            <ConfigRefreshButton
               tooltip={t('management.refresh')}
               onClick={() => void loadProjects()}
               loading={projectsLoading}
@@ -749,7 +745,7 @@ const WorktreeSettingsPage: React.FC = () => {
             />
           )}
         >
-          <ConfigPageMessage message={projectsMessage} />
+          <ConfigMessage message={projectsMessage} />
           {projectsMessage?.type === 'error' && projects.length === 0 && (
             <Button
               variant="outline"
@@ -790,8 +786,8 @@ const WorktreeSettingsPage: React.FC = () => {
       </ConfigPageContent>
 
       <ConfirmDialog
-        isOpen={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
+        open={deleteTarget !== null}
+        onOpenChange={() => setDeleteTarget(null)}
         onConfirm={() => void confirmDelete()}
         title={deletingWithLocalWork
           ? t('management.delete.forceTitle')

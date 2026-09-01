@@ -4,11 +4,8 @@
  */
 
 /* ========== Import design tokens ========== */
-@use '../../component-library/styles/tokens.scss' as *;
-
 /* ========== Global CSS variables ========== */
 :root {
-  @include apply-design-tokens;
 }
 
 /* ========== Global base styles ========== */
@@ -31,39 +28,39 @@ body {
   font-family:var(--bf-font-family-sans);
   font-size: var(--bf-font-size-base);
   line-height: var(--bf-line-height-base);
-  color: var(--bf-appearance-token-color-text-primary);
-  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-color-content-primary);
+  background: var(--bf-color-surface-canvas);
   overflow: hidden;
 }
 
 /* Link styles */
 a {
-  color: var(--bf-appearance-token-color-accent-500);
+  color: var(--bf-color-accent-default);
   text-decoration: none;
-  transition: color $motion-fast $easing-standard;
+  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 }
 
 a:hover {
-  color: var(--bf-appearance-token-color-accent-400);
+  color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
   text-decoration: underline;
 }
 
 /* Text selection styles */
 ::selection {
-  background: var(--bf-appearance-token-color-accent-300);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-action-secondary-pressed);
+  color: var(--bf-color-content-primary);
 }
 
 ::-moz-selection {
-  background: var(--bf-appearance-token-color-accent-300);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-action-secondary-pressed);
+  color: var(--bf-color-content-primary);
 }
 
 /* Focus styles */
 :focus-visible {
-  outline: 2px solid var(--bf-appearance-token-color-accent-400);
+  outline: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
   outline-offset: 2px;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
 }
 }
 
@@ -83,7 +80,7 @@ a:hover {
 @layer bf.base {
 /* Disabled state */
 :disabled {
-  opacity: $opacity-disabled;
+  opacity: var(--bf-opacity-disabled);
   cursor: default;
 }
 
@@ -91,7 +88,7 @@ a:hover {
 img {
   max-width: 100%;
   height: auto;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
 }
 
 /* Table styles */
@@ -103,14 +100,14 @@ table {
 th,
 td {
   text-align: left;
-  padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px solid var(--bf-appearance-token-border-base);
+  padding: var(--bf-space-2) var(--bf-space-3);
+  border-bottom: 1px solid var(--bf-color-border-default);
 }
 
 th {
   font-weight: var(--bf-font-weight-semibold);
-  color: var(--bf-appearance-token-color-text-primary);
-  background: var(--bf-appearance-token-element-bg-base);
+  color: var(--bf-color-content-primary);
+  background: var(--bf-color-action-neutral-surface);
 }
 
 /* Code styles */
@@ -118,9 +115,9 @@ code,
 pre {
   font-family: var(--bf-font-family-mono);
   font-size: var(--bf-font-size-sm);
-  background: var(--bf-appearance-token-element-bg-base);
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: $size-radius-sm;
+  background: var(--bf-color-action-neutral-surface);
+  border: 1px solid var(--bf-color-border-default);
+  border-radius: var(--bf-radius-sm);
 }
 
 code {
@@ -128,7 +125,7 @@ code {
 }
 
 pre {
-  padding: $size-gap-3;
+  padding: var(--bf-space-3);
   overflow-x: auto;
   line-height: var(--bf-line-height-relaxed);
 }
@@ -141,11 +138,11 @@ pre code {
 
 /* Blockquote styles */
 blockquote {
-  margin: $size-gap-4 0;
-  padding: $size-gap-3 $size-gap-4;
-  border-left: 3px solid var(--bf-appearance-token-color-accent-500);
-  background: var(--bf-appearance-token-element-bg-base);
-  border-radius: 0 $size-radius-base $size-radius-base 0;
+  margin: var(--bf-space-4) 0;
+  padding: var(--bf-space-3) var(--bf-space-4);
+  border-left: 3px solid var(--bf-color-accent-default);
+  background: var(--bf-color-action-neutral-surface);
+  border-radius: 0 var(--bf-radius-base) var(--bf-radius-base) 0;
   font-style: italic;
 }
 
@@ -153,18 +150,18 @@ blockquote {
 hr:not(:is(.m-editor hr)) {
   border: none;
   height: 1px;
-  background: var(--bf-appearance-token-border-base);
-  margin: $size-gap-5 0;
+  background: var(--bf-color-border-default);
+  margin: var(--bf-space-5) 0;
 }
 
 /* List styles */
 ul,
 ol {
-  padding-left: $size-gap-5;
+  padding-left: var(--bf-space-5);
 }
 
 li {
-  margin-bottom: $size-gap-1;
+  margin-bottom: var(--bf-space-1);
 }
 }
 
@@ -181,25 +178,25 @@ li {
 /* Loading state */
 .loading {
   pointer-events: none;
-  opacity: $opacity-hover;
+  opacity: var(--bf-opacity-hover);
 }
 
 /* Error state */
 .error {
-  color: var(--bf-appearance-token-color-error);
-  border-color: var(--bf-appearance-token-color-error);
+  color: var(--bf-color-status-danger-content);
+  border-color: var(--bf-color-status-danger-content);
 }
 
 /* Success state */
 .success {
-  color: var(--bf-appearance-token-color-success);
-  border-color: var(--bf-appearance-token-color-success);
+  color: var(--bf-color-status-success-content);
+  border-color: var(--bf-color-status-success-content);
 }
 
 /* Warning state */
 .warning {
-  color: var(--bf-appearance-token-color-warning);
-  border-color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
+  border-color: var(--bf-color-status-warning-content);
 }
 
 /* Accessibility helpers */
@@ -213,14 +210,6 @@ li {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* High-contrast mode */
-@media (prefers-contrast: high) {
-  :root {
-    --bf-appearance-token-glass-border-base: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.3);
-    --bf-appearance-token-glass-border-hover: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.5);
-  }
 }
 
 /* Reduced motion mode */
@@ -292,36 +281,32 @@ body > div[style*="z-index:999999"] {
 
 /* Print styles */
 @media print {
-  :root {
-    --print-border-rgb: 153, 153, 153;
-  }
-
   * {
     background: transparent !important;
-    color: black !important;
+    color: var(--bf-color-content-on-light) !important;
     box-shadow: none !important;
     text-shadow: none !important;
   }
-  
+
   a,
   a:visited {
     text-decoration: underline;
   }
-  
+
   a[href]::after {
     content: " (" attr(href) ")";
   }
-  
+
   pre,
   blockquote {
-    border: 1px solid rgb(var(--print-border-rgb));
+    border: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent);
     page-break-inside: avoid;
   }
-  
+
   img {
     page-break-inside: avoid;
   }
-  
+
   h2,
   h3 {
     page-break-after: avoid;

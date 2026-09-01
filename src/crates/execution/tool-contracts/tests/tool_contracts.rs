@@ -953,7 +953,7 @@ fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
     assert!(file_read_facts_content_matches(full_read, "alpha\n"));
     assert!(file_read_facts_are_fresh(full_read, "alpha\n", Some(200)));
     assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(200)));
-    assert!(file_read_facts_are_fresh(full_read, "beta\n", Some(50)));
+    assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(50)));
     assert!(!file_read_facts_are_fresh(full_read, "beta\n", None));
 
     let partial_read = FileReadFreshnessFacts {
@@ -971,12 +971,46 @@ fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
 }
 
 #[test]
+fn file_read_freshness_full_read_rejects_same_tick_and_restored_mtime_changes() {
+    let read = FileReadFreshnessFacts {
+        content: "alpha\nbeta",
+        timestamp_ms: 1_700_000_000_000,
+        is_full_file_read: true,
+    };
+    for modified in [
+        Some(read.timestamp_ms),
+        Some(read.timestamp_ms - 1_000),
+        None,
+    ] {
+        assert!(!file_read_facts_are_fresh(read, "alpha\nzeta\n", modified));
+        assert!(file_read_facts_are_fresh(
+            read,
+            "alpha\r\nbeta\r\n",
+            modified
+        ));
+    }
+    let partial = FileReadFreshnessFacts {
+        is_full_file_read: false,
+        ..read
+    };
+    assert!(file_read_facts_are_fresh(
+        partial,
+        "unobserved content",
+        Some(read.timestamp_ms)
+    ));
+    assert!(!file_read_facts_are_fresh(
+        partial,
+        "unobserved content",
+        Some(read.timestamp_ms + 1_000)
+    ));
+}
+
+#[test]
 fn file_read_freshness_tolerates_read_tool_trailing_newline_reconstruction_gap() {
     // The cached "last Read result" content is rebuilt from cat -n-style
     // output via a line-split/join, which drops a trailing newline even when
-    // the file on disk ends with one. Remote workspaces have no mtime to
-    // short-circuit this comparison, so every full-file Edit/Write on a
-    // trailing-newline file (the common case) must still be considered fresh.
+    // the file on disk ends with one. Every full-file Edit/Write on a
+    // trailing-newline file must still be considered fresh.
     let cached_without_trailing_newline = FileReadFreshnessFacts {
         content: "alpha\nbeta",
         timestamp_ms: 100,

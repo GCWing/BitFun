@@ -36,15 +36,15 @@ function DiagramShell({
       style={{
         minWidth: 0,
         overflow: 'auto',
-        border: '1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 78%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--bf-color-border-subtle) 78%, transparent)',
         borderRadius: 8,
-        background: 'color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 56%, transparent)',
+        background: 'color-mix(in srgb, var(--bf-color-surface-raised) 56%, transparent)',
         padding: 14,
         ...style,
       }}
     >
       {title ? (
-        <div style={{ marginBottom: 10, color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 'var(--bf-type-label-sm-font-size)', fontWeight: 'var(--bf-type-label-selected-font-weight)', lineHeight: 'var(--bf-type-label-sm-line-height)' }}>
+        <div style={{ marginBottom: 10, color: 'var(--bf-color-content-primary)', fontSize: 'var(--bf-type-label-sm-font-size)', fontWeight: 'var(--bf-type-label-selected-font-weight)', lineHeight: 'var(--bf-type-label-sm-line-height)' }}>
           {title}
         </div>
       ) : null}
@@ -83,7 +83,7 @@ function renderGraphSvg({
             width={rank.width + 16}
             height={rank.height + 16}
             rx={8}
-            fill={index % 2 === 0 ? 'var(--bf-appearance-token-element-bg-subtle)' : 'var(--bf-appearance-token-color-bg-chrome)'}
+            fill={index % 2 === 0 ? 'var(--bf-color-surface-subtle)' : 'var(--bf-color-surface-chrome)'}
             opacity={index % 2 === 0 ? 0.72 : 0.46}
           />
         ))}
@@ -106,7 +106,7 @@ function renderGraphSvg({
                   x={(edge.sourceX + edge.targetX) / 2}
                   y={(edge.sourceY + edge.targetY) / 2 - 4}
                   textAnchor="middle"
-                  fill="var(--bf-appearance-token-color-text-muted)"
+                  fill="var(--bf-color-content-muted)"
                   fontSize="var(--bf-type-micro-font-size)"
                 >
                   {String(meta.label).slice(0, 18)}
@@ -127,8 +127,8 @@ function renderGraphSvg({
               width={layoutNode.width}
               height={layoutNode.height}
               rx={6}
-              fill="var(--bf-appearance-token-color-bg-elevated)"
-              stroke="var(--bf-appearance-token-border-subtle)"
+              fill="var(--bf-color-surface-raised)"
+              stroke="var(--bf-color-border-subtle)"
               strokeWidth={1}
             />
             <rect
@@ -138,11 +138,11 @@ function renderGraphSvg({
               fill={color}
               opacity={0.78}
             />
-            <text x={14} y={description ? 18 : layoutNode.height / 2 + 4} fill="var(--bf-appearance-token-color-text-primary)" fontSize="var(--bf-type-support-font-size)" fontWeight="var(--bf-font-weight-semibold)">
+            <text x={14} y={description ? 18 : layoutNode.height / 2 + 4} fill="var(--bf-color-content-primary)" fontSize="var(--bf-type-support-font-size)" fontWeight="var(--bf-font-weight-semibold)">
               {String(label).slice(0, 22)}
             </text>
             {description ? (
-              <text x={14} y={34} fill="var(--bf-appearance-token-color-text-muted)" fontSize="var(--bf-type-micro-font-size)">
+              <text x={14} y={34} fill="var(--bf-color-content-muted)" fontSize="var(--bf-type-micro-font-size)">
                 {String(description).slice(0, 26)}
               </text>
             ) : null}
@@ -177,7 +177,7 @@ export function DependencyGraph({
       {nodes.length ? (
         renderGraphSvg({ layout, nodes, edges: resolvedEdges, title: String(title || 'Dependency graph') })
       ) : (
-        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No graph nodes</div>
+        <div style={{ color: 'var(--bf-color-content-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No graph nodes</div>
       )}
     </DiagramShell>
   );
@@ -238,7 +238,7 @@ export function FlowDiagram({
       {resolvedNodes.length ? (
         renderGraphSvg({ layout, nodes: resolvedNodes, edges: resolvedEdges, title: String(title || 'Flow diagram') })
       ) : (
-        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No flow steps</div>
+        <div style={{ color: 'var(--bf-color-content-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No flow steps</div>
       )}
     </DiagramShell>
   );

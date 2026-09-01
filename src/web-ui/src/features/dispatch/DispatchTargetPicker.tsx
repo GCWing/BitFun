@@ -7,14 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  FolderGit2,
-  Laptop,
-  Loader2,
-  MonitorSmartphone,
-  RefreshCw,
-  Server,
-} from 'lucide-react';
+import { FolderGit2, Laptop, Loader2, MonitorSmartphone, Server } from 'lucide-react';
 
 import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@bitfun/ui';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
@@ -262,7 +255,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         ) : null}
         {!loading && error ? (
           <MenuItem
-            leading={<RefreshCw size={14} aria-hidden />}
+            leading={<Icon name="refresh" size="sm" aria-hidden />}
             onClick={() => void refresh()}
           >
             {t('chatInput.dispatch.targetLoadFailed')}

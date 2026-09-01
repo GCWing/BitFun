@@ -1,8 +1,6 @@
 /**
  * New Project Dialog Styles
  */
-@use '../../../component-library/styles/tokens.scss' as *;
-
 // ==================== Dialog Container ====================
 
 .new-project-dialog {
@@ -12,7 +10,7 @@
   max-width: 100%;
 
   // ==================== Hero Section ====================
-  
+
   &__hero {
     display: flex;
     flex-direction: column;
@@ -33,7 +31,7 @@
     animation: new-project-icon-enter 0.4s ease-out;
 
     svg {
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 
@@ -51,7 +49,7 @@
   &__title {
     font-size: var(--bf-font-size-2xl);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin: 0 0 6px 0;
     position: relative;
     z-index: 1;
@@ -59,7 +57,7 @@
 
   &__subtitle {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     margin: 0;
     position: relative;
     z-index: 1;
@@ -81,7 +79,7 @@
     flex-direction: column;
     gap: 8px;
     animation: new-project-field-enter 0.35s ease-out both;
-    
+
     &:nth-child(1) { animation-delay: 0.05s; }
     &:nth-child(2) { animation-delay: 0.1s; }
   }
@@ -103,13 +101,13 @@
     gap: 6px;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     margin: 0;
-    
+
     svg {
       width: 14px;
       height: 14px;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -124,26 +122,26 @@
   &__path-input {
     flex: 1;
     min-width: 0;
-    
+
     input {
       width: 100%;
       cursor: default;
       user-select: none;
       font-size: var(--bf-font-size-xs);
       padding: 10px 12px;
-      background: var(--bf-appearance-token-color-overlay-white-04);
-      border: 1px dashed var(--bf-appearance-token-border-subtle);
+      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+      border: 1px dashed var(--bf-color-border-subtle);
       border-radius: 8px;
-      color: var(--bf-appearance-token-color-text-primary);
-      
+      color: var(--bf-color-content-primary);
+
       &::placeholder {
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         font-size: var(--bf-font-size-xs);
       }
-      
+
       &:focus {
         border-style: solid;
-        border-color: var(--bf-appearance-token-border-base);
+        border-color: var(--bf-color-border-default);
         outline: none;
       }
     }
@@ -161,27 +159,27 @@
       width: 100%;
       font-size: var(--bf-font-size-xs);
       padding: 10px 12px;
-      background: var(--bf-appearance-token-color-overlay-white-04);
-      border: 1px solid var(--bf-appearance-token-border-subtle);
+      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+      border: 1px solid var(--bf-color-border-subtle);
       border-radius: 8px;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       transition:
         background-color 0.2s ease,
         border-color 0.2s ease,
         box-shadow 0.2s ease,
         color 0.2s ease;
-      
+
       &::placeholder {
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         font-size: var(--bf-font-size-xs);
       }
-      
+
       &:focus {
-        border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
+        border-color: color-mix(in srgb, var(--bf-color-accent-default) 45%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
         outline: none;
       }
-      
+
       &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -196,8 +194,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
     border-radius: 8px;
     animation: new-project-preview-enter 0.3s ease-out;
   }
@@ -222,7 +220,7 @@
     svg {
       width: 14px;
       height: 14px;
-      color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
     }
   }
 
@@ -236,7 +234,7 @@
 
   &__preview-label {
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
   }
@@ -244,7 +242,7 @@
   &__preview-path {
     font-size: var(--bf-font-size-meta);
     font-family: var(--bf-font-family-mono);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -257,21 +255,21 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: var(--bf-appearance-token-glass-red-base);
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
+    background: var(--bf-color-status-danger-surface);
+    border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
     border-radius: 8px;
     animation: new-project-error-shake 0.4s ease-out;
-    
+
     svg {
       flex-shrink: 0;
       width: 14px;
       height: 14px;
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
-    
+
     span {
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -290,7 +288,7 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 8px 16px;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    border-top: 1px solid var(--bf-color-border-subtle);
     background: transparent;
 
   }
@@ -298,8 +296,8 @@
   &__btn-spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
-    border-top-color: var(--bf-appearance-token-color-accent-500);
+    border: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
+    border-top-color: var(--bf-color-accent-default);
     border-radius: 50%;
     animation: new-project-spin 0.8s linear infinite;
   }
@@ -314,23 +312,23 @@
 @media (max-width: 520px) {
   .new-project-dialog {
     width: 100%;
-    
+
     &__hero {
       padding: 8px 16px 20px;
     }
-    
+
     &__content {
       padding: 0 16px 16px;
     }
-    
+
     &__footer {
       padding: 10px 16px;
     }
-    
+
     &__path-selector {
       flex-direction: column;
     }
-    
+
     &__select-btn {
       width: 100%;
     }

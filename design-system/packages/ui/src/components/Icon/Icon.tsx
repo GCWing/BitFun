@@ -60,9 +60,27 @@ import turnUrl from "./assets/turn.svg";
 import uploadUrl from "./assets/upload.svg";
 import userUrl from "./assets/user.svg";
 import xmarkUrl from "./assets/xmark.svg";
+import chevronLeftUrl from "./assets/chevron-left.svg";
+import selectedUrl from "./assets/selected.svg";
+import deleteUrl from "./assets/delete.svg";
+import waitlistMessageUrl from "./assets/waitlist-message.svg";
+import creativeUrl from "./assets/creative.svg";
+import ultimateUrl from "./assets/ultimate.svg";
+import standardUrl from "./assets/standard.svg";
+import minimalUrl from "./assets/minimal.svg";
 import styles from "./Icon.module.css";
 
 export const iconNames = [
+  "arrow-down",
+  "unselected",
+  "chevron-left",
+  "selected",
+  "delete",
+  "waitlist-message",
+  "creative",
+  "ultimate",
+  "standard",
+  "minimal",
   "arrow-left",
   "arrow-right",
   "arrow-up",
@@ -121,6 +139,10 @@ export const iconNames = [
   "xmark",
 ] as const;
 
+/** Legacy names remain renderable; new previews use the canonical catalog. */
+export const iconAliases = { download: "arrow-down", circle: "unselected" } as const;
+export const canonicalIconNames = iconNames.filter(name => name !== "turn" && !(name in iconAliases)).sort();
+
 export type IconName = (typeof iconNames)[number];
 export type IconSize = "2xs" | "xs" | "sm" | "md" | "lg";
 export type IconTone =
@@ -135,6 +157,16 @@ export type IconTone =
   | "danger";
 
 const iconSources = {
+  "arrow-down": downloadUrl,
+  unselected: circleUrl,
+  "chevron-left": chevronLeftUrl,
+  "selected": selectedUrl,
+  "delete": deleteUrl,
+  "waitlist-message": waitlistMessageUrl,
+  "creative": creativeUrl,
+  "ultimate": ultimateUrl,
+  "standard": standardUrl,
+  "minimal": minimalUrl,
   "arrow-left": arrowLeftUrl,
   "arrow-right": arrowRightUrl,
   "arrow-up": arrowUpUrl,

@@ -1,17 +1,7 @@
 import { Button, Field, Icon, Input, Select, StatusPill, Textarea } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import {
-  AlertTriangle,
-  Camera,
-  FileImage,
-  Github,
-  History,
-  Loader2,
-  PackageOpen,
-  RefreshCw,
-  Send,
-} from 'lucide-react';
+import { AlertTriangle, Camera, FileImage, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { MarketAccountControls } from '@/features/market-account';
@@ -269,7 +259,7 @@ const MiniAppSubmissionsView: React.FC = () => {
         subtitle={t('market.submissions.subtitle')}
         actions={(
           <div className="miniapp-submissions__header-actions">
-            <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={busy} leadingIcon={<RefreshCw size={14} />}>
+            <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={busy} leadingIcon={<Icon name="refresh" size="sm" />}>
 
               {t('market.submissions.refresh')}
             </Button>

@@ -1,6 +1,17 @@
-import { Button, Checkbox, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Button,
+  Checkbox,
+  Icon,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Bot, FolderKanban, Loader2, Trash2 } from 'lucide-react';
+import { Archive, Bot, FolderKanban, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionMetadata } from '@/shared/types/session-history';
@@ -300,15 +311,22 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
   ]);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={isBusy ? () => {} : onClose}
-      title={t('nav.sessions.manage')}
-      size="xlarge"
-      contentLayout="flex"
-      contentClassName="workspace-session-batch-modal__content-shell"
-      closeOnOverlayClick={!isBusy}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isBusy) onClose();
+      }}
+      size="xl"
+      closeOnPointerOutside={!isBusy}
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('nav.sessions.manage')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
+        <div className="workspace-session-batch-modal__content-shell">
       <div data-bf-component="workspace-session-batch-modal" data-bf-part="root" className="workspace-session-batch-modal">
         <div data-bf-component="workspace-session-batch-modal" data-bf-part="hero" className="workspace-session-batch-modal__hero">
           <div className="workspace-session-batch-modal__hero-icon">
@@ -446,14 +464,16 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
             onClick={() => { void handleDeleteSelected(); }}
             disabled={isBusy || selectedCount === 0}
             loading={actionKind === 'delete'}
-            leadingIcon={<Trash2 size={14} />}
+            leadingIcon={<Icon name="delete" size="sm" />}
           >
 
             <span>{t('nav.sessions.deleteSelected')}</span>
           </Button>
         </div>
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 };
 

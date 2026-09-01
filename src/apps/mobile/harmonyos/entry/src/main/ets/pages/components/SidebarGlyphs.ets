@@ -1,10 +1,11 @@
-import { CARD, GREEN, INK, MUTED } from './Theme';
+import { CARD, STATUS_SUCCESS, INK, MUTED } from './Theme';
 import { TemplateIcon } from './TemplateIcon';
 
 @ComponentV2
 export struct SidebarGlyph {
   @Param kind: string = '';
   @Param connectionState: string = '';
+  @Param tint: ResourceColor = INK;
 
   build() {
     if (this.kind === 'session_more') {
@@ -46,7 +47,7 @@ export struct SidebarGlyph {
     Stack({ alignContent: Alignment.Center }) {
       if (this.connectionState === 'connected' || this.connectionState === 'reconnecting') {
         TemplateIcon({ src: $r('app.media.remote_ref_sidebar_connected'), iconWidth: 35, iconHeight: 34 })
-        Text('').width(8).height(8).backgroundColor(GREEN).borderRadius(4)
+        Text('').width(8).height(8).backgroundColor(STATUS_SUCCESS).borderRadius(4)
           .position({ x: 24, y: 22 })
       } else {
         TemplateIcon({ src: $r('app.media.remote_logo'), iconWidth: 34, iconHeight: 34, tint: MUTED })
@@ -135,14 +136,23 @@ export struct SidebarGlyph {
 
   @Builder
   private Edit() {
-    SymbolGlyph($r('sys.symbol.square_and_pencil'))
-      .fontSize(22).fontColor([INK]).width(24).height(24)
+    Stack({ alignContent: Alignment.Center }) {
+      SymbolGlyph($r('sys.symbol.square_and_pencil'))
+        .fontSize(20)
+        .fontColor([this.tint])
+    }
+    .width(22)
+    .height(22)
   }
 
   @Builder
   private Settings() {
-    SymbolGlyph($r('sys.symbol.gearshape'))
-      .fontSize(22).fontColor([INK]).width(24).height(24)
+    Stack({ alignContent: Alignment.Center }) {
+      SymbolGlyph($r('sys.symbol.gearshape'))
+        .fontSize(24)
+        .fontColor([this.tint])
+    }
+    .width(26)
+    .height(26)
   }
 }
-

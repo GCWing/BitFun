@@ -64,7 +64,7 @@ test("SegmentedControl styles bind pill geometry and shared action tokens", asyn
   assert.match(styles, /--bf-control-segmented-control-segment-padding-inline/);
   assert.match(styles, /--bf-control-segmented-control-icon-size/);
   assert.match(styles, /--bf-type-meta-font-size/);
-  assert.match(styles, /--bf-color-surface-subtle/);
+  assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-color-surface-raised/);
   assert.match(styles, /--bf-color-action-neutral-surface-hover/);
   assert.match(styles, /--bf-color-action-neutral-content-disabled/);

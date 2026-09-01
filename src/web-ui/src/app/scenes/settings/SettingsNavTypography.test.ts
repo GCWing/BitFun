@@ -51,7 +51,7 @@ describe('SettingsNav typography and layout ownership', () => {
 
   it('keeps title, search, and body separated by the navigation spacing token', () => {
     const root = declarations('.bitfun-settings-nav');
-    const header = declarations('.bitfun-settings-nav > [data-bf-part=header]');
+    const header = declarations('.bitfun-settings-nav__panel-header');
     expect(root.getPropertyValue('gap')).toBe('var(--bf-layout-navigation-panel-content-gap)');
     expect(header.getPropertyValue('display')).toBe('flex');
     expect(header.getPropertyValue('flex-direction')).toBe('column');
@@ -61,7 +61,7 @@ describe('SettingsNav typography and layout ownership', () => {
 
   it('resolves shared navigation text against the current chrome instead of secondary action ink', () => {
     const root = declarations('.bitfun-settings-nav');
-    expect(root.getPropertyValue('--bf-color-content-primary')).toBe('var(--bf-appearance-token-color-text-primary)');
+    expect(root.getPropertyValue('--bf-color-content-primary')).toBe('var(--bf-color-content-primary)');
     expect(root.getPropertyValue('--bf-color-action-neutral-content')).toBe('');
   });
 
@@ -75,13 +75,13 @@ describe('SettingsNav typography and layout ownership', () => {
   });
 
   it('stacks search copy inside the shared label without overriding the selected item', () => {
-    const label = declarations('.bitfun-settings-nav__search-result-item > [data-bf-part=trigger] > [data-bf-part=label]');
+    const label = declarations('.bitfun-settings-nav__search-result-copy');
     expect(label.getPropertyValue('display')).toBe('flex');
     expect(label.getPropertyValue('flex-direction')).toBe('column');
     expect(label.getPropertyValue('gap')).toBe('2px');
     expect(declarations('.bitfun-settings-nav__search-result-item').getPropertyValue('background')).toBe('');
     const highlight = rules.find((rule) => rule.selectorText.includes('.is-highlighted'));
-    expect(highlight?.selectorText).toContain(':not(:has(> [data-bf-part=trigger][aria-current]))');
+    expect(highlight?.selectorText).toContain('.is-highlighted:not(.is-active)');
     expect(highlight?.style.getPropertyValue('background')).toBe('var(--bf-color-action-neutral-surface)');
   });
 });

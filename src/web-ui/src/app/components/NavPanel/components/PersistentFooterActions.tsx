@@ -3,8 +3,21 @@ import { createPortal } from 'react-dom';
 import {
   PictureInPicture2,
 } from 'lucide-react';
-import { Icon, IconButton, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
-import { PresenceBoundary } from '@/component-library';
+import {
+  Icon,
+  IconButton,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { activateProductAction } from '@/app/global-search/productActionActivator';
@@ -268,12 +281,12 @@ const PersistentFooterActions: React.FC = () => {
           </div>
         </div>
       </div>
-      <PresenceBoundary active={showAbout}>
+      <RetainedMountBoundary present={showAbout}>
         <Suspense fallback={null}>
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={showRemoteConnect}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={showRemoteConnect}>
         <Suspense fallback={null}>
           <RemoteConnectDialog
             isOpen={showRemoteConnect}
@@ -281,21 +294,26 @@ const PersistentFooterActions: React.FC = () => {
             initialGroup={remoteInitialGroup}
           />
         </Suspense>
-      </PresenceBoundary>
-      <Modal
-        isOpen={showRemoteDisclaimer}
-        onClose={() => setShowRemoteDisclaimer(false)}
-        title={t('remoteConnect.disclaimerTitle')}
-        showCloseButton
-        size="large"
-        contentPadding="lg"
+      </RetainedMountBoundary>
+      <Dialog
+        open={showRemoteDisclaimer}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setShowRemoteDisclaimer(false); }}
+        size="lg"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('remoteConnect.disclaimerTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         <RemoteConnectDisclaimerContent
           agreed={hasAgreedRemoteDisclaimer}
           onClose={() => setShowRemoteDisclaimer(false)}
           onAgree={handleAgreeDisclaimer}
         />
-      </Modal>
+              </DialogBody>
+      </Dialog>
     </>
   );
 };

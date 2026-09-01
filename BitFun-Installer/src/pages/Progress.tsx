@@ -44,10 +44,10 @@ export function ProgressPage({
         >
           {!error ? (
             <>
-              <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 6 }}>
+              <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--bf-color-content-primary)', marginBottom: 6 }}>
                 {t('progress.title')}
               </p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 22 }}>
+              <p style={{ fontSize: 12, color: 'var(--bf-color-content-muted)', marginBottom: 22 }}>
                 {stepLabel}
               </p>
               <div style={{ width: '100%', maxWidth: 320 }}>
@@ -59,7 +59,7 @@ export function ProgressPage({
                     gap: 8,
                     marginTop: 8,
                     fontSize: 11,
-                    color: 'var(--color-text-muted)',
+                    color: 'var(--bf-color-content-muted)',
                     opacity: 0.7,
                     flexWrap: 'wrap',
                   }}
@@ -76,7 +76,7 @@ export function ProgressPage({
                 height="18"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="var(--color-error)"
+                stroke="var(--bf-color-status-danger-content)"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -84,7 +84,7 @@ export function ProgressPage({
               >
                 <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
               </svg>
-              <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8 }}>{t('progress.failed')}</p>
+              <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--bf-color-content-primary)', marginBottom: 8 }}>{t('progress.failed')}</p>
               <InstallErrorPanel message={error} variant="bare" />
             </>
           )}

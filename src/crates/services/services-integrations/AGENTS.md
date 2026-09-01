@@ -110,6 +110,7 @@ streamable HTTP stay independent. Representative stable entry points are:
 cargo check -p bitfun-services-integrations --no-default-features
 cargo test -p bitfun-services-integrations --no-default-features --features mcp --test mcp_contracts
 cargo test -p bitfun-services-integrations --no-default-features --features remote-ssh --test remote_ssh_contracts remote_ssh_disabled_contracts::
+cargo test -p bitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::manager::tests::workspace_
 cargo test -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 cargo test --locked -p bitfun-services-integrations --no-default-features --features deep-research --lib deep_research::tests::
 pnpm run check:core-boundaries

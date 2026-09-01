@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import {
   FLOWCHAT_TURN_RAIL_ROW_HEIGHT_PX,

@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { DiffEditor } from '../../tools/editor';
 import type { SnapshotFile } from '../../tools/snapshot_system/core/SnapshotStateManager';
 import { createLogger } from '@/shared/utils/logger';

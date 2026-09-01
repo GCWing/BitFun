@@ -1,13 +1,10 @@
 /**
  * CodeEditor Tool Component Styles
  * Follows SCSS isolation strategy and BEM naming conventions
- * 
+ *
  * Handles loading, error, and status overlay styles.
  * Editor core styling is provided by Monaco Editor theme.
  */
-
-@use '@/component-library/styles/tokens' as *;
-
 // Component Variables
 $_editor-loading-spinner-size: 32px;
 $_editor-loading-spinner-border: 3px;
@@ -22,13 +19,13 @@ $_editor-padding-desktop: 32px;
   height: 100%;
   width: 100%;
   position: relative;
-  background: var(--bf-appearance-token-color-bg-scene);
+  background: var(--bf-color-surface-scene);
 
-  
+
   > .editor-status-bar {
     flex-shrink: 0;
   }
-  
+
   // Loading State
   &.is-loading,
   &__loading {
@@ -37,31 +34,31 @@ $_editor-padding-desktop: 32px;
     align-items: center;
     justify-content: center;
     height: 100%;
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-muted);
   }
-  
+
   &__loading-spinner {
     width: $_editor-loading-spinner-size;
     height: $_editor-loading-spinner-size;
-    border: $_editor-loading-spinner-border solid var(--bf-appearance-token-color-accent-200);
-    border-top-color: var(--bf-appearance-token-color-accent-500);
-    border-radius: $size-radius-full;
-    animation: code-editor-spin $motion-lazy $easing-standard infinite;
-    margin-bottom: $size-gap-4;
-    box-shadow: 
-      0 0 20px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent),
-      0 0 40px var(--bf-appearance-token-color-accent-200);
+    border: $_editor-loading-spinner-border solid var(--bf-color-action-secondary-hover);
+    border-top-color: var(--bf-color-accent-default);
+    border-radius: var(--bf-radius-pill);
+    animation: code-editor-spin var(--bf-motion-duration-lazy) var(--bf-motion-easing-standard) infinite;
+    margin-bottom: var(--bf-space-4);
+    box-shadow:
+      0 0 20px color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent),
+      0 0 40px var(--bf-color-action-secondary-hover);
   }
-  
+
   &__loading-text {
     margin: 0;
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
-    animation: code-editor-pulse $motion-slow ease-in-out infinite;
+    animation: code-editor-pulse var(--bf-motion-duration-slow) ease-in-out infinite;
   }
-  
+
   // Error State
   &.is-error,
   &__error {
@@ -70,37 +67,37 @@ $_editor-padding-desktop: 32px;
     align-items: center;
     justify-content: center;
     height: 100%;
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
     text-align: center;
     padding: $_editor-padding-desktop;
   }
-  
+
   &__error-icon {
     width: 32px;
     height: 32px;
-    color: var(--bf-appearance-token-color-text-muted);
-    margin-bottom: $size-gap-3;
+    color: var(--bf-color-content-muted);
+    margin-bottom: var(--bf-space-3);
     opacity: 0.5;
   }
-  
+
   &__error-message {
-    margin: 0 0 $size-gap-3 0;
+    margin: 0 0 var(--bf-space-3) 0;
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
   }
-  
+
   // Editor Content Area
   &__content {
     flex: 1;
     min-height: 0;
     position: relative;
-    
+
     > div {
       height: 100%;
     }
   }
-  
+
   // Overlay Styles
   &__loading-overlay,
   &__error-overlay {
@@ -113,34 +110,34 @@ $_editor-padding-desktop: 32px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 85%, transparent);
+    background: color-mix(in srgb, var(--bf-color-surface-scene) 85%, transparent);
     backdrop-filter: blur(4px);
     z-index: 100;
     animation: code-editor-fade-in 0.2s ease-out;
   }
-  
+
   &__loading-overlay {
     pointer-events: none;
   }
-  
+
   &__error-overlay {
     text-align: center;
     padding: $_editor-padding-desktop;
   }
-  
+
   // Save Status Indicator
   &__saving-indicator {
     position: absolute;
-    top: $size-gap-4;
-    right: $size-gap-4;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, transparent);
-    color: var(--bf-appearance-token-color-bg-primary);
-    padding: $size-gap-2 $size-gap-4;
-    border-radius: $size-radius-base;
+    top: var(--bf-space-4);
+    right: var(--bf-space-4);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
+    color: var(--bf-color-surface-canvas);
+    padding: var(--bf-space-2) var(--bf-space-4);
+    border-radius: var(--bf-radius-base);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
     font-family: var(--bf-font-family-mono);
-    box-shadow: $glow-shadow-blue;
+    box-shadow: var(--bf-shadow-accent-glow);
     z-index: 50;
     animation: code-editor-fade-in 0.2s ease-out;
   }
@@ -154,44 +151,44 @@ $_editor-padding-desktop: 32px;
       }
     }
   }
-  
+
   // Ctrl+Hover Underline Styles
   :global {
     .monaco-editor {
       .ctrl-hover-underline {
         text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
         text-underline-offset: 2px;
         cursor: pointer !important;
       }
-      
+
       .monaco-cross-file-link {
         text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
         text-decoration-thickness: 1px;
         text-underline-offset: 2px;
         cursor: pointer !important;
       }
     }
-    
+
     .monaco-hover,
     .monaco-editor-hover {
       font-size: var(--bf-font-size-xs) !important;
-      
+
       .hover-row,
       .hover-contents {
         font-size: var(--bf-font-size-xs) !important;
-        color: var(--bf-appearance-token-color-static-black) !important;
+        color: var(--bf-color-content-on-light) !important;
       }
-      
+
       p, span, div {
         font-size: var(--bf-font-size-xs) !important;
-        color: var(--bf-appearance-token-color-static-black) !important;
+        color: var(--bf-color-content-on-light) !important;
       }
-      
+
       .markdown-string {
         font-size: var(--bf-font-size-xs) !important;
-        color: var(--bf-appearance-token-color-static-black) !important;
+        color: var(--bf-color-content-on-light) !important;
       }
     }
   }
@@ -199,11 +196,11 @@ $_editor-padding-desktop: 32px;
 
 // Animations
 @keyframes code-editor-spin {
-  from { 
-    transform: rotate(0deg); 
+  from {
+    transform: rotate(0deg);
   }
-  to { 
-    transform: rotate(360deg); 
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -255,23 +252,23 @@ $_editor-padding-desktop: 32px;
     &__error {
       padding: $_editor-padding-mobile;
     }
-    
+
     &__loading-spinner {
       width: $_editor-loading-spinner-size - 4px;
       height: $_editor-loading-spinner-size - 4px;
     }
-    
+
     &__loading-text,
     &__error-message {
       font-size: var(--bf-font-size-xs);
       max-width: 300px;
     }
-    
+
     &__error-icon {
       width: 16px;
       height: 16px;
     }
-    
+
   }
 }
 
@@ -279,14 +276,14 @@ $_editor-padding-desktop: 32px;
 @media (prefers-contrast: high) {
   .code-editor-tool {
     &__loading-spinner {
-      border-color: var(--bf-appearance-token-color-text-muted);
-      border-top-color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-content-muted);
+      border-top-color: var(--bf-color-content-primary);
     }
-    
+
     &__error-icon {
       opacity: 1;
     }
-    
+
   }
 }
 
@@ -296,10 +293,10 @@ $_editor-padding-desktop: 32px;
   body > .monaco-editor-hover,
   .monaco-hover-content {
     font-size: var(--bf-font-size-xs) !important;
-    
+
     * {
       font-size: var(--bf-font-size-xs) !important;
-      color: var(--bf-appearance-token-color-static-black) !important;
+      color: var(--bf-color-content-on-light) !important;
     }
   }
 }

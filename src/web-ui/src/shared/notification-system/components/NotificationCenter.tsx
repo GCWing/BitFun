@@ -1,8 +1,16 @@
  
 
 import React, { useState, useMemo } from 'react';
-import { CheckCheck, Trash2, ChevronUp, Loader2 } from 'lucide-react';
-import { Icon, IconButton, Modal, ScrollArea, SearchField } from '@bitfun/ui';
+import { CheckCheck, Loader2 } from 'lucide-react';
+import {
+  Icon,
+  IconButton,
+  ScrollArea,
+  SearchField,
+  Dialog,
+  DialogBody,
+  DialogHeader,
+} from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -341,7 +349,7 @@ export const NotificationCenter: React.FC = () => {
             }}
             title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
           >
-            {isExpanded ? <ChevronUp size={14} /> : <Icon name="chevron-down" size="sm" />}
+            {isExpanded ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-down" size="sm" />}
           </button>
           <button
             className="notification-center__item-delete"
@@ -356,12 +364,14 @@ export const NotificationCenter: React.FC = () => {
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      showCloseButton={false}
-      size="large"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleClose(); }}
+      size="lg"
     >
+      <DialogHeader>
+      </DialogHeader>
+      <DialogBody inset="none">
       <div className="notification-center" data-testid="notification-center" data-bf-component="notification" data-bf-part="centerRoot">
         
         <div className="notification-center__header" data-bf-component="notification" data-bf-part="centerHeader">
@@ -383,7 +393,7 @@ export const NotificationCenter: React.FC = () => {
               title={t('components:notificationCenter.actions.clearAll')}
               aria-label={t('components:notificationCenter.actions.clearAll')}
             >
-              <Trash2 size={16} />
+              <Icon name="delete" size="md" />
             </button>
             <IconButton
               className="notification-center__close"
@@ -491,7 +501,8 @@ export const NotificationCenter: React.FC = () => {
           )}
         </ScrollArea>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

@@ -4,8 +4,8 @@
   overflow-x: auto;
   overflow-y: hidden;
   border-radius: 10px;
-  background: var(--bf-appearance-token-color-overlay-white-04);
-  border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+  background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
 }
 
 .bitfun-generative-widget-frame__iframe {

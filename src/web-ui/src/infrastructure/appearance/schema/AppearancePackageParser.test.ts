@@ -1,7 +1,10 @@
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { createDefaultAppearanceRegistry } from '../registry/defaultAppearanceRegistry';
-import type { AppearancePackage } from '../types';
+import {
+  APPEARANCE_SCHEMA_VERSION,
+  type AppearancePackage,
+} from '../types';
 import { AppearancePackageParser } from './AppearancePackageParser';
 
 function pngHeader(width: number, height: number): Uint8Array {
@@ -37,9 +40,19 @@ function manifest(): AppearancePackage {
       },
     },
     components: {
-      card: {
+      'gallery-layout': {
         parts: {
           root: { base: { backgroundImage: { kind: 'asset', assetId: 'background' } } },
+        },
+      },
+    },
+    renderers: {
+      'css-tokens': {
+        version: 1,
+        settings: {
+          tokens: {
+            '--bf-appearance-token-color-bg-primary': '#101820',
+          },
         },
       },
     },
@@ -66,7 +79,29 @@ describe('AppearancePackageParser', () => {
       width: 320,
       height: 180,
     });
-    expect(stored.archive.byteLength).toBe(source.byteLength);
+    expect(stored.archiveSchemaVersion).toBe(APPEARANCE_SCHEMA_VERSION);
+    expect(stored.manifest).toMatchObject({
+      schemaVersion: APPEARANCE_SCHEMA_VERSION,
+      renderers: {
+        'theme-tokens': {
+          version: 1,
+          settings: {
+            tokens: {
+              '--bf-color-surface-canvas': '#101820',
+            },
+          },
+        },
+      },
+    });
+    expect(stored.manifest.renderers).not.toHaveProperty('css-tokens');
+
+    const canonicalZip = await JSZip.loadAsync(stored.archive);
+    const canonicalManifest = JSON.parse(
+      await canonicalZip.file('appearance.json')!.async('string'),
+    ) as AppearancePackage;
+    expect(canonicalManifest).toEqual(stored.manifest);
+    expect(canonicalManifest.schemaVersion).toBe(APPEARANCE_SCHEMA_VERSION);
+    expect(canonicalManifest.renderers).not.toHaveProperty('css-tokens');
   });
 
   it('rejects undeclared files before storage', async () => {

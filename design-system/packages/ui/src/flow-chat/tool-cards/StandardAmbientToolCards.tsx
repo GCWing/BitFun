@@ -13,7 +13,14 @@ import {
   ListTodo,
   XCircle,
 } from "lucide-react";
-import { Modal } from "../../components/Modal/Modal";
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from "../../components/Dialog";
 import {
   AmbientToolCard,
   AmbientToolCardHeader,
@@ -331,16 +338,25 @@ export function ViewImageToolCard({
         onClick={source && onToggle ? onToggle : undefined}
         status={status}
       />
-      <Modal
-        isOpen={Boolean(lightboxOpen && source && !imageFailed)}
-        onClose={onLightboxClose ?? (() => undefined)}
-        size="large"
-        title={lightboxTitle}
+      <Dialog
+        open={Boolean(lightboxOpen && source && !imageFailed)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onLightboxClose?.();
+        }}
+        size="lg"
       >
-        <div className={styles.lightbox} data-bf-part="lightbox">
-          <img alt={alt} src={source ?? ""} />
-        </div>
-      </Modal>
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{lightboxTitle ?? alt}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
+          <div className={styles.lightbox} data-bf-part="lightbox">
+            <img alt={alt} src={source ?? ""} />
+          </div>
+        </DialogBody>
+      </Dialog>
     </>
   );
 }

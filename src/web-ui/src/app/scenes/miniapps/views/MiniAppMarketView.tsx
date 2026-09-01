@@ -1,14 +1,6 @@
 import { Button, ConfirmDialog, Icon, SearchField, Select, type SelectOption, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  ChevronUp,
-  Heart,
-  Loader2,
-  PackageCheck,
-  RefreshCw,
-  ShieldCheck,
-} from 'lucide-react';
+import { AlertTriangle, Heart, Loader2, PackageCheck, ShieldCheck } from 'lucide-react';
 
 import {
   GalleryDetailModal,
@@ -330,7 +322,7 @@ const MiniAppMarketView: React.FC = () => {
               isError
               message={t('market.messages.catalogFailed', { error })}
               action={(
-                <Button size="sm" variant="outline" onClick={() => void loadCatalog(false)} leadingIcon={<RefreshCw size={14} />}>
+                <Button size="sm" variant="outline" onClick={() => void loadCatalog(false)} leadingIcon={<Icon name="refresh" size="sm" />}>
 
                   {t('scene.retry')}
                 </Button>
@@ -461,7 +453,7 @@ const MiniAppMarketView: React.FC = () => {
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => setInstallPrompt(true)}
               >
-                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <RefreshCw size={14} /> : <Icon name="download" size="sm" />}
+                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <Icon name="refresh" size="sm" /> : <Icon name="download" size="sm" />}
                 {installLabel}
               </Button>
             ) : null}
@@ -547,7 +539,7 @@ const MiniAppMarketView: React.FC = () => {
                   aria-expanded={releasesExpanded}
                   onClick={() => setReleasesExpanded((current) => !current)}
                 >
-                  {releasesExpanded ? <ChevronUp size={13} /> : <Icon name="chevron-down" size="xs" />}
+                  {releasesExpanded ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="xs" />}
                   {releasesExpanded
                     ? t('market.detail.releasesCollapse')
                     : t('market.detail.releasesExpand', { count: releaseHistory.hiddenCount })}
@@ -570,8 +562,8 @@ const MiniAppMarketView: React.FC = () => {
       </GalleryDetailModal>
 
       <ConfirmDialog
-        isOpen={installPrompt}
-        onClose={() => setInstallPrompt(false)}
+        open={installPrompt}
+        onOpenChange={() => setInstallPrompt(false)}
         onConfirm={() => void install()}
         title={t(installed ? 'market.confirmUpdate.title' : 'market.confirmInstall.title', {
           name: detailName,

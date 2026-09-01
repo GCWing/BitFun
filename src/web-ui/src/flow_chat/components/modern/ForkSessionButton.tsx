@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { GitFork, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';

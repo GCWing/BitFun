@@ -1,0 +1,40 @@
+@layer bf.components {
+  .root {
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--bf-space-6);
+    min-block-size: var(--bf-space-6);
+    padding: calc(var(--bf-space-1) / 2);
+    vertical-align: middle;
+    color: var(--bf-color-action-neutral-content);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-tight);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .value {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--bf-space-5);
+    min-block-size: var(--bf-space-5);
+    padding-inline: calc(var(--bf-space-1) / 2);
+    border-radius: var(--bf-radius-pill);
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  @media (forced-colors: active) {
+    .value {
+      outline: var(--bf-border-width-default) solid CanvasText;
+      color: CanvasText;
+      background: Canvas;
+    }
+  }
+}

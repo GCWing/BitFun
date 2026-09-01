@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
+import viteConfig, {
   createDesignSystemSourceAliases,
   createDevServerResponseHeaders,
 } from '../../../vite.config';
+import type { SourceWatchPlugin } from '../../../../../design-system/tooling/vite/watch-source.mjs';
 
 describe('design-system Vite integration', () => {
   it('resolves UI package entry points to source only while serving for HMR', () => {
@@ -32,6 +33,22 @@ describe('design-system Vite integration', () => {
     });
   });
 
+  it('watches aliased UI assets outside the application root during development', () => {
+    const config = viteConfig({ command: 'serve', mode: 'development' });
+    const watcher = config.plugins?.flat(Infinity).find(
+      plugin => plugin && typeof plugin === 'object'
+        && 'name' in plugin && plugin.name === 'bitfun:watch-ui-source',
+    ) as SourceWatchPlugin | undefined;
+
+    expect(watcher).toBeDefined();
+    expect(watcher?.apply).toBe('serve');
+    const watched: string[] = [];
+    watcher?.configureServer({ watcher: { add: directory => watched.push(directory) } });
+    expect(watched).toEqual([
+      path.dirname(createDesignSystemSourceAliases('serve')[3].replacement),
+    ]);
+  });
+
   it('registers the layer contract before product modules can load component CSS', () => {
     const mainSource = readFileSync(
       path.resolve(__dirname, '../../main.tsx'),
@@ -39,6 +56,10 @@ describe('design-system Vite integration', () => {
     );
     const indexHtml = readFileSync(
       path.resolve(__dirname, '../../../index.html'),
+      'utf8',
+    );
+    const themeEntry = readFileSync(
+      path.resolve(__dirname, '../../design-system-theme.css'),
       'utf8',
     );
     const globalStyles = readFileSync(
@@ -57,16 +78,14 @@ describe('design-system Vite integration', () => {
       'utf8',
     );
 
-    const themePreludeIndex = mainSource.indexOf(
-      'import "@bitfun/theme-bitfun/default.css"',
-    );
     const layerPreludeIndex = mainSource.indexOf(
       'import "@bitfun/ui/styles.css"',
     );
     const productGraphIndex = mainSource.indexOf('import App from "./app/App"');
 
-    expect(themePreludeIndex).toBeGreaterThanOrEqual(0);
-    expect(layerPreludeIndex).toBeGreaterThan(themePreludeIndex);
+    expect(themeEntry).toContain('@import "@bitfun/theme-bitfun/default.css";');
+    expect(mainSource).not.toContain('import "@bitfun/theme-bitfun/default.css"');
+    expect(layerPreludeIndex).toBeGreaterThanOrEqual(0);
     expect(productGraphIndex).toBeGreaterThan(layerPreludeIndex);
 
     const bootstrapLayerOrder =
@@ -76,9 +95,14 @@ describe('design-system Vite integration', () => {
     const moduleEntryIndex = indexHtml.indexOf(
       '<script type="module" src="/src/main.tsx"></script>',
     );
+    const themeEntryIndex = indexHtml.indexOf(
+      '<link rel="stylesheet" href="/src/design-system-theme.css" />',
+    );
 
     expect(bootstrapLayerOrderIndex).toBeGreaterThanOrEqual(0);
     expect(bootstrapResetIndex).toBeGreaterThan(bootstrapLayerOrderIndex);
+    expect(themeEntryIndex).toBeGreaterThanOrEqual(0);
+    expect(themeEntryIndex).toBeLessThan(moduleEntryIndex);
     expect(moduleEntryIndex).toBeGreaterThan(bootstrapResetIndex);
     expect(indexHtml).toMatch(
       /@layer bf\.reset\s*\{[\s\S]*?\*\s*,\s*\*::before\s*,\s*\*::after\s*\{[\s\S]*?padding:\s*0;/,

@@ -12,7 +12,7 @@
       "purpose": "Expresses one primary, secondary, quiet, or destructive workflow action with consistent emphasis.",
       "anatomy": ["touch_target", "action_label", "semantic_surface", "optional_hairline_border"],
       "states": ["primary", "secondary", "quiet", "destructive", "disabled", "busy"],
-      "tokens": ["sheet_action_height", "primary_action", "primary_action_text", "card", "soft", "line", "red", "label_large"],
+      "tokens": ["sheet_action_height", "primary_action", "content_on_action", "card", "soft", "line", "status_danger", "label_large"],
       "platformNotes": "The semantic style is shared; a workflow may override height when its context requires a larger target, while preserving typography, radius, color, and disabled treatment."
     },
     "conversation_header": {
@@ -45,9 +45,9 @@
     },
     "adaptive_modal_surface": {
       "purpose": "Hosts settings, connection, creation, selection, and detail flows without crossing a physical fold or obscuring more of the workspace than necessary.",
-      "anatomy": ["modal_scrim", "paper_surface", "header", "scroll_content", "action_rail"],
+      "anatomy": ["scrim", "paper_surface", "header", "scroll_content", "action_rail"],
       "states": ["compact_bottom", "wide_side", "fold_operate", "busy", "error"],
-      "tokens": ["modal_scrim", "sheet_top_radius", "sheet_side_radius", "sheet_horizontal_padding", "sheet_header_height", "sheet_action_height", "card", "line", "structure"],
+      "tokens": ["scrim", "sheet_top_radius", "sheet_side_radius", "sheet_horizontal_padding", "sheet_header_height", "sheet_action_height", "card", "line", "structure"],
       "platformNotes": "Use each platform's native modal lifecycle, accessibility focus, and back gesture; placement comes from the shared adaptive policy and visual geometry comes from these tokens."
     },
     "action_popover": {
@@ -61,7 +61,7 @@
       "purpose": "Presents actions for a session row without stacking confirmation UI.",
       "anatomy": ["optional_drag_handle", "session_identity", "action_rows", "in_place_confirmation"],
       "states": ["compact_bottom", "wide_popover", "confirming_delete", "busy"],
-      "tokens": ["sheet_action_height", "popover_radius", "card", "line", "soft", "red"],
+      "tokens": ["sheet_action_height", "popover_radius", "card", "line", "soft", "status_danger"],
       "platformNotes": "Compact session lists use a transparent native sheet hosting the same 16-unit paper surface that wide lists anchor as a popover; deletion confirmation replaces the action rows in place. This is distinct from the active conversation header's action_popover."
     },
     "selection_surface": {
@@ -75,7 +75,7 @@
       "purpose": "Confirms destructive or high-impact actions inside the surface that initiated them.",
       "anatomy": ["specific_consequence", "cancel_action", "destructive_action"],
       "states": ["idle", "confirming", "submitting", "failed"],
-      "tokens": ["sheet_action_height", "red", "soft", "line"],
+      "tokens": ["sheet_action_height", "status_danger", "soft", "line"],
       "platformNotes": "Prefer an in-place confirmation step over stacking a second modal and a second scrim."
     },
     "settings_card": {
@@ -103,7 +103,7 @@
       "purpose": "Guides desktop pairing from preparation through scanning, with a manual-code fallback that stays inside the connect surface.",
       "anatomy": ["hero_wash", "back_control", "desktop_or_scanner_glyph", "instructions", "primary_action", "manual_pairing_overlay", "conditional_account_credentials", "status_feedback"],
       "states": ["intro", "scan", "manual", "account_auth", "connecting", "failed", "paired"],
-      "tokens": ["connect_hero_bg", "connect_hero_surface", "modal_scrim", "sheet_side_radius", "primary_action", "card", "soft", "line"],
+      "tokens": ["connect_hero_bg", "connect_hero_surface", "scrim", "sheet_side_radius", "primary_action", "card", "soft", "line"],
       "platformNotes": "Camera capture and permission prompts remain native. The manual form is an in-surface overlay with the shared scrim and 34-unit card, not a second system sheet. Account-protected links add username and password fields in that same card; passwords remain transient view state and are cleared on submit or dismiss."
     },
     "remote_create_surface": {
@@ -117,7 +117,7 @@
       "purpose": "Explains which desktop is being controlled, how it is connected, and which permission policy that desktop applies.",
       "anatomy": ["modal_header", "profile_entry", "current_control_card", "connection_source", "alternate_connection_entry", "permission_mode_card", "in_place_full_access_confirmation"],
       "states": ["disconnected", "connecting", "connected_by_account", "connected_by_pairing", "permission_loading", "permission_failed", "confirming_full_access", "account_page"],
-      "tokens": ["sheet_header_height", "settings_prominent_card_radius", "settings_compact_card_radius", "modal_scrim", "card", "soft", "line", "red"],
+      "tokens": ["sheet_header_height", "settings_prominent_card_radius", "settings_compact_card_radius", "scrim", "card", "soft", "line", "status_danger"],
       "platformNotes": "The account page replaces this page inside the same adaptive modal. Full-access confirmation replaces content inside the permission card; it never opens a system alert or a second sheet."
     },
     "file_preview_surface": {

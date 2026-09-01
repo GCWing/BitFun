@@ -1,9 +1,37 @@
 import { useRef, useState } from "react";
 import {
-  Button, Card, CardFooter, ChangeCount, Combobox, ComboboxProvider, Disclosure,
-  Field, FieldGroup, FieldRow, Icon, IconButton, Input, KeyHint, MenuPopover, Modal,
-  NumberInput, PageHeader, SearchField, Select, StatusPill, Switch, TabGroup,
-  Textarea, Toolbar, ToolbarGroup, ToolbarSeparator,
+  Button,
+  Card,
+  CardFooter,
+  ChangeCount,
+  Disclosure,
+  Field,
+  FieldGroup,
+  FieldRow,
+  Icon,
+  IconButton,
+  Input,
+  KeyHint,
+  MenuPopover,
+  MultiSelect,
+  NumberInput,
+  PageHeader,
+  SearchField,
+  Select,
+  StatusPill,
+  Switch,
+  TabGroup,
+  Textarea,
+  Toolbar,
+  ToolbarGroup,
+  ToolbarSeparator,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
 } from "@bitfun/ui";
 import { useI18n } from "../i18n";
 
@@ -21,16 +49,31 @@ export function ProviderConfigurationPattern() {
     <div className="pattern-demo-actions">
       <Button size="sm" onClick={() => setOpen(true)}>{t("components.preview.modalInteractionDemo")}</Button>
     </div>
-    <ComboboxProvider labels={{ placeholder: t("components.preview.modalSelectModels"), search: t("patterns.provider.search"), empty: t("patterns.provider.empty"), loading: t("patterns.provider.loading"), clear: t("patterns.provider.remove"), selectAll: t("patterns.provider.all"), create: t("patterns.provider.add") }}>
+    <>
       <Card appearance="raised" padding="md" gap="lg" radius="lg">
         <PageHeader level={3} size="md" title={t("components.preview.modalTitle")} />
         <ProviderFields key={revision} />
         {footer(() => { setRevision(value => value + 1); setSaved(false); })}
       </Card>
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={t("components.preview.modalTitle")} closeButtonLabel={t("components.preview.close")} size="medium" contentClassName="pattern-provider-modal" footer={footer(() => setOpen(false))}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => { if (!nextOpen) (() => setOpen(false))(); }}
+        size="md"
+      >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t("components.preview.modalTitle")}</DialogTitle>
+          </DialogHeading>
+          <DialogClose aria-label={t("components.preview.close")} />
+        </DialogHeader>
+        <DialogBody inset="none">
+          <div className="pattern-provider-modal">
         <ProviderFields />
-      </Modal>
-    </ComboboxProvider>
+                </div>
+                </DialogBody>
+        <DialogFooter>{footer(() => setOpen(false))}</DialogFooter>
+      </Dialog>
+    </>
     <p className="pattern-feedback" role="status">{t(saved ? "patterns.provider.saved" : "patterns.provider.previewOnly")}</p>
   </div>;
 }
@@ -48,7 +91,7 @@ function ProviderFields() {
       <FieldRow><Field label={t("components.preview.modalApiUrl")} orientation="horizontal" labelWidth="sm" controlWidth="fill"><Input type="url" defaultValue="https://api.example.com/v1" /></Field></FieldRow>
       <FieldRow><Field label={t("components.preview.modalRequestFormat")} orientation="horizontal" labelWidth="sm" controlWidth="fill"><Select defaultValue="openai" options={[{ label: "OpenAI", value: "openai" }, { label: "Anthropic", value: "anthropic" }]} /></Field></FieldRow>
       <FieldRow><Field label={t("components.preview.modalSelectModels")} orientation="horizontal" labelWidth="sm" controlWidth="fill" required>
-        <Combobox multiple searchable allowCustomValue clearable indicator={<Icon name="plus" size="sm" />} value={models} onChange={value => setModels(Array.isArray(value) ? value.map(String) : [])} options={[
+        <MultiSelect clearable value={models} onValueChange={value => setModels(value.map(String))} onCreateValue={value => value} options={[
           { value: "glm-5.2", label: "GLM 5.2", group: t("patterns.provider.presets") },
           { value: "glm-4.7", label: "GLM 4.7", group: t("patterns.provider.presets") },
           { value: "glm-4.6v", label: "GLM 4.6V", group: t("patterns.provider.vision") },
@@ -63,7 +106,7 @@ function ProviderFields() {
       <Disclosure summary={model} defaultOpen={index === 0} description={t("components.preview.modalModelSummary")} actions={<IconButton aria-label={`${t("patterns.provider.remove")}: ${model}`} icon={<Icon name="xmark" />} size="sm" variant="quiet" onClick={() => setModels(models.filter(value => value !== model))} />}>
         <FieldGroup appearance="plain" dividers>
           <FieldRow><Field label={t("patterns.provider.category")} orientation="horizontal" labelWidth="sm" controlWidth="fill"><Select defaultValue="general" options={[{ label: t("patterns.provider.general"), value: "general" }, { label: t("patterns.provider.vision"), value: "vision" }]} /></Field></FieldRow>
-          <FieldRow><Field label={t("patterns.provider.context")} orientation="horizontal" labelWidth="sm" controlWidth="fill"><NumberInput value={contextWindows[model] ?? 131072} onChange={value => setContextWindows(previous => ({ ...previous, [model]: value }))} min={1024} step={1024} disableWheel incrementLabel={t("patterns.provider.increase")} decrementLabel={t("patterns.provider.decrease")} /></Field></FieldRow>
+          <FieldRow><Field label={t("patterns.provider.context")} orientation="horizontal" labelWidth="sm" controlWidth="fill"><NumberInput value={contextWindows[model] ?? 131072} onValueChange={value => setContextWindows(previous => ({ ...previous, [model]: value }))} min={1024} step={1024} disableWheel incrementLabel={t("patterns.provider.increase")} decrementLabel={t("patterns.provider.decrease")} /></Field></FieldRow>
           <FieldRow><Field label={t("patterns.provider.reasoning")} orientation="horizontal" labelWidth="sm"><Switch defaultChecked aria-label={t("patterns.provider.reasoning")} /></Field></FieldRow>
         </FieldGroup>
         <Card appearance="raised" padding="sm" gap="sm"><PageHeader level={4} size="sm" title={t("patterns.provider.preset")} description={t("patterns.provider.presetDescription")} /><Select aria-label={t("patterns.provider.preset")} defaultValue="auto" options={[{ label: t("patterns.provider.auto"), value: "auto" }, { label: t("patterns.provider.high"), value: "high" }]} /></Card>

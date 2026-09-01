@@ -13,7 +13,7 @@ import {
   TabOptions,
 } from './types';
 import { PanelContent, TabData } from '@/app/components/panels/base/types';
-import type { LineRange } from '@/component-library/components/Markdown';
+import { type LineRange } from '@/shared/editor/LineRange';
 import {
   isLegacyEcosystemCompatibilityDestination,
   resolveSettingsDestination,

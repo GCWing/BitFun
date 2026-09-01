@@ -1,9 +1,7 @@
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .bitfun-application-settings__content {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-6;
+  gap: var(--bf-space-6);
   padding: 0;
 }
 
@@ -38,18 +36,18 @@
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 
     &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-base);
-      border-color: var(--bf-appearance-token-border-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      border-color: var(--bf-color-border-subtle);
+      color: var(--bf-color-content-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:disabled {
@@ -63,8 +61,8 @@
     padding: 10px 12px;
     border-radius: 6px;
     background: transparent;
-    border: 1px dashed var(--bf-appearance-token-border-base);
-    color: var(--bf-appearance-token-color-text-primary);
+    border: 1px dashed var(--bf-color-border-default);
+    color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-mono);
     font-size: var(--bf-font-size-xs);
     word-break: break-all;
@@ -79,7 +77,7 @@
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-6;
+    gap: var(--bf-space-6);
   }
 
   &__shell-option,
@@ -117,9 +115,9 @@
   &__no-shells {
     width: 100%;
     padding: 12px 16px;
-    border: 1px dashed var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
+    border: 1px dashed var(--bf-color-border-default);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
   }
 }

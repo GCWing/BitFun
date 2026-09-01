@@ -21,3 +21,13 @@ test('startup appearance bootstrap check is stable across line endings', () => {
     'generator check should compare normalized current content',
   );
 });
+
+test('startup appearance generation does not claim the Web UI HMR socket', () => {
+  const generatorSource = readText('scripts/generate-startup-appearance-bootstrap.mjs');
+
+  assert.match(
+    generatorSource,
+    /middlewareMode:\s*true,[\s\S]*?hmr:\s*false/,
+    'the in-process Vite server should not collide with an active desktop dev server',
+  );
+});

@@ -4,7 +4,7 @@
  */
 import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { MiniApp, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -175,7 +175,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
               disabled={loading}
               loading={loading}
               aria-label={t('scene.reload')}
-              icon={<RefreshCw />}
+              icon={<Icon name="refresh" size="lg" />}
             />
           </Tooltip>
         </div>

@@ -1,6 +1,6 @@
 /**
  * Scroll-to-latest bar - minimal divider style.
- * Fixed at the bottom of flowchat with height tied to ChatInput state.
+ * Fixed at the bottom of FlowChat with height tied to the live composer measurement.
  */
 
 .scroll-to-latest-bar {
@@ -13,7 +13,7 @@
   pointer-events: none;
   
   // Default height fallback (overridden by inline style when inputHeight is measured).
-  // Active non-expanded: ~80px input + 4px gap + 6px clearance + 24px gradient ≈ 114px.
+  // ~80px input + 4px gap + 6px clearance + 24px gradient ≈ 114px.
   height: 114px;
   
   // Height follows live composer measurements; do not animate layout.
@@ -33,34 +33,28 @@
     }
   }
   
-  // ========== ChatInput collapsed ==========
-  &--input-collapsed {
-    // Pill ~42px + 4px gap + 6px clearance + 24px gradient ≈ 76px (fallback only)
-    height: 76px;
-  }
-  
   // ========== Gradient background layer ==========
   &__gradient {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: var(--bf-appearance-token-color-bg-scene);
+    background: var(--bf-color-surface-scene);
 
     mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      var(--bf-appearance-token-color-overlay-black-20) 20%,
-      var(--bf-appearance-token-color-overlay-black-50) 40%,
-      var(--bf-appearance-token-color-overlay-black-80) 60%,
-      black 85%
+      color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent) 20%,
+      var(--bf-color-overlay-scrim) 40%,
+      color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent) 60%,
+      currentColor 85%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      var(--bf-appearance-token-color-overlay-black-20) 20%,
-      var(--bf-appearance-token-color-overlay-black-50) 40%,
-      var(--bf-appearance-token-color-overlay-black-80) 60%,
-      black 85%
+      color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent) 20%,
+      var(--bf-color-overlay-scrim) 40%,
+      color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent) 60%,
+      currentColor 85%
     );
     transition: opacity 140ms ease;
   }
@@ -97,9 +91,9 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 1.5px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-muted);
+    border: 1.5px solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     pointer-events: none;
     padding: 0;
@@ -121,16 +115,16 @@
     outline: none;
     
     .scroll-to-latest-bar__btn {
-      border-color: var(--bf-appearance-token-border-strong);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-border-strong);
+      color: var(--bf-color-content-primary);
     }
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .scroll-to-latest-bar[data-visible='true']:hover .scroll-to-latest-bar__btn {
-    border-color: var(--bf-appearance-token-border-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    border-color: var(--bf-color-field-border-hover);
+    color: var(--bf-color-content-primary);
     transform: translateY(1px);
   }
 }
@@ -148,10 +142,6 @@
 @media (max-width: 768px) {
   .scroll-to-latest-bar {
     height: 123px;
-    
-    &--input-collapsed {
-      height: 58px;
-    }
     
     &__btn {
       width: 26px;

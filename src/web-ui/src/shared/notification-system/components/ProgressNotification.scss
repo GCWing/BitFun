@@ -1,15 +1,12 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .progress-notification {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   display: flex;
   align-items: flex-start;
-  gap: $size-gap-2;
-  padding: $size-gap-3;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-3);
   min-width: 280px;
   max-width: 320px;
   animation: bitfun-progress-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -19,15 +16,15 @@
   &--completed {
     
     .progress-notification__icon {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
   }
 
   &--failed {
     .progress-notification__icon {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -44,8 +41,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
-    color: var(--bf-appearance-token-color-warning);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+    color: var(--bf-color-status-warning-content);
   }
 
   &__spinner {
@@ -63,13 +60,13 @@
     font-weight: var(--bf-font-weight-semibold);
 
     &--success {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -79,34 +76,34 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__title {
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-snug);
   }
 
   &__percentage {
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     font-variant-numeric: tabular-nums;
     font-family: var(--bf-font-family-mono);
   }
 
   &__message {
     font-size: var(--bf-font-size-meta);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-snug);
     word-break: break-word;
   }
@@ -115,7 +112,7 @@
   &__progress-bar {
     width: 100%;
     height: 3px;
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-color-action-neutral-surface);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -123,7 +120,7 @@
   &__progress-fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, var(--bf-appearance-token-color-accent-600), var(--bf-appearance-token-color-purple-500));
+    background: linear-gradient(90deg, var(--bf-color-accent-hover), var(--bf-color-accent-secondary));
     border-radius: 2px;
     transform-origin: left center;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -131,12 +128,12 @@
 
   
   &--completed &__progress-fill {
-    background: var(--bf-appearance-token-color-success);
+    background: var(--bf-color-status-success-content);
   }
 
   
   &--failed &__progress-fill {
-    background: var(--bf-appearance-token-color-error);
+    background: var(--bf-color-status-danger-content);
   }
 
   

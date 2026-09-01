@@ -4,9 +4,6 @@
  * Full-screen opaque overlay. No rings.
  * Exit: logo scales up and fades, backdrop dissolves.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 // ── Container ────────────────────────────────────────────────────────────────
 
 .splash-screen {
@@ -16,7 +13,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bf-appearance-token-color-bg-primary);
+  background: var(--bf-color-surface-canvas);
   pointer-events: none;
 
   // ── Exit state ─────────────────────────────────────────────────────────────
@@ -53,7 +50,7 @@
   display: block;
   width: 96px;
   height: 96px;
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   user-select: none;
   // Ensure proper rendering on Linux
   -webkit-user-select: none;
@@ -61,19 +58,19 @@
 
 .splash-screen__message {
   position: absolute;
-  top: calc(100% + #{$size-gap-4});
+  top: calc(100% + var(--bf-space-4));
   left: 50%;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-xs);
   line-height: var(--bf-line-height-ui);
   text-align: center;
   opacity: 0;
   transform: translate(-50%, -2px);
   transition:
-    opacity $motion-base $easing-decelerate,
-    transform $motion-base $easing-decelerate;
+    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate),
+    transform var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate);
   pointer-events: none;
 }
 

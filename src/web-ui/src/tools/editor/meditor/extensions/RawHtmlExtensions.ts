@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Node } from '@tiptap/core';
-import { MarkdownRenderer } from '@/component-library';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 
 type SourceBackedBlockOptions = {

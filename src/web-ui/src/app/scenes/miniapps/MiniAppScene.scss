@@ -1,8 +1,6 @@
 /**
  * MiniAppScene styles
  */
-@use '../../../component-library/styles/tokens' as *;
-
 .miniapp-scene {
   display: flex;
   flex-direction: column;
@@ -16,9 +14,9 @@
   &__header {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     flex-shrink: 0;
     min-height: 40px;
   }
@@ -31,14 +29,14 @@
   &__title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     display: block;
 
     &--loading {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-weight: var(--bf-font-weight-regular);
     }
   }
@@ -46,7 +44,7 @@
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     flex-shrink: 0;
   }
 
@@ -86,37 +84,37 @@
     display: flex;
     align-items: flex-start;
     justify-content: flex-end;
-    padding: $size-gap-2;
+    padding: var(--bf-space-2);
     pointer-events: none;
-    color: var(--bf-appearance-token-color-text-muted);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 18%, transparent);
+    color: var(--bf-color-content-muted);
+    background: color-mix(in srgb, var(--bf-color-surface-scene) 18%, transparent);
   }
 
   &__preview-stage {
     position: absolute;
-    inset: $size-gap-4;
+    inset: var(--bf-space-4);
     z-index: 6;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-lg;
-    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-lg);
+    background: var(--bf-color-surface-raised);
     box-shadow:
-      0 24px 70px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.34),
-      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-static-white) 4%, transparent);
+      0 24px 70px color-mix(in srgb, var(--bf-color-content-on-light) 34%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
   }
 
   &__preview-stage-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-3;
-    padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-secondary);
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-panel);
 
     span,
     small {
@@ -124,14 +122,14 @@
     }
 
     span {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-sm);
       font-weight: var(--bf-font-weight-semibold);
     }
 
     small {
       margin-top: 2px;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
     }
   }
@@ -139,8 +137,8 @@
   &__preview-stage-body {
     flex: 1 1 auto;
     min-height: 0;
-    padding: $size-gap-3;
-    background: var(--bf-appearance-token-color-bg-primary);
+    padding: var(--bf-space-3);
+    background: var(--bf-color-surface-canvas);
 
     .miniapp-customize-panel__preview-frame {
       height: 100%;
@@ -156,8 +154,8 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    gap: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-muted);
+    gap: var(--bf-space-3);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
   }
 
@@ -169,14 +167,14 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    gap: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-muted);
+    gap: var(--bf-space-3);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
     text-align: center;
-    padding: $size-gap-6;
+    padding: var(--bf-space-6);
 
     > svg {
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     p {
@@ -192,24 +190,24 @@
 
   &__customize-notice {
     position: absolute;
-    left: $size-gap-3;
-    bottom: $size-gap-3;
+    left: var(--bf-space-3);
+    bottom: var(--bf-space-3);
     z-index: 5;
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    max-width: min(520px, calc(100% - #{$size-gap-6}));
-    padding: $size-gap-2 $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-color-success-border);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-secondary);
-    color: var(--bf-appearance-token-color-text-primary);
-    box-shadow: var(--bf-appearance-token-shadow-base);
+    gap: var(--bf-space-2);
+    max-width: min(520px, calc(100% - var(--bf-space-6)));
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border: 1px solid var(--bf-color-status-success-border);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-panel);
+    color: var(--bf-color-content-primary);
+    box-shadow: var(--bf-shadow-base);
     font-size: var(--bf-font-size-sm);
 
     svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
   }
 
@@ -222,16 +220,16 @@
   flex-direction: column;
   flex: 0 0 clamp(380px, 38vw, 560px);
   align-self: stretch;
-  margin: $size-gap-3 $size-gap-3 $size-gap-3 0;
+  margin: var(--bf-space-3) var(--bf-space-3) var(--bf-space-3) 0;
   min-width: 320px;
   overflow: hidden;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-color-bg-elevated);
-  color: var(--bf-appearance-token-color-text-primary);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+  background: var(--bf-color-surface-raised);
+  color: var(--bf-color-content-primary);
   box-shadow:
-    0 24px 70px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.36),
-    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-static-white) 4%, transparent);
+    0 24px 70px color-mix(in srgb, var(--bf-color-content-on-light) 36%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
   isolation: isolate;
 
   &__header,
@@ -246,9 +244,9 @@
 
   &__header {
     justify-content: space-between;
-    gap: $size-gap-3;
-    padding: $size-gap-3 $size-gap-3 $size-gap-2;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-3) var(--bf-space-3) var(--bf-space-2);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
 
     h3 {
       margin: 0;
@@ -259,7 +257,7 @@
     span {
       display: block;
       margin-top: 2px;
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-xs);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -270,15 +268,15 @@
 
   &__notice {
     display: flex;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-warning-bg);
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-status-warning-surface);
 
     svg {
       flex: 0 0 auto;
       margin-top: 2px;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     strong {
@@ -289,7 +287,7 @@
 
     p {
       margin: 0;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-xs);
       line-height: var(--bf-line-height-relaxed);
     }
@@ -297,79 +295,79 @@
     &-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: $size-gap-2;
-      margin-top: $size-gap-2;
+      gap: var(--bf-space-2);
+      margin-top: var(--bf-space-2);
     }
 
     &--update {
-      border-bottom-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 28%, var(--bf-appearance-token-border-subtle));
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, var(--bf-appearance-token-element-bg-subtle));
+      border-bottom-color: color-mix(in srgb, var(--bf-color-status-warning-content) 28%, var(--bf-color-border-subtle));
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, var(--bf-color-surface-subtle));
     }
   }
 
   &__request {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3);
 
     span {
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-medium);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     textarea {
       width: 100%;
       min-height: 96px;
       resize: vertical;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-base;
-      padding: $size-gap-2;
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-base);
+      padding: var(--bf-space-2);
+      background: var(--bf-color-surface-subtle);
+      color: var(--bf-color-content-primary);
       font: inherit;
       font-size: var(--bf-font-size-sm);
       line-height: var(--bf-line-height-relaxed);
 
       &:focus {
-        outline: 2px solid var(--bf-appearance-token-color-accent-500);
+        outline: 2px solid var(--bf-color-accent-default);
         outline-offset: 1px;
       }
     }
   }
 
   &__actions {
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     flex-wrap: wrap;
-    padding: 0 $size-gap-3 $size-gap-3;
+    padding: 0 var(--bf-space-3) var(--bf-space-3);
 
   }
 
   &__error,
   &__status,
   &__busy {
-    margin: 0 $size-gap-3 $size-gap-3;
-    padding: $size-gap-2;
-    border-radius: $size-radius-base;
+    margin: 0 var(--bf-space-3) var(--bf-space-3);
+    padding: var(--bf-space-2);
+    border-radius: var(--bf-radius-base);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-relaxed);
   }
 
   &__error {
-    border: 1px solid var(--bf-appearance-token-color-error-border);
-    background: var(--bf-appearance-token-color-error-bg);
-    color: var(--bf-appearance-token-color-error);
+    border: 1px solid var(--bf-color-status-danger-border);
+    background: var(--bf-color-status-danger-surface);
+    color: var(--bf-color-status-danger-content);
   }
 
   &__status {
-    gap: $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-color-success-border);
-    background: var(--bf-appearance-token-color-success-bg);
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-2);
+    border: 1px solid var(--bf-color-status-success-border);
+    background: var(--bf-color-status-success-surface);
+    color: var(--bf-color-content-secondary);
 
     svg {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
   }
 
@@ -377,16 +375,16 @@
     display: flex;
     flex: 1 1 240px;
     min-height: 220px;
-    margin: 0 $size-gap-3 $size-gap-3;
+    margin: 0 var(--bf-space-3) var(--bf-space-3);
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-scene);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-scene);
 
     .btw-session-panel {
       min-height: 0;
       width: 100%;
-      background: var(--bf-appearance-token-color-bg-scene);
+      background: var(--bf-color-surface-scene);
     }
 
     .btw-session-panel__header-right {
@@ -398,9 +396,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     width: 100%;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-sm);
   }
 
@@ -409,13 +407,13 @@
     flex: 0 0 190px;
     flex-direction: column;
     min-height: 0;
-    padding: 0 $size-gap-3 $size-gap-3;
+    padding: 0 var(--bf-space-3) var(--bf-space-3);
   }
 
   &__preview-header {
     justify-content: space-between;
-    gap: $size-gap-2;
-    margin-bottom: $size-gap-2;
+    gap: var(--bf-space-2);
+    margin-bottom: var(--bf-space-2);
     font-size: var(--bf-font-size-xs);
 
     span:first-child {
@@ -423,7 +421,7 @@
     }
 
     span:last-child {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       text-align: right;
     }
   }
@@ -432,47 +430,45 @@
     flex: 1 1 0;
     min-height: 180px;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-canvas);
   }
 
   &__footer {
     justify-content: flex-end;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3);
+    border-top: 1px solid var(--bf-color-border-subtle);
 
   }
 
   &__busy {
-    gap: $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-2);
+    border: 1px solid var(--bf-color-border-subtle);
+    color: var(--bf-color-content-secondary);
   }
 }
 
 .miniapp-permission-dialog {
-  [data-bf-component='modal'][data-bf-part='content'] {
-    overflow: visible;
-  }
+  overflow: visible;
 
   &__body {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__notice {
     display: flex;
-    gap: $size-gap-2;
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
     line-height: var(--bf-line-height-relaxed);
 
     svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     p {
@@ -482,9 +478,9 @@
 
   &__section {
     h4 {
-      margin: 0 0 $size-gap-1;
+      margin: 0 0 var(--bf-space-1);
       font-size: var(--bf-font-size-xs);
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       text-transform: uppercase;
       letter-spacing: var(--bf-letter-spacing-normal);
     }
@@ -496,12 +492,12 @@
     ul {
       display: flex;
       flex-direction: column;
-      gap: $size-gap-1;
+      gap: var(--bf-space-1);
       margin: 0;
-      padding: $size-gap-2 $size-gap-3;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-base;
-      background: var(--bf-appearance-token-element-bg-subtle);
+      padding: var(--bf-space-2) var(--bf-space-3);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-base);
+      background: var(--bf-color-surface-subtle);
       font-family:var(--bf-font-family-mono);
       font-size: var(--bf-font-size-xs);
     }
@@ -510,17 +506,17 @@
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 }
 
 @media (max-width: 720px) {
   .miniapp-customize-panel {
     position: absolute;
-    left: $size-gap-2;
-    right: $size-gap-2;
-    bottom: $size-gap-2;
-    top: $size-gap-2;
+    left: var(--bf-space-2);
+    right: var(--bf-space-2);
+    bottom: var(--bf-space-2);
+    top: var(--bf-space-2);
     width: auto;
     margin: 0;
     min-width: 0;

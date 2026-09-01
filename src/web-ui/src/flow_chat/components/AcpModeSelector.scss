@@ -1,5 +1,3 @@
-@use '../../component-library/styles/tokens' as *;
-
 .bitfun-acp-mode-selector {
   position: relative;
   display: inline-flex;
@@ -15,7 +13,7 @@
     border: none;
     border-radius: 10px;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-meta-font-size);
     cursor: pointer;
     opacity: 0.72;
@@ -25,17 +23,17 @@
     &:hover,
     &:focus-visible,
     &--open {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       opacity: 1;
     }
 
     &:hover,
     &--open {
-      background: var(--bf-appearance-token-element-bg-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:focus-visible {
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
     }
 
     &:disabled {
@@ -55,7 +53,7 @@
     --bf-overlay-menu-inline-size: min(240px, calc(100vw - 16px));
 
     min-width: clamp(0px, 190px, calc(100vw - 16px));
-    z-index: $z-popover;
+    z-index: var(--bf-layer-popover);
     transform-origin: center top;
     transition:
       opacity 100ms ease,
@@ -90,7 +88,7 @@
     justify-content: space-between;
     gap: 8px;
     padding: 5px 7px 7px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-micro-font-size);
     font-weight: var(--bf-font-weight-medium);
   }
@@ -106,12 +104,6 @@
   &__option {
     justify-content: space-between;
 
-    > [data-bf-part='label'] > span {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-
     strong {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -121,6 +113,12 @@
       font-weight: var(--bf-font-weight-medium);
     }
 
+  }
+
+  &__option-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
 }
 

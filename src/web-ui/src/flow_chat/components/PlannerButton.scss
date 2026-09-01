@@ -1,9 +1,6 @@
 /**
  * Planner button styles - pill layout.
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
-
 .bitfun-planner-button {
   // Reset default styles
   margin: 0;
@@ -14,22 +11,22 @@
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
-  
+
   // Base layout
   display: inline-flex;
   align-items: center;
   gap: 2px;
   height: 22px;
   border-radius: 11px;
-  
+
   // Default state without glass effect
-  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent);
-  color: var(--bf-appearance-token-color-overlay-white-70);
+  background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
+  color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  
+
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     color 160ms ease,
@@ -37,7 +34,7 @@
     box-shadow 180ms ease;
   position: relative;
   overflow: hidden;
-  
+
   // Light sweep effect
   &::before {
     content: '';
@@ -48,9 +45,9 @@
     height: 100%;
     background: linear-gradient(90deg,
       transparent,
-      var(--bf-appearance-token-color-overlay-white-08),
-      var(--bf-appearance-token-color-overlay-white-08),
-      var(--bf-appearance-token-color-overlay-white-08),
+      color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
+      color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
+      color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
       transparent
     );
     transform: translateX(-100%);
@@ -58,23 +55,23 @@
     z-index: 1;
     pointer-events: none;
   }
-  
+
   // Hover: enable glass effect only for devices with a persistent pointer.
   @media (hover: hover) and (pointer: fine) {
     &:hover {
       background: linear-gradient(135deg,
-        color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent) 0%,
-        color-mix(in srgb, var(--bf-appearance-token-color-warning) 17%, transparent) 30%,
-        color-mix(in srgb, var(--bf-appearance-token-color-warning) 13%, transparent) 60%,
-        color-mix(in srgb, var(--bf-appearance-token-color-warning) 23%, transparent) 100%
+        color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent) 0%,
+        color-mix(in srgb, var(--bf-color-status-warning-content) 17%, transparent) 30%,
+        color-mix(in srgb, var(--bf-color-status-warning-content) 13%, transparent) 60%,
+        color-mix(in srgb, var(--bf-color-status-warning-content) 23%, transparent) 100%
       );
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 50%, transparent);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent);
+      color: var(--bf-color-content-primary);
       box-shadow:
-        0 10px 20px color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent),
-        0 6px 12px color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent),
-        $inner-glow-top-hover,
-        inset 0 -1px 0 color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
+        0 10px 20px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
+        0 6px 12px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
+        var(--bf-shadow-inner-highlight-hover),
+        inset 0 -1px 0 color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
       backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
       -webkit-backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
       transform: translateY(-1px);
@@ -84,25 +81,25 @@
       }
     }
   }
-  
+
   // Active state
   &:active {
     transform: scale(0.97);
   }
-  
+
   &__dot {
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, transparent);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--bf-appearance-token-color-warning) 60%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, transparent);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--bf-color-status-warning-content) 60%, transparent);
     animation: bitfun-planner-button-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     flex-shrink: 0;
     position: relative;
     z-index: 2;
     margin-right: 2px;
   }
-  
+
   &__text {
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-medium);
@@ -110,7 +107,7 @@
     position: relative;
     z-index: 2;
   }
-  
+
   &__progress {
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-semibold);

@@ -29,9 +29,7 @@ body, html { margin: 0; padding: 0; height: 100%; }
   --d-serif: ui-serif, "Cormorant Garamond", "Cormorant", "EB Garamond",
              "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong,
              "STZhongsong", SimSun, "宋体", Georgia, "Times New Roman", serif;
-  --d-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "PingFang SC",
-            "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
-            "Helvetica Neue", Helvetica, Arial, sans-serif);
+  --d-sans: var(--bitfun-font-sans);
 }
 
 body {

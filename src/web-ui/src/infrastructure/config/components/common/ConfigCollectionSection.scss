@@ -1,10 +1,8 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 .bitfun-config-collection-section__content {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-appearance-token-size-gap-4);
-  padding: var(--bf-appearance-token-size-gap-4);
+  gap: var(--bf-space-4);
+  padding: var(--bf-space-4);
 }
 
 .bitfun-config-collection-section__toolbar,
@@ -15,20 +13,20 @@
 }
 
 .bitfun-config-collection-section__toolbar {
-  padding-bottom: var(--bf-appearance-token-size-gap-2);
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  padding-bottom: var(--bf-space-2);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .bitfun-config-collection-section__filters {
-  padding-bottom: var(--bf-appearance-token-size-gap-2);
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  padding-bottom: var(--bf-space-2);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .bitfun-config-collection-section__editor {
-  background: var(--bf-appearance-token-element-bg-subtle);
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: var(--bf-appearance-token-size-radius-md);
-  padding: var(--bf-appearance-token-size-gap-3);
+  background: var(--bf-color-surface-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-md);
+  padding: var(--bf-space-3);
 }
 
 .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__content {
@@ -56,17 +54,17 @@
 .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__editor {
   grid-area: editor;
   position: sticky;
-  top: var(--bf-appearance-token-size-gap-2);
+  top: var(--bf-space-2);
 }
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-collection-section__content {
-    gap: var(--bf-appearance-token-size-gap-3);
-    padding: var(--bf-appearance-token-size-gap-3);
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-3);
   }
 
   .bitfun-config-collection-section__editor {
-    padding: var(--bf-appearance-token-size-gap-2);
+    padding: var(--bf-space-2);
   }
 
   .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__content {
@@ -76,6 +74,6 @@
 
   .bitfun-config-collection-section__toolbar,
   .bitfun-config-collection-section__filters {
-    padding-bottom: var(--bf-appearance-token-size-gap-2);
+    padding-bottom: var(--bf-space-2);
   }
 }

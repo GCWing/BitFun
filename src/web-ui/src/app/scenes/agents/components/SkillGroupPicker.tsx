@@ -1,10 +1,21 @@
-import { Button, Icon, IconButton, Input, Modal, ScrollArea, Switch, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  ScrollArea,
+  Switch,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
-import {
-  ArrowDown,
-  Trash2,
-} from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
@@ -267,17 +278,24 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        closeEditor();
-        onClose();
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          closeEditor();
+          onClose();
+        }
       }}
-      title={t('agentsOverview.skillGroupPicker.manageTitle')}
-      size="large"
-      contentPadding="lg"
-      testId="skill-group-manager"
+      size="lg"
+      data-testid="skill-group-manager"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('agentsOverview.skillGroupPicker.manageTitle')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div className="skill-group-manager" data-bf-component="skill-group-picker" data-bf-part="manager">
         {isEditing ? (
           <div className="skill-group-manager__editor" data-bf-component="skill-group-picker" data-bf-part="managerEditor">
@@ -389,7 +407,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.skillGroupPicker.moveDown')}
                             onClick={() => void moveGroup(index, 1)}
                             disabled={saving || index === groups.length - 1}
-                            icon={<ArrowDown size={13} />}
+                            icon={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
                           />
                         </Tooltip>
                         <Tooltip content={t('agentsOverview.skillGroupPicker.editGroup')}>
@@ -409,7 +427,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.skillGroupPicker.deleteGroup')}
                             onClick={() => void deleteGroup(group)}
                             disabled={saving}
-                            icon={<Trash2 size={13} />}
+                            icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                           />
                         </Tooltip>
                       </div>
@@ -421,7 +439,8 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
           </>
         )}
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

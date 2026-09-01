@@ -2,7 +2,7 @@
   .prominentRoot,
   .ambientRoot {
     --_tool-card-action-size: var(--bf-space-6);
-    --_icon-size: var(--bf-font-size-xl);
+    --_flow-chat-tool-card-icon-size: var(--bf-font-size-xl);
     --_tool-card-transition: var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     box-sizing: border-box;
@@ -20,10 +20,9 @@
     border: var(--bf-border-width-default) solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-md);
     background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-xs);
+    box-shadow: none;
     transition:
       border-color var(--_tool-card-transition),
-      box-shadow var(--_tool-card-transition),
       background-color var(--_tool-card-transition);
   }
 
@@ -31,7 +30,6 @@
   .prominentRoot[data-bf-preview-state="hover"],
   :global([data-bf-preview-state="hover"]) .prominentRoot {
     border-color: var(--bf-color-border-strong);
-    box-shadow: var(--bf-shadow-sm);
   }
 
   .prominentRoot[data-bf-state~="confirmation"] {
@@ -261,8 +259,8 @@
   .iconMarks {
     position: relative;
     display: inline-flex;
-    inline-size: var(--_icon-size);
-    block-size: var(--_icon-size);
+    inline-size: var(--_flow-chat-tool-card-icon-size);
+    block-size: var(--_flow-chat-tool-card-icon-size);
     align-items: center;
     justify-content: center;
   }
@@ -280,7 +278,7 @@
       transform var(--_tool-card-transition);
   }
 
-  .mainIcon > :where(svg, img),
+  .mainIcon :where(svg, img),
   .inlineAffordance > :where(svg, img),
   .statusIcon > :where(svg, img) {
     display: block;
@@ -466,7 +464,7 @@
     border: var(--bf-border-width-default) solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-md);
     background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-xs);
+    box-shadow: none;
   }
 
   .ambientExpandedShell .ambientSurface {

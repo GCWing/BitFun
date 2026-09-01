@@ -2,14 +2,7 @@
  * SessionScene styles — ChatPane + Resizer + AuxPane layout.
  * Resizer styles moved here from WorkspaceShell.scss.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
-
 .bitfun-session-scene {
-  --private-session-pane-resizer-accent-rgb: 88, 166, 255;
-  --private-session-pane-resizer-muted-rgb: 128, 128, 128;
-
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -18,8 +11,8 @@
   height: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
 
   &--dragging {
     user-select: none;
@@ -87,8 +80,8 @@
   box-sizing: border-box;
   max-width: 1200px;
 
-  transition: width $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  transition: width var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &--collapsed {
     min-width: 0;
@@ -133,8 +126,8 @@
       inset: 0;
       background: linear-gradient(
         to right,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.25) 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.12) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 25%, transparent) 0%,
+        color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent) 50%,
         transparent 100%
       );
       pointer-events: none;
@@ -148,13 +141,13 @@
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9);
+      color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
       font-size: var(--bf-type-flow-control-font-size);
       font-weight: var(--bf-font-weight-semibold);
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;
-      text-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-30);
+      text-shadow: 0 1px 2px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
       animation: pane-collapse-hint 0.3s ease-out;
     }
   }
@@ -167,8 +160,8 @@
   position: relative;
   cursor: col-resize;
   user-select: none;
-  z-index: $z-sticky;
-  background: var(--bf-appearance-token-border-subtle);
+  z-index: var(--bf-layer-sticky);
+  background: var(--bf-color-border-subtle);
 
   &::before {
     content: '';
@@ -182,9 +175,9 @@
 
   // Explicit property list (no `transition: all`): only the collapse width
   // and cheap paint properties animate; hover feedback uses transform below.
-  transition: width $motion-base $easing-standard,
-              opacity $motion-base $easing-standard,
-              background-color $motion-base $easing-standard;
+  transition: width var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &--collapsed {
     width: 0;
@@ -206,11 +199,11 @@
     width: 2px;
     height: 50px;
     background: transparent;
-    border-radius: $size-radius-sm;
-    transition: opacity $motion-base $easing-standard,
-                background-color $motion-base $easing-standard,
-                box-shadow $motion-base $easing-standard,
-                transform $motion-base $easing-standard;
+    border-radius: var(--bf-radius-sm);
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     opacity: 0;
     pointer-events: none;
   }
@@ -221,13 +214,13 @@
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
-    transition: opacity $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     pointer-events: none;
   }
 
   &__icon {
-    color: rgba(var(--private-session-pane-resizer-muted-rgb), 0.6);
-    transition: color $motion-base $easing-standard;
+    color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
+    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   &:hover,
@@ -235,33 +228,33 @@
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.8) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 80%,
         transparent 100%
       );
       transform: translate(-50%, -50%) scaleY(1);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9); }
+    .bitfun-pane-resizer__icon { color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent); }
   }
 
   &--dragging {
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 1) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 20%,
+        var(--bf-color-accent-default) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px rgba(var(--private-session-pane-resizer-accent-rgb), 0.5);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
       transform: translate(-50%, -50%) scaleY(1.2);
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 1); }
+    .bitfun-pane-resizer__icon { color: var(--bf-color-accent-default); }
   }
 
   &:focus {
@@ -269,12 +262,12 @@
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.9) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px rgba(var(--private-session-pane-resizer-accent-rgb), 0.4);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       transform: translate(-50%, -50%) scaleY(1.1);
       opacity: 1;
     }
@@ -283,7 +276,7 @@
 
   &:focus-visible {
     .bitfun-pane-resizer__line {
-      outline: 2px solid rgba(var(--private-session-pane-resizer-accent-rgb), 0.8);
+      outline: 2px solid var(--bf-color-focus-ring);
       outline-offset: 2px;
     }
   }
@@ -298,9 +291,9 @@
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
-  transition: height $motion-base $easing-standard,
-              opacity $motion-base $easing-standard;
+  border-top: 1px solid var(--bf-color-border-subtle);
+  transition: height var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &--collapsed {
     min-height: 0;
@@ -323,12 +316,12 @@
   position: relative;
   cursor: row-resize;
   user-select: none;
-  z-index: $z-sticky;
-  background: var(--bf-appearance-token-border-subtle);
+  z-index: var(--bf-layer-sticky);
+  background: var(--bf-color-border-subtle);
   transition:
-    background-color $motion-base $easing-standard,
-    height $motion-base $easing-standard,
-    opacity $motion-base $easing-standard;
+    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    height var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
   &::before {
     content: '';
@@ -360,11 +353,11 @@
     width: 72px;
     height: 2px;
     background: transparent;
-    border-radius: $size-radius-sm;
-    transition: opacity $motion-base $easing-standard,
-                background-color $motion-base $easing-standard,
-                box-shadow $motion-base $easing-standard,
-                transform $motion-base $easing-standard;
+    border-radius: var(--bf-radius-sm);
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     opacity: 0;
     pointer-events: none;
   }
@@ -375,13 +368,13 @@
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
-    transition: opacity $motion-base $easing-standard;
+    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     pointer-events: none;
   }
 
   &__icon {
-    color: rgba(var(--private-session-pane-resizer-muted-rgb), 0.6);
-    transition: color $motion-base $easing-standard;
+    color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
+    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
   &:hover,
@@ -389,33 +382,33 @@
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.8) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.4) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 80%,
         transparent 100%
       );
       transform: translate(-50%, -50%) scaleX(1);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9); }
+    .bitfun-bottom-pane-resizer__icon { color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent); }
   }
 
   &--dragging {
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 1) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.6) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 20%,
+        var(--bf-color-accent-default) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px rgba(var(--private-session-pane-resizer-accent-rgb), 0.5);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
       transform: translate(-50%, -50%) scaleX(1.19);
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: rgba(var(--private-session-pane-resizer-accent-rgb), 1); }
+    .bitfun-bottom-pane-resizer__icon { color: var(--bf-color-accent-default); }
   }
 
   &:focus {
@@ -423,12 +416,12 @@
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 20%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.9) 50%,
-        rgba(var(--private-session-pane-resizer-accent-rgb), 0.5) 80%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 20%,
+        color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent) 50%,
+        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px rgba(var(--private-session-pane-resizer-accent-rgb), 0.4);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
       transform: translate(-50%, -50%) scaleX(1.11);
       opacity: 1;
     }
@@ -437,7 +430,7 @@
 
   &:focus-visible {
     .bitfun-bottom-pane-resizer__line {
-      outline: 2px solid rgba(var(--private-session-pane-resizer-accent-rgb), 0.8);
+      outline: 2px solid var(--bf-color-focus-ring);
       outline-offset: 2px;
     }
   }

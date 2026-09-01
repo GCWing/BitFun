@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -16,11 +16,11 @@ import {
   Search,
   TestTube,
   Wrench,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { recommendationRegistry } from './RecommendationRegistry';
 import { RecommendationAction, RecommendationContext } from './types';
-import { PopupCloseButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './SmartRecommendations.scss';
 
@@ -129,14 +129,18 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
     >
       <div data-bf-component="smart-recommendations" data-bf-part="header" className="bitfun-smart-recommendations__header">
         <span data-bf-component="smart-recommendations" data-bf-part="title" className="bitfun-smart-recommendations__title">{t('smartRecommendations.title')}</span>
-        <PopupCloseButton
-          data-bf-component="smart-recommendations"
-          data-bf-part="close"
-          className="bitfun-smart-recommendations__close"
-          onClick={handleClose}
-          tooltip={t('smartRecommendations.close')}
-          aria-label={t('smartRecommendations.close')}
-        />
+        <Tooltip content={t('smartRecommendations.close')}>
+          <IconButton
+            data-bf-component="smart-recommendations"
+            data-bf-part="close"
+            className="bitfun-smart-recommendations__close"
+            onClick={handleClose}
+            icon={<X size={16} />}
+            size="sm"
+            variant="quiet"
+            aria-label={t('smartRecommendations.close')}
+          />
+        </Tooltip>
       </div>
 
       <div data-bf-component="smart-recommendations" data-bf-part="actions" className="bitfun-smart-recommendations__actions">

@@ -111,10 +111,6 @@ function resolveSpecifier(fromFile, specifier) {
 
   if (specifier.startsWith('@/')) {
     candidate = path.join(WEB_SRC_DIR, specifier.slice(2));
-  } else if (specifier === '@components') {
-    candidate = path.join(WEB_SRC_DIR, 'component-library', 'components');
-  } else if (specifier.startsWith('@components/')) {
-    candidate = path.join(WEB_SRC_DIR, 'component-library', 'components', specifier.slice('@components/'.length));
   } else if (specifier.startsWith('.')) {
     candidate = path.resolve(path.dirname(fromFile), specifier);
   } else {

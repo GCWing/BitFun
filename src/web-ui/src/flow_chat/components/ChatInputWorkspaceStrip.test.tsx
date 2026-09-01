@@ -37,7 +37,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   // Forwards the rest of the props so state carried on data attributes stays
   // observable; `variant`/`size` are the library's own and have no DOM meaning.
   IconButton: ({
@@ -375,7 +376,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(document.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 
-  it('chooses the scope per click instead of through a separate toggle', async () => {
+  it('keeps session selection primary and opens one-off choices as a second level', async () => {
     const onChange = vi.fn();
     const onChangeForNextTurn = vi.fn();
     await act(async () => {
@@ -409,9 +410,16 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(onChange).toHaveBeenCalledWith('auto');
     expect(onChangeForNextTurn).not.toHaveBeenCalled();
 
-    // The trailing button is the one-off scope, and never writes the session.
+    // One-off scope is a named second level, not an unexplained checkbox on
+    // every session row.
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(document.querySelector('[role="menuitemcheckbox"]')).toBeNull();
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-turn-scope"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
       document
@@ -435,7 +443,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
             mode: 'ask',
             activeTurn: true,
             nextTurnMode: null,
-            scopeLabel: 'chatInput.permissionMode.activeTurnScope',
+            scopeLabel: 'This session',
             onChange: vi.fn(),
             onChangeForNextTurn,
           }}
@@ -450,6 +458,15 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(document.body.textContent).toContain('This session');
+    expect(
+      document.querySelector('[data-testid="chat-input-permission-turn-scope"]')?.textContent,
+    ).toContain('chatInput.permissionMode.activeTurnSettings');
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-turn-scope"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
 
     const oneOff = document.querySelector<HTMLButtonElement>(
       '[data-testid="chat-input-permission-next-turn-auto"]',
@@ -457,12 +474,104 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(oneOff?.getAttribute('aria-label')).toBe(
       'chatInput.permissionMode.activeTurnOnly',
     );
-    expect(oneOff?.getAttribute('role')).toBe('menuitemcheckbox');
+    expect(oneOff?.getAttribute('role')).toBe('menuitemradio');
+    expect(document.body.textContent).toContain('chatInput.permissionMode.activeTurnScope');
 
     await act(async () => {
       oneOff?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onChangeForNextTurn).toHaveBeenCalledWith('auto');
+  });
+
+  it('clears a one-off override through the explicit follow-session choice', async () => {
+    const onChangeForNextTurn = vi.fn();
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath=""
+          workspaceLabel=""
+          permissionControl={{
+            mode: 'auto',
+            nextTurnMode: 'full_access',
+            onChange: vi.fn(),
+            onChangeForNextTurn,
+          }}
+        />
+      );
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-turn-scope"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const followSession = document.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-permission-follow-session"]',
+    );
+    expect(followSession?.getAttribute('role')).toBe('menuitemradio');
+    expect(followSession?.getAttribute('aria-checked')).toBe('false');
+
+    await act(async () => {
+      followSession?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChangeForNextTurn).toHaveBeenCalledWith('full_access');
+    expect(document.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+  });
+
+  it('opens the one-off level on click or Right Arrow, never on hover', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath=""
+          workspaceLabel=""
+          permissionControl={{
+            mode: 'ask',
+            onChange: vi.fn(),
+            onChangeForNextTurn: vi.fn(),
+          }}
+        />
+      );
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const scope = document.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-permission-turn-scope"]',
+    );
+    await act(async () => {
+      scope?.dispatchEvent(new MouseEvent('pointerenter', { bubbles: true }));
+    });
+    expect(document.querySelector('[data-testid="chat-input-permission-follow-session"]'))
+      .toBeNull();
+
+    await act(async () => {
+      scope?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(document.querySelector('[data-testid="chat-input-permission-follow-session"]'))
+      .not.toBeNull();
+    expect(document.querySelector('[role="menuitemcheckbox"]')).toBeNull();
+    expect(
+      document
+        .querySelector('[data-testid="chat-input-permission-turn-back"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('chatInput.permissionMode.backToSessionSettings');
+
+    await act(async () => {
+      document
+        .querySelector<HTMLElement>('[data-testid="chat-input-permission-menu"]')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+    expect(document.querySelector('[data-testid="chat-input-permission-turn-scope"]'))
+      .not.toBeNull();
   });
 
   it('keeps the mode descriptions out of the row and in the accessible name', async () => {
@@ -515,6 +624,15 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(document.querySelector('[role="menuitemcheckbox"]')).toBeNull();
+    expect(
+      document.querySelector('[data-testid="chat-input-permission-turn-scope"]')?.textContent,
+    ).toContain('chatInput.permissionMode.fullAccess.label');
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-turn-scope"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     expect(
       document
         .querySelector('[data-testid="chat-input-permission-next-turn-full_access"]')
@@ -542,7 +660,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(
-      document.querySelector('[data-testid="chat-input-permission-next-turn-ask"]'),
+      document.querySelector('[data-testid="chat-input-permission-turn-scope"]'),
     ).toBeNull();
   });
 
@@ -581,6 +699,14 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(
       document.querySelector('[data-testid="chat-input-permission-selected-full_access"]'),
     ).toBeNull();
+    expect(
+      document.querySelector('[data-testid="chat-input-permission-next-turn-full_access"]'),
+    ).toBeNull();
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-turn-scope"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     expect(
       document
         .querySelector('[data-testid="chat-input-permission-next-turn-full_access"]')

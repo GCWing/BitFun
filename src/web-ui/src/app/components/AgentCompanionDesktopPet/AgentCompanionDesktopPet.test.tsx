@@ -190,7 +190,7 @@ describe('AgentCompanionDesktopPet', () => {
     dispatch(hitbox!, 'contextmenu', { clientX: 300, clientY: 200 });
 
     const menuItem = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item'),
+      container.querySelectorAll<HTMLButtonElement>('[data-bf-menu-item]'),
     ).find(item => item.textContent === 'Close pet');
     expect(menuItem?.textContent).toBe('Close pet');
 
@@ -199,7 +199,7 @@ describe('AgentCompanionDesktopPet', () => {
     });
 
     expect(emitMock).toHaveBeenCalledWith(PET_COMMAND_EVENT, { type: 'close-desktop-pet' });
-    expect(query('.bitfun-agent-companion-window__menu-item')).toBeNull();
+    expect(query('[data-bf-menu-item]')).toBeNull();
   });
 
   it('opens the pet settings from the pet context menu', () => {
@@ -209,7 +209,7 @@ describe('AgentCompanionDesktopPet', () => {
     });
 
     const menuItems = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item'),
+      container.querySelectorAll<HTMLButtonElement>('[data-bf-menu-item]'),
     );
     expect(menuItems.map(item => item.textContent)).toEqual(['Switch pet', 'Close pet']);
 
@@ -218,7 +218,7 @@ describe('AgentCompanionDesktopPet', () => {
     });
 
     expect(emitMock).toHaveBeenCalledWith(PET_COMMAND_EVENT, { type: 'open-pet-settings' });
-    expect(query('.bitfun-agent-companion-window__menu-item')).toBeNull();
+    expect(query('[data-bf-menu-item]')).toBeNull();
   });
 
   it('anchors the context menu to the cursor position', () => {
@@ -396,7 +396,7 @@ describe('AgentCompanionDesktopPet', () => {
 
     dispatch(query('.bitfun-agent-companion-window__bubble-shell')!, 'contextmenu');
 
-    const menuItem = query<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item');
+    const menuItem = query<HTMLButtonElement>('[data-bf-menu-item]');
     expect(menuItem?.textContent).toBe('Close this bubble');
     // The bubble menu shows the action only, not the session title.
     expect(query('.bitfun-agent-companion-window__overlay--anchored .bitfun-agent-companion-window__overlay-title')).toBeNull();
@@ -418,7 +418,7 @@ describe('AgentCompanionDesktopPet', () => {
 
     dispatch(query('.bitfun-agent-companion-window__bubble-shell')!, 'contextmenu');
     act(() => {
-      query<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item')!.click();
+      query<HTMLButtonElement>('[data-bf-menu-item]')!.click();
     });
 
     expect(query('.bitfun-agent-companion-window__bubble')).toBeNull();

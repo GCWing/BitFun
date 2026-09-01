@@ -2,7 +2,17 @@
  * New Project Dialog Component
  */
 
-import { Button, Icon, Input, Modal } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  Input,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   FolderPlus,
@@ -106,13 +116,18 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   }, [error]);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleCancel}
-      title=""
-      size="small"
-      showCloseButton={true}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleCancel(); }}
+      size="sm"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{""}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
       <div data-bf-component="new-project-dialog" data-bf-part="root" className="new-project-dialog">
         {/* Hero section */}
         <div data-bf-component="new-project-dialog" data-bf-part="hero" className="new-project-dialog__hero">
@@ -225,6 +240,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
           </Button>
         </div>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };

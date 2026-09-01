@@ -56,6 +56,9 @@ importers:
 
   BitFun-Installer:
     dependencies:
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../design-system/packages/theme-bitfun
       '@tauri-apps/api':
         specifier: ^2.10.1
         version: 2.10.1
@@ -207,6 +210,9 @@ importers:
 
   src/miniapp-market-web:
     dependencies:
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../../design-system/packages/theme-bitfun
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -241,6 +247,9 @@ importers:
 
   src/mobile-web:
     dependencies:
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../../design-system/packages/theme-bitfun
       '@noble/ciphers':
         specifier: ^2.1.1
         version: 2.1.1
@@ -293,6 +302,9 @@ importers:
 
   src/skin-market-web:
     dependencies:
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../../design-system/packages/theme-bitfun
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -586,6 +598,15 @@ importers:
       wdio-edgedriver-service:
         specifier: ^3.0.3
         version: 3.0.3(@wdio/types@8.41.0)
+
+  website:
+    dependencies:
+      '@bitfun/design-tokens':
+        specifier: workspace:^
+        version: link:../design-system/packages/design-tokens
+      '@bitfun/theme-bitfun':
+        specifier: workspace:^
+        version: link:../design-system/packages/theme-bitfun
 
 packages:
 

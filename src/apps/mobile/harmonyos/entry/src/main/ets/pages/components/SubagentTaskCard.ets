@@ -2,7 +2,15 @@ import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiMessageItem, ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
 import { ChatMessageStructurePolicy } from '../policy/ChatMessageStructurePolicy';
-import { CARD, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  SOFT,
+  STATUS_DANGER,
+  TRANSPARENT,
+} from './Theme';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolStatusList } from './ToolStatusList';
 import { ToolGlyph } from './ToolGlyphs';
@@ -28,13 +36,13 @@ export struct SubagentTaskCard {
       Row({ space: 8 }) {
         Stack({ alignContent: Alignment.BottomEnd }) {
           Stack({ alignContent: Alignment.Center }) {
-            ToolGlyph({ kind: 'task', color: this.isError() ? RED : MUTED })
+            ToolGlyph({ kind: 'task', color: this.isError() ? STATUS_DANGER : MUTED })
           }
           .width(18)
           .height(18)
           .backgroundColor(SOFT)
           .borderRadius(5)
-          .border({ width: 1, color: this.isError() ? RED : LINE })
+          .border({ width: 1, color: this.isError() ? STATUS_DANGER : LINE })
           if (this.isRunning() || this.isError()) {
             Text(this.isError() ? '!' : '•')
               .width(10)
@@ -43,7 +51,7 @@ export struct SubagentTaskCard {
               .fontWeight(FontWeight.Bold)
               .fontColor(CARD)
               .textAlign(TextAlign.Center)
-              .backgroundColor(this.isError() ? RED : MUTED)
+              .backgroundColor(this.isError() ? STATUS_DANGER : MUTED)
               .borderRadius(5)
               .border({ width: 1, color: CARD })
           }
@@ -52,13 +60,13 @@ export struct SubagentTaskCard {
         .height(20)
         Text(this.title)
           .fontSize(MobileDesignTypography.bodySmall.size)
-          .fontColor(this.isError() ? RED : MUTED)
+          .fontColor(this.isError() ? STATUS_DANGER : MUTED)
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.statusText())
           .fontSize(MobileDesignTypography.labelSmall.size)
-          .fontColor(this.isError() ? RED : MUTED)
+          .fontColor(this.isError() ? STATUS_DANGER : MUTED)
           .maxLines(1)
         if (this.hasProcessItems()) {
           SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
@@ -87,7 +95,7 @@ export struct SubagentTaskCard {
       top: this.isEmphasized() ? 6 : 0,
       bottom: this.isEmphasized() ? 6 : 0
     })
-    .backgroundColor(this.isEmphasized() || this.expanded ? SOFT : '#00000000')
+    .backgroundColor(this.isEmphasized() || this.expanded ? SOFT : TRANSPARENT)
     .borderRadius(this.isEmphasized() ? 14 : 8)
     .border({ width: this.isEmphasized() || this.expanded ? 1 : 0, color: LINE })
     .accessibilityText(`${this.title}, ${this.statusText()}`)

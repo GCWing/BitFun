@@ -1,9 +1,17 @@
-import { Button, ConfirmDialog, Icon, Modal, Switch } from '@bitfun/ui';
+import {
+  Button,
+  ConfirmDialog,
+  Icon,
+  Switch,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw } from 'lucide-react';
-import { ConfigPageLoading } from '@/component-library';
-
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
 import { useNotification } from '@/shared/notification-system';
@@ -23,6 +31,7 @@ import {
   ConfigPageLayout,
   ConfigPageRow,
   ConfigPageSection,
+  ConfigLoadingState,
 } from './common';
 
 const log = createLogger('HooksConfig');
@@ -300,13 +309,13 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
 
   if (loading) {
     if (embedded) {
-      return <ConfigPageLoading text={t('loading')} />;
+      return <ConfigLoadingState label={t('loading')} />;
     }
     return (
       <ConfigPageLayout>
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('loading')} />
+          <ConfigLoadingState label={t('loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -368,7 +377,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
               loading={importLoading}
               disabled={busyKey !== null}
               onClick={() => void refreshImports()}
-              leadingIcon={<RefreshCw size={14} />}
+              leadingIcon={<Icon name="refresh" size="sm" />}
             >
 
               {t('imports.refresh')}
@@ -483,7 +492,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
                 ) : null}
             </>
           ) : (
-            <ConfigPageLoading text={t('imports.loading')} />
+            <ConfigLoadingState label={t('imports.loading')} />
           )}
         </ConfigPageSection>
 
@@ -503,18 +512,24 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
         </ConfigPageSection>
       </ConfigPageContent>
 
-      <Modal
-        isOpen={reviewPlan !== null}
-        onClose={() => {
-          if (busyKey !== 'apply') {
+      <Dialog
+        open={reviewPlan !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && busyKey !== 'apply') {
             setReviewPlan(null);
             setPlanNotice(null);
           }
         }}
-        title={t('imports.reviewTitle', { name: reviewPlan?.source.displayName ?? '' })}
-        size="large"
-        closeOnOverlayClick={busyKey !== 'apply'}
+        size="lg"
+        closeOnPointerOutside={busyKey !== 'apply'}
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('imports.reviewTitle', { name: reviewPlan?.source.displayName ?? '' })}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         {reviewPlan ? (
           <div>
             {planNotice ? <p role="status">{planNotice}</p> : null}
@@ -562,11 +577,12 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             </Button>
           </div>
         ) : null}
-      </Modal>
+              </DialogBody>
+      </Dialog>
 
       <ConfirmDialog
-        isOpen={confirmation !== null}
-        onClose={() => setConfirmation(null)}
+        open={confirmation !== null}
+        onOpenChange={() => setConfirmation(null)}
         onConfirm={confirmMutation}
         title={confirmation?.kind === 'reset'
           ? t('imports.resetTitle')

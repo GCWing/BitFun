@@ -1,5 +1,3 @@
-@use '../../../../component-library/styles/tokens' as *;
-
 $assistant-defaults-row-columns:
   minmax(280px, 2.4fr)
   minmax(108px, 0.82fr)
@@ -10,8 +8,8 @@ $assistant-defaults-row-columns:
   76px;
 
 .nursery-page--assistant-defaults {
-  background: var(--bf-appearance-token-color-bg-scene);
-  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
 }
 
 .assistant-defaults {
@@ -25,13 +23,13 @@ $assistant-defaults-row-columns:
   &__header {
     flex: 0 0 auto;
     padding: clamp(16px, 2vw, 24px) clamp(20px, 3vw, 36px) clamp(14px, 1.6vw, 20px);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-scene);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-scene);
 
     > p {
       max-width: 760px;
-      margin: $size-gap-2 0 0 34px;
-      color: var(--bf-appearance-token-color-text-secondary);
+      margin: var(--bf-space-2) 0 0 34px;
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-xs);
       line-height: var(--bf-line-height-relaxed);
     }
@@ -41,13 +39,13 @@ $assistant-defaults-row-columns:
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
 
     h2 {
       flex: 0 1 auto;
       min-width: 0;
       margin: 0;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-3xl);
       font-weight: var(--bf-font-weight-semibold);
       line-height: var(--bf-line-height-tight);
@@ -59,10 +57,10 @@ $assistant-defaults-row-columns:
     display: inline-flex;
     min-height: 26px;
     align-items: center;
-    padding: 0 $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-full;
-    color: var(--bf-appearance-token-color-text-secondary);
+    padding: 0 var(--bf-space-2);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-pill);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     white-space: nowrap;
   }
@@ -70,7 +68,7 @@ $assistant-defaults-row-columns:
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     margin-left: auto;
   }
 
@@ -78,16 +76,16 @@ $assistant-defaults-row-columns:
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     white-space: nowrap;
 
     &--saved {
-      color: var(--bf-appearance-token-color-success);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      color: var(--bf-appearance-token-color-error);
+      color: var(--bf-color-status-danger-content);
     }
   }
 
@@ -97,8 +95,8 @@ $assistant-defaults-row-columns:
     min-height: 0;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-3;
-    color: var(--bf-appearance-token-color-text-muted);
+    gap: var(--bf-space-3);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -114,26 +112,26 @@ $assistant-defaults-row-columns:
   &__main {
     min-width: 0;
     min-height: 0;
-    padding: 0 clamp(20px, 3vw, 32px) $size-gap-4;
+    padding: 0 clamp(20px, 3vw, 32px) var(--bf-space-4);
     scrollbar-width: thin;
-    scrollbar-color: var(--bf-appearance-token-border-subtle) transparent;
+    scrollbar-color: var(--bf-color-border-subtle) transparent;
   }
 
   &__warning {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
-    margin: $size-gap-3 0 0;
-    padding: $size-gap-2 $size-gap-3;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 32%, var(--bf-appearance-token-border-subtle));
-    border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
+    gap: var(--bf-space-2);
+    margin: var(--bf-space-3) 0 0;
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 32%, var(--bf-color-border-subtle));
+    border-radius: var(--bf-radius-base);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 7%, transparent);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
 
     > svg {
       flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-warning);
+      color: var(--bf-color-status-warning-content);
     }
 
     span {
@@ -143,8 +141,8 @@ $assistant-defaults-row-columns:
   }
 
   &__footer {
-    padding: $size-gap-3 0 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    padding: var(--bf-space-3) 0 0;
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
   }
 }
@@ -153,7 +151,7 @@ $assistant-defaults-row-columns:
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 
   > div {
     position: relative;
@@ -162,7 +160,7 @@ $assistant-defaults-row-columns:
     flex-direction: column;
     justify-content: center;
     gap: 4px;
-    padding: $size-gap-3 clamp(14px, 1.8vw, 22px);
+    padding: var(--bf-space-3) clamp(14px, 1.8vw, 22px);
 
     & + div::before {
       position: absolute;
@@ -170,18 +168,18 @@ $assistant-defaults-row-columns:
       bottom: 30%;
       left: 0;
       width: 1px;
-      background: var(--bf-appearance-token-border-subtle);
+      background: var(--bf-color-border-subtle);
       content: '';
     }
   }
 
   span {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
   }
 
   strong {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-3xl);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-none);
@@ -195,9 +193,9 @@ $assistant-defaults-row-columns:
   gap: 2px;
   margin-top: clamp(14px, 1.8vw, 20px);
   padding: 3px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-element-bg-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+  background: var(--bf-color-surface-subtle);
 
   button {
     display: flex;
@@ -205,30 +203,30 @@ $assistant-defaults-row-columns:
     min-height: 34px;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-2;
-    padding: 0 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: 0 var(--bf-space-3);
     border: 0;
-    border-radius: calc(#{$size-radius-lg} - 3px);
+    border-radius: calc(var(--bf-radius-lg) - 3px);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-family:var(--bf-font-family-sans);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
     transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      box-shadow $motion-fast $easing-standard;
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-active) {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &.is-active {
-      background: var(--bf-appearance-token-color-text-primary);
-      color: var(--bf-appearance-token-color-bg-scene);
-      box-shadow: var(--bf-appearance-token-shadow-xs);
+      background: var(--bf-color-content-primary);
+      color: var(--bf-color-surface-scene);
+      box-shadow: var(--bf-shadow-xs);
     }
 
     small {
@@ -238,7 +236,7 @@ $assistant-defaults-row-columns:
       align-items: center;
       justify-content: center;
       padding: 0 6px;
-      border-radius: $size-radius-full;
+      border-radius: var(--bf-radius-pill);
       background: color-mix(in srgb, currentColor 10%, transparent);
       color: inherit;
       font-size: var(--bf-font-size-meta);
@@ -250,8 +248,8 @@ $assistant-defaults-row-columns:
 .assistant-defaults-controls {
   display: flex;
   align-items: center;
-  gap: $size-gap-2;
-  padding: clamp(12px, 1.5vw, 16px) 0 $size-gap-3;
+  gap: var(--bf-space-2);
+  padding: clamp(12px, 1.5vw, 16px) 0 var(--bf-space-3);
 }
 
 .assistant-defaults-search {
@@ -273,37 +271,37 @@ $assistant-defaults-row-columns:
 
   button {
     min-height: 32px;
-    padding: 0 $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
+    padding: 0 var(--bf-space-3);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-base);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font: inherit;
     font-size: var(--bf-font-size-meta);
     white-space: nowrap;
     cursor: pointer;
     transition:
-      background $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-active) {
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-color-field-border-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &.is-active {
-      border-color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-color-text-primary);
-      color: var(--bf-appearance-token-color-bg-scene);
+      border-color: var(--bf-color-content-primary);
+      background: var(--bf-color-content-primary);
+      color: var(--bf-color-surface-scene);
     }
   }
 }
 
 .assistant-defaults-list {
   min-width: 0;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-top: 1px solid var(--bf-color-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 
   &__header,
   .assistant-defaults-row {
@@ -317,18 +315,18 @@ $assistant-defaults-row-columns:
     top: 0;
     z-index: 4;
     min-height: 36px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-scene);
-    color: var(--bf-appearance-token-color-text-muted);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-scene);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-medium);
 
     > div {
       min-width: 0;
-      padding: 0 $size-gap-3;
+      padding: 0 var(--bf-space-3);
 
       &:first-child {
-        padding-left: $size-gap-2;
+        padding-left: var(--bf-space-2);
       }
     }
   }
@@ -337,23 +335,23 @@ $assistant-defaults-row-columns:
 .assistant-defaults-row {
   position: relative;
   min-height: 64px;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
   transition:
-    background $motion-fast $easing-standard,
-    box-shadow $motion-fast $easing-standard,
-    opacity $motion-fast $easing-standard;
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:last-child {
     border-bottom: 0;
   }
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &--selected {
-    background: var(--bf-appearance-token-element-bg-soft);
-    box-shadow: inset 3px 0 0 var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-quiet-hover);
+    box-shadow: inset 3px 0 0 var(--bf-color-content-primary);
   }
 
   &--unavailable {
@@ -369,8 +367,8 @@ $assistant-defaults-row-columns:
     min-width: 0;
     min-height: 63px;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3 $size-gap-2 $size-gap-2;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3) var(--bf-space-2) var(--bf-space-2);
     border: 0;
     background: transparent;
     color: inherit;
@@ -386,18 +384,18 @@ $assistant-defaults-row-columns:
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-subtle);
+    color: var(--bf-color-content-secondary);
   }
 
   &__icon--skill {
-    color: var(--bf-appearance-token-color-purple-500);
+    color: var(--bf-color-accent-secondary);
   }
 
   &__icon--mcp {
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &__copy {
@@ -414,7 +412,7 @@ $assistant-defaults-row-columns:
     }
 
     strong {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-semibold);
       line-height: var(--bf-line-height-base);
@@ -423,14 +421,14 @@ $assistant-defaults-row-columns:
 
     > span {
       display: block;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-xs);
       line-height: var(--bf-line-height-base);
       white-space: nowrap;
     }
 
     small {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-meta);
       line-height: var(--bf-line-height-base);
       white-space: nowrap;
@@ -439,9 +437,9 @@ $assistant-defaults-row-columns:
 
   &__cell {
     min-width: 0;
-    padding: 0 $size-gap-3;
+    padding: 0 var(--bf-space-3);
     overflow: hidden;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-meta);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -452,7 +450,7 @@ $assistant-defaults-row-columns:
   }
 
   &__difference {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     font-weight: var(--bf-font-weight-medium);
   }
 
@@ -460,8 +458,8 @@ $assistant-defaults-row-columns:
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: $size-gap-2;
-    padding-right: $size-gap-2;
+    gap: var(--bf-space-2);
+    padding-right: var(--bf-space-2);
   }
 
   &__detail {
@@ -473,18 +471,18 @@ $assistant-defaults-row-columns:
     justify-content: center;
     padding: 0;
     border: 0;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     transition:
-      background $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      transform $motion-fast $easing-standard;
+      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-primary);
     }
   }
 }
@@ -493,7 +491,7 @@ $assistant-defaults-row-columns:
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-font-size-xs);
   white-space: nowrap;
 
@@ -502,15 +500,15 @@ $assistant-defaults-row-columns:
     height: 7px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-color-content-muted);
   }
 
   &--available &__dot {
-    background: var(--bf-appearance-token-color-success);
+    background: var(--bf-color-status-success-content);
   }
 
   &--unavailable &__dot {
-    background: var(--bf-appearance-token-color-warning);
+    background: var(--bf-color-status-warning-content);
   }
 }
 
@@ -518,17 +516,17 @@ $assistant-defaults-row-columns:
   display: inline-flex;
   min-height: 24px;
   align-items: center;
-  padding: 0 $size-gap-2;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-base;
-  background: var(--bf-appearance-token-element-bg-soft);
-  color: var(--bf-appearance-token-color-text-primary);
+  padding: 0 var(--bf-space-2);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-action-quiet-hover);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-meta);
   font-weight: var(--bf-font-weight-medium);
 
   &--muted {
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 }
 
@@ -544,10 +542,10 @@ $assistant-defaults-row-columns:
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: $size-radius-base;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  color: var(--bf-appearance-token-color-accent-500);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-accent-default);
 }
 
 .assistant-defaults-group__detail,
@@ -560,23 +558,23 @@ $assistant-defaults-row-columns:
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: $size-radius-sm;
+  border-radius: var(--bf-radius-sm);
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   cursor: pointer;
   transition:
-    background $motion-fast $easing-standard,
-    color $motion-fast $easing-standard,
-    transform $motion-fast $easing-standard;
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-primary);
   }
 }
 
 .assistant-defaults-group {
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 
   &:last-child {
     border-bottom: 0;
@@ -590,13 +588,13 @@ $assistant-defaults-row-columns:
     display: flex;
     min-height: 48px;
     align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3 $size-gap-2 $size-gap-1;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3) var(--bf-space-2) var(--bf-space-1);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__collapse svg {
-    transition: transform $motion-fast $easing-standard;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &__icon {
@@ -619,27 +617,27 @@ $assistant-defaults-row-columns:
     }
 
     strong {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-semibold);
     }
 
     span {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-font-size-meta);
     }
   }
 
   &__count {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     white-space: nowrap;
   }
 
   &__empty {
     margin: 0;
-    padding: $size-gap-3 $size-gap-8;
-    color: var(--bf-appearance-token-color-text-muted);
+    padding: var(--bf-space-3) var(--bf-space-8);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
   }
 }
@@ -650,8 +648,8 @@ $assistant-defaults-row-columns:
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: $size-gap-3;
-  color: var(--bf-appearance-token-color-text-muted);
+  gap: var(--bf-space-3);
+  color: var(--bf-color-content-muted);
   text-align: center;
 
   p {
@@ -669,8 +667,8 @@ $assistant-defaults-row-columns:
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid var(--bf-appearance-token-border-subtle);
-  background: var(--bf-appearance-token-color-bg-scene);
+  border-left: 1px solid var(--bf-color-border-subtle);
+  background: var(--bf-color-surface-scene);
 
   &--empty {
     align-items: center;
@@ -682,17 +680,17 @@ $assistant-defaults-row-columns:
     max-width: 220px;
     align-items: center;
     flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-5;
-    color: var(--bf-appearance-token-color-text-muted);
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-5);
+    color: var(--bf-color-content-muted);
     text-align: center;
 
     > svg {
-      margin-bottom: $size-gap-1;
+      margin-bottom: var(--bf-space-1);
     }
 
     strong {
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-semibold);
     }
@@ -709,9 +707,9 @@ $assistant-defaults-row-columns:
     flex: 0 0 auto;
     align-items: flex-start;
     justify-content: space-between;
-    gap: $size-gap-4;
-    padding: $size-gap-4 clamp(16px, 2vw, 22px) $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    gap: var(--bf-space-4);
+    padding: var(--bf-space-4) clamp(16px, 2vw, 22px) var(--bf-space-3);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
 
     > div {
       min-width: 0;
@@ -720,7 +718,7 @@ $assistant-defaults-row-columns:
     h3 {
       margin: 2px 0 0;
       overflow-wrap: anywhere;
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-2xl);
       font-weight: var(--bf-font-weight-semibold);
       line-height: var(--bf-line-height-tight);
@@ -736,20 +734,20 @@ $assistant-defaults-row-columns:
       justify-content: center;
       padding: 0;
       border: 0;
-      border-radius: $size-radius-sm;
+      border-radius: var(--bf-radius-sm);
       background: transparent;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
       cursor: pointer;
 
       &:hover {
-        background: var(--bf-appearance-token-element-bg-soft);
-        color: var(--bf-appearance-token-color-text-primary);
+        background: var(--bf-color-action-quiet-hover);
+        color: var(--bf-color-content-primary);
       }
     }
   }
 
   &__eyebrow {
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
     letter-spacing: var(--bf-letter-spacing-widest);
@@ -759,21 +757,21 @@ $assistant-defaults-row-columns:
   &__body {
     min-height: 0;
     flex: 1;
-    padding: 0 clamp(16px, 2vw, 22px) $size-gap-5;
+    padding: 0 clamp(16px, 2vw, 22px) var(--bf-space-5);
     scrollbar-width: thin;
-    scrollbar-color: var(--bf-appearance-token-border-subtle) transparent;
+    scrollbar-color: var(--bf-color-border-subtle) transparent;
 
     > section {
-      padding: $size-gap-3 0;
-      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+      padding: var(--bf-space-3) 0;
+      border-top: 1px solid var(--bf-color-border-subtle);
 
       &:first-of-type {
         border-top: 0;
       }
 
       h4 {
-        margin: 0 0 $size-gap-3;
-        color: var(--bf-appearance-token-color-text-primary);
+        margin: 0 0 var(--bf-space-3);
+        color: var(--bf-color-content-primary);
         font-size: var(--bf-font-size-xs);
         font-weight: var(--bf-font-weight-semibold);
       }
@@ -782,15 +780,15 @@ $assistant-defaults-row-columns:
         display: flex;
         margin: 0;
         flex-direction: column;
-        gap: $size-gap-3;
+        gap: var(--bf-space-3);
       }
     }
   }
 
   &__description {
     margin: 0;
-    padding: $size-gap-3 0;
-    color: var(--bf-appearance-token-color-text-secondary);
+    padding: var(--bf-space-3) 0;
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-relaxed);
   }
@@ -798,7 +796,7 @@ $assistant-defaults-row-columns:
   &__field {
     display: grid;
     grid-template-columns: minmax(80px, 0.68fr) minmax(0, 1fr);
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
 
     dt,
     dd {
@@ -809,30 +807,30 @@ $assistant-defaults-row-columns:
     }
 
     dt {
-      color: var(--bf-appearance-token-color-text-muted);
+      color: var(--bf-color-content-muted);
     }
 
     dd {
       overflow-wrap: anywhere;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
   &__permission {
-    padding: $size-gap-3;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    padding: var(--bf-space-3);
+    border: 1px solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-base);
+    background: var(--bf-color-surface-subtle);
 
     strong {
-      color: var(--bf-appearance-token-color-text-primary);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-font-size-xs);
       font-weight: var(--bf-font-weight-semibold);
     }
 
     p {
-      margin: $size-gap-2 0 0;
-      color: var(--bf-appearance-token-color-text-secondary);
+      margin: var(--bf-space-2) 0 0;
+      color: var(--bf-color-content-secondary);
       font-size: var(--bf-font-size-meta);
       line-height: var(--bf-line-height-relaxed);
     }
@@ -841,8 +839,8 @@ $assistant-defaults-row-columns:
   &__management-row {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
-    padding: $size-gap-2 0;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-2) 0;
 
     > div {
       display: flex;
@@ -852,13 +850,13 @@ $assistant-defaults-row-columns:
       gap: 3px;
 
       strong {
-        color: var(--bf-appearance-token-color-text-primary);
+        color: var(--bf-color-content-primary);
         font-size: var(--bf-font-size-xs);
         font-weight: var(--bf-font-weight-medium);
       }
 
       span {
-        color: var(--bf-appearance-token-color-text-muted);
+        color: var(--bf-color-content-muted);
         font-size: var(--bf-font-size-meta);
         line-height: var(--bf-line-height-relaxed);
       }
@@ -867,15 +865,20 @@ $assistant-defaults-row-columns:
 
   &__note {
     margin: 0;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-relaxed);
   }
 }
 
-.assistant-defaults button:not([data-bf-component='button']):focus-visible,
-.assistant-defaults input:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 62%, transparent);
+.assistant-defaults-row__identity:focus-visible,
+.assistant-defaults-row__detail:focus-visible,
+.assistant-defaults-group__collapse:focus-visible,
+.assistant-defaults-group__detail:focus-visible,
+.assistant-defaults-detail__header > button:focus-visible,
+.assistant-defaults-tabs > button:focus-visible,
+.assistant-defaults-filters > button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 62%, transparent);
   outline-offset: 2px;
 }
 
@@ -911,12 +914,12 @@ $assistant-defaults-row-columns:
 @media (max-width: 960px) {
   .assistant-defaults {
     &__header-actions {
-      gap: $size-gap-3;
+      gap: var(--bf-space-3);
     }
 
     &__main {
-      padding-right: $size-gap-5;
-      padding-left: $size-gap-5;
+      padding-right: var(--bf-space-5);
+      padding-left: var(--bf-space-5);
     }
   }
 
@@ -953,7 +956,7 @@ $assistant-defaults-row-columns:
 @media (max-width: 760px) {
   .assistant-defaults {
     &__header {
-      padding: $size-gap-4;
+      padding: var(--bf-space-4);
 
       > p {
         margin-left: 0;
@@ -971,13 +974,13 @@ $assistant-defaults-row-columns:
 
     &__header-actions {
       width: 100%;
-      margin: $size-gap-2 0 0 34px;
+      margin: var(--bf-space-2) 0 0 34px;
     }
   }
 
   .assistant-defaults-summary > div {
     min-height: 64px;
-    padding: $size-gap-2;
+    padding: var(--bf-space-2);
   }
 
   .assistant-defaults-list {
@@ -1015,8 +1018,8 @@ $assistant-defaults-row-columns:
     }
 
     &__main {
-      padding-right: $size-gap-4;
-      padding-left: $size-gap-4;
+      padding-right: var(--bf-space-4);
+      padding-left: var(--bf-space-4);
     }
   }
 
@@ -1032,7 +1035,7 @@ $assistant-defaults-row-columns:
 
   .assistant-defaults-tabs button {
     min-height: 34px;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
     font-size: var(--bf-font-size-xs);
 
     small {
@@ -1042,7 +1045,7 @@ $assistant-defaults-row-columns:
 
   .assistant-defaults-row {
     &__identity {
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     &__icon {

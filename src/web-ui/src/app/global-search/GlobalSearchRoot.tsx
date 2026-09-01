@@ -8,23 +8,19 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { ActionCard, Button, Icon, KeyHint, Modal, SearchField, type IconName, type IconSize, ScrollArea } from '@bitfun/ui';
 import {
-  BarChart3,
-  Blocks,
-  Bot,
-  CheckSquare2,
-  ChevronLeft,
-  FileText,
-  Keyboard,
-  MessageSquareText,
-  MessagesSquare,
-  Network,
-  SlidersHorizontal,
-  SquareTerminal,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+  ActionCard,
+  Button,
+  Icon,
+  KeyHint,
+  SearchField,
+  type IconName,
+  type IconSize,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+} from '@bitfun/ui';
+import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, SlidersHorizontal, Users, type LucideIcon } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -64,7 +60,7 @@ function catalogLucide(name: IconName): LucideIcon {
   return function CatalogLucide({ size }: { size?: number | string }) {
     const n = typeof size === 'number' ? size : 20;
     const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-    return <Icon name={name} size={mapped} />;
+    return <Icon name={name} size={mapped} style={{ width: n, height: n }} />;
   } as LucideIcon;
 }
 
@@ -86,7 +82,7 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   folder: catalogLucide('folder'),
   plus: catalogLucide('plus'),
   globe: catalogLucide('browser'),
-  terminal: SquareTerminal,
+  terminal: catalogLucide('terminal'),
   files: FileText,
   users: Users,
   puzzle: catalogLucide('extension'),
@@ -98,19 +94,25 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   network: Network,
 };
 
-type ModalActionIconTone = 'red' | 'orange' | 'green' | 'cyan' | 'blue' | 'purple';
+type ModalActionIconRole =
+  | 'new-session'
+  | 'open-browser'
+  | 'open-terminal'
+  | 'open-project'
+  | 'new-project'
+  | 'open-files';
 
 /**
- * The reference uses color to distinguish the primary commands in this modal.
- * Keep that presentation local: the same actions stay neutral in other hosts.
+ * Global Search uses color to distinguish its six primary actions. Role names
+ * keep the mapping stable without leaking the current hues into product data.
  */
-const MODAL_ACTION_ICON_TONES: Partial<Record<ProductActionId, ModalActionIconTone>> = {
-  'session.new': 'red',
-  'surface.browser.open': 'orange',
-  'surface.terminal.open': 'green',
-  'project.open': 'cyan',
-  'project.new': 'blue',
-  'surface.files.open': 'purple',
+const MODAL_ACTION_ICON_ROLES: Partial<Record<ProductActionId, ModalActionIconRole>> = {
+  'session.new': 'new-session',
+  'surface.browser.open': 'open-browser',
+  'surface.terminal.open': 'open-terminal',
+  'project.open': 'open-project',
+  'project.new': 'new-project',
+  'surface.files.open': 'open-files',
 };
 
 const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> = {
@@ -455,7 +457,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       key={candidate}
                       size="sm"
                       variant={selected ? 'fill' : 'outline'}
-                      className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                      className={`global-search__scope global-search__scope--system${selected ? ' is-selected' : ''}`}
                       aria-pressed={selected}
                       disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
                       onClick={() => {
@@ -470,7 +472,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     <button
                       key={candidate}
                       type="button"
-                      className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                      className={`global-search__scope global-search__scope--native${selected ? ' is-selected' : ''}`}
                       aria-pressed={selected}
                       disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
                       onClick={() => {
@@ -534,7 +536,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       aria-label={tCommon('nav.search.backToOverview')}
                       data-testid={`${testIdPrefix}-group-back`}
                     >
-                      <ChevronLeft size={15} strokeWidth={1.8} aria-hidden="true" />
+                      <Icon name="chevron-left" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
                       <span>{tCommon('nav.search.back')}</span>
                     </button>
                     <div className="global-search__detail-heading">
@@ -576,8 +578,8 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     const selected = item.id === activeId;
                     const itemVariant = resultVariant(item.group);
                     const entity = itemVariant === 'entity';
-                    const modalActionIconTone = item.target.kind === 'action'
-                      ? MODAL_ACTION_ICON_TONES[item.target.actionId]
+                    const modalActionIconRole = item.target.kind === 'action'
+                      ? MODAL_ACTION_ICON_ROLES[item.target.actionId]
                       : undefined;
                     const resultCopy = (
                       <span className="global-search__result-copy">
@@ -606,7 +608,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                           leading={(
                             <span
                               className="global-search__action-icon"
-                              data-icon-tone={modalActionIconTone}
+                              data-icon-role={modalActionIconRole}
                               aria-hidden="true"
                             >
                               <ItemIcon size={20} strokeWidth={1.75} />
@@ -749,28 +751,24 @@ const GlobalSearchRoot: React.FC = () => {
   }, [toggleSearch]);
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={closeSearch}
-      size="xlarge"
-      radius="2xl"
-      backdropBlur="subtle"
-      contentPadding="md"
-      contentLayout="flex"
-      showCloseButton={false}
-      overlayClassName="global-search-overlay"
-      contentClassName="global-search-modal-content"
-      ariaLabel={tCommon('nav.search.dialogLabel')}
-      testId="global-search-dialog"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen) closeSearch(); }}
+      size="xl"
+      aria-label={tCommon('nav.search.dialogLabel')}
+      className="global-search-dialog"
+      data-testid="global-search-dialog"
     >
-      <GlobalSearchContent
-        active={open}
-        autoFocus
-        initialQuery={initialQuery}
-        onBeforeActivate={closeSearch}
-        variant="modal"
-      />
-    </Modal>
+      <DialogBody className="global-search-modal-content">
+        <GlobalSearchContent
+          active={open}
+          autoFocus
+          initialQuery={initialQuery}
+          onBeforeActivate={closeSearch}
+          variant="modal"
+        />
+      </DialogBody>
+    </Dialog>
   );
 };
 

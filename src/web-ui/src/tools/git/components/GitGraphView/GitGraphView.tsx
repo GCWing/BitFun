@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button, Icon, SearchField, ScrollArea } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { ChevronUp, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitGraph, GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
@@ -333,7 +333,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
                     title={t('graph.searchPrevious')}
                     disabled={searchFilter.totalMatches === 0}
                   >
-                    <ChevronUp size={14} />
+                    <Icon name="chevron-up" size="sm" />
                   </button>
                   <button
                     className="git-graph-view__search-nav-btn"
@@ -453,7 +453,7 @@ function drawNodeWithInfo(
   const centerY = y + rowHeight / 2;
   const resolveLaneColor = (lane: number) => ensureMinimumContrast(
     resolveCanvasColor(colors[lane % colors.length]),
-    resolveCanvasColor('var(--bf-appearance-token-color-bg-primary)'),
+    resolveCanvasColor('var(--bf-color-surface-canvas)'),
     GIT_GRAPH_LANE_MIN_CONTRAST
   );
   const color = resolveLaneColor(node.lane);
@@ -540,7 +540,7 @@ function drawNodeWithInfo(
   
 
   if (state.isSelected) {
-    ctx.strokeStyle = resolveCanvasColor('var(--bf-appearance-token-color-static-white)');
+    ctx.strokeStyle = resolveCanvasColor('var(--bf-color-content-on-dark)');
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, centerY, nodeSize + 1.5, 0, Math.PI * 2);
@@ -604,7 +604,7 @@ function drawNodeWithInfo(
             ? APPEARANCE_DOMAIN_TOKENS.gitGraphLane[2]
             : APPEARANCE_DOMAIN_TOKENS.gitGraphLane[3]
       ),
-      resolveCanvasColor('var(--bf-appearance-token-color-static-white)'),
+      resolveCanvasColor('var(--bf-color-content-on-dark)'),
       GIT_GRAPH_LANE_MIN_CONTRAST
     );
     const text = displayName;
@@ -625,7 +625,7 @@ function drawNodeWithInfo(
 
     if (ref.isCurrent) {
       ctx.save();
-      ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-static-white)');
+      ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-on-dark)');
       ctx.beginPath();
       ctx.arc(refX + refWidth - 4, centerY - refHeight / 2 + 4, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -634,7 +634,7 @@ function drawNodeWithInfo(
     
 
     ctx.save();
-    ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-static-white)');
+    ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-on-dark)');
     ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -651,7 +651,7 @@ function drawNodeWithInfo(
   ctx.save();
   
 
-  ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-text-primary)');
+  ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-primary)');
   ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -672,7 +672,7 @@ function drawNodeWithInfo(
   const metaX = textX + ctx.measureText(displayText).width + 20;
 
 
-  ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-text-muted)');
+  ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-muted)');
   ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   
   let authorName = node.authorName;
@@ -692,7 +692,7 @@ function drawNodeWithInfo(
   const hashX = metaX + ctx.measureText(metaText).width + 16;
   const hashText = node.hash.substring(0, 7);
   
-  ctx.fillStyle = resolveCanvasColor('var(--bf-appearance-token-color-text-disabled)');
+  ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-disabled)');
   ctx.font = '11px "SF Mono", "Monaco", "Courier New", monospace';
   ctx.fillText(hashText, hashX, centerY);
   

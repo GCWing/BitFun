@@ -66,7 +66,7 @@ internal fun ConnectionDot(phase: ConnectionPhase) {
     // BUSY is the one addition, because a dot that only ever goes green or grey
     // cannot say "connecting" while it is still trying.
     val color: Color = when (tone) {
-        ConnectionTone.OK -> bitFunColors.success
+        ConnectionTone.OK -> bitFunColors.statusSuccess
         ConnectionTone.BUSY -> MaterialTheme.colorScheme.tertiary
         ConnectionTone.ERROR -> MaterialTheme.colorScheme.error
         ConnectionTone.MUTED -> MaterialTheme.colorScheme.onSurfaceVariant

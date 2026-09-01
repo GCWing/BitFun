@@ -1,8 +1,3 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-
-
 .notification-center {
   position: relative;
   display: flex;
@@ -12,25 +7,25 @@
   font-family: var(--bf-font-family-sans);
   overflow: hidden;
 
-  
+
   &__header {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding-block: 0;
-    padding-inline: $size-gap-4 0;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    background: var(--bf-appearance-token-color-bg-primary);
+    padding-inline: var(--bf-space-4) 0;
+    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-canvas);
     height: 40px;
     min-height: 40px;
     flex-shrink: 0;
-    border-radius: $size-radius-base $size-radius-base 0 0; 
+    border-radius: var(--bf-radius-base) var(--bf-radius-base) 0 0;
   }
 
   &__title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     margin: 0;
     flex: 1;
   }
@@ -60,17 +55,17 @@
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-secondary);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
-      background-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
     }
 
     &:active {
@@ -78,19 +73,19 @@
     }
   }
 
-  
+
   &__search {
-    margin: $size-gap-3 $size-gap-4 0;
+    margin: var(--bf-space-3) var(--bf-space-4) 0;
     flex-shrink: 0;
   }
 
-  
+
   &__filters {
     display: flex;
-    gap: $size-gap-1;
-    margin: $size-gap-3 $size-gap-4 0;
-    padding-bottom: $size-gap-2;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    gap: var(--bf-space-1);
+    margin: var(--bf-space-3) var(--bf-space-4) 0;
+    padding-bottom: var(--bf-space-2);
+    border-bottom: 1px solid var(--bf-color-border-default);
     flex-shrink: 0;
   }
 
@@ -99,118 +94,118 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px $size-gap-2;
+    padding: 6px var(--bf-space-2);
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard,
-      color $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     white-space: nowrap;
-    border-radius: $size-radius-sm $size-radius-sm 0 0;
+    border-radius: var(--bf-radius-sm) var(--bf-radius-sm) 0 0;
 
     &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-color-content-primary);
+      background: var(--bf-color-surface-subtle);
     }
 
     &.is-active {
-      color: var(--bf-appearance-token-color-accent-500);
-      border-bottom-color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-color-accent-default);
+      border-bottom-color: var(--bf-color-accent-default);
       background: transparent;
     }
   }
 
-  
+
   &__content {
     flex: 1;
     min-height: 0;
 
   }
 
-  
+
   &__empty {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 40px $size-gap-4;
+    padding: 40px var(--bf-space-4);
     height: 100%;
     text-align: center;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
   &__empty-icon {
     font-size: var(--bf-font-size-5xl);
-    margin-bottom: $size-gap-3;
+    margin-bottom: var(--bf-space-3);
     opacity: 0.5;
   }
 
   &__empty-text {
     font-size: var(--bf-font-size-sm);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
-  
+
   &__group {
     margin-bottom: 2px;
-    
+
     &:first-child {
-      margin-top: $size-gap-1;
+      margin-top: var(--bf-space-1);
     }
   }
 
   &__group-title {
-    padding: 6px $size-gap-4;
+    padding: 6px var(--bf-space-4);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
-    background: var(--bf-appearance-token-element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
     user-select: none;
   }
 
-  
+
   &__item {
     position: relative;
     display: flex;
     align-items: flex-start;
-    gap: $size-gap-3;
-    padding: $size-gap-3 $size-gap-4;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-3) var(--bf-space-4);
     cursor: pointer;
     transition:
-      background-color $motion-base $easing-standard,
-      border-color $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
     border-bottom: 1px solid transparent;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      
+      background: var(--bf-color-action-neutral-surface);
+
       &:not(.is-unread) {
-        background: var(--bf-appearance-token-element-bg-subtle);
+        background: var(--bf-color-surface-subtle);
       }
     }
 
     &.is-unread {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 3%, transparent);
-      
+      background: color-mix(in srgb, var(--bf-color-accent-default) 3%, transparent);
+
       &:hover {
-        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 6%, transparent);
+        background: color-mix(in srgb, var(--bf-color-accent-default) 6%, transparent);
       }
     }
-    
+
     &:active {
       transform: scale(0.995);
     }
 
-    
+
     &.is-expanded {
       .notification-center__item-title {
         white-space: normal;
@@ -238,44 +233,44 @@
     font-weight: var(--bf-font-weight-semibold);
 
     &--success {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
 
     &--warning {
-      background: var(--bf-appearance-token-color-warning-bg);
-      color: var(--bf-appearance-token-color-warning);
+      background: var(--bf-color-status-warning-surface);
+      color: var(--bf-color-status-warning-content);
     }
 
     &--info {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
-      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+      color: var(--bf-color-status-warning-content);
     }
 
-    
+
     &--completed {
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
     }
 
     &--failed {
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-surface);
+      color: var(--bf-color-status-danger-content);
     }
 
     &--cancelled {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-muted);
     }
 
     &--active {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
-      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+      color: var(--bf-color-status-warning-content);
     }
   }
 
@@ -291,13 +286,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__item-title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-line-height-ui);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -308,7 +303,7 @@
   &__item-percentage {
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-warning);
+    color: var(--bf-color-status-warning-content);
     font-variant-numeric: tabular-nums;
     font-family: var(--bf-font-family-mono);
     flex-shrink: 0;
@@ -316,7 +311,7 @@
 
   &__item-message {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     line-height: var(--bf-line-height-support);
     margin-bottom: 2px;
     overflow: hidden;
@@ -330,16 +325,16 @@
 
   &__item-time {
     font-size: var(--bf-font-size-micro);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-mono);
   }
 
   &__item-technical-details {
-    margin-top: $size-gap-2;
-    padding: $size-gap-2;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-sm;
-    background: var(--bf-appearance-token-element-bg-subtle);
+    margin-top: var(--bf-space-2);
+    padding: var(--bf-space-2);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-surface-subtle);
     cursor: text;
   }
 
@@ -347,7 +342,7 @@
     margin-bottom: 4px;
     font-size: var(--bf-font-size-micro);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
   }
@@ -360,14 +355,14 @@
     font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-support);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 
-  
+
   &__item-progress-bar {
     width: 100%;
     height: 3px;
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-color-action-neutral-surface);
     border-radius: 1px;
     overflow: hidden;
     margin: 4px 0;
@@ -376,21 +371,21 @@
   &__item-progress-fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, var(--bf-appearance-token-color-accent-600), var(--bf-appearance-token-color-purple-500));
+    background: linear-gradient(90deg, var(--bf-color-accent-hover), var(--bf-color-accent-secondary));
     border-radius: 2px;
     transform-origin: left center;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &.is-completed {
-      background: var(--bf-appearance-token-color-success);
+      background: var(--bf-color-status-success-content);
     }
 
     &.is-failed {
-      background: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-status-danger-content);
     }
 
     &.is-cancelled {
-      background: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-color-content-muted);
     }
   }
 
@@ -398,11 +393,11 @@
     flex-shrink: 0;
     width: 10px;
     height: 10px;
-    background: var(--bf-appearance-token-color-error);
+    background: var(--bf-color-status-danger-content);
     border-radius: 50%;
     border: none;
     margin-left: auto;
-    margin-right: $size-gap-1;
+    margin-right: var(--bf-space-1);
     align-self: center;
   }
 
@@ -411,7 +406,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    margin-left: $size-gap-2;
+    margin-left: var(--bf-space-2);
   }
 
   &__item-expand {
@@ -424,19 +419,19 @@
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     opacity: 0;
     transition:
-      background-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      opacity $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
       opacity: 1 !important;
     }
 
@@ -455,19 +450,19 @@
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-muted);
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-muted);
     cursor: pointer;
     opacity: 0;
     transition:
-      background-color $motion-base $easing-standard,
-      color $motion-base $easing-standard,
-      opacity $motion-base $easing-standard,
-      transform $motion-base $easing-standard;
+      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-status-danger-content);
       opacity: 1 !important;
     }
 
@@ -481,25 +476,25 @@
     opacity: 1;
   }
 
-  
+
   &__item.is-expanded &__item-expand {
     opacity: 1;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 
-  
+
 
   &__active-section {
-    padding: $size-gap-3 0;
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 2%, transparent);
+    padding: var(--bf-space-3) 0;
+    border-bottom: 1px solid var(--bf-color-border-default);
+    background: color-mix(in srgb, var(--bf-color-accent-hover) 2%, transparent);
   }
 
   &__active-section-title {
-    padding: 6px $size-gap-4;
+    padding: 6px var(--bf-space-4);
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
     user-select: none;
@@ -511,16 +506,16 @@
     gap: 2px;
   }
 
-  
+
   &__active-task-item {
     display: flex;
     align-items: flex-start;
-    gap: $size-gap-3;
-    padding: $size-gap-3 $size-gap-4;
-    transition: background $motion-base $easing-standard;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-3) var(--bf-space-4);
+    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 5%, transparent);
+      background: color-mix(in srgb, var(--bf-color-accent-hover) 5%, transparent);
     }
   }
 
@@ -531,8 +526,8 @@
     justify-content: center;
     width: 20px;
     height: 20px;
-    color: var(--bf-appearance-token-color-accent-500);
-    margin-top: 1px;  
+    color: var(--bf-color-accent-default);
+    margin-top: 1px;
   }
 
   &__spinner {
@@ -551,13 +546,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__active-task-title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -567,7 +562,7 @@
   &__active-task-progress-text {
     font-size: var(--bf-font-size-meta);
     font-weight: var(--bf-font-weight-semibold);
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
     font-variant-numeric: tabular-nums;
     font-family: var(--bf-font-family-mono);
     flex-shrink: 0;
@@ -575,7 +570,7 @@
 
   &__active-task-message {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -584,7 +579,7 @@
   &__active-task-progress-bar {
     width: 100%;
     height: 3px;
-    background: var(--bf-appearance-token-element-bg-base);
+    background: var(--bf-color-action-neutral-surface);
     border-radius: 1px;
     overflow: hidden;
     margin-top: 4px;
@@ -593,22 +588,22 @@
   &__active-task-progress-fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, var(--bf-appearance-token-color-accent-600), var(--bf-appearance-token-color-purple-500));
+    background: linear-gradient(90deg, var(--bf-color-accent-hover), var(--bf-color-accent-secondary));
     border-radius: 1px;
     transform-origin: left center;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  
+
   &__active-loading-item {
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
-    padding: $size-gap-3 $size-gap-4;
-    transition: background $motion-base $easing-standard;
+    gap: var(--bf-space-3);
+    padding: var(--bf-space-3) var(--bf-space-4);
+    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 5%, transparent);
+      background: color-mix(in srgb, var(--bf-color-accent-hover) 5%, transparent);
     }
   }
 
@@ -619,7 +614,7 @@
     justify-content: center;
     width: 20px;
     height: 20px;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &__active-loading-content {
@@ -633,7 +628,7 @@
   &__active-loading-title {
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -641,7 +636,7 @@
 
   &__active-loading-message {
     font-size: var(--bf-font-size-xs);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

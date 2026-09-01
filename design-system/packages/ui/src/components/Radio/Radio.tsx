@@ -6,7 +6,7 @@ import {
 import { classNames } from "../../internal/classNames";
 import styles from "./Radio.module.css";
 
-export type RadioSize = "sm" | "md" | "lg" | "small" | "medium" | "large";
+export type RadioSize = "sm" | "md" | "lg";
 
 export interface RadioProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "children" | "size" | "type"> {
@@ -16,13 +16,6 @@ export interface RadioProps
   label?: ReactNode;
   onCheckedChange?: (checked: boolean) => void;
   size?: RadioSize;
-}
-
-function normalizeSize(size: RadioSize): "sm" | "md" | "lg" {
-  if (size === "small") return "sm";
-  if (size === "large") return "lg";
-  if (size === "medium") return "md";
-  return size;
 }
 
 export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio({
@@ -47,7 +40,7 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio({
       data-bf-component="radio"
       data-disabled={disabled ? "true" : "false"}
       data-invalid={invalid ? "true" : "false"}
-      data-size={normalizeSize(size)}
+      data-size={size}
     >
       <span className={styles.control} data-bf-part="control">
         <input

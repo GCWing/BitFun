@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 
@@ -348,7 +348,7 @@ export function AppearancePackageConfigSection() {
                 aria-label={t('package.delete')}
                 disabled={busy}
                 onClick={() => void handleDelete(selectedAppearance.id, selectedAppearance.name)}
-                icon={<Trash2 size={14} />}
+                icon={<Icon name="delete" size="sm" />}
               />
             </>
           )}

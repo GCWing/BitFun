@@ -1,6 +1,15 @@
  
 
-import { Button, Icon, Modal } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 ;
@@ -207,12 +216,18 @@ export class ImageCardRenderer implements ContextCardRenderer<'image'> {
         )}
         
         
-        <Modal
-          isOpen={showFullImage && !!imagePreview}
-          onClose={() => setShowFullImage(false)}
-          title={context.imageName}
-          size="large"
+        <Dialog
+          open={showFullImage && !!imagePreview}
+          onOpenChange={(nextOpen) => { if (!nextOpen) setShowFullImage(false); }}
+          size="lg"
         >
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{context.imageName}</DialogTitle>
+            </DialogHeading>
+            <DialogClose />
+          </DialogHeader>
+          <DialogBody inset="none">
           <div className="image-context-card__modal-content">
             <img 
               src={imagePreview || ''} 
@@ -220,7 +235,8 @@ export class ImageCardRenderer implements ContextCardRenderer<'image'> {
               style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
             />
           </div>
-        </Modal>
+                  </DialogBody>
+        </Dialog>
       </div>
     );
   }

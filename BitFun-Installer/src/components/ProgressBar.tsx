@@ -10,7 +10,7 @@ export function ProgressBar({ percent, completed = false }: ProgressBarProps) {
         className="progress-bar-fill"
         style={{
           width: `${Math.min(100, Math.max(0, percent))}%`,
-          background: completed ? 'var(--color-success)' : 'var(--color-accent-500)',
+          background: completed ? 'var(--bf-color-status-success-content)' : 'var(--bf-color-accent-default)',
         }}
       />
     </div>

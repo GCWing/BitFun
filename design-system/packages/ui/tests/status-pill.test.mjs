@@ -40,4 +40,5 @@ test("StatusPill styles consume public semantic and geometry tokens", async () =
   assert.match(styles, /--bf-control-status-pill-icon-size/);
   assert.match(styles, /--bf-color-status-success-surface/);
   assert.match(styles, /--bf-color-status-danger-content/);
+  assert.match(styles, /text-overflow:\s*ellipsis/);
 });

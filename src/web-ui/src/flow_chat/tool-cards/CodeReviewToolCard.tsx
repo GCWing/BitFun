@@ -58,10 +58,10 @@ const EVIDENCE_STATUS_LABEL_KEYS: Record<ReviewEvidenceStatus, string> = {
 const log = createLogger('CodeReviewToolCard');
 
 const riskLevelColors: Record<string, string> = {
-  low: 'var(--bf-appearance-token-color-success)',
-  medium: 'var(--bf-appearance-token-color-warning)',
-  high: 'color-mix(in srgb, var(--bf-appearance-token-color-warning) 55%, var(--bf-appearance-token-color-error))',
-  critical: 'var(--bf-appearance-token-color-error)',
+  low: 'var(--bf-color-status-success-content)',
+  medium: 'var(--bf-color-status-warning-content)',
+  high: 'color-mix(in srgb, var(--bf-color-status-warning-content) 55%, var(--bf-color-status-danger-content))',
+  critical: 'var(--bf-color-status-danger-content)',
 };
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -341,9 +341,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       case 'low':
         return <Info size={14} style={{ color: riskLevelColors.low }} />;
       case 'info':
-        return <Info size={14} style={{ color: 'var(--bf-appearance-token-color-text-muted)' }} />;
+        return <Info size={14} style={{ color: 'var(--bf-color-content-muted)' }} />;
       default:
-        return <Info size={14} style={{ color: 'var(--bf-appearance-token-color-text-muted)' }} />;
+        return <Info size={14} style={{ color: 'var(--bf-color-content-muted)' }} />;
     }
   };
 
@@ -548,7 +548,6 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     return (
       <ProminentToolCardHeader
         icon={null}
-        iconClassName="code-review-icon"
         content={renderContent()}
         actions={hasData && reviewData ? (
           <CodeReviewReportExportActions

@@ -40,11 +40,11 @@ describe('SessionsSection layout styles', () => {
     const inlineListBlock = extractBlock(stylesheet, '&__inline-list');
     const inlineItemBlock = extractBlock(stylesheet, '&__inline-item');
 
-    expect(inlineListBlock).toContain('padding: 2px $size-gap-1 2px;');
-    expect(inlineListBlock).toContain('margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);');
-    expect(inlineListBlock).toContain('gap: 0;');
+    expect(inlineListBlock).toContain('padding: 2px var(--bf-space-1) 2px;');
+    expect(inlineListBlock).toContain('margin: 0 var(--bf-space-1) 0 calc(var(--bf-space-1) + 4px);');
+    expect(inlineListBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(inlineItemBlock).toContain('height: 26px;');
-    expect(stylesheet).toContain('margin-top: -2px;');
+    expect(stylesheet).toContain('margin-top: 0;');
   });
 
   it('keeps hidden session row actions from reserving title width', () => {
@@ -107,8 +107,8 @@ describe('SessionsSection layout styles', () => {
     // one inherited rail. Context stylesheets that indent rows (see
     // WorkspaceListSection's 30px icon gutter) only have to move the rail.
     expect(inlineListBlock).toContain('--bf-nav-session-rail:');
-    expect(toggleBlock).toContain('padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);');
-    expect(inlineItemBlock).toContain('padding: 0 $size-gap-1 0 var(--bf-nav-session-rail);');
+    expect(toggleBlock).toContain('padding: 0 var(--bf-space-1) 0 var(--bf-nav-session-rail);');
+    expect(inlineItemBlock).toContain('padding: 0 var(--bf-space-1) 0 var(--bf-nav-session-rail);');
     expect(toggleBlock).toContain('justify-content: flex-start;');
     expect(toggleBlock).toContain('text-align: left;');
     expect(toggleBlock).toContain(`gap: ${inlineItemBlock.match(/gap: (\d+px);/)?.[1] ?? ''};`);
@@ -167,11 +167,11 @@ describe('SessionsSection layout styles', () => {
     expect(labelBlock).toContain('text-overflow: ellipsis;');
     expect(btwBadgeBlock).toContain('white-space: nowrap;');
     expect(btwBadgeBlock).toContain('overflow: visible;');
-    expect(btwBadgeBlock).toContain('color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 62%, var(--bf-appearance-token-color-text-primary));');
+    expect(btwBadgeBlock).toContain('color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 62%, var(--bf-color-content-primary));');
     expect(btwBadgeBlock).toContain('font-weight: var(--bf-font-weight-semibold);');
     expect(btwBadgeBlock).toContain('opacity: 0.96;');
     expect(reviewBadgeBlock).toContain('white-space: nowrap;');
-    expect(reviewBadgeBlock).toContain('color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 82%, var(--bf-appearance-token-color-text-primary));');
+    expect(reviewBadgeBlock).toContain('color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 82%, var(--bf-color-content-primary));');
     expect(reviewBadgeBlock).toContain('font-weight: var(--bf-font-weight-semibold);');
     expect(backgroundSubagentBadgeBlock).toContain('flex: 0 0 auto;');
     expect(backgroundSubagentBadgeBlock).toContain('display: inline-grid;');

@@ -40,7 +40,10 @@ describe('startup appearance bootstrap manifest', () => {
     const chrome = palette?.colors.chrome;
     expect(light).toEqual({
       id: palette?.id,
-      bgPrimary: chrome?.background.primary ?? palette?.colors.background.primary,
+      bgPrimary: chrome?.background.chrome
+        ?? chrome?.background.primary
+        ?? palette?.colors.background.chrome
+        ?? palette?.colors.background.primary,
       bgSecondary: chrome?.background.secondary ?? palette?.colors.background.secondary,
       bgScene: palette?.colors.background.scene,
       isLight: true,

@@ -22,16 +22,16 @@
       max-height: 42px;
       padding: 0 8px 0 20px;
       border-radius: 21px;
-      border: 1px solid var(--border-subtle);
+      border: 1px solid var(--bf-color-border-subtle);
       flex-direction: row;
       align-items: center;
       gap: 8px;
       cursor: pointer;
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--bf-shadow-lg);
 
       &:active {
-        background: var(--color-bg-elevated);
-        box-shadow: var(--shadow-xl);
+        background: var(--bf-color-surface-raised);
+        box-shadow: var(--bf-shadow-xl);
         transform: translateY(-1px);
       }
     }
@@ -63,7 +63,7 @@
     .chat-page__input-box {
       border-radius: 12px;
       padding: 12px 8px 0;
-      border: 1px solid var(--border-base);
+      border: 1px solid var(--bf-color-border-default);
       flex-direction: column;
       gap: 0;
     }
@@ -75,7 +75,7 @@
   width: 100%;
   display: flex;
   pointer-events: auto;
-  background: var(--color-bg-tertiary);
+  background: var(--bf-color-surface-tertiary);
   backdrop-filter: blur(16px) saturate(1.2);
   -webkit-backdrop-filter: blur(16px) saturate(1.2);
   transition: border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -85,7 +85,7 @@
               box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--bf-shadow-xl);
 }
 
 // ── Input area ───────────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@
   width: 100%;
   background: transparent;
   border: none;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: 14px;
   padding: 0;
   padding-right: 28px;
@@ -115,8 +115,8 @@
   font-family: var(--font-family-sans);
   line-height: 1.5;
 
-  &::placeholder { color: var(--color-text-primary); opacity: 0.6; }
-  &:disabled { opacity: var(--opacity-disabled); cursor: not-allowed; }
+  &::placeholder { color: var(--bf-color-content-primary); opacity: 0.6; }
+  &:disabled { opacity: var(--bf-opacity-disabled); cursor: not-allowed; }
 }
 
 .chat-page__input-placeholder {
@@ -124,7 +124,7 @@
   width: 100%;
   min-width: 0;
   font-size: 14px;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
   opacity: 0.6;
   line-height: 24px;
   white-space: nowrap;
@@ -176,19 +176,19 @@
   padding: 0 8px;
   border: none;
   border-radius: 12px;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:active:not(:disabled),
   &--open {
-    background: var(--color-accent-100);
-    color: var(--color-text-primary);
+    background: var(--bf-color-accent-surface);
+    color: var(--bf-color-content-primary);
   }
 
   &:disabled {
-    opacity: var(--opacity-disabled);
+    opacity: var(--bf-opacity-disabled);
     cursor: not-allowed;
   }
 }
@@ -204,11 +204,11 @@
 
 .chat-model-selector__icon,
 .chat-model-selector__chevron {
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .chat-model-selector__thinking {
-  color: var(--color-purple-500);
+  color: var(--bf-color-accent-secondary);
 }
 
 .chat-model-selector__name {
@@ -235,8 +235,8 @@
   justify-content: center;
   padding: 1px 4px;
   border-radius: 4px;
-  background: var(--color-success-bg);
-  color: var(--color-success);
+  background: var(--bf-color-status-success-surface);
+  color: var(--bf-color-status-success-content);
   font-size: 7px;
   font-weight: 600;
   line-height: 1;
@@ -253,10 +253,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: 10px;
-  background: var(--color-bg-elevated);
-  box-shadow: var(--shadow-xl);
+  background: var(--bf-color-surface-raised);
+  box-shadow: var(--bf-shadow-xl);
   backdrop-filter: blur(18px) saturate(1.15);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
   z-index: 30;
@@ -268,14 +268,14 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
-  border-bottom: 1px solid var(--border-subtle);
+  color: var(--bf-color-content-muted);
+  border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
 .chat-model-selector__divider {
   height: 1px;
   margin: 4px 12px;
-  background: var(--border-subtle);
+  background: var(--bf-color-border-subtle);
 }
 
 .chat-model-selector__list {
@@ -304,7 +304,7 @@
 
   &:active,
   &.is-selected {
-    background: var(--element-bg-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 }
 
@@ -327,7 +327,7 @@
   width: 100%;
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: var(--bf-color-content-primary);
 }
 
 .chat-model-selector__option-name-text {
@@ -340,7 +340,7 @@
 }
 
 .chat-model-selector__option-thinking {
-  color: var(--color-purple-500);
+  color: var(--bf-color-accent-secondary);
   font-size: 9px;
   flex-shrink: 0;
 }
@@ -350,7 +350,7 @@
   min-width: 0;
   max-width: 100%;
   font-size: 9px;
-  color: var(--color-text-muted);
+  color: var(--bf-color-content-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -394,7 +394,7 @@
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--bf-color-content-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -403,8 +403,8 @@
   padding: 0;
 
   &:active:not(:disabled) {
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-primary);
   }
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
@@ -416,9 +416,9 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid var(--color-accent-300);
-  background: var(--color-accent-200);
-  color: var(--color-accent-300);
+  border: 1px solid var(--bf-color-accent-border-subtle);
+  background: var(--bf-color-accent-surface-strong);
+  color: var(--bf-color-accent-border-subtle);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -427,10 +427,10 @@
   flex-shrink: 0;
 
   &:not(:disabled) {
-    background: var(--color-accent-500);
-    border: 1px solid var(--color-accent-600);
-    color: var(--btn-primary-color);
-    box-shadow: var(--shadow-sm);
+    background: var(--bf-color-accent-default);
+    border: 1px solid var(--bf-color-accent-hover);
+    color: var(--bf-color-action-primary-content);
+    box-shadow: var(--bf-shadow-sm);
   }
 
   &:active:not(:disabled) {
@@ -438,20 +438,20 @@
   }
 
   &:disabled {
-    background: var(--color-accent-100);
-    border-color: var(--color-accent-200);
-    color: var(--color-accent-400);
+    background: var(--bf-color-accent-surface);
+    border-color: var(--bf-color-accent-surface-strong);
+    color: var(--bf-color-accent-border);
     opacity: 0.35;
     cursor: default;
     box-shadow: none;
   }
 
   &.is-stop {
-    background: var(--color-error) !important;
-    border-color: var(--color-error) !important;
-    color: var(--btn-primary-color) !important;
+    background: var(--bf-color-status-danger-content) !important;
+    border-color: var(--bf-color-status-danger-content) !important;
+    color: var(--bf-color-action-primary-content) !important;
     opacity: 1 !important;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--bf-shadow-sm);
 
     &:active { transform: scale(0.92); }
   }
@@ -483,7 +483,7 @@
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-color-border-subtle);
 
   img { width: 100%; height: 100%; object-fit: cover; }
 }
@@ -495,8 +495,8 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--color-overlay);
-  color: var(--color-static-white);
+  background: var(--bf-color-overlay-scrim);
+  color: var(--bf-color-content-on-dark);
   border: none;
   font-size: 11px;
   line-height: 1;
@@ -519,7 +519,7 @@
     display: inline-block;
     width: 5px;
     height: 5px;
-    background: var(--color-text-muted);
+    background: var(--bf-color-content-muted);
     border-radius: 50%;
     animation: typing-bounce 1.2s ease-in-out infinite;
 

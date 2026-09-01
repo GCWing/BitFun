@@ -2,43 +2,40 @@
  * Standalone chat input styles
  */
 
-@use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/_extended-mixins' as mixins;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
   position: absolute;
   flex: 0 0 auto;
-  bottom: $size-gap-6;
+  bottom: var(--bf-space-6);
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
   height: auto;
   min-height: 0;
   max-width: 900px;
-  z-index: $z-overlay;
+  z-index: var(--bf-layer-overlay);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0 $size-gap-2;
+  padding: 0 var(--bf-space-2);
   pointer-events: auto !important;
 
   &.bitfun-context-drop-zone--can-accept {
-    .bitfun-chat-input__composer-surface {
-      border-color: var(--bf-appearance-token-border-medium);
+    .bitfun-chat-input__composer {
+      outline: var(--bf-border-width-default) solid var(--bf-color-field-border-hover);
       box-shadow:
-        0 12px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45),
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12);
-      background: var(--bf-appearance-token-color-bg-scene);
+        0 12px 32px color-mix(in srgb, var(--bf-color-content-on-light) 45%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
     }
   }
 
   &.bitfun-context-drop-zone--cannot-accept {
-    .bitfun-chat-input__composer-surface {
-      border-color: var(--bf-appearance-token-color-error-border);
+    .bitfun-chat-input__composer {
+      outline: var(--bf-border-width-default) solid var(--bf-color-status-danger-border);
       box-shadow:
-        0 8px 24px var(--bf-appearance-token-color-overlay-black-40),
-        0 0 20px var(--bf-appearance-token-color-error);
+        0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent),
+        0 0 20px var(--bf-color-status-danger-content);
     }
   }
 }
@@ -46,7 +43,7 @@
 .bitfun-chat-input__voice-cluster {
   display: inline-flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   flex-shrink: 0;
   min-width: 24px;
 
@@ -66,18 +63,17 @@
   line-height: 0;
 }
 
-.bitfun-chat-input__voice-control.icon-btn,
-.bitfun-chat-input__voice-control[data-bf-component='icon-button'] {
+.bitfun-chat-input__voice-control {
   width: 24px;
   height: 24px;
   min-width: 24px;
   min-height: 24px;
   border-radius: 50%;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   flex-shrink: 0;
 
   &:not(:disabled):hover {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-color-content-primary);
   }
 }
 
@@ -94,12 +90,12 @@
   height: 32px;
   padding: 0 2px 0 9px;
   gap: 5px;
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: $size-radius-full;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-element-bg-base));
+  border: 1px solid var(--bf-color-border-default);
+  border-radius: var(--bf-radius-pill);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-action-neutral-surface));
   box-shadow:
-    0 1px 4px var(--bf-appearance-token-color-overlay-black-12),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
+    0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
   animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
 }
 
@@ -112,12 +108,12 @@
   min-height: 34px;
   padding: 2px 3px 2px 10px;
   gap: 7px;
-  border: 1px solid var(--bf-appearance-token-border-base);
-  border-radius: $size-radius-full;
-  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-element-bg-base));
+  border: 1px solid var(--bf-color-border-default);
+  border-radius: var(--bf-radius-pill);
+  background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-action-neutral-surface));
   box-shadow:
-    0 1px 4px var(--bf-appearance-token-color-overlay-black-12),
-    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
+    0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
   animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
 }
 
@@ -128,7 +124,7 @@
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
 }
 
 .bitfun-chat-input__voice-setup-copy {
@@ -136,7 +132,7 @@
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
   line-height: var(--bf-line-height-base);
   text-overflow: ellipsis;
@@ -150,14 +146,14 @@
   left: 0;
   height: 2px;
   overflow: hidden;
-  border-radius: $size-radius-full;
-  background: var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-radius-pill);
+  background: var(--bf-color-border-subtle);
 
   > span {
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-color-accent-default);
     transition: width 180ms ease;
   }
 }
@@ -173,7 +169,7 @@
   min-height: 24px;
   flex: 0 0 24px;
   border-radius: 50%;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
 }
 
 .bitfun-chat-input__voice-pill-status {
@@ -183,26 +179,26 @@
   width: 12px;
   height: 12px;
   flex: 0 0 12px;
-  color: var(--bf-appearance-token-color-error);
+  color: var(--bf-color-status-danger-content);
 }
 
 .bitfun-chat-input__voice-pill-recording-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--bf-appearance-token-color-error);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-error) 9%, transparent);
+  background: var(--bf-color-status-danger-content);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-status-danger-content) 9%, transparent);
   animation: bitfun-voice-recording-dot 1.6s ease-in-out infinite;
 }
 
 .bitfun-chat-input__voice-low-volume {
-  color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-color-status-warning-content);
   animation: bitfun-voice-low-volume 1.2s ease-in-out infinite;
 }
 
 .bitfun-chat-input__voice-pill-time {
   min-width: 36px;
-  color: var(--bf-appearance-token-color-text-primary);
+  color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-support-font-size);
   font-weight: var(--bf-font-weight-semibold);
   font-variant-numeric: tabular-nums;
@@ -219,7 +215,7 @@
   height: 18px;
   gap: 2px;
   overflow: hidden;
-  color: var(--bf-appearance-token-color-text-secondary);
+  color: var(--bf-color-content-secondary);
   pointer-events: none;
 
   &--paused { opacity: 0.58; }
@@ -229,7 +225,7 @@
   justify-self: center;
   width: min(2px, 100%);
   height: 18px;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: currentColor;
   transform: scaleY(0.12);
   transform-origin: center;
@@ -240,7 +236,7 @@
   width: 1px;
   height: 16px;
   flex: 0 0 1px;
-  background: var(--bf-appearance-token-border-subtle);
+  background: var(--bf-color-border-subtle);
 }
 
 .bitfun-chat-input__voice-pill-action.icon-btn {
@@ -251,7 +247,7 @@
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
+  color: var(--bf-color-content-muted);
   box-shadow: none;
   flex-shrink: 0;
   transition:
@@ -261,8 +257,8 @@
 
   &:not(:disabled):hover {
     border: none;
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-action-quiet-hover);
+    color: var(--bf-color-content-primary);
     transform: scale(1.08);
   }
 
@@ -271,7 +267,7 @@
   }
 
   &.bitfun-chat-input__voice-pill-action--transcribe {
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
   }
 }
 
@@ -282,8 +278,8 @@
   min-height: 28px;
   border: 1px solid transparent;
   border-radius: 50%;
-  background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
-  color: rgb(var(--private-chat-input-send-dark-icon-rgb));
+  background: var(--bf-color-action-primary-background);
+  color: var(--bf-color-action-primary-content);
   box-shadow: none;
   flex: 0 0 28px;
   transition:
@@ -292,16 +288,10 @@
     transform 190ms cubic-bezier(0.18, 0.9, 0.3, 1.28);
 
   &:not(:disabled):hover {
-    border: 1px solid rgba(var(--bf-appearance-token-color-static-white-rgb), 0.52);
-    background: linear-gradient(
-      165deg,
-      var(--bf-appearance-token-color-static-white) 0%,
-      rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
-    );
-    color: rgb(var(--private-chat-input-send-dark-icon-strong-rgb));
-    box-shadow:
-      0 0 0 1px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.32),
-      0 6px 14px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.28);
+    border-color: color-mix(in srgb, var(--bf-color-action-primary-content) 24%, transparent);
+    background: var(--bf-color-action-primary-hover);
+    color: var(--bf-color-action-primary-content);
+    box-shadow: var(--bf-shadow-base);
     transform: scale(1.05);
   }
 
@@ -311,40 +301,10 @@
 
   &:disabled {
     border: 1px solid transparent;
-    background: rgba(var(--private-chat-input-send-surface-disabled-rgb), 0.18);
-    color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.38);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-action-neutral-content-disabled);
     opacity: 1;
     box-shadow: none;
-  }
-}
-
-:root[data-bf-appearance-mode="light"] .bitfun-chat-input__voice-pill-send.icon-btn,
-.light .bitfun-chat-input__voice-pill-send.icon-btn {
-  &:not(:disabled) {
-    background: linear-gradient(
-      165deg,
-      rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
-      rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
-    );
-    color: rgb(var(--private-chat-input-send-inverse-text-rgb));
-  }
-
-  &:hover:not(:disabled) {
-    border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.58);
-    background: linear-gradient(
-      165deg,
-      rgb(var(--private-chat-input-send-inverse-hover-start-rgb)) 0%,
-      rgb(var(--private-chat-input-send-inverse-hover-end-rgb)) 100%
-    );
-    color: rgb(var(--private-chat-input-send-inverse-hover-text-rgb));
-    box-shadow:
-      0 0 0 1px rgba(var(--bf-appearance-token-color-static-white-rgb), 0.28),
-      0 6px 14px var(--bf-appearance-token-color-overlay-black-20);
-  }
-
-  &:disabled {
-    background: rgba(var(--private-chat-input-send-inverse-disabled-bg-rgb), 0.18);
-    color: rgba(var(--private-chat-input-send-inverse-disabled-text-rgb), 0.8);
   }
 }
 
@@ -397,33 +357,6 @@
 }
 
 .bitfun-chat-input {
-  --private-chat-input-send-dark-icon-rgb: 17, 17, 22;
-  --private-chat-input-send-dark-icon-strong-rgb: 5, 5, 8;
-  --private-chat-input-send-surface-rgb: 239, 241, 248;
-  --private-chat-input-send-surface-hover-rgb: 236, 239, 248;
-  --private-chat-input-send-surface-focus-start-rgb: 252, 253, 255;
-  --private-chat-input-send-surface-focus-end-rgb: 232, 235, 244;
-  --private-chat-input-send-surface-disabled-rgb: 246, 247, 250;
-  --private-chat-input-send-breathing-hover-glyph-rgb: 12, 13, 18;
-  --private-chat-input-send-inverse-surface-start-rgb: 21, 21, 28;
-  --private-chat-input-send-inverse-surface-end-rgb: 10, 10, 15;
-  --private-chat-input-send-inverse-text-rgb: 232, 234, 241;
-  --private-chat-input-send-inverse-hover-start-rgb: 41, 41, 52;
-  --private-chat-input-send-inverse-hover-end-rgb: 22, 22, 31;
-  --private-chat-input-send-inverse-hover-text-rgb: 250, 251, 255;
-  --private-chat-input-send-inverse-focus-start-rgb: 30, 30, 40;
-  --private-chat-input-send-inverse-focus-end-rgb: 18, 18, 25;
-  --private-chat-input-send-inverse-focus-text-rgb: 240, 242, 248;
-  --private-chat-input-send-inverse-disabled-bg-rgb: 10, 10, 14;
-  --private-chat-input-send-inverse-disabled-text-rgb: 24, 24, 34;
-  --private-chat-input-stop-inverse-glyph-start-rgb: 237, 237, 242;
-  --private-chat-input-stop-inverse-glyph-end-rgb: 200, 202, 212;
-  --private-chat-input-stop-inverse-hover-start-rgb: 36, 36, 47;
-  --private-chat-input-stop-inverse-hover-end-rgb: 20, 20, 30;
-  --private-chat-input-stop-inverse-hover-glyph-start-rgb: 244, 245, 250;
-  --private-chat-input-stop-inverse-hover-glyph-end-rgb: 216, 218, 228;
-  --private-chat-input-queued-badge-ring-rgb: 18, 18, 28;
-
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -436,7 +369,7 @@
     left: 0;
     right: 0;
     pointer-events: none;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 52%, transparent);
+    color: color-mix(in srgb, var(--bf-color-content-muted) 52%, transparent);
     font-size: var(--bf-type-flow-control-font-size);
     line-height: var(--bf-type-flow-support-line-height);
     white-space: nowrap;
@@ -460,7 +393,7 @@
   :root[data-bf-appearance-mode="light"] &,
   .light & {
     &__placeholder {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 48%, transparent);
+      color: color-mix(in srgb, var(--bf-color-content-secondary) 48%, transparent);
     }
   }
 
@@ -471,7 +404,7 @@
   &__space-key {
     display: inline-block;
     padding: 0 4px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-medium);
     letter-spacing: var(--bf-letter-spacing-subtle);
@@ -484,10 +417,10 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    gap: var(--bf-control-flow-chat-inline-gap);
     font-size: var(--bf-type-flow-control-font-size);
     line-height: var(--bf-type-flow-support-line-height);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     opacity: 0.72;
     white-space: nowrap;
     pointer-events: none;
@@ -497,7 +430,7 @@
     width: 1px;
     height: 14px;
     flex-shrink: 0;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 28%, transparent);
+    background: color-mix(in srgb, var(--bf-color-content-muted) 28%, transparent);
     pointer-events: none;
   }
 
@@ -505,36 +438,12 @@
   :root[data-bf-appearance-mode="light"] &,
   .light & {
     .bitfun-chat-input__capsule-divider {
-      background: rgba(var(--bf-appearance-token-color-overlay-slate-rgb), 0.2);
+      background: color-mix(in srgb, var(--bf-color-content-muted) 20%, transparent);
     }
   }
 
   // Non-agent scenes: high transparency to avoid obscuring content
   &--non-agent {
-    .bitfun-chat-input__composer-surface {
-      background: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.03);
-      border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.14);
-      box-shadow: none;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      transition: none;
-
-      &:hover {
-        background: var(--bf-appearance-token-color-bg-tertiary);
-        border-color: var(--bf-appearance-token-border-medium);
-        box-shadow: 0 4px 16px var(--bf-appearance-token-color-overlay-black-20);
-      }
-
-      &:focus-within {
-        background: var(--bf-appearance-token-color-bg-tertiary);
-        border-color: var(--bf-appearance-token-border-base);
-        box-shadow:
-          0 12px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45),
-          inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12),
-          inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-04);
-      }
-    }
-
     .bitfun-chat-input__input-area,
     .bitfun-chat-input__actions-left,
     .bitfun-chat-input__actions-right,
@@ -554,14 +463,14 @@
     }
   }
 
-  gap: var(--bf-appearance-token-flowchat-control-gap);
+  gap: var(--bf-control-flow-chat-control-gap);
 
   &__recommendations {
-    margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
+    margin-bottom: var(--bf-control-flow-chat-card-gap);
   }
 
   &__cowork-examples {
-    margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
+    margin-bottom: var(--bf-control-flow-chat-card-gap);
   }
 
   & > * {
@@ -573,7 +482,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--bf-appearance-token-flowchat-card-gap);
+    gap: var(--bf-control-flow-chat-card-gap);
     justify-content: center;
 
     .session-file-modifications-bar {
@@ -643,38 +552,11 @@
       gap: var(--bf-space-1);
     }
 
-    .bitfun-chat-input__agent-boost-add {
-      width: var(--bf-control-chat-composer-control-height) !important;
-      height: var(--bf-control-chat-composer-control-height) !important;
-      min-width: var(--bf-control-chat-composer-control-height) !important;
-      min-height: var(--bf-control-chat-composer-control-height) !important;
-      padding: 0 !important;
-      border: 0 !important;
-      border-radius: var(--bf-radius-pill) !important;
-      background: var(--bf-appearance-token-element-bg-subtle) !important;
-      color: var(--bf-appearance-token-color-text-primary);
-
-      &:hover,
-      &:focus-visible,
-      &[aria-expanded='true'] {
-        background: var(--bf-appearance-token-element-bg-soft) !important;
-      }
-
-      svg {
-        width: 14px;
-        height: 14px;
-      }
-    }
-
     .bitfun-chat-input__model-usage-group,
     .bitfun-model-selector {
       display: flex;
       min-width: 0;
       align-items: center;
-    }
-
-    .bitfun-model-selector__ctx-usage {
-      display: none;
     }
 
     .bitfun-model-selector {
@@ -688,7 +570,7 @@
 
       &:hover,
       &[data-bf-state='open'] {
-        background: var(--bf-appearance-token-element-bg-soft);
+        background: var(--bf-color-action-quiet-hover);
       }
     }
 
@@ -711,11 +593,10 @@
       width: auto;
       height: 20px;
       padding-inline: 2px;
-      border-radius: var(--bf-appearance-token-size-radius-sm);
+      border-radius: var(--bf-radius-sm);
     }
 
-    .bitfun-chat-input__voice-control.icon-btn,
-    .bitfun-chat-input__send-button {
+    .bitfun-chat-input__voice-control.icon-btn {
       width: var(--bf-control-chat-composer-control-height) !important;
       height: var(--bf-control-chat-composer-control-height) !important;
       min-width: var(--bf-control-chat-composer-control-height) !important;
@@ -728,8 +609,7 @@
       background: transparent;
     }
 
-    .bitfun-chat-input__voice-control.icon-btn svg,
-    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) svg {
+    .bitfun-chat-input__voice-control.icon-btn svg {
       width: 14px;
       height: 14px;
     }
@@ -809,16 +689,16 @@
     gap: 0.125rem;
     padding-bottom: 7px;
     margin-bottom: 0.06rem;
-    border-bottom: 1px solid var(--bf-appearance-token-color-overlay-white-08);
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
     animation: bitfun-chat-input-fade-in 0.1s ease-out;
   }
 
   &__target-switcher-label {
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-weight: var(--bf-font-weight-regular);
-    padding: 0.12rem var(--bf-appearance-token-flowchat-card-expanded-pad-y) 0.12rem 0;
-    margin-right: var(--bf-appearance-token-flowchat-inline-gap);
+    padding: 0.12rem var(--bf-control-flow-chat-card-expanded-padding-block) 0.12rem 0;
+    margin-right: var(--bf-control-flow-chat-inline-gap);
     flex-shrink: 0;
     letter-spacing: var(--bf-letter-spacing-wide);
     opacity: 0.72;
@@ -827,11 +707,11 @@
   &__target-tab {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
-    padding: 0.12rem var(--bf-appearance-token-flowchat-card-expanded-pad-y);
+    gap: var(--bf-control-flow-chat-inline-gap);
+    padding: 0.12rem var(--bf-control-flow-chat-card-expanded-padding-block);
     border: none;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-regular);
     border-radius: 5px;
@@ -841,8 +721,8 @@
     outline: none;
 
     &:focus-visible {
-      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-accent);
-      color: var(--bf-appearance-token-color-text-primary);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+      color: var(--bf-color-content-primary);
     }
 
     &:active:not(:disabled) {
@@ -850,14 +730,14 @@
     }
 
     &:hover:not(#{&}--active) {
-      color: var(--bf-appearance-token-color-text-secondary);
-      background: var(--bf-appearance-token-color-overlay-white-04);
+      color: var(--bf-color-content-secondary);
+      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
     }
 
     &--active {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, var(--bf-appearance-token-color-text-primary));
+      color: color-mix(in srgb, var(--bf-color-accent-default) 95%, var(--bf-color-content-primary));
       font-weight: var(--bf-font-weight-medium);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
+      background: color-mix(in srgb, var(--bf-color-accent-default) 9%, transparent);
     }
   }
 
@@ -896,8 +776,8 @@
   &__image-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
-    margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
+    gap: var(--bf-control-flow-chat-inline-gap);
+    margin-bottom: var(--bf-control-flow-chat-inline-gap);
     padding: 0.12rem 0;
   }
 
@@ -907,8 +787,8 @@
     height: 44px;
     border-radius: 6px;
     overflow: visible;
-    background: var(--bf-appearance-token-element-bg-medium);
-    border: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-action-neutral-surface-hover);
+    border: 1px solid var(--bf-color-border-subtle);
     flex-shrink: 0;
 
     &:hover .bitfun-chat-input__image-chip-remove {
@@ -928,7 +808,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--bf-appearance-token-color-text-secondary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
@@ -940,14 +820,14 @@
     height: 18px;
     border-radius: 50%;
     border: none;
-    background: var(--bf-appearance-token-color-bg-elevated);
-    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-primary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     padding: 0;
-    box-shadow: 0 1px 3px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 35%, transparent);
     opacity: 0;
     transform: scale(0.85);
     transition:
@@ -955,12 +835,12 @@
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-hover);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:focus-visible {
       opacity: 1;
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline: 2px solid var(--bf-color-accent-default);
       outline-offset: 1px;
     }
   }
@@ -972,7 +852,7 @@
     border-radius: 50%;
     border: none;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -988,8 +868,8 @@
     }
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
       opacity: 1;
     }
 
@@ -999,7 +879,7 @@
 
     &:focus-visible {
       opacity: 1;
-      outline: 2px solid var(--bf-appearance-token-border-accent);
+      outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
       outline-offset: 1px;
     }
   }
@@ -1020,36 +900,15 @@
     line-height: 0;
   }
 
-  &__agent-boost-add {
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    padding: 0 !important;
-    border-radius: 50% !important;
-    opacity: 1;
-    color: var(--bf-appearance-token-color-text-secondary);
-    background: var(--bf-appearance-token-element-bg-subtle) !important;
-
-    .bitfun-chat-input__box:focus-within & {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-medium) !important;
-    }
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-medium) !important;
-    }
-  }
-
   &__agent-boost-empty {
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    padding: var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-align: center;
     line-height: var(--bf-type-flow-support-line-height);
 
     &--inline {
-      padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+      padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
       text-align: left;
     }
   }
@@ -1061,7 +920,7 @@
 
   &__boost-submenu-panel {
     position: fixed;
-    z-index: calc(#{$z-dropdown} + 20);
+    z-index: calc(var(--bf-layer-dropdown) + 20);
   }
 
   &__boost-submenu-loading,
@@ -1070,20 +929,20 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    gap: var(--bf-control-flow-chat-control-gap);
+    padding: var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__boost-submenu-spinner {
     animation: bitfun-chat-input-spin 0.8s linear infinite;
-    color: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-color-accent-default);
   }
 
   &__mode-pending-indicator {
     font-size: var(--bf-type-flow-micro-font-size);
-    color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, transparent);
+    color: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, transparent);
     margin-left: 4px;
     display: inline-flex;
     align-items: center;
@@ -1094,18 +953,18 @@
 
   &__mode-dropdown {
     position: fixed;
-    z-index: $z-dropdown;
+    z-index: var(--bf-layer-dropdown);
   }
 
   &__slash-command-picker {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
     position: fixed;
     width: min(260px, calc(100vw - 16px));
     max-height: min(280px, calc(100vh - 16px));
     overflow: hidden;
-    z-index: $z-dropdown;
-    color: var(--bf-appearance-token-color-text-primary);
+    z-index: var(--bf-layer-dropdown);
+    color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
     font-size: var(--bf-type-flow-control-font-size);
     // Slash commands are opened by typing, so their keyboard path is instant.
@@ -1116,18 +975,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
+    border-bottom: 1px solid var(--bf-color-border-subtle);
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     text-transform: uppercase;
     letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   &__slash-command-hint {
     font-size: var(--bf-type-flow-meta-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
     font-weight: var(--bf-font-weight-regular);
     text-transform: none;
     letter-spacing: var(--bf-letter-spacing-normal);
@@ -1147,11 +1006,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-color-overlay-white-15);
+      background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
       border-radius: 2px;
 
       &:hover {
-        background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.25);
+        background: color-mix(in srgb, var(--bf-color-content-on-dark) 25%, transparent);
       }
     }
   }
@@ -1160,14 +1019,14 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px var(--bf-appearance-token-flowchat-card-expanded-pad-x) 4px;
+    padding: 8px var(--bf-control-flow-chat-card-expanded-padding-inline) 4px;
   }
 
   &__slash-command-section-line {
     flex: 1;
     min-width: 16px;
     height: 1px;
-    background: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-color-border-subtle);
   }
 
   &__slash-command-section-title {
@@ -1176,24 +1035,24 @@
     font-weight: var(--bf-font-weight-semibold);
     letter-spacing: var(--bf-letter-spacing-wider);
     text-transform: uppercase;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
   }
 
   &__slash-command-item {
     display: flex;
     align-items: flex-start;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
-    padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    gap: var(--bf-control-flow-chat-control-gap);
+    padding: var(--bf-control-flow-chat-inline-gap) var(--bf-control-flow-chat-card-expanded-padding-inline);
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     min-width: 0;
 
     &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &--selected {
-      background: var(--bf-appearance-token-element-bg-medium);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:active {
@@ -1202,7 +1061,7 @@
 
     &--active {
       .bitfun-chat-input__slash-command-name {
-        color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, var(--bf-appearance-token-color-text-primary));
+        color: color-mix(in srgb, var(--bf-color-accent-default) 95%, var(--bf-color-content-primary));
       }
     }
   }
@@ -1210,7 +1069,7 @@
   &__slash-command-name {
     font-size: var(--bf-type-flow-control-font-size);
     font-weight: var(--bf-font-weight-medium);
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
+    color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
     font-family:var(--bf-font-family-mono);
     flex: 0 0 112px;
     min-width: 0;
@@ -1221,7 +1080,7 @@
 
   &__slash-command-label {
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-color-content-secondary);
     flex: 1;
     min-width: 0;
     line-height: var(--bf-line-height-compact);
@@ -1242,8 +1101,8 @@
     font-size: var(--bf-type-flow-meta-font-size);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
+    background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
+    color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
     font-weight: var(--bf-font-weight-medium);
     flex: 0 0 auto;
   }
@@ -1262,21 +1121,21 @@
     white-space: nowrap;
 
     &--restricted {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
-      color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, var(--bf-appearance-token-color-text-primary));
+      background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
+      color: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, var(--bf-color-content-primary));
     }
 
     &--choose {
-      background: var(--bf-appearance-token-color-bg-tertiary);
-      color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-color-surface-tertiary);
+      color: var(--bf-color-content-secondary);
     }
   }
 
   &__slash-command-empty {
-    padding: var(--bf-appearance-token-size-gap-4) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+    padding: var(--bf-space-4) var(--bf-control-flow-chat-card-expanded-padding-inline);
     text-align: center;
     font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-color-content-muted);
 
     &--retry {
       width: 100%;
@@ -1285,8 +1144,8 @@
       cursor: pointer;
 
       &:hover {
-        background: var(--bf-appearance-token-element-bg-medium);
-        color: var(--bf-appearance-token-color-text-secondary);
+        background: var(--bf-color-action-neutral-surface-hover);
+        color: var(--bf-color-content-secondary);
       }
     }
   }
@@ -1296,26 +1155,26 @@
   :root[data-bf-appearance-mode="light"] &,
   .light & {
     &__mode-option:not(.bitfun-chat-input__mode-option--disabled):hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &__mode-submenu-content {
-      background: var(--bf-appearance-token-color-overlay-slate-04);
+      background: color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent);
 
       .bitfun-chat-input__mode-option:hover:not(.bitfun-chat-input__mode-option--disabled) {
-        background: var(--bf-appearance-token-element-bg-soft);
+        background: var(--bf-color-action-quiet-hover);
       }
     }
 
     &__mode-submenu-trigger:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
+      background: var(--bf-color-action-quiet-hover);
     }
 
     &__slash-command-list::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-color-overlay-slate-08);
+      background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
 
       &:hover {
-        background: var(--bf-appearance-token-color-overlay-slate-12);
+        background: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
       }
     }
   }
@@ -1327,7 +1186,7 @@
     display: flex;
     height: var(--bf-control-chat-composer-control-height);
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-width: 0;
   }
 
@@ -1342,7 +1201,7 @@
   &__actions-right {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     height: var(--bf-control-chat-composer-control-height);
   }
 
@@ -1360,124 +1219,40 @@
     flex: 0 0 auto;
   }
 
-  /* Send: same chrome language as stop — luminous disk + dark icon on dark UI,
-     charcoal disk + light icon on light UI. */
-  &__send-button {
+  /* The public composer action owns send geometry and states. Stop keeps its
+     product-specific live-task presentation without changing visual size. */
+  &__send-button--breathing {
     position: relative;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: none;
-    background: var(--bf-appearance-token-color-overlay-white-08);
-    color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.55);
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
     cursor: pointer;
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 120ms ease;
-    flex-shrink: 0;
 
-    &:not(:disabled) {
-      background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
-      border: 1px solid transparent;
-      color: rgb(var(--private-chat-input-send-dark-icon-rgb));
-      box-shadow: none;
-    }
-
-    &:hover:not(:disabled) {
-      transform: scale(1.07);
-      filter: none;
-      background: linear-gradient(
-        165deg,
-        var(--bf-appearance-token-color-static-white) 0%,
-        rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
-      );
-      border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.52);
-      color: rgb(var(--private-chat-input-send-dark-icon-strong-rgb));
-      box-shadow:
-        0 0 0 1px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.32),
-        0 8px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.32);
-    }
-
-    .bitfun-chat-input__box:focus-within &:not(:disabled) {
-      filter: none;
-      transform: scale(1.05);
-      background: linear-gradient(
-        165deg,
-        rgba(var(--private-chat-input-send-surface-focus-start-rgb), 0.99) 0%,
-        rgba(var(--private-chat-input-send-surface-focus-end-rgb), 0.97) 100%
-      );
-      border-color: var(--bf-appearance-token-border-prominent);
-      box-shadow:
-        0 0 0 1px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.36),
-        0 3px 12px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.28);
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-      filter: none;
-      box-shadow:
-        0 0 0 1px var(--bf-appearance-token-color-overlay-black-40),
-        0 1px 3px var(--bf-appearance-token-color-overlay-black-20);
-    }
-
-    &:disabled {
-      cursor: default;
-      background: rgba(var(--private-chat-input-send-surface-disabled-rgb), 0.18);
-      border: none;
-      color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.38);
-      opacity: 1;
-      box-shadow: none;
-      filter: saturate(0.65);
-    }
-
-    &--breathing {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .bitfun-chat-input__box:focus-within &,
+    &:hover {
       background: transparent !important;
       border: none !important;
-      border-radius: 0 !important;
-      padding: 0;
-      width: auto;
-      height: auto;
       box-shadow: none !important;
       transform: none !important;
-      cursor: pointer;
+    }
 
-      .bitfun-chat-input__box:focus-within & {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        transform: none !important;
-      }
+    &:hover .bitfun-chat-input__breathing-circle {
+      filter: none;
+      background: var(--bf-color-action-primary-hover);
+      border-color: color-mix(in srgb, var(--bf-color-action-primary-content) 24%, transparent);
+      box-shadow: var(--bf-shadow-base);
 
-      &:hover {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-
-      &:hover .bitfun-chat-input__breathing-circle {
-        transform: scale(1.07);
-        filter: none;
-        background: linear-gradient(
-          165deg,
-          var(--bf-appearance-token-color-static-white) 0%,
-          rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
-        );
-        border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.52);
-        box-shadow:
-          0 0 0 1px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.32),
-          0 8px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.32);
-
-        &::after {
-          background: rgb(var(--private-chat-input-send-breathing-hover-glyph-rgb));
-          box-shadow: none;
-        }
+      &::after {
+        background: var(--bf-color-action-primary-content);
+        box-shadow: none;
       }
     }
   }
@@ -1487,12 +1262,11 @@
     inset: 1.5px;
     border-radius: 50%;
     border: 1px solid transparent;
-    border-top-color: var(--bf-appearance-token-color-static-white);
+    border-top-color: var(--bf-color-action-primary-content);
     animation: bitfun-chat-input-spin 0.8s linear infinite;
   }
 
-  /* Stop: theme-inverted pause glyph — luminous disk + deep square on dark UI;
-     charcoal disk + soft square on light UI (matches contrast on each chrome). */
+  /* Stop keeps the same action surface so state changes do not shift hierarchy. */
   &__breathing-circle {
     position: relative;
     box-sizing: border-box;
@@ -1503,10 +1277,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 120ms ease;
-    background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
+    transition: opacity 120ms ease;
+    background: var(--bf-color-action-primary-background);
     border: 1px solid transparent;
     box-shadow: none;
 
@@ -1515,110 +1287,11 @@
       width: 9px;
       height: 9px;
       border-radius: 2px;
-      background: rgb(var(--private-chat-input-send-dark-icon-rgb));
+      background: var(--bf-color-action-primary-content);
       box-shadow: none;
       transition:
         background 0.18s ease,
         box-shadow 0.18s ease;
-    }
-  }
-
-  :root[data-bf-appearance-mode="light"] &,
-  :root[data-bf-appearance-mode="light"] &,
-  .light & {
-    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) {
-      &:not(:disabled) {
-        background: linear-gradient(
-          165deg,
-          rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
-          rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
-        );
-        border: 1px solid transparent;
-        color: rgb(var(--private-chat-input-send-inverse-text-rgb));
-        box-shadow: none;
-      }
-
-      &:hover:not(:disabled) {
-        filter: none;
-        transform: scale(1.07);
-        background: linear-gradient(
-          165deg,
-          rgb(var(--private-chat-input-send-inverse-hover-start-rgb)) 0%,
-          rgb(var(--private-chat-input-send-inverse-hover-end-rgb)) 100%
-        );
-        border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.58);
-        color: rgb(var(--private-chat-input-send-inverse-hover-text-rgb));
-        box-shadow:
-          0 0 0 1px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.16),
-          0 8px 20px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.22);
-      }
-
-      .bitfun-chat-input__box:focus-within &:not(:disabled) {
-        filter: none;
-        transform: scale(1.05);
-        background: linear-gradient(
-          165deg,
-          rgb(var(--private-chat-input-send-inverse-focus-start-rgb)) 0%,
-          rgb(var(--private-chat-input-send-inverse-focus-end-rgb)) 100%
-        );
-        border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.52);
-        color: rgb(var(--private-chat-input-send-inverse-focus-text-rgb));
-        box-shadow:
-          0 0 0 1px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.13),
-          0 4px 14px var(--bf-appearance-token-color-overlay-black-20);
-      }
-
-      &:disabled {
-        background: rgba(var(--private-chat-input-send-inverse-disabled-bg-rgb), 0.12);
-        border: none;
-        color: rgba(var(--private-chat-input-send-inverse-disabled-text-rgb), 0.28);
-        box-shadow: none;
-        filter: none;
-      }
-    }
-
-    .bitfun-chat-input__breathing-circle {
-      background: linear-gradient(
-        165deg,
-        rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
-        rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
-      );
-      border: 1px solid transparent;
-      box-shadow: none;
-
-      &::after {
-        background: linear-gradient(
-          165deg,
-          rgb(var(--private-chat-input-stop-inverse-glyph-start-rgb)) 0%,
-          rgb(var(--private-chat-input-stop-inverse-glyph-end-rgb)) 100%
-        );
-        box-shadow: none;
-        transition:
-          background 0.18s ease,
-          box-shadow 0.18s ease;
-      }
-    }
-
-    .bitfun-chat-input__send-button--breathing:hover .bitfun-chat-input__breathing-circle {
-      transform: scale(1.07);
-      background: linear-gradient(
-        165deg,
-        rgb(var(--private-chat-input-stop-inverse-hover-start-rgb)) 0%,
-        rgb(var(--private-chat-input-stop-inverse-hover-end-rgb)) 100%
-      );
-      border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.55);
-      box-shadow:
-        0 0 0 1px var(--bf-appearance-token-color-overlay-black-15),
-        0 8px 20px var(--bf-appearance-token-color-overlay-black-20);
-
-      &::after {
-        background: linear-gradient(
-          165deg,
-          rgb(var(--private-chat-input-stop-inverse-hover-glyph-start-rgb)) 0%,
-          rgb(var(--private-chat-input-stop-inverse-hover-glyph-end-rgb)) 100%
-        );
-        box-shadow: none;
-      }
     }
   }
 
@@ -1630,31 +1303,16 @@
     height: 11px;
     padding: 0 3px;
     border-radius: 999px;
-    background: var(--bf-appearance-token-color-error);
-    color: var(--bf-appearance-token-color-static-white);
+    background: var(--bf-color-status-danger-content);
+    color: var(--bf-color-content-on-dark);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: var(--bf-type-flow-micro-font-size);
     font-weight: var(--bf-font-weight-bold);
     line-height: var(--bf-line-height-none);
-    box-shadow: 0 0 0 1px rgba(var(--private-chat-input-queued-badge-ring-rgb), 0.85);
+    box-shadow: 0 0 0 1px var(--bf-color-surface-panel);
     pointer-events: none;
-  }
-}
-
-// In the light reference the disabled send affordance is grayed out as a
-// whole — a muted disk with a muted arrow — instead of keeping the charcoal
-// disk and only dimming the glyph.
-:root[data-bf-appearance-mode='light'] .bitfun-chat-input--capsule,
-.light .bitfun-chat-input--capsule {
-  .bitfun-chat-input__composer-surface
-    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing):disabled {
-    border: 1px solid transparent;
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-disabled);
-    opacity: 1;
-    filter: none;
   }
 }
 
@@ -1676,8 +1334,6 @@
 }
 
 @media (hover: none), (pointer: coarse) {
-  .bitfun-chat-input__send-button:hover:not(:disabled),
-  .bitfun-chat-input__send-button--breathing:hover .bitfun-chat-input__breathing-circle,
   .bitfun-chat-input__voice-pill-action:not(:disabled):hover,
   .bitfun-chat-input__voice-pill-send:not(:disabled):hover {
     transform: none;

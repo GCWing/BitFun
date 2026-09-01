@@ -53,7 +53,7 @@
   }
 
   .tab[aria-selected="true"] {
-    --_tab-background: var(--bf-color-action-neutral-surface);
+    --_tab-background: var(--bf-color-selection-surface);
     --_tab-background-hover: var(--bf-color-action-neutral-surface-hover);
     --_tab-border: transparent;
 

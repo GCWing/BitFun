@@ -3,7 +3,7 @@ import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 ;
-import { PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { DiffEditor } from '../../../tools/editor';
@@ -168,9 +168,9 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
   );
 
   return createPortal(
-    <PresenceBoundary active={isOpen}>
+    <RetainedMountBoundary present={isOpen}>
       {fullscreenContent}
-    </PresenceBoundary>,
+    </RetainedMountBoundary>,
     getAppearanceOverlayHost(),
   );
 };

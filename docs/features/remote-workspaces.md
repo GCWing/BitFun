@@ -91,6 +91,58 @@ The configured Docker CLI remains the security boundary. BitFun does not expose
 the Docker daemon over the network or bypass the current user's Docker
 permissions.
 
+## Search on hosts without ripgrep
+
+Agent Grep keeps one matching and result-processing implementation. For
+case-sensitive literals and literal alternatives such as `foo|bar`, an available
+compatible `rg` can preselect candidate files to reduce SSH transfer. Without
+`rg`, BitFun can automatically use a compatible system `grep` in batches for the
+same purpose. Both are checked for required behavior before use. The shared
+scanner applies the query, file types, context, counting and pagination.
+Complex regular expressions, case folding or unavailable target accelerators
+use file streams through the existing workspace connection. Installing BitFun
+on the target is not required. Stream scanning can transfer more data and take
+longer on a slow connection; results report the backend and scanned bytes.
+
+System grep is not a transparent replacement: its default regular expression
+syntax, supported options and filename framing differ. BitFun does not silently
+substitute a weaker expression and return a misleading empty result. Search
+failures retain their diagnostics. Remote Glob uses the shared matcher on
+POSIX paths, preserving filename boundaries and applying the pattern before
+the result limit.
+
+The built-in Grep tool accepts structured search arguments. This differs from
+`ExecCommand`, where the model supplies a shell command executed in the Session's
+target environment. A missing shell program is reported as such; BitFun does
+not silently rewrite that command or install software.
+
+## Session forks and file previews
+
+Forking a remote session copies the selected conversation history and keeps the
+source session's SSH connection and POSIX workspace path. It does not create a
+Git worktree or copy remote files. The original and forked sessions continue to
+use the same remote working tree. Fork storage is selected by the verified
+remote binding, even when another host has a workspace with the same path.
+
+Read, Write, Edit, Delete and LS share their tool logic across local and remote
+workspaces. Only filesystem IO changes provider. Agent Runtime, credentials,
+permissions, Session history and snapshot metadata stay on the BitFun host;
+SSH workspaces do not start a remote BitFun CLI or shared daemon.
+
+New remote file modifications can record snapshots in the host's local mirror,
+isolated by the complete connection identity. A successfully recorded operation
+can display its persisted summary and diff even after disconnecting. An older
+operation, failed snapshot, or unsupported symbolic-link target does not claim
+that history exists; tool cards retain their inline preview instead.
+Forked conversation history retains inline tool results but does not inherit
+the source Session's snapshot preview capability.
+
+These operation records do not prove complete historical coverage. Full file
+rollback and edit-and-rerun remain unavailable for remote Sessions until the
+Session's coverage can be verified. Existing history is retained, and no
+baseline is fabricated from current remote files. A snapshot bookkeeping
+failure never causes a file tool to execute twice.
+
 ## Git ownership trust
 
 Git refuses a repository whose directory is owned by another user until the

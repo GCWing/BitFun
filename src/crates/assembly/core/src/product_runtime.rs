@@ -71,6 +71,9 @@ use crate::agentic::session::{
     INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
 };
 use crate::agentic::tools::implementations::skills::SkillRegistry;
+use crate::service::remote_ssh::workspace_state::{
+    workspace_session_identity, WorkspaceSessionIdentity,
+};
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
     SessionTurnCatalog, SessionTurnWindowResponse, TurnStatus,
@@ -362,16 +365,112 @@ fn validate_persisted_session_id(session_id: &str) -> BitFunResult<()> {
     bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)
 }
 
+fn validate_session_workspace_identity(
+    session: &Session,
+    expected: &WorkspaceSessionIdentity,
+) -> BitFunResult<()> {
+    let config = &session.config;
+    let actual = config.workspace_path.as_deref().and_then(|path| {
+        workspace_session_identity(
+            path,
+            config.remote_connection_id.as_deref(),
+            config.remote_ssh_host.as_deref(),
+        )
+    });
+    if actual.as_ref() != Some(expected) {
+        return Err(BitFunError::Validation(format!(
+            "Session workspace identity does not match the requested workspace scope: {}",
+            session.session_id,
+        )));
+    }
+    Ok(())
+}
+
+fn fork_workspace_identity(
+    session: &Session,
+    request: &SessionStoragePathRequest,
+) -> BitFunResult<Option<WorkspaceSessionIdentity>> {
+    fn nonempty(value: Option<&str>) -> Option<&str> {
+        value.map(str::trim).filter(|value| !value.is_empty())
+    }
+    fn declares_remote(connection_id: Option<&str>, hostname: Option<&str>) -> bool {
+        connection_id.is_some()
+            || hostname.is_some_and(|host| {
+                host != bitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
+            })
+    }
+    let connection_id = nonempty(request.remote_connection_id.as_deref());
+    let hostname = nonempty(request.remote_ssh_host.as_deref());
+    let config = &session.config;
+    let request_is_remote = declares_remote(connection_id, hostname);
+    let (workspace_path, connection_id, hostname) = if request_is_remote {
+        (
+            request.workspace_path.to_string_lossy().into_owned(),
+            connection_id.or_else(|| nonempty(config.remote_connection_id.as_deref())),
+            hostname.or_else(|| nonempty(config.remote_ssh_host.as_deref())),
+        )
+    } else {
+        // Legacy/plugin callers may provide only a resolved Session store or a
+        // project root (different from a worktree). Its durable execution
+        // identity remains authoritative; do not reinterpret that path locally.
+        let Some(workspace_path) = config.workspace_path.clone() else {
+            if declares_remote(
+                nonempty(config.remote_connection_id.as_deref()),
+                nonempty(config.remote_ssh_host.as_deref()),
+            ) {
+                return Err(BitFunError::Validation(
+                    "Remote Session fork requires a persisted workspace path".to_string(),
+                ));
+            }
+            return Ok(None);
+        };
+        (
+            workspace_path,
+            nonempty(config.remote_connection_id.as_deref()),
+            nonempty(config.remote_ssh_host.as_deref()),
+        )
+    };
+    let identity = workspace_session_identity(&workspace_path, connection_id, hostname);
+    if (request_is_remote || declares_remote(connection_id, hostname))
+        && identity
+            .as_ref()
+            .is_none_or(|identity| identity.remote_connection_id.is_none())
+    {
+        return Err(BitFunError::Validation(
+            "Remote Session fork requires a complete persisted connection and host identity"
+                .to_string(),
+        ));
+    }
+    if let Some(identity) = identity.as_ref() {
+        validate_session_workspace_identity(session, identity)?;
+    }
+    Ok(identity)
+}
+
 async fn begin_consistent_persisted_session_read(
     coordinator: &ConversationCoordinator,
     persistence: &PersistenceManager,
     storage_path: &Path,
     session_id: &str,
+    expected_workspace: Option<&WorkspaceSessionIdentity>,
 ) -> BitFunResult<CoreSessionReadPermit> {
     validate_persisted_session_id(session_id)?;
     let session_manager = coordinator.get_session_manager();
     let guard = session_manager.acquire_session_mutation(session_id).await?;
     session_manager.validate_session_storage_path_binding(session_id, storage_path)?;
+
+    // A remote mirror's Session directory predates connection-specific snapshot
+    // scopes. Check durable and loaded identity under the same lock before
+    // reconciling history or exposing any operation content.
+    if let Some(expected) = expected_workspace {
+        if let Some(session) = session_manager.get_session(session_id) {
+            validate_session_workspace_identity(&session, expected)?;
+        }
+        let persisted = persistence
+            .load_session_header(storage_path, session_id)
+            .await?;
+        validate_session_workspace_identity(&persisted, expected)?;
+    }
 
     if let Some(state) = persistence
         .load_session_revert_state(storage_path, session_id)
@@ -502,6 +601,7 @@ fn snapshot_port_error(error: SnapshotError) -> PortError {
         | SnapshotError::OperationNotFound(_)
         | SnapshotError::FileNotFound(_) => PortErrorKind::NotFound,
         SnapshotError::Io(_)
+        | SnapshotError::WorkspaceIo(_)
         | SnapshotError::Serialization(_)
         | SnapshotError::GitIsolationFailure(_)
         | SnapshotError::ConfigError(_)
@@ -1382,6 +1482,23 @@ impl CoreAgentRuntimeCompatibility {
             self.persistence.as_ref(),
             storage_path,
             session_id,
+            None,
+        )
+        .await
+    }
+
+    pub async fn begin_persisted_session_read_for_workspace(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+        workspace: &WorkspaceSessionIdentity,
+    ) -> BitFunResult<CoreSessionReadPermit> {
+        begin_consistent_persisted_session_read(
+            self.coordinator.as_ref(),
+            self.persistence.as_ref(),
+            storage_path,
+            session_id,
+            Some(workspace),
         )
         .await
     }
@@ -1788,6 +1905,7 @@ impl CoreSessionOperationsPort {
         source_session_id: String,
         source_turn_id: Option<String>,
         boundary: SessionBranchBoundary,
+        workspace_scope: &SessionStoragePathRequest,
     ) -> PortResult<AgentSessionForkResult> {
         if source_turn_id
             .as_deref()
@@ -1798,18 +1916,51 @@ impl CoreSessionOperationsPort {
                 "source turn id is required",
             ));
         }
-        if !self
-            .coordinator
-            .get_session_manager()
+        let session_manager = self.coordinator.get_session_manager();
+        let expected_workspace = {
+            let _guard = session_manager
+                .acquire_session_mutation(&source_session_id)
+                .await
+                .map_err(runtime_port_error)?;
+            session_manager
+                .validate_session_storage_path_binding(&source_session_id, storage_path)
+                .map_err(runtime_port_error)?;
+            let persisted = self
+                .persistence
+                .load_session_header(storage_path, &source_session_id)
+                .await
+                .map_err(runtime_port_error)?;
+            let identity =
+                fork_workspace_identity(&persisted, workspace_scope).map_err(runtime_port_error)?;
+            if let Some(identity) = identity.as_ref() {
+                if let Some(loaded) = session_manager.get_session(&source_session_id) {
+                    validate_session_workspace_identity(&loaded, identity)
+                        .map_err(runtime_port_error)?;
+                }
+                if identity.remote_connection_id.is_some() {
+                    self.coordinator
+                        .ensure_workspace_runtime_ownership(
+                            Path::new(&identity.logical_workspace_path),
+                            identity.remote_connection_id.as_deref(),
+                            Some(&identity.hostname),
+                        )
+                        .map_err(runtime_port_error)?;
+                }
+            }
+            identity
+        };
+        if !session_manager
             .is_session_loaded_from_storage_path(storage_path, &source_session_id)
             .map_err(runtime_port_error)?
         {
-            self.coordinator
+            // Restore owns its own mutation lock. Do not use Coordinator's
+            // restore-and-reconcile facade: identity must be rechecked before
+            // an unfinished undo transition can change files or history.
+            session_manager
                 .restore_session_from_storage_path(storage_path, &source_session_id)
                 .await
                 .map_err(runtime_port_error)?;
         }
-        let session_manager = self.coordinator.get_session_manager();
         let _mutation_guard = session_manager
             .acquire_session_mutation(&source_session_id)
             .await
@@ -1817,6 +1968,19 @@ impl CoreSessionOperationsPort {
         session_manager
             .validate_session_storage_path_binding(&source_session_id, storage_path)
             .map_err(runtime_port_error)?;
+        if let Some(expected) = expected_workspace.as_ref() {
+            if let Some(loaded) = session_manager.get_session(&source_session_id) {
+                validate_session_workspace_identity(&loaded, expected)
+                    .map_err(runtime_port_error)?;
+            }
+            let persisted = self
+                .persistence
+                .load_session_header(storage_path, &source_session_id)
+                .await
+                .map_err(runtime_port_error)?;
+            validate_session_workspace_identity(&persisted, expected)
+                .map_err(runtime_port_error)?;
+        }
         self.coordinator
             .reconcile_session_revert_locked(storage_path, &source_session_id)
             .await
@@ -1989,26 +2153,6 @@ fn runtime_port_error(error: BitFunError) -> PortError {
     PortError::new(kind, error.to_string())
 }
 
-fn validate_latest_turn_fork_scope(request: &AgentSessionForkRequest) -> PortResult<()> {
-    validate_local_fork_scope(
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
-}
-
-fn validate_local_fork_scope(
-    remote_connection_id: Option<&str>,
-    remote_ssh_host: Option<&str>,
-) -> PortResult<()> {
-    if remote_connection_id.is_some() || remote_ssh_host.is_some() {
-        return Err(PortError::new(
-            PortErrorKind::NotAvailable,
-            "Remote session fork is not supported by the local CLI runtime",
-        ));
-    }
-    Ok(())
-}
-
 #[async_trait::async_trait]
 impl AgentSessionLineagePort for CoreSessionOperationsPort {
     async fn get_session_lineage(
@@ -2167,13 +2311,17 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionForkRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        validate_latest_turn_fork_scope(&request)?;
         let AgentSessionForkRequest {
             workspace_path,
             source_session_id,
             remote_connection_id,
             remote_ssh_host,
         } = request;
+        let workspace_scope = SessionStoragePathRequest {
+            workspace_path: PathBuf::from(&workspace_path),
+            remote_connection_id: remote_connection_id.clone(),
+            remote_ssh_host: remote_ssh_host.clone(),
+        };
         self.coordinator
             .ensure_workspace_runtime_ownership(
                 Path::new(&workspace_path),
@@ -2189,6 +2337,7 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
             source_session_id,
             None,
             SessionBranchBoundary::ThroughTurn,
+            &workspace_scope,
         )
         .await
     }
@@ -2197,10 +2346,11 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionForkAtTurnRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        validate_local_fork_scope(
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )?;
+        let workspace_scope = SessionStoragePathRequest {
+            workspace_path: PathBuf::from(&request.workspace_path),
+            remote_connection_id: request.remote_connection_id.clone(),
+            remote_ssh_host: request.remote_ssh_host.clone(),
+        };
         self.coordinator
             .ensure_workspace_runtime_ownership(
                 Path::new(&request.workspace_path),
@@ -2220,6 +2370,7 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
             request.source_session_id,
             Some(request.source_turn_id),
             SessionBranchBoundary::ThroughTurn,
+            &workspace_scope,
         )
         .await
     }
@@ -2228,10 +2379,11 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionForkBeforeTurnRequest,
     ) -> PortResult<AgentSessionForkResult> {
-        validate_local_fork_scope(
-            request.remote_connection_id.as_deref(),
-            request.remote_ssh_host.as_deref(),
-        )?;
+        let workspace_scope = SessionStoragePathRequest {
+            workspace_path: PathBuf::from(&request.workspace_path),
+            remote_connection_id: request.remote_connection_id.clone(),
+            remote_ssh_host: request.remote_ssh_host.clone(),
+        };
         self.coordinator
             .ensure_workspace_runtime_ownership(
                 Path::new(&request.workspace_path),
@@ -2251,6 +2403,7 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
             request.source_session_id,
             Some(request.source_turn_id),
             SessionBranchBoundary::BeforeTurn,
+            &workspace_scope,
         )
         .await
     }
@@ -2280,6 +2433,7 @@ impl AgentSessionUsagePort for CoreSessionOperationsPort {
             self.persistence.as_ref(),
             &storage_path,
             &request.session_id,
+            None,
         )
         .await
         .map_err(runtime_port_error)?;
@@ -2426,10 +2580,10 @@ mod tests {
         build_session_lineage_snapshot, generate_core_session_usage_report,
         get_snapshot_manager_for_workspace, latest_persisted_turn_id,
         merge_runtime_owned_turn_facts, projected_turn_save_would_overwrite_runtime_state,
-        runtime_lineage_snapshot, runtime_port_error, validate_latest_turn_fork_scope,
-        validate_persisted_session_id, CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot,
-        CoreProductAgentRuntime, CoreProductEventQueueOwner, CoreSessionOperationsPort,
-        SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,
+        runtime_lineage_snapshot, runtime_port_error, validate_persisted_session_id,
+        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+        CoreProductEventQueueOwner, CoreSessionOperationsPort, SESSION_PROVIDER_ACP,
+        SESSION_PROVIDER_METADATA_KEY,
     };
     #[cfg(feature = "product-search")]
     use super::{session_search_index_error, validated_session_content_search_query};
@@ -2459,8 +2613,8 @@ mod tests {
     };
     use crate::util::errors::BitFunError;
     use bitfun_agent_runtime::sdk::{
-        AgentSessionForkAtTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
-        AgentSessionUsagePort, AgentSessionUsageRequest, PortErrorKind,
+        AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
+        AgentSessionForkRequest, AgentSessionUsagePort, AgentSessionUsageRequest, PortErrorKind,
     };
     use bitfun_events::AgenticEvent;
     use tokio::sync::RwLock as TokioRwLock;
@@ -3333,23 +3487,416 @@ mod tests {
         );
     }
 
-    #[test]
-    fn latest_turn_session_fork_keeps_remote_identity_unsupported() {
-        for (remote_connection_id, remote_ssh_host) in [
-            (Some("remote-1".to_string()), None),
-            (None, Some("host-1".to_string())),
-        ] {
-            let request = AgentSessionForkRequest {
-                workspace_path: "D:/workspace/project".to_string(),
-                source_session_id: "session-1".to_string(),
-                remote_connection_id,
-                remote_ssh_host,
-            };
-            let error = validate_latest_turn_fork_scope(&request)
-                .expect_err("latest-turn remote fork must remain unsupported");
+    #[tokio::test]
+    async fn session_fork_uses_verified_remote_storage_and_preserves_execution_identity() {
+        let workspace = TestWorkspace::new();
+        let remote_path = format!("/workspace/remote-fork-{}", Uuid::new_v4());
+        assert!(!Path::new(&remote_path).exists());
+        let path_manager = workspace.path_manager();
+        let runtime_service = WorkspaceRuntimeService::new(path_manager.clone());
+        let persistence =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence.clone(),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let execution_engine = Arc::new(ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        ));
+        let coordinator = Arc::new(ConversationCoordinator::new(
+            session_manager.clone(),
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            Arc::new(EventRouter::new()),
+            Arc::new(
+                crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
+                    workspace.path().join("ownership"),
+                    "bitfun".to_string(),
+                    "test",
+                ),
+            ),
+        ));
+        let scheduler = DialogScheduler::new(coordinator.clone(), session_manager.clone());
+        let token_usage_service = Arc::new(
+            TokenUsageService::new_in_base_dir(workspace.path().join("tokens"))
+                .await
+                .expect("token usage service"),
+        );
+        let port =
+            CoreSessionOperationsPort::new(coordinator.clone(), scheduler, token_usage_service);
 
-            assert_eq!(error.kind, PortErrorKind::NotAvailable);
+        // Two SSH hosts may use the same POSIX path. Forking is a Session-store
+        // operation: no checkout, Git command, or controller path may be used.
+        for (connection_id, host) in [("ssh-a", "host-a"), ("ssh-b", "host-b")] {
+            let storage_path = runtime_service
+                .context_for_remote_workspace(host, &remote_path)
+                .sessions_dir;
+            let source_session_id = format!("session-{connection_id}");
+            let source = crate::agentic::core::Session::new_with_id(
+                source_session_id.clone(),
+                format!("Remote fork {host}"),
+                "agentic".to_string(),
+                crate::agentic::core::SessionConfig {
+                    workspace_path: Some(remote_path.clone()),
+                    remote_connection_id: Some(connection_id.to_string()),
+                    remote_ssh_host: Some(host.to_string()),
+                    ..Default::default()
+                },
+            );
+            persistence
+                .save_session(&storage_path, &source)
+                .await
+                .expect("remote source session");
+            for index in 0..2 {
+                let mut turn = DialogTurnData::new(
+                    format!("turn-{index}"),
+                    index,
+                    source_session_id.clone(),
+                    UserMessageData {
+                        id: format!("user-{index}"),
+                        content: format!("{host} turn {index}"),
+                        timestamp: index as u64,
+                        metadata: None,
+                    },
+                );
+                turn.mark_completed();
+                persistence
+                    .save_dialog_turn(&storage_path, &turn)
+                    .await
+                    .expect("remote source turn");
+            }
+
+            let identity =
+                super::workspace_session_identity(&remote_path, Some(connection_id), Some(host))
+                    .unwrap();
+            let read = super::begin_consistent_persisted_session_read(
+                coordinator.as_ref(),
+                persistence.as_ref(),
+                &storage_path,
+                &source_session_id,
+                Some(&identity),
+            )
+            .await
+            .expect("offline recorded history validates persisted Session identity");
+            drop(read);
+            let other_profile = super::workspace_session_identity(
+                &remote_path,
+                Some("another-profile"),
+                Some(host),
+            )
+            .unwrap();
+            let error = super::begin_consistent_persisted_session_read(
+                coordinator.as_ref(),
+                persistence.as_ref(),
+                &storage_path,
+                &source_session_id,
+                Some(&other_profile),
+            )
+            .await
+            .err()
+            .expect("same host and root cannot alias another profile's Session");
+            assert!(error
+                .to_string()
+                .contains("workspace identity does not match"));
+            assert!(session_manager.get_session(&source_session_id).is_none());
+
+            let unverified_error = port
+                .fork_session(AgentSessionForkRequest {
+                    workspace_path: remote_path.clone(),
+                    source_session_id: source_session_id.clone(),
+                    remote_connection_id: Some(connection_id.to_string()),
+                    remote_ssh_host: Some(host.to_string()),
+                })
+                .await
+                .expect_err("raw remote identity must not bypass Runtime ownership");
+            assert!(unverified_error
+                .message
+                .contains("unverified_remote_workspace_scope"));
+            assert!(session_manager.get_session(&source_session_id).is_none());
+
+            coordinator
+                .ensure_verified_remote_workspace_runtime_ownership(
+                    Path::new(&remote_path),
+                    connection_id,
+                    Some(host),
+                )
+                .expect("Workspace owner has verified this remote binding");
+            let wrong_host_error = port
+                .fork_session_at_turn(AgentSessionForkAtTurnRequest {
+                    workspace_path: remote_path.clone(),
+                    source_session_id: source_session_id.clone(),
+                    source_turn_id: "turn-0".to_string(),
+                    remote_connection_id: Some(connection_id.to_string()),
+                    remote_ssh_host: Some("wrong-host".to_string()),
+                })
+                .await
+                .expect_err("a mismatched host cannot use a verified connection");
+            assert!(wrong_host_error
+                .message
+                .contains("unverified_remote_workspace_scope"));
+
+            let other_connection_id = format!("{connection_id}-other-profile");
+            coordinator
+                .ensure_verified_remote_workspace_runtime_ownership(
+                    Path::new(&remote_path),
+                    &other_connection_id,
+                    Some(host),
+                )
+                .expect("second profile is independently verified for the same host and root");
+            // Both profiles resolve to the same legacy Session mirror. None of
+            // the three fork APIs may restore or branch the other profile's
+            // Session merely because its storage path matches.
+            for loaded in [false, true] {
+                if loaded {
+                    coordinator
+                        .restore_session_from_storage_path(&storage_path, &source_session_id)
+                        .await
+                        .expect("load the source under its own identity");
+                }
+                for variant in 0..3 {
+                    let result = match variant {
+                        0 => {
+                            port.fork_session(AgentSessionForkRequest {
+                                workspace_path: remote_path.clone(),
+                                source_session_id: source_session_id.clone(),
+                                remote_connection_id: Some(other_connection_id.clone()),
+                                remote_ssh_host: Some(host.to_string()),
+                            })
+                            .await
+                        }
+                        1 => {
+                            port.fork_session_at_turn(AgentSessionForkAtTurnRequest {
+                                workspace_path: remote_path.clone(),
+                                source_session_id: source_session_id.clone(),
+                                source_turn_id: "turn-0".to_string(),
+                                remote_connection_id: Some(other_connection_id.clone()),
+                                remote_ssh_host: Some(host.to_string()),
+                            })
+                            .await
+                        }
+                        _ => {
+                            port.fork_session_before_turn(AgentSessionForkBeforeTurnRequest {
+                                workspace_path: remote_path.clone(),
+                                source_session_id: source_session_id.clone(),
+                                source_turn_id: "turn-0".to_string(),
+                                remote_connection_id: Some(other_connection_id.clone()),
+                                remote_ssh_host: Some(host.to_string()),
+                            })
+                            .await
+                        }
+                    };
+                    let error = result.expect_err("another profile cannot fork the source Session");
+                    assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+                    assert!(error.message.contains("workspace identity does not match"));
+                    assert_eq!(
+                        session_manager.get_session(&source_session_id).is_some(),
+                        loaded
+                    );
+                    assert_eq!(
+                        persistence
+                            .list_session_metadata(&storage_path)
+                            .await
+                            .unwrap()
+                            .len(),
+                        1,
+                        "scope rejection must not persist a fork",
+                    );
+                }
+            }
+
+            // A loaded Session cannot override contradictory durable identity.
+            let persisted_source = persistence
+                .load_session(&storage_path, &source_session_id)
+                .await
+                .unwrap();
+            let mut changed_source = persisted_source.clone();
+            changed_source.config.remote_connection_id = Some(other_connection_id.clone());
+            persistence
+                .save_session(&storage_path, &changed_source)
+                .await
+                .unwrap();
+            let error = port
+                .fork_session(AgentSessionForkRequest {
+                    workspace_path: remote_path.clone(),
+                    source_session_id: source_session_id.clone(),
+                    remote_connection_id: Some(other_connection_id),
+                    remote_ssh_host: Some(host.to_string()),
+                })
+                .await
+                .expect_err("loaded and persisted identities must both match");
+            assert!(error.message.contains("workspace identity does not match"));
+            persistence
+                .save_session(&storage_path, &persisted_source)
+                .await
+                .unwrap();
+
+            for variant in 0..3 {
+                let result = match variant {
+                    0 => {
+                        port.fork_session_at_turn(AgentSessionForkAtTurnRequest {
+                            workspace_path: remote_path.clone(),
+                            source_session_id: source_session_id.clone(),
+                            source_turn_id: "turn-0".to_string(),
+                            remote_connection_id: Some(connection_id.to_string()),
+                            remote_ssh_host: Some(host.to_string()),
+                        })
+                        .await
+                    }
+                    1 => {
+                        port.fork_session(AgentSessionForkRequest {
+                            workspace_path: remote_path.clone(),
+                            source_session_id: source_session_id.clone(),
+                            remote_connection_id: Some(connection_id.to_string()),
+                            remote_ssh_host: Some(host.to_string()),
+                        })
+                        .await
+                    }
+                    _ => {
+                        port.fork_session_before_turn(AgentSessionForkBeforeTurnRequest {
+                            workspace_path: remote_path.clone(),
+                            source_session_id: source_session_id.clone(),
+                            source_turn_id: "turn-0".to_string(),
+                            remote_connection_id: Some(connection_id.to_string()),
+                            remote_ssh_host: Some(host.to_string()),
+                        })
+                        .await
+                    }
+                }
+                .expect("verified remote session can be forked");
+                let restored = coordinator
+                    .restore_session_from_storage_path(&storage_path, &result.session_id)
+                    .await
+                    .expect("fork restores from the same remote session store");
+                assert_eq!(
+                    restored.config.workspace_path.as_deref(),
+                    Some(remote_path.as_str())
+                );
+                assert_eq!(
+                    restored.config.remote_connection_id.as_deref(),
+                    Some(connection_id)
+                );
+                assert_eq!(restored.config.remote_ssh_host.as_deref(), Some(host));
+                let turns = persistence
+                    .load_session_turns(&storage_path, &result.session_id)
+                    .await
+                    .expect("fork turns");
+                assert_eq!(turns.len(), [1, 2, 0][variant]);
+                assert!(turns.iter().all(|turn| {
+                    turn.session_id == result.session_id
+                        && turn.user_message.content.starts_with(host)
+                }));
+                assert!(!runtime_service
+                    .context_for_local_workspace(Path::new(&remote_path))
+                    .sessions_dir
+                    .join(&result.session_id)
+                    .exists());
+            }
+            let legacy_fork = port
+                .fork_session(AgentSessionForkRequest {
+                    workspace_path: storage_path.to_string_lossy().into_owned(),
+                    source_session_id: source_session_id.clone(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await
+                .expect("legacy callers may fork from a trusted resolved Session store");
+            let legacy_fork = persistence
+                .load_session(&storage_path, &legacy_fork.session_id)
+                .await
+                .unwrap();
+            assert_eq!(
+                legacy_fork.config.remote_connection_id.as_deref(),
+                Some(connection_id)
+            );
+            assert_eq!(legacy_fork.config.remote_ssh_host.as_deref(), Some(host));
+            assert_eq!(
+                persistence
+                    .load_session_turns(&storage_path, &source_session_id)
+                    .await
+                    .expect("source history is preserved")
+                    .len(),
+                2
+            );
         }
+        assert!(!Path::new(&remote_path).exists());
+    }
+
+    #[test]
+    fn session_fork_legacy_scope_uses_durable_identity_without_local_downgrade() {
+        let source = crate::agentic::core::Session::new_with_id(
+            "remote-source".into(),
+            "Remote source".into(),
+            "agentic".into(),
+            crate::agentic::core::SessionConfig {
+                workspace_path: Some("/workspace/repo".into()),
+                remote_connection_id: Some("ssh-source".into()),
+                remote_ssh_host: Some("source-host".into()),
+                ..Default::default()
+            },
+        );
+        let expected = super::workspace_session_identity(
+            "/workspace/repo",
+            Some("ssh-source"),
+            Some("source-host"),
+        );
+        let mut request = bitfun_runtime_ports::SessionStoragePathRequest {
+            workspace_path: PathBuf::from("/controller/mirror/sessions"),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        assert_eq!(
+            super::fork_workspace_identity(&source, &request).unwrap(),
+            expected
+        );
+        request.workspace_path = PathBuf::from("/workspace/repo");
+        request.remote_connection_id = Some("ssh-source".into());
+        assert_eq!(
+            super::fork_workspace_identity(&source, &request).unwrap(),
+            expected
+        );
+        request.remote_connection_id = None;
+        request.remote_ssh_host = Some("source-host".into());
+        assert_eq!(
+            super::fork_workspace_identity(&source, &request).unwrap(),
+            expected
+        );
+
+        let mut incomplete = source.clone();
+        incomplete.config.remote_connection_id = None;
+        assert!(super::fork_workspace_identity(&incomplete, &request).is_err());
+        request.remote_ssh_host = None;
+        assert!(super::fork_workspace_identity(&incomplete, &request).is_err());
+
+        let local = TestWorkspace::new();
+        incomplete.config.workspace_path = Some(local.path().to_string_lossy().into_owned());
+        incomplete.config.remote_ssh_host = Some("localhost".into());
+        request.workspace_path = local.path().to_path_buf();
+        request.remote_ssh_host = Some("localhost".into());
+        assert!(super::fork_workspace_identity(&incomplete, &request)
+            .unwrap()
+            .is_some_and(|identity| identity.remote_connection_id.is_none()));
     }
 
     #[tokio::test]

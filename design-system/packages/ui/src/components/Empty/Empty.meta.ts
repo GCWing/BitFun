@@ -10,7 +10,7 @@ export const emptyMeta = {
     { name: "description", type: "ReactNode" },
     { name: "icon", type: "ReactNode" },
     { name: "actions", type: "ReactNode" },
-    { defaultValue: "md", name: "imageSize", type: "sm | md | lg | number" },
+    { defaultValue: "md", name: "imageSize", type: "sm | md | lg" },
   ],
   states: ["default", "with-title", "with-actions"],
   tokens: [

@@ -7,7 +7,8 @@ import {
   LINE,
   MUTED,
   PAGE_BG_FADE,
-  RED,
+  SHADOW_FAINT,
+  STATUS_DANGER,
   SUBTLE
 } from './Theme';
 import { SheetActionFooter } from './SheetActionFooter';
@@ -94,7 +95,7 @@ export struct BitFunAccountLoginPage {
         Text(this.errorText)
           .fontSize(MobileDesignTypography.bodySmall.size)
           .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-          .fontColor(RED)
+          .fontColor(STATUS_DANGER)
           .width('100%')
           .margin({ top: 12, left: 4, right: 4 })
       }
@@ -166,6 +167,7 @@ export struct BitFunAccountLoginPage {
     .backgroundColor(CARD)
     .border({ width: 1, color: LINE })
     .borderRadius(24)
+    .shadow({ radius: 16, color: SHADOW_FAINT, offsetY: 5 })
     .clip(true)
   }
 

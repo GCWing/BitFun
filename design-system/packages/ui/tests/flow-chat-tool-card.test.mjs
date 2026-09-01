@@ -119,6 +119,22 @@ test("prominent actions stay hidden until hover, preview-hover, or keyboard focu
   assert.match(styles, /--bf-color-focus-ring/);
 });
 
+test("FlowChat tool-card shells stay flat at rest and on hover", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const prominentRule = styles.match(/\.prominentRoot\s*\{([^}]*)\}/s)?.[1];
+  const ambientExpandedRule = styles.match(/\.ambientExpandedShell\s*\{([^}]*)\}/s)?.[1];
+
+  assert.ok(prominentRule);
+  assert.ok(ambientExpandedRule);
+  assert.match(prominentRule, /box-shadow:\s*none/);
+  assert.match(ambientExpandedRule, /box-shadow:\s*none/);
+  assert.doesNotMatch(styles, /box-shadow:\s*var\(--bf-shadow-(?:xs|sm)\)/);
+  assert.doesNotMatch(styles, /box-shadow\s+var\(--_tool-card-transition\)/);
+});
+
 test("command text remains plain when a host applies inline-code chrome", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
   const commandRule = styles.match(/\.[_a-zA-Z0-9-]*command[_a-zA-Z0-9-]*\{([^}]*)\}/)?.[1];

@@ -421,7 +421,7 @@ private fun AccountModelSelection(
                     .clip(RoundedCornerShape(9.dp))
                     .background(
                         if (model.id == activeModelId) MaterialTheme.colorScheme.surfaceVariant
-                        else Color.Transparent,
+                        else bitFunColors.transparent,
                     )
                     .clickable { onSelect(model.id) }
                     .padding(horizontal = 10.dp),
@@ -791,7 +791,7 @@ private fun LocalModelEditor(
             Text(
                 stringResource(R.string.model_service_test_success),
                 style = MaterialTheme.typography.bodySmall,
-                color = bitFunColors.success,
+                color = bitFunColors.statusSuccess,
             )
         }
     }
@@ -849,9 +849,9 @@ private fun SoftTextField(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
+            focusedIndicatorColor = bitFunColors.transparent,
+            unfocusedIndicatorColor = bitFunColors.transparent,
+            disabledIndicatorColor = bitFunColors.transparent,
         ),
         modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
     )

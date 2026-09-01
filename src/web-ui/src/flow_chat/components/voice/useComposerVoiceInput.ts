@@ -53,7 +53,6 @@ export interface ComposerVoiceInputController {
 }
 
 export interface UseComposerVoiceInputOptions {
-  activateInput: () => void;
   focusInputSoon: () => void;
   insertText: (text: string) => string | null;
   submitText: (text: string) => Promise<void>;
@@ -91,7 +90,6 @@ function estimatePcm16Base64Seconds(pcm16Base64: string, sampleRate: number): nu
 }
 
 export function useComposerVoiceInput({
-  activateInput,
   focusInputSoon,
   insertText,
   submitText,
@@ -415,7 +413,6 @@ export function useComposerVoiceInput({
       const result = await speechAPI.finishInputSession(session.sessionId);
       const text = result.text.trim();
       if (text) {
-        activateInput();
         const mergedText = insertText(text);
         if (mode === 'send' && mergedText) {
           await submitText(mergedText);
@@ -452,7 +449,7 @@ export function useComposerVoiceInput({
       setCompletionMode(null);
       setPhase('idle');
     }
-  }, [activateInput, attachSession, clearRecordingLimitTimer, focusInputSoon, insertText, submitText, t]);
+  }, [attachSession, clearRecordingLimitTimer, focusInputSoon, insertText, submitText, t]);
 
   const startRecording = useCallback(async (skipModelCheck = false) => {
     if (!settings?.enabled) {
