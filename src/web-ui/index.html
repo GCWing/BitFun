@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/Logo-ICON-128.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="/fonts/fonts.css" />
     <title>BitFun - AI Code Assistant</title>
     <script>
       (function () {
@@ -69,6 +68,7 @@
       })();
     </script>
     <link rel="stylesheet" href="/src/design-system-theme.css" />
+    <!-- BITFUN_FONT_PROFILE_STYLESHEET -->
     <style>
       @layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;
 
@@ -128,7 +128,7 @@
         justify-content: center;
         background: var(--bf-color-surface-chrome);
         color: var(--bf-color-content-muted);
-        font-family: "Noto Sans SC", "Inter", "Segoe UI", system-ui, sans-serif;
+        font-family: var(--bf-font-family-sans);
         font-size: 13px;
         pointer-events: none;
       }

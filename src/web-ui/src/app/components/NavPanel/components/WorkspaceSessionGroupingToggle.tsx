@@ -1,7 +1,7 @@
 import React from 'react';
-import { BITFUN_ICON_SIZE, NavigationSessionViewAllIcon, NavigationSessionViewGroupedIcon } from '@/app/icons';
 import { useI18n } from '@/infrastructure/i18n';
 import { IconButton, Tooltip } from '@bitfun/ui';
+import { List, ListTree } from 'lucide-react';
 import {
   getNextWorkspaceSessionGrouping,
   useWorkspaceSessionViewStore,
@@ -13,9 +13,7 @@ const WorkspaceSessionGroupingToggle: React.FC = () => {
   const setGrouping = useWorkspaceSessionViewStore(state => state.setGrouping);
   const isAll = grouping === 'all';
   const actionTooltip = t(`nav.sessions.viewToggle.${isAll ? 'grouped' : 'all'}Tooltip`);
-  const ViewIcon = isAll
-    ? NavigationSessionViewAllIcon
-    : NavigationSessionViewGroupedIcon;
+  const ViewIcon = isAll ? List : ListTree;
 
   return (
     <Tooltip
@@ -27,7 +25,13 @@ const WorkspaceSessionGroupingToggle: React.FC = () => {
         className="bitfun-nav-panel__section-action bitfun-nav-panel__session-view-toggle"
         aria-label={actionTooltip}
         aria-pressed={isAll}
-        icon={<ViewIcon size={BITFUN_ICON_SIZE.navigation} aria-hidden="true" />}
+        icon={(
+          <ViewIcon
+            size={16}
+            aria-hidden="true"
+            data-session-view-icon={grouping}
+          />
+        )}
         size="xs"
         variant="quiet"
         data-bf-action="toggle-session-view"

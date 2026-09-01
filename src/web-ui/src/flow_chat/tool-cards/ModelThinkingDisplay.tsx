@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
@@ -344,7 +344,16 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
         className="thinking-collapsed-header"
         onClick={handleToggleClick}
       >
-        <ChevronRight size={14} className="thinking-chevron" data-bf-component="model-thinking-display" data-bf-part="chevron" />
+        <span
+          aria-hidden="true"
+          className="thinking-leading-icon"
+          data-bf-component="model-thinking-display"
+          data-bf-part="leadingIcon"
+        >
+          <Icon name="thinking" size="sm" className="thinking-leading-icon__default" />
+          <Icon name="chevron-right" size="sm" className="thinking-leading-icon__collapsed-hover" />
+          <Icon name="chevron-down" size="sm" className="thinking-leading-icon__expanded" />
+        </span>
         <span
           data-bf-component="model-thinking-display"
           data-bf-part="label"

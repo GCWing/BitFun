@@ -44,6 +44,38 @@ test('rejects raw CSS sizes, weights, line heights, tracking, and font stacks', 
   assert.equal(codes.filter(code => code === 'raw-css-typography').length, 5);
 });
 
+test('accepts only build-owned font faces and stacks in Web font profiles', () => {
+  const issues = auditTypographyText(`
+    @font-face {
+      font-family: "BitFun HarmonyOS Sans";
+      font-weight: 500;
+    }
+    @layer bf.tokens.system {
+      :where([data-bf-design-system-root]) {
+        --bf-font-family-sans: "BitFun HarmonyOS Sans", system-ui, sans-serif;
+        --bf-font-family-control: "BitFun HarmonyOS Sans", system-ui, sans-serif;
+        --bf-font-family-mono: "Fira Code", monospace;
+      }
+    }
+  `, 'src/web-ui/src/font-profiles/harmony-bundled.css');
+
+  assert.deepEqual(issues, []);
+});
+
+test('rejects unrelated raw typography inside Web font profiles', () => {
+  const codes = codesFor(`
+    .bad {
+      font-family: Inter, sans-serif;
+      font-size: 14px;
+      font-weight: 650;
+      --feature-font-family: Inter, sans-serif;
+    }
+  `, 'src/web-ui/src/font-profiles/harmony-bundled.css');
+
+  assert.equal(codes.filter(code => code === 'raw-css-typography').length, 3);
+  assert.equal(codes.filter(code => code === 'raw-private-typography-token').length, 1);
+});
+
 test('rejects static TypeScript typography but accepts tokens, adapters, and dynamic previews', () => {
   const codes = codesFor(`
     const RAW_FONT_SIZE = 12;

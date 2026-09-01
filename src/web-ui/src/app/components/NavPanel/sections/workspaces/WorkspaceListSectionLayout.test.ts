@@ -211,10 +211,10 @@ describe('WorkspaceListSection layout styles', () => {
     const listSource = readWorkspaceListSource();
     const stylesheet = readWorkspaceListStylesheet();
 
-    expect(itemSource).toContain('<SessionGroupAssistantIcon size={BITFUN_ICON_SIZE.navigation} />');
-    expect(itemSource).toContain('<SessionGroupRemoteWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />');
-    expect(itemSource).toContain('<SessionGroupWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />');
-    expect(listSource).not.toContain('SessionGroupGlobalTaskIcon');
+    expect(itemSource).toContain('<Icon name="user" size="sm" />');
+    expect(itemSource).toContain('<Network size={16} />');
+    expect(itemSource).toContain('<Icon name="folder" size="sm" />');
+    expect(itemSource).not.toContain('SessionGroup');
     expect(listSource).not.toContain('nav.sessions.viewMenu.grouping.all');
     expect(listSource).not.toContain('workspace-all-sessions-header');
     expect(stylesheet).not.toContain('&__workspace-all-sessions-header');

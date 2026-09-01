@@ -6,12 +6,11 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Image, Loader2 } from 'lucide-react';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '@/shared/notification-system';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
@@ -554,7 +553,9 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
           ? i18nService.t('flow-chat:exportImage.exporting')
           : i18nService.t('flow-chat:exportImage.exportToImage')}
       >
-        {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
+        {isExporting
+          ? <Icon name="progress-25" size="sm" className="spinning" />
+          : <Icon name="image" size="sm" />}
       </button>
     </Tooltip>
   );

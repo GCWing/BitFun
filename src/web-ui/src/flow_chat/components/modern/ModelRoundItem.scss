@@ -258,12 +258,6 @@
     outline-offset: 1px;
   }
 
-  svg {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-  }
-
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;

@@ -37,8 +37,6 @@
     "capabilities:generate": "node scripts/generate-interactive-capabilities.mjs",
     "capabilities:check": "node scripts/generate-interactive-capabilities.mjs --check",
     "capabilities:test": "node --test scripts/interactive-capabilities.test.mjs",
-    "iconography:generate": "node scripts/iconography/generate.mjs",
-    "iconography:check": "node scripts/iconography/generate.mjs --check",
     "typography:audit": "node scripts/audit-typography-tokens.mjs",
     "typography:audit:test": "node --test scripts/audit-typography-tokens.test.mjs",
     "theme:color-audit": "node scripts/audit-frontend-colors.mjs --surface web-ui",

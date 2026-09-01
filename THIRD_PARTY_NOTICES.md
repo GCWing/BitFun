@@ -4,6 +4,21 @@ BitFun redistributes selected material and links libraries from the following
 third-party projects. These notices are included with BitFun's Desktop and CLI
 release packages.
 
+## HarmonyOS Sans Fonts
+
+- Project: HarmonyOS Sans Fonts
+- Provider: Huawei Device Co., Ltd.
+- License: HarmonyOS Sans Fonts License Agreement
+- Copyright: Copyright 2021 Huawei Device Co., Ltd.
+
+Non-Apple BitFun GUI distributions bundle unmodified copies of the Base and
+Simplified Chinese Regular, Medium, and Bold fonts. They do not bundle the
+Traditional Chinese font family. Apple GUI distributions and Traditional
+Chinese UI text use platform system fonts instead.
+
+The complete license agreement and a font-specific notice are included only in
+the non-Apple frontend artifact under `third-party/fonts/harmonyos-sans/`.
+
 ## models.dev catalog data
 
 - Project: models.dev

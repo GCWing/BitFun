@@ -103,24 +103,22 @@ describe('L0 Navigation Panel', () => {
   });
 
   describe('Navigation interactivity', () => {
-    it('should use the native session-context icon for the session group menu', async function () {
+    it('should use the standard folder-add icon for the session group menu', async function () {
       expect(hasWorkspace).toBe(true);
 
       const sessionGroupMenuButton = await $('[data-testid="nav-workspace-add-btn"]');
       await sessionGroupMenuButton.waitForDisplayed({ timeout: 10000 });
 
-      const sessionContextIcon = await sessionGroupMenuButton.$(
-        'svg[data-bf-icon="navigation-session-context-add"][data-bf-source="bitfun-svg"]',
-      );
+      const sessionContextIcon = await sessionGroupMenuButton.$('svg.lucide-folder-plus');
       const lucideFolderOpenIcon = await sessionGroupMenuButton.$('svg.lucide-folder-open');
       const plainPlusIcon = await sessionGroupMenuButton.$('svg.lucide-plus');
       expect(await sessionContextIcon.isDisplayed()).toBe(true);
       expect(await lucideFolderOpenIcon.isExisting()).toBe(false);
       expect(await plainPlusIcon.isExisting()).toBe(false);
-      await saveStepScreenshot('l0-navigation-session-context-add-icon');
+      await saveStepScreenshot('l0-standard-folder-add-icon');
     });
 
-    it('should switch the native session-view icon between grouped and all', async function () {
+    it('should switch the standard session-view icon between grouped and all', async function () {
       expect(hasWorkspace).toBe(true);
 
       const viewToggle = await $('[data-testid="nav-workspace-session-view-toggle"]');
@@ -135,11 +133,11 @@ describe('L0 Navigation Panel', () => {
       );
 
       expect(await viewToggle.getAttribute('aria-pressed')).toBe('false');
-      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-grouped"]').isDisplayed()).toBe(true);
-      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-all"]').isExisting()).toBe(false);
+      expect(await viewToggle.$('svg[data-session-view-icon="grouped"]').isDisplayed()).toBe(true);
+      expect(await viewToggle.$('svg[data-session-view-icon="all"]').isExisting()).toBe(false);
       await saveElementScreenshot(
         '[data-testid="nav-workspace-session-view-toggle"]',
-        'l0-navigation-session-view-grouped-icon',
+        'l0-session-view-grouped-icon',
       );
 
       await viewToggle.click();
@@ -149,14 +147,14 @@ describe('L0 Navigation Panel', () => {
       );
 
       expect(await viewToggle.getAttribute('aria-pressed')).toBe('true');
-      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-all"]').isDisplayed()).toBe(true);
-      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-grouped"]').isExisting()).toBe(false);
+      expect(await viewToggle.$('svg[data-session-view-icon="all"]').isDisplayed()).toBe(true);
+      expect(await viewToggle.$('svg[data-session-view-icon="grouped"]').isExisting()).toBe(false);
       expect(await $('.bitfun-nav-panel__workspace-all-sessions-header').isExisting()).toBe(false);
       await saveElementScreenshot(
         '[data-testid="nav-workspace-session-view-toggle"]',
-        'l0-navigation-session-view-all-icon',
+        'l0-session-view-all-icon',
       );
-      await saveStepScreenshot('l0-navigation-session-view-all-icon');
+      await saveStepScreenshot('l0-session-view-all-icon');
 
       await viewToggle.click();
       await browser.waitUntil(
@@ -165,29 +163,17 @@ describe('L0 Navigation Panel', () => {
       );
     });
 
-    it('should render the active session group with its filled native selected icon', async function () {
+    it('should render the active session group with a standard semantic icon', async function () {
       expect(hasWorkspace).toBe(true);
 
       const activeGroup = await $('[data-testid="nav-workspace-item"][data-workspace-active="true"]');
       await activeGroup.waitForDisplayed({ timeout: 10000 });
 
-      const selectedIcon = await activeGroup.$(
-        'svg[data-bf-source="bitfun-svg"][data-bf-icon$="-selected"]',
+      const groupIcon = await activeGroup.$(
+        '[data-bf-part="icon"] [data-bf-component="icon"], '
+        + '[data-bf-part="icon"] svg.lucide-network',
       );
-      await selectedIcon.waitForDisplayed({ timeout: 10000 });
-
-      const selectedIconName = await selectedIcon.getAttribute('data-bf-icon');
-      expect([
-        'session-group-assistant-selected',
-        'session-group-remote-workspace-selected',
-        'session-group-workspace-selected',
-      ]).toContain(selectedIconName);
-      expect(await activeGroup.$(
-        'svg[data-bf-icon="session-group-assistant"], '
-        + 'svg[data-bf-icon="session-group-remote-workspace"], '
-        + 'svg[data-bf-icon="session-group-workspace"]',
-      ).isExisting()).toBe(false);
-
+      await groupIcon.waitForDisplayed({ timeout: 10000 });
       await saveElementScreenshot(
         '[data-testid="nav-workspace-item"][data-workspace-active="true"]',
         'l0-navigation-selected-session-group-icon',

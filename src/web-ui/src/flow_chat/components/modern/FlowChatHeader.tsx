@@ -7,20 +7,13 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   Keyboard,
   MoreHorizontal,
-  PanelRightClose,
-  PanelRightOpen,
-  Search,
-  SlidersHorizontal,
   Square,
   Terminal,
-  X,
 } from 'lucide-react';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import {
   SceneChromeContribution,
   useSceneChromeContext,
@@ -38,7 +31,6 @@ import {
   createReviewPlatformTab,
 } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
-import { IconButton, Input, Menu, MenuItem } from '@bitfun/ui';
 
 const PULL_REQUEST_OVERVIEW_LIMIT = 3;
 
@@ -599,7 +591,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <Input
               ref={searchInputRef}
               className="flowchat-header__search-field"
-              leading={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
+              leading={<Icon name="search" size="xs" className="flowchat-header__search-prefix-icon" />}
               trailing={
                 <span
                   className="flowchat-header__search-inline-controls"
@@ -625,7 +617,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       aria-label={t('flowChatHeader.searchPrevious')}
                       type="button"
                     >
-                      <ChevronUp size={10} />
+                      <Icon name="chevron-up" size="xs" style={{ width: 10, height: 10 }} />
                     </button>
                     <button
                       className="flowchat-header__search-nav-btn"
@@ -635,7 +627,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       aria-label={t('flowChatHeader.searchNext')}
                       type="button"
                     >
-                      <ChevronDown size={10} />
+                      <Icon name="chevron-down" size="xs" style={{ width: 10, height: 10 }} />
                     </button>
                   </span>
                 </span>
@@ -655,7 +647,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                 size="sm"
                 onClick={handleCloseSearch}
                 aria-label={t('flowChatHeader.searchClose')}
-                icon={<X size={14} />}
+                icon={<Icon name="xmark" size="sm" />}
               />
             </Tooltip>
           </div>
@@ -667,7 +659,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               onClick={handleOpenSearch}
               aria-label={t('flowChatHeader.searchOpen')}
               data-testid="flowchat-header-search"
-              icon={<Search size={14} />}
+              icon={<Icon name="search" size="sm" />}
             />
           </Tooltip>
         )) : null}
@@ -698,7 +690,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               aria-haspopup="dialog"
               data-testid="flowchat-header-session-overview"
               icon={<span className="flowchat-header__session-overview-trigger-inner">
-                <SlidersHorizontal size={14} aria-hidden="true" />
+                <Icon name="settings" size="sm" />
                 {hasSessionActivity ? (
                   <span
                     className="flowchat-header__session-overview-status-dot"
@@ -987,11 +979,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               aria-label={rightPanelLabel}
               aria-pressed={isRightPanelOpen}
               data-testid="flowchat-header-right-panel"
-              icon={isRightPanelOpen ? (
-                <PanelRightClose size={14} aria-hidden="true" />
-              ) : (
-                <PanelRightOpen size={14} aria-hidden="true" />
-              )}
+              icon={<Icon name="sidebar-right" size="sm" />}
             />
           </Tooltip>
         ) : null}

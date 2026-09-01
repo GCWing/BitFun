@@ -28,9 +28,8 @@ import {
 } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Plus, FolderOpen, FolderPlus, History, Users, Network, CalendarClock } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Users, Network } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
-import { BITFUN_ICON_SIZE, NavigationExtensionsCompatibilityIcon, NavigationSessionContextAddIcon } from '@/app/icons';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from '../SceneBar/types';
@@ -108,11 +107,6 @@ const MainNav: React.FC<MainNavProps> = ({
     [activeTabId]
   );
 
-  // Section expand state
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    () => new Set(['sessions'])
-  );
-
   const workspaceMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const sectionsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -120,18 +114,6 @@ const MainNav: React.FC<MainNavProps> = ({
   const [workspaceMenuClosing, setWorkspaceMenuClosing] = useState(false);
   const [workspaceMenuPos, setWorkspaceMenuPos] = useState({ top: 0, left: 0 });
   const [isExtensionsOpen, setIsExtensionsOpen] = useState(false);
-
-  const toggleSection = useCallback((id: string) => {
-    setExpandedSections(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
 
   const closeWorkspaceMenu = useCallback(() => {
     setWorkspaceMenuClosing(true);
@@ -481,7 +463,7 @@ const MainNav: React.FC<MainNavProps> = ({
               data-testid="nav-todos-btn"
             >
               <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                <CalendarClock size={15} />
+                <Icon name="clock" size="sm" />
               </span>
               <span>{taskBoardLabel}</span>
             </button>
@@ -514,9 +496,13 @@ const MainNav: React.FC<MainNavProps> = ({
                 aria-label={extensionsLabel}
                 data-testid="agent-skill-entry"
               >
-                <span className="bitfun-nav-panel__top-action-expand-icons" aria-hidden="true">
-                  <NavigationExtensionsCompatibilityIcon
-                    size={BITFUN_ICON_SIZE.navigation}
+                <span
+                  className="bitfun-nav-panel__top-action-icon-slot bitfun-nav-panel__top-action-expand-icons"
+                  aria-hidden="true"
+                >
+                  <Icon
+                    name="extension"
+                    size="sm"
                     className="bitfun-nav-panel__top-action-expand-icon-default"
                   />
                   <Icon
@@ -621,9 +607,6 @@ const MainNav: React.FC<MainNavProps> = ({
           <StickySectionHeader scrollRootRef={sectionsScrollRef}>
             <SectionHeader
               label={t('nav.items.sessions')}
-              collapsible
-              isOpen={expandedSections.has('sessions')}
-              onToggle={() => toggleSection('sessions')}
               actions={
                 <>
                   <WorkspaceSessionGroupingToggle />
@@ -640,7 +623,7 @@ const MainNav: React.FC<MainNavProps> = ({
                         onClick={toggleWorkspaceMenu}
                         data-testid="nav-workspace-add-btn"
                       >
-                        <NavigationSessionContextAddIcon size={BITFUN_ICON_SIZE.compact} />
+                        <FolderPlus size={14} aria-hidden="true" />
                       </button>
                     </Tooltip>
                   </div>
@@ -648,12 +631,8 @@ const MainNav: React.FC<MainNavProps> = ({
               }
             />
           </StickySectionHeader>
-          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('sessions') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('sessions') ? 'open' : ''}>
-            <div className="bitfun-nav-panel__collapsible-inner">
-              <div className="bitfun-nav-panel__items">
-                <WorkspaceListSection variant="all" />
-              </div>
-            </div>
+          <div className="bitfun-nav-panel__items" data-bf-component="nav-panel" data-bf-part="sectionContent">
+            <WorkspaceListSection variant="all" />
           </div>
         </div>
         </div>

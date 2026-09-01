@@ -163,12 +163,15 @@ describe('FlowChatHeader', () => {
     expect(host?.querySelector('[data-testid="flowchat-header-search"]')).toBeNull();
     expect(host?.querySelector('[data-testid="flowchat-header-session-overview"]')).not.toBeNull();
     expect(host?.querySelector('[data-testid="flowchat-header-right-panel"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-session-overview"] [data-bf-name="settings"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-right-panel"] [data-bf-name="sidebar-right"]')).not.toBeNull();
 
     act(() => renderInScene('settings'));
     expect(host?.childElementCount).toBe(0);
 
     act(() => renderInScene('session', true));
     expect(host?.querySelector('[data-testid="flowchat-header-search"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-search"] [data-bf-name="search"]')).not.toBeNull();
   });
 
   it('omits the list, previous-turn, and next-turn navigation controls', () => {
@@ -194,7 +197,7 @@ describe('FlowChatHeader', () => {
     expect(trigger?.getAttribute('aria-label')).toBe('common:header.expandRightPanel');
     expect(trigger?.getAttribute('aria-pressed')).toBe('false');
     expect(trigger?.getAttribute('data-bf-state')).toBe('collapsed');
-    expect(trigger?.querySelector('.lucide-panel-right-open')).not.toBeNull();
+    expect(trigger?.querySelector('[data-bf-name="sidebar-right"]')).not.toBeNull();
     const rightActions = container.querySelectorAll('.flowchat-header__actions')[1];
     const actionTestIds = () => [...(rightActions?.children ?? [])].map((action) => (
       action.getAttribute('data-testid')
@@ -242,7 +245,7 @@ describe('FlowChatHeader', () => {
     expect(openTrigger?.getAttribute('aria-pressed')).toBe('true');
     expect(openTrigger?.getAttribute('data-bf-state')).toBe('open');
     expect(openTrigger?.classList.contains('flowchat-header__right-panel-trigger--active')).toBe(true);
-    expect(openTrigger?.querySelector('.lucide-panel-right-close')).not.toBeNull();
+    expect(openTrigger?.querySelector('[data-bf-name="sidebar-right"]')).not.toBeNull();
   });
 
   it('shows Agents, background terminals, and pull requests as one default list', async () => {
@@ -257,7 +260,7 @@ describe('FlowChatHeader', () => {
     const overviewButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="flowchat-header-session-overview"]',
     );
-    expect(overviewButton?.querySelector('.lucide-sliders-horizontal')).not.toBeNull();
+    expect(overviewButton?.querySelector('[data-bf-name="settings"]')).not.toBeNull();
     expect(overviewButton?.querySelector('.lucide-activity')).toBeNull();
     await act(async () => {
       overviewButton?.click();

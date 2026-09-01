@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuItem } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { Copy, Check, CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
@@ -30,7 +30,6 @@ import {
   buildModelRoundItemGroups,
   type ModelRoundItemGroup,
 } from './modelRoundItemGrouping';
-import { Tooltip } from '@bitfun/ui';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -787,7 +786,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   aria-label={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')}
                   data-testid="model-round-copy-btn"
                  data-bf-component="model-round-item" data-bf-part="action" data-bf-state={copied ? 'copied' : undefined}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  <Icon name={copied ? 'check-line' : 'duplicate'} size="sm" />
                 </button>
               </Tooltip>
 

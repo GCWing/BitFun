@@ -205,10 +205,12 @@ describe('SessionFilesBadge', () => {
 
     const toggle = container.querySelector('.session-files-badge__button') as HTMLButtonElement | null;
     expect(toggle).not.toBeNull();
+    expect(toggle?.querySelector('[data-bf-name="chevron-down"]')).not.toBeNull();
 
     await act(async () => {
       toggle?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
+    expect(toggle?.querySelector('[data-bf-name="chevron-up"]')).not.toBeNull();
 
     const filesPopover = dom.window.document.querySelector<HTMLElement>('.session-files-badge__popover');
     expect(filesPopover?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
@@ -244,6 +246,8 @@ describe('SessionFilesBadge', () => {
 
     const actionsButton = container.querySelector('.session-files-badge__review-btn') as HTMLButtonElement | null;
     expect(actionsButton).not.toBeNull();
+    expect(actionsButton?.querySelector('[data-bf-name="commit"]')).not.toBeNull();
+    expect(actionsButton?.textContent).toBe('');
 
     await act(async () => {
       actionsButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));

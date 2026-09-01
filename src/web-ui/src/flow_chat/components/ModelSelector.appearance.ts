@@ -8,6 +8,8 @@ export const modelSelectorAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'name' },
     { id: 'reasoningSummary' },
     { id: 'dropdown' },
+    { id: 'level' },
+    { id: 'back' },
     { id: 'list' },
     { id: 'option' },
     { id: 'providerOption' },
