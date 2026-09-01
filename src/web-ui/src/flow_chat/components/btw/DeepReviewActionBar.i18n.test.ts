@@ -17,6 +17,8 @@ const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.managedCoverageProgress',
   'deepReviewActionBar.managedCoverageDeferred',
   'deepReviewActionBar.fixAndReviewRunning',
+  'deepReviewActionBar.actionStartFailed',
+  'deepReviewActionBar.actionStartFailedWithReason',
   'deepReviewActionBar.minimizedStandard',
   'deepReviewActionBar.minimizedReviewRunningDeep',
   'deepReviewActionBar.minimizedReviewRunningStandard',

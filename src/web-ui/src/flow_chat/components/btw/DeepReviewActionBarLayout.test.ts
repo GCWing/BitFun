@@ -51,4 +51,20 @@ describe('DeepReviewActionBar layout styles', () => {
     expect(stylesheet).not.toContain('--deep-review-action-bar-scrollbar-gutter');
     expect(actions).not.toContain('calc(');
   });
+
+  it('keeps complete review and fix error details readable', () => {
+    const stylesheet = readActionBarStylesheet();
+    const status = extractBlock(stylesheet, '&__status');
+    const errorMessage = extractBlock(stylesheet, '&__error-message');
+
+    expect(status).toContain('display: grid;');
+    expect(status).toContain('grid-template-columns: auto minmax(0, 1fr);');
+    expect(errorMessage).toContain('grid-column: 2;');
+    expect(errorMessage).toContain('overflow-wrap: anywhere;');
+    expect(errorMessage).toContain('white-space: pre-wrap;');
+    expect(errorMessage).not.toContain('overflow: hidden;');
+    expect(errorMessage).not.toContain('text-overflow: ellipsis;');
+    expect(errorMessage).not.toContain('white-space: nowrap;');
+    expect(errorMessage).not.toContain('max-width: 50%;');
+  });
 });

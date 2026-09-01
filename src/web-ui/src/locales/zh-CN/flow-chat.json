@@ -1017,6 +1017,8 @@
     "fixRunning": "正在修复...",
     "fixCompleted": "修复完成",
     "fixFailed": "修复失败",
+    "actionStartFailed": "无法开始此次操作。",
+    "actionStartFailedWithReason": "无法开始此次操作：{{reason}}",
     "fixTimeout": "修复超时",
     "fixInterrupted": "修复已中断，最多有 {{count}} 个已选项目可能仍需处理。",
     "reviewWaitingCapacity": "审核正在等待容量",

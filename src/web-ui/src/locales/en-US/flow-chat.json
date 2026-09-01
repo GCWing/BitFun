@@ -1017,6 +1017,8 @@
     "fixRunning": "Fixing in progress...",
     "fixCompleted": "Fix completed",
     "fixFailed": "Fix failed",
+    "actionStartFailed": "Unable to start this action.",
+    "actionStartFailedWithReason": "Unable to start this action: {{reason}}",
     "fixTimeout": "Fix timed out",
     "fixInterrupted": "Fix was interrupted. Up to {{count}} selected items may still need attention.",
     "reviewWaitingCapacity": "Review waiting for capacity",
