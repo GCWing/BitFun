@@ -273,6 +273,10 @@
     padding: var(--bf-space-1);
   }
 
+  .searchField {
+    inline-size: 100%;
+  }
+
   .listbox {
     flex: 1 1 auto;
     min-block-size: 0;
