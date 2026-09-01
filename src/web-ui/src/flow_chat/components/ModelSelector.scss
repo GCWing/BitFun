@@ -216,29 +216,6 @@
     }
   }
 
-  // One menu level. It is remounted on every step, so its entry animation is
-  // what makes the height change read as a step in a direction rather than as
-  // the surface resizing on its own.
-  &__level {
-    transition:
-      opacity 120ms ease,
-      transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &[data-direction='forward'] {
-      @starting-style {
-        opacity: 0;
-        transform: translateX(8px);
-      }
-    }
-
-    &[data-direction='back'] {
-      @starting-style {
-        opacity: 0;
-        transform: translateX(-8px);
-      }
-    }
-  }
-
   &__settings-value {
     display: block;
     max-width: 112px;
@@ -320,7 +297,7 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-model-selector__trigger,
   .bitfun-model-selector__chevron,
-  .bitfun-model-selector__level {
+  .bitfun-model-selector__submenu {
     transition-duration: 0ms;
   }
 

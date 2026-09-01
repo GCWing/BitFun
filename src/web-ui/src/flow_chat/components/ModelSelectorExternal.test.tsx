@@ -293,11 +293,6 @@ describe('ModelSelector external transport reuse', () => {
     });
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="chat-model-selector-settings-model"]',
-      )?.click();
-    });
-    await act(async () => {
-      document.body.querySelector<HTMLButtonElement>(
         '[data-testid="chat-model-selector-provider"][data-provider-key="provider-shared"]',
       )?.click();
     });
