@@ -388,11 +388,9 @@ $track-item-gap: 10px;
   }
 
   /*
-   * The UI font (Noto Sans SC) has CJK vertical metrics — 1.16em ascent against
-   * 0.32em descent — so `align-items: center` centers a line box whose glyphs sit
-   * ~0.06em below its middle. Beside a glyph that centers exactly, a label reads
-   * as low. The 1px bottom pad lifts it by half of that, and every text span on
-   * the track carries the same one so they share a baseline.
+   * Product sans faces have different vertical metrics across platform font
+   * profiles. Keep the shared 1px optical compensation on every text span so
+   * labels remain aligned with icons and with one another.
    */
   &__worktree-label {
     padding-bottom: 1px;

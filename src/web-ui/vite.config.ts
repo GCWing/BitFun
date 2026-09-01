@@ -1,15 +1,82 @@
-import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { versionInjectionPlugin } from "./vite.config.version-plugin";
 import { bitfunCanvasRuntimeBundlePlugin } from "./vite.config.canvas-runtime-plugin";
 import { watchSourcePlugin } from "../../design-system/tooling/vite/watch-source.mjs";
+import {
+  APPLE_SYSTEM_FONT_PROFILE,
+  HARMONY_BUNDLED_FONT_PROFILE,
+  WEB_FONT_PROFILE_ENV,
+  assertWebFontProfileBundle,
+  resolveWebFontProfile,
+  verifyHarmonyFontSources,
+} from "../../scripts/web-font-profile.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 const designSystemUiSourceDirectory = path.resolve(
   __dirname,
   '../../design-system/packages/ui/src',
 );
+const fontAssetDirectory = path.resolve(__dirname, 'src/assets/fonts');
+const FONT_PROFILE_STYLESHEET_MARKER = '<!-- BITFUN_FONT_PROFILE_STYLESHEET -->';
+
+export function createWebFontProfilePlugin(
+  profile: typeof APPLE_SYSTEM_FONT_PROFILE | typeof HARMONY_BUNDLED_FONT_PROFILE,
+  command: 'serve' | 'build',
+): Plugin {
+  const stylesheetPath = `/src/font-profiles/${profile}.css`;
+
+  if (command === 'build' && profile === HARMONY_BUNDLED_FONT_PROFILE) {
+    verifyHarmonyFontSources(path.join(fontAssetDirectory, 'harmonyos-sans'));
+  }
+
+  return {
+    name: 'bitfun-web-font-profile',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html) {
+        if (!html.includes(FONT_PROFILE_STYLESHEET_MARKER)) {
+          throw new Error('Web font profile stylesheet marker is missing from index.html.');
+        }
+        return html
+          .replace(
+            FONT_PROFILE_STYLESHEET_MARKER,
+            `<link rel="stylesheet" href="${stylesheetPath}" data-bf-font-profile-stylesheet="${profile}" />`,
+          )
+          .replace(
+            '<html lang="zh-CN">',
+            `<html lang="zh-CN" data-bf-font-profile="${profile}">`,
+          );
+      },
+    },
+    buildStart() {
+      if (command !== 'build' || profile !== HARMONY_BUNDLED_FONT_PROFILE) return;
+
+      for (const [fileName, sourcePath] of [
+        [
+          'third-party/fonts/harmonyos-sans/LICENSE.txt',
+          path.join(fontAssetDirectory, 'harmonyos-sans/LICENSE.txt'),
+        ],
+        [
+          'third-party/fonts/harmonyos-sans/NOTICE.txt',
+          path.join(fontAssetDirectory, 'harmonyos-sans/NOTICE.txt'),
+        ],
+        [
+          'third-party/fonts/fira-code/LICENSE.txt',
+          path.join(fontAssetDirectory, 'fira-code/LICENSE.txt'),
+        ],
+      ]) {
+        this.emitFile({ type: 'asset', fileName, source: readFileSync(sourcePath) });
+      }
+    },
+    generateBundle(_options, bundle) {
+      if (command !== 'build') return;
+      assertWebFontProfileBundle(profile, Object.keys(bundle));
+    },
+  };
+}
 
 /**
  * Product development consumes the design-system source so Vite can preserve
@@ -73,6 +140,13 @@ function warnIfNativeWatchUnreliable(): void {
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
   const isProduction = mode === 'production' || (command === 'build' && mode !== 'development');
+  const fontProfile = resolveWebFontProfile({
+    requested: process.env[WEB_FONT_PROFILE_ENV],
+    command,
+    platform: process.platform,
+  });
+
+  console.log(`[font-profile] ${fontProfile}`);
 
   if (command === 'serve' && !process.env.VITE_USE_POLLING) {
     warnIfNativeWatchUnreliable();
@@ -80,6 +154,7 @@ export default defineConfig(({ mode, command }) => {
 
   return {
     plugins: [
+      createWebFontProfilePlugin(fontProfile, command),
       react(),
       watchSourcePlugin(designSystemUiSourceDirectory),
       bitfunCanvasRuntimeBundlePlugin(),

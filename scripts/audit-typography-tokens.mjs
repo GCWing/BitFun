@@ -24,6 +24,12 @@ const SELF_AUDIT_FILES = new Set([
   'scripts/audit-typography-tokens.mjs',
   'scripts/audit-typography-tokens.test.mjs',
 ]);
+const WEB_FONT_PROFILE_STYLE_ROOT = 'src/web-ui/src/font-profiles/';
+const WEB_FONT_PROFILE_STACK_PROPERTIES = new Set([
+  '--bf-font-family-sans',
+  '--bf-font-family-control',
+  '--bf-font-family-mono',
+]);
 
 const TYPOGRAPHY_PROPERTIES = new Set([
   'font',
@@ -353,6 +359,38 @@ function normalizeCssValue(value) {
     .trim();
 }
 
+function cssAtRuleRanges(source, atRulePattern) {
+  const ranges = [];
+  const pattern = new RegExp(`${atRulePattern}\\s*\\{`, 'gi');
+  for (const match of source.matchAll(pattern)) {
+    const openBrace = (match.index ?? 0) + match[0].lastIndexOf('{');
+    let depth = 1;
+    for (let index = openBrace + 1; index < source.length; index += 1) {
+      if (source[index] === '{') depth += 1;
+      if (source[index] === '}') depth -= 1;
+      if (depth === 0) {
+        ranges.push([openBrace, index]);
+        break;
+      }
+    }
+  }
+  return ranges;
+}
+
+function isBuildOwnedWebFontDeclaration(relativePath, source, offset, property, customProperty) {
+  if (!normalizePath(relativePath).startsWith(WEB_FONT_PROFILE_STYLE_ROOT)) return false;
+
+  if (customProperty) {
+    return property === 'fontFamily'
+      && WEB_FONT_PROFILE_STACK_PROPERTIES.has(customProperty.toLowerCase());
+  }
+
+  if (property !== 'fontFamily' && property !== 'fontWeight') return false;
+  return cssAtRuleRanges(source, '@font-face').some(([start, end]) => (
+    offset >= start && offset <= end
+  ));
+}
+
 function isStructuralZero(property, value) {
   return (property === 'fontSize' || property === 'lineHeight') && /^0(?:\.0+)?$/.test(value);
 }
@@ -383,6 +421,7 @@ function auditCssDeclarations(text, relativePath) {
     // are still caught because they contain no interpolation marker.
     if (value.includes('${')) continue;
     if (isCanonicalTypographyValue(property, value)) continue;
+    if (isBuildOwnedWebFontDeclaration(relativePath, source, match.index ?? 0, property)) continue;
     if (hasLocalTypographyException(lines, line)) continue;
 
     issues.push(createIssue(
@@ -413,6 +452,13 @@ function auditCssDeclarations(text, relativePath) {
     if (
       isCanonicalTypographyValue(property, value)
       || /^var\(--_[a-z0-9-]+\)$/i.test(normalizedValue)
+      || isBuildOwnedWebFontDeclaration(
+        relativePath,
+        source,
+        match.index ?? 0,
+        property,
+        customProperty,
+      )
       || hasLocalTypographyException(lines, line)
     ) {
       continue;

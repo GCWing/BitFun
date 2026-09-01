@@ -1,0 +1,97 @@
+@font-face {
+  font-family: "BitFun HarmonyOS Sans";
+  src: url("../assets/fonts/harmonyos-sans/base/HarmonyOS_Sans_Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BitFun HarmonyOS Sans";
+  src: url("../assets/fonts/harmonyos-sans/base/HarmonyOS_Sans_Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BitFun HarmonyOS Sans";
+  src: url("../assets/fonts/harmonyos-sans/base/HarmonyOS_Sans_Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BitFun HarmonyOS Sans SC";
+  src: url("../assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BitFun HarmonyOS Sans SC";
+  src: url("../assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BitFun HarmonyOS Sans SC";
+  src: url("../assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src: url("../assets/fonts/fira-code/FiraCode-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src: url("../assets/fonts/fira-code/FiraCode-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src: url("../assets/fonts/fira-code/FiraCode-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Code VF";
+  src: url("../assets/fonts/fira-code/FiraCode-VF.woff2") format("woff2-variations");
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+@layer bf.tokens.system {
+  :where([data-bf-design-system-root]) {
+    --bf-font-family-sans: "BitFun HarmonyOS Sans", system-ui, "Segoe UI", Arial, sans-serif;
+    --bf-font-family-control: "BitFun HarmonyOS Sans", system-ui, "Segoe UI", Arial, sans-serif;
+  }
+
+  :where([data-bf-design-system-root]):lang(zh-CN) {
+    --bf-font-family-sans: "BitFun HarmonyOS Sans SC", "BitFun HarmonyOS Sans", system-ui, "Microsoft YaHei UI", sans-serif;
+    --bf-font-family-control: "BitFun HarmonyOS Sans SC", "BitFun HarmonyOS Sans", system-ui, "Microsoft YaHei UI", sans-serif;
+  }
+
+  /* Traditional Chinese deliberately follows the platform's localized face. */
+  :where([data-bf-design-system-root]):lang(zh-TW) {
+    --bf-font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --bf-font-family-control: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}

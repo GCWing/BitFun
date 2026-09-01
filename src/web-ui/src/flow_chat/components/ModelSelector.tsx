@@ -12,7 +12,7 @@ import { Menu, MenuItem, MenuSection, MenuSeparator, OverflowText } from '@bitfu
 import React, { useState, useEffect, useId, useRef, useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { ChevronDown, ChevronRight, Check, RotateCcw, Zap } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Check, RotateCcw, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -144,6 +144,7 @@ interface ProviderGroupInfo {
 }
 
 type NativeSubmenuKind = 'models' | 'reasoning';
+type ModelSelectorLevelDirection = 'none' | 'forward' | 'back';
 
 const NATIVE_SUBMENU_GAP = 5;
 const NATIVE_SUBMENU_FALLBACK_WIDTH = 228;
@@ -165,6 +166,26 @@ const ModelSelectorTooltipContent: React.FC<{ details: ModelSelectorTooltipDetai
     {details.warning ? (
       <div className="bitfun-model-selector__tooltip-warning">{details.warning}</div>
     ) : null}
+  </div>
+);
+
+const ModelSelectorMenuLevel: React.FC<{
+  children: React.ReactNode;
+  direction: ModelSelectorLevelDirection;
+}> = ({ children, direction }) => (
+  <div
+    className="bitfun-model-selector__level"
+    data-bf-component="model-selector"
+    data-bf-part="level"
+    data-direction={direction}
+  >
+    <div
+      className="bitfun-model-selector__list"
+      data-bf-component="model-selector"
+      data-bf-part="list"
+    >
+      <MenuSection>{children}</MenuSection>
+    </div>
   </div>
 );
 
@@ -294,10 +315,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [keyboardNavigationOpen, setKeyboardNavigationOpen] = useState(false);
-  /** Provider whose models are open in the second-level flyout. */
+  /** Provider whose models the menu is currently showing; null is the provider level. */
   const [activeProviderKey, setActiveProviderKey] = useState<string | null>(null);
-  /** Click-open detail menu beside the provider-first model picker. */
+  /** Click-open detail menu beside the stable native settings summary. */
   const [nativeSubmenu, setNativeSubmenu] = useState<NativeSubmenuKind | null>(null);
+  /** Which way the provider level stepped inside the model submenu. */
+  const [levelDirection, setLevelDirection] = useState<ModelSelectorLevelDirection>('none');
   const [loading, setLoading] = useState(false);
   const [reasoningLoading, setReasoningLoading] = useState(false);
   const acpRestoreToastShownRef = useRef<string | null>(null);
@@ -306,7 +329,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
   const nativeSubmenuRef = useRef<HTMLDivElement>(null);
-  const activeProviderMenuItemRef = useRef<HTMLButtonElement>(null);
+  const nativeModelMenuItemRef = useRef<HTMLButtonElement>(null);
   const nativeReasoningMenuItemRef = useRef<HTMLButtonElement>(null);
   const focusNativeSubmenuOnOpenRef = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -562,15 +585,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     };
   }, [dropdownOpen, dropdownPlacement]);
 
-  // Provider models and reasoning choices are separate click-open flyouts.
-  // Keep each flyout anchored to its first-level row even though both menus
-  // are portalled.
+  // Native model and reasoning choices are separate click-open flyouts. Keep
+  // them anchored to their summary row even though both menus are portalled.
   useLayoutEffect(() => {
     if (!dropdownOpen || !nativeSubmenu) return;
 
     const updatePosition = () => {
       const anchor = nativeSubmenu === 'models'
-        ? activeProviderMenuItemRef.current
+        ? nativeModelMenuItemRef.current
         : nativeReasoningMenuItemRef.current;
       const submenu = nativeSubmenuRef.current;
       if (!anchor || !submenu) return;
@@ -619,7 +641,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       ? null
       : new ResizeObserver(updatePosition);
     const anchor = nativeSubmenu === 'models'
-      ? activeProviderMenuItemRef.current
+      ? nativeModelMenuItemRef.current
       : nativeReasoningMenuItemRef.current;
     if (anchor) resizeObserver?.observe(anchor);
     if (nativeSubmenuRef.current) resizeObserver?.observe(nativeSubmenuRef.current);
@@ -880,51 +902,53 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     (preferredItem ?? firstItem)?.focus();
   }, []);
 
-  const openProviderSubmenu = useCallback((providerKey: string, moveFocus: boolean) => {
-    focusNativeSubmenuOnOpenRef.current = moveFocus;
-    if (nativeSubmenu === 'models' && activeProviderKey === providerKey && moveFocus) {
-      focusNativeSubmenuOnOpenRef.current = false;
-      focusPreferredNativeSubmenuItem();
-      return;
-    }
-    setActiveProviderKey(providerKey);
-    setNativeSubmenu('models');
-  }, [activeProviderKey, focusPreferredNativeSubmenuItem, nativeSubmenu]);
-
-  const openReasoningSubmenu = useCallback((moveFocus: boolean) => {
+  const openNativeSubmenu = useCallback((kind: NativeSubmenuKind, moveFocus: boolean) => {
     focusNativeSubmenuOnOpenRef.current = moveFocus;
     setActiveProviderKey(null);
-    if (nativeSubmenu === 'reasoning' && moveFocus) {
+    setLevelDirection('none');
+    if (nativeSubmenu === kind && moveFocus && !activeProviderKey) {
       focusNativeSubmenuOnOpenRef.current = false;
       focusPreferredNativeSubmenuItem();
     }
-    setNativeSubmenu('reasoning');
-  }, [focusPreferredNativeSubmenuItem, nativeSubmenu]);
+    setNativeSubmenu(kind);
+  }, [activeProviderKey, focusPreferredNativeSubmenuItem, nativeSubmenu]);
 
   const closeNativeSubmenu = useCallback((restoreFocus: boolean) => {
     const anchor = nativeSubmenu === 'models'
-      ? activeProviderMenuItemRef.current
+      ? nativeModelMenuItemRef.current
       : nativeReasoningMenuItemRef.current;
     focusNativeSubmenuOnOpenRef.current = false;
     setActiveProviderKey(null);
     setNativeSubmenu(null);
+    setLevelDirection('none');
     if (restoreFocus) anchor?.focus();
   }, [nativeSubmenu]);
 
-  const toggleReasoningSubmenu = useCallback(() => {
-    if (nativeSubmenu === 'reasoning') {
+  const toggleNativeSubmenu = useCallback((kind: NativeSubmenuKind) => {
+    if (nativeSubmenu === kind) {
       closeNativeSubmenu(false);
       return;
     }
-    openReasoningSubmenu(false);
-  }, [closeNativeSubmenu, nativeSubmenu, openReasoningSubmenu]);
+    openNativeSubmenu(kind, false);
+  }, [closeNativeSubmenu, nativeSubmenu, openNativeSubmenu]);
 
-  // Reopening starts at the provider list. A provider removed while its model
-  // flyout is open must not leave an orphaned second-level menu behind.
+  const openProviderLevel = useCallback((providerKey: string) => {
+    setActiveProviderKey(providerKey);
+    setLevelDirection('forward');
+  }, []);
+
+  const closeProviderLevel = useCallback(() => {
+    setActiveProviderKey(null);
+    setLevelDirection('back');
+  }, []);
+
+  // Reopening starts with only the stable summary. A provider removed while
+  // its submenu is open must not leave the model flyout on a missing level.
   useEffect(() => {
     if (!dropdownOpen) {
       setActiveProviderKey(null);
       setNativeSubmenu(null);
+      setLevelDirection('none');
       return;
     }
     if (nativeSubmenu !== 'models' && activeProviderKey) {
@@ -932,13 +956,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return;
     }
     if (activeProviderKey && !activeProviderGroup) {
-      closeNativeSubmenu(false);
+      closeProviderLevel();
     }
-  }, [activeProviderGroup, activeProviderKey, closeNativeSubmenu, dropdownOpen, nativeSubmenu]);
+  }, [activeProviderGroup, activeProviderKey, closeProviderLevel, dropdownOpen, nativeSubmenu]);
 
   const currentNativeModelId = getCurrentModelId();
   const concreteModelId = resolveConcreteModelId(currentNativeModelId, defaultModels);
-  /** Provider that owns the pinned model, so the first level can mark it. */
+  /** Provider that owns the pinned model, so the provider level can mark it. */
   const selectedProviderKey = useMemo((): string | null => {
     if (isSpecialModel(currentNativeModelId)) return null;
     return providerGroups.find(
@@ -1336,14 +1360,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
   }, [dropdownOpen, isAcpSession, loadAcpOptions]);
 
-  const handleReasoningSubmenuTriggerKeyDown = useCallback((
+  const handleNativeSubmenuTriggerKeyDown = useCallback((
+    kind: NativeSubmenuKind,
     event: React.KeyboardEvent<HTMLButtonElement>,
   ) => {
     if (event.key !== 'ArrowRight') return;
     event.preventDefault();
     event.stopPropagation();
-    openReasoningSubmenu(true);
-  }, [openReasoningSubmenu]);
+    openNativeSubmenu(kind, true);
+  }, [openNativeSubmenu]);
 
   const handleDropdownKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.defaultPrevented) return;
@@ -1362,16 +1387,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (event.key === 'ArrowRight') {
       const focusedElement = document.activeElement as HTMLElement | null;
       const focusedTarget = focusedElement?.dataset?.modelMenuTarget;
-      const focusedProviderKey = focusedElement?.dataset?.providerKey;
       if (!externalSelection && !isAcpSession) {
-        if (focusedProviderKey) {
+        if (focusedTarget === 'models') {
           event.preventDefault();
-          openProviderSubmenu(focusedProviderKey, true);
+          openNativeSubmenu('models', true);
           return;
         }
         if (focusedTarget === 'reasoning') {
           event.preventDefault();
-          openReasoningSubmenu(true);
+          openNativeSubmenu('reasoning', true);
           return;
         }
       }
@@ -1382,8 +1406,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     externalSelection,
     isAcpSession,
     nativeSubmenu,
-    openProviderSubmenu,
-    openReasoningSubmenu,
+    openNativeSubmenu,
   ]);
 
   const handleNativeSubmenuKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1392,10 +1415,29 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (event.key === 'Escape' || event.key === 'ArrowLeft') {
       event.preventDefault();
       event.stopPropagation();
-      closeNativeSubmenu(true);
+      if (activeProviderKey) {
+        closeProviderLevel();
+      } else {
+        closeNativeSubmenu(true);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && nativeSubmenu === 'models' && !activeProviderKey) {
+      const focusedElement = document.activeElement as HTMLElement | null;
+      const focusedProviderKey = focusedElement?.dataset?.providerKey;
+      if (focusedProviderKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        openProviderLevel(focusedProviderKey);
+      }
     }
   }, [
+    activeProviderKey,
     closeNativeSubmenu,
+    closeProviderLevel,
+    nativeSubmenu,
+    openProviderLevel,
   ]);
 
   useEffect(() => {
@@ -1415,14 +1457,46 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     return () => window.cancelAnimationFrame(frameId);
   }, [dropdownOpen, keyboardNavigationOpen]);
 
-  // Keyboard-opened flyouts receive focus; pointer-opened flyouts leave focus
-  // on the provider or reasoning row so the stable first level stays usable.
+  // Keyboard-opened flyouts receive focus. Provider steps also move focus
+  // because the clicked row is replaced inside the model flyout.
+  const previousNativeProviderKeyRef = useRef(activeProviderKey);
   useLayoutEffect(() => {
+    const previousProviderKey = previousNativeProviderKeyRef.current;
+    previousNativeProviderKeyRef.current = activeProviderKey;
     if (!dropdownOpen || !nativeSubmenu) return;
-    if (!focusNativeSubmenuOnOpenRef.current) return;
+    const providerLevelChanged = nativeSubmenu === 'models'
+      && previousProviderKey !== activeProviderKey;
+    if (!focusNativeSubmenuOnOpenRef.current && !providerLevelChanged) return;
     focusNativeSubmenuOnOpenRef.current = false;
+
+    const menu = nativeSubmenuRef.current;
+    if (!menu) return;
+
+    if (activeProviderKey) {
+      const selectedModel = menu.querySelector<HTMLButtonElement>(
+        'button[role="menuitemradio"][aria-checked="true"]',
+      );
+      const firstModel = menu.querySelector<HTMLButtonElement>(
+        'button[role="menuitemradio"]:not(:disabled)',
+      );
+      (selectedModel ?? firstModel)?.focus();
+      return;
+    }
+
+    if (nativeSubmenu === 'models' && previousProviderKey) {
+      const providerRows = Array.from(
+        menu.querySelectorAll<HTMLButtonElement>('button[data-provider-key]'),
+      );
+      const targetRow = providerRows.find(
+        row => row.dataset.providerKey === previousProviderKey,
+      );
+      (targetRow ?? providerRows[0])?.focus();
+      return;
+    }
+
     focusPreferredNativeSubmenuItem();
   }, [
+    activeProviderKey,
     dropdownOpen,
     focusPreferredNativeSubmenuItem,
     nativeSubmenu,
@@ -1814,7 +1888,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
             data-placement={resolvedDropdownPlacement}
             data-open={dropdownOpen ? 'true' : 'false'}
-            data-menu-level="providers"
+            data-menu-level="settings"
             aria-hidden={!dropdownOpen}
             {...(!dropdownOpen ? { inert: '' } : {})}
             aria-label={t('modelSelector.modelSettings')}
@@ -1822,152 +1896,48 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           >
             <MenuSection
               data-testid="chat-model-selector-settings"
-              title={t('modelSelector.modelSelection')}
               aria-label={t('modelSelector.modelSettings')}
             >
-              {providerGroups.map(group => {
-                const isSelected = selectedProviderKey === group.key;
-                const isOpen = nativeSubmenu === 'models' && activeProviderKey === group.key;
-                const selectedModel = isSelected
-                  ? group.models.find(model => model.id === currentModelId) ?? null
-                  : null;
-
-                return (
-                  <Tooltip
-                    key={group.key}
-                    content={`${group.providerName} · ${t('modelSelector.providerModelCount', { total: group.models.length })}`}
-                    placement="right"
-                  >
-                    <MenuItem
-                      ref={isOpen ? activeProviderMenuItemRef : undefined}
-                      className={`bitfun-model-selector__settings-item${isOpen ? ' is-open' : ''}`}
-                      aria-haspopup="menu"
-                      aria-expanded={isOpen}
-                      aria-controls={isOpen ? nativeSubmenuId : undefined}
-                      data-testid="chat-model-selector-provider"
-                      data-provider-key={group.key}
-                      data-selected={isSelected ? 'true' : 'false'}
-                      data-open={isOpen ? 'true' : 'false'}
-                      data-bf-component="model-selector"
-                      data-bf-part="providerOption"
-                      data-bf-state={isSelected ? 'selected' : undefined}
-                      metadata={group.models.length}
-                      shortcut={<ChevronRight size={14} aria-hidden />}
-                      onClick={() => {
-                        if (isOpen) closeNativeSubmenu(false);
-                        else openProviderSubmenu(group.key, false);
-                      }}
-                    >
-                      <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                        <span className="bitfun-model-selector__option-name">
-                          {group.providerName}
-                        </span>
-                        {selectedModel && (
-                          <span
-                            className="bitfun-model-selector__option-desc bitfun-model-selector__option-desc--selected-model"
-                            data-testid="chat-model-selector-provider-selected-model"
-                            data-model-id={selectedModel.id}
-                          >
-                            <span className="bitfun-model-selector__option-desc-label">
-                              {selectedModel.modelName}
-                            </span>
-                            <Check
-                              size={11}
-                              aria-hidden="true"
-                              className="bitfun-model-selector__option-selected-check"
-                              data-testid="chat-model-selector-provider-selected-check"
-                            />
-                          </span>
-                        )}
-                      </div>
-                    </MenuItem>
-                  </Tooltip>
-                );
-              })}
-
-              <MenuSeparator />
-
-              {(() => {
-                const primaryModel = allModels.find(m => m.id === defaultModels.primary);
-                const primaryTooltip = primaryModel
-                  ? buildResolvedModelTooltipText(primaryModel.model_name, {
-                    providerName: getProviderDisplayName(primaryModel),
-                    contextWindow: primaryModel.context_window
-                  }, t('modelSelector.primaryModelDesc'))
-                  : t('modelSelector.primaryModelDesc');
-                return (
-                  <Tooltip content={primaryTooltip} placement="right">
-                    <MenuItem
-                      role="menuitemradio"
-                      checked={currentModelId === 'primary'}
-                      data-testid="chat-model-selector-option"
-                      data-model-id="primary"
-                      data-model-name={primaryModel?.model_name || 'primary'}
-                      data-selected={currentModelId === 'primary' ? 'true' : 'false'}
-                      data-bf-component="model-selector"
-                      data-bf-part="option"
-                      data-bf-state={currentModelId === 'primary' ? 'selected' : undefined}
-                      metadata={currentModelId === 'primary' ? <Check size={14} aria-hidden /> : null}
-                      onClick={() => handleSelectModel('primary')}
-                    >
-                      {t('modelSelector.primaryModel')}
-                    </MenuItem>
-                  </Tooltip>
-                );
-              })()}
-
-              {(() => {
-                const fastModel = allModels.find(m => m.id === defaultModels.fast);
-                const fastTooltip = fastModel
-                  ? buildResolvedModelTooltipText(fastModel.model_name, {
-                    providerName: getProviderDisplayName(fastModel),
-                    contextWindow: fastModel.context_window
-                  }, t('modelSelector.fastModelDesc'))
-                  : t('modelSelector.fastModelDesc');
-                return (
-                  <Tooltip content={fastTooltip} placement="right">
-                    <MenuItem
-                      role="menuitemradio"
-                      checked={currentModelId === 'fast'}
-                      data-testid="chat-model-selector-option"
-                      data-model-id="fast"
-                      data-model-name={fastModel?.model_name || 'fast'}
-                      data-selected={currentModelId === 'fast' ? 'true' : 'false'}
-                      data-bf-component="model-selector"
-                      data-bf-part="option"
-                      data-bf-state={currentModelId === 'fast' ? 'selected' : undefined}
-                      metadata={currentModelId === 'fast' ? <Check size={14} aria-hidden /> : null}
-                      onClick={() => handleSelectModel('fast')}
-                    >
-                      {t('modelSelector.fastModel')}
-                    </MenuItem>
-                  </Tooltip>
-                );
-              })()}
+              <MenuItem
+                ref={nativeModelMenuItemRef}
+                className={`bitfun-model-selector__settings-item${nativeSubmenu === 'models' ? ' is-open' : ''}`}
+                data-testid="chat-model-selector-settings-model"
+                data-model-menu-target="models"
+                aria-haspopup="menu"
+                aria-expanded={nativeSubmenu === 'models'}
+                aria-controls={nativeSubmenu === 'models' ? nativeSubmenuId : undefined}
+                metadata={(
+                  <span className="bitfun-model-selector__settings-value">
+                    {getModelDisplayLabel(currentModel, t('modelSelector.primaryModel'))}
+                  </span>
+                )}
+                onClick={() => toggleNativeSubmenu('models')}
+                onKeyDown={(event) => handleNativeSubmenuTriggerKeyDown('models', event)}
+                shortcut={<ChevronRight size={14} aria-hidden />}
+              >
+                {t('modelSelector.model')}
+              </MenuItem>
 
               {hasNativeReasoningSettings && (
-                <>
-                  <MenuSeparator />
-                  <MenuItem
-                    ref={nativeReasoningMenuItemRef}
-                    className={`bitfun-model-selector__settings-item${nativeSubmenu === 'reasoning' ? ' is-open' : ''}`}
-                    data-testid="chat-model-selector-settings-reasoning"
-                    data-model-menu-target="reasoning"
-                    aria-haspopup="menu"
-                    aria-expanded={nativeSubmenu === 'reasoning'}
-                    aria-controls={nativeSubmenu === 'reasoning' ? nativeSubmenuId : undefined}
-                    metadata={(
-                      <span className="bitfun-model-selector__settings-value">
-                        {currentReasoningLabel}
-                      </span>
-                    )}
-                    onClick={toggleReasoningSubmenu}
-                    onKeyDown={handleReasoningSubmenuTriggerKeyDown}
-                    shortcut={<ChevronRight size={14} aria-hidden />}
-                  >
-                    {t('reasoningSelector.title')}
-                  </MenuItem>
-                </>
+                <MenuItem
+                  ref={nativeReasoningMenuItemRef}
+                  className={`bitfun-model-selector__settings-item${nativeSubmenu === 'reasoning' ? ' is-open' : ''}`}
+                  data-testid="chat-model-selector-settings-reasoning"
+                  data-model-menu-target="reasoning"
+                  aria-haspopup="menu"
+                  aria-expanded={nativeSubmenu === 'reasoning'}
+                  aria-controls={nativeSubmenu === 'reasoning' ? nativeSubmenuId : undefined}
+                  metadata={(
+                    <span className="bitfun-model-selector__settings-value">
+                      {currentReasoningLabel}
+                    </span>
+                  )}
+                  onClick={() => toggleNativeSubmenu('reasoning')}
+                  onKeyDown={(event) => handleNativeSubmenuTriggerKeyDown('reasoning', event)}
+                  shortcut={<ChevronRight size={14} aria-hidden />}
+                >
+                  {t('reasoningSelector.title')}
+                </MenuItem>
               )}
 
               <MenuSeparator />
@@ -1995,7 +1965,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           style={nativeSubmenuStyle}
           data-testid="chat-model-selector-submenu"
           data-submenu-kind={nativeSubmenu}
-          data-menu-level={nativeSubmenu}
+          data-menu-level={activeProviderGroup ? 'provider' : nativeSubmenu}
           data-placement={nativeSubmenuPlacement}
           data-bf-component="model-selector"
           data-bf-part="dropdown"
@@ -2006,11 +1976,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               : t('modelSelector.modelSelection')}
           onKeyDown={handleNativeSubmenuKeyDown}
         >
-          <MenuSection
+          <ModelSelectorMenuLevel
             key={activeProviderGroup ? `provider:${activeProviderGroup.key}` : nativeSubmenu}
-            title={nativeSubmenu === 'reasoning'
-              ? t('reasoningSelector.title')
-              : activeProviderGroup?.providerName}
+            direction={levelDirection}
           >
             {nativeSubmenu === 'reasoning' ? (
               <>
@@ -2050,31 +2018,159 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 })}
               </>
             ) : activeProviderGroup ? (
-              activeProviderGroup.models.map(model => {
-                const isSelected = currentModelId === model.id;
+              <>
+                <MenuItem
+                  data-testid="chat-model-selector-back"
+                  data-bf-component="model-selector"
+                  data-bf-part="back"
+                  aria-label={t('modelSelector.backToProviders')}
+                  leading={<ChevronLeft size={12} aria-hidden />}
+                  onClick={closeProviderLevel}
+                >
+                  {activeProviderGroup.providerName}
+                </MenuItem>
 
-                return (
-                  <Tooltip key={model.id} content={buildModelMetaText(model)} placement="right">
-                    <MenuItem
-                      role="menuitemradio"
-                      checked={isSelected}
-                      data-testid="chat-model-selector-option"
-                      data-model-id={model.id}
-                      data-model-name={model.modelName}
-                      data-selected={isSelected ? 'true' : 'false'}
-                      data-bf-component="model-selector"
-                      data-bf-part="option"
-                      data-bf-state={isSelected ? 'selected' : undefined}
-                      metadata={isSelected ? <Check size={14} aria-hidden /> : null}
-                      onClick={() => handleSelectModel(model.id)}
+                {activeProviderGroup.models.map(model => {
+                  const isSelected = currentModelId === model.id;
+
+                  return (
+                    <Tooltip key={model.id} content={buildModelMetaText(model)} placement="right">
+                      <MenuItem
+                        role="menuitemradio"
+                        checked={isSelected}
+                        data-testid="chat-model-selector-option"
+                        data-model-id={model.id}
+                        data-model-name={model.modelName}
+                        data-selected={isSelected ? 'true' : 'false'}
+                        data-bf-component="model-selector"
+                        data-bf-part="option"
+                        data-bf-state={isSelected ? 'selected' : undefined}
+                        metadata={isSelected ? <Check size={14} aria-hidden /> : null}
+                        onClick={() => handleSelectModel(model.id)}
+                      >
+                        {model.modelName}
+                      </MenuItem>
+                    </Tooltip>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                {providerGroups.map(group => {
+                  const isSelected = selectedProviderKey === group.key;
+                  const selectedModel = isSelected
+                    ? group.models.find(model => model.id === currentModelId) ?? null
+                    : null;
+
+                  return (
+                    <Tooltip
+                      key={group.key}
+                      content={`${group.providerName} · ${t('modelSelector.providerModelCount', { total: group.models.length })}`}
+                      placement="right"
                     >
-                      {model.modelName}
-                    </MenuItem>
-                  </Tooltip>
-                );
-              })
-            ) : null}
-          </MenuSection>
+                      <MenuItem
+                        aria-haspopup="menu"
+                        aria-expanded={false}
+                        data-testid="chat-model-selector-provider"
+                        data-provider-key={group.key}
+                        data-selected={isSelected ? 'true' : 'false'}
+                        data-bf-component="model-selector"
+                        data-bf-part="providerOption"
+                        data-bf-state={isSelected ? 'selected' : undefined}
+                        metadata={group.models.length}
+                        shortcut={<ChevronRight size={14} aria-hidden />}
+                        onClick={() => openProviderLevel(group.key)}
+                      >
+                        <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
+                          <span className="bitfun-model-selector__option-name">
+                            {group.providerName}
+                          </span>
+                          {selectedModel && (
+                            <span
+                              className="bitfun-model-selector__option-desc bitfun-model-selector__option-desc--selected-model"
+                              data-testid="chat-model-selector-provider-selected-model"
+                              data-model-id={selectedModel.id}
+                            >
+                              <span className="bitfun-model-selector__option-desc-label">
+                                {selectedModel.modelName}
+                              </span>
+                              <Check
+                                size={11}
+                                aria-hidden="true"
+                                className="bitfun-model-selector__option-selected-check"
+                                data-testid="chat-model-selector-provider-selected-check"
+                              />
+                            </span>
+                          )}
+                        </div>
+                      </MenuItem>
+                    </Tooltip>
+                  );
+                })}
+
+                <MenuSeparator />
+
+                {(() => {
+                  const primaryModel = allModels.find(m => m.id === defaultModels.primary);
+                  const primaryTooltip = primaryModel
+                    ? buildResolvedModelTooltipText(primaryModel.model_name, {
+                      providerName: getProviderDisplayName(primaryModel),
+                      contextWindow: primaryModel.context_window
+                    }, t('modelSelector.primaryModelDesc'))
+                    : t('modelSelector.primaryModelDesc');
+                  return (
+                    <Tooltip content={primaryTooltip} placement="right">
+                      <MenuItem
+                        role="menuitemradio"
+                        checked={currentModelId === 'primary'}
+                        data-testid="chat-model-selector-option"
+                        data-model-id="primary"
+                        data-model-name={primaryModel?.model_name || 'primary'}
+                        data-selected={currentModelId === 'primary' ? 'true' : 'false'}
+                        data-bf-component="model-selector"
+                        data-bf-part="option"
+                        data-bf-state={currentModelId === 'primary' ? 'selected' : undefined}
+                        metadata={currentModelId === 'primary' ? <Check size={14} aria-hidden /> : null}
+                        onClick={() => handleSelectModel('primary')}
+                      >
+                        {t('modelSelector.primaryModel')}
+                      </MenuItem>
+                    </Tooltip>
+                  );
+                })()}
+
+                {(() => {
+                  const fastModel = allModels.find(m => m.id === defaultModels.fast);
+                  const fastTooltip = fastModel
+                    ? buildResolvedModelTooltipText(fastModel.model_name, {
+                      providerName: getProviderDisplayName(fastModel),
+                      contextWindow: fastModel.context_window
+                    }, t('modelSelector.fastModelDesc'))
+                    : t('modelSelector.fastModelDesc');
+                  return (
+                    <Tooltip content={fastTooltip} placement="right">
+                      <MenuItem
+                        role="menuitemradio"
+                        checked={currentModelId === 'fast'}
+                        data-testid="chat-model-selector-option"
+                        data-model-id="fast"
+                        data-model-name={fastModel?.model_name || 'fast'}
+                        data-selected={currentModelId === 'fast' ? 'true' : 'false'}
+                        data-bf-component="model-selector"
+                        data-bf-part="option"
+                        data-bf-state={currentModelId === 'fast' ? 'selected' : undefined}
+                        metadata={currentModelId === 'fast' ? <Check size={14} aria-hidden /> : null}
+                        onClick={() => handleSelectModel('fast')}
+                      >
+                        {t('modelSelector.fastModel')}
+                      </MenuItem>
+                    </Tooltip>
+                  );
+                })()}
+
+              </>
+            )}
+          </ModelSelectorMenuLevel>
         </Menu>,
         getAppearanceOverlayHost()
       )}

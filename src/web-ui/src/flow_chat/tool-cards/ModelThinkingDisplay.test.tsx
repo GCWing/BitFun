@@ -94,6 +94,17 @@ describe('ModelThinkingDisplay reasoning summary', () => {
     expect(label?.textContent).not.toContain('characters');
   });
 
+  it('uses design-system thinking and disclosure icons in the header', async () => {
+    await act(async () => {
+      root.render(<ModelThinkingDisplay thinkingItem={summaryItem('**Inspecting**')} />);
+    });
+
+    const leadingIcon = container.querySelector('[data-bf-part="leadingIcon"]');
+    expect(leadingIcon?.querySelector('[data-bf-name="thinking"]')).not.toBeNull();
+    expect(leadingIcon?.querySelector('[data-bf-name="chevron-right"]')).not.toBeNull();
+    expect(leadingIcon?.querySelector('[data-bf-name="chevron-down"]')).not.toBeNull();
+  });
+
   it('replaces the collapsed preview when a new summary part arrives', async () => {
     await act(async () => {
       root.render(<ModelThinkingDisplay thinkingItem={summaryItem('**First part**')} />);

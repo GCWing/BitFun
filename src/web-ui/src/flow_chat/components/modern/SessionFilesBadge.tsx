@@ -10,14 +10,12 @@ import {
   FilePlus,
   SearchCheck,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   Zap,
   GitCommitHorizontal,
   GitPullRequest,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
+import { Icon, IconButton, Menu, MenuItem, MenuSeparator, Tooltip } from '@bitfun/ui';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
 import { snapshotAPI } from '../../../infrastructure/api';
@@ -783,49 +781,39 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         data-bf-component="session-files-badge"
         data-bf-part="reviewMenu"
       >
-        <button
-          ref={reviewTriggerRef}
-          className={[
-            'session-files-badge__review-btn',
-            showReviewReadyGlint && 'session-files-badge__review-btn--glint',
-            activeReviewMode && 'session-files-badge__review-btn--running',
-          ].filter(Boolean).join(' ')}
-          data-bf-component="session-files-badge"
-          data-bf-part="reviewTrigger"
-          data-bf-state={isReviewMenuOpen ? 'open' : undefined}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isReviewLaunchOrActivityBlocking) return;
-            setIsReviewMenuOpen((open) => {
-              const next = !open;
-              if (next) setIsExpanded(false);
-              return next;
-            });
-          }}
-          disabled={isReviewLaunchOrActivityBlocking}
-          title={reviewButtonTitle}
-          type="button"
-          aria-label={reviewButtonTitle}
-          aria-haspopup="menu"
-          aria-expanded={isReviewMenuOpen && !isReviewLaunchOrActivityBlocking}
-          aria-busy={Boolean(activeReviewMode)}
-        >
-          <span className="session-files-badge__review-actions-label">
-            {activeReviewMode
-              ? t('sessionFilesBadge.actionsButtonRunning')
-              : t('sessionFilesBadge.actionsButton')}
-          </span>
-          {!activeReviewMode ? (
-            <ChevronDown
-              size={12}
+        <Tooltip content={reviewButtonTitle}>
+          <span
+            className="session-files-badge__review-trigger"
+            data-bf-component="session-files-badge"
+            data-bf-part="reviewTrigger"
+            data-bf-state={isReviewMenuOpen ? 'open' : undefined}
+          >
+            <IconButton
+              ref={reviewTriggerRef}
               className={[
-                'session-files-badge__review-menu-chevron',
-                isReviewMenuOpen && !isReviewLaunchOrActivityBlocking && 'session-files-badge__review-menu-chevron--open',
+                'session-files-badge__review-btn',
+                showReviewReadyGlint && 'session-files-badge__review-btn--glint',
+                activeReviewMode && 'session-files-badge__review-btn--running',
               ].filter(Boolean).join(' ')}
-              aria-hidden
+              size="sm"
+              icon={<Icon name="commit" size="sm" className="session-files-badge__review-main-icon" />}
+              loading={Boolean(activeReviewMode)}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isReviewLaunchOrActivityBlocking) return;
+                setIsReviewMenuOpen((open) => {
+                  const next = !open;
+                  if (next) setIsExpanded(false);
+                  return next;
+                });
+              }}
+              disabled={isReviewLaunchOrActivityBlocking}
+              aria-label={reviewButtonTitle}
+              aria-haspopup="menu"
+              aria-expanded={isReviewMenuOpen && !isReviewLaunchOrActivityBlocking}
             />
-          ) : null}
-        </button>
+          </span>
+        </Tooltip>
 
         {isReviewMenuOpen && !isReviewLaunchOrActivityBlocking && createPortal(
           <Menu
@@ -913,11 +901,11 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
             -{totalStats.totalDeletions}
           </span>
         )}
-        {isExpanded ? (
-          <ChevronUp size={12} className="session-files-badge__arrow" />
-        ) : (
-          <ChevronDown size={12} className="session-files-badge__arrow" />
-        )}
+        <Icon
+          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+          size="xs"
+          className="session-files-badge__arrow"
+        />
       </button>
       ) : null}
 

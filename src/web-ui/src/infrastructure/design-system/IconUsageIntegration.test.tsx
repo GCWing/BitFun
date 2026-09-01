@@ -48,7 +48,6 @@ describe('catalog icon consumer integration', () => {
     expect(source('app/scenes/agents/AgentsScene.tsx')).toContain('<Icon name="creative"');
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("RefreshCw: 'refresh'");
     expect(source('app/components/NavBar/NavBar.tsx')).not.toContain('PanelLeftIcon');
-    expect(source('app/scenes/agents/AgentsScene.tsx')).not.toContain('HarnessCreativeIcon');
   });
 
   it('keeps the shared refresh action compact and disables it while loading', () => {

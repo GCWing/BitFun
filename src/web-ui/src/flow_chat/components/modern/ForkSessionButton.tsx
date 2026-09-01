@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { GitFork, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';
@@ -59,7 +58,9 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
         onClick={handleFork}
         disabled={isForking}
       >
-        {isForking ? <Loader2 size={14} className="spinning" /> : <GitFork size={14} />}
+        {isForking
+          ? <Icon name="progress-25" size="sm" className="spinning" />
+          : <Icon name="git" size="sm" />}
       </button>
     </Tooltip>
   );

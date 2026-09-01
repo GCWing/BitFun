@@ -375,15 +375,13 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
     },
   );
   const controlFontFamily = tokens["font.family.control"];
-  assert.equal(controlFontFamily.startsWith("'SF Pro Text'"), true);
+  assert.equal(controlFontFamily.startsWith("system-ui"), true);
+  assert.equal(controlFontFamily.includes("-apple-system"), true);
   assert.equal(controlFontFamily.includes("'Segoe UI Variable Text'"), true);
-  assert.equal(controlFontFamily.includes("'Noto Sans SC'"), true);
-  assert.ok(
-    controlFontFamily.indexOf("'Segoe UI Variable Text'")
-      < controlFontFamily.indexOf("'Noto Sans SC'"),
-  );
-  assert.equal(tokens["font.family.sans"].startsWith("'Noto Sans SC'"), true);
+  assert.equal(controlFontFamily.includes("'Noto Sans SC'"), false);
+  assert.equal(tokens["font.family.sans"].startsWith("system-ui"), true);
   assert.equal(tokens["font.family.mono"].startsWith("'JetBrains Mono'"), true);
+  assert.equal(tokens["font.family.mono"].includes("'Fira Code'"), true);
   assert.equal(tokens["font.size.micro"], "10px");
   assert.equal(tokens["font.size.meta"], "11px");
   assert.equal(tokens["font.size.xs"], "12px");

@@ -23,6 +23,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, className }: { name: string; className?: string }) => (
+    <span className={className} data-bf-component="icon" data-bf-name={name} />
+  ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -90,6 +93,8 @@ describe('ForkSessionButton', () => {
       root.render(<ForkSessionButton sessionId="main-session" turnId="turn-1" />);
     });
 
-    expect(container.querySelector('.model-round-item__fork-btn')).not.toBeNull();
+    const button = container.querySelector('.model-round-item__fork-btn');
+    expect(button).not.toBeNull();
+    expect(button?.querySelector('[data-bf-name="git"]')).not.toBeNull();
   });
 });

@@ -541,31 +541,6 @@ $_section-header-height: 22px;
     margin: 0 var(--bf-space-1);
     border-radius: 4px;
     opacity: 0.92;
-    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    &--interactive {
-      cursor: pointer;
-
-      &:hover {
-        opacity: 1;
-        background: var(--bf-color-action-quiet-hover);
-
-        .bitfun-nav-panel__section-label {
-          color: var(--bf-color-content-primary);
-        }
-      }
-
-      &:active {
-        opacity: 1;
-        background: var(--bf-color-action-neutral-surface-hover);
-      }
-
-      &:focus-visible {
-        outline: 1px solid var(--bf-color-accent-default);
-        outline-offset: -1px;
-      }
-    }
   }
 
   &__section-label {
@@ -579,14 +554,6 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-  }
-
-  &__section-header--current-scene &__section-label {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-normal);
-    text-transform: none;
-    color: var(--bf-color-content-primary);
   }
 
   &__bottom-bar {
@@ -971,23 +938,6 @@ $_section-header-height: 22px;
     white-space: nowrap;
   }
 
-  &__section-indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--bf-color-content-muted);
-    opacity: 0.7;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    .bitfun-nav-panel__section-header--opens-scene:hover & {
-      color: var(--bf-color-content-secondary);
-      opacity: 1;
-      transform: translateX(1px);
-    }
-  }
-
   &__section-action {
     display: inline-flex;
     align-items: center;
@@ -1090,36 +1040,6 @@ $_section-header-height: 22px;
   }
 
   // ──────────────────────────────────────────────
-  // Collapsible wrapper (grid-template-rows 0fr→1fr)
-  // ──────────────────────────────────────────────
-
-  &__collapsible {
-    display: grid;
-    grid-template-rows: 1fr;
-    min-width: 0;
-    max-width: 100%;
-    transition: grid-template-rows var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate),
-                opacity var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate);
-
-    &.is-hidden {
-      display: none;
-    }
-
-    &.is-collapsed {
-      grid-template-rows: 0fr;
-      pointer-events: none;
-    }
-  }
-
-  &__collapsible-inner {
-    overflow: hidden;
-    min-height: 0;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  // ──────────────────────────────────────────────
   // Items list
   // ──────────────────────────────────────────────
 
@@ -1151,7 +1071,7 @@ $_section-header-height: 22px;
   //   .is-departing-up     → items above anchor slide up + fade
   //   .is-departing-anchor → the anchor item itself (brief scale pulse)
   //   .is-departing-down   → items below anchor slide down + fade
-  // These play on top of the grid-row collapse for a "split-open" feel.
+  // These provide the "split-open" feel while scene navigation changes.
   // ──────────────────────────────────────────────
 
   $_depart-distance: 28px;
@@ -1191,18 +1111,6 @@ $_section-header-height: 22px;
 
     &.is-departing-anchor {
       transform: scale(0.96);
-      opacity: 0;
-    }
-
-    &.is-departing-down {
-      transform: translateY($_depart-distance);
-      opacity: 0;
-    }
-  }
-
-  &__collapsible {
-    &.is-departing-up {
-      transform: translateY(-$_depart-distance);
       opacity: 0;
     }
 
@@ -2219,7 +2127,6 @@ $_section-header-height: 22px;
     &__item-icon,
     &__section,
     &__section-label,
-    &__collapsible,
     &__mode-pill,
     &__mode-pill-liquid,
     &__mode-pill-segment,
@@ -2483,16 +2390,12 @@ $_section-header-height: 22px;
 // 扩展：默认 Blocks，悬停时图标位切换为 Chevron；展开时箭头朝上
 .bitfun-nav-panel__top-action-expand-icons {
   position: relative;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  flex-shrink: 0;
 
-  > svg {
+  > .bitfun-nav-panel__top-action-expand-icon-default,
+  > .bitfun-nav-panel__top-action-expand-icon-chevron {
     position: absolute;
-    left: 50%;
-    top: 50%;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
     transform: translate(-50%, -50%);
     transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -2500,6 +2403,9 @@ $_section-header-height: 22px;
 
   .bitfun-nav-panel__top-action-expand-icon-default {
     opacity: 1;
+    // The puzzle glyph's filled mass sits left of its viewBox center. At the
+    // 14px navigation size, a 1px optical correction aligns it with the row.
+    transform: translate(calc(-50% + 1px), -50%);
   }
 
   .bitfun-nav-panel__top-action-expand-icon-chevron {
@@ -2745,10 +2651,6 @@ $_section-header-height: 22px;
     }
   }
 
-  &__collapsible {
-    transition: grid-template-rows 150ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
-
   &__item-slot {
     transition: none;
 
@@ -2959,14 +2861,12 @@ $_section-header-height: 22px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-nav-panel__section-header--interactive:hover,
   .bitfun-nav-panel__top-action-btn:hover,
   .bitfun-nav-panel__item:hover,
   .bitfun-nav-panel__footer-btn--icon:hover {
     @include shell-surfaces.navigation-hover-feedback;
   }
 
-  .bitfun-nav-panel__section-header--interactive:hover,
   .bitfun-nav-panel__top-action-btn:hover {
     transform: none;
     box-shadow: none;
@@ -3026,7 +2926,6 @@ $_section-header-height: 22px;
 
   &__search-trigger__icon,
   &__utility-action,
-  &__section-indicator,
   &__section-action,
   &__item-action,
   &__footer-btn--icon {
@@ -3039,10 +2938,6 @@ $_section-header-height: 22px;
 
   &__section-label {
     @include nav-font.nav-panel-text-group;
-  }
-
-  &__section-header--current-scene &__section-label {
-    @include nav-font.nav-panel-text-row-active;
   }
 
   &__top-action-btn,

@@ -4,16 +4,6 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/app/icons', () => ({
-  BITFUN_ICON_SIZE: { navigation: 16 },
-  NavigationSessionViewAllIcon: ({ size }: { size: number }) => (
-    <svg data-bf-icon="navigation-session-view-all" width={size} height={size} />
-  ),
-  NavigationSessionViewGroupedIcon: ({ size }: { size: number }) => (
-    <svg data-bf-icon="navigation-session-view-grouped" width={size} height={size} />
-  ),
-}));
-
 vi.mock('@bitfun/ui', async importOriginal => ({
   ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -51,15 +41,15 @@ describe('WorkspaceSessionGroupingToggle', () => {
     );
     expect(toggle?.dataset.viewMode).toBe('grouped');
     expect(toggle?.getAttribute('aria-pressed')).toBe('false');
-    expect(toggle?.querySelector('[data-bf-icon="navigation-session-view-grouped"]')).not.toBeNull();
-    expect(toggle?.querySelector('[data-bf-icon="navigation-session-view-all"]')).toBeNull();
+    expect(toggle?.querySelector('[data-session-view-icon="grouped"]')).not.toBeNull();
+    expect(toggle?.querySelector('[data-session-view-icon="all"]')).toBeNull();
 
     act(() => toggle!.click());
     expect(useWorkspaceSessionViewStore.getState().grouping).toBe('all');
     expect(toggle?.dataset.viewMode).toBe('all');
     expect(toggle?.getAttribute('aria-pressed')).toBe('true');
-    expect(toggle?.querySelector('[data-bf-icon="navigation-session-view-all"]')).not.toBeNull();
-    expect(toggle?.querySelector('[data-bf-icon="navigation-session-view-grouped"]')).toBeNull();
+    expect(toggle?.querySelector('[data-session-view-icon="all"]')).not.toBeNull();
+    expect(toggle?.querySelector('[data-session-view-icon="grouped"]')).toBeNull();
 
     act(() => toggle!.click());
     expect(useWorkspaceSessionViewStore.getState().grouping).toBe('grouped');

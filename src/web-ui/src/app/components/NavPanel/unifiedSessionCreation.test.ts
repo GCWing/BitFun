@@ -55,7 +55,7 @@ describe('unified project session creation', () => {
     expect(footerActions).not.toContain('data-testid="nav-todos-btn"');
     expect(mainNav).toContain('data-bf-part="todoEntry"');
     expect(mainNav).toContain("activateProductAction('surface.todos.open')");
-    expect(mainNav).toContain("new Set(['sessions'])");
+    expect(mainNav).not.toContain("new Set(['sessions'])");
     expect(mainNav).toContain('label={t(\'nav.items.sessions\')}');
     expect(mainNav).toContain('<WorkspaceListSection variant="all" />');
     expect(workspaceList).toContain('variant: SessionNavigationScope');
@@ -96,6 +96,7 @@ describe('unified project session creation', () => {
     const aboutIndex = footerActions.indexOf('data-testid="nav-settings-about-item"');
 
     expect(footerActions).toContain('data-testid="nav-footer-settings-item"');
+    expect(footerActions).toContain('icon={<Icon name="gear" size="sm" aria-hidden="true" />}');
     expect(footerActions).toContain('data-testid="nav-settings-menu"');
     expect(floatingIndex).toBeGreaterThan(-1);
     expect(notificationIndex).toBeGreaterThan(floatingIndex);
@@ -127,8 +128,8 @@ describe('unified project session creation', () => {
     expect(filterIndex).toBeGreaterThan(groupingIndex);
     expect(addIndex).toBeGreaterThan(filterIndex);
     expect(groupingToggle).toContain('data-testid="nav-workspace-session-view-toggle"');
-    expect(groupingToggle).toContain('NavigationSessionViewGroupedIcon');
-    expect(groupingToggle).toContain('NavigationSessionViewAllIcon');
+    expect(groupingToggle).toContain('const ViewIcon = isAll ? List : ListTree');
+    expect(groupingToggle).toContain('data-session-view-icon={grouping}');
     expect(groupingToggle).toContain('getNextWorkspaceSessionGrouping(grouping)');
     expect(groupingToggle).not.toContain('VIEW_OPTIONS');
     expect(groupingToggle).not.toContain('nav-session-view-all');
@@ -146,6 +147,7 @@ describe('unified project session creation', () => {
   it('keeps global utilities outside the scroll root and docks one session filter header', () => {
     const mainNav = source('./MainNav.tsx');
     const navPanel = source('./NavPanel.tsx');
+    const sectionHeader = source('./components/SectionHeader.tsx');
     const stickyHeader = source('./components/StickySectionHeader.tsx');
     const navStyles = source('./NavPanel.scss');
     const brandHeaderIndex = mainNav.indexOf('data-bf-part="brandHeader"');
@@ -159,6 +161,11 @@ describe('unified project session creation', () => {
     expect(persistentFooterIndex).toBeGreaterThan(contentIndex);
     expect(mainNav).toContain('<NavigationPanelBody className="bitfun-nav-panel__sections" ref={sectionsScrollRef}>');
     expect(mainNav).toContain('<StickySectionHeader scrollRootRef={sectionsScrollRef}>');
+    expect(mainNav).not.toContain('expandedSections');
+    expect(mainNav).not.toContain('toggleSection');
+    expect(mainNav).not.toContain('bitfun-nav-panel__collapsible');
+    expect(sectionHeader).not.toContain('bitfun-nav-panel__section-header--interactive');
+    expect(sectionHeader).not.toContain('aria-expanded');
     expect(stickyHeader).toContain('new IntersectionObserver');
     expect(stickyHeader).toContain('root: scrollRoot');
     expect(stickyHeader).toContain('{children}');

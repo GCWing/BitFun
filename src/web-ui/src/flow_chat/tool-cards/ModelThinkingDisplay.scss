@@ -14,8 +14,8 @@
  * WebKit (Tauri/macOS) baseline-quirk fix:
  * — Collapsed summary uses `--bf-type-flow-control-font-size` + shared support line-height to match
  *   `.explore-region--collapsible` (e.g. “执行了 N 个命令”).
- * — Make the chevron SVG `display: block` and the label simple `inline` flow
- *   so flex `align-items: center` stays stable. */
+ * — Keep the fixed-size leading-icon swap box and the label in simple `inline`
+ *   flow so flex `align-items: center` stays stable. */
 .flow-thinking-item {
   padding: 0;
   /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
@@ -48,18 +48,45 @@
       opacity: 1;
     }
 
-    .thinking-chevron {
+    .thinking-leading-icon {
+      opacity: 1;
+    }
+
+    .thinking-leading-icon__default {
+      opacity: 0;
+    }
+
+    .thinking-leading-icon__collapsed-hover {
       opacity: 1;
     }
   }
 
-  .thinking-chevron {
+  .thinking-leading-icon {
+    position: relative;
+    width: var(--bf-control-icon-size-sm);
+    height: var(--bf-control-icon-size-sm);
     flex-shrink: 0;
     color: var(--bf-color-content-muted);
     opacity: 0.6;
-    display: block;
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
-    transform: rotate(0deg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s ease;
+
+    > [data-bf-component='icon'] {
+      position: absolute;
+      inset: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    &__default {
+      opacity: 1;
+    }
+
+    &__collapsed-hover,
+    &__expanded {
+      opacity: 0;
+    }
   }
 
   .thinking-label {
@@ -90,9 +117,15 @@
   opacity: 0.9;
 }
 
-/* Rotate chevron when expanded */
-.flow-thinking-item.expanded .thinking-chevron {
-  transform: rotate(90deg);
+.flow-thinking-item.expanded {
+  .thinking-leading-icon__default,
+  .thinking-leading-icon__collapsed-hover {
+    opacity: 0;
+  }
+
+  .thinking-leading-icon__expanded {
+    opacity: 1;
+  }
 }
 
 /* Expand container with animation — duration matches FLOWCHAT_COLLAPSE_DURATION_MS. */
