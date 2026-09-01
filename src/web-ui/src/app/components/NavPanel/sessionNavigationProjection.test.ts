@@ -4,7 +4,10 @@ import {
   WorkspaceType,
   type WorkspaceInfo,
 } from '@/shared/types';
-import { projectWorkspaceBackedSessionGroups } from './sessionNavigationProjection';
+import {
+  isWorkspaceBackedSessionGroupActive,
+  projectWorkspaceBackedSessionGroups,
+} from './sessionNavigationProjection';
 
 const createWorkspace = (
   id: string,
@@ -86,5 +89,40 @@ describe('projectWorkspaceBackedSessionGroups', () => {
       [linkedWorktree],
       'all',
     ).map(group => group.workspace.id)).toEqual(['linked-worktree']);
+  });
+});
+
+describe('isWorkspaceBackedSessionGroupActive', () => {
+  it('distinguishes identical paths opened through different remote connections', () => {
+    const firstRemote = createWorkspace('remote-first', WorkspaceKind.Remote, {
+      rootPath: '/workspace',
+      connectionId: 'ssh-first',
+      sshHost: 'host-a.example',
+    });
+    const secondRemote = createWorkspace('remote-second', WorkspaceKind.Remote, {
+      rootPath: '/workspace',
+      connectionId: 'ssh-second',
+      sshHost: 'host-b.example',
+    });
+
+    expect(isWorkspaceBackedSessionGroupActive(firstRemote, firstRemote)).toBe(true);
+    expect(isWorkspaceBackedSessionGroupActive(secondRemote, firstRemote)).toBe(false);
+  });
+
+  it('keeps the canonical local project active for its selected worktree', () => {
+    const canonicalProject = createWorkspace('canonical-project', WorkspaceKind.Normal, {
+      rootPath: '/repo',
+    });
+    const linkedWorktree = createWorkspace('linked-worktree', WorkspaceKind.Normal, {
+      rootPath: '/repo/.worktrees/feature',
+      worktree: {
+        path: '/repo/.worktrees/feature',
+        mainRepoPath: '/repo',
+        branch: 'feature',
+        isMain: false,
+      },
+    });
+
+    expect(isWorkspaceBackedSessionGroupActive(canonicalProject, linkedWorktree)).toBe(true);
   });
 });
