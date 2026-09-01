@@ -30,9 +30,9 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 #[derive(Debug)]
@@ -51,6 +51,21 @@ struct ActiveRemoteOAuthSession {
     shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
 }
 
+pub(super) struct PersistedServerOperationGuard {
+    server_id: String,
+    in_flight: Arc<StdMutex<HashSet<String>>>,
+}
+
+impl Drop for PersistedServerOperationGuard {
+    fn drop(&mut self) {
+        let mut in_flight = self
+            .in_flight
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        in_flight.remove(&self.server_id);
+    }
+}
+
 /// MCP server manager.
 #[derive(Clone)]
 pub struct MCPServerManager {
@@ -67,6 +82,8 @@ pub struct MCPServerManager {
     ephemeral_start_tokens: Arc<tokio::sync::RwLock<HashMap<String, Arc<()>>>>,
     tool_context_policy: Arc<MCPToolContextPolicy>,
     ephemeral_lifecycle: Arc<Mutex<()>>,
+    persisted_lifecycle: Arc<RwLock<()>>,
+    persisted_server_operations: Arc<StdMutex<HashSet<String>>>,
 }
 
 impl MCPServerManager {
@@ -93,6 +110,8 @@ impl MCPServerManager {
             ephemeral_start_tokens: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             tool_context_policy: Arc::new(MCPToolContextPolicy::default()),
             ephemeral_lifecycle: Arc::new(Mutex::new(())),
+            persisted_lifecycle: Arc::new(RwLock::new(())),
+            persisted_server_operations: Arc::new(StdMutex::new(HashSet::new())),
         }
     }
 

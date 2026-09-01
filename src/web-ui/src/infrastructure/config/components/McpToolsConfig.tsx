@@ -41,6 +41,8 @@ import './McpToolsConfig.scss';
 
 const log = createLogger('McpToolsConfig');
 
+type MCPServerLifecycleAction = 'start' | 'stop' | 'restart' | 'authorize';
+
 // ─── MCP error classifier (from MCPConfig) ────────────────────────────────────
 interface ErrorInfo {
   title: string;
@@ -177,6 +179,7 @@ const McpToolsConfig: React.FC = () => {
   const oauthPollTimerRef = useRef<number | null>(null);
   const serverLoadRequestIdRef = useRef(0);
   const jsonLoadRequestIdRef = useRef(0);
+  const serverLifecycleActionsRef = useRef(new Map<string, MCPServerLifecycleAction>());
   const capabilityRef = useRef({ available: desktopConfigAvailable, epoch: 0 });
   const [servers, setServers] = useState<MCPServerInfo[]>([]);
   const [mcpLoading, setMcpLoading] = useState(true);
@@ -186,6 +189,10 @@ const McpToolsConfig: React.FC = () => {
   const [jsonConfigFingerprint, setJsonConfigFingerprint] = useState('');
   const [jsonLoading, setJsonLoading] = useState(true);
   const [jsonLoadFailed, setJsonLoadFailed] = useState(false);
+  const [mcpSaving, setMcpSaving] = useState(false);
+  const [serverLifecycleActions, setServerLifecycleActions] = useState<
+    Record<string, MCPServerLifecycleAction>
+  >({});
   const [authDialogServer, setAuthDialogServer] = useState<MCPServerInfo | null>(null);
   const [authValue, setAuthValue] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
@@ -214,6 +221,29 @@ const McpToolsConfig: React.FC = () => {
   const capabilityIsCurrent = useCallback((epoch: number): boolean => (
     capabilityRef.current.available && capabilityRef.current.epoch === epoch
   ), []);
+
+  const beginServerLifecycleAction = (
+    serverId: string,
+    action: MCPServerLifecycleAction,
+  ): boolean => {
+    if (serverLifecycleActionsRef.current.has(serverId)) return false;
+    serverLifecycleActionsRef.current.set(serverId, action);
+    setServerLifecycleActions((current) => ({ ...current, [serverId]: action }));
+    return true;
+  };
+
+  const endServerLifecycleAction = (
+    serverId: string,
+    action: MCPServerLifecycleAction,
+  ) => {
+    if (serverLifecycleActionsRef.current.get(serverId) !== action) return;
+    serverLifecycleActionsRef.current.delete(serverId);
+    setServerLifecycleActions((current) => {
+      const next = { ...current };
+      delete next[serverId];
+      return next;
+    });
+  };
 
   const tryFormatJson = (input: string): string | null => {
     try {
@@ -383,6 +413,8 @@ const McpToolsConfig: React.FC = () => {
     serverLoadRequestIdRef.current += 1;
     jsonLoadRequestIdRef.current += 1;
     if (!desktopConfigAvailable) {
+      serverLifecycleActionsRef.current.clear();
+      setServerLifecycleActions({});
       setServers([]);
       setMcpLoading(false);
       setServerLoadFailed(false);
@@ -401,6 +433,21 @@ const McpToolsConfig: React.FC = () => {
     void loadServers();
     void loadJsonConfig();
   }, [desktopConfigAvailable, loadJsonConfig, loadServers]);
+
+  useEffect(() => {
+    if (!desktopConfigAvailable || mcpLoading) return;
+    const hasPendingAutoStart = servers.some((server) => {
+      if (!server.enabled || !server.autoStart) return false;
+      const status = server.status.trim().toLowerCase();
+      return ['uninitialized', 'starting', 'reconnecting', 'stopping'].includes(status);
+    });
+    if (!hasPendingAutoStart) return;
+
+    const timer = window.setTimeout(() => {
+      void loadServers();
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [desktopConfigAvailable, loadServers, mcpLoading, servers]);
 
   useEffect(() => {
     return () => {
@@ -455,6 +502,8 @@ const McpToolsConfig: React.FC = () => {
   const handleSaveJsonConfig = async () => {
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
+    if (mcpSaving) return;
+    setMcpSaving(true);
     try {
       let parsedConfig;
       try {
@@ -480,28 +529,10 @@ const McpToolsConfig: React.FC = () => {
         duration: 3000,
       });
       setShowJsonEditor(false);
-
-      void (async () => {
-        try {
-          await loadServers();
-          if (!capabilityIsCurrent(capabilityEpoch)) return;
-          await MCPAPI.initializeServers();
-          if (!capabilityIsCurrent(capabilityEpoch)) return;
-        } catch {
-          if (!capabilityIsCurrent(capabilityEpoch)) return;
-          notification.warning(tMcp('messages.partialStartFailed'), {
-            title: tMcp('notifications.partialStartFailed'),
-            duration: 5000,
-          });
-        } finally {
-          if (capabilityIsCurrent(capabilityEpoch)) {
-            await loadServers();
-            if (capabilityIsCurrent(capabilityEpoch)) {
-              await loadJsonConfig();
-            }
-          }
-        }
-      })();
+      await loadServers();
+      if (capabilityIsCurrent(capabilityEpoch)) {
+        await loadJsonConfig();
+      }
     } catch (error) {
       if (!capabilityIsCurrent(capabilityEpoch)) return;
       const errorInfo = classifyError(error, tMcp('actions.saveConfig'));
@@ -517,6 +548,8 @@ const McpToolsConfig: React.FC = () => {
         title: errorInfo.title,
         duration: errorInfo.duration,
       });
+    } finally {
+      setMcpSaving(false);
     }
   };
 
@@ -668,7 +701,19 @@ const McpToolsConfig: React.FC = () => {
       return;
     }
 
+    // OAuth-enabled remote servers cannot complete an MCP handshake before the
+    // first authorization. Enter OAuth directly instead of surfacing the
+    // provider's expected 401 challenge as a server-start failure.
+    if (isRemoteServer(server) && server.oauthEnabled === true && server.authConfigured === false) {
+      if (serverLifecycleActionsRef.current.has(server.id)) return;
+      handleOpenAuthDialog(server, false);
+      void startRemoteOAuthFlow(server);
+      return;
+    }
+
     const serverId = server.id;
+    let shouldStartOAuth = false;
+    if (!beginServerLifecycleAction(serverId, 'start')) return;
     try {
       await MCPAPI.startServer(serverId);
       if (!capabilityIsCurrent(capabilityEpoch)) return;
@@ -679,24 +724,30 @@ const McpToolsConfig: React.FC = () => {
       await loadServers();
     } catch (error) {
       if (!capabilityIsCurrent(capabilityEpoch)) return;
-      if (isRemoteServer(server) && isLikelyRemoteAuthError(error)) {
-        handleOpenAuthDialog(server);
-        if (server.oauthEnabled) {
-          void startRemoteOAuthFlow(server);
-        }
+      const needsRemoteAuth = isRemoteServer(server) && isLikelyRemoteAuthError(error);
+      if (needsRemoteAuth) {
+        handleOpenAuthDialog(server, false);
+        shouldStartOAuth = server.oauthEnabled === true;
+      } else {
+        notification.error(
+          tMcp('messages.startFailed', { serverId }) +
+            ': ' +
+            getErrorMessage(error),
+          { title: tMcp('notifications.startFailed'), duration: 5000 }
+        );
       }
-      notification.error(
-        tMcp('messages.startFailed', { serverId }) +
-          ': ' +
-          getErrorMessage(error),
-        { title: tMcp('notifications.startFailed'), duration: 5000 }
-      );
+    } finally {
+      endServerLifecycleAction(serverId, 'start');
+    }
+    if (shouldStartOAuth && capabilityIsCurrent(capabilityEpoch)) {
+      void startRemoteOAuthFlow(server);
     }
   };
 
   const handleStopServer = async (serverId: string) => {
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
+    if (!beginServerLifecycleAction(serverId, 'stop')) return;
     try {
       await MCPAPI.stopServer(serverId);
       if (!capabilityIsCurrent(capabilityEpoch)) return;
@@ -713,6 +764,8 @@ const McpToolsConfig: React.FC = () => {
           (error instanceof Error ? error.message : String(error)),
         { title: tMcp('notifications.stopFailed'), duration: 5000 }
       );
+    } finally {
+      endServerLifecycleAction(serverId, 'stop');
     }
   };
 
@@ -724,7 +777,16 @@ const McpToolsConfig: React.FC = () => {
       return;
     }
 
+    if (isRemoteServer(server) && server.oauthEnabled === true && server.authConfigured === false) {
+      if (serverLifecycleActionsRef.current.has(server.id)) return;
+      handleOpenAuthDialog(server, false);
+      void startRemoteOAuthFlow(server);
+      return;
+    }
+
     const serverId = server.id;
+    let shouldStartOAuth = false;
+    if (!beginServerLifecycleAction(serverId, 'restart')) return;
     try {
       await MCPAPI.restartServer(serverId);
       if (!capabilityIsCurrent(capabilityEpoch)) return;
@@ -735,22 +797,27 @@ const McpToolsConfig: React.FC = () => {
       await loadServers();
     } catch (error) {
       if (!capabilityIsCurrent(capabilityEpoch)) return;
-      if (isRemoteServer(server) && isLikelyRemoteAuthError(error)) {
-        handleOpenAuthDialog(server);
-        if (server.oauthEnabled) {
-          void startRemoteOAuthFlow(server);
-        }
+      const needsRemoteAuth = isRemoteServer(server) && isLikelyRemoteAuthError(error);
+      if (needsRemoteAuth) {
+        handleOpenAuthDialog(server, false);
+        shouldStartOAuth = server.oauthEnabled === true;
+      } else {
+        notification.error(
+          tMcp('messages.restartFailed', { serverId }) +
+            ': ' +
+            getErrorMessage(error),
+          { title: tMcp('notifications.restartFailed'), duration: 5000 }
+        );
       }
-      notification.error(
-        tMcp('messages.restartFailed', { serverId }) +
-          ': ' +
-          getErrorMessage(error),
-        { title: tMcp('notifications.restartFailed'), duration: 5000 }
-      );
+    } finally {
+      endServerLifecycleAction(serverId, 'restart');
+    }
+    if (shouldStartOAuth && capabilityIsCurrent(capabilityEpoch)) {
+      void startRemoteOAuthFlow(server);
     }
   };
 
-  function handleOpenAuthDialog(server: MCPServerInfo) {
+  function handleOpenAuthDialog(server: MCPServerInfo, loadExistingOAuthSession = true) {
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
     setAuthDialogServer(server);
@@ -760,7 +827,7 @@ const McpToolsConfig: React.FC = () => {
     setOauthCancelling(false);
     stopOAuthPolling();
 
-    if (server.oauthEnabled) {
+    if (server.oauthEnabled && loadExistingOAuthSession) {
       void (async () => {
         try {
           const session = await MCPAPI.getRemoteOAuthSession({ serverId: server.id });
@@ -909,6 +976,7 @@ const McpToolsConfig: React.FC = () => {
   async function startRemoteOAuthFlow(server: MCPServerInfo) {
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
+    if (!beginServerLifecycleAction(server.id, 'authorize')) return;
     setOauthStarting(true);
     try {
       const session = await MCPAPI.startRemoteOAuth({ serverId: server.id });
@@ -934,6 +1002,7 @@ const McpToolsConfig: React.FC = () => {
         duration: errorInfo.duration,
       });
     } finally {
+      endServerLifecycleAction(server.id, 'authorize');
       if (capabilityIsCurrent(capabilityEpoch)) {
         setOauthStarting(false);
       }
@@ -964,7 +1033,7 @@ const McpToolsConfig: React.FC = () => {
 
   const isStopped = (status: string) => {
     const s = status.toLowerCase();
-    return s.includes('stopped') || s.includes('failed') || s.includes('auth');
+    return s.includes('uninitialized') || s.includes('stopped') || s.includes('failed') || s.includes('auth');
   };
 
   const getServerStatusLabel = (status: string) => {
@@ -1123,73 +1192,99 @@ const McpToolsConfig: React.FC = () => {
     </span>
   );
 
-  const renderServerControl = (server: MCPServerInfo) => (
-    <>
-      {isRemoteServer(server) && (
-        <Tooltip content={tMcp('actions.remoteAuth')}>
+  const renderServerControl = (server: MCPServerInfo) => {
+    const pendingAction = serverLifecycleActions[server.id];
+    const oauthPending = authDialogServer?.id === server.id
+      && oauthSession !== null
+      && !['authorized', 'failed', 'cancelled'].includes(oauthSession.status);
+    const lifecyclePending = pendingAction !== undefined || oauthPending;
+
+    return (
+      <>
+        {isRemoteServer(server) && (
+          <Tooltip content={tMcp('actions.remoteAuth')}>
           <IconButton
             size="sm"
             onClick={() => handleOpenAuthDialog(server)}
+            disabled={lifecyclePending}
+            data-testid="mcp-server-auth"
             aria-label={tMcp('actions.remoteAuth')}
-            icon={<KeyRound size={14} />}
-          />
-        </Tooltip>
-      )}
-      <Tooltip content={tMcp('actions.delete')}>
+              icon={pendingAction === 'authorize'
+                ? <ToolProcessingDots size={10} />
+                : <KeyRound size={14} />}
+            />
+          </Tooltip>
+        )}
+        <Tooltip content={tMcp('actions.delete')}>
         <IconButton
           size="sm"
           onClick={() => handleDeleteServer(server)}
+          disabled={lifecyclePending}
+          data-testid="mcp-server-delete"
           aria-label={tMcp('actions.delete')}
-          icon={<Trash2 size={14} />}
-        />
-      </Tooltip>
-      {isStopped(server.status) ? (
-        <Tooltip content={
+            icon={<Trash2 size={14} />}
+          />
+        </Tooltip>
+        {isStopped(server.status) ? (
+          <Tooltip content={
             canStartServer(server)
               ? tMcp('actions.start')
               : tMcp('messages.commandUnavailable', { serverId: server.id })
           }>
-          <IconButton
-            size="sm"
-            variant="primary"
+            <IconButton
+              size="sm"
+              variant="primary"
             onClick={() => handleStartServer(server)}
-            aria-label={
-              canStartServer(server)
-                ? tMcp('actions.start')
-                : tMcp('messages.commandUnavailable', { serverId: server.id })
-            }
-            icon={<Play size={14} />}
-          />
-        </Tooltip>
-      ) : (
-        <Tooltip content={tMcp('actions.stop')}>
-          <IconButton
-            size="sm"
-            tone="danger"
+            disabled={lifecyclePending}
+            data-testid="mcp-server-start"
+              aria-label={
+                canStartServer(server)
+                  ? tMcp('actions.start')
+                  : tMcp('messages.commandUnavailable', { serverId: server.id })
+              }
+              icon={pendingAction === 'start'
+                ? <ToolProcessingDots size={10} />
+                : <Play size={14} />}
+            />
+          </Tooltip>
+        ) : (
+          <Tooltip content={tMcp('actions.stop')}>
+            <IconButton
+              size="sm"
+              tone="danger"
             onClick={() => handleStopServer(server.id)}
-            aria-label={tMcp('actions.stop')}
-            icon={<Square size={14} />}
-          />
-        </Tooltip>
-      )}
-      <Tooltip content={
+            disabled={lifecyclePending}
+            data-testid="mcp-server-stop"
+              aria-label={tMcp('actions.stop')}
+              icon={pendingAction === 'stop'
+                ? <ToolProcessingDots size={10} />
+                : <Square size={14} />}
+            />
+          </Tooltip>
+        )}
+        <Tooltip content={
           canStartServer(server)
             ? tMcp('actions.restart')
             : tMcp('messages.commandUnavailable', { serverId: server.id })
         }>
-        <IconButton
-          size="sm"
+          <IconButton
+            size="sm"
           onClick={() => handleRestartServer(server)}
-          aria-label={
-            canStartServer(server)
-              ? tMcp('actions.restart')
-              : tMcp('messages.commandUnavailable', { serverId: server.id })
-          }
-          icon={<RefreshCw size={14} />}
-        />
-      </Tooltip>
-    </>
-  );
+          disabled={lifecyclePending}
+          data-testid="mcp-server-restart"
+            aria-label={
+              canStartServer(server)
+                ? tMcp('actions.restart')
+                : tMcp('messages.commandUnavailable', { serverId: server.id })
+            }
+            icon={pendingAction === 'restart'
+              ? <ToolProcessingDots size={10} />
+              : <RefreshCw size={14} />}
+          />
+        </Tooltip>
+      </>
+    );
+  };
 
   const renderServerDetails = (server: MCPServerInfo) => {
     if (!server.statusMessage && !isCommandDrivenServer(server) && !isRemoteServer(server)) return null;
@@ -1363,10 +1458,15 @@ const McpToolsConfig: React.FC = () => {
                 }
               />
               <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
-                <Button variant="outline" onClick={() => setShowJsonEditor(false)}>
+                <Button variant="outline" onClick={() => setShowJsonEditor(false)} disabled={mcpSaving}>
                   {tMcp('actions.cancel')}
                 </Button>
-                <Button variant="fill" onClick={handleSaveJsonConfig}>
+                <Button
+                  variant="fill"
+                  onClick={handleSaveJsonConfig}
+                  loading={mcpSaving}
+                  disabled={mcpSaving}
+                >
                   {tMcp('actions.saveConfig')}
                 </Button>
               </div>
@@ -1411,6 +1511,8 @@ const McpToolsConfig: React.FC = () => {
             servers.map((server) => (
               <ConfigCollectionItem
                 key={server.id}
+                data-testid="mcp-server-item"
+                data-server-id={server.id}
                 label={server.name}
                 badge={renderServerBadge(server)}
                 control={renderServerControl(server)}
