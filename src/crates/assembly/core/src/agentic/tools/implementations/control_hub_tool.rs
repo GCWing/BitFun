@@ -63,6 +63,20 @@ fn browser_sessions() -> Arc<BrowserSessionRegistry> {
         .clone()
 }
 
+/// Disconnect the user-selected external browser from BitFun without closing
+/// any browser tabs or changing the browser-owned Remote debugging preference.
+/// Page sessions and the retained browser WebSocket share this cleanup so an
+/// in-flight or later tool action cannot continue through a stale binding.
+pub async fn disconnect_external_browser(port: u16) -> usize {
+    CdpClient::suppress_browser_connection(port).await;
+    let sessions = browser_sessions().remove_by_port(port).await;
+    for session in &sessions {
+        session.client.disconnect().await;
+    }
+    let browser_connection_removed = CdpClient::disconnect_browser_connection(port).await;
+    sessions.len() + usize::from(browser_connection_removed)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BrowserTargetKind {
     External,
@@ -117,6 +131,40 @@ impl Default for ControlHubTool {
 impl ControlHubTool {
     pub fn new() -> Self {
         Self
+    }
+
+    fn browser_disconnected_error() -> ControlHubError {
+        ControlHubError::new(
+            ErrorCode::NotAvailable,
+            "Browser Control was disconnected by the user in Settings.",
+        )
+        .with_hint(
+            "Ask the user to reconnect it in Settings > Desktop & browser before using external-browser actions again.",
+        )
+        .with_hint(
+            "Use target='builtin' for BitFun's built-in browser when that surface is sufficient.",
+        )
+    }
+
+    /// Register an external page only while the Settings-owned connection is
+    /// allowed. The second check closes the race where Disconnect lands after
+    /// CDP attachment but before the new page session reaches the registry.
+    async fn register_external_session(session: &BrowserSession) -> Result<(), ControlHubError> {
+        if CdpClient::browser_connection_suppressed(session.port).await {
+            session.client.disconnect().await;
+            return Err(Self::browser_disconnected_error());
+        }
+
+        let registry = browser_sessions();
+        registry.register(session.clone()).await;
+
+        if CdpClient::browser_connection_suppressed(session.port).await {
+            registry.remove(&session.session_id).await;
+            session.client.disconnect().await;
+            return Err(Self::browser_disconnected_error());
+        }
+
+        Ok(())
     }
 
     fn browser_target_kind(params: &Value) -> Result<BrowserTargetKind, ControlHubError> {
@@ -1042,6 +1090,16 @@ Branch on `ok` and `error.code`, not on English messages.
                 .unwrap_or(DEFAULT_CDP_PORT),
         };
 
+        if browser_target_kind == BrowserTargetKind::External
+            && CdpClient::browser_connection_suppressed(port).await
+        {
+            return Ok(err_response(
+                "browser",
+                action,
+                Self::browser_disconnected_error(),
+            ));
+        }
+
         match action {
             "open_builtin" => {
                 let raw_url = params.get("url").and_then(Value::as_str).unwrap_or("");
@@ -1370,7 +1428,9 @@ Branch on `ok` and `error.code`, not on English messages.
                             client: Arc::new(client),
                             state: Arc::new(BrowserSessionState::new()),
                         };
-                        browser_sessions().register(session.clone()).await;
+                        if let Err(error) = Self::register_external_session(&session).await {
+                            return Ok(err_response("browser", "connect", error));
+                        }
 
                         // Enable CDP observers so network/console/error events
                         // start recording immediately for later query via
@@ -1722,7 +1782,9 @@ Branch on `ok` and `error.code`, not on English messages.
                     client: Arc::new(client),
                     state: Arc::new(BrowserSessionState::new()),
                 };
-                browser_sessions().register(session.clone()).await;
+                if let Err(error) = Self::register_external_session(&session).await {
+                    return Ok(err_response("browser", "tab_new", error));
+                }
                 let _ = BrowserActions::new(session.client.as_ref())
                     .enable_observers()
                     .await;
@@ -1807,7 +1869,9 @@ Branch on `ok` and `error.code`, not on English messages.
                         client: Arc::new(client),
                         state: Arc::new(BrowserSessionState::new()),
                     };
-                    registry.register(session.clone()).await;
+                    if let Err(error) = Self::register_external_session(&session).await {
+                        return Ok(err_response("browser", "switch_page", error));
+                    }
                     let _ = BrowserActions::new(session.client.as_ref())
                         .enable_observers()
                         .await;
@@ -4169,6 +4233,33 @@ mod control_hub_tests {
             "expected headless guidance in hints: {}",
             payload
         );
+    }
+
+    #[tokio::test]
+    async fn settings_disconnect_blocks_external_actions_until_user_reconnects() {
+        let port = 61_337;
+        CdpClient::suppress_browser_connection(port).await;
+
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch(
+                "browser",
+                "connect",
+                &json!({ "mode": "headless", "port": port }),
+                &ctx,
+            )
+            .await
+            .expect("disconnect is returned as a structured error");
+        let payload = results[0].content();
+        assert_eq!(payload["ok"], false);
+        assert_eq!(payload["error"]["code"], "NOT_AVAILABLE");
+        assert!(payload["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("disconnected by the user")));
+
+        CdpClient::allow_browser_connection(port).await;
+        assert!(!CdpClient::browser_connection_suppressed(port).await);
     }
 
     #[test]

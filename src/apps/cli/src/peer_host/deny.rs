@@ -162,6 +162,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "browser_control_get_status",
     "browser_control_restart_with_cdp",
     "browser_control_enable_default_cdp",
+    "browser_control_disconnect",
     "browser_webview_create",
     "browser_webview_eval",
     "browser_webview_navigate",
