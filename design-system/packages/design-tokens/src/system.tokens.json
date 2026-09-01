@@ -521,12 +521,17 @@
       "$type": "dimension",
       "gap": { "$value": "2px" },
       "padding": { "$value": "2px" },
+      "paddingMd": { "$value": "3px" },
       "radius": { "$value": "{radius.pill}" },
       "segmentHeight": { "$value": "22px" },
+      "segmentHeightMd": { "$value": "28px" },
+      "pillSegmentHeight": { "$value": "24px" },
       "segmentPaddingInline": { "$value": "{space.2}" },
       "segmentGap": { "$value": "{space.1}" },
       "segmentRadius": { "$value": "{radius.pill}" },
-      "iconSize": { "$value": "12px" }
+      "pillSegmentRadius": { "$value": "{radius.sm}" },
+      "iconSize": { "$value": "12px" },
+      "iconSizeMd": { "$value": "14px" }
     },
     "composer": {
       "$type": "dimension",

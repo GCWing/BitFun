@@ -16,6 +16,15 @@
     background: var(--bf-color-action-neutral-surface);
   }
 
+  .root[data-distribution="fill"] {
+    display: flex;
+    inline-size: 100%;
+  }
+
+  .root[data-distribution="fill"] .segment {
+    flex: 1 1 0;
+  }
+
   .segment {
     display: inline-flex;
     align-items: center;
@@ -46,6 +55,40 @@
     color: var(--bf-color-content-primary);
     background: var(--bf-color-surface-raised);
     font-weight: var(--bf-type-label-selected-font-weight);
+  }
+
+  .root[data-size="md"] {
+    padding: var(--bf-control-segmented-control-padding-md);
+  }
+
+  .root[data-size="md"] .segment {
+    block-size: var(--bf-control-segmented-control-segment-height-md);
+  }
+
+  .root[data-size="md"] .icon {
+    inline-size: var(--bf-control-segmented-control-icon-size-md);
+    block-size: var(--bf-control-segmented-control-icon-size-md);
+  }
+
+  .root[data-variant="pills"] {
+    gap: var(--bf-space-2);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .root[data-variant="pills"] .segment {
+    block-size: var(--bf-control-segmented-control-pill-segment-height);
+    border: var(--bf-border-width-default) solid var(--bf-color-action-neutral-border);
+    border-radius: var(--bf-control-segmented-control-pill-segment-radius);
+    background: var(--bf-color-surface-raised);
+  }
+
+  .root[data-variant="pills"] .segment[aria-checked="true"] {
+    border-color: var(--bf-color-action-primary-background);
+    color: var(--bf-color-action-primary-content);
+    background: var(--bf-color-action-primary-background);
   }
 
   .segment:hover:not(:disabled)[aria-checked="false"],

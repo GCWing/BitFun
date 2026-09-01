@@ -1,5 +1,10 @@
 import React from 'react';
 import { Icon, type IconName, type IconSize } from '@bitfun/ui';
+import codingFootprintIcon from '@/assets/miniapps/catalog/coding-footprint.png';
+import dailyDivinationIcon from '@/assets/miniapps/catalog/daily-divination.png';
+import gomokuIcon from '@/assets/miniapps/catalog/gomoku.png';
+import pptLiveIcon from '@/assets/miniapps/catalog/ppt-live.png';
+import regexPlaygroundIcon from '@/assets/miniapps/catalog/regex-playground.png';
 import {
   Aperture,
   AppWindow,
@@ -64,6 +69,18 @@ const MINI_APP_ICONS = {
   Workflow,
   Wrench,
 } satisfies Record<string, LucideIcon>;
+
+const BUILTIN_MINI_APP_ICON_ASSETS: Readonly<Record<string, string>> = {
+  'builtin-coding-selfie': codingFootprintIcon,
+  'builtin-daily-divination': dailyDivinationIcon,
+  'builtin-gomoku': gomokuIcon,
+  'builtin-ppt-live': pptLiveIcon,
+  'builtin-regex-playground': regexPlaygroundIcon,
+};
+
+export function getMiniAppIconAsset(id: string): string | undefined {
+  return BUILTIN_MINI_APP_ICON_ASSETS[id];
+}
 
 export function renderMiniAppIcon(name: string, size = 28): React.ReactNode {
   const key = name

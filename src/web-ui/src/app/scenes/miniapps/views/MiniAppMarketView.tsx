@@ -62,7 +62,11 @@ const CATEGORIES = [
   'other',
 ] as const;
 
-const MiniAppMarketView: React.FC = () => {
+interface MiniAppMarketViewProps {
+  tabs?: React.ReactNode;
+}
+
+const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
   const { t, formatNumber, currentLanguage } = useI18n('scenes/miniapp');
   const notification = useNotification();
   const { workspace } = useCurrentWorkspace();
@@ -287,6 +291,8 @@ const MiniAppMarketView: React.FC = () => {
           </div>
         )}
       />
+
+      {tabs}
 
       <div
         className="gallery-zones"

@@ -138,6 +138,18 @@ $content-max: 1360px;
     color: var(--bf-color-content-primary);
   }
 
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--bf-space-2);
+    min-width: 0;
+  }
+
+  &__title-adornment {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
   &__subtitle {
     font-family: var(--bf-type-support-font-family);
     font-size: var(--bf-type-support-font-size);
