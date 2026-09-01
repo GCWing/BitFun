@@ -1,5 +1,5 @@
 import type { WorkspaceInfo } from '@/shared/types';
-import { isLinkedWorktreeWorkspace } from '@/shared/types';
+import { isLinkedWorktreeWorkspace, isRemoteWorkspace } from '@/shared/types';
 import { isSamePath } from '@/shared/utils/pathUtils';
 
 export type SessionNavigationScope = 'all' | 'assistants' | 'projects';
@@ -17,6 +17,28 @@ export interface WorkspaceBackedSessionGroup {
   groupId: `workspace:${string}`;
   kind: WorkspaceBackedSessionGroupKind;
   workspace: WorkspaceInfo;
+}
+
+/**
+ * Resolve the active sidebar group without treating a remote POSIX path as a
+ * workspace identity. The same path can be open on multiple remote hosts, so
+ * remote workspaces must match by their stable workspace id. Local path
+ * matching remains available for a linked worktree whose canonical project is
+ * the visible navigation group.
+ */
+export function isWorkspaceBackedSessionGroupActive(
+  workspace: WorkspaceInfo,
+  activeWorkspace: WorkspaceInfo | null | undefined,
+): boolean {
+  if (!activeWorkspace) return false;
+  if (workspace.id === activeWorkspace.id) return true;
+  if (isRemoteWorkspace(workspace) || isRemoteWorkspace(activeWorkspace)) return false;
+
+  const activeProjectPath = activeWorkspace.worktree && !activeWorkspace.worktree.isMain
+    ? activeWorkspace.worktree.mainRepoPath
+    : activeWorkspace.rootPath;
+
+  return Boolean(activeProjectPath && isSamePath(workspace.rootPath, activeProjectPath));
 }
 
 const isWorkspaceInScope = (
