@@ -287,8 +287,25 @@ mod tests {
         assert_eq!(out.len(), 2);
         assert_eq!(out[0]["title"], "Result One");
         assert_eq!(out[0]["url"], "https://example.com/one");
-        assert_eq!(out[0]["snippet"], "Result One First paragraph.");
+        assert_eq!(out[0]["published"], "2026-08-30T00:00:00.000Z");
+        assert_eq!(out[0]["author"], "First Author");
+        assert!(out[0].get("snippet").is_none());
         assert_eq!(out[1]["title"], "Result Two");
+    }
+
+    #[test]
+    fn websearch_schema_contains_only_supported_arguments() {
+        let schema = WebSearchTool::new().input_schema();
+        let properties = schema["properties"].as_object().expect("properties");
+
+        assert_eq!(properties.len(), 2);
+        assert!(properties.contains_key("query"));
+        assert!(properties.contains_key("num_results"));
+        assert_eq!(properties["num_results"]["default"], 10);
+        assert_eq!(properties["num_results"]["minimum"], 1);
+        assert_eq!(properties["num_results"]["maximum"], 20);
+        assert_eq!(schema["required"], json!(["query"]));
+        assert_eq!(schema["additionalProperties"], false);
     }
 
     #[test]
@@ -309,14 +326,18 @@ mod tests {
                 assert_eq!(data["provider"], "exa_mcp");
                 assert_eq!(data["results"][0]["title"], "Result One");
                 assert_eq!(data["results"][0]["url"], "https://example.com/one");
-                assert_eq!(data["results"][0]["snippet"], "Result One First paragraph.");
+                assert_eq!(data["results"][0]["published"], "2026-08-30T00:00:00.000Z");
+                assert_eq!(data["results"][0]["author"], "First Author");
+                assert!(data["results"][0].get("snippet").is_none());
 
                 let assistant_text = result_for_assistant.as_deref().expect("assistant text");
                 assert!(assistant_text.contains("Search query: 'example query'"));
                 assert!(assistant_text.contains("Found 2 results:"));
                 assert!(assistant_text.contains("1. Result One"));
                 assert!(assistant_text.contains("URL: https://example.com/one"));
-                assert!(assistant_text.contains("Snippet: Result One First paragraph."));
+                assert!(assistant_text.contains("Published: 2026-08-30T00:00:00.000Z"));
+                assert!(assistant_text.contains("Author: First Author"));
+                assert!(!assistant_text.contains("Highlights:"));
             }
             other => panic!("unexpected tool result variant: {:?}", other),
         }
@@ -325,15 +346,17 @@ mod tests {
     fn websearch_sample_text() -> &'static str {
         r#"Title: Result One
 URL: https://example.com/one
-Text: Result One
-
-First paragraph.
+Published: 2026-08-30T00:00:00.000Z
+Author: First Author
+Highlights:
+Very long first highlight that should not enter the tool result.
 
 Title: Result Two
 URL: https://example.com/two
-Text: Result Two
-
-Second paragraph.
+Published: N/A
+Author: N/A
+Highlights:
+Very long second highlight that should not enter the tool result.
 "#
     }
 }

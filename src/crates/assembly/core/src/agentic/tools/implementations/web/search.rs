@@ -8,8 +8,8 @@ use log::{error, info};
 use serde_json::{json, Value};
 use tool_runtime::web_search::{parse_exa_text_results, WebSearchResult};
 
-const EXA_RESULTS: u64 = 5;
-const EXA_CONTEXT: u64 = 8_000;
+const EXA_RESULTS: u64 = 10;
+const EXA_MAX_RESULTS: u64 = 20;
 
 pub struct WebSearchTool;
 
@@ -24,20 +24,10 @@ impl WebSearchTool {
         Self
     }
 
-    async fn search(
-        &self,
-        query: &str,
-        num: u64,
-        kind: &str,
-        crawl: &str,
-        ctx: u64,
-    ) -> BitFunResult<String> {
+    async fn search(&self, query: &str, num: u64) -> BitFunResult<String> {
         WebToolNetworkProvider::search_exa(ExaSearchRequest {
             query,
             num_results: num,
-            kind,
-            livecrawl: crawl,
-            context_max_characters: ctx,
         })
         .await
         .map_err(|error| {
@@ -58,7 +48,8 @@ fn search_result_to_value(result: WebSearchResult) -> Value {
     json!({
         "title": result.title,
         "url": result.url,
-        "snippet": result.snippet,
+        "published": result.published,
+        "author": result.author,
     })
 }
 
@@ -68,11 +59,12 @@ pub(super) fn build_web_search_tool_result(query: &str, results: Vec<Value>) -> 
         .enumerate()
         .map(|(i, r)| {
             format!(
-                "{}. {}\n   URL: {}\n   Snippet: {}\n",
+                "{}. {}\n   URL: {}\n   Published: {}\n   Author: {}\n",
                 i + 1,
                 r["title"].as_str().unwrap_or("Untitled"),
                 r["url"].as_str().unwrap_or(""),
-                r["snippet"].as_str().unwrap_or("")
+                r["published"].as_str().unwrap_or(""),
+                r["author"].as_str().unwrap_or("")
             )
         })
         .collect::<Vec<_>>()
@@ -102,25 +94,7 @@ impl Tool for WebSearchTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(
-            r#"- Allows BitFun to search the web and use the results to inform responses
-- Provides up-to-date information for current events and recent data
-- Returns search result information formatted as search result blocks
-- Use this tool for accessing information beyond BitFun's knowledge cutoff
-
-Usage notes:
-- Use when you need current information not in training data
-- Effective for recent news, current events, product updates, or real-time data
-- Search queries should be specific and well-targeted for best results
-- Results include title, URL, snippet and source information
-
-Advanced features:
-- Choose search depth: auto, fast, or deep
-- Control result count and context size for LLM-friendly output
-- Optionally prefer live crawling for fresher pages
-- Return up to 10 results per query"#
-                .to_string(),
-        )
+        Ok("Search the web for up-to-date information and sources.".to_string())
     }
 
     fn short_description(&self) -> String {
@@ -141,32 +115,11 @@ Advanced features:
                 },
                 "num_results": {
                     "type": "number",
-                    "description": "Number of search results to return (1-10, default: 5)",
-                    "default": EXA_RESULTS,
-                    "minimum": 1,
-                    "maximum": 10
-                },
-                "type": {
-                    "type": "string",
-                    "enum": ["auto", "fast", "deep"],
-                    "description": "Search depth. Use 'auto' for balanced results, 'fast' for lower latency, or 'deep' for broader context.",
-                    "default": "auto"
-                },
-                "livecrawl": {
-                    "type": "string",
-                    "enum": ["fallback", "preferred"],
-                    "description": "Live crawl mode. Use 'preferred' to favor fresh crawling, or 'fallback' to use cached data when possible.",
-                    "default": "fallback"
-                },
-                "context_max_characters": {
-                    "type": "number",
-                    "description": "Maximum characters of search context to request (default: 8000)",
-                    "default": EXA_CONTEXT,
-                    "minimum": 1000,
-                    "maximum": 20000
+                    "description": "Number of search results to return (1-20, default: 10)"
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": false
         })
     }
 
@@ -209,27 +162,14 @@ Advanced features:
             .get("num_results")
             .and_then(|v| v.as_u64())
             .unwrap_or(EXA_RESULTS)
-            .clamp(1, 10);
-
-        let kind = input.get("type").and_then(|v| v.as_str()).unwrap_or("auto");
-
-        let crawl = input
-            .get("livecrawl")
-            .and_then(|v| v.as_str())
-            .unwrap_or("fallback");
-
-        let ctx = input
-            .get("context_max_characters")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(EXA_CONTEXT)
-            .clamp(1_000, 20_000);
+            .clamp(1, EXA_MAX_RESULTS);
 
         info!(
-            "WebSearch Exa call: query='{}', num_results={}, type={}, livecrawl={}, context_max_characters={}",
-            query, num_results, kind, crawl, ctx
+            "WebSearch Exa call: query='{}', num_results={}",
+            query, num_results
         );
 
-        let raw = self.search(query, num_results, kind, crawl, ctx).await?;
+        let raw = self.search(query, num_results).await?;
         let results = self.results(&raw);
         Ok(vec![build_web_search_tool_result(query, results)])
     }
