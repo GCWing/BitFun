@@ -103,6 +103,28 @@ test("prominent error status opens error content without a separate failure flag
   assert.match(markup, /Command failed/);
 });
 
+test("prominent error status can opt into expandable supporting details", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ProminentToolCard, {
+      allowExpandedWhenFailed: true,
+      errorContent: createElement("div", null, "Command failed"),
+      expandedContent: createElement("div", null, "Invocation input"),
+      header: createElement(ProminentToolCardHeader, { action: "Run command" }),
+      isExpanded: true,
+      onClick() {},
+      status: "error",
+    }),
+  );
+
+  assert.match(markup, /data-bf-state="expanded failed"/);
+  assert.match(markup, /data-bf-expandable="true"/);
+  assert.match(markup, /aria-expanded="true"/);
+  assert.match(markup, /data-bf-part="expandedCollapse"[^>]+data-open="true"/);
+  assert.match(markup, /Invocation input/);
+  assert.match(markup, /data-bf-part="errorCollapse"[^>]+data-open="true"/);
+  assert.match(markup, /Command failed/);
+});
+
 test("prominent actions stay hidden until hover, preview-hover, or keyboard focus", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 

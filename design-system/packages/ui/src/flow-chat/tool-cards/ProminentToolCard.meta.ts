@@ -11,6 +11,7 @@ export const prominentToolCardMeta = {
     { defaultValue: "false", name: "isExpanded", type: "boolean" },
     { name: "expandedContent", type: "ReactNode" },
     { name: "errorContent", type: "ReactNode" },
+    { defaultValue: "false", name: "allowExpandedWhenFailed", type: "boolean" },
     { defaultValue: "false", name: "requiresConfirmation", type: "boolean" },
   ],
   states: ["default", "hover", "loading", "expanded", "error", "confirmation"],
