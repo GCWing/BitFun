@@ -44,6 +44,10 @@ import { findLatestCodeReviewResultState, summarizeCodeReviewResult } from '@/fl
 import { parsePullRequestUrl, remoteMatchesPullRequestLink } from '@/shared/utils/pullRequestLinks';
 import { useContextStore } from '@/shared/stores/contextStore';
 import { quickActions } from '@/shared/services/ide-control';
+import {
+  describeGitTrustFailure,
+  withGitRepositoryTrustRecovery,
+} from '@/shared/services/gitTrustService';
 import type { PullRequestContext } from '@/shared/types/context';
 import {
   currentPullRequestReviewStatusText,
@@ -142,6 +146,11 @@ const detailCache = new Map<string, DetailCacheEntry>();
 const detailPageCache = new Map<string, DetailPageCacheEntry>();
 const reviewLaunchesInFlight = new Set<string>();
 const EMPTY_REVIEW_THREADS: ReviewPlatformThread[] = [];
+
+function reviewPlatformErrorMessage(error: unknown, fallback: string): string {
+  return describeGitTrustFailure(error)
+    ?? (error instanceof Error ? error.message : fallback);
+}
 
 function detailPageInfo(pagination: ReviewPlatformPagination, itemCount: number): PageInfo {
   const pageIndex = Math.max(0, (pagination.page || 1) - 1);
@@ -763,7 +772,10 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     [account, snapshot.remotes],
   );
 
-  const loadSnapshot = useCallback(async (nextRemoteId?: string | null, options?: { force?: boolean; page?: number }) => {
+  const loadSnapshot = useCallback(async (
+    nextRemoteId?: string | null,
+    options?: { force?: boolean; page?: number; userInitiated?: boolean },
+  ) => {
     const requestSeq = ++snapshotRequestSeq.current;
     if (!workspacePath) {
       setSnapshot(emptySnapshot());
@@ -815,9 +827,17 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const next = detailOnly
-        ? await reviewPlatformAPI.getWorkspaceContext(workspacePath, requestedRemoteId ?? null)
-        : await reviewPlatformAPI.getWorkspaceSnapshot(workspacePath, requestedRemoteId ?? null, requestedPage, PR_PAGE_SIZE);
+      const next = await withGitRepositoryTrustRecovery(
+        () => detailOnly
+          ? reviewPlatformAPI.getWorkspaceContext(workspacePath, requestedRemoteId ?? null)
+          : reviewPlatformAPI.getWorkspaceSnapshot(
+              workspacePath,
+              requestedRemoteId ?? null,
+              requestedPage,
+              PR_PAGE_SIZE,
+            ),
+        { userInitiated: options?.userInitiated },
+      );
       if (snapshotRequestSeq.current !== requestSeq) return;
       setSnapshot(next);
       const remoteId = next.selectedRemoteId ?? next.remotes[0]?.id ?? null;
@@ -836,7 +856,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       setSnapshotCacheState('cached');
     } catch (err) {
       if (snapshotRequestSeq.current !== requestSeq) return;
-      const message = err instanceof Error ? err.message : 'Failed to load pull requests';
+      const message = reviewPlatformErrorMessage(err, 'Failed to load pull requests');
       setError(message);
       if (!cached) {
         setSnapshot(emptySnapshot());
@@ -890,7 +910,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     } catch (err) {
       if (detailRequestSeq.current !== requestSeq) return;
       log.error('Failed to load pull request detail', { pullRequestId, error: err });
-      setDetailError(err instanceof Error ? err.message : 'Failed to load pull request details.');
+      setDetailError(reviewPlatformErrorMessage(err, 'Failed to load pull request details.'));
       if (!cached) {
         setDetail(null);
       }
@@ -968,7 +988,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     } catch (err) {
       if (detailSectionRequestSeq.current !== requestSeq) return;
       log.error('Failed to load pull request detail section', { pullRequestId, section, page, perPage, error: err });
-      setDetailError(err instanceof Error ? err.message : 'Failed to load pull request details.');
+      setDetailError(reviewPlatformErrorMessage(err, 'Failed to load pull request details.'));
     } finally {
       if (detailSectionRequestSeq.current === requestSeq) {
         setDetailLoading(false);
@@ -1379,7 +1399,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       setCiLogById(prev => ({ ...prev, [item.id]: nextLog }));
       return nextLog;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load CI error log.';
+      const message = reviewPlatformErrorMessage(err, 'Failed to load CI error log.');
       setCiLogErrorById(prev => ({ ...prev, [item.id]: message }));
       log.error('Failed to load CI log', { itemId: item.id, error: err });
       return null;
@@ -1918,7 +1938,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               size="xs"
               variant="ghost"
               tooltip="Refresh"
-              onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}
+              onClick={() => void loadSnapshot(listRemoteId, {
+                force: true,
+                page: currentPageIndex + 1,
+                userInitiated: true,
+              })}
               isLoading={loading}
             >
               <RefreshCw size={14} />
@@ -1982,7 +2006,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               <div className="review-platform__error-state" data-bf-component="review-platform" data-bf-part="errorState">
                 <XCircle size={16} />
                 <span>{error}</span>
-                <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}>
+                <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadSnapshot(listRemoteId, {
+                  force: true,
+                  page: currentPageIndex + 1,
+                  userInitiated: true,
+                })}>
                   Retry
                 </Button>
               </div>
@@ -2111,7 +2139,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   className="review-platform__panel-button"
                   size="small"
                   variant="secondary"
-                  onClick={() => void loadSnapshot(undefined, { force: true })}
+                  onClick={() => void loadSnapshot(undefined, { force: true, userInitiated: true })}
                 >
                   Retry
                 </Button>
