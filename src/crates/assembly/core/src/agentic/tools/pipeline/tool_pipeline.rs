@@ -92,11 +92,15 @@ fn plugin_after_presentation(
         .and_then(serde_json::Value::as_str)
         .unwrap_or(tool_name)
         .to_string();
-    let output = object
-        .and_then(|value| value.get("output"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
-        .or_else(|| tool_result.result_for_assistant.clone())
+    let output = tool_result
+        .result_for_assistant
+        .clone()
+        .or_else(|| {
+            object
+                .and_then(|value| value.get("output"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
         .unwrap_or_else(|| tool_result.result.to_string());
     let metadata = object
         .and_then(|value| value.get("metadata"))
@@ -2676,7 +2680,80 @@ mod tests {
 
     #[cfg(feature = "opencode-plugin-host")]
     #[test]
-    fn plugin_after_presentation_prefers_the_plugin_result_contract() {
+    fn plugin_after_presentation_prefers_model_visible_output_over_structured_output() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "ExecCommand".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "ExecCommand",
+                "output": "raw terminal output",
+                "metadata": {"tty": true},
+                "session_id": 42
+            }),
+            result_for_assistant: Some("Process is still running with session ID 42.".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("ExecCommand", &result);
+        assert_eq!(presentation.title, "ExecCommand");
+        assert_eq!(
+            presentation.output,
+            "Process is still running with session ID 42."
+        );
+        assert_eq!(presentation.metadata["tty"], true);
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_preserves_specialized_exec_and_stdin_results() {
+        let cases = [
+            (
+                "ExecCommand",
+                json!({"output": "", "tty": false}),
+                "Command completed successfully.",
+            ),
+            (
+                "ExecCommand",
+                json!({"output": "\u{1b}[?25l", "tty": true, "session_id": 73}),
+                "Process is still running with session ID 73.",
+            ),
+            (
+                "WriteStdin",
+                json!({"output": "done", "session_id": 73}),
+                "Wrote input to session 73.",
+            ),
+            (
+                "WriteStdin",
+                json!({"output": "", "requested_session_id": 999}),
+                "Session 999 was not found.",
+            ),
+        ];
+
+        for (tool_name, structured_result, assistant_result) in cases {
+            let result = ModelToolResult {
+                tool_id: "call-a".to_string(),
+                tool_name: tool_name.to_string(),
+                effective_tool_name: None,
+                result: structured_result,
+                result_for_assistant: Some(assistant_result.to_string()),
+                is_error: false,
+                duration_ms: None,
+                image_attachments: None,
+            };
+
+            assert_eq!(
+                plugin_after_presentation(tool_name, &result).output,
+                assistant_result
+            );
+        }
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_falls_back_to_plugin_output_without_assistant_text() {
         let result = ModelToolResult {
             tool_id: "call-a".to_string(),
             tool_name: "report".to_string(),
@@ -2686,16 +2763,16 @@ mod tests {
                 "output": "report ready",
                 "metadata": {"path": "report.md"}
             }),
-            result_for_assistant: Some("report ready".to_string()),
+            result_for_assistant: None,
             is_error: false,
             duration_ms: None,
             image_attachments: None,
         };
 
-        let presentation = plugin_after_presentation("report", &result);
-        assert_eq!(presentation.title, "Generated report");
-        assert_eq!(presentation.output, "report ready");
-        assert_eq!(presentation.metadata["path"], "report.md");
+        assert_eq!(
+            plugin_after_presentation("report", &result).output,
+            "report ready"
+        );
     }
 
     #[cfg(feature = "opencode-plugin-host")]

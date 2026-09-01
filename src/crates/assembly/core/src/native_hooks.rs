@@ -21,6 +21,8 @@ use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 pub use crate::service::config::types::AgentHooksConfig;
 use async_trait::async_trait;
+#[cfg(feature = "opencode-plugin-host")]
+use bitfun_agent_runtime::native_hooks::PluginHookDispatchResult;
 use bitfun_agent_runtime::native_hooks::{
     AgentHookEngine, AgentHookEvent, AgentHookEventPayload, AgentHookMatcher, AgentHookOutcome,
     AgentHookPayload, AgentHookPayloadCommon, AgentHookPermissionMode, AgentHookPermissionOutcome,
@@ -84,6 +86,36 @@ pub(crate) async fn dispatch_plugin_hook(
 }
 
 #[cfg(feature = "opencode-plugin-host")]
+fn plugin_tool_before_output(result: PluginHookDispatchResult) -> Result<Option<Value>, String> {
+    if let Some(failure) = result.failure {
+        return Err(failure);
+    }
+    if result.executed_handlers == 0 {
+        return Ok(None);
+    }
+    Ok(result
+        .output
+        .get("args")
+        .cloned()
+        .filter(|updated| updated != &serde_json::Value::Null))
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn plugin_tool_after_output(
+    result: PluginHookDispatchResult,
+) -> Result<Option<PluginToolAfterOutput>, String> {
+    if let Some(failure) = result.failure {
+        return Err(failure);
+    }
+    if result.executed_handlers == 0 {
+        return Ok(None);
+    }
+    serde_json::from_value::<PluginToolAfterOutput>(result.output)
+        .map(Some)
+        .map_err(|error| format!("Invalid tool.execute.after output: {error}"))
+}
+
+#[cfg(feature = "opencode-plugin-host")]
 pub(crate) async fn dispatch_plugin_tool_before(
     workspace_scope: &str,
     tool_name: &str,
@@ -123,14 +155,7 @@ pub(crate) async fn dispatch_plugin_tool_before(
     for warning in &result.warnings {
         warn!("OpenCode plugin hook warning (tool.execute.before): {warning}");
     }
-    if let Some(failure) = result.failure {
-        return Err(failure);
-    }
-    Ok(result
-        .output
-        .get("args")
-        .cloned()
-        .filter(|updated| updated != &serde_json::Value::Null))
+    plugin_tool_before_output(result)
 }
 
 #[cfg(feature = "opencode-plugin-host")]
@@ -181,13 +206,7 @@ pub(crate) async fn dispatch_plugin_tool_after(
     for warning in &result.warnings {
         warn!("OpenCode plugin hook warning (tool.execute.after): {warning}");
     }
-    if let Some(failure) = result.failure {
-        return Err(failure);
-    }
-    match serde_json::from_value::<PluginToolAfterOutput>(result.output) {
-        Ok(output) => Ok(Some(output)),
-        Err(error) => Err(format!("Invalid tool.execute.after output: {error}")),
-    }
+    plugin_tool_after_output(result)
 }
 
 #[cfg(feature = "opencode-plugin-host")]
@@ -215,6 +234,78 @@ impl PluginToolAfterOutput {
         // specified.
         drop((title, metadata));
         output
+    }
+}
+
+#[cfg(all(test, feature = "opencode-plugin-host"))]
+mod plugin_tool_output_tests {
+    use super::{plugin_tool_after_output, plugin_tool_before_output};
+    use bitfun_agent_runtime::native_hooks::PluginHookDispatchResult;
+    use serde_json::{json, Value};
+
+    fn dispatch_result(output: Value, executed_handlers: usize) -> PluginHookDispatchResult {
+        PluginHookDispatchResult {
+            input: Value::Null,
+            output,
+            warnings: Vec::new(),
+            failure: None,
+            executed_handlers,
+        }
+    }
+
+    #[test]
+    fn zero_plugin_handlers_do_not_report_before_or_after_transformations() {
+        let before =
+            plugin_tool_before_output(dispatch_result(json!({"args": {"cmd": "cargo check"}}), 0));
+        assert_eq!(before.expect("zero-handler before result"), None);
+
+        let after = plugin_tool_after_output(dispatch_result(
+            json!({
+                "title": "ExecCommand",
+                "output": "raw output",
+                "metadata": {}
+            }),
+            0,
+        ));
+        assert!(after.expect("zero-handler after result").is_none());
+    }
+
+    #[test]
+    fn executed_plugin_handlers_still_publish_their_transformations() {
+        let before =
+            plugin_tool_before_output(dispatch_result(json!({"args": {"cmd": "cargo test"}}), 1))
+                .expect("before hook output")
+                .expect("executed before hook transformation");
+        assert_eq!(before["cmd"], "cargo test");
+
+        let after = plugin_tool_after_output(dispatch_result(
+            json!({
+                "title": "ExecCommand",
+                "output": "transformed for the model",
+                "metadata": {"source": "test"}
+            }),
+            1,
+        ))
+        .expect("after hook output")
+        .expect("executed after hook transformation");
+        assert_eq!(after.output, "transformed for the model");
+        assert_eq!(after.metadata["source"], "test");
+    }
+
+    #[test]
+    fn plugin_dispatch_failure_is_not_hidden_by_a_zero_handler_count() {
+        let result = PluginHookDispatchResult {
+            input: Value::Null,
+            output: Value::Null,
+            warnings: Vec::new(),
+            failure: Some("plugin registry unavailable".to_string()),
+            executed_handlers: 0,
+        };
+
+        assert_eq!(
+            plugin_tool_before_output(result).expect_err("failure must be preserved"),
+            "plugin registry unavailable"
+        );
     }
 }
 
