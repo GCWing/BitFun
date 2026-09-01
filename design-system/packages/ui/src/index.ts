@@ -252,6 +252,7 @@ export {
   type TooltipTrigger,
 } from "./components/Tooltip";
 export { SessionIcon, type SessionIconProps } from "./icons";
+export { OverflowText, type OverflowTextProps } from "./primitives/OverflowText";
 export { Stack, type StackProps } from "./primitives/Stack";
 export {
   ThemeRoot,

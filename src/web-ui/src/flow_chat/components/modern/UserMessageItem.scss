@@ -27,9 +27,7 @@
     var(--bf-control-flow-chat-content-padding-inline)
     var(--bf-control-flow-chat-turn-gap)
     var(--bf-control-flow-chat-content-padding-inline);
-  box-shadow:
-    0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 5%, transparent) inset,
-    0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+  box-shadow: none;
   transition: opacity 140ms ease;
   /*
    * No enter animation: the message list is virtualized, so a mount-triggered

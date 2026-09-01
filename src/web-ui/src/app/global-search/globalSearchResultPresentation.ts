@@ -4,7 +4,7 @@ import {
   type GlobalSearchItem,
 } from './types';
 
-export const DEFAULT_ENTITY_PREVIEW_LIMIT = 2;
+export const DEFAULT_ENTITY_PREVIEW_LIMIT = 1;
 
 export type GlobalSearchDrilldownGroupId = Extract<
   GlobalSearchGroupId,

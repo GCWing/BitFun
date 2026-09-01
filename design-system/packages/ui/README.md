@@ -18,6 +18,11 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+Use `OverflowText` for single-line labels that should fade at the inline end only
+when their rendered content is actually clipped. The primitive keeps the full
+text in the accessibility tree, supports right-to-left direction, and leaves
+width constraints and any tooltip content to the consumer.
+
 `Disclosure` is the shared expandable-content primitive. It owns controlled or
 uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.

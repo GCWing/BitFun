@@ -1,0 +1,13 @@
+@mixin apply {
+  .markdown-renderer {
+    pre,
+    .code-block-wrapper,
+    .table-wrapper,
+    .mermaid-block,
+    blockquote,
+    .custom-blockquote,
+    details {
+      box-shadow: none;
+    }
+  }
+}

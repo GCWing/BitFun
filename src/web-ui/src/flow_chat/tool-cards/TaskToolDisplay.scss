@@ -524,32 +524,23 @@
 /**
  * Unified task + subagent card wrapper.
  * Wraps the task tool header card and the subagent items container so they
- * behave as a single card with a shared hover/shadow effect.
+ * behave as a single flat card with shared border feedback.
  */
 .task-with-subagent-wrapper {
   position: relative;
   border-radius: 8px;
   margin: 4px 0 10px;
-  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   contain: layout paint style;
 
   .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root'] {
     margin: 0;
     /*
-     * Keep only shadow/border hover feedback in this grouped shell. Layout
-     * properties must not interpolate while the task and subagent surfaces
-     * merge into one card.
+     * Keep only border hover feedback in this grouped shell. Layout properties
+     * must not interpolate while the task and subagent surfaces merge into one
+     * card.
      */
-    transition:
-      box-shadow 0.18s ease,
-      border-color 0.18s ease;
-  }
-
-  // Keep expand/collapse press feedback subtle inside grouped subagent cards.
-  .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root']:active {
-    box-shadow:
-      0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 14%, transparent),
-      inset 0 1px 2px color-mix(in srgb, var(--bf-color-content-on-light) 18%, transparent);
+    transition: border-color 0.18s ease;
   }
 
   // Expanded state: the wrapper becomes the unified visual container.
@@ -559,9 +550,7 @@
     border: 1px solid var(--bf-color-border-default);
     backdrop-filter: blur(10px);
     overflow: hidden;
-    box-shadow:
-      0 2px 6px color-mix(in srgb, var(--bf-color-content-on-light) 15%, transparent),
-      0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+    box-shadow: none;
 
     // Strip the shared framework shell so it merges
     // into the wrapper; the wrapper provides the unified card chrome.
@@ -616,12 +605,9 @@
 
   }
 
-  // Hover over expanded card: stronger elevation.
+  // Hover over expanded card: border feedback without elevation.
   &.task-with-subagent-wrapper--expanded:hover {
-    box-shadow:
-      0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 18%, transparent),
-      0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+    box-shadow: none;
     border-color: var(--bf-color-field-border-hover);
   }
 }

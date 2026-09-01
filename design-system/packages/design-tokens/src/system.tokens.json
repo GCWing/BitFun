@@ -540,6 +540,9 @@
   },
   "layout": {
     "$type": "dimension",
+    "overflowText": {
+      "fadeExtent": { "$value": "{space.4}" }
+    },
     "field": {
       "rootGap": { "$value": "{space.2}" },
       "horizontalGap": { "$value": "{space.5}" },

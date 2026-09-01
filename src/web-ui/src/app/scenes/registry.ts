@@ -3,7 +3,8 @@
  *
  * Rules:
  *  - Every explicitly opened scene remains open until the user closes it.
- *  - pinned = true: protected from manual close.
+ *  - pinned = true: stays ahead of regular tabs while open.
+ *  - closable = false: protected from manual close; pinning is independent.
  *  - Scene ids are unique, while Mini Apps use one id per app instance.
  */
 
@@ -34,7 +35,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     labelKey: 'scenes.aiAgent',
     Icon: catalogSceneIcon('session'),
     pinned: true,
-    closable: false,
+    closable: true,
     singleton: true,
     defaultOpen: false,
   },
@@ -182,6 +183,11 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
 
 export function getSceneDef(id: SceneTabId): SceneTabDef | undefined {
   return SCENE_TAB_REGISTRY.find(d => d.id === id);
+}
+
+/** Shared closeability policy for the scene store and every tab interaction. */
+export function isSceneTabClosable(def: SceneTabDef | undefined): boolean {
+  return def !== undefined && def.closable !== false;
 }
 
 /** Static singleton scene def for the panel-view scene. */

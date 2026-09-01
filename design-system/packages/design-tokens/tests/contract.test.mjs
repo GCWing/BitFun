@@ -297,6 +297,10 @@ test("Toolbar tokens preserve independent compact and tab-strip compositions", a
   assert.equal(systemDocument.layout.toolbar.groupGapMd.$value, "{space.2}");
 });
 
+test("OverflowText exposes one shared inline-end fade extent", () => {
+  assert.equal(tokens["layout.overflowText.fadeExtent"], "16px");
+});
+
 test("Dialog tokens preserve the reference surface and chrome contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

@@ -35,7 +35,7 @@ describe('sceneStore transition snapshots', () => {
 
     expect(snapshots).toHaveLength(1);
     expect(snapshots[0].activeTabId).toBe('settings');
-    expect(snapshots[0].openTabIds).toEqual(['session', 'settings']);
+    expect(snapshots[0].openTabIds).toEqual(['settings']);
   });
 
   it('records pointer scene navigation without animating keyboard activation', () => {
@@ -57,7 +57,6 @@ describe('sceneStore transition snapshots', () => {
     useSceneStore.getState().openScene('miniapp:second');
 
     expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
-      'session',
       'settings',
       'terminal',
       'git',
@@ -75,7 +74,6 @@ describe('sceneStore transition snapshots', () => {
 
     const state = useSceneStore.getState();
     expect(state.openTabs.map(tab => tab.id)).toEqual([
-      'session',
       'settings',
       'terminal',
     ]);
@@ -83,14 +81,32 @@ describe('sceneStore transition snapshots', () => {
     expect(state.activeTabId).toBe('settings');
   });
 
-  it('keeps the pinned session tab when close is requested', () => {
-    useSceneStore.getState().openScene('settings');
+  it('closes the last session tab into the tabless welcome state', () => {
+    useSceneStore.getState().openScene('session');
     useSceneStore.getState().closeScene('session');
+
+    const state = useSceneStore.getState();
+    expect(state.openTabs).toEqual([]);
+    expect(state.activeTabId).toBeNull();
+    expect(state.navHistory).toEqual([]);
+    expect(state.navCursor).toBe(-1);
+  });
+
+  it('keeps the session tab first while allowing it to close back to another scene', () => {
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().openScene('session');
 
     expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
       'session',
       'settings',
     ]);
+
+    useSceneStore.getState().closeScene('session');
+
+    const state = useSceneStore.getState();
+    expect(state.openTabs.map(tab => tab.id)).toEqual(['settings']);
+    expect(state.activeTabId).toBe('settings');
+    expect(state.navHistory).not.toContain('session');
   });
 
   it('preserves close fallback and history navigation across many open tabs', () => {
@@ -104,7 +120,7 @@ describe('sceneStore transition snapshots', () => {
     useSceneStore.getState().closeScene('settings');
 
     const state = useSceneStore.getState();
-    expect(state.openTabs.map(tab => tab.id)).toEqual(['session', 'terminal', 'git']);
+    expect(state.openTabs.map(tab => tab.id)).toEqual(['terminal', 'git']);
     expect(state.activeTabId).toBe('git');
     expect(state.navHistory).not.toContain('settings');
 
@@ -116,7 +132,7 @@ describe('sceneStore transition snapshots', () => {
     useSceneStore.getState().openScene('settings');
     useSceneStore.getState().openScene('terminal');
     useSceneStore.getState().openScene('git');
-    expect(useSceneStore.getState().openTabs).toHaveLength(4);
+    expect(useSceneStore.getState().openTabs).toHaveLength(3);
 
     useSceneStore.getState().resetForPeerSwitch();
 
