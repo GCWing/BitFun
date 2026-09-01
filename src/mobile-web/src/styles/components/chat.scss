@@ -69,10 +69,41 @@
 }
 
 .chat-page__header-right {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--size-gap-1);
   flex-shrink: 0;
+}
+
+.chat-page__header-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 176px;
+  padding: 8px;
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: 16px;
+  background: var(--bf-color-surface-panel);
+  box-shadow: var(--bf-shadow-lg);
+}
+
+.chat-page__header-menu button {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--bf-color-content-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:active {
+    background: var(--bf-color-surface-subtle);
+  }
 }
 
 .chat-page__theme-btn {

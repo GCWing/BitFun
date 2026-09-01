@@ -72,13 +72,15 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const identityRequestRef = useRef(0);
   const devicesRequestRef = useRef(0);
   const switchRequestRef = useRef(0);
-  const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
+  const sortedDevices = useMemo(() => devices.filter((device) => (
+    device.device_id !== client.controllerDeviceId
+  )).sort((left, right) => {
     const leftCurrent = left.device_id === client.pairedDeviceId;
     const rightCurrent = right.device_id === client.pairedDeviceId;
     if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
     if (left.online !== right.online) return left.online ? -1 : 1;
     return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
-  }), [client.pairedDeviceId, devices]);
+  }), [client.controllerDeviceId, client.pairedDeviceId, devices]);
 
   const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
     const message = String((value as { message?: string })?.message || value);

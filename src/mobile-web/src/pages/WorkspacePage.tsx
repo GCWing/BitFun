@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import LanguageToggleButton from '../components/LanguageToggleButton';
 import { useI18n } from '../i18n';
+import { useMobileStore } from '../services/store';
 import {
   RemoteSessionManager,
   WorkspaceInfo,
@@ -10,16 +10,17 @@ import {
 interface WorkspacePageProps {
   sessionMgr: RemoteSessionManager;
   onReady: () => void;
+  onBack?: () => void;
 }
 
-const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) => {
+const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady, onBack }) => {
   const { t } = useI18n();
   const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo | null>(null);
   const [recentWorkspaces, setRecentWorkspaces] = useState<RecentWorkspaceEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showRecent, setShowRecent] = useState(false);
+  const controlTarget = useMobileStore((state) => state.controlTarget);
 
   const loadWorkspaceInfo = useCallback(async () => {
     try {
@@ -42,13 +43,8 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
   }, [sessionMgr]);
 
   useEffect(() => {
-    loadWorkspaceInfo();
-  }, [loadWorkspaceInfo]);
-
-  const handleShowRecent = async () => {
-    setShowRecent(true);
-    await loadRecentWorkspaces();
-  };
+    void Promise.all([loadWorkspaceInfo(), loadRecentWorkspaces()]);
+  }, [loadRecentWorkspaces, loadWorkspaceInfo]);
 
   const handleSelectWorkspace = useCallback(async (workspace: RecentWorkspaceEntry) => {
     if (switching) return;
@@ -61,7 +57,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
       });
       if (result.success) {
         await loadWorkspaceInfo();
-        setShowRecent(false);
+        onReady();
       } else {
         setError(result.error || t('workspace.failedToSetWorkspace'));
       }
@@ -70,7 +66,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
     } finally {
       setSwitching(false);
     }
-  }, [loadWorkspaceInfo, sessionMgr, switching, t]);
+  }, [loadWorkspaceInfo, onReady, sessionMgr, switching, t]);
 
   if (loading) {
     return (
@@ -85,96 +81,50 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
 
   return (
     <div className="workspace-page">
-      <div className="workspace-page__header">
-        <h1>{t('shared.features.workspace')}</h1>
-        <LanguageToggleButton />
-      </div>
-
-      <div className="workspace-page__content">
-        {workspaceInfo?.has_workspace ? (
-          <div className="workspace-page__current">
-            <div className="workspace-page__current-label">{t('workspace.currentWorkspace')}</div>
-            <div className="workspace-page__current-card">
-              <div className="workspace-page__project-name">
-                {workspaceInfo.project_name || t('workspace.unknownProject')}
-              </div>
-              <div className="workspace-page__project-path">{workspaceInfo.path}</div>
-              {workspaceInfo.git_branch && (
-                <div className="workspace-page__git-branch">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" strokeWidth="1.3"/><circle cx="11" cy="4" r="2" stroke="currentColor" strokeWidth="1.3"/><circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 6V10M11 6V8C11 9.1046 10.1046 10 9 10H5" stroke="currentColor" strokeWidth="1.3"/></svg>
-                  {workspaceInfo.git_branch}
-                </div>
-              )}
-            </div>
-            <div className="workspace-page__actions">
-              <button className="workspace-page__btn workspace-page__btn--primary" onClick={onReady}>
-                {t('common.continue')}
-              </button>
-              <button className="workspace-page__btn workspace-page__btn--secondary" onClick={handleShowRecent}>
-                {t('common.switch')}
-              </button>
-            </div>
+      <div className="workspace-page__sheet">
+        <header className="workspace-page__header">
+          <div className="workspace-page__heading-copy">
+            <h1>{t('workspace.selectWorkspace')}</h1>
+            {controlTarget?.deviceName && <p>{controlTarget.deviceName}</p>}
           </div>
-        ) : (
-          <div className="workspace-page__no-workspace">
-            <div className="workspace-page__no-workspace-icon">
-              <svg width="40" height="40" viewBox="0 0 16 16" fill="none"><path d="M2 4V12C2 12.5523 2.44772 13 3 13H13C13.5523 13 14 12.5523 14 12V6C14 5.44772 13.5523 5 13 5H8L6.5 3H3C2.44772 3 2 3.44772 2 4Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
-            </div>
-            <div className="workspace-page__no-workspace-text">
-              {t('workspace.noWorkspaceOpen')}
-            </div>
-            <div className="workspace-page__no-workspace-hint">
-              {t('workspace.noWorkspaceHint')}
-            </div>
-            {!showRecent && (
-              <button className="workspace-page__btn workspace-page__btn--primary" onClick={handleShowRecent}>
-                {t('workspace.selectWorkspace')}
-              </button>
-            )}
-          </div>
-        )}
+          {onBack && (
+            <button type="button" className="workspace-page__close" onClick={onBack} aria-label={t('common.close')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            </button>
+          )}
+        </header>
 
-        {showRecent && (
-          <div className="workspace-page__recent">
-            <div className="workspace-page__recent-label">{t('workspace.recentWorkspaces')}</div>
-            {recentWorkspaces.length === 0 ? (
-              <div className="workspace-page__recent-empty">
-                {t('workspace.noRecentWorkspaces')}
-              </div>
-            ) : (
-              <div className="workspace-page__recent-list">
-                {recentWorkspaces.map((ws) => (
+        <div className="workspace-page__divider" />
+        <div className="workspace-page__content">
+          {recentWorkspaces.length === 0 ? (
+            <div className="workspace-page__recent-empty">{t('workspace.noRecentWorkspaces')}</div>
+          ) : (
+            <div className="workspace-page__recent-list">
+              {recentWorkspaces.map((ws) => {
+                const selected = workspaceInfo?.path === ws.path;
+                return (
                   <button
                     key={`${ws.remote_connection_id ?? 'local'}:${ws.path}`}
-                    className="workspace-page__recent-item"
+                    className={`workspace-page__recent-item${selected ? ' is-selected' : ''}`}
                     onClick={() => handleSelectWorkspace(ws)}
                     disabled={switching}
                   >
-                    <div className="workspace-page__recent-item-name">{ws.name}</div>
-                    <div className="workspace-page__recent-item-path">{ws.path}</div>
+                    <span className="workspace-page__recent-item-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4l2 2h7A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                    </span>
+                    <span className="workspace-page__recent-item-copy">
+                      <span className="workspace-page__recent-item-name">{ws.name}</span>
+                      <span className="workspace-page__recent-item-path">{ws.path}</span>
+                    </span>
+                    <span className="workspace-page__recent-item-trailing" aria-hidden="true">{selected ? '✓' : '›'}</span>
                   </button>
-                ))}
-              </div>
-            )}
-            {workspaceInfo?.has_workspace && (
-              <button
-                className="workspace-page__btn workspace-page__btn--secondary"
-                onClick={() => setShowRecent(false)}
-              >
-                {t('common.cancel')}
-              </button>
-            )}
-          </div>
-        )}
-
-        {switching && (
-          <div className="workspace-page__switching">
-            <div className="spinner spinner--sm" />
-            <span>{t('workspace.openingWorkspace')}</span>
-          </div>
-        )}
-
-        {error && <div className="workspace-page__error">{error}</div>}
+                );
+              })}
+            </div>
+          )}
+          {switching && <div className="workspace-page__switching"><div className="spinner spinner--sm" /></div>}
+          {error && <div className="workspace-page__error">{error}</div>}
+        </div>
       </div>
     </div>
   );

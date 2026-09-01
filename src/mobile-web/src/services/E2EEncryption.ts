@@ -50,11 +50,17 @@ export async function decrypt(
   dataB64: string,
   nonceB64: string,
 ): Promise<string> {
-  const nonce = fromB64(nonceB64);
-  const data = fromB64(dataB64);
-  const cipher = gcm(key, nonce);
-  const pt = cipher.decrypt(data);
+  const pt = decryptBytes(key, fromB64(dataB64), fromB64(nonceB64));
   return new TextDecoder().decode(pt);
+}
+
+/** Decrypt a raw AES-256-GCM payload, including its appended authentication tag. */
+export function decryptBytes(
+  key: Uint8Array,
+  data: Uint8Array,
+  nonce: Uint8Array,
+): Uint8Array {
+  return gcm(key, nonce).decrypt(data);
 }
 
 export function toB64(buf: Uint8Array): string {

@@ -22,6 +22,7 @@ interface DelegatedIdentitySnapshot {
   userId: string | null;
   homeDeviceId: string | null;
   generation: number;
+  source: 'paired' | 'direct';
 }
 
 interface DelegatedAccountIdentity {
@@ -112,6 +113,8 @@ export class RelayHttpClient {
   ) => void>();
   /** The current control-target device_id (for sendDeviceRpc). */
   private pairedDeviceIdValue: string | null = null;
+  /** This browser's relay device id. Never offer it as a remote control target. */
+  private controllerDeviceIdValue: string | null = null;
   private controlTargetEpochValue = 0;
   private controlTargetListeners = new Set<(snapshot: ControlTargetSnapshot) => void>();
   /** The QR-paired desktop's device_id (the "home" device of this session). */
@@ -211,6 +214,7 @@ export class RelayHttpClient {
     this.sharedKey = await deriveSharedKey(this.keyPair, desktopPub);
 
     const deviceId = identity.mobileInstallId;
+    this.controllerDeviceIdValue = deviceId;
     const deviceName = this.getMobileDeviceName();
     const userId = identity.userId.trim();
     const mobileInstallId = identity.mobileInstallId.trim();
@@ -300,6 +304,9 @@ export class RelayHttpClient {
    * not-logged-in case.
    */
   async requestDelegatedIdentity(options?: { force?: boolean }): Promise<boolean> {
+    // Direct account login already owns a first-party device credential. It
+    // must never fall back to a QR-room command, especially on forced refresh.
+    if (this.delegatedIdentity?.source === 'direct') return true;
     if (!options?.force && this.hasDelegatedIdentity) return true;
     const requestGeneration = ++this.delegatedIdentityRequestEpoch;
     if (options?.force) {
@@ -326,6 +333,7 @@ export class RelayHttpClient {
           userId: resp.user_id ?? null,
           homeDeviceId,
           generation: ++this.delegatedIdentityGenerationValue,
+          source: 'paired',
         };
         this.delegatedIdentity = nextIdentity;
 
@@ -388,6 +396,7 @@ export class RelayHttpClient {
     const targetEpoch = this.controlTargetEpochValue;
     this.clearDelegatedIdentity();
     this.commitDelegatedAccountUnavailable();
+    this.controllerDeviceIdValue = null;
     if (this.controlTargetEpochValue === targetEpoch) {
       // Disconnect is an explicit ownership boundary even when this session
       // never received delegated credentials and was using only the QR room.
@@ -499,8 +508,66 @@ export class RelayHttpClient {
     return this.delegatedIdentity !== null;
   }
 
+  /**
+   * Install an account session obtained by this browser itself. The existing
+   * account data plane can then list devices and issue encrypted device RPCs
+   * without requiring a QR-room connection first.
+   */
+  installDirectAccountIdentity(identity: {
+    token: string;
+    masterKey: Uint8Array;
+    userId: string;
+    deviceId: string;
+  }): void {
+    const token = identity.token.trim();
+    const userId = identity.userId.trim();
+    const deviceId = identity.deviceId.trim();
+    if (!token || !userId || !deviceId || identity.masterKey.length !== 32) {
+      throw new Error('Relay returned an invalid account identity.');
+    }
+    this.controllerDeviceIdValue = deviceId;
+
+    const hadAccountIdentity = this.delegatedAccountIdentity !== null;
+    const nextAccountIdentity: DelegatedAccountIdentity = {
+      userId,
+      masterKey: identity.masterKey.slice(),
+      homeDeviceId: null,
+    };
+    const accountChanged = delegatedAccountChanged(
+      this.delegatedAccountIdentity,
+      nextAccountIdentity,
+    );
+
+    this.delegatedIdentityRequestEpoch += 1;
+    this.delegatedIdentityRefreshOwner = null;
+    this.delegatedIdentity = {
+      token,
+      masterKey: identity.masterKey.slice(),
+      userId,
+      homeDeviceId: null,
+      generation: ++this.delegatedIdentityGenerationValue,
+      source: 'direct',
+    };
+    if (accountChanged) this.delegatedAccountEpochValue += 1;
+    this.delegatedAccountIdentity = nextAccountIdentity;
+    this.homeDeviceId = null;
+    this.setPairedDeviceId(null);
+    if (accountChanged) {
+      this.emitDelegatedAccountOwnerChange({
+        kind: hadAccountIdentity ? 'replacement' : 'initial',
+        epoch: this.delegatedAccountEpochValue,
+        userId,
+        homeDeviceId: null,
+      });
+    }
+  }
+
   get pairedDeviceId(): string | null {
     return this.pairedDeviceIdValue;
+  }
+
+  get controllerDeviceId(): string | null {
+    return this.controllerDeviceIdValue;
   }
 
   /**
@@ -596,6 +663,7 @@ export class RelayHttpClient {
     if (!this.isDelegatedIdentityCurrent(failedIdentity)) {
       return this.hasDelegatedIdentity;
     }
+    if (failedIdentity.source === 'direct') return false;
     try {
       return await this.requestDelegatedIdentity({ force: true });
     } catch {
