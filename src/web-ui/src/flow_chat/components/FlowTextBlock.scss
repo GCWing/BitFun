@@ -2,8 +2,11 @@
  * FlowTextBlock styles
  */
 @use '@/infrastructure/markdown/layout' as markdown;
+@use '../flat-markdown-surfaces' as flatMarkdownSurfaces;
 
 .flow-text-block {
+  @include flatMarkdownSurfaces.apply;
+
   width: 100%;
   margin: 0 0 var(--bf-control-flow-chat-flow-item-gap) 0;
   font-size: var(--bf-type-flow-body-font-size);
@@ -112,11 +115,6 @@
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
     color: var(--bf-color-status-success-content);
     transform: scale(1.08);
-  }
-
-  /* MermaidBlock.scss adds a heavy hover shadow; keep chat diagrams flat. */
-  .markdown-renderer .mermaid-block:hover {
-    box-shadow: none;
   }
 
   .text-content {

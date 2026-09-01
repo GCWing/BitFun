@@ -2,8 +2,11 @@
  * Virtual item renderer wrapper styles.
  * A4-like reading width with centered content.
  */
+@use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
 
 .virtual-item-wrapper {
+  @include flatMarkdownSurfaces.apply;
+
   width: 100%;
   /*
    * Single reading column shared by every item type (model rounds, explore
@@ -15,6 +18,13 @@
   box-sizing: border-box;
   min-height: 1px;
   padding: 0;
+
+  // A regular user message starts a new Turn. Give it a clear boundary from
+  // the preceding Turn while keeping the first message aligned to the list
+  // header and steering messages grouped with the active Turn.
+  &[data-item-type='user-message']:not([data-virtual-index='0']) {
+    padding-top: var(--bf-space-6);
+  }
 
   @media (max-width: 768px) {
     max-width: 100%;

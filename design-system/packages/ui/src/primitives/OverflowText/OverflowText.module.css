@@ -1,0 +1,49 @@
+@layer bf.base {
+  .root {
+    display: block;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  .root[data-overflow="true"] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      currentColor 0,
+      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      currentColor 0,
+      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      transparent 100%
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+
+  .root:dir(rtl)[data-overflow="true"] {
+    -webkit-mask-image: linear-gradient(
+      to left,
+      currentColor 0,
+      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to left,
+      currentColor 0,
+      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      transparent 100%
+    );
+  }
+
+  @media (forced-colors: active) {
+    .root[data-overflow="true"] {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+  }
+}

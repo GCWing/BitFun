@@ -12,19 +12,11 @@
   border-radius: 8px;
   margin: var(--bf-control-flow-chat-card-gap) 0;
   overflow: hidden;
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+  transition: border-color 180ms ease;
   box-sizing: border-box;
 
   &:hover {
     border-color: var(--bf-color-field-border-hover);
-    box-shadow:
-      0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent),
-      0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-    transform: translateY(-1px);
   }
 
   &--loading {

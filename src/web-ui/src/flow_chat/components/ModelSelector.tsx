@@ -8,7 +8,7 @@
  * - Supports 'primary' | 'fast' | specific model IDs
  */
 
-import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSection, MenuSeparator, OverflowText } from '@bitfun/ui';
 import React, { useState, useEffect, useId, useRef, useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -1544,9 +1544,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             }}
             disabled={disabled || loading || externalSelection.disabled}
           >
-            <span className="bitfun-model-selector__name">
+            <OverflowText className="bitfun-model-selector__name">
               {getModelDisplayLabel(externalCurrentModel, externalCurrentModelId)}
-            </span>
+            </OverflowText>
             <ChevronDown size={10} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>
@@ -1676,11 +1676,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             }}
             disabled={disabled || loading}
            data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
-            <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
+            <OverflowText className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
               {acpAvailableModels.length > 0
                 ? getModelDisplayLabel(acpCurrentModel, currentAcpModelId)
                 : t('modelSelector.fastMode')}
-            </span>
+            </OverflowText>
             {acpFastMode?.enabled && (
               <Zap size={9} className="bitfun-model-selector__fast-icon" />
             )}
@@ -1844,9 +1844,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           }}
           disabled={disabled || loading || reasoningLoading}
          data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
-          <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
+          <OverflowText className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
             {getModelDisplayLabel(currentModel, t('modelSelector.primaryModel'))}
-          </span>
+          </OverflowText>
           {hasNativeReasoningSettings && (
             <span
               className="bitfun-model-selector__trigger-reasoning"

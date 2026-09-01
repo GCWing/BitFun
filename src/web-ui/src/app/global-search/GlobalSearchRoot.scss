@@ -1,8 +1,10 @@
 @use '../styles/nav-panel-font-scope.scss' as nav-font;
 
 .global-search-dialog {
+  // Fits the default two-row action grid plus one workspace and assistant.
+  // Query and drilldown views keep the results region scrollable when needed.
   block-size: min(
-    520px,
+    480px,
     calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter))
   );
 }

@@ -20,10 +20,9 @@
     border: var(--bf-border-width-default) solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-md);
     background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-xs);
+    box-shadow: none;
     transition:
       border-color var(--_tool-card-transition),
-      box-shadow var(--_tool-card-transition),
       background-color var(--_tool-card-transition);
   }
 
@@ -31,7 +30,6 @@
   .prominentRoot[data-bf-preview-state="hover"],
   :global([data-bf-preview-state="hover"]) .prominentRoot {
     border-color: var(--bf-color-border-strong);
-    box-shadow: var(--bf-shadow-sm);
   }
 
   .prominentRoot[data-bf-state~="confirmation"] {
@@ -466,7 +464,7 @@
     border: var(--bf-border-width-default) solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-md);
     background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-xs);
+    box-shadow: none;
   }
 
   .ambientExpandedShell .ambientSurface {
