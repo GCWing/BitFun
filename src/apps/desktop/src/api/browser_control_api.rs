@@ -4,6 +4,7 @@ use bitfun_core::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
 use bitfun_core::agentic::tools::browser_control::cdp_client::CdpClient;
+use bitfun_core::agentic::tools::implementations::control_hub_tool::disconnect_external_browser;
 use bitfun_core::service::config::{get_global_config_service, GlobalConfig};
 use serde::{Deserialize, Serialize};
 
@@ -157,6 +158,11 @@ pub struct BrowserControlStatusResponse {
     pub cdp_available: bool,
     pub default_cdp_supported: bool,
     pub default_cdp_enabled: bool,
+    /// Browser-owned settings URL for the guarded user-profile CDP flow. The
+    /// UI always displays it while setup is pending so the user can recover if
+    /// the platform-specific automatic open did not produce the right tab.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setup_url: Option<String>,
     /// The selected browser is running with remote debugging on, so BitFun can
     /// attach whenever it needs to. Distinguishes "ready, nothing attached yet"
     /// from "nothing to attach to", which both used to read as "not connected".
@@ -185,6 +191,7 @@ pub async fn browser_control_get_status(
             || BrowserLauncher::is_default_cdp_enabled(&configured_kind));
     let user_profile_connection =
         CdpClient::browser_connection_for_kind(port, &configured_kind).await;
+    let browser_connection_suppressed = CdpClient::browser_connection_suppressed(port).await;
     let legacy_version =
         if user_profile_connection.is_none() && BrowserLauncher::is_cdp_available(port).await {
             CdpClient::get_version(port).await.ok()
@@ -206,8 +213,9 @@ pub async fn browser_control_get_status(
             _ => true,
         }
     });
-    let available = user_profile_connection.is_some() || legacy_matches_selection;
-    let browser_ready = available || user_profile_endpoint.is_some();
+    let available = !browser_connection_suppressed
+        && (user_profile_connection.is_some() || legacy_matches_selection);
+    let browser_ready = available || user_profile_endpoint.is_some() || legacy_matches_selection;
 
     let (version, page_count, actual_kind) = if available {
         let ver_info = if let Some(connection) = &user_profile_connection {
@@ -243,6 +251,8 @@ pub async fn browser_control_get_status(
         cdp_available: available,
         default_cdp_supported,
         default_cdp_enabled,
+        setup_url: BrowserLauncher::user_profile_debugging_setup_url(&actual_kind)
+            .map(str::to_string),
         browser_ready,
         browser_kind: actual_kind.to_string(),
         browser_version: version,
@@ -374,6 +384,7 @@ pub async fn browser_control_launch(
 ) -> Result<BrowserControlLaunchResponse, String> {
     let port = request.port;
     let kind = selected_browser_kind().await?;
+    CdpClient::allow_browser_connection(port).await;
 
     if CdpClient::browser_connection_for_kind(port, &kind)
         .await
@@ -405,6 +416,7 @@ pub async fn browser_control_enable_default_cdp(
 ) -> Result<BrowserControlLaunchResponse, String> {
     let port = request.port;
     let kind = selected_browser_kind().await?;
+    CdpClient::allow_browser_connection(port).await;
 
     if !BrowserLauncher::supports_default_cdp(&kind) {
         return Ok(BrowserControlLaunchResponse {
@@ -442,10 +454,39 @@ pub async fn browser_control_restart_with_cdp(
 ) -> Result<BrowserControlLaunchResponse, String> {
     let port = request.port;
     let kind = selected_browser_kind().await?;
+    CdpClient::allow_browser_connection(port).await;
 
     let result = BrowserLauncher::restart_with_cdp(&kind, port)
         .await
         .map_err(|e| e.to_string())?;
 
     complete_launch(&kind, port, result).await
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserControlDisconnectResponse {
+    pub success: bool,
+    pub status: String,
+    pub browser_kind: String,
+}
+
+/// Detach BitFun from the selected browser without closing browser tabs or
+/// changing the browser-owned Remote debugging preference.
+#[tauri::command]
+pub async fn browser_control_disconnect(
+    request: BrowserControlLaunchRequest,
+) -> Result<BrowserControlDisconnectResponse, String> {
+    let kind = selected_browser_kind().await?;
+    let disconnected_count = disconnect_external_browser(request.port).await;
+
+    Ok(BrowserControlDisconnectResponse {
+        success: true,
+        status: if disconnected_count > 0 {
+            "disconnected".into()
+        } else {
+            "already_disconnected".into()
+        },
+        browser_kind: kind.to_string(),
+    })
 }

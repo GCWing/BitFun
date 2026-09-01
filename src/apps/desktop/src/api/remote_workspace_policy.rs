@@ -229,6 +229,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (
+        "browser_control_disconnect",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "browser_control_get_status",
         RemoteWorkspacePolicy::LocalOnly,
     ),
