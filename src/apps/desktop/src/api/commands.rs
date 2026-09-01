@@ -519,6 +519,8 @@ pub struct ResetWorkspacePersonaFilesRequest {
 #[derive(Debug, Deserialize)]
 pub struct CheckPathExistsRequest {
     pub path: String,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2774,7 +2776,12 @@ pub async fn check_path_exists(
     state: State<'_, AppState>,
     request: CheckPathExistsRequest,
 ) -> Result<bool, String> {
-    path_exists(&state, &request.path).await
+    path_exists(
+        &state,
+        &request.path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]

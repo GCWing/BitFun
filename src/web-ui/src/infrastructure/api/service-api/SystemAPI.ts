@@ -118,13 +118,13 @@ export class SystemAPI {
   }
 
    
-  async checkPathExists(path: string): Promise<boolean> {
+  async checkPathExists(path: string, remoteConnectionId?: string): Promise<boolean> {
     try {
-      return await api.invoke('check_path_exists', { 
-        request: { path } 
+      return await api.invoke('check_path_exists', {
+        request: { path, remoteConnectionId }
       });
     } catch (error) {
-      throw createTauriCommandError('check_path_exists', error, { path });
+      throw createTauriCommandError('check_path_exists', error, { path, remoteConnectionId });
     }
   }
 

@@ -287,6 +287,12 @@ async function prepareFromResolvedTarget(params: {
       'deepReviewActionBar.launchError.unresolvedTarget',
     );
   }
+  if (params.targetEvidence.limitations.includes('explicit_target_path_not_found')) {
+    throw reviewTargetError(
+      'The requested file or directory does not exist in the current workspace.',
+      'deepReviewActionBar.launchError.missingExplicitScope',
+    );
+  }
   if (params.targetEvidence.limitations.includes('explicit_file_scope_has_no_workspace_changes')) {
     throw reviewTargetError(
       'The requested files or directories contain no workspace changes.',

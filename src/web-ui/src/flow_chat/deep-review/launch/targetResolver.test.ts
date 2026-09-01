@@ -14,6 +14,7 @@ const mockGitGetDiff = vi.fn();
 const mockGitResolveRevision = vi.fn();
 const mockWorkspaceReadFile = vi.fn();
 const mockWorkspaceGetFileMetadata = vi.fn();
+const mockSystemCheckPathExists = vi.fn();
 
 vi.mock('@/infrastructure/api', () => ({
   gitAPI: {
@@ -25,6 +26,9 @@ vi.mock('@/infrastructure/api', () => ({
   workspaceAPI: {
     readFileContent: (...args: any[]) => mockWorkspaceReadFile(...args),
     getFileMetadata: (...args: any[]) => mockWorkspaceGetFileMetadata(...args),
+  },
+  systemAPI: {
+    checkPathExists: (...args: any[]) => mockSystemCheckPathExists(...args),
   },
 }));
 
@@ -53,6 +57,7 @@ describe('Deep Review target resolver', () => {
       isFile: true,
       size: 1024,
     });
+    mockSystemCheckPathExists.mockResolvedValue(true);
   });
 
   it('counts changed lines from unified diff without headers', () => {
@@ -106,6 +111,77 @@ describe('Deep Review target resolver', () => {
       source: 'workspace',
       completeness: 'complete',
       workspaceBinding: 'matching_dirty',
+    });
+  });
+
+  it('normalizes an existing changed absolute POSIX target to the workspace', async () => {
+    mockGitGetStatus.mockResolvedValueOnce({
+      staged: [{ path: 'tests/existing.ts', status: 'modified' }],
+      unstaged: [],
+      untracked: [],
+      conflicts: [],
+      current_branch: 'main',
+      ahead: 0,
+      behind: 0,
+    });
+    mockGitGetChangedFiles.mockResolvedValueOnce([
+      { path: 'tests/existing.ts', status: 'modified' },
+    ]);
+    mockGitGetDiff.mockResolvedValueOnce('+changed\n');
+
+    const result = await resolveSlashCommandReviewTarget(
+      '/storage/Users/currentUser/files/git_code/BitFun/tests/existing.ts',
+      '/storage/Users/currentUser/files/git_code/BitFun',
+    );
+
+    expect(result.target.files.map((file) => file.normalizedPath)).toEqual([
+      'tests/existing.ts',
+    ]);
+    expect(result.targetEvidence).toMatchObject({
+      source: 'workspace',
+      completeness: 'complete',
+      workspaceBinding: 'matching_dirty',
+    });
+    expect(mockSystemCheckPathExists).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing absolute POSIX target', async () => {
+    mockSystemCheckPathExists.mockResolvedValueOnce(false);
+
+    const result = await resolveSlashCommandReviewTarget(
+      '/storage/Users/currentUser/files/git_code/BitFun/tests/missing.ts',
+      '/storage/Users/currentUser/files/git_code/BitFun',
+    );
+
+    expect(mockSystemCheckPathExists).toHaveBeenCalledWith(
+      '/storage/Users/currentUser/files/git_code/BitFun/tests/missing.ts',
+      undefined,
+    );
+    expect(result.target.files.map((file) => file.normalizedPath)).toEqual([
+      'tests/missing.ts',
+    ]);
+    expect(result.targetEvidence).toMatchObject({
+      completeness: 'unknown',
+      limitations: ['explicit_target_path_not_found'],
+    });
+  });
+
+  it('keeps the existing unchanged-path limitation distinct from a missing path', async () => {
+    const result = await resolveSlashCommandReviewTarget(
+      '/storage/Users/currentUser/files/git_code/BitFun/tests/unchanged.ts',
+      '/storage/Users/currentUser/files/git_code/BitFun',
+    );
+
+    expect(mockSystemCheckPathExists).toHaveBeenCalledWith(
+      '/storage/Users/currentUser/files/git_code/BitFun/tests/unchanged.ts',
+      undefined,
+    );
+    expect(result.target.files.map((file) => file.normalizedPath)).toEqual([
+      'tests/unchanged.ts',
+    ]);
+    expect(result.targetEvidence).toMatchObject({
+      completeness: 'unknown',
+      limitations: ['explicit_file_scope_has_no_workspace_changes'],
     });
   });
 
@@ -292,6 +368,27 @@ describe('Deep Review target resolver', () => {
       'remote-1',
     );
 
+    expect(mockGitGetStatus).not.toHaveBeenCalled();
+    expect(mockGitGetChangedFiles).not.toHaveBeenCalled();
+    expect(mockGitGetDiff).not.toHaveBeenCalled();
+    expect(result.targetEvidence).toMatchObject({
+      source: 'workspace',
+      completeness: 'unknown',
+      limitations: ['remote_workspace_review_unavailable'],
+    });
+  });
+
+  it('checks an explicit remote POSIX target without local fallback', async () => {
+    const result = await resolveSlashCommandReviewTarget(
+      '/remote/workspace/src/existing.ts',
+      '/remote/workspace',
+      'remote-1',
+    );
+
+    expect(mockSystemCheckPathExists).toHaveBeenCalledWith(
+      '/remote/workspace/src/existing.ts',
+      'remote-1',
+    );
     expect(mockGitGetStatus).not.toHaveBeenCalled();
     expect(mockGitGetChangedFiles).not.toHaveBeenCalled();
     expect(mockGitGetDiff).not.toHaveBeenCalled();

@@ -1190,6 +1190,7 @@
       "unresolvedGitRange": "无法解析请求的 Git 范围，请检查引用或范围后重试",
       "emptyWorkspace": "当前工作区没有可审核的变更",
       "emptyExplicitScope": "请求的文件或目录没有工作区变更",
+      "missingExplicitScope": "请求的文件或目录在当前工作区中不存在",
       "unresolvedTarget": "无法将审核目标准备为有界证据，请打开对应工作区或缩小目标后重试",
       "repositoryUntrusted": "该目录属于其他用户，Git 拒绝读取此仓库。请在提示中信任该目录后重新启动审核",
       "uncertain": "审核请求可能已经在运行。会话已保留，可安全检查或重试",
