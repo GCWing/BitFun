@@ -225,6 +225,63 @@ describe('ExecProcessToolCardView', () => {
     });
 
     expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('15');
+    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-density')).toBe('expanded');
+    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-sizing')).toBe('content');
+  });
+
+  it('content-sizes a manually expanded completed card with no output', () => {
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={model}
+        />,
+      );
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLElement>('[data-bf-part="surface"][data-bf-attention="prominent"]')
+        ?.click();
+    });
+
+    expect(container.textContent).toContain('No output');
+    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-density')).toBe('expanded');
+    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-sizing')).toBe('content');
+  });
+
+  it('pushes WriteStdin session and execution metadata to the footer end', () => {
+    const stdinModel: ExecProcessCardModel = {
+      ...model,
+      kind: 'stdin',
+      sessionId: 42,
+      exitCode: 0,
+      wallTimeSeconds: 1.25,
+    };
+
+    act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={{ ...toolItem('completed'), toolName: 'WriteStdin' }}
+          model={stdinModel}
+        />,
+      );
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLElement>('[data-bf-part="surface"][data-bf-attention="prominent"]')
+        ?.click();
+    });
+
+    const footerItems = Array.from(container.querySelectorAll('[data-bf-part="footer"] > span'));
+    expect(footerItems).toHaveLength(3);
+    expect(footerItems[0]?.getAttribute('data-push-to-end')).toBe('true');
+    expect(footerItems[0]?.textContent).toContain('#42');
+    expect(footerItems[1]?.getAttribute('data-push-to-end')).toBe('false');
+    expect(footerItems[1]?.textContent).toContain('toolCards.execProcess.wallTime');
+    expect(footerItems[2]?.getAttribute('data-push-to-end')).toBe('false');
+    expect(footerItems[2]?.textContent).toContain('Exit code: 0');
   });
 
   it('keeps the output frame and footer mounted while content changes', () => {
@@ -246,6 +303,7 @@ describe('ExecProcessToolCardView', () => {
     const frameBeforeOutput = container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]');
     const footerBeforeOutput = container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]');
     expect(frameBeforeOutput?.getAttribute('data-density')).toBe('compact');
+    expect(frameBeforeOutput?.getAttribute('data-sizing')).toBe('fixed');
     expect(footerBeforeOutput?.textContent).toBe('');
     expect(container.querySelector('[data-bf-part="output"] pre')).toBeNull();
 

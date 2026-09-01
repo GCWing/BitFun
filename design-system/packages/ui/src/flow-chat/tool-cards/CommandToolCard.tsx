@@ -37,6 +37,7 @@ export interface CommandToolCardFooterItem {
   grow?: boolean;
   label?: ReactNode;
   monospace?: boolean;
+  pushToEnd?: boolean;
   tone?: "danger" | "neutral" | "success" | "warning";
   value: ReactNode;
 }
@@ -57,6 +58,7 @@ export interface CommandToolCardProps
   output?: ReactNode;
   outputAction?: ReactNode;
   outputDensity?: "compact" | "expanded";
+  outputSizing?: "content" | "fixed";
   reserveFooter?: boolean;
   reserveOutput?: boolean;
   requiresConfirmation?: boolean;
@@ -91,6 +93,7 @@ export function CommandToolCard({
   output,
   outputAction,
   outputDensity = "expanded",
+  outputSizing = "fixed",
   reserveFooter = false,
   reserveOutput = false,
   requiresConfirmation = false,
@@ -148,6 +151,7 @@ export function CommandToolCard({
           className={styles.outputFrame}
           data-bf-part="outputFrame"
           data-density={outputDensity}
+          data-sizing={outputSizing}
         >
           {outputAction && <span className={styles.outputActions}>{outputAction}</span>}
           {output
@@ -162,6 +166,7 @@ export function CommandToolCard({
               className={styles.footerItem}
               data-grow={item.grow ? "true" : "false"}
               data-monospace={item.monospace ? "true" : "false"}
+              data-push-to-end={item.pushToEnd ? "true" : "false"}
               data-tone={item.tone ?? "neutral"}
               key={index}
             >

@@ -261,6 +261,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     return undefined;
   })();
   const footerItems: CommandToolCardFooterItem[] = [];
+  const footerMetadataItems: CommandToolCardFooterItem[] = [];
 
   if (rejectedOrCancelled) {
     footerItems.push({ tone: 'warning', value: t(cancelledStatusLabelKey) });
@@ -273,31 +274,51 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     });
   }
   if (model.sessionId != null) {
-    footerItems.push({
+    footerMetadataItems.push({
       label: t('toolCards.execProcess.session'),
       monospace: true,
       value: `#${model.sessionId}`,
     });
   }
   if (model.remote) {
-    footerItems.push({ value: t('toolCards.execProcess.remote') });
+    footerMetadataItems.push({ value: t('toolCards.execProcess.remote') });
   }
-  if (model.tty) {
-    footerItems.push({ value: t('toolCards.execProcess.tty') });
+  if (model.tty && model.kind !== 'command') {
+    footerMetadataItems.push({ value: t('toolCards.execProcess.tty') });
   }
-  if (model.exitCode != null) {
-    footerItems.push({
-      monospace: true,
-      tone: model.exitCode === 0 ? 'success' : 'danger',
-      value: t('toolCards.terminal.exitCode', { code: model.exitCode }),
-    });
+  const exitCodeFooterItem: CommandToolCardFooterItem | undefined = model.exitCode != null
+    ? {
+        monospace: true,
+        tone: model.exitCode === 0 ? 'success' : 'danger',
+        value: t('toolCards.terminal.exitCode', { code: model.exitCode }),
+      }
+    : undefined;
+  const wallTimeFooterItem: CommandToolCardFooterItem | undefined = model.wallTimeSeconds != null
+    ? {
+        monospace: true,
+        value: t('toolCards.execProcess.wallTime', { seconds: model.wallTimeSeconds.toFixed(3) }),
+      }
+    : undefined;
+  if (model.kind === 'stdin') {
+    if (wallTimeFooterItem) {
+      footerMetadataItems.push(wallTimeFooterItem);
+    }
+    if (exitCodeFooterItem) {
+      footerMetadataItems.push(exitCodeFooterItem);
+    }
+  } else {
+    if (exitCodeFooterItem) {
+      footerMetadataItems.push(exitCodeFooterItem);
+    }
+    if (wallTimeFooterItem) {
+      footerMetadataItems.push(wallTimeFooterItem);
+    }
   }
-  if (model.wallTimeSeconds != null) {
-    footerItems.push({
-      monospace: true,
-      value: t('toolCards.execProcess.wallTime', { seconds: model.wallTimeSeconds.toFixed(3) }),
-    });
-  }
+  footerItems.push(...footerMetadataItems.map((item, index) => (
+    model.kind === 'stdin' && index === 0
+      ? { ...item, pushToEnd: true }
+      : item
+  )));
 
   return (
     <div ref={cardRootRef} data-bf-adapter="exec-process-tool-card" data-tool-card-id={toolId ?? ''}>
@@ -328,6 +349,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
         ) : undefined}
         outputAction={outputText ? renderCopyOutputButton() : undefined}
         outputDensity={keepCompactCompletionPreview || isRunning ? 'compact' : 'expanded'}
+        outputSizing={status === 'completed' && userToggledRef.current ? 'content' : 'fixed'}
         reserveFooter
         reserveOutput
         requiresConfirmation={status === 'pending_confirmation'}

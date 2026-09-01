@@ -1749,7 +1749,7 @@
     },
     "execProcess": {
       "executeCommand": "執行命令:",
-      "writeStdin": "寫入標準輸入:",
+      "writeStdin": "傳送輸入:",
       "pollProcess": "輪詢進程:",
       "interruptProcess": "中斷進程:",
       "killProcess": "終止進程:",

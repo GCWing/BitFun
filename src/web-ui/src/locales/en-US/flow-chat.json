@@ -1749,7 +1749,7 @@
     },
     "execProcess": {
       "executeCommand": "Run command:",
-      "writeStdin": "Write stdin:",
+      "writeStdin": "Send input:",
       "pollProcess": "Poll process:",
       "interruptProcess": "Interrupt process:",
       "killProcess": "Kill process:",

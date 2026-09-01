@@ -84,6 +84,18 @@
     block-size: 20rem;
   }
 
+  .outputFrame[data-sizing="content"] {
+    block-size: auto;
+  }
+
+  .outputFrame[data-density="compact"][data-sizing="content"] {
+    max-block-size: 5.375rem;
+  }
+
+  .outputFrame[data-density="expanded"][data-sizing="content"] {
+    max-block-size: 20rem;
+  }
+
   .output,
   .waiting {
     box-sizing: border-box;
@@ -150,6 +162,10 @@
 
   .footerItem[data-grow="true"] {
     flex: 1 1 12rem;
+  }
+
+  .footerItem[data-push-to-end="true"] {
+    margin-inline-start: auto;
   }
 
   .footerLabel {

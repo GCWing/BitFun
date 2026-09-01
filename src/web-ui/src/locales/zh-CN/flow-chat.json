@@ -1749,7 +1749,7 @@
     },
     "execProcess": {
       "executeCommand": "运行命令:",
-      "writeStdin": "写入标准输入:",
+      "writeStdin": "发送输入:",
       "pollProcess": "轮询进程:",
       "interruptProcess": "中断进程:",
       "killProcess": "终止进程:",
