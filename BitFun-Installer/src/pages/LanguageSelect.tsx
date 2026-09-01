@@ -47,9 +47,13 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
             filter: 'drop-shadow(0 0 40px color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent))',
           }} />
           <h1 style={{
-            fontFamily: 'var(--bf-font-family-sans)', fontSize: 42, fontWeight: 700,
-            color: 'var(--bf-color-content-primary)', letterSpacing: '-0.03em',
-            lineHeight: 0.95, margin: '0 0 16px 0',
+            fontFamily: 'var(--bf-type-display-md-font-family)',
+            fontSize: 'var(--bf-type-display-md-font-size)',
+            fontWeight: 'var(--bf-type-heading-page-font-weight)',
+            color: 'var(--bf-color-content-primary)',
+            letterSpacing: 'var(--bf-type-display-md-letter-spacing)',
+            lineHeight: 'var(--bf-type-display-md-line-height)',
+            margin: '0 0 16px 0',
             textShadow: '0 0 60px color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent)',
           }}>BitFun</h1>
         </div>
@@ -67,10 +71,10 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
             margin: '0 auto',
             padding: '0 24px',
             textAlign: 'center',
-            fontSize: 11,
+            fontSize: 'var(--bf-type-support-font-size)',
             color: 'var(--bf-color-content-muted)',
             opacity: 0.6,
-            letterSpacing: '0.5px',
+            letterSpacing: 'var(--bf-type-modifier-tracking-wider-letter-spacing)',
           }}>
             Version 0.2.15
           </div>
@@ -114,7 +118,7 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
                         cursor: 'pointer', textAlign: 'left',
                         transition: 'all 0.25s ease',
                         outline: 'none',
-                        fontFamily: 'var(--bf-font-family-sans)',
+                        fontFamily: 'var(--bf-type-label-lg-font-family)',
                         boxShadow: 'none',
                       }}
                       onMouseEnter={(e) => {
@@ -130,12 +134,13 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
                     >
                       <div style={{ flex: 1 }}>
                         <div style={{
-                          fontSize: 14, fontWeight: 500,
+                          fontSize: 'var(--bf-type-label-lg-font-size)',
+                          fontWeight: 'var(--bf-type-label-lg-font-weight)',
                           color: isSelected ? 'var(--bf-color-content-primary)' : 'var(--bf-color-content-secondary)',
                           transition: 'color 0.2s ease',
                         }}>{lang.nativeName}</div>
                         <div style={{
-                          fontSize: 11,
+                          fontSize: 'var(--bf-type-support-font-size)',
                           color: 'var(--bf-color-content-muted)', opacity: 0.7,
                           marginTop: 2,
                         }}>{lang.label}</div>

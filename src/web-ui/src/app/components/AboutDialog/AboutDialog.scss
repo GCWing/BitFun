@@ -49,18 +49,18 @@
 .bitfun-about-dialog__title {
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-8xl);
-  font-weight: var(--bf-font-weight-regular);
-  line-height: var(--bf-line-height-none);
-  letter-spacing: var(--bf-letter-spacing-tighter);
+  font-family:var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-display-xl-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
+  letter-spacing: var(--bf-type-modifier-tracking-tighter-letter-spacing);
 }
 
 .bitfun-about-dialog__tagline {
   margin: 16px 0 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-base);
-  line-height: var(--bf-line-height-comfortable);
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-support-line-height);
 }
 
 .bitfun-about-dialog__release {
@@ -77,9 +77,9 @@
 
 .bitfun-about-dialog__release-version {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xl);
+  font-size: var(--bf-type-flow-title-font-size);
   font-variant-numeric: tabular-nums;
-  line-height: var(--bf-line-height-tight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .bitfun-about-dialog__channel-badge {
@@ -91,8 +91,8 @@
   border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
   white-space: nowrap;
 }
 
@@ -159,15 +159,15 @@
   justify-content: space-between;
   gap: 12px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 }
 
 .bitfun-about-dialog__download-hint {
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .bitfun-about-dialog__update-installed {
@@ -182,8 +182,8 @@
   align-items: flex-start;
   gap: 8px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 
   svg {
     flex-shrink: 0;
@@ -245,9 +245,9 @@
   gap: 13px;
   min-width: 0;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-flow-support-line-height);
 
   svg {
     flex-shrink: 0;
@@ -258,24 +258,24 @@
 .bitfun-about-dialog__info-value {
   min-width: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-lg);
-  font-weight: var(--bf-font-weight-regular);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  line-height: var(--bf-type-flow-support-line-height);
   text-align: right;
   overflow-wrap: anywhere;
 
   &--version {
-    font-size: var(--bf-font-size-xl);
+    font-size: var(--bf-type-flow-title-font-size);
     font-variant-numeric: tabular-nums;
   }
 
   &--mono {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     font-variant-numeric: tabular-nums;
   }
 
   &--branch {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 }
 
@@ -347,9 +347,9 @@
   gap: 6px;
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 
   svg {
     flex: 0 0 auto;
@@ -359,8 +359,8 @@
 .bitfun-about-dialog__star-description {
   margin: 4px 0 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .bitfun-about-dialog__star-rule {
@@ -386,8 +386,8 @@
 .bitfun-about-dialog__copyright {
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 @media (max-width: 900px) {
@@ -442,7 +442,7 @@
   }
 
   .bitfun-about-dialog__title {
-    font-size: var(--bf-font-size-7xl);
+    font-size: var(--bf-type-display-lg-font-size);
   }
 
   .bitfun-about-dialog__release {
@@ -485,12 +485,12 @@
   }
 
   .bitfun-about-dialog__title {
-    font-size: var(--bf-font-size-6xl);
+    font-size: var(--bf-type-display-md-font-size);
   }
 
   .bitfun-about-dialog__tagline {
     margin-top: 10px;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   .bitfun-about-dialog__metadata {
@@ -504,7 +504,7 @@
 
   .bitfun-about-dialog__info-label {
     gap: 8px;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
 
     svg {
       width: 18px;
@@ -513,14 +513,14 @@
   }
 
   .bitfun-about-dialog__info-value {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
 
     &--version {
-      font-size: var(--bf-font-size-lg);
+      font-size: var(--bf-type-body-lg-font-size);
     }
 
     &--branch {
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
     }
   }
 
@@ -554,7 +554,7 @@
   }
 
   .bitfun-about-dialog__title {
-    font-size: var(--bf-font-size-7xl);
+    font-size: var(--bf-type-display-lg-font-size);
   }
 
   .bitfun-about-dialog__release {

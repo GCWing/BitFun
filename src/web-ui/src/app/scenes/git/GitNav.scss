@@ -31,8 +31,8 @@
   }
 
   &__title {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -55,13 +55,13 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-2);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-secondary);
     margin-bottom: var(--bf-space-1);
   }
 
   &__branch-name {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -72,7 +72,7 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-1);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -95,8 +95,8 @@
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     text-align: left;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     width: 100%;
     position: relative;
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -114,7 +114,7 @@
     &.is-active {
       color: var(--bf-color-content-primary);
       background: var(--bf-color-action-quiet-hover);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
 
       &::before {
         content: '';
@@ -136,7 +136,7 @@
   }
 
   &__item-badge {
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     margin-left: var(--bf-space-1);
   }

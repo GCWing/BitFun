@@ -13,6 +13,8 @@ const SOURCE_GROUPS = Object.freeze({
   ],
   'web-ui': [
     'src/web-ui/src',
+    'src/mobile-web/src',
+    'BitFun-Installer/src',
   ],
 });
 
@@ -30,6 +32,26 @@ const WEB_FONT_PROFILE_STACK_PROPERTIES = new Set([
   '--bf-font-family-control',
   '--bf-font-family-mono',
 ]);
+
+const SEMANTIC_ROLE_COMPONENT_STYLE_ROOT = 'design-system/packages/ui/src/';
+const SEMANTIC_ROLE_COMPONENT_STYLE_EXCEPTIONS = new Set([
+  // The bars variant uses the font-size property as a scalable graphic cell,
+  // while its user-visible label already consumes type.support.
+  'design-system/packages/ui/src/components/Spinner/Spinner.module.css',
+]);
+
+const SEMANTIC_ROLE_PRODUCT_STYLE_ROOTS = [
+  'src/web-ui/src/',
+  'src/mobile-web/src/',
+  'BitFun-Installer/src/',
+  'design-system/apps/design-lab/src/',
+];
+
+const COMPLETE_PRODUCT_STYLE_ROOTS = [
+  'src/web-ui/src/',
+  'src/mobile-web/src/',
+  'BitFun-Installer/src/',
+];
 
 const TYPOGRAPHY_PROPERTIES = new Set([
   'font',
@@ -548,6 +570,11 @@ function isRawTypographyLiteral(property, literal) {
   }
 }
 
+function isFoundationTypographyLiteral(literal) {
+  return literal?.kind === 'string'
+    && /^var\(--bf-(?:font-(?:family|size|weight)|line-height|letter-spacing)-[a-z0-9-]+\)$/i.test(literal.value.trim());
+}
+
 function scriptKindForPath(relativePath) {
   if (relativePath.endsWith('.tsx')) return ts.ScriptKind.TSX;
   if (relativePath.endsWith('.jsx')) return ts.ScriptKind.JSX;
@@ -566,6 +593,18 @@ function auditScriptTypography(text, relativePath) {
   );
 
   function report(node, property, literal) {
+    if (requiresSemanticRoleConsumption(relativePath) && isFoundationTypographyLiteral(literal)) {
+      const start = node.getStart(sourceFile);
+      const { line } = sourceFile.getLineAndCharacterOfPosition(start);
+      issues.push(createIssue(
+        relativePath,
+        line + 1,
+        'foundation-typography-in-semantic-consumer',
+        'Product frontend inline text styles must consume a semantic --bf-type-* role.',
+        node.getText(sourceFile),
+      ));
+      return;
+    }
     if (!isRawTypographyLiteral(property, literal)) return;
     const start = node.getStart(sourceFile);
     const { line } = sourceFile.getLineAndCharacterOfPosition(start);
@@ -632,6 +671,55 @@ function auditRetiredReferences(text, relativePath) {
   return issues;
 }
 
+function requiresSemanticRoleConsumption(relativePath) {
+  if (relativePath.startsWith(WEB_FONT_PROFILE_STYLE_ROOT)) return false;
+
+  return (
+    relativePath.startsWith(SEMANTIC_ROLE_COMPONENT_STYLE_ROOT)
+    && relativePath.endsWith('.module.css')
+    && !SEMANTIC_ROLE_COMPONENT_STYLE_EXCEPTIONS.has(relativePath)
+  )
+    || SEMANTIC_ROLE_PRODUCT_STYLE_ROOTS.some(root => relativePath.startsWith(root));
+}
+
+function auditSemanticRoleConsumption(text, relativePath) {
+  if (!requiresSemanticRoleConsumption(relativePath)) return [];
+
+  const issues = [];
+  const source = stripCommentsPreservingLines(text);
+  const lines = text.split(/\r?\n/);
+  const governsCompleteProductStyle = COMPLETE_PRODUCT_STYLE_ROOTS.some(root => relativePath.startsWith(root))
+    && STYLE_EXTENSIONS.has(path.extname(relativePath).toLowerCase());
+  const foundationPattern = governsCompleteProductStyle
+    ? /(--bf-(?:font-family|font-size|font-weight|line-height|letter-spacing)-[a-z0-9-]+)/gi
+    : /(?:font-family|font-size|font-weight|line-height|letter-spacing)\s*:\s*[^;{}\r\n]*?(--bf-(?:font-family|font-size|font-weight|line-height|letter-spacing)-[a-z0-9-]+)/gi;
+  for (const match of source.matchAll(foundationPattern)) {
+    const token = match[1];
+    const tokenOffset = match[0].lastIndexOf(token);
+    const line = lineNumberAt(source, (match.index ?? 0) + Math.max(0, tokenOffset));
+    if (hasLocalTypographyException(lines, line)) continue;
+    issues.push(createIssue(
+      relativePath,
+      line,
+      'foundation-typography-in-semantic-consumer',
+      'Text-bearing public components and migrated product surfaces must consume a semantic --bf-type-* role.',
+      token,
+    ));
+  }
+
+  const hasTypographyDeclaration = /(?:^|[;{}\r\n])\s*(?:font-family|font-size|font-weight|letter-spacing|line-height)\s*:/im.test(source);
+  if (hasTypographyDeclaration && !/--bf-type-[a-z0-9-]+-(?:font-family|font-size|font-weight|letter-spacing|line-height)/i.test(source)) {
+    issues.push(createIssue(
+      relativePath,
+      1,
+      'semantic-typography-role-missing',
+      'A governed text-bearing stylesheet must identify its typography through a semantic --bf-type-* role.',
+    ));
+  }
+
+  return issues;
+}
+
 export function auditTypographyText(text, relativePath, options = {}) {
   const normalizedPath = normalizePath(relativePath);
   const extension = path.extname(normalizedPath).toLowerCase();
@@ -641,9 +729,11 @@ export function auditTypographyText(text, relativePath, options = {}) {
   if (options.retiredOnly) return issues;
   if (STYLE_EXTENSIONS.has(extension) && productionSource) {
     issues.push(...auditCssDeclarations(text, normalizedPath));
+    issues.push(...auditSemanticRoleConsumption(text, normalizedPath));
   }
   if (SCRIPT_EXTENSIONS.has(extension) && productionSource) {
     issues.push(...auditCssDeclarations(text, normalizedPath));
+    issues.push(...auditSemanticRoleConsumption(text, normalizedPath));
     issues.push(...auditScriptTypography(text, normalizedPath));
   }
 

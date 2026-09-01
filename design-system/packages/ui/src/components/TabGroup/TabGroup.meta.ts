@@ -28,10 +28,9 @@ export const tabGroupMeta = {
     "control.tabGroup.itemActionSize",
     "control.tabGroup.itemActionInset",
     "control.tabGroup.itemRadius",
-    "font.family.control",
-    "font.size.sm",
-    "font.weight.regular",
-    "font.weight.semibold",
+    "type.label.md.fontSize",
+    "type.label.selected.fontWeight",
+    "type.body.sm.lineHeight",
     "radius.pill",
   ],
 } as const satisfies ComponentMeta;

@@ -32,7 +32,8 @@ export const activityItemMeta = {
     "control.activityItem.inlineGap",
     "control.activityItem.inlineIconSize",
     "type.meta.fontSize",
-    "lineHeight.comfortable",
+    "type.label.md.fontSize",
+    "type.label.sm.fontWeight",
     "control.activityItem.surfaceHeight",
     "control.activityItem.surfaceGap",
     "control.activityItem.surfacePaddingBlock",
@@ -48,8 +49,5 @@ export const activityItemMeta = {
     "control.changeCount.radius",
     "control.iconButton.xsSize",
     "control.iconButton.xsIconSize",
-    "font.family.control",
-    "font.size.sm",
-    "font.weight.medium",
   ],
 } as const satisfies ComponentMeta;

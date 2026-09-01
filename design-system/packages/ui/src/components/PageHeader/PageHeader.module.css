@@ -36,22 +36,35 @@
   .heading {
     margin: 0;
     color: inherit;
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-heading-page-font-family);
+    font-size: var(--bf-type-heading-page-font-size);
+    font-weight: var(--bf-type-heading-page-font-weight);
+    line-height: var(--bf-type-heading-page-line-height);
+    letter-spacing: var(--bf-type-heading-page-letter-spacing);
   }
 
   .root[data-size="sm"] .heading {
-    font-size: var(--bf-font-size-lg);
+    font-family: var(--bf-type-heading-section-font-family);
+    font-size: var(--bf-type-heading-section-font-size);
+    font-weight: var(--bf-type-heading-section-font-weight);
+    line-height: var(--bf-type-heading-section-line-height);
+    letter-spacing: var(--bf-type-heading-section-letter-spacing);
   }
 
   .root[data-size="lg"] .heading {
-    font-size: var(--bf-font-size-3xl);
+    font-family: var(--bf-type-heading-display-font-family);
+    font-size: var(--bf-type-heading-display-font-size);
+    font-weight: var(--bf-type-heading-display-font-weight);
+    line-height: var(--bf-type-heading-display-line-height);
+    letter-spacing: var(--bf-type-heading-display-letter-spacing);
   }
 
   .root[data-size="display"] .heading {
-    font-size: var(--bf-font-size-4xl);
+    font-family: var(--bf-type-display-sm-font-family);
+    font-size: var(--bf-type-display-sm-font-size);
+    font-weight: var(--bf-type-display-sm-font-weight);
+    line-height: var(--bf-type-display-sm-line-height);
+    letter-spacing: var(--bf-type-display-sm-letter-spacing);
   }
 
   .required {
@@ -61,14 +74,19 @@
 
   .description {
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-lg-font-family);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-body-lg-font-weight);
+    line-height: var(--bf-type-body-lg-line-height);
+    letter-spacing: var(--bf-type-body-lg-letter-spacing);
   }
 
   .root[data-size="sm"] .description {
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   .action {

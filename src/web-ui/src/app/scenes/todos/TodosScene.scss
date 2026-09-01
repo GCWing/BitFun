@@ -51,16 +51,16 @@ $todos-compact-breakpoint: 720px;
 
   &__title {
     margin: 0;
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-primary);
   }
 
   &__subtitle {
     margin: 0;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     color: var(--bf-color-content-muted);
   }
 
@@ -85,8 +85,8 @@ $todos-compact-breakpoint: 720px;
     justify-content: center;
     gap: var(--bf-space-1);
     min-width: 112px;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     font-variant-numeric: tabular-nums;
   }
@@ -137,22 +137,22 @@ $todos-compact-breakpoint: 720px;
   &__pane-title,
   &__list-title {
     margin: 0;
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   &__pane-title {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   &__list-title {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   &__pane-hint {
     margin: 2px 0 0;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     color: var(--bf-color-content-muted);
   }
 
@@ -160,7 +160,7 @@ $todos-compact-breakpoint: 720px;
     margin: 0;
     padding: var(--bf-space-4) var(--bf-space-3);
     text-align: center;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-muted);
     border: 1px dashed var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-base);
@@ -188,8 +188,8 @@ $todos-compact-breakpoint: 720px;
 
   &__overview-title {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -224,21 +224,21 @@ $todos-compact-breakpoint: 720px;
     color: var(--bf-color-content-primary);
 
     strong {
-      font-size: var(--bf-font-size-xl);
-      font-weight: var(--bf-font-weight-medium);
-      line-height: var(--bf-line-height-tight);
+      font-size: var(--bf-type-flow-title-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
+      line-height: var(--bf-type-label-md-line-height);
       font-variant-numeric: tabular-nums;
     }
 
     span {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-muted);
     }
   }
 
   &__overview-label {
     margin-top: var(--bf-space-1);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -333,8 +333,8 @@ $todos-compact-breakpoint: 720px;
 
   &__row-name {
     min-width: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -347,9 +347,9 @@ $todos-compact-breakpoint: 720px;
     border-radius: var(--bf-radius-sm);
     background: color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
     color: var(--bf-color-accent-default);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
     white-space: nowrap;
 
     &--warn {
@@ -368,7 +368,7 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     gap: var(--bf-space-1);
     min-width: 0;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -381,7 +381,7 @@ $todos-compact-breakpoint: 720px;
 
   &__row-error {
     margin: 0;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-status-danger-content);
     word-break: break-word;
   }
@@ -413,8 +413,8 @@ $todos-compact-breakpoint: 720px;
 
   &__inactive-title {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-muted);
   }
 
@@ -454,8 +454,8 @@ $todos-compact-breakpoint: 720px;
   &__calendar-weekday {
     padding: 2px 0;
     text-align: center;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     color: var(--bf-color-content-muted);
   }
 
@@ -513,8 +513,8 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__calendar-daynum {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     font-variant-numeric: tabular-nums;
     color: var(--bf-color-content-secondary);
   }
@@ -534,8 +534,8 @@ $todos-compact-breakpoint: 720px;
     padding: 2px 5px;
     border-radius: var(--bf-radius-sm);
     background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__calendar-chip-time {
@@ -554,7 +554,7 @@ $todos-compact-breakpoint: 720px;
 
   &__calendar-more {
     padding-left: 4px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -604,8 +604,8 @@ $todos-compact-breakpoint: 720px;
 
   &__day-detail-title {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -654,16 +654,16 @@ $todos-compact-breakpoint: 720px;
 
   &__editor-title {
     margin: 0;
-    font-size: var(--bf-font-size-xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-primary);
   }
 
   &__editor-description {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     color: var(--bf-color-content-muted);
   }
 
@@ -686,9 +686,9 @@ $todos-compact-breakpoint: 720px;
     margin: 0;
     padding-left: var(--bf-space-2);
     border-left: 3px solid var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-primary);
   }
 
@@ -729,8 +729,8 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     gap: var(--bf-space-2);
     min-width: 0;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
 
     svg {
@@ -740,8 +740,8 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__field-note {
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-ui);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     color: var(--bf-color-content-muted);
   }
 
@@ -750,7 +750,7 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     min-height: 36px;
     border-bottom: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -776,12 +776,12 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__workspace-option-label {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
   }
 
   &__workspace-option-path {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -842,14 +842,14 @@ $todos-compact-breakpoint: 720px;
     min-width: 0;
 
     strong {
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-md-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       color: var(--bf-color-content-primary);
     }
 
     span {
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
       color: var(--bf-color-content-muted);
     }
   }
@@ -873,8 +873,8 @@ $todos-compact-breakpoint: 720px;
     background: transparent;
     color: var(--bf-color-content-primary);
     font: inherit;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     text-align: left;
     cursor: pointer;
 
@@ -912,8 +912,8 @@ $todos-compact-breakpoint: 720px;
   &__editor-advanced-note {
     grid-column: 1 / -1;
     margin-bottom: 0;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     color: var(--bf-color-content-muted);
   }
 
@@ -923,7 +923,7 @@ $todos-compact-breakpoint: 720px;
     border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
     border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-status-danger-content) 6%, transparent);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-status-danger-content);
   }
 

@@ -46,9 +46,9 @@
   h3 {
     margin: 4px 0 0;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-3xl);
-    font-weight: var(--bf-font-weight-bold);
-    letter-spacing: var(--bf-letter-spacing-normal);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    font-weight: var(--bf-type-heading-page-font-weight);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
     line-height: var(--bf-type-flow-meta-line-height);
   }
 }
@@ -56,8 +56,8 @@
 .deep-review-consent__eyebrow {
   color: color-mix(in srgb, var(--deep-review-accent) 58%, var(--bf-color-content-muted));
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-bold);
-  letter-spacing: var(--bf-letter-spacing-normal);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
   text-transform: uppercase;
 }
 
@@ -128,7 +128,7 @@
     padding: 0;
     color: color-mix(in srgb, var(--bf-color-content-secondary) 70%, var(--bf-color-content-primary));
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     line-height: var(--bf-type-flow-support-line-height);
   }
 }
@@ -157,7 +157,7 @@
   span {
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-bold);
+    font-weight: var(--bf-type-heading-page-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
   }
 
@@ -165,7 +165,7 @@
     margin-top: 3px;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-bold);
+    font-weight: var(--bf-type-heading-page-font-weight);
     line-height: var(--bf-type-flow-support-line-height);
   }
 }
@@ -187,7 +187,7 @@
   strong {
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-bold);
+    font-weight: var(--bf-type-heading-page-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
   }
 
@@ -227,7 +227,7 @@
   strong {
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-bold);
+    font-weight: var(--bf-type-heading-page-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
   }
 
@@ -245,7 +245,7 @@
   gap: 6px;
   color: color-mix(in srgb, var(--bf-color-content-secondary) 72%, var(--bf-color-content-primary));
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-bold);
+  font-weight: var(--bf-type-heading-page-font-weight);
   text-transform: uppercase;
 }
 
@@ -284,7 +284,7 @@
     strong {
       color: color-mix(in srgb, var(--deep-review-warm) 72%, var(--bf-color-content-primary));
       font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-font-weight-bold);
+      font-weight: var(--bf-type-heading-page-font-weight);
       text-align: right;
       white-space: normal;
     }
@@ -312,7 +312,7 @@ li.deep-review-consent__skipped-more {
 .deep-review-consent__fact-title {
   color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-font-weight-bold);
+  font-weight: var(--bf-type-heading-page-font-weight);
   line-height: var(--bf-type-flow-meta-line-height);
 }
 

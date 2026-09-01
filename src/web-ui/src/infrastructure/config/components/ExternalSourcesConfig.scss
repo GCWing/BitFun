@@ -21,8 +21,8 @@
     padding: 12px var(--bf-space-2);
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     transition:
       background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -125,7 +125,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -166,7 +166,7 @@
   &__app-empty {
     padding: 12px var(--bf-space-4);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__ecosystem-heading,
@@ -183,8 +183,8 @@
 
   &__ecosystem-name {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__inherited-badge,
@@ -193,8 +193,8 @@
     display: inline-flex;
     align-items: center;
     width: fit-content;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__scope-bar {
@@ -263,7 +263,7 @@
     border-left: 2px solid var(--bf-color-status-warning-content);
     color: var(--bf-color-content-primary);
     background: color-mix(in srgb, var(--bf-color-status-warning-content) 7%, transparent);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     > span {
       flex: 1;
@@ -277,7 +277,7 @@
     margin-bottom: 4px;
     padding: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__ecosystem-card {
@@ -299,8 +299,8 @@
     align-items: center;
     gap: 4px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
 
     &.is-ready {
       color: var(--bf-color-status-success-content);
@@ -362,7 +362,7 @@
     padding: 10px 0;
     border-bottom: 1px solid var(--bf-color-border-subtle);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     > div:first-child {
       display: grid;
@@ -374,7 +374,7 @@
   &__empty,
   &__conflict-hint {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__notice {
@@ -483,14 +483,14 @@
   }
 
   &__source-member-label {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-dense);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
     color: var(--bf-color-content-primary);
   }
 
   &__source-member-description {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-display);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-display-sm-line-height);
     color: var(--bf-color-content-muted);
   }
 
@@ -525,15 +525,15 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-tertiary);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     font-variant-numeric: tabular-nums;
-    line-height: var(--bf-line-height-compact);
+    line-height: var(--bf-type-meta-line-height);
     white-space: nowrap;
   }
 
   &__state {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     &.is-restricted,
     &.is-degraded,
@@ -570,7 +570,7 @@
     display: grid;
     gap: 4px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__path-link {
@@ -601,7 +601,7 @@
     justify-content: space-between;
     gap: 8px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__opencode-locations {
@@ -609,7 +609,7 @@
     display: grid;
     gap: 4px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     > * {
       display: flex;
@@ -647,13 +647,13 @@
 
   &__mcp-empty {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     display: grid;
     gap: 8px;
     padding: 12px var(--bf-space-4);
 
     code {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-muted);
     }
   }
@@ -661,12 +661,12 @@
   &__tool-warning {
     margin-top: 8px;
     color: var(--bf-color-status-warning-content);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__diagnostic-code {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     overflow-wrap: anywhere;
   }
 
@@ -680,8 +680,8 @@
   &__conflict-title {
     margin-bottom: 8px;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__conflict-options {
@@ -699,12 +699,12 @@
 
   &__candidate-detail {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__candidate-state {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__ecosystem {

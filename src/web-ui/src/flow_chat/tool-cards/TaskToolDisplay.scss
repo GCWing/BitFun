@@ -184,7 +184,7 @@
 
   .task-action {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     flex-shrink: 1;
     min-width: 0;
@@ -194,7 +194,7 @@
 
     &__model-tag {
       font-size: var(--bf-type-flow-micro-font-size);
-      font-weight: var(--bf-font-weight-regular);
+      font-weight: var(--bf-type-body-sm-font-weight);
       color: var(--bf-color-content-secondary);
       vertical-align: baseline;
     }
@@ -217,7 +217,7 @@
     padding: 0.1rem var(--bf-control-flow-chat-inline-gap);
     border-radius: 3px;
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     flex-shrink: 0;
     color: var(--bf-color-content-muted);
     background: color-mix(in srgb, var(--bf-color-content-muted) 15%, transparent);
@@ -229,7 +229,7 @@
     padding: 0.1rem var(--bf-control-flow-chat-inline-gap);
     border-radius: 3px;
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     flex-shrink: 0;
     color: var(--bf-color-content-muted);
     background: var(--bf-color-action-quiet-hover);
@@ -294,11 +294,11 @@
     padding: 0.125rem var(--bf-control-flow-chat-inline-gap);
     border-radius: 4px;
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     flex-shrink: 0;
     color: var(--bf-color-content-secondary);
     background: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
-    letter-spacing: var(--bf-letter-spacing-wide);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
   }
 
   .task-header-meta {
@@ -384,8 +384,8 @@
     gap: var(--bf-control-flow-chat-inline-gap);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-subtle);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
     line-height: var(--bf-type-flow-meta-line-height);
 
     svg {
@@ -409,10 +409,10 @@
     gap: var(--bf-control-flow-chat-inline-gap);
     margin-bottom: var(--bf-control-flow-chat-card-gap);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     opacity: 0.8;
   }
 
@@ -472,7 +472,7 @@
     padding: var(--bf-control-flow-chat-control-padding-block) var(--bf-control-flow-chat-control-padding-inline);
     border-radius: 4px;
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     cursor: pointer;
     transition:
       scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -633,7 +633,7 @@
   color: var(--bf-color-content-secondary);
 
   &__role {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     font-size: var(--bf-type-flow-control-font-size);
   }
 

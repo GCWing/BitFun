@@ -21,7 +21,7 @@
   padding: var(--bf-space-2);
   box-sizing: border-box;
   overflow: hidden;
-  line-height: var(--bf-line-height-compact);
+  line-height: var(--bf-type-meta-line-height);
 
   &__panel-header {
     display: flex;
@@ -47,9 +47,9 @@
   &__title {
     @include nav-font.nav-panel-text-heading;
 
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-dense);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -93,8 +93,8 @@
     width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: var(--bf-line-height-compact);
-    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-type-meta-line-height);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__search-result-desc {
@@ -103,16 +103,16 @@
     width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-compact);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-meta-line-height);
+    font-weight: var(--bf-type-body-sm-font-weight);
   }
 
   &__search-empty {
     @include nav-font.nav-panel-text-meta;
 
     padding: var(--bf-space-3) var(--bf-space-2);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     text-align: center;
   }
 

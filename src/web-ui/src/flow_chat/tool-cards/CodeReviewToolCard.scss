@@ -90,7 +90,7 @@
   .review-reliability-status__title {
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .review-reliability-status__items {
@@ -138,7 +138,7 @@
 
   .review-reliability-status__label {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .review-reliability-status__detail {
@@ -153,7 +153,7 @@
 
     .summary-header {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
       margin-bottom: 8px;
     }
@@ -190,7 +190,7 @@
     }
 
     .summary-label {
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-muted);
       font-size: var(--bf-type-flow-support-font-size);
       white-space: nowrap;
@@ -207,7 +207,7 @@
       &.risk-level {
         display: inline-flex;
         align-items: center;
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
         gap: 4px;
         white-space: nowrap;
       }
@@ -247,7 +247,7 @@
   .review-report-section__title {
     overflow: hidden;
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -277,8 +277,8 @@
   .review-report-group__title {
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-bold);
-    letter-spacing: var(--bf-letter-spacing-wider);
+    font-weight: var(--bf-type-heading-page-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
   }
 
@@ -319,7 +319,7 @@
 
   .review-decision-item__question {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   .review-decision-item__options {
@@ -334,7 +334,7 @@
 
       &.is-recommended {
         color: var(--bf-color-accent-default);
-        font-weight: var(--bf-font-weight-medium);
+        font-weight: var(--bf-type-label-sm-font-weight);
       }
     }
   }
@@ -374,7 +374,7 @@
       overflow: hidden;
       color: var(--bf-color-content-primary);
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -388,7 +388,7 @@
   .run-manifest__group-title {
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
 
     &--warning {
       color: var(--bf-color-status-warning-content);
@@ -415,7 +415,7 @@
     overflow: hidden;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -459,7 +459,7 @@
     strong {
       color: var(--bf-color-content-muted);
       font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       white-space: nowrap;
     }
   }
@@ -510,7 +510,7 @@
 
   .reviewer-name {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -594,7 +594,7 @@
     }
 
     .issue-category {
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-secondary);
       flex-shrink: 0;
       font-size: var(--bf-type-flow-micro-font-size);
@@ -616,7 +616,7 @@
 
     .issue-location {
       color: var(--bf-color-content-muted);
-      font-family:var(--bf-font-family-mono);
+      font-family:var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-support-font-size);
       white-space: nowrap;
       overflow: hidden;
@@ -635,7 +635,7 @@
     }
 
     .issue-title {
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
       margin-bottom: 4px;
       font-size: var(--bf-type-flow-control-font-size);
@@ -669,7 +669,7 @@
     }
 
     .suggestion-label {
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-status-success-content);
       flex-shrink: 0;
       font-size: var(--bf-type-flow-support-font-size);
@@ -687,7 +687,7 @@
 
     .team-header {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
       margin-bottom: 8px;
     }
@@ -723,7 +723,7 @@
 
     .reviewer-name {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
     }
 
@@ -754,7 +754,7 @@
       display: flex;
       align-items: center;
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
       margin-bottom: 8px;
     }
@@ -819,7 +819,7 @@
             min-width: 0;
 
             .issue-category {
-              font-weight: var(--bf-font-weight-semibold);
+              font-weight: var(--bf-type-label-selected-font-weight);
               color: var(--bf-color-content-secondary);
               flex-shrink: 0;
               font-size: var(--bf-type-flow-micro-font-size);
@@ -841,7 +841,7 @@
 
             .issue-location {
               color: var(--bf-color-content-muted);
-              font-family:var(--bf-font-family-mono);
+              font-family:var(--bf-type-code-md-font-family);
               font-size: var(--bf-type-flow-support-font-size);
               white-space: nowrap;
               overflow: hidden;
@@ -862,7 +862,7 @@
         }
 
         .issue-title {
-          font-weight: var(--bf-font-weight-semibold);
+          font-weight: var(--bf-type-label-selected-font-weight);
           color: var(--bf-color-content-primary);
           margin-bottom: 4px;
           font-size: var(--bf-type-flow-control-font-size);
@@ -895,7 +895,7 @@
           margin-top: 6px;
 
           .suggestion-label {
-            font-weight: var(--bf-font-weight-semibold);
+            font-weight: var(--bf-type-label-selected-font-weight);
             color: var(--bf-color-status-success-content);
             flex-shrink: 0;
             font-size: var(--bf-type-flow-support-font-size);
@@ -924,7 +924,7 @@
 
     .remediation-header {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
       margin-bottom: 3px;
     }
@@ -995,7 +995,7 @@
       background: color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
       color: var(--bf-color-accent-default);
       font-size: var(--bf-type-flow-micro-font-size);
-      font-weight: var(--bf-font-weight-bold);
+      font-weight: var(--bf-type-heading-page-font-weight);
       flex-shrink: 0;
       margin-top: 1px;
     }
@@ -1047,14 +1047,14 @@
       span {
         color: var(--bf-color-content-muted);
         font-size: var(--bf-type-flow-micro-font-size);
-        font-weight: var(--bf-font-weight-bold);
-        letter-spacing: var(--bf-letter-spacing-widest);
+        font-weight: var(--bf-type-heading-page-font-weight);
+        letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
         text-transform: uppercase;
       }
 
       strong {
         color: var(--bf-color-content-primary);
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
       }
     }
 
@@ -1081,7 +1081,7 @@
         overflow: hidden;
         color: var(--bf-color-content-primary);
         font-size: var(--bf-type-flow-support-font-size);
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1101,7 +1101,7 @@
 
       span {
         color: var(--bf-color-status-success-content);
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
         flex-shrink: 0;
       }
     }
@@ -1135,7 +1135,7 @@
 
     &__title {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-bold);
+      font-weight: var(--bf-type-heading-page-font-weight);
       color: var(--bf-color-content-primary);
       margin-bottom: 3px;
     }
@@ -1164,7 +1164,7 @@
   .review-positive {
     .positive-header {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-status-success-content);
       margin-bottom: 8px;
       padding-bottom: 6px;

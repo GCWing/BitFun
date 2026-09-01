@@ -4,8 +4,8 @@
 
 html, body, #root {
   width: 100%; height: 100%; overflow: hidden;
-  font-family: var(--bf-font-family-sans);
-  font-size: 14px; line-height: 1.5;
+  font-family: var(--bf-type-body-md-font-family);
+  font-size: var(--bf-type-body-md-font-size); line-height: var(--bf-type-body-md-line-height);
   color: var(--bf-color-content-primary);
   background: var(--bf-color-surface-canvas);
   -webkit-font-smoothing: antialiased;
@@ -43,9 +43,9 @@ html, body, #root {
 }
 
 .titlebar-title {
-  font-size: 12px; font-weight: 500;
+  font-size: var(--bf-type-body-xs-font-size); font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-muted); opacity: 0.6;
-  letter-spacing: 0.3px;
+  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
 }
 
 .window-controls {
@@ -136,8 +136,8 @@ html, body, #root {
   background: transparent;
   border: 1px dashed var(--bf-color-border-default);
   border-radius: var(--bf-radius-sm);
-  font-family: var(--bf-font-family-sans);
-  font-size: 13px; font-weight: 500;
+  font-family: var(--bf-type-body-md-font-family);
+  font-size: var(--bf-type-body-sm-font-size); font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-muted);
   cursor: pointer;
   box-shadow: none;
@@ -241,8 +241,8 @@ html, body, #root {
 .card-btn__icon svg { color: var(--bf-color-accent-default); transition: color 0.25s ease; }
 
 .card-btn__content { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.card-btn__title { font-size: 14px; font-weight: 500; color: var(--bf-color-content-primary); }
-.card-btn__subtitle { font-size: 12px; color: var(--bf-color-content-muted); opacity: 0.7; }
+.card-btn__title { font-size: var(--bf-type-body-md-font-size); font-weight: var(--bf-type-label-lg-font-weight); color: var(--bf-color-content-primary); }
+.card-btn__subtitle { font-size: var(--bf-type-body-xs-font-size); color: var(--bf-color-content-muted); opacity: 0.7; }
 
 .card-btn__arrow {
   flex-shrink: 0; color: var(--bf-color-content-muted);
@@ -258,7 +258,7 @@ html, body, #root {
   border: 1px solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-sm);
   color: var(--bf-color-content-primary);
-  font-size: 12px; font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-body-xs-font-size); font-family: var(--bf-type-code-md-font-family);
   outline: none; transition: all 0.25s ease;
 }
 .input:focus {
@@ -303,8 +303,8 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-body-xs-font-size);
+  font-family: var(--bf-type-code-md-font-family);
   color: var(--bf-color-content-primary);
 }
 
@@ -353,8 +353,8 @@ html, body, #root {
   border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-primary);
-  font-size: 12px;
-  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-body-xs-font-size);
+  font-family: var(--bf-type-code-md-font-family);
   outline: none;
 }
 
@@ -390,21 +390,21 @@ html, body, #root {
 }
 
 .bf-select-option-label {
-  font-size: 12px;
-  line-height: 1.2;
+  font-size: var(--bf-type-body-xs-font-size);
+  line-height: var(--bf-type-heading-page-line-height);
   color: var(--bf-color-content-primary);
 }
 
 .bf-select-option-desc {
-  font-size: 11px;
-  line-height: 1.2;
+  font-size: var(--bf-type-support-font-size);
+  line-height: var(--bf-type-heading-page-line-height);
   color: var(--bf-color-content-muted);
 }
 
 .bf-select-empty {
   padding: 8px;
   color: var(--bf-color-content-muted);
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
 }
 
 .model-setup-page {
@@ -429,21 +429,21 @@ html, body, #root {
 
 .model-setup-intro {
   margin-bottom: 2px;
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-muted);
 }
 
 .model-setup-desc {
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-secondary);
 }
 
 .model-setup-provider-desc {
   margin-top: 4px;
   margin-bottom: 2px;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--bf-type-support-font-size);
+  line-height: var(--bf-type-modifier-leading-balanced-line-height);
   color: var(--bf-color-content-muted);
 }
 
@@ -456,8 +456,8 @@ html, body, #root {
 }
 
 .model-setup-row__label {
-  font-size: 12px;
-  line-height: 1.25;
+  font-size: var(--bf-type-body-xs-font-size);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
   color: var(--bf-color-content-secondary);
   text-align: end;
   padding-right: 2px;
@@ -501,8 +501,8 @@ html, body, #root {
 }
 
 .model-setup-fetch-hint {
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--bf-type-support-font-size);
+  line-height: var(--bf-type-modifier-leading-balanced-line-height);
   color: var(--bf-color-content-muted);
   margin-top: 4px;
   padding-left: calc(34% + 10px);
@@ -521,12 +521,12 @@ html, body, #root {
 }
 
 .model-setup-test-msg--ok {
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-status-success-content);
 }
 
 .model-setup-test-msg--err {
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-status-danger-content);
 }
 
@@ -581,7 +581,7 @@ html, body, #root {
 .checkbox-box svg { width: 10px; height: 10px; color: var(--bf-color-surface-panel); opacity: 0; transition: opacity 0.15s ease; }
 .checkbox-box.checked svg { opacity: 1; }
 
-.checkbox-label { font-size: 13px; color: var(--bf-color-content-secondary); transition: color 0.15s ease; }
+.checkbox-label { font-size: var(--bf-type-body-sm-font-size); color: var(--bf-color-content-secondary); transition: color 0.15s ease; }
 .checkbox-item:hover .checkbox-label { color: var(--bf-color-content-primary); }
 
 .progress-bar-container {
@@ -620,10 +620,10 @@ html, body, #root {
 
 .section-label {
   display: flex; align-items: center; gap: 8px;
-  font-size: 12px; font-weight: 500;
+  font-size: var(--bf-type-body-xs-font-size); font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-muted);
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
   margin-bottom: 12px;
 }
 .section-label svg { opacity: 0.6; }
@@ -657,16 +657,16 @@ html, body, #root {
 
 .uninstall-title {
   margin-bottom: 22px;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--bf-type-heading-page-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   text-align: center;
-  letter-spacing: 0.2px;
+  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
 }
 
 .uninstall-subtitle {
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-primary);
   text-align: left;
   opacity: 0.86;
@@ -678,7 +678,7 @@ html, body, #root {
   gap: 6px;
   margin-bottom: 14px;
   padding: 4px 0 6px;
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-muted);
   border: none;
   min-width: 0;
@@ -688,13 +688,13 @@ html, body, #root {
   white-space: nowrap;
   flex-shrink: 0;
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-mono);
+  font-family: var(--bf-type-code-md-font-family);
   opacity: 1;
 }
 
 .uninstall-inline-path {
   color: var(--bf-color-content-muted);
-  font-family: var(--bf-font-family-mono);
+  font-family: var(--bf-type-code-md-font-family);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -707,13 +707,13 @@ html, body, #root {
 .uninstall-error {
   margin-bottom: 10px;
   color: var(--bf-color-status-danger-content);
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
 }
 
 .uninstall-success {
   margin-bottom: 10px;
   color: var(--bf-color-status-success-content);
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
 }
 
 .uninstall-progress-wrap {
@@ -728,7 +728,7 @@ html, body, #root {
 }
 
 .uninstall-progress-text {
-  font-size: 11px;
+  font-size: var(--bf-type-support-font-size);
   color: var(--bf-color-content-muted);
   min-width: 34px;
   text-align: right;

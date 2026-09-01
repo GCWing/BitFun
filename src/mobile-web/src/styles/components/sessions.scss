@@ -44,19 +44,19 @@
 
   h1 {
     margin: 0;
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-bold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-heading-page-font-weight);
     color: var(--bf-color-content-primary);
-    letter-spacing: 0.01em;
+    letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
     width: fit-content;
   }
 }
 
 .session-list__header-account-name {
-  font-size: 11px;
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-muted);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
 }
 
 .session-list__health-dot {
@@ -85,9 +85,9 @@
 }
 
 .session-list__header-kicker {
-  font-size: 10px;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.16em;
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
   color: var(--bf-color-accent-default);
   width: fit-content;
@@ -163,10 +163,10 @@
   border-radius: var(--size-radius-full);
   background: var(--bf-color-accent-surface);
   color: var(--bf-color-accent-default);
-  font-size: 10px;
-  font-weight: var(--font-weight-semibold);
-  line-height: 16px;
-  letter-spacing: 0.02em;
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-body-lg-line-height);
+  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -243,15 +243,15 @@
 }
 
 .session-list__resume-label {
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: var(--bf-type-micro-font-size);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
   color: var(--bf-color-accent-default);
 }
 
 .session-list__resume-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -268,7 +268,7 @@
 }
 
 .session-list__resume-time {
-  font-size: 11px;
+  font-size: var(--bf-type-support-font-size);
   color: var(--bf-color-content-muted);
   white-space: nowrap;
   flex-shrink: 0;
@@ -302,8 +302,8 @@
   @include squircle(12px);
   background: transparent;
   color: var(--bf-color-content-secondary);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-sm-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 
@@ -353,15 +353,15 @@
 }
 
 .session-list__workspace-label {
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: var(--bf-type-micro-font-size);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
   color: var(--bf-color-accent-default);
 }
 
 .session-list__workspace-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -376,7 +376,7 @@
   @include squircle(999px);
   background: var(--bf-color-accent-surface);
   color: var(--bf-color-accent-default);
-  font-size: 11px;
+  font-size: var(--bf-type-support-font-size);
   flex-shrink: 1;
   min-width: 0;
   white-space: nowrap;
@@ -421,8 +421,8 @@
 }
 
 .session-list__section-kicker {
-  font-size: 9px;
-  letter-spacing: 0.14em;
+  font-size: var(--bf-type-overline-sm-font-size);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
   color: var(--bf-color-accent-default);
 
@@ -433,15 +433,15 @@
 
 .session-list__section-title {
   margin-top: 4px;
-  font-size: var(--font-size-lg);
-  line-height: 1.1;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-flow-title-font-size);
+  line-height: var(--bf-type-display-xxl-line-height);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--bf-type-display-xxl-letter-spacing);
 }
 
 .session-list__section-meta {
-  font-size: 11px;
+  font-size: var(--bf-type-support-font-size);
   color: var(--bf-color-content-muted);
   flex-shrink: 0;
 }
@@ -500,15 +500,15 @@
 }
 
 .session-list__assistant-label {
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: var(--bf-type-micro-font-size);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
   color: var(--bf-color-identity-assistant-content);
 }
 
 .session-list__assistant-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -601,15 +601,15 @@
 }
 
 .session-list__create-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--bf-type-flow-title-letter-spacing);
 }
 
 .session-list__create-desc {
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--bf-type-support-font-size);
+  line-height: var(--bf-type-modifier-leading-balanced-line-height);
   color: var(--bf-color-content-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -697,9 +697,9 @@
 }
 
 .session-list__item-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.25;
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
   color: var(--bf-color-content-primary);
   min-width: 0;
   flex: 1;
@@ -710,7 +710,7 @@
 }
 
 .session-list__item-time {
-  font-size: 10px;
+  font-size: var(--bf-type-micro-font-size);
   color: var(--bf-color-content-muted);
   margin-top: 2px;
 }
@@ -721,8 +721,8 @@
   min-height: 18px;
   padding: 0 8px;
   @include squircle(999px);
-  font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   border: 1px solid var(--bf-color-border-subtle);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-secondary);
@@ -753,8 +753,8 @@
 .session-list__empty {
   padding: var(--size-gap-10) var(--size-gap-4);
   text-align: center;
-  font-size: var(--font-size-sm);
-  line-height: 1.6;
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
   color: var(--bf-color-content-muted);
   border: 1px solid var(--bf-color-border-subtle);
   @include squircle(18px);
@@ -782,7 +782,7 @@
 .session-list__load-more {
   padding: var(--size-gap-3) 0 var(--size-gap-1);
   text-align: center;
-  font-size: 12px;
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-muted);
 }
 
@@ -819,8 +819,8 @@
 
   h3 {
     margin: 0;
-    font-size: 16px;
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 }
@@ -852,7 +852,7 @@
   padding: var(--size-gap-6);
   text-align: center;
   color: var(--bf-color-content-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-type-body-md-font-size);
 }
 
 .session-list__picker-item {
@@ -931,8 +931,8 @@
 
 .session-list__picker-item-name {
   flex: 1;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-primary);
 }
 
@@ -986,7 +986,7 @@
   flex: 1;
   border: none;
   background: none;
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-type-body-md-font-size);
   color: var(--bf-color-content-primary);
   outline: none;
   padding: 0;
@@ -1058,8 +1058,8 @@
 
 .session-list__menu-title {
   text-align: center;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   padding: var(--size-gap-1) 0;
   white-space: nowrap;
@@ -1083,8 +1083,8 @@
   @include squircle(16px);
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-primary);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   cursor: pointer;
   text-align: left;
 
@@ -1114,8 +1114,8 @@
   @include squircle(14px);
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-secondary);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   cursor: pointer;
 
   &:active {
@@ -1143,8 +1143,8 @@
 
 .session-list__rename-title {
   margin: 0;
-  font-size: 18px;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   text-align: center;
 }
@@ -1155,7 +1155,7 @@
   @include squircle(12px);
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-primary);
-  font-size: var(--font-size-base);
+  font-size: var(--bf-type-body-lg-font-size);
   outline: none;
 
   &:focus {
@@ -1174,8 +1174,8 @@
   padding: 12px;
   border: none;
   @include squircle(14px);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 
@@ -1225,16 +1225,16 @@
 
 .session-list__confirm-title {
   margin: 0;
-  font-size: 17px;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-heading-navigation-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
 }
 
 .session-list__confirm-desc {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-type-body-md-font-size);
   color: var(--bf-color-content-secondary);
-  line-height: 1.5;
+  line-height: var(--bf-type-body-md-line-height);
 }
 
 .session-list__confirm-actions {
@@ -1249,8 +1249,8 @@
   padding: 12px;
   border: none;
   @include squircle(14px);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 
@@ -1288,8 +1288,8 @@
   border-radius: 999px;
   background: var(--bf-color-content-primary);
   color: var(--bf-color-surface-canvas);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   z-index: 9999;
   box-shadow: var(--bf-shadow-base);
   pointer-events: none;

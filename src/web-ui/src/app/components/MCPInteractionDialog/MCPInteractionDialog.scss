@@ -10,7 +10,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-secondary);
 }
 
@@ -31,7 +31,7 @@
 }
 
 .mcp-interaction-dialog__label {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-secondary);
 }
 
@@ -42,8 +42,8 @@
   background: var(--bf-color-surface-tertiary);
   border: 1px solid var(--bf-color-border-default);
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 180px;

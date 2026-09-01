@@ -10,8 +10,8 @@
     background: var(--bf-color-surface-panel);
     box-shadow: none;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
-    line-height: var(--bf-line-height-tight);
+    font-family:var(--bf-type-body-md-font-family);
+    line-height: var(--bf-type-heading-page-line-height);
   }
 
   .header,
@@ -29,8 +29,8 @@
     padding-block: var(--bf-control-ask-user-summary-padding-block);
     padding-inline: var(--bf-control-ask-user-summary-padding-inline-start);
     border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-label-lg-font-weight);
   }
 
   .summaryButton {
@@ -70,9 +70,9 @@
   .summaryCopy {
     flex: 1 1 auto;
     gap: var(--bf-space-1);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-label-lg-font-weight);
+    line-height: var(--bf-type-heading-page-line-height);
   }
 
   .summaryIcon,
@@ -175,9 +175,9 @@
     inline-size: 100%;
     padding-inline: var(--bf-control-ask-user-question-padding-inline);
     color: var(--bf-color-action-neutral-content);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-heading-page-line-height);
   }
 
   .options {
@@ -252,15 +252,15 @@
 
   .optionLabel,
   .optionDescription {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .optionLabel {
     flex: 0 1 auto;
     min-inline-size: 0;
     color: var(--bf-color-action-neutral-content);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-tight);
+    font-weight: var(--bf-type-label-lg-font-weight);
+    line-height: var(--bf-type-heading-page-line-height);
   }
 
   .optionDescription {
@@ -269,7 +269,7 @@
     max-inline-size: var(--bf-control-ask-user-description-max-width);
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-md-font-weight);
     line-height: var(--bf-type-body-sm-line-height);
     text-align: end;
     text-overflow: ellipsis;
@@ -322,9 +322,9 @@
   }
 
   .statusText {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-xs-font-size);
+    font-weight: var(--bf-type-label-lg-font-weight);
+    line-height: var(--bf-type-body-md-line-height);
   }
 
   .root[data-bf-state="asking"] .statusIcon,

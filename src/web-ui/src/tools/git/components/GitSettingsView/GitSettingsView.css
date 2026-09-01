@@ -4,7 +4,7 @@
   height: 100%;
   background: var(--bf-color-surface-canvas);
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
 }
 
 .settings-header {
@@ -24,8 +24,8 @@
 
 .header-left h3 {
   margin: 0;
-  font-size: var(--bf-font-size-2xl);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
 }
 
@@ -71,8 +71,8 @@
   border: 1px solid var(--bf-color-status-success-content);
   border-radius: 4px;
   color: var(--bf-color-status-success-content);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -95,7 +95,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   border-bottom: 1px solid;
 }
 
@@ -117,8 +117,8 @@
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: var(--bf-font-size-base);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 }
 
 .settings-tabs {
@@ -136,8 +136,8 @@
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -177,23 +177,23 @@
 
 .settings-section h4 {
   margin: 0 0 8px;
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
 }
 
 .settings-section h5 {
   margin: 16px 0 8px;
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-secondary);
 }
 
 .section-description {
   margin: 0 0 16px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-secondary);
-  line-height: var(--bf-line-height-ui);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 }
 
 .form-group {
@@ -205,8 +205,8 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 6px;
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: var(--bf-color-content-secondary);
 }
 
@@ -218,7 +218,7 @@
   border: 1px solid var(--bf-color-border-default);
   border-radius: 4px;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -259,9 +259,9 @@
 
 .field-description {
   margin: 4px 0 0;
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   color: var(--bf-color-content-secondary);
-  line-height: var(--bf-line-height-snug);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
 }
 
 .form-row {
@@ -285,8 +285,8 @@
   border: 1px solid var(--bf-color-accent-default);
   border-radius: 3px;
   color: var(--bf-color-accent-default);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   text-transform: uppercase;
   display: inline-block;
 }
@@ -306,8 +306,8 @@
   border: 1px solid var(--bf-color-status-success-content);
   border-radius: 3px;
   color: var(--bf-color-status-success-content);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   display: inline-block;
 }
 
@@ -337,12 +337,12 @@
 
 .error-state h3 {
   margin: 0 0 8px;
-  font-size: var(--bf-font-size-xl);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-flow-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .error-message {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-secondary);
   margin: 4px 0 16px;
 }
@@ -353,7 +353,7 @@
   border: none;
   border-radius: 4px;
   color: var(--bf-color-content-on-dark);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   cursor: pointer;
   transition: background-color 0.2s ease;
 }

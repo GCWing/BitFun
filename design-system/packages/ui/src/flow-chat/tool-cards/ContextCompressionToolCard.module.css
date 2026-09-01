@@ -9,13 +9,13 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .summary {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     font-variant-numeric: tabular-nums;
   }
 
@@ -25,8 +25,8 @@
   }
 
   .error {
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     color: var(--bf-color-status-danger-content);

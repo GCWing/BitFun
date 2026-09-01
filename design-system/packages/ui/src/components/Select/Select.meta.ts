@@ -37,8 +37,6 @@ export const selectMeta = {
     "control.select.contentGap",
     "control.select.indicatorSize",
     "control.select.radius",
-    "font.family.control",
-    "font.size.sm",
-    "font.weight.regular",
+    "type.label.md.fontSize",
   ],
 } as const satisfies ComponentMeta;

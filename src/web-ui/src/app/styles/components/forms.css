@@ -29,14 +29,14 @@
 /* ========== Label styles ========== */
 
 .form-label {
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: var(--bf-color-content-secondary);
   display: flex;
   align-items: center;
   gap: var(--bf-space-2);
   margin-bottom: var(--bf-space-1);
-  line-height: var(--bf-line-height-tight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .form-label.required::after {
@@ -46,9 +46,9 @@
 }
 
 .form-hint {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
   margin-top: var(--bf-space-1);
 }
 
@@ -59,10 +59,10 @@
 .form-textarea {
   width: 100%;
   padding: 12px 16px;
-  font-size: var(--bf-font-size-base);
-  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-type-body-md-font-size);
+  font-family:var(--bf-type-body-sm-font-family);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
   
   /* Glassmorphism effect */
   background: var(--bf-color-surface-subtle);
@@ -86,14 +86,14 @@
 .form-input-sm,
 .form-select-sm {
   padding: 8px 12px;
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   border-radius: var(--bf-radius-sm);
 }
 
 .form-input-lg,
 .form-select-lg {
   padding: 16px 20px;
-  font-size: var(--bf-font-size-lg);
+  font-size: var(--bf-type-body-lg-font-size);
   border-radius: var(--bf-radius-lg);
 }
 
@@ -188,7 +188,7 @@
 .form-textarea {
   min-height: 100px;
   resize: vertical;
-  line-height: var(--bf-line-height-relaxed);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .form-textarea-sm {
@@ -220,7 +220,7 @@
   gap: var(--bf-space-2);
   cursor: pointer;
   user-select: none;
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 .form-checkbox input,
@@ -271,7 +271,7 @@
   border: 1px solid var(--bf-color-border-default);
   border-left: none;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   white-space: nowrap;
 }
 
@@ -319,9 +319,9 @@
   align-items: center;
   gap: var(--bf-space-1);
   margin-top: var(--bf-space-1);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-status-danger-content);
-  line-height: var(--bf-line-height-tight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .form-success-message {
@@ -329,9 +329,9 @@
   align-items: center;
   gap: var(--bf-space-1);
   margin-top: var(--bf-space-1);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-status-success-content);
-  line-height: var(--bf-line-height-tight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 /* ========== File upload ========== */

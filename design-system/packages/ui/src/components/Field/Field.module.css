@@ -66,10 +66,11 @@
     align-items: center;
     gap: var(--bf-layout-field-label-gap);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
   }
 
   .required {
@@ -85,19 +86,21 @@
 
   .description {
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-support-font-family);
+    font-size: var(--bf-type-support-font-size);
+    font-weight: var(--bf-type-support-font-weight);
+    line-height: var(--bf-type-support-line-height);
+    letter-spacing: var(--bf-type-support-letter-spacing);
   }
 
   .error {
     grid-column: 1 / -1;
     color: var(--bf-color-status-danger-content);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-support-font-family);
+    font-size: var(--bf-type-support-font-size);
+    font-weight: var(--bf-type-support-font-weight);
+    line-height: var(--bf-type-support-line-height);
+    letter-spacing: var(--bf-type-support-letter-spacing);
   }
 
   .control {

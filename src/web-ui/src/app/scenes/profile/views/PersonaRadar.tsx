@@ -148,9 +148,9 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               style={{
-                fontSize: 'var(--bf-font-size-2xs)',
+                fontSize: 'var(--bf-type-overline-sm-font-size)',
                 fill: hasClick ? 'var(--bf-color-content-secondary)' : 'var(--bf-color-content-muted)',
-                fontFamily: 'var(--bf-font-family-sans)',
+                fontFamily: 'var(--bf-type-body-sm-font-family)',
                 userSelect: 'none',
                 cursor: hasClick ? 'pointer' : 'default',
                 transition: 'fill 0.15s',

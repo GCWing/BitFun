@@ -73,7 +73,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
       <div className="page-scroll">
         <div className="page-container page-container--center" style={{ maxWidth: 760 }}>
           <p style={{
-            fontSize: 14,
+            fontSize: 'var(--bf-type-body-md-font-size)',
             color: 'var(--bf-color-content-secondary)',
             marginBottom: 12,
           }}>
@@ -98,7 +98,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                 <div style={{ flex: 1, background: lightPreview.colors.background.primary }} />
                 <div style={{ flex: 1, background: darkPreview.colors.background.primary }} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--bf-color-content-primary)' }}>
+              <div style={{ fontSize: 'var(--bf-type-support-font-size)', color: 'var(--bf-color-content-primary)' }}>
                 {t('themeSetup.followSystem')}
               </div>
             </button>
@@ -115,7 +115,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                     </div>
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--bf-color-content-primary)' }}>
+                <div style={{ fontSize: 'var(--bf-type-support-font-size)', color: 'var(--bf-color-content-primary)' }}>
                   {t(`themeSetup.themeNames.${theme.id}`, { defaultValue: theme.name })}
                 </div>
               </button>
@@ -134,7 +134,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
             <div style={{
               color: 'var(--bf-color-status-danger-content)',
               marginBottom: 12,
-              fontSize: 12,
+              fontSize: 'var(--bf-type-body-xs-font-size)',
               width: '100%',
             }}>
               {finishError}

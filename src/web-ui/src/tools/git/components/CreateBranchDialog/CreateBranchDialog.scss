@@ -19,8 +19,8 @@
   }
 
   &__title {
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -67,9 +67,9 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-2);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
 
     svg {
       color: var(--bf-color-accent-default);
@@ -77,10 +77,10 @@
   }
 
   &__base-value {
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     padding: 2px 8px;
     background: var(--bf-color-action-neutral-surface);
     border: 1px solid var(--bf-color-border-default);
@@ -100,8 +100,8 @@
   }
 
   &__label {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
     display: flex;
     align-items: center;
@@ -119,8 +119,8 @@
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
     transition:
       background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
       border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
@@ -136,7 +136,7 @@
 
     &::placeholder {
       color: var(--bf-color-content-muted);
-      font-family: var(--bf-font-family-sans);
+      font-family: var(--bf-type-body-sm-font-family);
     }
 
     &:disabled {
@@ -163,18 +163,18 @@
     border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 25%, transparent);
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     animation: bitfun-create-branch-dialog-shake 0.4s ease-in-out;
   }
 
   &__hint {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
 
     div {
       margin-bottom: var(--bf-space-1);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     ul {
@@ -201,8 +201,8 @@
       background: var(--bf-color-action-neutral-surface);
       border: 1px solid var(--bf-color-border-default);
       border-radius: var(--bf-radius-sm);
-      font-family: var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-micro);
+      font-family: var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-micro-font-size);
       color: var(--bf-color-content-secondary);
     }
   }
@@ -218,7 +218,7 @@
 
   &__shortcuts {
     margin-top: var(--bf-space-2);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     text-align: center;
 
@@ -228,9 +228,9 @@
       background: var(--bf-color-action-neutral-surface);
       border: 1px solid var(--bf-color-border-default);
       border-radius: var(--bf-radius-sm);
-      font-family: var(--bf-font-family-mono);
+      font-family: var(--bf-type-code-md-font-family);
       margin: 0 4px;
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
   }
 

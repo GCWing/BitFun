@@ -59,17 +59,17 @@
   }
 
   &__intro-title {
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-meta-line-height);
     color: var(--bf-color-content-primary);
-    letter-spacing: var(--bf-letter-spacing-snug);
+    letter-spacing: var(--bf-type-flow-title-letter-spacing);
   }
 
   &__intro-text,
   &__scope {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-comfortable);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-support-line-height);
     color: var(--bf-color-content-secondary);
   }
 
@@ -93,8 +93,8 @@
   }
 
   &__intro-badge-label {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__empty {
@@ -107,8 +107,8 @@
     border-radius: 14px;
     background: color-mix(in srgb, var(--bf-color-surface-subtle) 64%, transparent);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: center;
   }
 
@@ -124,14 +124,14 @@
     justify-content: space-between;
     gap: 8px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__section-description {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__external-section {
@@ -142,13 +142,13 @@
 
   &__read-only {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__diagnostics {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
 
     summary {
       cursor: pointer;
@@ -160,7 +160,7 @@
     }
 
     code {
-      font-family:var(--bf-font-family-mono);
+      font-family:var(--bf-type-code-md-font-family);
       overflow-wrap: anywhere;
     }
   }
@@ -188,22 +188,22 @@
 
   &__external-alias {
     color: var(--bf-color-accent-default);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__external-source {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__external-path {
     overflow-wrap: anywhere;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-support);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__card-header {
@@ -221,9 +221,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-color-action-neutral-surface) 62%, transparent);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 
   &__remove {
@@ -271,8 +271,8 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
     color: color-mix(in srgb, var(--bf-color-status-danger-content) 88%, var(--bf-color-content-primary));
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__footer {

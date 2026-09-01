@@ -15,13 +15,13 @@
     align-items: baseline;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .detailLabel {
     flex: 0 0 auto;
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .detailValue {
@@ -30,7 +30,7 @@
   }
 
   .detail[data-monospace="true"] .detailValue {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   .results {
@@ -49,7 +49,7 @@
     gap: var(--bf-space-2);
     padding-block: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .result + .result {
@@ -79,7 +79,7 @@
     min-inline-size: 0;
     color: var(--bf-color-content-primary);
     font: inherit;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-lg-font-weight);
     text-align: start;
     overflow-wrap: anywhere;
   }
@@ -102,13 +102,13 @@
   .resultUrl,
   .resultMeta {
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-md-line-height);
     overflow-wrap: anywhere;
   }
 
   .resultUrl {
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-xs-font-size);
   }
 
   .resultMeta {
@@ -120,9 +120,9 @@
     margin: 0;
     overflow: auto;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -130,7 +130,7 @@
   .overflowLabel {
     padding-block: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
     font-style: italic;
     text-align: center;
   }

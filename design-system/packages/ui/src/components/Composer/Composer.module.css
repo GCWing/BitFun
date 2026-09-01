@@ -99,10 +99,11 @@
     min-block-size: 0;
     padding: var(--bf-control-composer-editor-padding);
     color: inherit;
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   .editor > :where(textarea, input, [contenteditable="true"]) {

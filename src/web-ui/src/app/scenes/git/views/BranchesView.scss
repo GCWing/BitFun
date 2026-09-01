@@ -77,7 +77,7 @@
   }
 
   &__name {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -86,8 +86,8 @@
 
   &__current-badge {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-accent-default);
     text-transform: uppercase;
   }
@@ -101,7 +101,7 @@
     padding: 16px;
     text-align: center;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__placeholder {
@@ -112,11 +112,11 @@
     flex: 1;
     gap: 8px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   &__hint {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     opacity: 0.8;
   }
 
@@ -132,8 +132,8 @@
   }
 
   &__history-title {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     margin-right: auto;
   }
@@ -177,7 +177,7 @@
   }
 
   &__commit-message {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -185,7 +185,7 @@
   }
 
   &__commit-meta {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     margin-top: 2px;
   }
@@ -198,7 +198,7 @@
   &__commit-detail {
     padding: 8px 10px 10px 34px;
     border-top: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__commit-body {
@@ -206,11 +206,11 @@
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__files {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
 
     ul {

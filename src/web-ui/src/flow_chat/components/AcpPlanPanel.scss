@@ -18,8 +18,8 @@
   &__title {
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-meta-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wide);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     text-transform: uppercase;
   }
 
@@ -76,7 +76,7 @@
   }
 
   &__content {
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     word-break: break-word;
   }
 }

@@ -19,7 +19,7 @@
 
   &__selected-count {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     font-variant-numeric: tabular-nums;
   }
 
@@ -37,10 +37,10 @@
 
   &__section-label {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__group {
@@ -71,10 +71,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wide);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
   }
 
   &__group-count {
@@ -86,7 +86,7 @@
     border-radius: var(--bf-radius-pill);
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -114,8 +114,8 @@
     border-radius: var(--bf-radius-pill);
     background: transparent;
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-meta-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -156,8 +156,8 @@
 
   &__label {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__tools {
@@ -187,7 +187,7 @@
     justify-content: space-between;
     gap: var(--bf-space-3);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__list {
@@ -214,14 +214,14 @@
 
   &__group-name {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__group-meta,
   &__empty {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__group-actions {
@@ -242,8 +242,8 @@
     flex-direction: column;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__token-grid {
@@ -266,8 +266,8 @@
     border-radius: var(--bf-radius-pill);
     background: transparent;
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-meta-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

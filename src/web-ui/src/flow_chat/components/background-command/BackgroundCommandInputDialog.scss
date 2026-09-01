@@ -20,8 +20,8 @@
     code {
       min-width: 0;
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -30,16 +30,16 @@
 
   &__summary-label {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__textarea {
     .bitfun-textarea__field {
       min-height: 96px;
       resize: vertical;
-      font-family:var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-base);
+      font-family:var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
     }
 
     &--masked .bitfun-textarea__field {
@@ -64,8 +64,8 @@
   &__note {
     margin: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__actions {

@@ -26,8 +26,8 @@ export function InstallErrorPanel({ message, variant = 'options' }: InstallError
         border: '1px solid color-mix(in srgb, var(--bf-color-border-default) 70%, transparent)',
         background: 'color-mix(in srgb, var(--bf-color-surface-subtle) 80%, transparent)',
         color: 'var(--bf-color-content-secondary)',
-        fontSize: 11,
-        lineHeight: 1.55,
+        fontSize: 'var(--bf-type-support-font-size)',
+        lineHeight: 'var(--bf-type-support-line-height)',
         textAlign: variant === 'bare' ? 'center' : 'left',
       }}
     >
@@ -41,8 +41,8 @@ export function InstallErrorPanel({ message, variant = 'options' }: InstallError
         <div
           style={{
             color: 'var(--bf-color-content-muted)',
-            fontSize: 12,
-            lineHeight: 1.6,
+            fontSize: 'var(--bf-type-body-xs-font-size)',
+            lineHeight: 'var(--bf-type-body-lg-line-height)',
             textAlign: 'center',
             maxWidth: 320,
           }}
@@ -63,8 +63,8 @@ export function InstallErrorPanel({ message, variant = 'options' }: InstallError
         border: '1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 55%, transparent)',
         background: 'color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent)',
         color: 'var(--bf-color-content-primary)',
-        fontSize: 12,
-        lineHeight: 1.5,
+        fontSize: 'var(--bf-type-body-xs-font-size)',
+        lineHeight: 'var(--bf-type-body-md-line-height)',
       }}
     >
       {text}

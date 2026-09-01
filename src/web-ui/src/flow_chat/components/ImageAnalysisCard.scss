@@ -86,8 +86,8 @@
 }
 
 .image-analysis-card__filename {
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: var(--image-analysis-text);
   margin-bottom: 6px;
   overflow: hidden;
@@ -185,11 +185,11 @@
     
     h4 {
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--image-analysis-text-secondary);
       margin: 0 0 6px 0;
       text-transform: uppercase;
-      letter-spacing: var(--bf-letter-spacing-wider);
+      letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     }
     
     p {

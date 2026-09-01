@@ -10,10 +10,11 @@
     padding: calc(var(--bf-space-1) / 2);
     vertical-align: middle;
     color: var(--bf-color-action-neutral-content);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }

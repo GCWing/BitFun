@@ -86,8 +86,8 @@
     -webkit-backdrop-filter: blur(8px);
     
     font-size: var(--bf-type-flow-meta-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-none);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     
     box-shadow: 
       0 2px 8px color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent),

@@ -25,7 +25,7 @@ test("ToolbarBadge preserves its slot hook and delegates to NumberBadge", () => 
 
 test("NumberBadge uses a 24px slot, 20px surface and 11px control typography without clipping", async () => {
   const source = await readFile(new URL("../src/components/NumberBadge/NumberBadge.module.css", import.meta.url), "utf8");
-  for (const token of ["space-6", "space-5", "font-size-meta", "font-family-control", "font-weight-medium", "color-action-neutral-content", "color-action-neutral-surface"]) assert.ok(source.includes(`--bf-${token}`), token);
+  for (const token of ["space-6", "space-5", "type-meta-font-size", "type-meta-font-family", "type-meta-font-weight", "color-action-neutral-content", "color-action-neutral-surface"]) assert.ok(source.includes(`--bf-${token}`), token);
   assert.doesNotMatch(source, /overflow:\s*(hidden|clip)|text-overflow:\s*ellipsis/);
   assert.match(source, /forced-colors: active/);
 });

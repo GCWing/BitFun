@@ -101,7 +101,7 @@ ${createWidgetAppearanceFallbackCss()}
       min-height: 0;
       background: transparent;
       color: var(--bf-color-content-primary);
-      font-family: var(--bf-font-family-sans);
+      font-family: var(--bf-type-body-sm-font-family);
       overflow-x: hidden;
       overflow-y: hidden;
     }
@@ -129,11 +129,11 @@ ${createWidgetAppearanceFallbackCss()}
       word-break: break-word;
     }
     body {
-      font-size: var(--bf-font-size-sm);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-label-md-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
     }
     body, button, input, textarea, select {
-      font-family: var(--bf-font-family-sans);
+      font-family: var(--bf-type-body-sm-font-family);
     }
     button, input, textarea, select {
       font: inherit;
@@ -211,23 +211,23 @@ ${createWidgetAppearanceFallbackCss()}
     }
     .bf-title {
       margin: 0;
-      font-size: var(--bf-font-size-lg);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-tight);
+      font-size: var(--bf-type-body-lg-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-label-md-line-height);
       color: var(--bf-color-content-primary);
-      letter-spacing: var(--bf-letter-spacing-snug);
+      letter-spacing: var(--bf-type-flow-title-letter-spacing);
     }
     .bf-subtitle {
       margin: 0;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-muted);
-      line-height: var(--bf-line-height-base);
+      line-height: var(--bf-type-body-sm-line-height);
     }
     .bf-eyebrow {
       margin: 0;
-      font-size: var(--bf-font-size-meta);
-      font-weight: var(--bf-font-weight-medium);
-      letter-spacing: var(--bf-letter-spacing-widest);
+      font-size: var(--bf-type-meta-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
+      letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
       text-transform: uppercase;
       color: var(--bf-color-content-muted);
     }
@@ -282,20 +282,20 @@ ${createWidgetAppearanceFallbackCss()}
       border: 1px solid var(--bf-color-border-subtle);
     }
     .bf-kpi-label {
-      font-size: var(--bf-font-size-meta);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-meta-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       text-transform: uppercase;
-      letter-spacing: var(--bf-letter-spacing-widest);
+      letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
       color: var(--bf-color-content-muted);
     }
     .bf-kpi-value {
-      font-size: var(--bf-font-size-2xl);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-display);
+      font-size: var(--bf-type-flow-section-title-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-display-sm-line-height);
       color: var(--bf-color-content-primary);
     }
     .bf-kpi-meta {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-secondary);
     }
     .bf-badge {
@@ -308,8 +308,8 @@ ${createWidgetAppearanceFallbackCss()}
       border-radius: 999px;
       background: var(--bf-color-action-neutral-surface);
       border: 1px solid var(--bf-color-border-subtle);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       color: var(--bf-color-content-secondary);
       white-space: nowrap;
     }
@@ -450,15 +450,15 @@ ${createWidgetAppearanceFallbackCss()}
       vertical-align: top;
       border-bottom: 1px solid var(--bf-color-border-subtle);
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
       word-break: break-word;
     }
     .bf-table th {
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       color: var(--bf-color-content-muted);
       text-transform: uppercase;
-      letter-spacing: var(--bf-letter-spacing-wider);
+      letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     }
     .bf-empty {
       display: flex;
@@ -486,11 +486,11 @@ ${createWidgetAppearanceFallbackCss()}
       border-radius: 6px;
       background: var(--bf-color-action-neutral-surface);
       color: var(--bf-color-content-primary);
-      font-family: var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-xs);
+      font-family: var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-label-sm-font-size);
     }
     .bf-mono {
-      font-family: var(--bf-font-family-mono);
+      font-family: var(--bf-type-code-md-font-family);
     }
     @media (max-width: 560px) {
       .bf-card,
@@ -502,7 +502,7 @@ ${createWidgetAppearanceFallbackCss()}
         grid-template-columns: 1fr;
       }
       .bf-title {
-        font-size: var(--bf-font-size-base);
+        font-size: var(--bf-type-body-md-font-size);
       }
     }
     @media (prefers-reduced-motion: reduce) {

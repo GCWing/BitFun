@@ -31,11 +31,11 @@
     border-radius: var(--bf-control-tab-group-item-radius);
     color: var(--_tab-content);
     background: var(--_tab-background);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    letter-spacing: var(--bf-letter-spacing-normal);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    line-height: var(--bf-type-label-md-line-height);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -57,7 +57,7 @@
     --_tab-background-hover: var(--bf-color-action-neutral-surface-hover);
     --_tab-border: transparent;
 
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .tab:hover:not(:disabled),
@@ -69,7 +69,7 @@
   .tab:active:not(:disabled),
   .tabGroup[data-bf-preview-state="active"] .tab[aria-selected="false"]:not(:disabled) {
     background: var(--_tab-background-active);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .tab:focus-visible {
@@ -102,7 +102,7 @@
 
   .label {
     min-inline-size: 0;
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
   }

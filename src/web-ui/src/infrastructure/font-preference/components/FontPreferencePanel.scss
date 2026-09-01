@@ -43,7 +43,7 @@
 
   &__level-label {
     display: block;
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-type-label-md-line-height);
     font-weight: inherit;
     color: inherit;
   }
@@ -54,9 +54,9 @@
 
   &__custom-hint {
     width: 100%;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   &__preview {
@@ -68,7 +68,7 @@
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
     word-wrap: break-word;
     transition: font-size var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }

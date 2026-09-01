@@ -19,8 +19,8 @@
     border-radius: 6px;
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
 
     svg {
       flex-shrink: 0;
@@ -50,8 +50,8 @@
     min-height: 44px;
     padding: 8px 12px;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     background: var(--bf-color-surface-subtle);
   }
 
@@ -86,14 +86,14 @@
       min-width: 0;
       overflow: hidden;
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     span {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       white-space: nowrap;
     }
   }
@@ -111,7 +111,7 @@
   &__rule-heading {
     min-height: 32px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     background: var(--bf-color-surface-subtle);
     border-bottom: 1px solid var(--bf-color-border-subtle);
   }
@@ -143,8 +143,8 @@
   &__empty {
     padding: 18px 12px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: center;
   }
 }

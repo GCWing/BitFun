@@ -106,8 +106,11 @@
     strong {
       overflow: hidden;
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-base);
-      font-weight: var(--bf-font-weight-semibold);
+      font-family: var(--bf-type-heading-card-font-family);
+      font-size: var(--bf-type-heading-card-font-size);
+      font-weight: var(--bf-type-heading-card-font-weight);
+      line-height: var(--bf-type-heading-card-line-height);
+      letter-spacing: var(--bf-type-heading-card-letter-spacing);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -118,8 +121,11 @@
       margin: 0;
       overflow: hidden;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-sm);
-      line-height: var(--bf-line-height-support);
+      font-family: var(--bf-type-support-font-family);
+      font-size: var(--bf-type-support-font-size);
+      font-weight: var(--bf-type-support-font-weight);
+      line-height: var(--bf-type-support-line-height);
+      letter-spacing: var(--bf-type-support-letter-spacing);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -130,7 +136,11 @@
     display: flex;
     align-items: center;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
   }
 
   &__eyebrow {
@@ -166,15 +176,21 @@
     // Same scale as the submission workspace: 13px/600 titles over 13px body.
     h4 {
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-semibold);
+      font-family: var(--bf-type-heading-card-font-family);
+      font-size: var(--bf-type-heading-card-font-size);
+      font-weight: var(--bf-type-heading-card-font-weight);
+      line-height: var(--bf-type-heading-card-line-height);
+      letter-spacing: var(--bf-type-heading-card-letter-spacing);
     }
 
     p,
     li {
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-sm);
-      line-height: var(--bf-line-height-relaxed);
+      font-family: var(--bf-type-body-sm-font-family);
+      font-size: var(--bf-type-body-sm-font-size);
+      font-weight: var(--bf-type-body-sm-font-weight);
+      line-height: var(--bf-type-body-sm-line-height);
+      letter-spacing: var(--bf-type-body-sm-letter-spacing);
     }
   }
 
@@ -184,7 +200,11 @@
     align-items: center;
     gap: var(--bf-space-1);
     color: var(--bf-color-status-success-content);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
   }
 
   &__screenshots {
@@ -211,7 +231,11 @@
     border-radius: var(--bf-radius-lg);
     background: var(--bf-color-status-warning-surface);
     color: var(--bf-color-status-warning-content);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   &__rating {
@@ -226,7 +250,11 @@
     span {
       margin-left: var(--bf-space-2);
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
+      font-family: var(--bf-type-meta-font-family);
+      font-size: var(--bf-type-meta-font-size);
+      font-weight: var(--bf-type-meta-font-weight);
+      line-height: var(--bf-type-meta-line-height);
+      letter-spacing: var(--bf-type-meta-letter-spacing);
     }
   }
 
@@ -242,7 +270,11 @@
       border: 1px solid var(--bf-color-border-subtle);
       border-radius: var(--bf-radius-base);
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-sm);
+      font-family: var(--bf-type-body-sm-font-family);
+      font-size: var(--bf-type-body-sm-font-size);
+      font-weight: var(--bf-type-body-sm-font-weight);
+      line-height: var(--bf-type-body-sm-line-height);
+      letter-spacing: var(--bf-type-body-sm-letter-spacing);
     }
   }
 

@@ -79,9 +79,9 @@
   padding: 0.12rem 0.44rem;
   border-radius: 999px;
   font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   line-height: var(--bf-type-flow-meta-line-height);
-  letter-spacing: var(--bf-letter-spacing-normal);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
   user-select: none;
 }
 
@@ -119,7 +119,7 @@
 .user-message-item__content {
   flex: 1;
   font-size: var(--bf-type-flow-body-font-size);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   line-height: var(--bf-type-flow-body-line-height);
   color: var(--bf-color-content-primary);
   white-space: pre-wrap;
@@ -149,8 +149,8 @@
   background: var(--bf-color-action-neutral-surface-hover);
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-compact);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-meta-line-height);
   white-space: nowrap;
   user-select: none;
 
@@ -178,7 +178,7 @@
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
   --_failed-font-size: var(--bf-type-flow-control-font-size);
-  --_failed-line-height: var(--bf-line-height-comfortable);
+  --_failed-line-height: var(--bf-type-support-line-height);
   --_failed-line-box: calc(
     var(--_failed-font-size) * var(--_failed-line-height)
   );
@@ -240,7 +240,7 @@
     max-width: 100%;
     color: var(--bf-color-content-muted);
     font-size: var(--_failed-font-size);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     font-style: italic;
     line-height: var(--_failed-line-height);
     text-decoration: line-through;

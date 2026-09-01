@@ -55,8 +55,8 @@
 
     h3 {
       margin: 0;
-      font-size: var(--bf-font-size-base);
-      font-weight: var(--bf-font-weight-semibold);
+      font-size: var(--bf-type-body-md-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 
@@ -68,8 +68,8 @@
     background: var(--bf-color-accent-default);
     color: var(--bf-color-content-on-dark);
     border-radius: 4px;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__search {
@@ -89,11 +89,11 @@
   }
 
   &__search-count {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
     padding: 0 8px;
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
 
     &--no-results {
       color: var(--bf-color-content-muted);
@@ -249,8 +249,8 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: 12px;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
     cursor: help;
 
@@ -277,14 +277,14 @@
 
   &__commit-message {
     flex: 1;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
 
     .git-graph-view__commit:hover & {
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 
@@ -292,7 +292,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     flex-shrink: 0;
   }
@@ -309,7 +309,7 @@
   }
 
   &__commit-hash {
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
     padding: 2px 6px;
     background: var(--bf-color-surface-tertiary);
     border-radius: 4px;

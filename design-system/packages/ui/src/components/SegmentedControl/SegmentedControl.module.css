@@ -30,10 +30,11 @@
     border-radius: var(--bf-control-segmented-control-segment-radius);
     color: var(--bf-color-action-neutral-content);
     background: transparent;
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -44,7 +45,7 @@
   .segment[aria-checked="true"] {
     color: var(--bf-color-content-primary);
     background: var(--bf-color-surface-raised);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .segment:hover:not(:disabled)[aria-checked="false"],
@@ -85,7 +86,7 @@
 
   .label {
     min-inline-size: 0;
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
   }

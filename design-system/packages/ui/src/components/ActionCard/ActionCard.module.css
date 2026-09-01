@@ -18,7 +18,6 @@
     border-radius: var(--bf-control-action-card-radius);
     color: var(--bf-color-action-neutral-content);
     background: var(--bf-color-action-neutral-surface);
-    font-family:var(--bf-font-family-sans);
     transition:
       color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -117,16 +116,20 @@
 
   .title {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-heading-card-font-family);
+    font-size: var(--bf-type-heading-card-font-size);
+    font-weight: var(--bf-type-heading-card-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-heading-card-letter-spacing);
   }
 
   .description {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   .actions {

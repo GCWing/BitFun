@@ -6,7 +6,7 @@
   max-height: min(78vh, 720px);
   flex-direction: column;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 
   &__header {
     display: flex;
@@ -17,14 +17,14 @@
 
   &__title {
     margin: 0;
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-flow-section-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 
   &__subtitle {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__body {
@@ -47,7 +47,7 @@
     align-items: center;
     gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__field {
@@ -58,20 +58,20 @@
     code {
       overflow-wrap: anywhere;
       color: var(--bf-color-content-secondary);
-      font-family:var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-xs);
+      font-family:var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-label-sm-font-size);
     }
   }
 
   &__field-label {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__details {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     summary {
       width: fit-content;
@@ -114,7 +114,7 @@
     padding: var(--bf-space-2) var(--bf-space-3);
     border-bottom: 1px solid var(--bf-color-border-subtle);
     background: var(--bf-color-surface-subtle);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
 
     > svg {
       color: var(--bf-color-content-muted);
@@ -123,7 +123,7 @@
     > span {
       margin-left: auto;
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       font-variant-numeric: tabular-nums;
     }
   }
@@ -144,13 +144,13 @@
       padding: 2px 0;
       overflow-wrap: anywhere;
       color: var(--bf-color-content-secondary);
-      font-family:var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-xs);
+      font-family:var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-label-sm-font-size);
 
       > strong {
         min-width: 2ch;
         color: var(--bf-color-content-muted);
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
       }
 
       > span {
@@ -168,8 +168,8 @@
       margin-left: auto;
       color: var(--bf-color-status-warning-content);
       // The list is monospaced for paths; this annotation is prose.
-      font-family:var(--bf-font-family-sans);
-      font-size: var(--bf-font-size-xs);
+      font-family:var(--bf-type-body-sm-font-family);
+      font-size: var(--bf-type-label-sm-font-size);
       font-style: normal;
       white-space: nowrap;
     }
@@ -178,7 +178,7 @@
   &__empty {
     padding: var(--bf-space-3);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__actions {

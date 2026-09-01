@@ -62,25 +62,25 @@
 @mixin nav-panel-text-row {
   @include nav-panel-text-body;
 
-  font-family: var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-regular);
+  font-family: var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
   // Truncated labels need room for the bundled font's ascenders and descenders.
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 @mixin nav-panel-text-row-active {
   @include nav-panel-text-heading;
 
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
 }
 
 @mixin nav-panel-text-group {
   @include nav-panel-text-meta;
 
-  font-family: var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-medium);
-  letter-spacing: var(--bf-letter-spacing-normal);
-  line-height: var(--bf-line-height-base);
+  font-family: var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  line-height: var(--bf-type-body-sm-line-height);
 }

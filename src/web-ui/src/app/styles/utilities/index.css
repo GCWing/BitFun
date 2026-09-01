@@ -141,19 +141,19 @@
 /* ========== Typography utilities ========== */
 
 /* Font size */
-.text-xs { font-size: var(--bf-font-size-xs); }
-.text-sm { font-size: var(--bf-font-size-sm); }
-.text-base { font-size: var(--bf-font-size-base); }
-.text-lg { font-size: var(--bf-font-size-lg); }
-.text-xl { font-size: var(--bf-font-size-xl); }
-.text-2xl { font-size: var(--bf-font-size-2xl); }
-.text-3xl { font-size: var(--bf-font-size-3xl); }
+.text-xs { font-size: var(--bf-type-label-sm-font-size); }
+.text-sm { font-size: var(--bf-type-label-md-font-size); }
+.text-base { font-size: var(--bf-type-body-md-font-size); }
+.text-lg { font-size: var(--bf-type-body-lg-font-size); }
+.text-xl { font-size: var(--bf-type-flow-title-font-size); }
+.text-2xl { font-size: var(--bf-type-flow-section-title-font-size); }
+.text-3xl { font-size: var(--bf-type-heading-dialog-font-size); }
 
 /* Font weight */
-.font-normal { font-weight: var(--bf-font-weight-regular); }
-.font-medium { font-weight: var(--bf-font-weight-medium); }
-.font-semibold { font-weight: var(--bf-font-weight-semibold); }
-.font-bold { font-weight: var(--bf-font-weight-semibold); }
+.font-normal { font-weight: var(--bf-type-body-sm-font-weight); }
+.font-medium { font-weight: var(--bf-type-label-sm-font-weight); }
+.font-semibold { font-weight: var(--bf-type-label-selected-font-weight); }
+.font-bold { font-weight: var(--bf-type-label-selected-font-weight); }
 
 /* Text color */
 .text-primary { color: var(--bf-color-content-primary); }
@@ -327,9 +327,9 @@
   .md\:p-3 { padding: var(--bf-space-3); }
   .md\:p-4 { padding: var(--bf-space-4); }
   
-  .md\:text-sm { font-size: var(--bf-font-size-sm); }
-  .md\:text-base { font-size: var(--bf-font-size-base); }
-  .md\:text-lg { font-size: var(--bf-font-size-lg); }
+  .md\:text-sm { font-size: var(--bf-type-label-md-font-size); }
+  .md\:text-base { font-size: var(--bf-type-body-md-font-size); }
+  .md\:text-lg { font-size: var(--bf-type-body-lg-font-size); }
   
   .md\:w-full { width: 100%; }
   .md\:max-w-full { max-width: 100%; }
@@ -344,7 +344,7 @@
   .sm\:p-2 { padding: var(--bf-space-2); }
   .sm\:p-3 { padding: var(--bf-space-3); }
   
-  .sm\:text-xs { font-size: var(--bf-font-size-xs); }
-  .sm\:text-sm { font-size: var(--bf-font-size-sm); }
-  .sm\:text-base { font-size: var(--bf-font-size-base); }
+  .sm\:text-xs { font-size: var(--bf-type-label-sm-font-size); }
+  .sm\:text-sm { font-size: var(--bf-type-label-md-font-size); }
+  .sm\:text-base { font-size: var(--bf-type-body-md-font-size); }
 }

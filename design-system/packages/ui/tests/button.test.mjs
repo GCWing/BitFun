@@ -90,14 +90,14 @@ test("primary and text variants expose semantic emphasis without changing button
 test("Button owns the reference pill geometry and typography", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /letter-spacing:var\(--bf-letter-spacing-normal\)/);
+  assert.match(styles, /letter-spacing:var\(--bf-type-label-md-letter-spacing\)/);
   assert.match(styles, /border-radius:var\(--bf-radius-pill\)/);
   assert.match(styles, /--_button-height:\s*var\(--bf-control-height-md\)/);
   assert.match(styles, /--_button-leading-icon-size:\s*16px/);
   assert.match(styles, /--_button-trailing-icon-size:\s*14px/);
-  assert.match(styles, /--_button-font-size:\s*var\(--bf-font-size-sm\)/);
-  assert.match(styles, /font-family:var\(--bf-font-family-sans\)/);
-  assert.match(styles, /font-weight:var\(--bf-font-weight-regular\)/);
+  assert.match(styles, /--_button-font-size:\s*var\(--bf-type-label-md-font-size\)/);
+  assert.match(styles, /font-family:var\(--bf-type-label-md-font-family\)/);
+  assert.match(styles, /font-weight:var\(--bf-type-label-md-font-weight\)/);
   assert.match(styles, /padding-block:var\(--_button-padding-block\)/);
   assert.match(styles, /padding-inline:var\(--_button-padding-inline\)/);
   assert.match(styles, /--_button-padding-inline:\s*var\(--bf-space-5\)/);
@@ -155,8 +155,8 @@ test("real and preview active states share the semibold component rule", async (
     styles,
     /:is\(:active,\s*\[data-bf-preview-state=(?:"active"|active)\]\):not\(:disabled\)/,
   );
-  assert.match(styles, /font-weight:\s*var\(--bf-font-weight-semibold\)/);
-  assert.equal((styles.match(/--bf-font-weight-semibold/g) ?? []).length, 1);
+  assert.match(styles, /font-weight:\s*var\(--bf-type-label-selected-font-weight\)/);
+  assert.equal((styles.match(/--bf-type-label-selected-font-weight/g) ?? []).length, 1);
 });
 
 test("fill uses neutral semantic state colors and icons inherit content color", async () => {

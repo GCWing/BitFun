@@ -69,10 +69,10 @@
 .bitfun-remote-connect__sidebar-title {
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-4xl);
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-tight);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-heading-display-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .bitfun-remote-connect__title-extra {
@@ -92,8 +92,8 @@
   max-width: 172px;
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-relaxed);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .bitfun-remote-connect__sidebar-decoration {
@@ -148,9 +148,9 @@
   gap: 12px;
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-2xl);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 }
 
 .bitfun-remote-connect__section-marker {
@@ -169,8 +169,8 @@
 .bitfun-remote-connect__overview-section-description {
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 .bitfun-remote-connect__overview-actions {
@@ -294,16 +294,16 @@
 
 .bitfun-remote-connect__overview-action-title {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-lg);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .bitfun-remote-connect__overview-action-description {
   max-width: 410px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-comfortable);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-support-line-height);
 }
 
 .bitfun-remote-connect__overview-action-status {
@@ -318,7 +318,7 @@
   max-width: 150px;
   overflow: hidden;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -512,8 +512,8 @@
 .bitfun-remote-connect__pairing-label {
   margin-bottom: 7px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 }
 
 .bitfun-remote-connect__pairing-url-row {
@@ -527,10 +527,10 @@
     flex: 1;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-support);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-flow-support-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -550,8 +550,8 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-relaxed);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
   }
 }
 
@@ -573,10 +573,10 @@
   border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-4xl);
-  font-weight: var(--bf-font-weight-bold);
-  letter-spacing: var(--bf-letter-spacing-expanded);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-heading-display-font-size);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-expanded-letter-spacing);
   user-select: all;
 }
 
@@ -618,16 +618,16 @@
 .bitfun-remote-connect__bot-identity-title {
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-2xl);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 }
 
 .bitfun-remote-connect__bot-identity-description {
   margin: 9px 0 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-relaxed);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .bitfun-remote-connect__bot-setup {
@@ -682,8 +682,8 @@
   gap: 12px;
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-relaxed);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
   text-align: left;
 }
 
@@ -696,9 +696,9 @@
   border-radius: var(--bf-radius-pill);
   background: var(--bf-color-status-success-content);
   color: var(--bf-color-content-inverse);
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-bold);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 }
 
 // ==================== Shared detail primitives ====================
@@ -718,8 +718,8 @@
 .bitfun-remote-connect__info-meta {
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-relaxed);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
   text-align: left;
 }
 
@@ -740,7 +740,7 @@
 
 .bitfun-remote-connect__info-meta-label {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   white-space: nowrap;
 }
 
@@ -789,7 +789,7 @@
 
 .bitfun-remote-connect__peer-username {
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .bitfun-remote-connect__connected {
@@ -842,16 +842,16 @@
 
   strong {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-ui);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   > span {
     max-width: 470px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 }
 
@@ -873,8 +873,8 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-relaxed);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
   }
 }
 
@@ -905,8 +905,8 @@
   max-width: 480px;
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-relaxed);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .bitfun-remote-connect__hint {
@@ -920,15 +920,15 @@
 .bitfun-remote-connect__ngrok-usage-link {
   margin: 0;
   padding: 14px 40px 0;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   text-align: right;
 }
 
 .bitfun-remote-connect__error {
   margin: 0;
   color: var(--bf-color-status-danger-content);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   text-align: center;
 }
 
@@ -944,12 +944,12 @@
   align-items: center;
   gap: var(--bf-space-2);
   color: var(--bf-color-content-muted);
-  font-family:var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-xs);
+  font-family:var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
 
   > span[data-active='true'] {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 }
 
@@ -1070,7 +1070,7 @@
   }
 
   .bitfun-remote-connect__sidebar-title {
-    font-size: var(--bf-font-size-2xl);
+    font-size: var(--bf-type-flow-section-title-font-size);
   }
 
   .bitfun-remote-connect__title-extra {

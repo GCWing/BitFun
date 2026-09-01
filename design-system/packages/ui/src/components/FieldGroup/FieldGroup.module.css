@@ -55,18 +55,20 @@
   .title {
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-type-body-lg-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-heading-section-font-family);
+    font-size: var(--bf-type-heading-section-font-size);
+    font-weight: var(--bf-type-heading-section-font-weight);
+    line-height: var(--bf-type-heading-section-line-height);
+    letter-spacing: var(--bf-type-heading-section-letter-spacing);
   }
 
   .description {
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   .actions {

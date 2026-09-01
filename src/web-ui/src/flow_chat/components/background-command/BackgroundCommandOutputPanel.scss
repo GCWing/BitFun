@@ -46,7 +46,7 @@
     .bitfun-checkbox__label {
       color: var(--bf-color-content-secondary);
       font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     &:hover .bitfun-checkbox__label {
@@ -70,14 +70,14 @@
     h2 {
       margin: 0;
       font-size: var(--bf-type-flow-lead-font-size);
-      line-height: var(--bf-line-height-tight);
+      line-height: var(--bf-type-label-md-line-height);
     }
 
     p {
       margin: 4px 0 0;
       max-width: 100%;
       color: var(--bf-color-content-secondary);
-      font-family: var(--bf-font-family-mono);
+      font-family: var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-support-font-size);
       white-space: nowrap;
       overflow: hidden;
@@ -182,9 +182,9 @@
       min-height: 74px;
       max-height: 180px;
       resize: vertical;
-      font-family: var(--bf-font-family-mono);
+      font-family: var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-support-font-size);
-      line-height: var(--bf-line-height-base);
+      line-height: var(--bf-type-body-sm-line-height);
     }
 
     &--masked .bitfun-textarea__field {

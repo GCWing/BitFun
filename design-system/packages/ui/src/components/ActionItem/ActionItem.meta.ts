@@ -26,10 +26,9 @@ export const actionItemMeta = {
     "color.status.danger.content",
     "color.status.danger.surface",
     "control.height.sm",
-    "font.family.control",
-    "font.size.sm",
-    "font.weight.regular",
-    "font.weight.semibold",
+    "type.label.md.fontSize",
+    "type.label.selected.fontWeight",
+    "type.meta.fontSize",
     "radius.base",
   ],
 } as const satisfies ComponentMeta;

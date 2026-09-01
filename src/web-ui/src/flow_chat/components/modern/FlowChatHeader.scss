@@ -224,7 +224,7 @@
     overflow: hidden;
     z-index: var(--bf-layer-popover);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
   }
 
   &__session-overview-panel-header {
@@ -318,7 +318,7 @@
     overflow: hidden;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -361,7 +361,7 @@
 
     &--action {
       border-radius: var(--bf-radius-base);
-      font-family:var(--bf-font-family-sans);
+      font-family:var(--bf-type-body-sm-font-family);
       cursor: pointer;
       transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
@@ -394,7 +394,7 @@
     border-radius: var(--bf-radius-base);
     background: transparent;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
     font-size: var(--bf-type-flow-control-font-size);
     text-align: left;
     cursor: pointer;

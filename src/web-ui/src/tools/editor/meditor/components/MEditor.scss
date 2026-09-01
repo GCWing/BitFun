@@ -19,8 +19,8 @@
     border-bottom: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent);
     background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
 
     &__icon {
       flex: 0 0 auto;
@@ -54,8 +54,8 @@
     background: var(--bf-color-surface-scene);
     color: var(--bf-color-content-primary);
     font: inherit;
-    font-family:var(--bf-font-family-mono);
-    line-height: var(--bf-line-height-relaxed);
+    font-family:var(--bf-type-code-md-font-family);
+    line-height: var(--bf-type-body-lg-line-height);
     white-space: pre-wrap;
     overflow: auto;
   }

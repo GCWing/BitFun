@@ -168,11 +168,11 @@ describe('SessionsSection layout styles', () => {
     expect(btwBadgeBlock).toContain('white-space: nowrap;');
     expect(btwBadgeBlock).toContain('overflow: visible;');
     expect(btwBadgeBlock).toContain('color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 62%, var(--bf-color-content-primary));');
-    expect(btwBadgeBlock).toContain('font-weight: var(--bf-font-weight-semibold);');
+    expect(btwBadgeBlock).toContain('font-weight: var(--bf-type-label-selected-font-weight);');
     expect(btwBadgeBlock).toContain('opacity: 0.96;');
     expect(reviewBadgeBlock).toContain('white-space: nowrap;');
     expect(reviewBadgeBlock).toContain('color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 82%, var(--bf-color-content-primary));');
-    expect(reviewBadgeBlock).toContain('font-weight: var(--bf-font-weight-semibold);');
+    expect(reviewBadgeBlock).toContain('font-weight: var(--bf-type-label-selected-font-weight);');
     expect(backgroundSubagentBadgeBlock).toContain('flex: 0 0 auto;');
     expect(backgroundSubagentBadgeBlock).toContain('display: inline-grid;');
     expect(backgroundSubagentBadgeBlock).toContain('place-items: center;');

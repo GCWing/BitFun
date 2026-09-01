@@ -24,24 +24,6 @@
   --motion-slow: 0.6s;
   --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
-  --font-family-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, sans-serif;
-  --font-family-mono: 'Menlo', 'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', 'Courier New', 'Noto Sans Mono CJK SC', 'Noto Sans Mono', monospace;
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 15px;
-  --font-size-lg: 16px;
-  --font-size-xl: 18px;
-  --font-size-2xl: 20px;
-  --font-size-3xl: 24px;
-
-  --line-height-tight: 1.2;
-  --line-height-base: 1.5;
-  --line-height-relaxed: 1.6;
 }
 
 * {
@@ -59,9 +41,9 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-base);
+  font-family: var(--bf-type-body-md-font-family);
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-body-md-line-height);
   color: var(--bf-color-content-primary);
   background: var(--bf-color-surface-canvas);
   -webkit-font-smoothing: antialiased;
@@ -242,8 +224,8 @@ html.theme-switching {
   padding: 8px 16px;
   background: var(--bf-color-status-warning-content);
   color: var(--bf-color-action-primary-content);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   animation: slideDown var(--motion-fast) var(--easing-standard);
 
   button {

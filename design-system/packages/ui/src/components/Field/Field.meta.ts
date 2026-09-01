@@ -35,10 +35,7 @@ export const fieldMeta = {
     "layout.field.labelGap",
     "layout.field.labelActionGap",
     "layout.field.controlGap",
-    "font.family.control",
-    "font.size.xs",
-    "font.size.sm",
-    "font.weight.regular",
-    "font.weight.semibold",
+    "type.label.md.fontSize",
+    "type.support.fontSize",
   ],
 } as const satisfies ComponentMeta;

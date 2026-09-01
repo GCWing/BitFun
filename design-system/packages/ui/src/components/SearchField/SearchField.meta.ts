@@ -35,9 +35,8 @@ export const searchFieldMeta = {
     "control.height.sm",
     "control.height.md",
     "control.height.lg",
-    "font.family.control",
-    "font.size.xs",
-    "font.size.sm",
+    "type.label.md.fontSize",
+    "type.meta.fontSize",
     "radius.pill",
   ],
 } as const satisfies ComponentMeta;

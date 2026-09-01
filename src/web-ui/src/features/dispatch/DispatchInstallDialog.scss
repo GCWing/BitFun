@@ -18,7 +18,7 @@
   max-height: min(78vh, 720px);
   flex-direction: column;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 
   &__header {
     display: flex;
@@ -30,14 +30,14 @@
   &__title {
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-flow-section-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 
   &__subtitle {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   // The one scrolling region. Keeps the footer reachable on short viewports,
@@ -81,14 +81,14 @@
 
   &__section-title {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__hint {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__field {
@@ -99,8 +99,8 @@
 
   &__field-label {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   // A read-only path, not a code sample: drop the global `code` pill so the
@@ -111,8 +111,8 @@
     background: none;
     overflow-wrap: anywhere;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__base-ref {
@@ -127,8 +127,8 @@
       border-radius: var(--bf-radius-base);
       background: var(--bf-color-surface-canvas);
       color: var(--bf-color-content-primary);
-      font-family:var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-xs);
+      font-family:var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-label-sm-font-size);
 
       &:focus-visible {
         border-color: var(--bf-color-accent-default);
@@ -158,13 +158,13 @@
 
       > span {
         color: var(--bf-color-content-muted);
-        font-size: var(--bf-font-size-xs);
+        font-size: var(--bf-type-label-sm-font-size);
       }
 
       > strong {
         min-width: 0;
         overflow-wrap: anywhere;
-        font-weight: var(--bf-font-weight-medium);
+        font-weight: var(--bf-type-label-sm-font-weight);
       }
 
       &[data-state='ok'] > strong {
@@ -187,7 +187,7 @@
     align-items: center;
     gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__retry {
@@ -201,7 +201,7 @@
   &__details {
     width: 100%;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     summary {
       width: fit-content;
@@ -240,7 +240,7 @@
       min-width: 0;
       margin: 0;
       overflow-wrap: anywhere;
-      font-family:var(--bf-font-family-mono);
+      font-family:var(--bf-type-code-md-font-family);
     }
   }
 

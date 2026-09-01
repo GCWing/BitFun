@@ -7,7 +7,7 @@
     border-radius: var(--bf-radius-2xl);
     color: var(--bf-color-content-primary);
     background: transparent;
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-md-font-family);
   }
 
   .root[data-has-context="true"] {
@@ -133,9 +133,9 @@
     align-self: stretch;
     align-items: center;
     padding: var(--bf-space-1);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-md-font-weight);
+    line-height: var(--bf-type-body-md-line-height);
   }
 
   .surface[data-bf-layout="expanded"] .content {

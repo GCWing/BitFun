@@ -61,14 +61,14 @@
 }
 
 .pairing-page__brand {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-heading-compact-page-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-accent-default);
-  letter-spacing: 0.5px;
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
 }
 
 .pairing-page__state {
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-type-body-md-font-size);
   color: var(--bf-color-content-muted);
   text-align: center;
 }
@@ -87,9 +87,9 @@
 }
 
 .pairing-page__field-label {
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-secondary);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   text-transform: uppercase;
 }
 
@@ -101,7 +101,7 @@
   border-radius: var(--size-radius-base);
   background: var(--bf-color-surface-raised);
   color: var(--bf-color-content-primary);
-  font-size: var(--font-size-base);
+  font-size: var(--bf-type-body-lg-font-size);
   outline: none;
 
   &:focus {
@@ -112,8 +112,8 @@
 
 .pairing-page__note {
   margin: 0;
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
+  font-size: var(--bf-type-body-xs-font-size);
+  line-height: var(--bf-type-body-md-line-height);
   color: var(--bf-color-content-muted);
   text-align: left;
 }
@@ -126,7 +126,7 @@
 }
 
 .pairing-page__error {
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-status-danger-content);
   text-align: center;
   max-width: 280px;
@@ -142,8 +142,8 @@
   color: var(--bf-color-content-primary);
   border: 1px solid var(--bf-color-border-default);
   border-radius: var(--size-radius-base);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 

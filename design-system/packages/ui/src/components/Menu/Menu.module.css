@@ -78,10 +78,11 @@
     flex: 1 1 auto;
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
+    font-family: var(--bf-type-meta-font-family);
     font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-base);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

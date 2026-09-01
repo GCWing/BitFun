@@ -9,13 +9,13 @@
   outline: none !important;
   color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
   padding: 0;
   vertical-align: top;
   min-height: 24px;
   max-height: 200px;
   overflow-y: auto;
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
   white-space: pre-wrap;
   word-wrap: break-word;
   word-break: break-word;
@@ -77,7 +77,7 @@
   border: 1px dashed color-mix(in srgb, var(--bf-color-accent-default) 35%, transparent);
   border-radius: 6px;
   font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
   cursor: pointer;
   user-select: text;
@@ -126,7 +126,7 @@
   border: none;
   border-radius: 10px;
   font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: color-mix(in srgb, var(--bf-color-accent-default) 95%, transparent);
   cursor: default;
   user-select: none;
@@ -202,8 +202,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: var(--bf-type-flow-support-line-height);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-xs);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .rich-text-tag-pill--widget-ref {
@@ -235,8 +235,8 @@
   background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
   color: inherit;
   font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-font-weight-bold);
-  letter-spacing: var(--bf-letter-spacing-wider);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   text-transform: uppercase;
 }
 
@@ -244,7 +244,7 @@
   min-width: 18px;
   padding: 0 3px;
   background: transparent;
-  letter-spacing: var(--bf-letter-spacing-normal);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
   text-transform: none;
 
   svg {
@@ -259,7 +259,7 @@
 }
 
 .rich-text-tag-pill__text--widget-ref {
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
   max-width: 260px;
 }
 
@@ -280,7 +280,7 @@
   color: currentColor;
   opacity: 0.6;
   font-size: var(--bf-type-flow-section-title-font-size);
-  line-height: var(--bf-line-height-none);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
   cursor: pointer;
   border-radius: 50%;
   transition:

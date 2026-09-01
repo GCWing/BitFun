@@ -29,7 +29,7 @@ for (const [component, selector] of [
         declarations[declaration.slice(0, colon).trim()] = declaration.slice(colon + 1).trim();
       }
     }
-    assert.equal(declarations["line-height"], "var(--bf-line-height-base)");
+    assert.match(declarations["line-height"], /^var\(--bf-(?:line-height-base|type-body-sm-line-height)\)$/);
     assert.equal(declarations.overflow, "hidden");
     assert.equal(declarations["text-overflow"], "ellipsis");
     assert.equal(declarations["block-size"], undefined);

@@ -380,7 +380,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     return (
       <span className="file-card" style={cardStyle}>
         <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
+        <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
       </span>
     );
   }
@@ -388,7 +388,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     return (
       <span className="file-card" style={{ ...cardStyle, cursor: 'default', opacity: 0.5 }} title={state.message}>
         <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: '0.8rem' }}>{t('chat.fileUnavailable')}</span>
+        <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)' }}>{t('chat.fileUnavailable')}</span>
       </span>
     );
   }
@@ -411,8 +411,8 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       <span style={{ minWidth: 0, overflow: 'hidden' }}>
         <span style={{
           display: 'block',
-          fontSize: '0.85rem',
-          fontWeight: 500,
+          fontSize: 'var(--bf-type-body-xs-font-size)',
+          fontWeight: 'var(--bf-type-label-lg-font-weight)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -422,7 +422,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
         </span>
         <span style={{
           display: 'block',
-          fontSize: '0.75rem',
+          fontSize: 'var(--bf-type-support-font-size)',
           color: 'var(--bf-color-content-muted)',
           marginTop: '2px',
         }}>
@@ -431,7 +431,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       </span>
       <span style={{
         flexShrink: 0,
-        fontSize: '0.75rem',
+        fontSize: 'var(--bf-type-support-font-size)',
         color: isDone ? 'var(--bf-color-status-success-content)' : 'var(--bf-color-content-muted)',
       }}>
         {isDownloading ? `${Math.round((state as any).progress * 100)}%` : isDone ? '✓' : '↓'}
@@ -475,12 +475,12 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
             customStyle={{
               margin: 0,
               borderRadius: '8px',
-              fontSize: '0.8rem',
-              lineHeight: '1.5',
+              fontSize: 'var(--bf-type-code-sm-font-size)',
+              lineHeight: 'var(--bf-type-body-md-line-height)',
             }}
             codeTagProps={{
               style: {
-                fontFamily: 'var(--font-family-mono)',
+                fontFamily: 'var(--bf-type-code-md-font-family)',
               },
             }}
             lineNumberStyle={{
@@ -1139,7 +1139,11 @@ const ReadFilesToggle: React.FC<{ tools: RemoteToolStatus[] }> = ({ tools }) => 
             {tools.map(t => {
               const preview = t.input_preview || '';
               return (
-                <div key={t.id} style={{ fontSize: '12px', padding: '2px 0', opacity: 0.8 }}>
+                <div key={t.id} style={{
+                  fontSize: 'var(--bf-type-body-xs-font-size)',
+                  padding: '2px 0',
+                  opacity: 0.8,
+                }}>
                   {t.status === 'completed' ? '✓' : '⋯'} {t.name} {preview}
                 </div>
               );

@@ -36,9 +36,7 @@ export const composerMeta = {
     "control.composer.editorPadding",
     "control.composer.toolbarGap",
     "control.composer.dividerBlockSize",
-    "font.family.control",
-    "font.size.sm",
-    "font.weight.regular",
+    "type.body.sm.fontSize",
     "shadow.composer",
   ],
 } as const satisfies ComponentMeta;
