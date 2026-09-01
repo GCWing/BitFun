@@ -26,7 +26,9 @@ const DEFAULT_TOKEN_LIFETIME_SECS: i64 = 60 * 60;
 const DEFAULT_DEVICE_LIFETIME_SECS: i64 = 5 * 60;
 const DEFAULT_POLL_INTERVAL_SECS: i64 = 5;
 const SLOW_DOWN_INCREMENT_SECS: i64 = 5;
-const REFRESH_LEEWAY_MS: i64 = 2 * 60 * 1000;
+const SHORT_TOKEN_REFRESH_LEEWAY_MS: i64 = 2 * 60 * 1000;
+const LONG_TOKEN_REFRESH_LEEWAY_MS: i64 = 60 * 60 * 1000;
+const SHORT_TOKEN_THRESHOLD_MS: i64 = 45 * 60 * 1000;
 
 #[derive(Debug, Deserialize)]
 struct DeviceCodeResponse {
@@ -88,6 +90,20 @@ fn expires_at_ms(expires_in: Option<i64>) -> i64 {
     now_ms().saturating_add(
         positive_seconds(expires_in, DEFAULT_TOKEN_LIFETIME_SECS).saturating_mul(1000),
     )
+}
+
+/// Current Hermes keeps a one-hour gateway safety window for multi-hour
+/// SuperGrok sessions, but drops to two minutes for the short JWTs commonly
+/// returned by device-code login so each request does not consume a rotating
+/// refresh token.
+fn refresh_leeway_ms(access: &str, stored_expires: i64, now: i64) -> i64 {
+    let effective_expires = jwt::expires_at_ms(access).unwrap_or(stored_expires);
+    let remaining = effective_expires.saturating_sub(now);
+    if remaining > 0 && remaining <= SHORT_TOKEN_THRESHOLD_MS {
+        SHORT_TOKEN_REFRESH_LEEWAY_MS
+    } else {
+        LONG_TOKEN_REFRESH_LEEWAY_MS
+    }
 }
 
 fn opencode_user_agent() -> String {
@@ -361,6 +377,7 @@ pub(crate) async fn begin_login(
 }
 
 async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)> {
+    let _refresh_lease = store::acquire_provider_refresh_lease(STORE_KEY).await?;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -377,9 +394,8 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)
     };
 
     let now = now_ms();
-    if expires > now + REFRESH_LEEWAY_MS
-        && !super::jwt::expires_within(&access, now, REFRESH_LEEWAY_MS)
-    {
+    let refresh_leeway = refresh_leeway_ms(&access, expires, now);
+    if expires > now + refresh_leeway && !super::jwt::expires_within(&access, now, refresh_leeway) {
         return Ok((access, expires));
     }
 
@@ -474,7 +490,8 @@ mod tests {
     use super::{
         classify_device_poll_error, inference_headers, suggested, validate_user_code,
         validate_verification_url, DeviceCodeResponse, DevicePoll, TokenErrorResponse,
-        TokenResponse, DEFAULT_MODEL, XAI_BASE_URL, XAI_REQUEST_URL,
+        TokenResponse, DEFAULT_MODEL, LONG_TOKEN_REFRESH_LEEWAY_MS, SHORT_TOKEN_REFRESH_LEEWAY_MS,
+        XAI_BASE_URL, XAI_REQUEST_URL,
     };
 
     #[test]
@@ -522,9 +539,9 @@ mod tests {
         let headers = inference_headers();
         assert_eq!(
             headers.get("User-Agent").map(String::as_str),
-            Some(concat!("opencode/", "1.18.23"))
+            Some(concat!("opencode/", "1.18.25"))
         );
-        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.23");
+        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.25");
         assert!(!headers.contains_key("X-XAI-Token-Auth"));
         assert!(!headers.contains_key("x-grok-model-override"));
     }
@@ -558,5 +575,18 @@ mod tests {
             panic!("access_denied must be terminal");
         };
         assert!(error.to_string().contains("denied"));
+    }
+
+    #[test]
+    fn uses_short_skew_for_short_tokens_and_gateway_skew_for_long_sessions() {
+        let now = 1_800_000_000_000i64;
+        assert_eq!(
+            super::refresh_leeway_ms("opaque", now + 15 * 60 * 1000, now),
+            SHORT_TOKEN_REFRESH_LEEWAY_MS
+        );
+        assert_eq!(
+            super::refresh_leeway_ms("opaque", now + 6 * 60 * 60 * 1000, now),
+            LONG_TOKEN_REFRESH_LEEWAY_MS
+        );
     }
 }

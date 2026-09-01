@@ -381,6 +381,7 @@ pub(crate) async fn begin_login(
 /// Ensures the stored access token is fresh, refreshing it when needed. Returns
 /// the current `(access, account_id, expires_ms)`.
 async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, Option<String>, i64)> {
+    let _refresh_lease = store::acquire_provider_refresh_lease(STORE_KEY).await?;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -505,7 +506,7 @@ mod tests {
         assert_eq!(device_poll_interval(&serde_json::json!(2)), 2);
         assert_eq!(device_poll_interval(&serde_json::json!(0)), 5);
         assert_eq!(DEFAULT_MODEL, "gpt-5.5");
-        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.23");
-        assert!(opencode_user_agent().starts_with("opencode/1.18.23 ("));
+        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.25");
+        assert!(opencode_user_agent().starts_with("opencode/1.18.25 ("));
     }
 }

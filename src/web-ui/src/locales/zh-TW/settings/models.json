@@ -30,7 +30,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "訂閱賬號",
-    "sectionDescription": "連接 Codex、Antigravity、OpenCode 或 xAI 訂閱",
+    "sectionDescription": "連接 Codex、Antigravity、OpenCode、xAI 或 Hermes 訂閱",
     "rescan": "重新整理狀態",
     "import": "匯入使用",
     "login": "登入",
@@ -40,6 +40,7 @@
     "loginCancelled": "已取消登入",
     "logout": "登出",
     "refresh": "重新整理 Token",
+    "manageSubscription": "開通或管理訂閱",
     "refreshSuccess": "Token 已重新整理",
     "refreshFailed": "重新整理失敗：{{error}}",
     "loginSuccess": "登入成功",
@@ -59,6 +60,7 @@
       "codex": "Codex（ChatGPT 訂閱）",
       "antigravity": "Antigravity（Google 訂閱）",
       "grok": "xAI（SuperGrok 訂閱）",
+      "hermes": "Hermes（Nous Portal 訂閱）",
       "opencodeZen": "OpenCode 帳號 · Zen API",
       "opencodeGo": "OpenCode 帳號 · Go API"
     },

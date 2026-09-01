@@ -20,6 +20,7 @@ const CLEANUP_JOURNAL_VERSION: u8 = 1;
 #[cfg(not(target_os = "macos"))]
 const KEYRING_SERVICE: &str = "openbitfun.bitfun.subscription-auth.v1";
 const STORE_FILE_LOCK_TIMEOUT: Duration = Duration::from_secs(10);
+const PROVIDER_REFRESH_LOCK_TIMEOUT: Duration = Duration::from_secs(40);
 const STORE_FILE_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 // Windows Credential Manager limits a generic credential blob to 2560 bytes.
 // Leave headroom for platform-store implementations and split every logical
@@ -397,6 +398,14 @@ struct StoreTransactionGuard {
     _process_lock: tokio::sync::MutexGuard<'static, ()>,
 }
 
+/// Cross-process lease for an OAuth provider whose refresh token rotates on
+/// use. It is separate from the short metadata transaction lock, so logout and
+/// login can still advance the provider revision while a network refresh is in
+/// flight; the refresh CAS will then fail instead of resurrecting stale state.
+pub(crate) struct ProviderRefreshLease {
+    _file_lock: StoreFileLock,
+}
+
 fn store_lock_path(metadata_path: &Path) -> PathBuf {
     metadata_path.with_extension("lock")
 }
@@ -609,6 +618,31 @@ async fn acquire_store_transaction() -> Result<(PathBuf, StoreTransactionGuard)>
             _process_lock: process_lock,
         },
     ))
+}
+
+/// Serializes rotating-token refreshes for one provider across BitFun
+/// processes. The caller must reload the credential after acquiring the lease.
+pub(crate) async fn acquire_provider_refresh_lease(provider: &str) -> Result<ProviderRefreshLease> {
+    if provider.is_empty()
+        || !provider
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err(anyhow!("invalid subscription refresh-lease provider id"));
+    }
+    let metadata_path = store_path()?;
+    let stem = metadata_path
+        .file_stem()
+        .and_then(std::ffi::OsStr::to_str)
+        .ok_or_else(|| anyhow!("subscription credential path has no valid file stem"))?;
+    // `acquire_store_file_lock_with_timeout` replaces the extension with
+    // `.lock`, so place the provider in the file stem rather than extension.
+    let lease_seed = metadata_path.with_file_name(format!("{stem}-{provider}-refresh.seed"));
+    let file_lock =
+        acquire_store_file_lock_with_timeout(&lease_seed, PROVIDER_REFRESH_LOCK_TIMEOUT).await?;
+    Ok(ProviderRefreshLease {
+        _file_lock: file_lock,
+    })
 }
 
 /// Overrides the metadata path for tests. The override also switches secret

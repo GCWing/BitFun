@@ -59,6 +59,8 @@ struct TokenResponse {
 #[derive(Debug, Deserialize)]
 struct PendingResponse {
     error: String,
+    #[serde(default)]
+    error_description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,6 +160,30 @@ enum DevicePoll {
     SlowDown,
 }
 
+fn classify_device_poll_error(
+    status: reqwest::StatusCode,
+    pending: &PendingResponse,
+) -> Result<DevicePoll> {
+    match pending.error.as_str() {
+        "authorization_pending" => Ok(DevicePoll::Pending),
+        "slow_down" => Ok(DevicePoll::SlowDown),
+        "expired_token" => Err(anyhow!("opencode device authorization code expired")),
+        "access_denied" | "authorization_denied" => {
+            Err(anyhow!("opencode device authorization was denied"))
+        }
+        other => {
+            let detail = pending
+                .error_description
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or(other);
+            Err(anyhow!(
+                "opencode device authorization failed: HTTP {status}: {detail}"
+            ))
+        }
+    }
+}
+
 /// One poll attempt against the device-token endpoint.
 async fn poll_once(device_code: &str, options: &SubscriptionHttpOptions) -> Result<DevicePoll> {
     let client = http_client(options)?;
@@ -171,19 +197,18 @@ async fn poll_once(device_code: &str, options: &SubscriptionHttpOptions) -> Resu
         .send()
         .await
         .context("call opencode device token endpoint")?;
+    let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
-    if let Ok(tokens) = serde_json::from_str::<TokenResponse>(&body) {
+    if status.is_success() {
+        let tokens = serde_json::from_str::<TokenResponse>(&body)
+            .context("parse opencode device token response")?;
         return Ok(DevicePoll::Authorized(tokens));
     }
     if let Ok(pending) = serde_json::from_str::<PendingResponse>(&body) {
-        match pending.error.as_str() {
-            "authorization_pending" => return Ok(DevicePoll::Pending),
-            "slow_down" => return Ok(DevicePoll::SlowDown),
-            other => return Err(anyhow!("opencode device authorization failed: {other}")),
-        }
+        return classify_device_poll_error(status, &pending);
     }
     Err(anyhow!(
-        "opencode device token response unrecognized: {body}"
+        "opencode device token response unrecognized: HTTP {status}: {body}"
     ))
 }
 
@@ -657,6 +682,7 @@ pub(crate) async fn begin_login(
 }
 
 async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<FreshCredential> {
+    let _refresh_lease = store::acquire_provider_refresh_lease(STORE_KEY).await?;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -843,10 +869,11 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        absolute_verification_url, inference_headers, offerings_from_metadata,
-        offerings_from_remote_config, route_for, OpenCodePlan, RemoteConfig, RemoteModel,
-        RemoteModelProvider, RemoteProvider, GO_MESSAGES_URL, GO_REQUEST_URL, GO_RESPONSES_URL,
-        ZEN_MESSAGES_URL, ZEN_REQUEST_URL, ZEN_RESPONSES_URL,
+        absolute_verification_url, classify_device_poll_error, inference_headers,
+        offerings_from_metadata, offerings_from_remote_config, route_for, DevicePoll, OpenCodePlan,
+        PendingResponse, RemoteConfig, RemoteModel, RemoteModelProvider, RemoteProvider,
+        GO_MESSAGES_URL, GO_REQUEST_URL, GO_RESPONSES_URL, ZEN_MESSAGES_URL, ZEN_REQUEST_URL,
+        ZEN_RESPONSES_URL,
     };
     use std::collections::HashMap;
 
@@ -873,6 +900,28 @@ mod tests {
             "https://opencode.ai/console/device?user_code=ABCD-1234&client_id=opencode-cli"
         );
         assert!(absolute_verification_url("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn device_poll_errors_distinguish_pending_and_terminal_outcomes() {
+        let pending = PendingResponse {
+            error: "authorization_pending".to_string(),
+            error_description: None,
+        };
+        assert!(matches!(
+            classify_device_poll_error(reqwest::StatusCode::BAD_REQUEST, &pending).unwrap(),
+            DevicePoll::Pending
+        ));
+
+        for error in ["expired_token", "access_denied"] {
+            let terminal = PendingResponse {
+                error: error.to_string(),
+                error_description: Some("terminal".to_string()),
+            };
+            assert!(
+                classify_device_poll_error(reqwest::StatusCode::BAD_REQUEST, &terminal).is_err()
+            );
+        }
     }
 
     #[test]

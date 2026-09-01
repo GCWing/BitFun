@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "50330e04b820bfaf1f564dca7e6e6983cae16c190b3e11cbdeb376349e17cac8",
+  "catalogDigest": "11f5c733ffe70284be9195c6ce6af20df24f5e596696458c74d828a818ceb7b6",
   "count": 206,
   "reasonCounts": {
     "externalAuth": 4,
@@ -2732,8 +2732,8 @@
     {
       "capabilityId": "setting.ai.models",
       "itemId": "subscription-auth",
-      "titleZh": "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户",
-      "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts",
+      "titleZh": "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode、Hermes 等订阅账户",
+      "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, Hermes, and other subscription accounts",
       "reasonCode": "externalAuth",
       "reasonZh": "订阅账户登录需要在供应商网页或设备授权流程中确认；Agent 可以打开入口，但不能代替用户完成外部认证。",
       "reasonEn": "Subscription sign-in requires confirmation in a provider web or device-authorization flow; the Agent can open the entry but cannot complete external authentication for the user.",

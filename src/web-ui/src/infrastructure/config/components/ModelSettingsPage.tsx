@@ -2372,6 +2372,7 @@ const ModelSettingsPage: React.FC = () => {
       { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
       { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
       { value: 'subscription:grok', label: t('subscriptionAuth.options.grok') },
+      { value: 'subscription:hermes', label: t('subscriptionAuth.options.hermes') },
       { value: 'subscription:opencode:zen', label: t('subscriptionAuth.options.opencodeZen') },
       { value: 'subscription:opencode:go', label: t('subscriptionAuth.options.opencodeGo') },
     ];
@@ -3277,6 +3278,18 @@ const ModelSettingsPage: React.FC = () => {
                           {t(loginPanel?.status === 'failed'
                             ? 'subscriptionAuth.retryLogin'
                             : 'subscriptionAuth.login')}
+                        </Button>
+                      )}
+                      {account.management_url && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={anyLoginInProgress}
+                          onClick={() => void handleOpenSubscriptionAuthorization(
+                            account.management_url!,
+                          )}
+                        >
+                          {t('subscriptionAuth.manageSubscription')}
                         </Button>
                       )}
                       {isLoggingIn && (

@@ -437,6 +437,7 @@ fn to_adapter_provider(provider: SubscriptionProvider) -> AdapterProvider {
         SubscriptionProvider::Antigravity => AdapterProvider::Antigravity,
         SubscriptionProvider::Opencode => AdapterProvider::Opencode,
         SubscriptionProvider::Grok => AdapterProvider::Grok,
+        SubscriptionProvider::Hermes => AdapterProvider::Hermes,
     }
 }
 
@@ -525,6 +526,9 @@ pub async fn apply_subscription_auth_with_options(
                 (SubscriptionProvider::Grok, None) => {
                     subscription_auth::resolve_grok_with_options(&ai_config.model, options).await
                 }
+                (SubscriptionProvider::Hermes, None) => {
+                    subscription_auth::resolve_hermes_with_options(&ai_config.model, options).await
+                }
                 (_, None) => {
                     subscription_auth::resolve_with_options(adapter_provider, options).await
                 }
@@ -572,7 +576,7 @@ pub async fn apply_subscription_auth_with_options(
     Ok(resolved.expires_at)
 }
 
-/// List subscription accounts (Codex / Antigravity / OpenCode / xAI).
+/// List subscription accounts (Codex / Antigravity / OpenCode / xAI / Hermes).
 #[cfg(feature = "subscription-auth")]
 pub async fn list_subscription_accounts() -> Vec<subscription_auth::SubscriptionAccount> {
     subscription_auth::list_accounts().await
