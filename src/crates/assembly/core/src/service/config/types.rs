@@ -1439,6 +1439,7 @@ pub enum SubscriptionProvider {
     Antigravity,
     Opencode,
     Grok,
+    Hermes,
 }
 
 /// OpenCode API product selected for a subscription-authenticated model.
@@ -1453,7 +1454,7 @@ pub enum OpenCodePlan {
 /// Where to obtain the runtime auth material for an `AIModelConfig`.
 ///
 /// Stored on disk as `{"type":"api_key"}` or
-/// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"|"grok"}`.
+/// `{"type":"subscription","provider":"codex"|"antigravity"|"opencode"|"grok"|"hermes"}`.
 /// OpenCode models may additionally persist `"plan":"zen"|"go"`; an absent
 /// plan preserves the legacy Zen Chat Completions behavior.
 /// Tokens live in the subscription auth store and are resolved at request time.
@@ -2200,6 +2201,27 @@ mod tests {
         assert_eq!(
             serde_json::from_value::<AuthConfig>(serialized).expect("Grok auth should deserialize"),
             grok
+        );
+    }
+
+    #[test]
+    fn hermes_subscription_auth_roundtrips_without_opencode_plan() {
+        let hermes = AuthConfig::Subscription {
+            provider: SubscriptionProvider::Hermes,
+            plan: None,
+        };
+        let serialized = serde_json::to_value(&hermes).expect("Hermes auth should serialize");
+        assert_eq!(
+            serialized,
+            serde_json::json!({
+                "type": "subscription",
+                "provider": "hermes"
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<AuthConfig>(serialized)
+                .expect("Hermes auth should deserialize"),
+            hermes
         );
     }
 

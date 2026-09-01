@@ -30,7 +30,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "Subscription accounts",
-    "sectionDescription": "Connect Codex, Antigravity, OpenCode, or xAI subscriptions",
+    "sectionDescription": "Connect Codex, Antigravity, OpenCode, xAI, or Hermes subscriptions",
     "rescan": "Refresh status",
     "import": "Use as model",
     "login": "Sign in",
@@ -40,6 +40,7 @@
     "loginCancelled": "Sign-in cancelled",
     "logout": "Sign out",
     "refresh": "Refresh token",
+    "manageSubscription": "Manage subscription",
     "refreshSuccess": "Token refreshed",
     "refreshFailed": "Refresh failed: {{error}}",
     "loginSuccess": "Signed in",
@@ -59,6 +60,7 @@
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
       "grok": "xAI (SuperGrok subscription)",
+      "hermes": "Hermes (Nous Portal subscription)",
       "opencodeZen": "OpenCode account · Zen API",
       "opencodeGo": "OpenCode account · Go API"
     },

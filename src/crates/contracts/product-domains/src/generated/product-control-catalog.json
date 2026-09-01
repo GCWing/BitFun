@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "ad97f6faa042bfb6469b6fc6891a0f2bffbfe4b0a669ed122c7dd9bf27c02774",
+  "digest": "8014d639f49b04d3364042fa99feceed760568682cea66995ff798862f07977b",
   "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
   "searchAcceptance": [
     {
@@ -25665,8 +25665,8 @@
         },
         {
           "id": "subscription-auth",
-          "titleZh": "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户",
-          "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts",
+          "titleZh": "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode、Hermes 等订阅账户",
+          "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, Hermes, and other subscription accounts",
           "control": {
             "kind": "open",
             "reasonCode": "externalAuth",
@@ -25868,8 +25868,8 @@
         "Add, edit, and remove built-in or custom AI providers",
         "配置 API Key、Base URL、请求格式和模型列表",
         "Configure API keys, base URLs, request formats, and model lists",
-        "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户",
-        "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts",
+        "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode、Hermes 等订阅账户",
+        "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, Hermes, and other subscription accounts",
         "选择主模型、快速模型以及图像理解、图像生成和语音识别模型",
         "Choose primary, fast, image-understanding, image-generation, and speech-recognition models",
         "为模型选择推理预设或自定义推理强度",

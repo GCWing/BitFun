@@ -21,8 +21,8 @@ Add AI providers and models, choose defaults, and configure proxy, subscription,
   - Add, edit, and remove built-in or custom AI providers
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 配置 API Key、Base URL、请求格式和模型列表
   - Configure API keys, base URLs, request formats, and model lists
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 登录、刷新和退出 Codex、Antigravity、Grok、OpenCode 等订阅账户
-  - Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, and other subscription accounts
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 登录、刷新和退出 Codex、Antigravity、Grok、OpenCode、Hermes 等订阅账户
+  - Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, Hermes, and other subscription accounts
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择主模型、快速模型以及图像理解、图像生成和语音识别模型
   - Choose primary, fast, image-understanding, image-generation, and speech-recognition models
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为模型选择推理预设或自定义推理强度

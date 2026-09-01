@@ -16,6 +16,7 @@ describe('preferredSubscriptionLoginMethod', () => {
     expect(preferredSubscriptionLoginMethod('antigravity', false)).toBeUndefined();
     expect(preferredSubscriptionLoginMethod('opencode', false)).toBeUndefined();
     expect(preferredSubscriptionLoginMethod('grok', false)).toBeUndefined();
+    expect(preferredSubscriptionLoginMethod('hermes', false)).toBeUndefined();
   });
 
   it('identifies the browser-only provider that cannot sign in through a peer', () => {
@@ -23,6 +24,7 @@ describe('preferredSubscriptionLoginMethod', () => {
     expect(subscriptionLoginRequiresLocalDevice('codex')).toBe(false);
     expect(subscriptionLoginRequiresLocalDevice('opencode')).toBe(false);
     expect(subscriptionLoginRequiresLocalDevice('grok')).toBe(false);
+    expect(subscriptionLoginRequiresLocalDevice('hermes')).toBe(false);
   });
 });
 

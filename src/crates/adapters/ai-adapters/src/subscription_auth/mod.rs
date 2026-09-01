@@ -1,7 +1,7 @@
 //! In-app subscription authentication.
 //!
 //! Lets BitFun sign in to another product's subscription (Codex/ChatGPT,
-//! Antigravity/Google, OpenCode, xAI/SuperGrok) with an in-app OAuth flow,
+//! Antigravity/Google, OpenCode, xAI/SuperGrok, Hermes/Nous Portal) with an in-app OAuth flow,
 //! and use the resulting tokens to authenticate AI requests. Secret material
 //! is stored separately from the non-secret account metadata. macOS uses a
 //! prompt-free encrypted local vault; other platforms use their native store.
@@ -11,6 +11,7 @@
 mod antigravity;
 mod codex;
 mod grok;
+mod hermes;
 mod jwt;
 mod oauth_server;
 mod opencode;
@@ -33,7 +34,7 @@ use tokio_util::sync::CancellationToken;
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// OpenCode release whose built-in subscription protocols these adapters mirror.
-pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.23";
+pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.25";
 
 /// One of the subscription providers BitFun can sign in to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -43,6 +44,7 @@ pub enum SubscriptionProvider {
     Antigravity,
     Opencode,
     Grok,
+    Hermes,
 }
 
 /// User-visible authorization method supported by a subscription provider.
@@ -74,8 +76,13 @@ impl SubscriptionHttpOptions {
 
 impl SubscriptionProvider {
     /// All providers, in display order.
-    pub const ALL: [SubscriptionProvider; 4] =
-        [Self::Codex, Self::Antigravity, Self::Opencode, Self::Grok];
+    pub const ALL: [SubscriptionProvider; 5] = [
+        Self::Codex,
+        Self::Antigravity,
+        Self::Opencode,
+        Self::Grok,
+        Self::Hermes,
+    ];
 
     /// Stable store key / serde tag for this provider.
     pub fn key(self) -> &'static str {
@@ -84,6 +91,7 @@ impl SubscriptionProvider {
             Self::Antigravity => "antigravity",
             Self::Opencode => "opencode",
             Self::Grok => "grok",
+            Self::Hermes => "hermes",
         }
     }
 
@@ -94,6 +102,7 @@ impl SubscriptionProvider {
             "antigravity" => Some(Self::Antigravity),
             "opencode" => Some(Self::Opencode),
             "grok" => Some(Self::Grok),
+            "hermes" => Some(Self::Hermes),
             _ => None,
         }
     }
@@ -104,6 +113,7 @@ impl SubscriptionProvider {
             Self::Antigravity => "Antigravity (Google)",
             Self::Opencode => "OpenCode (Go/Zen)",
             Self::Grok => "xAI (SuperGrok)",
+            Self::Hermes => "Hermes (Nous Portal)",
         }
         .to_string()
     }
@@ -114,6 +124,7 @@ impl SubscriptionProvider {
             Self::Antigravity => antigravity::suggested(),
             Self::Opencode => opencode::suggested(),
             Self::Grok => grok::suggested(),
+            Self::Hermes => hermes::suggested(),
         }
     }
 
@@ -124,7 +135,7 @@ impl SubscriptionProvider {
         match self {
             Self::Codex => &[Browser, Device],
             Self::Antigravity => &[Browser],
-            Self::Opencode | Self::Grok => &[Device],
+            Self::Opencode | Self::Grok | Self::Hermes => &[Device],
         }
     }
 
@@ -216,6 +227,9 @@ pub struct SubscriptionAccount {
     /// Empty for subscription providers that expose only one fixed endpoint.
     #[serde(default)]
     pub api_offerings: Vec<SubscriptionApiOffering>,
+    /// Provider-owned page where the user can start or manage a subscription.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub management_url: Option<String>,
 }
 
 /// Structured sign-out result. Metadata removal determines connection state;
@@ -378,11 +392,13 @@ pub(crate) fn store_lock(provider: SubscriptionProvider) -> &'static tokio::sync
     static ANTIGRAVITY: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static OPENCODE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     static GROK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    static HERMES: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     match provider {
         SubscriptionProvider::Codex => &CODEX,
         SubscriptionProvider::Antigravity => &ANTIGRAVITY,
         SubscriptionProvider::Opencode => &OPENCODE,
         SubscriptionProvider::Grok => &GROK,
+        SubscriptionProvider::Hermes => &HERMES,
     }
 }
 
@@ -503,6 +519,10 @@ fn build_account(
         suggested_base_url: base_url.to_string(),
         suggested_model: model.to_string(),
         api_offerings,
+        management_url: match provider {
+            SubscriptionProvider::Hermes => Some(hermes::MANAGEMENT_URL.to_string()),
+            _ => None,
+        },
     }
 }
 
@@ -637,6 +657,9 @@ pub async fn start_login_with_method_and_options(
             }
             SubscriptionProvider::Grok => {
                 grok::begin_login(begin_cancel.clone(), expected_revision, options).await
+            }
+            SubscriptionProvider::Hermes => {
+                hermes::begin_login(begin_cancel.clone(), expected_revision, options).await
             }
         }
     };
@@ -900,6 +923,7 @@ pub async fn resolve_with_options(
         SubscriptionProvider::Antigravity => antigravity::resolve(options).await,
         SubscriptionProvider::Opencode => opencode::resolve(options).await,
         SubscriptionProvider::Grok => grok::resolve(options).await,
+        SubscriptionProvider::Hermes => hermes::resolve(options).await,
     }
 }
 
@@ -932,6 +956,21 @@ pub async fn resolve_grok_with_options(
     options: &SubscriptionHttpOptions,
 ) -> Result<ResolvedCredential> {
     grok::resolve_for(model, options).await
+}
+
+/// Resolves a Hermes subscription credential for a concrete model. Nous uses
+/// Anthropic Messages for `anthropic/*` model ids and OpenAI Chat Completions
+/// for the rest; the adapter pins both routes to the trusted inference host.
+pub async fn resolve_hermes(model: &str) -> Result<ResolvedCredential> {
+    resolve_hermes_with_options(model, &SubscriptionHttpOptions::default()).await
+}
+
+/// Resolves a Hermes credential with an explicit transport policy.
+pub async fn resolve_hermes_with_options(
+    model: &str,
+    options: &SubscriptionHttpOptions,
+) -> Result<ResolvedCredential> {
+    hermes::resolve_for(model, options).await
 }
 
 /// Forces a resolve (which refreshes and saves), then returns the account entry.
@@ -996,6 +1035,10 @@ mod tests {
             serde_json::to_value(SubscriptionProvider::Grok).unwrap(),
             serde_json::json!("grok")
         );
+        assert_eq!(
+            serde_json::to_value(SubscriptionProvider::Hermes).unwrap(),
+            serde_json::json!("hermes")
+        );
         let parsed: SubscriptionProvider =
             serde_json::from_value(serde_json::json!("opencode")).unwrap();
         assert_eq!(parsed, SubscriptionProvider::Opencode);
@@ -1006,6 +1049,10 @@ mod tests {
         assert_eq!(
             SubscriptionProvider::from_key("grok"),
             Some(SubscriptionProvider::Grok)
+        );
+        assert_eq!(
+            SubscriptionProvider::from_key("hermes"),
+            Some(SubscriptionProvider::Hermes)
         );
         assert_eq!(SubscriptionProvider::from_key("unknown"), None);
     }
@@ -1025,6 +1072,10 @@ mod tests {
         );
         assert_eq!(
             SubscriptionProvider::Opencode.login_methods(),
+            &[SubscriptionLoginMethod::Device]
+        );
+        assert_eq!(
+            SubscriptionProvider::Hermes.login_methods(),
             &[SubscriptionLoginMethod::Device]
         );
         assert_eq!(
@@ -1064,6 +1115,10 @@ mod tests {
         assert_eq!(
             runtime_model_override(SubscriptionProvider::Grok, "grok-4.5"),
             None
+        );
+        assert_eq!(
+            runtime_model_override(SubscriptionProvider::Hermes, " "),
+            Some("z-ai/glm-5.2")
         );
     }
 
@@ -1110,6 +1165,15 @@ mod tests {
         assert_eq!(codex.account.as_deref(), Some("user@example.com"));
         assert_eq!(codex.expires_at, Some(1_800_000_000));
         assert!(!codex.reauthentication_required);
+        let hermes = accounts
+            .iter()
+            .find(|a| a.provider == SubscriptionProvider::Hermes)
+            .unwrap();
+        assert!(!hermes.connected);
+        assert_eq!(
+            hermes.management_url.as_deref(),
+            Some("https://portal.nousresearch.com/manage-subscription")
+        );
     }
 
     fn store_path_override_for_assertion() -> std::path::PathBuf {

@@ -300,7 +300,7 @@ export interface AIModelConfig {
 }
 
 /** Subscription provider for in-app OAuth auth. */
-export type SubscriptionProvider = 'codex' | 'antigravity' | 'opencode' | 'grok';
+export type SubscriptionProvider = 'codex' | 'antigravity' | 'opencode' | 'grok' | 'hermes';
 
 /** OpenCode billing/API product. Both plans reuse the same signed-in account. */
 export type OpenCodePlan = 'zen' | 'go';

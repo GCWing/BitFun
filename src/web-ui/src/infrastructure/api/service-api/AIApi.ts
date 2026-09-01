@@ -219,6 +219,7 @@ export interface SubscriptionAccount {
   suggested_base_url: string;
   suggested_model: string;
   api_offerings: SubscriptionApiOffering[];
+  management_url?: string | null;
 }
 
 export interface SubscriptionLogoutResult {
