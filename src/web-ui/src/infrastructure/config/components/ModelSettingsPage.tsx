@@ -3280,18 +3280,6 @@ const ModelSettingsPage: React.FC = () => {
                             : 'subscriptionAuth.login')}
                         </Button>
                       )}
-                      {account.management_url && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={anyLoginInProgress}
-                          onClick={() => void handleOpenSubscriptionAuthorization(
-                            account.management_url!,
-                          )}
-                        >
-                          {t('subscriptionAuth.manageSubscription')}
-                        </Button>
-                      )}
                       {isLoggingIn && (
                         <Button
                           size="sm"
