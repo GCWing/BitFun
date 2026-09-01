@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "50330e04b820bfaf1f564dca7e6e6983cae16c190b3e11cbdeb376349e17cac8",
-  "commandCount": 653,
+  "catalogDigest": "ad97f6faa042bfb6469b6fc6891a0f2bffbfe4b0a669ed122c7dd9bf27c02774",
+  "commandCount": 654,
   "coverage": {
-    "commandCount": 653,
-    "documentedCommandCount": 626,
+    "commandCount": 654,
+    "documentedCommandCount": 627,
     "implementationCommandCount": 27,
     "implementationDigest": "4d3b2e8145a6a97b622fdb78cf1c25275881328eb7ccbc3c92ae95bf798cb190"
   },
@@ -763,6 +763,22 @@
       "sourceFile": "src/apps/desktop/src/api/session_api.rs",
       "signature": "fn archive_session( request: ArchiveSessionRequest, runtime: State<'_, DesktopRuntimeContext>, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "browser_control_disconnect",
+      "moduleId": "browser_control",
+      "capabilityId": "feature.computer-use",
+      "capabilityIds": [
+        "feature.computer-use"
+      ],
+      "documentedItemIds": [
+        "feature.computer-use:launch-connect"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::browser_control_api::browser_control_disconnect",
+      "sourceFile": "src/apps/desktop/src/api/browser_control_api.rs",
+      "signature": "fn browser_control_disconnect( request: BrowserControlLaunchRequest, ) -> Result<BrowserControlDisconnectResponse, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "browser_control_enable_default_cdp",

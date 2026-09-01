@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "50330e04b820bfaf1f564dca7e6e6983cae16c190b3e11cbdeb376349e17cac8",
+  "digest": "ad97f6faa042bfb6469b6fc6891a0f2bffbfe4b0a669ed122c7dd9bf27c02774",
   "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
   "searchAcceptance": [
     {
@@ -20861,12 +20861,12 @@
       ],
       "highlightsZh": [
         "启用或停用 Computer Use",
-        "连接受支持的浏览器",
+        "连接或断开受支持的浏览器",
         "检查并打开系统权限设置"
       ],
       "highlightsEn": [
         "Enable or disable Computer Use",
-        "Connect a supported browser",
+        "Connect or disconnect a supported browser",
         "Inspect and open OS permission settings"
       ],
       "items": [
@@ -20916,13 +20916,13 @@
         },
         {
           "id": "launch-connect",
-          "titleZh": "启动浏览器控制或连接已经开放 CDP 的浏览器",
-          "titleEn": "Launch browser control or connect to a browser that already exposes CDP",
+          "titleZh": "启动浏览器控制，以及连接或断开已经配置 CDP 的浏览器",
+          "titleEn": "Launch browser control, or connect to and disconnect from a browser configured for CDP",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“启动浏览器控制或连接已经开放 CDP 的浏览器”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Launch browser control or connect to a browser that already exposes CDP” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“启动浏览器控制，以及连接或断开已经配置 CDP 的浏览器”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Launch browser control, or connect to and disconnect from a browser configured for CDP” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           }
         },
         {
@@ -20998,10 +20998,10 @@
         "accessibility",
         "screen recording",
         "启用或停用 Computer Use",
-        "连接受支持的浏览器",
+        "连接或断开受支持的浏览器",
         "检查并打开系统权限设置",
         "Enable or disable Computer Use",
-        "Connect a supported browser",
+        "Connect or disconnect a supported browser",
         "Inspect and open OS permission settings",
         "检查 Computer Use 可用性、辅助功能和屏幕录制授权状态",
         "Check Computer Use availability plus accessibility and screen-recording permission status",
@@ -21011,8 +21011,8 @@
         "Open the matching operating-system privacy and security settings",
         "发现受支持的浏览器并查看当前 CDP 连接状态",
         "Discover supported browsers and inspect the current CDP connection state",
-        "启动浏览器控制或连接已经开放 CDP 的浏览器",
-        "Launch browser control or connect to a browser that already exposes CDP",
+        "启动浏览器控制，以及连接或断开已经配置 CDP 的浏览器",
+        "Launch browser control, or connect to and disconnect from a browser configured for CDP",
         "启用默认 CDP 配置并按需要重启浏览器",
         "Enable the default CDP setup and restart the browser when required",
         "授权后让 Agent 截图、点击、输入、滚动并读取可见界面",
