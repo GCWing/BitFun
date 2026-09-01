@@ -1491,7 +1491,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                   </span>
                   <span className="harmony-sidebar__account-copy">
                     <strong>{t('settings.currentAccount')}</strong>
-                    <small>{authenticatedUserLabel || t('settings.product')}</small>
+                    <small>{authenticatedUserLabel || t('shared.product.remote')}</small>
                   </span>
                   <span className="harmony-sidebar__verified">{t('settings.signedIn')}</span>
                 </div>
@@ -1505,7 +1505,12 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                     <span className="harmony-sidebar__settings-chevron">›</span>
                   </button>
                   <div className="harmony-sidebar__settings-row">
-                    <span className="harmony-sidebar__settings-row-icon" aria-hidden="true">文</span>
+                    <span className="harmony-sidebar__settings-row-icon" aria-hidden="true">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.45 3.3 5.45 3.3 9S14.2 18.55 12 21M12 3C9.8 5.45 8.7 8.45 8.7 12s1.1 6.55 3.3 9"/>
+                      </svg>
+                    </span>
                     <span>{t('settings.language')}</span>
                     <LanguageToggleButton className="harmony-sidebar__settings-language"/>
                     <span className="harmony-sidebar__settings-chevron">›</span>
@@ -1542,7 +1547,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
 
                 <h3>{t('settings.aboutSection')}</h3>
                 <div className="harmony-sidebar__settings-card">
-                  <div className="harmony-sidebar__settings-row harmony-sidebar__settings-row--static"><span>{t('settings.product')}</span><small>{t('settings.platform')}</small></div>
+                  <div className="harmony-sidebar__settings-row harmony-sidebar__settings-row--static"><span>{t('shared.product.remote')}</span><small>{t('settings.platform')}</small></div>
                 </div>
 
                 <button type="button" className="harmony-sidebar__settings-disconnect" onClick={() => { setCompactSettingsOpen(false); setShowDisconnectConfirm(true); }}>

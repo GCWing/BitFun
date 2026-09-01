@@ -166,7 +166,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       devicesSection: 'Devices',
       currentDevice: 'Current',
       aboutSection: 'About',
-      product: 'BitFun Remote',
       platform: 'Mobile Web',
     },
     workspace: {
@@ -413,7 +412,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       devicesSection: '设备',
       currentDevice: '当前设备',
       aboutSection: '关于',
-      product: 'BitFun Remote',
       platform: '移动网页',
     },
     workspace: {
@@ -660,7 +658,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       devicesSection: '裝置',
       currentDevice: '目前裝置',
       aboutSection: '關於',
-      product: 'BitFun Remote',
       platform: '行動網頁',
     },
     workspace: {
