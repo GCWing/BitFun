@@ -72,5 +72,8 @@ test("Combobox styling uses public field, overlay, action, and motion tokens", a
   assert.match(styles, /--bf-overlay-menu-surface-radius/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-shadow-menu/);
+  assert.match(styles, /position:\s*fixed/);
+  assert.match(styles, /z-index:\s*var\(--bf-layer-popover\)/);
+  assert.doesNotMatch(styles, /data-popover-mode/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

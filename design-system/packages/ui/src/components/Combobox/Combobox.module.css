@@ -253,6 +253,8 @@
   }
 
   .popover {
+    position: fixed;
+    z-index: var(--bf-layer-popover);
     display: flex;
     min-inline-size: var(--bf-overlay-menu-inline-size);
     max-inline-size: calc(100vw - var(--bf-space-4));
@@ -264,18 +266,6 @@
     color: var(--bf-color-action-neutral-content);
     background: var(--bf-color-surface-panel);
     box-shadow: var(--bf-shadow-menu);
-  }
-
-  .popover[data-popover-mode="overlay"] {
-    position: fixed;
-  }
-
-  .popover[data-popover-mode="inline"] {
-    position: absolute;
-    z-index: 1;
-    inset-block-start: calc(100% + var(--bf-space-1));
-    inset-inline-start: 0;
-    inline-size: 100%;
   }
 
   .search {
