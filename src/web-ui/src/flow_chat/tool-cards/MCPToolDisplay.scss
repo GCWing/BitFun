@@ -28,26 +28,6 @@
     white-space: nowrap;
   }
 
-  .preview-toggle-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    color: var(--bf-color-content-secondary);
-    transition: color 0.2s ease;
-
-    &:hover {
-      color: var(--bf-color-content-primary);
-    }
-
-    svg {
-      display: block;
-    }
-  }
-
   .error-expand-indicator {
     display: flex;
     align-items: center;
@@ -66,6 +46,27 @@
         padding-bottom: var(--bf-control-flow-chat-card-gap);
         border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
       }
+    }
+
+    .content-item-input {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mcp-input-code {
+      max-height: 240px;
+      margin: 0;
+      overflow: auto;
+      padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-sm);
+      background: var(--bf-color-action-neutral-surface);
+      color: var(--bf-color-content-primary);
+      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-type-flow-control-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .text-content {

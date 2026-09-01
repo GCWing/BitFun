@@ -223,6 +223,7 @@ function CollapsibleRegion({
 
 export interface ProminentToolCardProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "onClick"> {
+  allowExpandedWhenFailed?: boolean;
   className?: string;
   disableExpandAnimation?: boolean;
   errorContent?: ReactNode;
@@ -239,6 +240,7 @@ export interface ProminentToolCardProps
 }
 
 export function ProminentToolCard({
+  allowExpandedWhenFailed = false,
   className,
   disableExpandAnimation = false,
   errorContent,
@@ -255,7 +257,8 @@ export function ProminentToolCard({
   ...props
 }: ProminentToolCardProps) {
   const failed = isFailed || status === "error";
-  const expandable = headerExpandAffordance ?? Boolean(onClick && expandedContent && !failed);
+  const expandable = headerExpandAffordance
+    ?? Boolean(onClick && expandedContent && (!failed || allowExpandedWhenFailed));
   const loading = LOADING_STATUSES.has(status);
   const confirmation = requiresConfirmation && ![
     "completed",
@@ -323,7 +326,7 @@ export function ProminentToolCard({
 
       <CollapsibleRegion
         disableAnimation={disableExpandAnimation}
-        isOpen={Boolean(isExpanded && expandedContent && !failed)}
+        isOpen={Boolean(isExpanded && expandedContent && (!failed || allowExpandedWhenFailed))}
         part="expanded"
         status={status}
       >
