@@ -893,8 +893,25 @@ pub async fn terminal_has_shell_integration(
     Ok(api.has_shell_integration(&session_id).await)
 }
 
+/// Shuts down every PTY this desktop owns, on the controller and on any connected SSH host.
+///
+/// Remote sessions live in the remote terminal manager, so stopping only the local API would leave
+/// shells running on the host after the caller was told everything was shut down.
 #[tauri::command]
 pub async fn terminal_shutdown_all(state: State<'_, TerminalState>) -> Result<(), String> {
+    if let Some(remote_manager) = get_remote_workspace_manager() {
+        if let Some(terminal_manager) = remote_manager.get_terminal_manager().await {
+            for session in terminal_manager.list_sessions().await {
+                if let Err(error) = terminal_manager.close_session(&session.id).await {
+                    warn!(
+                        "Failed to close remote terminal session during shutdown_all: session_id={}, error={}",
+                        session.id, error
+                    );
+                }
+            }
+        }
+    }
+
     let api = state.get_or_init_api().await?;
     api.shutdown_all().await;
 

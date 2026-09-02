@@ -8,6 +8,7 @@ mod args;
 mod bootstrap;
 mod commands;
 mod control;
+#[cfg(test)]
 mod deny;
 mod dispatch;
 mod fanout;

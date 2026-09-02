@@ -730,7 +730,7 @@
       "rustPath": "apply_patch",
       "sourceFile": "src/apps/desktop/src/api/diff_api.rs",
       "signature": "fn apply_patch(request: ApplyPatchRequest) -> Result<String, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "archive_all_sessions",
@@ -1044,7 +1044,7 @@
       "rustPath": "api::agentic_api::cancel_dialog_turn",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn cancel_dialog_turn( runtime: State<'_, DesktopRuntimeContext>, app_state: State<'_, AppState>, request: CancelDialogTurnRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "cancel_insights_generation",
@@ -1092,7 +1092,7 @@
       "rustPath": "cancel_search",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn cancel_search( state: State<'_, AppState>, request: CancelSearchRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "cancel_session",
@@ -1141,7 +1141,7 @@
       "rustPath": "api::agentic_api::cancel_tool",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn cancel_tool( coordinator: State<'_, Arc<ConversationCoordinator>>, request: CancelToolRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "cancel_transfer",
@@ -1187,7 +1187,7 @@
       "rustPath": "check_command_exists",
       "sourceFile": "src/apps/desktop/src/api/system_api.rs",
       "signature": "fn check_command_exists(command: String) -> Result<CheckCommandResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "check_commands_exist",
@@ -1201,7 +1201,7 @@
       "rustPath": "check_commands_exist",
       "sourceFile": "src/apps/desktop/src/api/system_api.rs",
       "signature": "fn check_commands_exist( commands: Vec<String>, ) -> Result<Vec<(String, CheckCommandResponse)>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "check_for_updates",
@@ -1252,7 +1252,7 @@
       "rustPath": "check_path_exists",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn check_path_exists( state: State<'_, AppState>, request: CheckPathExistsRequest, ) -> Result<bool, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "choose_external_mcp_conflict_command",
@@ -1380,7 +1380,7 @@
       "rustPath": "close_workspace",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn close_workspace( state: State<'_, AppState>, app: tauri::AppHandle, request: CloseWorkspaceRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "compact_session",
@@ -1396,7 +1396,7 @@
       "rustPath": "api::agentic_api::compact_session",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn compact_session( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: CompactSessionRequest, ) -> Result<StartDialogTurnResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "compress_path",
@@ -1428,7 +1428,7 @@
       "rustPath": "compute_diff",
       "sourceFile": "src/apps/desktop/src/api/diff_api.rs",
       "signature": "fn compute_diff(request: ComputeDiffRequest) -> Result<DiffResult, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "computer_use_get_status",
@@ -1612,7 +1612,7 @@
       "rustPath": "create_directory",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn create_directory( state: State<'_, AppState>, request: CreateDirectoryRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "create_file",
@@ -1628,7 +1628,7 @@
       "rustPath": "create_file",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn create_file( state: State<'_, AppState>, request: CreateFileRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "create_miniapp",
@@ -1855,7 +1855,7 @@
       "rustPath": "delete_directory",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn delete_directory( state: State<'_, AppState>, request: DeleteDirectoryRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "delete_file",
@@ -1871,7 +1871,7 @@
       "rustPath": "delete_file",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn delete_file( state: State<'_, AppState>, request: DeleteFileRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "delete_mcp_server",
@@ -2348,7 +2348,7 @@
       "rustPath": "api::agentic_api::ensure_coordinator_session",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn ensure_coordinator_session( runtime: State<'_, DesktopRuntimeContext>, request: EnsureCoordinatorSessionRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "execute_tool",
@@ -2364,7 +2364,7 @@
       "rustPath": "execute_tool",
       "sourceFile": "src/apps/desktop/src/api/tool_api.rs",
       "signature": "fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecutionResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "expand_external_prompt_command_command",
@@ -2428,7 +2428,7 @@
       "rustPath": "explorer_get_file_tree",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn explorer_get_file_tree( state: State<'_, AppState>, request: ExplorerGetFileTreeRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "export_config",
@@ -2476,7 +2476,7 @@
       "rustPath": "export_local_file_to_path",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn export_local_file_to_path(request: ExportLocalFileRequest) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "export_session_transcript",
@@ -2832,7 +2832,7 @@
       "rustPath": "get_clipboard_files",
       "sourceFile": "src/apps/desktop/src/api/clipboard_file_api.rs",
       "signature": "fn get_clipboard_files() -> Result<ClipboardFilesResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "get_config",
@@ -2876,7 +2876,7 @@
       "rustPath": "get_current_workspace",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_current_workspace( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, ) -> Result<Option<WorkspaceInfoDto>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "get_custom_agent_detail",
@@ -3054,7 +3054,7 @@
       "rustPath": "get_file_diff",
       "sourceFile": "src/apps/desktop/src/api/snapshot_service.rs",
       "signature": "fn get_file_diff( runtime: State<'_, DesktopRuntimeContext>, request: GetFileDiffRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "get_file_editor_sync_hash",
@@ -3086,7 +3086,7 @@
       "rustPath": "get_file_metadata",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_file_metadata( state: State<'_, AppState>, request: GetFileMetadataRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "get_file_tree",
@@ -3102,7 +3102,7 @@
       "rustPath": "get_file_tree",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_file_tree( state: State<'_, AppState>, request: GetFileTreeRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "get_frontend_update_status",
@@ -3445,7 +3445,7 @@
       "rustPath": "get_opened_workspaces",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_opened_workspaces( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, ) -> Result<Vec<WorkspaceInfoDto>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "get_operation_diff",
@@ -3573,7 +3573,7 @@
       "rustPath": "get_recent_workspaces",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_recent_workspaces( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, ) -> Result<Vec<WorkspaceInfoDto>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "get_runtime_capabilities",
@@ -3943,7 +3943,7 @@
       "rustPath": "get_watched_paths",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_watched_paths() -> Result<Vec<String>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "get_web_search_credential_status",
@@ -4719,7 +4719,7 @@
       "rustPath": "initialize_workspace_startup_state",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn initialize_workspace_startup_state( state: State<'_, AppState>, app: tauri::AppHandle, startup_trace: State<'_, DesktopStartupTrace>, ) -> Result<WorkspaceStartupStateSnapshotDto, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "install_acp_client_cli",
@@ -4881,7 +4881,7 @@
       "rustPath": "list_directory_files",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn list_directory_files( state: State<'_, AppState>, request: ListDirectoryFilesRequest, ) -> Result<Vec<String>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "list_manageable_subagents",
@@ -6222,7 +6222,7 @@
       "rustPath": "open_workspace",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn open_workspace( state: State<'_, AppState>, app: tauri::AppHandle, request: OpenWorkspaceRequest, ) -> Result<WorkspaceInfoDto, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "page_create_open_link",
@@ -6398,7 +6398,7 @@
       "rustPath": "paste_files",
       "sourceFile": "src/apps/desktop/src/api/clipboard_file_api.rs",
       "signature": "fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "peer_control_attach",
@@ -6654,7 +6654,7 @@
       "rustPath": "read_file_content",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn read_file_content( state: State<'_, AppState>, request: ReadFileContentRequest, ) -> Result<String, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "read_mcp_resource",
@@ -7473,7 +7473,7 @@
       "rustPath": "remove_recent_workspace",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn remove_recent_workspace( state: State<'_, AppState>, request: RemoveRecentWorkspaceRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "rename_file",
@@ -7489,7 +7489,7 @@
       "rustPath": "rename_file",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn rename_file( state: State<'_, AppState>, request: RenameFileRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "reorder_opened_workspaces",
@@ -8095,7 +8095,7 @@
       "rustPath": "run_system_command",
       "sourceFile": "src/apps/desktop/src/api/system_api.rs",
       "signature": "fn run_system_command( request: RunCommandRequest, ) -> Result<CommandOutputResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "save_acp_json_config",
@@ -8267,7 +8267,7 @@
       "rustPath": "scan_workspace_info",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn scan_workspace_info( state: State<'_, AppState>, request: ScanWorkspaceInfoRequest, ) -> Result<Option<WorkspaceInfoDto>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "search_build_index",
@@ -8301,7 +8301,7 @@
       "rustPath": "search_file_contents",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn search_file_contents( state: State<'_, AppState>, request: SearchFileContentsRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "search_filenames",
@@ -8333,7 +8333,7 @@
       "rustPath": "search_files",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn search_files( state: State<'_, AppState>, request: SearchFilesRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "search_get_repo_status",
@@ -8513,7 +8513,7 @@
       "rustPath": "set_active_workspace",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn set_active_workspace( state: State<'_, AppState>, app: tauri::AppHandle, request: SetActiveWorkspaceRequest, ) -> Result<WorkspaceInfoDto, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "set_agent_profile_config",
@@ -9524,7 +9524,7 @@
       "rustPath": "api::agentic_api::start_dialog_turn",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn start_dialog_turn( _app: AppHandle, runtime: State<'_, DesktopRuntimeContext>, request: StartDialogTurnRequest, ) -> Result<StartDialogTurnResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "start_file_watch",
@@ -9540,7 +9540,7 @@
       "rustPath": "start_file_watch",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn start_file_watch(path: String, recursive: Option<bool>) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "start_mcp_remote_oauth",
@@ -9588,7 +9588,7 @@
       "rustPath": "start_search_file_contents_stream",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn start_search_file_contents_stream( app_handle: AppHandle, state: State<'_, AppState>, request: SearchFileContentsRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "start_search_filenames_stream",
@@ -9650,7 +9650,7 @@
       "rustPath": "api::agentic_api::steer_dialog_turn",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn steer_dialog_turn( runtime: State<'_, DesktopRuntimeContext>, request: SteerDialogTurnRequest, ) -> Result<SteerDialogTurnResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "stop_acp_client",
@@ -9682,7 +9682,7 @@
       "rustPath": "stop_file_watch",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn stop_file_watch(path: String) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "stop_mcp_server",
@@ -9746,7 +9746,7 @@
       "rustPath": "submit_user_answers",
       "sourceFile": "src/apps/desktop/src/api/tool_api.rs",
       "signature": "fn submit_user_answers( runtime: State<'_, DesktopRuntimeContext>, tool_id: String, answers: serde_json::Value, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "subscribe_permission_requests",
@@ -9844,7 +9844,7 @@
       "rustPath": "api::terminal_api::terminal_get",
       "sourceFile": "src/apps/desktop/src/api/terminal_api.rs",
       "signature": "fn terminal_get( session_id: String, state: State<'_, TerminalState>, ) -> Result<SessionResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "terminal_get_history",
@@ -9878,7 +9878,7 @@
       "rustPath": "api::terminal_api::terminal_get_shells",
       "sourceFile": "src/apps/desktop/src/api/terminal_api.rs",
       "signature": "fn terminal_get_shells( state: State<'_, TerminalState>, ) -> Result<Vec<ShellInfo>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "terminal_has_shell_integration",
@@ -9910,7 +9910,7 @@
       "rustPath": "api::terminal_api::terminal_list",
       "sourceFile": "src/apps/desktop/src/api/terminal_api.rs",
       "signature": "fn terminal_list( state: State<'_, TerminalState>, ) -> Result<Vec<SessionResponse>, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "terminal_resize",
@@ -9958,7 +9958,7 @@
       "rustPath": "api::terminal_api::terminal_shutdown_all",
       "sourceFile": "src/apps/desktop/src/api/terminal_api.rs",
       "signature": "fn terminal_shutdown_all(state: State<'_, TerminalState>) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "terminal_signal",
@@ -10327,7 +10327,7 @@
       "rustPath": "update_workspace_info",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn update_workspace_info( state: State<'_, AppState>, app: tauri::AppHandle, request: UpdateWorkspaceInfoRequest, ) -> Result<WorkspaceInfoDto, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "upload_image_contexts",
@@ -10391,7 +10391,7 @@
       "rustPath": "validate_tool_input",
       "sourceFile": "src/apps/desktop/src/api/tool_api.rs",
       "signature": "fn validate_tool_input( request: ToolValidationRequest, ) -> Result<ToolValidationResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "webdriver_bridge_result",
@@ -10553,7 +10553,7 @@
       "rustPath": "write_file_content",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn write_file_content( state: State<'_, AppState>, request: WriteFileContentRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "RemoteRouted"
     }
   ]
 }

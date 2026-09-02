@@ -13,7 +13,10 @@
 主要区域：
 
 - `src/api/`：Tauri commands
-- `src/api/peer_host_invoke.rs`：Peer Device Mode host-invoke bridge 与 control attach
+- `src/api/peer_host_invoke.rs`：Peer Device Mode host-invoke bridge 与 control attach；
+  允许/拒绝与能力来自 Product Operation Registry（`bitfun_product_domains::remote_surface`），
+  不再有本地表
+- `src/api/remote_workspace_policy.rs`：证明每个已注册 Tauri 命令在注册表中恰有一行的闭包测试
 - `src/lib.rs`、`src/main.rs`：应用启动与装配
 - `src/computer_use/`：操作系统相关自动化支持
 

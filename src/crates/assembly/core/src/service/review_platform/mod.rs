@@ -35,13 +35,20 @@ struct CoreReviewPlatformWorkspaceClassifier;
 
 #[async_trait::async_trait]
 impl ReviewPlatformWorkspaceClassifier for CoreReviewPlatformWorkspaceClassifier {
+    /// With `remote-workspace` this consults the SSH registry. Without it the
+    /// compat facade still recognises an opened workspace record of kind
+    /// `Remote`, and the owner then routes Git probes to
+    /// [`Self::execute_remote_git_command`], which refuses below instead of
+    /// running `git` against the controller filesystem.
     async fn is_remote_workspace_path(&self, path: &str) -> bool {
-        #[cfg(feature = "remote-workspace")]
+        #[cfg(any(feature = "remote-workspace", feature = "agent-runtime"))]
         {
             return crate::service::remote_ssh::workspace_state::is_remote_path(path).await;
         }
-        #[cfg(not(feature = "remote-workspace"))]
+        #[cfg(not(any(feature = "remote-workspace", feature = "agent-runtime")))]
         {
+            // No SSH registry and no workspace records exist in this build,
+            // so nothing can mark a path as remote.
             let _ = path;
             false
         }
@@ -104,10 +111,10 @@ impl ReviewPlatformWorkspaceClassifier for CoreReviewPlatformWorkspaceClassifier
         }
         #[cfg(not(feature = "remote-workspace"))]
         {
-            let _ = (workspace_path, current_dir, args);
-            Err(ReviewPlatformError::InvalidRepository(
-                "Remote workspace support is not available in this build".to_string(),
-            ))
+            let _ = (current_dir, args);
+            Err(ReviewPlatformError::InvalidRepository(format!(
+                "Remote workspaces are not compiled into this BitFun host (feature `remote-workspace`); refusing to run Git against the local filesystem for a remote workspace: {workspace_path}"
+            )))
         }
     }
 }

@@ -132,6 +132,38 @@ pub(crate) async fn should_use_workspace_search(
         .is_none()
 }
 
+/// Builds the refusal sentence used when a remote workspace cannot be searched over SSH.
+///
+/// The legacy content walker only sees the controller filesystem, so running it for a remote
+/// root would answer a question about the wrong machine. Callers must surface this instead.
+pub(crate) fn remote_content_search_refusal_message(
+    command: &str,
+    root_path: &str,
+    reason: &str,
+) -> String {
+    format!(
+        "{} cannot search remote workspace path '{}': {}; local filesystem fallback was not attempted",
+        command, root_path, reason
+    )
+}
+
+/// Returns a refusal message when `root_path` belongs to a remote workspace whose remote search
+/// path is unavailable, and `None` when the path is local or remote search can serve the request.
+pub(crate) async fn remote_content_search_refusal(
+    state: &State<'_, AppState>,
+    command: &str,
+    root_path: &str,
+) -> Option<String> {
+    if !is_remote_path(root_path.trim()).await {
+        return None;
+    }
+
+    let reason = workspace_search_unavailable_message(state, root_path).await?;
+    Some(remote_content_search_refusal_message(
+        command, root_path, &reason,
+    ))
+}
+
 pub(crate) async fn prepare_content_search_runner(
     state: &State<'_, AppState>,
     root_path: &str,
@@ -345,5 +377,18 @@ mod tests {
             repo_status_error_message(raw),
             "Failed to get search repository status: SSH handshake timed out after 30 seconds"
         );
+    }
+
+    #[test]
+    fn remote_content_search_refusal_names_command_and_denies_local_fallback() {
+        let message = remote_content_search_refusal_message(
+            "search_file_contents",
+            "/home/dev/project",
+            "Remote workspace search services are unavailable",
+        );
+        assert!(message.starts_with("search_file_contents cannot search remote workspace path"));
+        assert!(message.contains("/home/dev/project"));
+        assert!(message.contains("Remote workspace search services are unavailable"));
+        assert!(message.contains("local filesystem fallback was not attempted"));
     }
 }

@@ -1,7 +1,7 @@
 use crate::native_hooks::{
     build_engine, build_overview, build_overview_with_imports, clear_session_hook_state,
-    dispatch_pre_tool_use, hook_settings_paths, ordered_layers, take_pending_session_context,
-    AgentHooksConfig, NativeHookSessionFacts,
+    dispatch_pre_tool_use, hook_settings_paths, ordered_layers, overview, overview_with_facts,
+    take_pending_session_context, AgentHooksConfig, NativeHookSessionFacts,
 };
 use bitfun_agent_runtime::native_hooks::{AgentHookEvent, AgentHookScope, AgentHookSettingsLayer};
 use serde_json::json;
@@ -169,8 +169,10 @@ fn oversized_settings_files_are_ignored() {
 
 #[tokio::test]
 async fn remote_workspaces_skip_hook_dispatch() {
-    // Remote workspaces are skipped before any settings lookup, so this
-    // resolves to a no-op decision regardless of local configuration.
+    // Remote workspaces never dispatch: a local hook process cannot act on
+    // the remote filesystem. The skip resolves to a no-op decision regardless
+    // of local configuration; when hooks are configured it is reported, not
+    // silent.
     let decision = dispatch_pre_tool_use(
         NativeHookSessionFacts {
             session_id: "session-remote",
@@ -189,6 +191,18 @@ async fn remote_workspaces_skip_hook_dispatch() {
     assert!(decision.deny_reason.is_none());
     assert!(!decision.allow);
     assert!(decision.updated_input.is_none());
+
+    // The read-only view carries the same fact, and it never derives a
+    // controller-local project path from the remote root.
+    let remote = overview_with_facts(Some(Path::new("/remote/workspace")), true).await;
+    assert!(remote.remote_workspace_unsupported);
+    assert!(remote
+        .files
+        .iter()
+        .all(|file| !file.path.starts_with("/remote/workspace")));
+
+    let local = overview(Some(Path::new("/remote/workspace"))).await;
+    assert!(!local.remote_workspace_unsupported);
 }
 
 #[test]

@@ -1,7 +1,18 @@
 //! Clipboard File API
 
+use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+/// Returns the first path in `paths` that belongs to a registered remote workspace.
+async fn first_remote_path<'a>(paths: impl Iterator<Item = &'a str>) -> Option<String> {
+    for path in paths {
+        if is_remote_path(path.trim()).await {
+            return Some(path.to_string());
+        }
+    }
+    None
+}
 
 #[derive(Debug, Serialize)]
 pub struct ClipboardFilesResponse {
@@ -299,8 +310,24 @@ pub async fn get_clipboard_files() -> Result<ClipboardFilesResponse, String> {
     }
 }
 
+/// Pastes clipboard files between controller-local paths.
+///
+/// The remote file provider exposes no copy primitive, so a remote workspace path is refused here
+/// instead of being served by a controller-side copy that would silently target the wrong machine.
 #[tauri::command]
 pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesResponse, String> {
+    if let Some(remote_path) = first_remote_path(
+        std::iter::once(request.target_directory.as_str())
+            .chain(request.source_paths.iter().map(String::as_str)),
+    )
+    .await
+    {
+        return Err(format!(
+            "paste_files cannot copy remote workspace path '{}': the remote file provider has no copy primitive; local filesystem fallback was not attempted",
+            remote_path
+        ));
+    }
+
     let target_dir = Path::new(&request.target_directory);
 
     if !target_dir.exists() {
@@ -547,5 +574,52 @@ mod tests {
         );
 
         std::fs::remove_dir_all(root).expect("remove test directory");
+    }
+}
+
+#[cfg(test)]
+mod remote_guard_tests {
+    use super::{paste_files, PasteFilesRequest};
+    use bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager;
+
+    const REMOTE_ROOT: &str = "/remote-audit-paste";
+    const CONNECTION_ID: &str = "remote-audit-paste-connection";
+
+    #[tokio::test]
+    async fn paste_files_refuses_remote_target_and_leaves_controller_untouched() {
+        init_remote_workspace_manager()
+            .register_remote_workspace(
+                REMOTE_ROOT.to_string(),
+                CONNECTION_ID.to_string(),
+                "remote-audit-paste".to_string(),
+                "remote-audit-paste.invalid".to_string(),
+            )
+            .await;
+
+        let source = std::env::temp_dir().join("bitfun-remote-audit-paste-source.txt");
+        std::fs::write(&source, b"local bytes").expect("write controller source");
+        let sentinel = std::env::temp_dir().join("bitfun-remote-audit-paste-source.txt.copy");
+        let _ = std::fs::remove_file(&sentinel);
+
+        let error = paste_files(PasteFilesRequest {
+            source_paths: vec![source.to_string_lossy().to_string()],
+            target_directory: format!("{REMOTE_ROOT}/src"),
+            is_cut: true,
+        })
+        .await
+        .expect_err("remote paste target must be refused");
+
+        assert!(error.starts_with("paste_files cannot copy remote workspace path"));
+        assert!(error.contains("local filesystem fallback was not attempted"));
+        assert!(
+            source.exists(),
+            "a refused cut must not delete the controller source"
+        );
+        assert!(!sentinel.exists());
+
+        let _ = std::fs::remove_file(&source);
+        init_remote_workspace_manager()
+            .unregister_remote_workspace(CONNECTION_ID, REMOTE_ROOT)
+            .await;
     }
 }

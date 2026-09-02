@@ -82,22 +82,32 @@ async fn read_remote_directory_contents(
     )
 }
 
+/// Without the `remote-workspace` feature there is no SSH provider to route
+/// to. A request that carries a remote marker (an explicit connection id or a
+/// path owned by an opened workspace of kind `Remote`) is refused here so it
+/// never reaches the controller filesystem scanner below.
 #[cfg(not(feature = "remote-workspace"))]
 async fn read_remote_directory_contents(
-    _path: &str,
-    _preferred_remote_connection_id: Option<&str>,
+    path: &str,
+    preferred_remote_connection_id: Option<&str>,
 ) -> Option<BitFunResult<Vec<FileTreeNode>>> {
+    use crate::service::remote_ssh::workspace_state::{
+        is_remote_path, remote_workspace_not_compiled_message,
+    };
+
+    let explicit_connection_id = preferred_remote_connection_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if explicit_connection_id.is_some() || is_remote_path(path).await {
+        return Some(Err(BitFunError::NotImplemented(
+            remote_workspace_not_compiled_message(path),
+        )));
+    }
     None
 }
 
-#[cfg(feature = "remote-workspace")]
 async fn is_remote_path(path: &str) -> bool {
     crate::service::remote_ssh::workspace_state::is_remote_path(path).await
-}
-
-#[cfg(not(feature = "remote-workspace"))]
-async fn is_remote_path(_path: &str) -> bool {
-    false
 }
 
 /// Unified file system service
@@ -131,7 +141,14 @@ impl FileSystemService {
         preferred_remote_connection_id: Option<&str>,
     ) -> BitFunResult<Vec<FileTreeNode>> {
         let started_at = std::time::Instant::now();
-        let tree = if is_remote_path(root_path).await {
+        // An explicit remote connection id is exact target identity, never a
+        // hint the local scanner may ignore: route it through the remote
+        // reader, which fails closed when that connection does not own the
+        // path or when this build has no remote provider at all.
+        let explicit_remote_scope = preferred_remote_connection_id
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty());
+        let tree = if explicit_remote_scope || is_remote_path(root_path).await {
             self.get_directory_contents_with_remote_hint(root_path, preferred_remote_connection_id)
                 .await?
         } else {
@@ -499,6 +516,79 @@ impl FileSystemService {
 
     pub fn editor_sync_sha256_hex_from_raw_bytes(&self, bytes: &[u8]) -> String {
         self.inner.editor_sync_sha256_hex_from_raw_bytes(bytes)
+    }
+}
+
+#[cfg(all(test, not(feature = "remote-workspace")))]
+mod remote_marker_tests {
+    use super::FileSystemService;
+
+    /// Without the `remote-workspace` feature there is no provider, so a
+    /// request that names a remote connection must be refused instead of
+    /// reading the controller filesystem. The sentinel proves no local read
+    /// happened: the directory exists locally and would list fine.
+    #[tokio::test]
+    async fn explicit_remote_scope_is_refused_without_remote_workspace_support() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        // The sentinel only needs to exist; the directory itself is the local
+        // content a silent fallback would have listed.
+        tempfile::Builder::new()
+            .prefix("controller-sentinel")
+            .suffix(".txt")
+            .tempfile_in(temp.path())
+            .expect("sentinel")
+            .keep()
+            .expect("keep sentinel");
+        let root = temp.path().to_string_lossy().to_string();
+        let service = FileSystemService::default();
+
+        for result in [
+            service
+                .get_directory_contents_with_remote_hint(&root, Some("ssh-remote-1"))
+                .await,
+            service
+                .build_file_tree_with_remote_hint(&root, Some("ssh-remote-1"))
+                .await,
+        ] {
+            let error = result.expect_err("remote-marked requests must fail closed");
+            assert!(
+                matches!(error, crate::util::errors::BitFunError::NotImplemented(_)),
+                "unexpected error: {error}"
+            );
+            let message = error.to_string();
+            assert!(
+                message.contains("not compiled into this BitFun host"),
+                "unexpected error: {message}"
+            );
+            assert!(
+                !message.contains("controller-sentinel"),
+                "the controller directory must not have been listed: {message}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn local_requests_keep_working_without_remote_workspace_support() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (_, local_path) = tempfile::Builder::new()
+            .prefix("local-")
+            .suffix(".txt")
+            .tempfile_in(temp.path())
+            .expect("file")
+            .keep()
+            .expect("keep file");
+        let local_name = local_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("file name")
+            .to_string();
+        let root = temp.path().to_string_lossy().to_string();
+
+        let entries = FileSystemService::default()
+            .get_directory_contents_with_remote_hint(&root, None)
+            .await
+            .expect("local directories stay readable");
+        assert!(entries.iter().any(|entry| entry.name == local_name));
     }
 }
 

@@ -394,6 +394,31 @@ pub async fn get_effective_session_path(
         .sessions_dir
 }
 
+/// Whether the running binary can execute workspace IO against a remote
+/// SSH/Docker workspace. This build compiles the SSH facade, so remote paths
+/// route to the registered provider; the `remote-workspace`-less build answers
+/// `NotCompiled` and must refuse remote-marked requests instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteWorkspaceSupport {
+    Available,
+    NotCompiled,
+}
+
+/// See [`RemoteWorkspaceSupport`]; always `Available` in this build.
+pub fn remote_workspace_support() -> RemoteWorkspaceSupport {
+    RemoteWorkspaceSupport::Available
+}
+
+/// Shared refusal wording for a remote-marked request the host cannot serve.
+/// Mirrors the `remote-workspace`-less compat module so callers can use one
+/// message regardless of build; unreachable through
+/// [`remote_workspace_support`] here.
+pub fn remote_workspace_not_compiled_message(path: &str) -> String {
+    format!(
+        "Remote workspaces are not compiled into this BitFun host (feature `remote-workspace`); refusing to read the local filesystem for a remote path: {path}"
+    )
+}
+
 /// Check if a specific path belongs to any registered remote workspace.
 pub async fn is_remote_path(path: &str) -> bool {
     if let Some(manager) = get_remote_workspace_manager() {

@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 import {
   buildCapabilityCatalog,
+  loadRemoteSurfaceRegistry,
   parseRegisteredCommands,
+  renderRemoteSurfaceTsBindings,
 } from './generate-interactive-capabilities.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -463,4 +465,39 @@ test('GUI, Agent, CLI, and Peer config writes converge on the ProductControl exe
   assert.match(cliProductControlHost, /ProductControlSource::Peer/u);
   assert.match(generatedBindings, new RegExp(publicCatalog.digest, 'u'));
   assert.match(generatedBindings, /ProductControlOptionIdsByCapability/u);
+});
+
+test('the remote surface bindings are a projection of the compiled Product Operation Registry', async () => {
+  const { raw, registry } = loadRemoteSurfaceRegistry();
+  const registrations = parseRegisteredCommands(await read('src/apps/desktop/src/lib.rs'));
+  const tauriRows = registry.operations.filter(({ surface }) => surface === 'tauri_command');
+  assert.deepEqual(
+    new Set(tauriRows.map(({ id }) => id)),
+    new Set(registrations.map(({ id }) => id)),
+    'every registered Tauri command has exactly one registry row and vice versa',
+  );
+  assert.equal(new Set(registry.operations.map(({ id }) => id)).size, registry.operations.length);
+  assert.ok(registry.digest.startsWith('fnv1a64:'));
+
+  const { technicalMap } = buildCapabilityCatalog();
+  const stanceById = new Map(tauriRows.map(({ id, remoteWorkspace }) => [id, remoteWorkspace]));
+  for (const command of technicalMap.commands) {
+    assert.equal(command.remoteWorkspacePolicy, stanceById.get(command.id), command.id);
+  }
+
+  const committed = await read('src/crates/contracts/product-domains/src/generated/remote-surface-registry.json');
+  assert.equal(committed, raw, 'committed registry export must match the compiled registry');
+  const committedTs = await read('src/web-ui/src/infrastructure/api/generated/remoteSurface.ts');
+  const rendered = renderRemoteSurfaceTsBindings(registry);
+  assert.equal(committedTs, rendered, 'committed remoteSurface.ts must match the renderer');
+
+  assert.match(rendered, /export const REMOTE_SURFACE_REGISTRY_DIGEST = "fnv1a64:[0-9a-f]{16}" as const;/u);
+  assert.ok(rendered.includes('"account_login",'));
+  assert.ok(rendered.includes('"peer_mode_ping",'));
+  assert.equal(rendered.includes('"git_trust_repository",'), false, 'operator-only rows stay forwarded');
+  assert.equal(rendered.includes('"dispatch_target_submit",'), false, 'HostInvoke-only rows never enter the FE local set');
+  for (const capability of registry.capabilities.ids) {
+    assert.ok(rendered.includes(`"${capability}",`), capability);
+  }
+  assert.ok(rendered.includes('"lsp_",'));
 });

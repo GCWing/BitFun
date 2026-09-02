@@ -198,10 +198,13 @@ Rules that apply to all four:
 
 Per-scenario obligations:
 
-- **Remote workspace**: every desktop Tauri command declares its policy in
-  [`remote_workspace_policy.rs`](src/apps/desktop/src/api/remote_workspace_policy.rs).
-  The contract test there rejects new commands without an explicit policy and
-  forbids growing the `LegacyUnaudited` backlog.
+- **Remote workspace**: every desktop Tauri command has one row in the Product
+  Operation Registry
+  ([`remote_surface/table.rs`](src/crates/contracts/product-domains/src/remote_surface/table.rs))
+  declaring its remote-workspace stance. The desktop closure test and the
+  capability generator reject new commands without a row, and the registry's
+  ratchet forbids growing the `Unaudited` backlog. See
+  [remote-surface-contract.md](docs/architecture/remote-surface-contract.md).
 - **Remote control**: mobile web and IM bots reach sessions through the
   `RemoteCommand` wire protocol and the bot command router / menu, not through the
   Web UI. When a session-level capability is added or moved — workspace or
@@ -209,12 +212,15 @@ Per-scenario obligations:
   extend those surfaces or make them answer with an explicit unsupported reply.
 - **Peer Device Mode**: product commands are proxied to the peer by default. A
   command that must stay on the controller (window chrome, updater, account
-  identity, local OS automation) has to be denied in all three lists that are kept
-  in sync: [`peer_host_invoke.rs`](src/apps/desktop/src/api/peer_host_invoke.rs),
-  [`deny.rs`](src/apps/cli/src/peer_host/deny.rs), and
-  [`peer-device-adapter.ts`](src/web-ui/src/infrastructure/api/adapters/peer-device-adapter.ts).
-  Read the peer-device README invariants before changing session, account, or
-  hydrate paths.
+  identity, local OS automation) is declared `ControllerLocal` in the same
+  registry row; the desktop peer host, the CLI peer host, and the Web UI
+  transport adapter all derive their deny sets from it, and
+  `pnpm run check:core-boundaries` rejects a hand-written table. A command the
+  CLI host runs needs a handler plus `cli_peer: HANDLED` in its row (the
+  closure test in `src/apps/cli/src/peer_host/commands/mod.rs` keeps both in
+  step). Peer capabilities are typed (`PeerHostCapability`) and advertised
+  from the registry. Read the peer-device README invariants before changing
+  session, account, or hydrate paths.
 - **Detached Dispatch**: jobs run headless on the target under the CLI delivery
   profile, with no interactive host and no guaranteed controller connection. The
   controller is an observer, never a runtime or filesystem proxy. Do not add

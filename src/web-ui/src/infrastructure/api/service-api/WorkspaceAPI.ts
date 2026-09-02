@@ -230,50 +230,6 @@ export class WorkspaceAPI {
   }
 
    
-  async getWorkspaceInfo(): Promise<WorkspaceInfo> {
-    try {
-      return await api.invoke('get_workspace_info', { 
-        request: {} 
-      });
-    } catch (error) {
-      throw createTauriCommandError('get_workspace_info', error);
-    }
-  }
-
-   
-  async listFiles(path: string): Promise<any[]> {
-    try {
-      return await api.invoke('list_files', { 
-        request: { path } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('list_files', error, { path });
-    }
-  }
-
-   
-  async readFile(path: string): Promise<string> {
-    try {
-      return await api.invoke('read_file', { 
-        request: { path } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('read_file', error, { path });
-    }
-  }
-
-   
-  async writeFile(path: string, content: string): Promise<void> {
-    try {
-      await api.invoke('write_file', { 
-        request: { path, content } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('write_file', error, { path, content });
-    }
-  }
-
-   
   async writeFileContent(
     workspacePath: string,
     filePath: string,

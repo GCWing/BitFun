@@ -879,15 +879,12 @@ async fn prepare<'a>(
     facts: NativeHookSessionFacts<'a>,
     event: AgentHookEvent,
 ) -> Option<PreparedDispatch<'a>> {
-    if facts.is_remote_workspace {
-        debug!(
-            "Skipping agent hook dispatch for remote workspace: event={}, session_id={}",
-            event, facts.session_id
-        );
-        return None;
-    }
     let config = hooks_config().await;
     if !config.enabled {
+        return None;
+    }
+    if facts.is_remote_workspace {
+        report_remote_workspace_skip(&facts, event).await;
         return None;
     }
     let engine = engine_for(facts.workspace_root, config.project_hooks_enabled).await?;
@@ -914,6 +911,66 @@ async fn prepare<'a>(
 /// resolve against the serialized `GlobalConfig`, where `AppConfig` lives
 /// under `app`.
 pub(crate) const HOOKS_CONFIG_PATH: &str = "app.hooks";
+
+/// A remote workspace never dispatches hooks: a local hook process and a
+/// remote workspace path do not describe the same filesystem. The skip must
+/// still be visible, so when the host-level hook configuration has rules for
+/// this event the first skip per session is logged as a warning.
+///
+/// Only the host-owned user layer is consulted. The project layer of a remote
+/// workspace lives on the remote host; deriving a controller-local path from
+/// the remote root to look for it would be exactly the local read this skip
+/// exists to prevent.
+async fn report_remote_workspace_skip(facts: &NativeHookSessionFacts<'_>, event: AgentHookEvent) {
+    let configured = match engine_for(None, false).await {
+        Some(engine) => engine.has_rules_for_workspace(event, None),
+        None => false,
+    };
+    if !configured {
+        debug!(
+            "Skipping agent hook dispatch for remote workspace: event={}, session_id={}",
+            event, facts.session_id
+        );
+        return;
+    }
+    if remote_skip_already_reported(facts.session_id) {
+        debug!(
+            "Skipping configured agent hooks for remote workspace: event={}, session_id={}",
+            event, facts.session_id
+        );
+        return;
+    }
+    warn!(
+        "Configured agent hooks are not executed for a remote workspace: event={}, session_id={}, workspace_root={}; hooks run only where the workspace filesystem lives, and this host did not run them locally",
+        event,
+        facts.session_id,
+        facts
+            .workspace_root
+            .map(|root| root.to_string_lossy().to_string())
+            .unwrap_or_default()
+    );
+}
+
+/// One warning per session keeps the skip visible without repeating it for
+/// every tool call of a long remote turn. The set is bounded so a long-lived
+/// host does not accumulate ids forever.
+fn remote_skip_already_reported(session_id: &str) -> bool {
+    const MAX_TRACKED_SESSIONS: usize = 1024;
+    static REPORTED: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        OnceLock::new();
+    let reported = REPORTED.get_or_init(Default::default);
+    let Ok(mut reported) = reported.lock() else {
+        return false;
+    };
+    if reported.contains(session_id) {
+        return true;
+    }
+    if reported.len() >= MAX_TRACKED_SESSIONS {
+        reported.clear();
+    }
+    reported.insert(session_id.to_string());
+    false
+}
 
 async fn hooks_config() -> AgentHooksConfig {
     match get_global_config_service().await {
@@ -1231,6 +1288,9 @@ pub struct NativeHookOverview {
     pub total_handlers: usize,
     /// Configuration problems, in the wording used for the backend log.
     pub issues: Vec<String>,
+    /// `true` when the workspace is remote: the rules above describe what is
+    /// configured on this host, but none of them run for that workspace.
+    pub remote_workspace_unsupported: bool,
 }
 
 /// Read the hook configuration for a workspace without dispatching anything.
@@ -1239,13 +1299,29 @@ pub struct NativeHookOverview {
 /// surface that needs to show what is configured. It re-reads the files rather
 /// than consulting the dispatch cache, so it always reflects what is on disk.
 pub async fn overview(workspace_root: Option<&Path>) -> NativeHookOverview {
+    overview_with_facts(workspace_root, false).await
+}
+
+/// [`overview`] with the session's remote fact. For a remote workspace only
+/// the host-owned user layer is inspected (the project layer lives on the
+/// remote host and no controller-local path is derived from the remote root),
+/// and the result is flagged so surfaces can say the hooks will not run.
+pub async fn overview_with_facts(
+    workspace_root: Option<&Path>,
+    is_remote_workspace: bool,
+) -> NativeHookOverview {
     // Ask for every candidate path, then mark which layers a dispatch would
     // actually load, so the view can show a gated-off project file.
     let config = hooks_config().await;
+    let local_root = if is_remote_workspace {
+        None
+    } else {
+        workspace_root
+    };
     let imported_layers = if config.enabled {
         #[cfg(feature = "external-sources")]
         {
-            crate::external_hook_import::enabled_imported_hook_layers(workspace_root)
+            crate::external_hook_import::enabled_imported_hook_layers(local_root)
                 .await
                 .unwrap_or_default()
         }
@@ -1256,11 +1332,13 @@ pub async fn overview(workspace_root: Option<&Path>) -> NativeHookOverview {
     } else {
         Vec::new()
     };
-    build_overview_with_imports(
+    let mut overview = build_overview_with_imports(
         config,
-        hook_settings_paths(workspace_root, true),
+        hook_settings_paths(local_root, true),
         imported_layers,
-    )
+    );
+    overview.remote_workspace_unsupported = is_remote_workspace;
+    overview
 }
 
 #[cfg(test)]
@@ -1342,6 +1420,7 @@ pub(crate) fn build_overview_with_imports(
             .into_iter()
             .chain(issues.iter().map(ToString::to_string))
             .collect(),
+        remote_workspace_unsupported: false,
     }
 }
 

@@ -23,6 +23,12 @@ ports；具体 runtime 行为不属于本 crate。
 - `function-agents` 可以拥有 function-agent DTO、prompt/domain policy、response parsing/repair rule、file-shape analysis
   和 Git/AI port trait。
 - `plugin-source` 可以拥有 BitFun 插件包清单数据结构、来源标识、工作区信任记录和纯信任版本变更规则。
+- `remote_surface`（默认 feature）拥有 Product Operation Registry：每个可跨宿主边界的产品操作一行，
+  声明远程工作区立场、Peer Device 立场、CLI peer host 支持情况，以及类型化的 peer 能力列表和
+  `src/generated/` 下的导出产物。宿主与 Web UI 从它派生各自的表，它本身不执行任何操作。
+  设计见 `docs/architecture/remote-surface-contract.md`；聚焦检查：
+  `cargo test -p bitfun-product-domains --no-default-features remote_surface`，之后运行
+  `pnpm run capabilities:generate` 刷新生成投影。
 - `external-sources` 可以拥有开放生态/来源标识、类型化能力 provider 端口、目录 DTO 与版本敏感冲突指纹；
   也可以拥有可执行插件 adapter 输出的生态无关 Agent、Tool 引用与 Skill 根贡献 DTO。这些 DTO 不定义来源格式、
   Host 协议、执行句柄或生命周期；provider 刷新、文件观察、偏好持久化和生命周期协调属于 assembly、services 或 adapters。

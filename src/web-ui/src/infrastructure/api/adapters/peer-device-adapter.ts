@@ -7,6 +7,7 @@ import {
   surfaceIdForDevice,
   type DeviceSurfaceId,
 } from '@/infrastructure/peer-device/deviceSurface';
+import { PEER_CONTROLLER_LOCAL_COMMANDS } from '@/infrastructure/api/generated/remoteSurface';
 import { createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 
@@ -14,211 +15,16 @@ const log = createLogger('PeerDeviceTransport');
 
 /**
  * Commands that must always hit the local Tauri host, even in peer mode.
- * Keep aligned with desktop `peer_host_invoke::LOCAL_ONLY_COMMANDS` and CLI
- * `peer_host/deny.rs`. Account + cloud turn APIs stay on the controller;
- * peer history uses HostInvoke restore. See
- * `src/infrastructure/peer-device/README.md`.
+ *
+ * Derived from the Product Operation Registry
+ * (`bitfun_product_domains::remote_surface`) through the generated
+ * `remoteSurface.ts`; the desktop and CLI peer hosts refuse the same set from
+ * the same registry, so this list is never edited by hand. Account + cloud turn
+ * APIs stay on the controller; peer history uses HostInvoke restore. See
+ * `src/infrastructure/peer-device/README.md` and
+ * `docs/architecture/remote-surface-contract.md`.
  */
-const LOCAL_ONLY_COMMANDS = new Set([
-  'show_main_window',
-  'hide_main_window_after_close_request',
-  'frontend_update_candidate_ready',
-  'get_frontend_update_status',
-  'confirm_frontend_update',
-  'rollback_frontend_update',
-  'quit_app',
-  'minimize_to_tray',
-  'initialize_tray_after_startup',
-  'startup_window_control',
-  'toggle_main_window_fullscreen',
-  'set_main_window_transient_geometry',
-  'get_prevent_sleep_enabled',
-  'set_prevent_sleep_enabled',
-  'restart_app',
-  'check_for_updates',
-  'install_update',
-  'appearance_market_browse',
-  'appearance_market_download_release',
-  'appearance_market_get_listing',
-  'appearance_market_get_review_submission',
-  'appearance_market_list_review_submissions',
-  'appearance_market_list_submissions',
-  'appearance_market_review_submission',
-  'appearance_market_submit_package',
-  'appearance_market_withdraw_submission',
-  'account_login',
-  'account_finalize_login',
-  'account_cancel_pending_login',
-  'account_logout',
-  'account_status',
-  'account_get_credential_hint',
-  'account_token_expired',
-  'account_connect_devices',
-  'account_online_devices',
-  'account_list_devices',
-  'account_delete_device',
-  'account_device_rpc',
-  'account_delegate_to_paired',
-  'account_auto_sync',
-  'account_sync_settings',
-  'account_fetch_settings',
-  'account_sync_session',
-  'account_fetch_synced_sessions',
-  'account_delete_synced_session',
-  'account_export_local_session',
-  'account_export_all_sessions',
-  'account_import_remote_sessions',
-  'account_fetch_session_turns',
-  'account_send_session_to_device',
-  'account_execute_on_device',
-  'peer_host_invoke_complete',
-  'peer_control_attach',
-  'peer_control_detach',
-  'peer_mode_ping',
-  'peer_controller_set_active',
-  // `computer_use_request_permissions` / `computer_use_open_system_settings`
-  // are intentionally NOT local-only: they run on the host that runs the
-  // Computer Use Tool, so Desktop Peer B surfaces B's own OS permission prompts
-  // and settings panes. CLI Peer refuses them in deny.rs and the UI gates the
-  // section on host type. See SessionConfig + peer_host_invoke + cli deny.rs.
-  // Native child-WebView lifecycle belongs to this controller window.
-  'browser_webview_set_agent_target_state',
-  // ProductControl presentation callbacks acknowledge this window's runtime.
-  // The command itself follows the peer product data plane.
-  'mark_bitfun_control_surface_ready',
-  'mark_bitfun_control_surface_unready',
-  'report_bitfun_control_result',
-  // Detached dispatch uses this controller's SSH credentials and observer index.
-  'dispatch_list_targets',
-  'dispatch_probe_target',
-  'dispatch_install_cli_start',
-  'dispatch_install_cli_poll',
-  'dispatch_install_cli_cancel',
-  'dispatch_provision_target',
-  'dispatch_sync_model_config',
-  'dispatch_submit',
-  'dispatch_status',
-  'dispatch_query',
-  'dispatch_cancel',
-  'dispatch_list_jobs',
-  'dispatch_answer',
-  'dispatch_append',
-  'dispatch_continue',
-  'dispatch_sync_result',
-  'dispatch_load_transcript',
-  'dispatch_save_transcript',
-  'remote_connect_get_device_info',
-  'remote_connect_get_lan_ip',
-  'remote_connect_get_lan_network_info',
-  'remote_connect_get_methods',
-  'remote_connect_start',
-  'remote_connect_stop',
-  'remote_connect_stop_bot',
-  'remote_connect_status',
-  'remote_connect_get_form_state',
-  'remote_connect_set_form_state',
-  'remote_connect_configure_custom_server',
-  'remote_connect_configure_bot',
-  'remote_connect_weixin_qr_start',
-  'remote_connect_weixin_qr_poll',
-  'remote_connect_get_bot_verbose_mode',
-  'remote_connect_set_bot_verbose_mode',
-  // One-click relay deploy SSHes from the controller, never the peer host
-  'relay_deploy_preflight',
-  'relay_deploy_install_docker',
-  'relay_deploy_start',
-  'relay_deploy_poll',
-  'relay_deploy_cancel',
-  'relay_deploy_register',
-  'relay_deploy_verify',
-  'speech_list_models',
-  'speech_download_model',
-  'speech_cancel_model_download',
-  'speech_delete_model',
-  'speech_verify_model',
-  'speech_start_input_session',
-  'speech_append_audio_chunk',
-  'speech_finish_input_session',
-  'speech_cancel_input_session',
-  'speech_start_realtime_session',
-  'speech_append_realtime_audio',
-  'speech_commit_realtime_audio',
-  'speech_send_realtime_tool_result',
-  'speech_speak_realtime_text',
-  'speech_cancel_realtime_response',
-  'speech_close_realtime_session',
-  'speech_get_realtime_config',
-  'speech_save_realtime_config',
-  // UI locale is controller app-shell state: it writes the controller's config
-  // file, rebuilds THIS machine's macOS menubar/tray, and drives the UI the user
-  // is looking at. Routing it to a peer both writes the wrong config and rebuilds
-  // the wrong machine's chrome (CLI peer returns unsupported). See PR #2428.
-  'i18n_get_current_language',
-  'i18n_set_language',
-  'i18n_get_supported_languages',
-  'i18n_get_config',
-  'i18n_set_config',
-  // Announcement cards/scheduler are controller app-shell state. get_pending /
-  // get_tips trigger the scheduler (mutate app_open_count + persist); seen /
-  // dismiss / never-show write the controller's announcement state. CLI peer
-  // returns unsupported. Keeping them LOCAL_ONLY also removes them from peer
-  // read-retry (see SIDE_EFFECTING_GET_COMMANDS). See scheduler.rs run().
-  'get_pending_announcements',
-  'get_announcement_tips',
-  'mark_announcement_seen',
-  'dismiss_announcement',
-  'never_show_announcement',
-  'trigger_announcement',
-  // Companion pets live on the controller's desktop. The import zip is picked by
-  // a local dialog on A; its absolute path only exists on A. Peer B cannot read
-  // it, and B's returned spritesheetPath is a B-absolute path A's plugin-fs
-  // cannot open. CLI peer returns unsupported at dispatch. Keeping these
-  // LOCAL_ONLY gates Peer Mode (invariant 10: download destinations stay on the
-  // controller). See PR #2428.
-  'list_agent_companion_pets',
-  'import_agent_companion_pet_package',
-  'delete_agent_companion_pet_package',
-  // Insights is the controller's own usage report: it reads the controller's
-  // session history and writes the HTML to the controller's user_data_dir. In
-  // Peer Mode generate_insights would run on B but listenProgress listens on A,
-  // openReport opens B's absolute path on A, and the 30s mutation timeout fires
-  // while B keeps running. Keep it controller-local so report, progress event
-  // and openPath all land on one machine. (Cross-device insights tracking is
-  // out of scope; this LOCAL gate is the reviewer-asked fix.) See PR #2428.
-  'generate_insights',
-  'get_latest_insights',
-  'load_insights_report',
-  'has_insights_data',
-  'cancel_insights_generation',
-  // IDE control events drive THIS window's panels (window.dispatchEvent). The
-  // listen is local; the result report must use the same transport on both
-  // success and error branches so a request never splits across hosts. CLI peer
-  // returns unsupported. See PR #2428.
-  'report_ide_control_result',
-  // Controller app-shell / local-device commands reached by migrating dynamic
-  // invoke() sites behind the adapter fence. These operate on the controller's
-  // OWN surfaces (embedded webview, DevTools, desktop pet, diagnostics) and a
-  // peer host has no implementation for them, so routing to a peer would be a
-  // regression. Declared LOCAL_ONLY so api.invoke keeps them on the controller.
-  // See PR #2428 (lint fence + dynamic import migration).
-  //
-  // NOTE: the runtime-owning Browser Control and Computer Use commands are NOT
-  // here — they run the agent Tool, so they route to the host that runs the
-  // Tool: Desktop Peer bridges them to its own webview (reads the peer's own
-  // browser/OS), and CLI Peer refuses them in deny.rs (the UI gates the section
-  // on host type). See SessionConfig + peer_host_invoke + cli deny.rs.
-  'browser_webview_create',
-  'browser_webview_eval',
-  'browser_webview_navigate',
-  'browser_webview_reload',
-  'browser_webview_set_bounds',
-  'debug_devtools_available',
-  'debug_open_devtools',
-  'resize_agent_companion_desktop_pet',
-  'show_agent_companion_desktop_pet',
-  'hide_agent_companion_desktop_pet',
-  'append_flow_chat_diagnostics',
-]);
+const LOCAL_ONLY_COMMANDS: ReadonlySet<string> = PEER_CONTROLLER_LOCAL_COMMANDS;
 
 /**
  * Session / workspace / chat / config path — must not wait behind git/SSH/editor

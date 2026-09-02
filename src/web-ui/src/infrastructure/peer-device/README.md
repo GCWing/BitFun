@@ -133,8 +133,12 @@ Still to migrate, in order: the interaction mailbox, then history positions.
 
 7. **Account identity commands are LOCAL_ONLY** and must stay denied on the
    peer host (`account_login`, `account_finalize_login`, logout, device RPC,
-   …). Keep FE adapter, desktop `peer_host_invoke`, and CLI `peer_host/deny`
-   lists aligned.
+   …). The FE adapter, desktop `peer_host_invoke`, and CLI `peer_host` all
+   derive that set from one registry row (`peer: ControllerLocal` in
+   `src/crates/contracts/product-domains/src/remote_surface/table.rs`); the
+   FE set is the generated `PEER_CONTROLLER_LOCAL_COMMANDS`. Do not add a
+   hand-written list on any surface. See
+   `docs/architecture/remote-surface-contract.md`.
 
 8. **`relay_deploy_*` is LOCAL_ONLY.** One-click deploy SSHes from the
    controller to a user-owned host; do not HostInvoke it onto the peer.
@@ -279,9 +283,10 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     host. `git_trust_repository` writes the peer user's global Git
     configuration (`safe.directory`) and tells Git to run hooks from a tree
     they do not own, so it is denied on both the desktop and CLI peer hosts.
-    Keep it out of the FE `LOCAL_ONLY` set: running it on the controller would
-    write an exception for a path that only exists on the peer. A controller
-    surfaces the probe's `manualCommand` instead.
+    Its registry stance is `OperatorOnly`: the generated FE set deliberately
+    omits it, because running it on the controller would write an exception
+    for a path that only exists on the peer. A controller forwards it, receives
+    the explicit refusal, and surfaces the probe's `manualCommand` instead.
 
 16. **ProductControl commands follow the product host; presentation ACKs stay
     with the window.** `product_control_invoke` is a normal product mutation and

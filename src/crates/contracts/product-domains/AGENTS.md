@@ -35,6 +35,14 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
 - `plugin-source` may own BitFun package manifest shapes, source identity,
   fixed package input data, workspace trust records, and pure trust epoch
   transitions.
+- `remote_surface` (default feature) owns the Product Operation Registry: one
+  row per product operation that can cross a host boundary, with its
+  remote-workspace stance, Peer Device stance, CLI peer host support, the
+  typed peer capability list, and the exported artifact under `src/generated/`.
+  Hosts and the Web UI derive their tables from it; it never executes anything.
+  Design: `docs/architecture/remote-surface-contract.md`. Focused check:
+  `cargo test -p bitfun-product-domains --no-default-features remote_surface`,
+  then `pnpm run capabilities:generate` to refresh the generated projections.
 - `external-sources` may own open ecosystem/source identifiers, typed
   capability-provider ports, catalog DTOs, and version-sensitive conflict
   fingerprints. It also owns the provider-neutral Agent, Tool-reference, and

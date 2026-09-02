@@ -595,8 +595,14 @@ struct WorkspaceGitScope {
     remote: bool,
 }
 
+/// Test-only classifier that treats every path as local. Production hosts
+/// must inject a remote-aware classifier; a classifier that answers `false`
+/// for a remote workspace would run Git probes against the controller
+/// filesystem, which is the silent local fallback the remote scenarios forbid.
+#[cfg(test)]
 struct LocalOnlyReviewPlatformWorkspaceClassifier;
 
+#[cfg(test)]
 #[async_trait::async_trait]
 impl ReviewPlatformWorkspaceClassifier for LocalOnlyReviewPlatformWorkspaceClassifier {
     async fn is_remote_workspace_path(&self, _path: &str) -> bool {
@@ -750,8 +756,10 @@ impl ReviewPlatformService {
         }
     }
 
-    /// Creates a local-only owner for services tests and local Git-only hosts.
-    pub fn new_local_only(token_store_path: PathBuf) -> Self {
+    /// Creates a local-only owner for services tests. Production hosts must
+    /// use [`Self::new`] with a remote-aware classifier.
+    #[cfg(test)]
+    pub(crate) fn new_local_only(token_store_path: PathBuf) -> Self {
         Self::new(
             token_store_path,
             Arc::new(LocalOnlyReviewPlatformWorkspaceClassifier),

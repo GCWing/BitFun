@@ -13,7 +13,11 @@ This file applies to `src/apps/desktop`. Use the top-level `AGENTS.md` for repos
 Main areas:
 
 - `src/api/`: Tauri commands
-- `src/api/peer_host_invoke.rs`: Peer Device Mode host-invoke bridge + control attach
+- `src/api/peer_host_invoke.rs`: Peer Device Mode host-invoke bridge + control attach;
+  allow/deny and capabilities come from the Product Operation Registry
+  (`bitfun_product_domains::remote_surface`), not from a local table
+- `src/api/remote_workspace_policy.rs`: closure test proving every registered Tauri
+  command has one registry row
 - `src/lib.rs`, `src/main.rs`: app setup and wiring
 - `src/computer_use/`: OS-specific automation support
 

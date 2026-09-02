@@ -5,7 +5,8 @@
 //! keyboards, Feishu interactive cards, or WeChat numbered text lines.
 //!
 //! There is intentionally no per-platform menu state in this module — menu
-//! semantics live in `command_router::dispatch_im_bot_command_inner`.
+//! semantics live in the command router's `dispatch` entry point in
+//! `bitfun-core::service::remote_connect::bot::command_router`.
 
 use serde::{Deserialize, Serialize};
 

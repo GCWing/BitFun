@@ -87,6 +87,13 @@ fn project_native_hook_overview(
         })
     };
 
+    // The shared projection DTO has no dedicated slot for the remote fact yet,
+    // so it travels as the first issue line: the CLI renders issues verbatim and
+    // this keeps the reason hooks did not run visible next to the rules.
+    let remote_notice = overview
+        .remote_workspace_unsupported
+        .then(|| REMOTE_WORKSPACE_HOOKS_NOTICE.to_string());
+
     NativeHookOverview {
         enabled: overview.enabled,
         project_hooks_enabled: overview.project_hooks_enabled,
@@ -138,9 +145,16 @@ fn project_native_hook_overview(
             )
             .collect(),
         total_handlers: overview.total_handlers,
-        issues: overview.issues.into_iter().map(sanitize_issue).collect(),
+        issues: remote_notice
+            .into_iter()
+            .chain(overview.issues.into_iter().map(sanitize_issue))
+            .collect(),
     }
 }
+
+/// English line shown in `/hooks` when the session workspace is remote.
+const REMOTE_WORKSPACE_HOOKS_NOTICE: &str =
+    "Hooks are not run for this remote workspace: hooks execute only on the host that owns the workspace filesystem, and none of the rules above ran here.";
 
 fn native_hook_help_text() -> String {
     [
@@ -305,4 +319,48 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
     lines.push(String::new());
     lines.push("Manual Hooks remain editable in hooks.json. Imported Hooks are managed through /hooks. Help: /help hooks, /hooks -h, or /hooks --help".to_string());
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod remote_hook_projection_tests {
+    use super::{
+        project_native_hook_overview, render_native_hook_overview, REMOTE_WORKSPACE_HOOKS_NOTICE,
+    };
+
+    fn core_overview(
+        remote_workspace_unsupported: bool,
+    ) -> bitfun_core::native_hooks::NativeHookOverview {
+        bitfun_core::native_hooks::NativeHookOverview {
+            enabled: true,
+            project_hooks_enabled: false,
+            files: Vec::new(),
+            rules: Vec::new(),
+            total_handlers: 0,
+            issues: vec!["Hook event 'PreTool' is not a supported event name".to_string()],
+            remote_workspace_unsupported,
+        }
+    }
+
+    #[test]
+    fn remote_workspace_overview_renders_the_skip_before_configuration_issues() {
+        let workspace = std::path::Path::new("/srv/remote-project");
+        let projected = project_native_hook_overview(core_overview(true), workspace);
+        assert_eq!(
+            projected.issues.first().map(String::as_str),
+            Some(REMOTE_WORKSPACE_HOOKS_NOTICE)
+        );
+        assert_eq!(projected.issues.len(), 2);
+
+        let text = render_native_hook_overview(&projected);
+        assert!(text.contains("Hooks are not run for this remote workspace"));
+        assert!(text.contains("is not a supported event name"));
+    }
+
+    #[test]
+    fn local_workspace_overview_does_not_mention_remote_workspaces() {
+        let workspace = std::path::Path::new("/srv/local-project");
+        let projected = project_native_hook_overview(core_overview(false), workspace);
+        assert_eq!(projected.issues.len(), 1);
+        assert!(!render_native_hook_overview(&projected).contains("remote workspace"));
+    }
 }
