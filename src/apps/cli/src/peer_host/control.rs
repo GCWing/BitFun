@@ -7,6 +7,9 @@ use serde_json::{json, Value};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
 use bitfun_core::service::remote_connect::DeviceIdentity;
+use bitfun_product_domains::remote_surface::{
+    capability_map, digest as remote_surface_digest, PeerHostKind,
+};
 
 #[derive(Default)]
 struct ControllerRegistry {
@@ -103,25 +106,18 @@ pub(crate) fn peer_mode_ping_value() -> Value {
         "peer": true,
         "device_id": device_id,
         // Declares which kind of host answered so the controller can resolve
-        // capabilities that an older CLI did not advertise. An older CLI
-        // (pre-`50b76516`) omits `cancel_tool`/`tool_catalog`, and older CLI
-        // hosts also lack `submit_user_answers`; reporting `host_type: "cli"`
-        // lets the controller gate those controls instead of showing actions
-        // that silently fail. See PR #2428 round 5 #1.
-        "host_type": "cli",
-        "capabilities": {
-            "idempotent_dialog_submit": true,
-            "targeted_session_rollback": true,
-            "token_usage_statistics": true,
-            "product_control_v1": true,
-            // Per-tool interrupt, read-only tool catalog, and Runtime-owned
-            // question responses are implemented on this host. Advertising
-            // them lets the controller gate the matching UI on real
-            // capabilities instead of guessing.
-            "cancel_tool": true,
-            "tool_catalog": true,
-            "user_question_response": true,
-        },
+        // capabilities that an older CLI did not advertise. Older CLI hosts
+        // omitted `cancel_tool`/`tool_catalog` and lacked
+        // `submit_user_answers`; reporting the host kind lets the controller
+        // gate those controls instead of showing actions that silently fail.
+        "host_type": PeerHostKind::Cli.as_wire_str(),
+        // Only advertised keys, all `true`, taken from the Product Operation
+        // Registry so the desktop host, this host and the generated frontend
+        // artifact publish and consume one capability list.
+        "capabilities": Value::Object(capability_map(PeerHostKind::Cli)),
+        // Additive: lets a controller detect that this host and its own
+        // generated tables were built from different registries.
+        "surface_registry_digest": remote_surface_digest(),
     })
 }
 

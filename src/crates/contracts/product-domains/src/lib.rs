@@ -11,6 +11,7 @@ pub mod native_hooks;
 pub mod product_control;
 pub mod product_control_owner_registry;
 pub mod product_search;
+pub mod remote_surface;
 pub mod tool_permissions;
 
 #[cfg(feature = "appearance-market")]

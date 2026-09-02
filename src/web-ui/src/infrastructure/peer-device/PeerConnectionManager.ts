@@ -16,6 +16,7 @@
  */
 
 import { PeerDeviceTransportAdapter } from '@/infrastructure/api/adapters/peer-device-adapter';
+import type { PeerHostCapabilityId } from '@/infrastructure/api/generated/remoteSurface';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { createLogger } from '@/shared/utils/logger';
 import type { DeviceSurfaceId } from './deviceSurface';
@@ -49,13 +50,23 @@ export interface PeerHostCapabilities {
   readonly miniAppAgentContextFilesV1: boolean;
   /** Typed ProductControl HostInvoke, including shared config read-back. */
   readonly productControlV1?: boolean;
+  /**
+   * ProductControl definitions that need a host-native provider or a live
+   * presentation surface. The controller does not pre-check these: the peer
+   * host executes the same owner handler and returns a typed unsupported
+   * result when the definition needs a surface it lacks (peer-device README,
+   * invariant 16). They are kept here so a future pre-send gate reads the
+   * negotiated value instead of guessing by host kind.
+   */
   readonly productControlNativeV1?: boolean;
   readonly productControlPresentationV1?: boolean;
   /**
-   * Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal
-   * Interrupt button. `null` = the host's `peer_mode_ping` did not advertise
-   * the field (older host): resolve via `hostKind` — an older Desktop always
-   * implemented cancel_tool (keep the button), an older CLI never did (hide it).
+   * Host implements `cancel_tool` (per-tool interrupt). `null` = the host's
+   * `peer_mode_ping` did not advertise the field (older host): resolve via
+   * `hostKind` — an older Desktop always implemented cancel_tool, an older CLI
+   * never did. The controller currently has no consumer (the Terminal
+   * Interrupt button left with the legacy TerminalControl tool); hosts keep
+   * advertising it for older controllers that still render that button.
    */
   readonly cancelTool: boolean | null;
   /**
@@ -137,18 +148,15 @@ interface HostInvokeEnvelope {
 
 interface PeerModePingResult {
   host_type?: string;
-  capabilities?: {
-    idempotent_dialog_submit?: boolean;
-    targeted_session_rollback?: boolean;
-    token_usage_statistics?: boolean;
-    miniapp_agent_context_files_v1?: boolean;
-    product_control_v1?: boolean;
-    product_control_native_v1?: boolean;
-    product_control_presentation_v1?: boolean;
-    cancel_tool?: boolean;
-    tool_catalog?: boolean;
-    user_question_response?: boolean;
-  };
+  /**
+   * Only advertised keys are present, each `true`; a missing key means the
+   * host predates that capability and is resolved through `host_type`. The
+   * key set is the registry's (`PEER_HOST_CAPABILITY_IDS`), shared with both
+   * peer hosts, so a probe cannot ask for a key no host will ever send.
+   */
+  capabilities?: Partial<Record<PeerHostCapabilityId, boolean>>;
+  /** Additive: digest of the registry the host was built from. */
+  surface_registry_digest?: string;
 }
 
 const NO_CAPABILITIES: PeerHostCapabilities = {

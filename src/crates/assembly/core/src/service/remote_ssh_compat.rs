@@ -3,9 +3,28 @@
 //! The concrete SSH facade is compiled only by `remote-workspace`. Local Agent
 //! Runtime code still shares the stable workspace/session identity helpers
 //! owned by `bitfun-services-core`.
+//!
+//! This build cannot execute against a remote workspace. Callers that hold a
+//! remote marker must refuse instead of reading the controller filesystem;
+//! see [`workspace_state::remote_workspace_support`].
+
+/// Whether the running binary can execute workspace IO against a remote
+/// SSH/Docker workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteWorkspaceSupport {
+    /// The `remote-workspace` feature is compiled in; remote paths route to
+    /// the registered SSH/Docker provider.
+    Available,
+    /// The `remote-workspace` feature is not compiled in. A workspace or
+    /// session that carries a remote marker must be refused with a typed
+    /// error; it must never be served from the controller filesystem.
+    NotCompiled,
+}
 
 pub mod workspace_state {
     use std::path::PathBuf;
+
+    pub use super::RemoteWorkspaceSupport;
 
     pub use bitfun_services_core::workspace_identity::{
         canonicalize_local_workspace_root, local_workspace_roots_equal,
@@ -53,8 +72,74 @@ pub mod workspace_state {
         )
     }
 
-    pub async fn is_remote_path(_path: &str) -> bool {
-        false
+    /// Whether this binary can execute against remote SSH/Docker workspaces.
+    ///
+    /// Callers that hold a remote marker (a persisted `remote_connection_id`,
+    /// an explicit remote scope, a remote session binding, or a workspace
+    /// record of kind `Remote`) must consult this before touching the
+    /// controller filesystem; this build always answers `NotCompiled`.
+    pub fn remote_workspace_support() -> RemoteWorkspaceSupport {
+        RemoteWorkspaceSupport::NotCompiled
+    }
+
+    /// Error for a remote-marked request in a build without remote workspace
+    /// support. Shared wording so every refusal names the missing feature and
+    /// states that no local fallback was attempted.
+    pub fn remote_workspace_not_compiled_message(path: &str) -> String {
+        format!(
+            "Remote workspaces are not compiled into this BitFun host (feature `remote-workspace`); refusing to read the local filesystem for a remote path: {path}"
+        )
+    }
+
+    /// Root of the opened workspace record of kind `Remote` that owns `path`,
+    /// if any. The persisted workspace record is the only remote marker a
+    /// build without the SSH registry can consult.
+    pub async fn persisted_remote_workspace_root(path: &str) -> Option<String> {
+        use crate::service::workspace::manager::WorkspaceKind;
+
+        let service = crate::service::workspace::get_global_workspace_service()?;
+        let needle = normalize_remote_workspace_path(path);
+        service
+            .get_opened_workspaces()
+            .await
+            .into_iter()
+            .filter(|workspace| workspace.workspace_kind == WorkspaceKind::Remote)
+            .map(|workspace| {
+                normalize_remote_workspace_path(&workspace.root_path.to_string_lossy())
+            })
+            .find(|root| remote_posix_path_is_under_root(&needle, root))
+    }
+
+    /// POSIX prefix check for remote workspace paths. Remote paths are POSIX on
+    /// every client OS, so this never uses host `std::path` semantics.
+    pub fn remote_posix_path_is_under_root(path: &str, root: &str) -> bool {
+        if root == "/" {
+            return path.starts_with('/');
+        }
+        path == root
+            || path
+                .strip_prefix(root)
+                .is_some_and(|rest| rest.starts_with('/'))
+    }
+
+    /// Whether `path` belongs to a workspace this host knows to be remote.
+    ///
+    /// Without the `remote-workspace` feature there is no SSH registry, so the
+    /// persisted workspace record is the only source of truth. A `true` answer
+    /// means the caller must refuse: this build cannot serve the workspace and
+    /// must not read the controller filesystem in its place.
+    pub async fn is_remote_path(path: &str) -> bool {
+        match persisted_remote_workspace_root(path).await {
+            Some(root) => {
+                log::warn!(
+                    "Remote workspace support is not compiled into this host; a remote workspace path was refused instead of reading the local filesystem: path={}, remote_root={}",
+                    path,
+                    root
+                );
+                true
+            }
+            None => false,
+        }
     }
 }
 

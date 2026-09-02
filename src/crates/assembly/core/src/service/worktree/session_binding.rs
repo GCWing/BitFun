@@ -12,6 +12,7 @@
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::keyed_lock::KeyedAsyncLock;
 use crate::agentic::session::{SessionExecutionBindingError, SessionExecutionBindingUpdate};
+use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::worktree::{
     WorktreeCreateRequest, WorktreeListRequest, WorktreeRemoveRequest, WorktreeService,
@@ -168,12 +169,22 @@ async fn load_binding_context(
                         format!("Session not found: {}", request.session_id),
                     )
                 })?;
-            let transition_blocker = (metadata.turn_count > 0).then(|| {
-                error(
+            let transition_blocker = if metadata.turn_count > 0 {
+                Some(error(
                     WorktreeErrorCode::WorktreeBusy,
                     "Worktree isolation can only be changed before the session's first message",
-                )
-            });
+                ))
+            } else if persisted_session_is_remote(metadata.workspace_hostname.as_deref()) {
+                // The persisted record carries the remote marker itself, so a
+                // build without the SSH registry still refuses here instead
+                // of creating a controller-local worktree for a remote path.
+                Some(error(
+                    WorktreeErrorCode::RemoteUnsupported,
+                    "Managed worktrees are not supported for remote SSH workspaces yet",
+                ))
+            } else {
+                None
+            };
 
             let workspace_path = metadata
                 .workspace_path
@@ -217,6 +228,14 @@ async fn load_binding_context(
         execution_target,
         transition_blocker,
     })
+}
+
+/// A persisted session names its workspace host; anything but the local host
+/// marks the session as remote even when no SSH connection is registered.
+fn persisted_session_is_remote(workspace_hostname: Option<&str>) -> bool {
+    workspace_hostname
+        .map(str::trim)
+        .is_some_and(|host| !host.is_empty() && host != LOCAL_WORKSPACE_SSH_HOST)
 }
 
 fn binding_action(
@@ -438,11 +457,20 @@ impl WorktreeService {
 #[cfg(test)]
 mod tests {
     use super::{
-        binding_action, error, SessionBindingAction, SessionBindingContext,
-        WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS,
+        binding_action, error, persisted_session_is_remote, SessionBindingAction,
+        SessionBindingContext, WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS,
     };
     use bitfun_core_types::{SessionExecutionTarget, WorktreeErrorCode};
     use std::time::Duration;
+
+    #[test]
+    fn persisted_workspace_hostname_marks_remote_sessions() {
+        assert!(!persisted_session_is_remote(None));
+        assert!(!persisted_session_is_remote(Some("localhost")));
+        assert!(!persisted_session_is_remote(Some("   ")));
+        assert!(persisted_session_is_remote(Some("build.example.test")));
+        assert!(persisted_session_is_remote(Some("_unresolved")));
+    }
 
     #[test]
     fn binding_request_keeps_legacy_callers_compatible() {

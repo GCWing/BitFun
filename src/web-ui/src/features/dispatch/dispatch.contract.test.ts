@@ -5,6 +5,7 @@ import {
   BASE_DISPATCH_CAPABILITIES,
   DISPATCH_PROTOCOL_VERSION,
 } from './dispatchPreflight';
+import { PEER_CONTROLLER_LOCAL_COMMANDS } from '@/infrastructure/api/generated/remoteSurface';
 
 const OUTBOUND_DISPATCH_COMMANDS = [
   'dispatch_list_targets',
@@ -34,6 +35,35 @@ function read(relativePath: string): string {
 }
 
 describe('dispatch controller-only routing contract', () => {
+  // The three peer surfaces (Web transport, Desktop host, CLI host) no longer
+  // keep their own deny tables: all derive from the Product Operation
+  // Registry. Pinning the registry rows therefore pins every surface at once.
+  const registry = JSON.parse(
+    read('../../../../../src/crates/contracts/product-domains/src/generated/remote-surface-registry.json'),
+  ) as {
+    operations: Array<{ id: string; surface: string; peer: { kind: string } }>;
+  };
+  const byId = new Map(registry.operations.map(operation => [operation.id, operation]));
+
+  it('keeps every outbound command controller-local in the registry', () => {
+    for (const command of [...OUTBOUND_DISPATCH_COMMANDS, 'dispatch_continue']) {
+      const operation = byId.get(command);
+      expect(operation, command).toBeDefined();
+      expect(operation?.peer.kind, command).toBe('controller_local');
+      expect(PEER_CONTROLLER_LOCAL_COMMANDS.has(command), command).toBe(true);
+    }
+  });
+
+  it('routes the target verb family to the host control plane, never the controller', () => {
+    const targets = registry.operations.filter(operation => operation.id.startsWith('dispatch_target_'));
+    expect(targets).toHaveLength(15);
+    for (const operation of targets) {
+      expect(operation.peer.kind, operation.id).toBe('host_control_plane');
+      expect(operation.surface, operation.id).toBe('host_invoke_only');
+      expect(PEER_CONTROLLER_LOCAL_COMMANDS.has(operation.id), operation.id).toBe(false);
+    }
+  });
+
   const tables = [
     {
       name: 'Web peer transport',
@@ -48,14 +78,6 @@ describe('dispatch controller-only routing contract', () => {
       source: read('../../../../../src/apps/cli/src/peer_host/deny.rs'),
     },
   ];
-
-  for (const table of tables) {
-    it(`keeps every outbound command local in the ${table.name}`, () => {
-      for (const command of OUTBOUND_DISPATCH_COMMANDS) {
-        expect(table.source).toMatch(new RegExp(`['"]${command}['"]`));
-      }
-    });
-  }
 
   // Preparing a target means installing the signed release and nothing else.
   // Compiling BitFun on someone else's machine is not a command this client
@@ -88,16 +110,20 @@ describe('dispatch wire contract single source', () => {
     );
   });
 
-  it('requires only capabilities the shared Rust contract defines', () => {
-    for (const capability of BASE_DISPATCH_CAPABILITIES) {
-      if (capability === 'detached_worker') {
-        expect(contractSource).toContain(
-          `DISPATCH_DETACHED_WORKER_CAPABILITY: &str = "${capability}"`,
-        );
-        continue;
-      }
-      expect(contractSource).toContain(`"${capability}",`);
-    }
+  it('requires exactly the capabilities the shared Rust contract requires', () => {
+    // `dispatch_required_target_capabilities()` = the unconditional base list
+    // plus the platform-conditional detached worker. Parse both from the Rust
+    // source so a capability added on either side fails here, in both
+    // directions, instead of at runtime probe.
+    const baseBlock = /DISPATCH_BASE_TARGET_CAPABILITIES: &\[&str\] = &\[([\s\S]*?)\n\];/u.exec(contractSource);
+    expect(baseBlock).not.toBeNull();
+    const rustRequired = new Set(
+      Array.from(baseBlock![1].replace(/\/\/[^\n]*/g, '').matchAll(/"([^"]+)"/g), match => match[1]),
+    );
+    const detached = /DISPATCH_DETACHED_WORKER_CAPABILITY: &str = "([^"]+)"/u.exec(contractSource);
+    expect(detached).not.toBeNull();
+    rustRequired.add(detached![1]);
+    expect(new Set(BASE_DISPATCH_CAPABILITIES)).toEqual(rustRequired);
   });
 
   it('keeps the versioned feature capabilities required on both sides', () => {

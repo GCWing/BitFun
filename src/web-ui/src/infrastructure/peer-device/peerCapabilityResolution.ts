@@ -14,7 +14,10 @@ import type { PeerHostCapabilities } from './PeerConnectionManager';
  *   (`true`); an old CLI never did (`false`). `hostKind === null` (truly
  *   unknown / still probing) stays optimistic.
  *
- * Mirrors {@link resolveCanCancelTool} for `cancel_tool`. See PR #2428 round 5 #1.
+ * `cancel_tool` is resolved by the same rule when a consumer needs it. The
+ * Terminal Interrupt button that used to consume it left with the legacy
+ * TerminalControl tool; hosts keep advertising the capability for older
+ * controllers that still render that button. See PR #2428 round 5 #1.
  */
 export function canQueryToolCatalogOnSurface(
   peerActive: boolean,

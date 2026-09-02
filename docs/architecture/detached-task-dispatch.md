@@ -107,8 +107,10 @@ commit. When the commit is reachable, the target creates the job worktree and
 branch at:
 
 ```text
-~/.bitfun/dispatch/worktrees/<jobId>
+~/.bitfun/dispatch/worktrees/<repoKey>/<project>-<short job id>
 ```
+
+(see "Workspace naming" below for how the leaf is derived)
 
 If the target cannot reach the commit, it returns `needsBundle` and the commits
 it already has. The controller then creates a Git bundle advertised by the
@@ -170,9 +172,13 @@ synchronization request can be retried after the lock clears.
 
 ## Protocol
 
-The target CLI owns transport-independent dispatch protocol version 4 and the
-durable store. Version 4 is intentionally incompatible with targets that do
-not implement Git worktree delivery. SSH submission can repair that mismatch
+The target CLI owns transport-independent dispatch protocol version 5 and the
+durable store; `DISPATCH_PROTOCOL_VERSION` in
+`src/crates/services/services-core/src/dispatch_contract.rs` is the single
+source, and the Web UI pins its copy against that file. Version 4 introduced
+Git worktree delivery and is intentionally incompatible with targets that do
+not implement it; version 5 adds the target-owned reasoning catalog and
+per-turn preset selection (`reasoning_presets`). SSH submission can repair that mismatch
 through signed release installation; an account device must be upgraded as a
 BitFun device.
 

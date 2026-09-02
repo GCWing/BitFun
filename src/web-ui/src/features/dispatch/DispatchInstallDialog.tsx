@@ -33,17 +33,6 @@ const log = createLogger('DispatchInstallDialog');
 const DIALOG_TITLE_ID = 'dispatch-install-dialog-title';
 type TargetPreparationPhase = 'installing' | 'provisioning' | 'cancelling';
 
-/**
- * The approval policy is chosen in the composer, per turn, so a target is only
- * usable when it can serve every policy the user may later switch to. This
- * mirrors the capability-probe branch on the controller, which requires the
- * complete approval surface whenever no single policy is named yet.
- */
-const APPROVAL_DISPATCH_CAPABILITIES = [
-  'approval_auto',
-  'approval_reject_and_report',
-  'approval_remote',
-];
 
 interface DispatchInstallDialogProps {
   open: boolean;
@@ -306,10 +295,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   }, [closeDialog, preparationPhase]);
 
   const protocol = probe?.protocol;
-  const requiredCapabilities = [
-    ...BASE_DISPATCH_CAPABILITIES,
-    ...APPROVAL_DISPATCH_CAPABILITIES,
-  ];
+  const requiredCapabilities = [...BASE_DISPATCH_CAPABILITIES];
   const missingCapabilities = protocol
     ? requiredCapabilities.filter(capability => !protocol.capabilities.includes(capability))
     : requiredCapabilities;

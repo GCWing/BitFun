@@ -157,6 +157,26 @@ mod tests {
         assert!(!is_target_command("account_device_rpc"));
     }
 
+    /// The registry marks every `dispatch_target_*` name as host control plane
+    /// (routed to the dispatch runner before the peer bridge); this table must
+    /// answer exactly that family, no more and no less.
+    #[test]
+    fn target_command_family_matches_registry() {
+        use bitfun_product_domains::remote_surface::{operations, PeerStance};
+        for op in operations() {
+            let registry_says_target = op.id.starts_with("dispatch_target_");
+            assert_eq!(
+                is_target_command(op.id),
+                registry_says_target,
+                "{} target-command classification disagrees with the registry",
+                op.id
+            );
+            if registry_says_target {
+                assert_eq!(op.peer, PeerStance::HostControlPlane, "{}", op.id);
+            }
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn cli_discovery_accepts_a_symlink_to_a_regular_binary() {

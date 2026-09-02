@@ -1549,71 +1549,65 @@ impl ConversationCoordinator {
 
     /// Build `WorkspaceServices` from a resolved `WorkspaceBinding`.
     /// For remote bindings, wires up SSH-backed FS/shell; for local ones,
-    /// returns local implementations.
+    /// returns local implementations. `Ok(None)` only means "no workspace
+    /// bound": a remote binding whose provider cannot be built is an error,
+    /// because a context without workspace services would otherwise fall back
+    /// to the controller filesystem for a remote session.
     async fn build_workspace_services(
         binding: &Option<WorkspaceBinding>,
-    ) -> Option<crate::agentic::workspace::WorkspaceServices> {
-        let binding = binding.as_ref()?;
+    ) -> BitFunResult<Option<crate::agentic::workspace::WorkspaceServices>> {
+        let Some(binding) = binding.as_ref() else {
+            return Ok(None);
+        };
 
-        if binding.is_remote() {
-            #[cfg(not(feature = "remote-workspace"))]
-            return None;
-
-            #[cfg(feature = "remote-workspace")]
-            {
-                let manager =
-                    match crate::service::remote_ssh::workspace_state::get_remote_workspace_manager(
-                    ) {
-                        Some(m) => m,
-                        None => {
-                            log::warn!(
-                            "build_workspace_services: RemoteWorkspaceStateManager not initialized"
-                        );
-                            return None;
-                        }
-                    };
-                let ssh_manager = match manager.get_ssh_manager().await {
-                    Some(m) => m,
-                    None => {
-                        log::warn!(
-                            "build_workspace_services: SSH manager not available in state manager"
-                        );
-                        return None;
-                    }
-                };
-                let file_service = match manager.get_file_service().await {
-                    Some(f) => f,
-                    None => {
-                        log::warn!(
-                            "build_workspace_services: File service not available in state manager"
-                        );
-                        return None;
-                    }
-                };
-                let connection_id = match binding.connection_id() {
-                    Some(id) => id.to_string(),
-                    None => {
-                        log::warn!(
-                            "build_workspace_services: No connection_id in workspace binding"
-                        );
-                        return None;
-                    }
-                };
-                log::info!(
-                    "build_workspace_services: Built remote services for connection_id={}",
-                    connection_id
-                );
-                Some(crate::agentic::workspace::remote_workspace_services(
-                    connection_id,
-                    file_service,
-                    ssh_manager,
-                    binding.root_path_string(),
-                ))
-            }
-        } else {
-            Some(crate::agentic::workspace::local_workspace_services(
+        if !binding.is_remote() {
+            return Ok(Some(crate::agentic::workspace::local_workspace_services(
                 binding.root_path_string(),
+            )));
+        }
+
+        let connection_id = binding.connection_id().ok_or_else(|| {
+            BitFunError::service(format!(
+                "Remote workspace services are unavailable for {}: the workspace binding has no connection id; no local fallback was attempted",
+                binding.root_path_string()
             ))
+        })?;
+
+        #[cfg(not(feature = "remote-workspace"))]
+        {
+            Err(BitFunError::NotImplemented(format!(
+                "Remote workspace services are unavailable for connection {connection_id}: remote workspaces are not compiled into this BitFun host (feature `remote-workspace`); no local fallback was attempted"
+            )))
+        }
+
+        #[cfg(feature = "remote-workspace")]
+        {
+            let unavailable = |reason: &str| {
+                BitFunError::service(format!(
+                    "Remote workspace services are unavailable for connection {connection_id}: {reason}; no local fallback was attempted"
+                ))
+            };
+            let manager =
+                crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
+                    .ok_or_else(|| unavailable("remote workspace state is not initialized"))?;
+            let ssh_manager = manager
+                .get_ssh_manager()
+                .await
+                .ok_or_else(|| unavailable("the SSH connection manager is not available"))?;
+            let file_service = manager
+                .get_file_service()
+                .await
+                .ok_or_else(|| unavailable("the remote file service is not available"))?;
+            log::info!(
+                "build_workspace_services: Built remote services for connection_id={}",
+                connection_id
+            );
+            Ok(Some(crate::agentic::workspace::remote_workspace_services(
+                connection_id.to_string(),
+                file_service,
+                ssh_manager,
+                binding.root_path_string(),
+            )))
         }
     }
 
@@ -5618,7 +5612,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         cancellation_token: CancellationToken,
         commit_gate: Arc<ManualCompactionCommitGate>,
     ) -> BitFunResult<()> {
-        let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await;
+        let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await?;
         let manual_execution_context = ExecutionContext {
             session_id: session_id.clone(),
             dialog_turn_id: turn_id.clone(),
@@ -6146,7 +6140,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         // Build WorkspaceServices based on the workspace type
-        let workspace_services = Self::build_workspace_services(&session_workspace).await;
+        let workspace_services = Self::build_workspace_services(&session_workspace).await?;
 
         info!(
             "Dialog turn workspace context: session_id={}, workspace_path={:?}, is_remote={}, workspace_services={}",
@@ -6945,7 +6939,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
         let runtime_agent_type = primary_agent_binding.runtime_agent_key;
         let external_agent_generation_lease = primary_agent_binding.lease;
-        let workspace_services = Self::build_workspace_services(&session_workspace).await;
+        let workspace_services = Self::build_workspace_services(&session_workspace).await?;
         let persisted_subagent_context = self
             .load_persisted_subagent_continuation_context(&session)
             .await;
@@ -9919,7 +9913,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             ));
         }
 
-        let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
+        let subagent_services = Self::build_workspace_services(&subagent_workspace).await?;
         let execution_context = ExecutionContext {
             session_id: session_id.clone(),
             dialog_turn_id: dialog_turn_id.clone(),
@@ -14092,7 +14086,9 @@ impl bitfun_runtime_ports::AgentUserShellCommandPort for ConversationCoordinator
                 )))
             })?;
         let workspace = Self::build_workspace_binding(&session.config).await;
-        let workspace_services = Self::build_workspace_services(&workspace).await;
+        let workspace_services = Self::build_workspace_services(&workspace)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
         let terminal_port = self.terminal_port();
         let remote_exec_port = self.remote_exec_port();
         let mut options =
@@ -14933,8 +14929,8 @@ mod tests {
         assert!(
             ConversationCoordinator::build_workspace_services(&Some(binding))
                 .await
-                .is_none(),
-            "a binary without remote-workspace must not create local services for a remote binding"
+                .is_err(),
+            "a remote binding without a reachable provider must be an error, never local services"
         );
 
         for incomplete in [
@@ -14956,6 +14952,45 @@ mod tests {
                 "incomplete remote metadata must fail closed instead of becoming local"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_services_unavailable_is_an_error() {
+        let binding = ConversationCoordinator::build_workspace_binding(&SessionConfig {
+            workspace_path: Some("/srv/remote-project".to_string()),
+            remote_connection_id: Some("ssh-user@example.test:22".to_string()),
+            remote_ssh_host: Some("example.test".to_string()),
+            ..SessionConfig::default()
+        })
+        .await
+        .expect("remote metadata must remain a remote binding");
+
+        // No remote workspace manager is initialized in this test binary, so
+        // the provider cannot be built. The turn must fail with a typed error
+        // that names the connection instead of running the session against
+        // the controller filesystem.
+        let error = ConversationCoordinator::build_workspace_services(&Some(binding))
+            .await
+            .expect_err("an unserved remote binding must not yield local services");
+        let message = error.to_string();
+        assert!(
+            message.contains("ssh-user@example.test:22"),
+            "error must name the connection: {message}"
+        );
+        assert!(
+            message.contains("no local fallback was attempted"),
+            "error must state that no fallback happened: {message}"
+        );
+        #[cfg(not(feature = "remote-workspace"))]
+        assert!(
+            matches!(error, BitFunError::NotImplemented(_)),
+            "builds without remote-workspace must report the missing feature: {message}"
+        );
+
+        let local = ConversationCoordinator::build_workspace_services(&None)
+            .await
+            .expect("no binding is not an error");
+        assert!(local.is_none());
     }
 
     #[test]

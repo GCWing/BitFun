@@ -226,9 +226,16 @@ FS) and must not be mixed with Peer Device Mode.
   controller-only interactions still follow their owner's mailbox or fail-closed
   policy.
 - Local-only commands (window chrome, updater, account login/logout, peer
-  control plane) never execute on the peer on behalf of a controller.
+  control plane) never execute on the peer on behalf of a controller. Which
+  commands those are is declared once, per command, in the Product Operation
+  Registry (`bitfun_product_domains::remote_surface`); the desktop host, the
+  CLI host, and the Web UI transport adapter derive their tables from it. See
+  [remote-surface-contract.md](remote-surface-contract.md).
 - Unsupported or denied commands fail loudly; they must not fall back to the
-  local host (that would leak local content).
+  local host (that would leak local content). The CLI host distinguishes
+  "controller-owned", "unsupported on a CLI host (reason)", "retired", and
+  "unknown to this host version" so a controller can tell a policy refusal
+  from a version mismatch.
 
 ## Transport
 
@@ -240,7 +247,7 @@ FS) and must not be mixed with Peer Device Mode.
   editor RPCs so hydrate is not starved into relay HTTP 504s. Terminal commands
   are always interactive priority, and one slot is kept free from normal and
   low-priority work so input cannot be trapped behind slow polling requests.
-- Idempotent read HostInvokes use a 10s per-attempt deadline and at most two
+- Idempotent read HostInvokes use a 10s per-attempt deadline and at most four
   exponential-backoff retries. Mutating commands use a 30s deadline and are
   not replayed unless both ends share an explicit idempotency contract.
   `start_dialog_turn` and `start_acp_dialog_turn` use their stable
@@ -349,6 +356,8 @@ and may represent a different operating system.
 
 ## Ownership
 
+- Command policy and peer capabilities (all surfaces):
+  `src/crates/contracts/product-domains/src/remote_surface/`
 - Desktop host invoke / fan-out: `src/apps/desktop/src/api/peer_host_invoke.rs`,
   `remote_connect_api.rs`
 - CLI host invoke / fan-out: `src/apps/cli/src/peer_host/` (Core registry; no

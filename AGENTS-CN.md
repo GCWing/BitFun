@@ -155,20 +155,22 @@ BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 
 
 各场景的具体约束：
 
-- **远程工作区**：每个桌面端 Tauri 命令都必须在
-  [`remote_workspace_policy.rs`](src/apps/desktop/src/api/remote_workspace_policy.rs)
-  中声明策略；该文件的契约测试会拒绝没有显式策略的新命令，并禁止 `LegacyUnaudited`
-  存量清单增长。
+- **远程工作区**：每个桌面端 Tauri 命令在 Product Operation Registry
+  （[`remote_surface/table.rs`](src/crates/contracts/product-domains/src/remote_surface/table.rs)）
+  中有且只有一行，声明其远程工作区立场。桌面端闭包测试与能力生成器会拒绝没有对应行的
+  新命令，注册表的 ratchet 禁止 `Unaudited` 存量清单增长。见
+  [remote-surface-contract.md](docs/architecture/remote-surface-contract.md)。
 - **远程控制**：mobile web 和 IM Bot 是通过 `RemoteCommand` wire 协议和 bot command
   router / menu 触达会话的，不走 Web UI。新增或迁移会话级能力时——工作区与助手选择、
   会话生命周期、模式、模型、审批、附件——要同步扩展这些形态，或让它们给出明确的
   不支持回复。
 - **多端互控**：产品命令默认代理到 peer 执行。必须留在控制端的命令（窗口装饰、更新器、
-  账号身份、本地 OS 自动化）要在三份保持同步的清单中一起禁用：
-  [`peer_host_invoke.rs`](src/apps/desktop/src/api/peer_host_invoke.rs)、
-  [`deny.rs`](src/apps/cli/src/peer_host/deny.rs) 和
-  [`peer-device-adapter.ts`](src/web-ui/src/infrastructure/api/adapters/peer-device-adapter.ts)。
-  改动 session、account 或 hydrate 路径前，先读 peer-device README 的 invariants。
+  账号身份、本地 OS 自动化）在同一注册表行中声明为 `ControllerLocal`；桌面端 peer host、
+  CLI peer host 和 Web UI transport adapter 都从它派生拒绝集合，
+  `pnpm run check:core-boundaries` 会拒绝手写清单。CLI host 要执行的命令需要处理分支加
+  行内 `cli_peer: HANDLED`（`src/apps/cli/src/peer_host/commands/mod.rs` 的闭包测试保持
+  两者一致）。Peer 能力是类型化的 `PeerHostCapability`，由注册表发布。改动 session、
+  account 或 hydrate 路径前，先读 peer-device README 的 invariants。
 - **Dispatch 分离任务**：任务在目标端以 CLI delivery profile 无界面运行，没有交互宿主，
   也不保证控制端在线。控制端只是观察者，不是 runtime 或文件系统代理。不要引入依赖提交方
   常驻的行为；dispatch 协议版本和目标端必备 capability 属于兼容契约——新的目标端要求要走

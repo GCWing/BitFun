@@ -10,6 +10,7 @@ use crate::api::path_target::{
 };
 use crate::api::search_api::{
     build_content_search_request, group_search_results, prepare_content_search_runner,
+    remote_content_search_refusal, remote_content_search_refusal_message,
     search_file_contents_via_workspace_search, search_metadata_from_content_result,
     should_use_workspace_search, SearchMetadataResponse,
 };
@@ -366,6 +367,10 @@ fn serialize_search_response(
 #[derive(Debug, Deserialize)]
 pub struct OpenWorkspaceRequest {
     pub path: String,
+    /// Optional SSH connection scope for a remote root that is already known to BitFun. Path-only
+    /// callers may omit it; the workspace service then resolves the connection from history.
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -519,11 +524,15 @@ pub struct ResetWorkspacePersonaFilesRequest {
 #[derive(Debug, Deserialize)]
 pub struct CheckPathExistsRequest {
     pub path: String,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetFileMetadataRequest {
     pub path: String,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -561,6 +570,8 @@ pub struct SearchFilesRequest {
     pub root_path: String,
     pub pattern: String,
     pub search_content: bool,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub search_id: Option<String>,
     #[serde(default)]
@@ -1214,9 +1225,17 @@ pub async fn open_workspace(
     app: tauri::AppHandle,
     request: OpenWorkspaceRequest,
 ) -> Result<WorkspaceInfoDto, String> {
+    // A remote root does not exist on the controller filesystem, so a plain local open would either
+    // fail with a misleading "path does not exist" or, on a same-shaped controller path, silently
+    // open the wrong directory. `open_workspace_resolving_known` restores the SSH scope first and
+    // falls back to the local open only when no remote workspace owns this path.
     match state
         .workspace_service
-        .open_workspace(request.path.clone().into())
+        .open_workspace_resolving_known(
+            request.path.clone().into(),
+            request.remote_connection_id.as_deref(),
+            None,
+        )
         .await
     {
         Ok(workspace_info) => {
@@ -2171,6 +2190,15 @@ pub async fn scan_workspace_info(
             .map_err(|e| format!("Failed to rescan workspace: {}", e));
     }
 
+    // An unknown remote path cannot be scanned as a normal workspace: that would canonicalize and
+    // stat the controller filesystem and report a local directory under the remote root's name.
+    if is_remote_path(request.workspace_path.trim()).await {
+        return Err(format!(
+            "scan_workspace_info cannot scan remote workspace path '{}' because it is not an opened workspace; open it through open_remote_workspace first. Local filesystem fallback was not attempted",
+            request.workspace_path
+        ));
+    }
+
     WorkspaceInfo::new(
         workspace_path,
         WorkspaceOpenOptions {
@@ -2794,7 +2822,12 @@ pub async fn check_path_exists(
     state: State<'_, AppState>,
     request: CheckPathExistsRequest,
 ) -> Result<bool, String> {
-    path_exists(&state, &request.path).await
+    path_exists(
+        &state,
+        &request.path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -2802,7 +2835,12 @@ pub async fn get_file_metadata(
     state: State<'_, AppState>,
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
-    get_path_metadata(&state, &request.path).await
+    get_path_metadata(
+        &state,
+        &request.path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
 }
 
 /// Returns SHA-256 hex (lowercase) of file bytes after the same normalization as the web editor
@@ -2812,7 +2850,13 @@ pub async fn get_file_editor_sync_hash(
     state: State<'_, AppState>,
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
-    match resolve_desktop_path_target(&state, &request.path, None).await? {
+    match resolve_desktop_path_target(
+        &state,
+        &request.path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await?
+    {
         DesktopPathTarget::Remote {
             requested_path,
             entry,
@@ -2864,8 +2908,23 @@ pub async fn rename_file(
 }
 
 /// Copy a local file or directory to another local path (binary-safe).
+///
+/// Both endpoints are controller-side: there is no remote copy primitive behind this command, so a
+/// remote workspace path is refused rather than served from a same-looking controller path.
 #[tauri::command]
 pub async fn export_local_file_to_path(request: ExportLocalFileRequest) -> Result<(), String> {
+    for (role, path) in [
+        ("source", request.source_path.as_str()),
+        ("destination", request.destination_path.as_str()),
+    ] {
+        if is_remote_path(path.trim()).await {
+            return Err(format!(
+                "export_local_file_to_path cannot use remote workspace path '{}' as {}: this command only copies between controller-local paths; local filesystem fallback was not attempted",
+                path, role
+            ));
+        }
+    }
+
     let src = request.source_path;
     let dst = request.destination_path;
     tokio::task::spawn_blocking(move || {
@@ -4404,7 +4463,17 @@ pub async fn search_files(
     let result = if request.search_content {
         if is_remote_path(request.root_path.trim()).await {
             if !use_workspace_search {
-                Err("Remote content search requires workspace search support".to_string())
+                Err(
+                    remote_content_search_refusal(&state, "search_files", &request.root_path)
+                        .await
+                        .unwrap_or_else(|| {
+                            remote_content_search_refusal_message(
+                                "search_files",
+                                &request.root_path,
+                                "remote workspace search is unavailable",
+                            )
+                        }),
+                )
             } else {
                 search_file_contents_via_workspace_search(
                     &state,
@@ -4480,12 +4549,45 @@ pub async fn search_files(
             }
         }
     } else {
-        state
-            .filesystem_service
-            .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
-            .await
-            .map(|outcome| outcome.results)
-            .map_err(|error| format!("Failed to search filenames: {}", error))
+        match resolve_desktop_path_target(
+            &state,
+            &request.root_path,
+            request.remote_connection_id.as_deref(),
+        )
+        .await
+        {
+            Ok(DesktopPathTarget::Remote {
+                requested_path,
+                entry,
+            }) => match state.get_remote_file_service_async().await {
+                Ok(remote_fs) => search_remote_file_names(RemoteFileNameSearch {
+                    remote_fs,
+                    workspace: entry,
+                    root_path: requested_path,
+                    pattern: request.pattern.clone(),
+                    case_sensitive: request.case_sensitive,
+                    use_regex: request.use_regex,
+                    whole_word: request.whole_word,
+                    include_directories: request.include_directories,
+                    limit: max_results,
+                    cancel_flag,
+                    progress_sink: None,
+                })
+                .await
+                .map(|outcome| outcome.results),
+                Err(error) => Err(format!(
+                    "search_files cannot list remote workspace path '{}': remote file service is unavailable ({}); local filesystem fallback was not attempted",
+                    request.root_path, error
+                )),
+            },
+            Ok(DesktopPathTarget::Local { .. }) => state
+                .filesystem_service
+                .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
+                .await
+                .map(|outcome| outcome.results)
+                .map_err(|error| format!("Failed to search filenames: {}", error)),
+            Err(error) => Err(error),
+        }
     };
     unregister_search(&state, search_id.as_deref());
 
@@ -4599,6 +4701,13 @@ pub async fn search_file_contents(
     request: SearchFileContentsRequest,
 ) -> Result<serde_json::Value, String> {
     use bitfun_core::service::filesystem::FileSearchOptions;
+
+    if let Some(message) =
+        remote_content_search_refusal(&state, "search_file_contents", &request.root_path).await
+    {
+        error!("Content search refused: {}", message);
+        return Err(message);
+    }
 
     let search_id = request.search_id.clone();
     let cancel_flag = register_search(&state, search_id.as_deref());
@@ -4813,6 +4922,17 @@ pub async fn start_search_file_contents_stream(
     request: SearchFileContentsRequest,
 ) -> Result<serde_json::Value, String> {
     use bitfun_core::service::filesystem::FileSearchOptions;
+
+    if let Some(message) = remote_content_search_refusal(
+        &state,
+        "start_search_file_contents_stream",
+        &request.root_path,
+    )
+    .await
+    {
+        error!("Content search stream refused: {}", message);
+        return Err(message);
+    }
 
     let search_id = ensure_search_id(request.search_id.clone(), "content-stream");
     let cancel_flag = register_search(&state, Some(&search_id));
@@ -5059,8 +5179,17 @@ pub async fn report_ide_control_result(request: IdeControlResultRequest) -> Resu
     Ok(())
 }
 
+/// The file watcher is a controller-side notify backend; it cannot observe an SSH host. A remote
+/// workspace path is refused so callers see the gap instead of a watch on a same-named local path.
 #[tauri::command]
 pub async fn start_file_watch(path: String, recursive: Option<bool>) -> Result<(), String> {
+    if is_remote_path(path.trim()).await {
+        return Err(format!(
+            "start_file_watch cannot watch remote workspace path '{}': filesystem watching is not available over SSH; local filesystem fallback was not attempted",
+            path
+        ));
+    }
+
     file_watch::start_file_watch(path, recursive).await
 }
 
@@ -5178,4 +5307,173 @@ pub async fn refresh_subscription_account(
     )
     .await
     .map_err(|e| format!("Failed to refresh subscription account: {e:#}"))
+}
+
+#[cfg(test)]
+mod remote_guard_tests {
+    use super::{
+        export_local_file_to_path, start_file_watch, CheckPathExistsRequest,
+        ExportLocalFileRequest, GetFileMetadataRequest, OpenWorkspaceRequest, SearchFilesRequest,
+    };
+    use bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager;
+
+    /// Registers a uniquely named remote root in the process-wide registry so the guards under
+    /// test see a real remote workspace, and removes it again when the guard returns.
+    struct RemoteRootFixture {
+        remote_root: String,
+        connection_id: String,
+    }
+
+    impl RemoteRootFixture {
+        async fn register(name: &str) -> Self {
+            let remote_root = format!("/remote-audit-{name}");
+            let connection_id = format!("remote-audit-{name}-connection");
+            init_remote_workspace_manager()
+                .register_remote_workspace(
+                    remote_root.clone(),
+                    connection_id.clone(),
+                    format!("remote-audit-{name}"),
+                    format!("remote-audit-{name}.invalid"),
+                )
+                .await;
+            Self {
+                remote_root,
+                connection_id,
+            }
+        }
+
+        fn child(&self, name: &str) -> String {
+            format!("{}/{}", self.remote_root, name)
+        }
+
+        async fn unregister(self) {
+            init_remote_workspace_manager()
+                .unregister_remote_workspace(&self.connection_id, &self.remote_root)
+                .await;
+        }
+    }
+
+    fn controller_sentinel(name: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("bitfun-remote-audit-{name}"));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir_all(&path);
+        path
+    }
+
+    #[tokio::test]
+    async fn export_local_file_to_path_refuses_remote_source_and_leaves_controller_untouched() {
+        let fixture = RemoteRootFixture::register("export-source").await;
+        let destination = controller_sentinel("export-source-destination.txt");
+
+        let error = export_local_file_to_path(ExportLocalFileRequest {
+            source_path: fixture.child("main.rs"),
+            destination_path: destination.to_string_lossy().to_string(),
+        })
+        .await
+        .expect_err("remote export source must be refused");
+
+        assert!(error.starts_with("export_local_file_to_path cannot use remote workspace path"));
+        assert!(error.contains("local filesystem fallback was not attempted"));
+        assert!(
+            !destination.exists(),
+            "controller destination must not be written"
+        );
+
+        fixture.unregister().await;
+    }
+
+    #[tokio::test]
+    async fn export_local_file_to_path_refuses_remote_destination() {
+        let fixture = RemoteRootFixture::register("export-destination").await;
+        let source = controller_sentinel("export-destination-source.txt");
+        std::fs::write(&source, b"local bytes").expect("write controller source");
+
+        let error = export_local_file_to_path(ExportLocalFileRequest {
+            source_path: source.to_string_lossy().to_string(),
+            destination_path: fixture.child("copy.txt"),
+        })
+        .await
+        .expect_err("remote export destination must be refused");
+
+        assert!(error.contains("as destination"));
+        assert!(error.contains("local filesystem fallback was not attempted"));
+
+        let _ = std::fs::remove_file(&source);
+        fixture.unregister().await;
+    }
+
+    #[tokio::test]
+    async fn start_file_watch_refuses_remote_path() {
+        let fixture = RemoteRootFixture::register("file-watch").await;
+
+        let error = start_file_watch(fixture.child("src"), Some(true))
+            .await
+            .expect_err("remote watch target must be refused");
+
+        assert!(error.starts_with("start_file_watch cannot watch remote workspace path"));
+        assert!(error.contains("local filesystem fallback was not attempted"));
+
+        fixture.unregister().await;
+    }
+
+    #[test]
+    fn legacy_search_files_payload_without_remote_scope_remains_readable() {
+        let request: SearchFilesRequest = serde_json::from_value(serde_json::json!({
+            "rootPath": "/workspace",
+            "pattern": "todo",
+            "searchContent": false
+        }))
+        .expect("deserialize legacy search request");
+
+        assert!(request.remote_connection_id.is_none());
+        assert!(request.include_directories);
+    }
+
+    #[test]
+    fn search_files_payload_accepts_remote_scope() {
+        let request: SearchFilesRequest = serde_json::from_value(serde_json::json!({
+            "rootPath": "/workspace",
+            "pattern": "todo",
+            "searchContent": false,
+            "remoteConnectionId": "connection-1"
+        }))
+        .expect("deserialize scoped search request");
+
+        assert_eq!(
+            request.remote_connection_id.as_deref(),
+            Some("connection-1")
+        );
+    }
+
+    #[test]
+    fn legacy_open_workspace_payload_without_remote_scope_remains_readable() {
+        let legacy: OpenWorkspaceRequest = serde_json::from_value(serde_json::json!({
+            "path": "/workspace"
+        }))
+        .expect("deserialize legacy open workspace request");
+        assert!(legacy.remote_connection_id.is_none());
+
+        let scoped: OpenWorkspaceRequest = serde_json::from_value(serde_json::json!({
+            "path": "/workspace",
+            "remoteConnectionId": "connection-1"
+        }))
+        .expect("deserialize scoped open workspace request");
+        assert_eq!(scoped.remote_connection_id.as_deref(), Some("connection-1"));
+    }
+
+    #[test]
+    fn path_probe_payloads_accept_optional_remote_scope() {
+        let exists: CheckPathExistsRequest = serde_json::from_value(serde_json::json!({
+            "path": "/workspace/main.rs",
+            "remoteConnectionId": "connection-1"
+        }))
+        .expect("deserialize scoped exists request");
+        assert_eq!(exists.remote_connection_id.as_deref(), Some("connection-1"));
+
+        let legacy: GetFileMetadataRequest = serde_json::from_value(serde_json::json!({
+            "path": "/workspace/main.rs"
+        }))
+        .expect("deserialize legacy metadata request");
+        assert!(legacy.remote_connection_id.is_none());
+    }
 }

@@ -210,7 +210,7 @@ Everything not listed here behaves as the Codex documentation describes.
 | `[features] hooks = false` | use `app.hooks.enabled` |
 | Plugin-bundled and managed hooks (`PLUGIN_ROOT`, `managed_dir`) | not supported |
 | `prompt` and `agent` handler types | parsed so shared files stay valid, but skipped — only `type: "command"` executes |
-| Remote workspaces | hooks are skipped entirely: a local hook process and a remote workspace path do not describe the same filesystem |
+| Remote workspaces | hooks are not dispatched: a local hook process and a remote workspace path do not describe the same filesystem. The skip is reported, not silent: when the host has rules for the event, the first skipped dispatch per session logs a warning, and the hook overview carries `remote_workspace_unsupported` so surfaces can say the configured rules did not run |
 
 ### Fields not populated yet
 
@@ -263,7 +263,7 @@ every time its event fires. Treat `hooks.json` like a shell profile:
 
 | Symptom | Cause |
 | --- | --- |
-| No hook runs at all | `app.hooks.enabled` is `false`, the file is not at the documented path, or the workspace is remote. |
+| No hook runs at all | `app.hooks.enabled` is `false`, the file is not at the documented path, or the workspace is remote (the log then carries a warning for the first skipped dispatch of each session). |
 | Project hooks do not run | `app.hooks.project_hooks_enabled` is `false` (the default). |
 | The whole file is ignored | Invalid JSON, or a root key other than `description`/`hooks`. |
 | One event is ignored | Misspelled event name — the names are case-sensitive. |
