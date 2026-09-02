@@ -248,19 +248,17 @@ describe('composer context track layout', () => {
     expect(chatInput).toContain('!isMultiLine && executionLevelPolicy.userConfigurable ? (');
   });
 
-  it('groups additional modes in one second-level menu immediately after Harness', () => {
+  it('groups quick skill modes in one second-level menu immediately after Harness', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const menuHarnessIndex = chatInput.indexOf('presentation="menu-item"');
     const additionalModesIndex = chatInput.indexOf("label={t('chatInput.boostAdditionalModes')}");
     const quickSkillsIndex = chatInput.indexOf('quickSkillShortcuts.map(shortcut => (');
-    const reviewDefinitionIndex = chatInput.indexOf("id: 'review',");
     const additionalModeItemsIndex = chatInput.indexOf('additionalModeItems.map(item => (');
     const contextIndex = chatInput.indexOf('onClick={handleBoostOpenAtContext}');
 
     expect(menuHarnessIndex).toBeGreaterThan(-1);
     expect(additionalModesIndex).toBeGreaterThan(menuHarnessIndex);
     expect(quickSkillsIndex).toBeGreaterThan(-1);
-    expect(reviewDefinitionIndex).toBeGreaterThan(quickSkillsIndex);
     expect(additionalModeItemsIndex).toBeGreaterThan(additionalModesIndex);
     expect(contextIndex).toBeGreaterThan(additionalModeItemsIndex);
     expect(chatInput).toContain('additionalModeItems.map(item => (');
@@ -275,8 +273,9 @@ describe('composer context track layout', () => {
     );
     expect(chatInput).toContain('layoutRevision: boostMenuLayoutRevision');
     expect(chatInput).toContain('skillName: shortcut.skill.name');
-    expect(chatInput).toContain('selectAdditionalMode(item.selection)');
-    expect(chatInput).toContain('insertAdditionalModeIntoInput(selection.modeId)');
+    expect(chatInput).toContain('selectAdditionalMode(item.skillName)');
+    expect(chatInput).not.toContain('showReviewAdditionalMode');
+    expect(chatInput).not.toContain("modeId: 'review' as const");
     expect(chatInput).not.toContain("selectSlashCommandAction('review')");
   });
 
