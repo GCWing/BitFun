@@ -1,0 +1,100 @@
+{
+  "title": "網頁搜尋",
+  "subtitle": "設定 WebSearch 工具執行時期使用的搜尋服務。",
+  "providers": {
+    "exaMcpFree": "Exa MCP（免費，無需 API Key）",
+    "exaSearchApi": "Exa Search API",
+    "tavily": "Tavily Search API",
+    "bitfunSearchHttp": "BitFun Search HTTP Protocol"
+  },
+  "auth": {
+    "none": "無需驗證",
+    "bearer": "Bearer 憑據",
+    "header": "受限 Header 憑據"
+  },
+  "sections": {
+    "provider": {
+      "title": "搜尋服務"
+    },
+    "http": {
+      "title": "BitFun Search HTTP Protocol v1",
+      "description": "連接實作固定 BitFun 協定的自建或企業內部端點。"
+    },
+    "protocol": {
+      "title": "協定說明",
+      "description": "實作自訂搜尋端點需要遵循的請求與回應格式。"
+    },
+    "credential": {
+      "title": "裝置憑據",
+      "description": "Secret 僅在執行 WebSearch 的主機上加密儲存，不會同步。"
+    }
+  },
+  "fields": {
+    "endpoint": {
+      "label": "端點",
+      "description": "必須使用 HTTPS；僅 localhost 或迴環 IP 可使用明文 HTTP。",
+      "placeholder": "https://search.example.com/search"
+    },
+    "authMode": {
+      "label": "驗證方式",
+      "description": "可選無需驗證、Bearer 憑據或一個受限自訂 Header。"
+    },
+    "headerName": {
+      "label": "Header 名稱",
+      "description": "用於填寫 X-API-Key 等自訂憑據 Header；Bearer 驗證請選擇「Bearer 憑據」。",
+      "placeholder": "X-Search-Key"
+    },
+    "credentialStatus": {
+      "label": "狀態",
+      "description": "目前執行主機的憑據狀態"
+    },
+    "credential": {
+      "label": "API Key 或 Secret",
+      "description": "儲存新值會取代目前裝置上的 Secret。",
+      "placeholder": "輸入憑據",
+      "replacePlaceholder": "輸入新憑據以取代已儲存的值"
+    }
+  },
+  "status": {
+    "configured": "已在此裝置設定",
+    "missing": "此裝置缺少憑據"
+  },
+  "protocol": {
+    "request": {
+      "title": "請求",
+      "description": "端點必須接受以下 POST 請求。query 必須是非空字串；maxResults 必須是 1–20 的整數。"
+    },
+    "success": {
+      "title": "成功回應",
+      "description": "2xx 回應必須使用 application/json 或 v1 media type。title 和 url 必填；publishedAt 和 author 可省略或為 null。"
+    },
+    "error": {
+      "title": "錯誤回應",
+      "description": "非 2xx 回應可以傳回以下結構；即使沒有該結構，BitFun 也會依 HTTP 狀態碼識別常見錯誤。",
+      "codes": "支援的 code："
+    },
+    "notes": {
+      "resultHandling": "服務可以傳回少於 maxResults 的結果；BitFun 會驗證、去重並截斷結果，回應根的未知欄位會被忽略。",
+      "transportLimits": "BitFun 不跟隨重新導向，請求逾時為 60 秒，讀取回應的上限為 1 MiB。"
+    }
+  },
+  "actions": {
+    "saveConfiguration": "儲存設定",
+    "saveCredential": "儲存",
+    "clearCredential": "清除",
+    "copyProtocol": "複製協定"
+  },
+  "messages": {
+    "loading": "正在載入網頁搜尋設定…",
+    "loadFailed": "載入網頁搜尋設定失敗。",
+    "saved": "網頁搜尋設定已儲存。",
+    "saveFailed": "儲存網頁搜尋設定失敗。",
+    "credentialRequired": "請先輸入憑據。",
+    "credentialSaved": "憑據已儲存到此裝置。",
+    "credentialSaveFailed": "儲存裝置憑據失敗。",
+    "credentialCleared": "已從此裝置清除憑據。",
+    "credentialClearFailed": "清除裝置憑據失敗。",
+    "protocolCopied": "協定已複製。",
+    "protocolCopyFailed": "複製協定失敗。"
+  }
+}

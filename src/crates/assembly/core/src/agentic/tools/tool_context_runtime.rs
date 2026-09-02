@@ -340,10 +340,14 @@ fn core_tool_runtime_handles(
     terminal_port: Option<Arc<dyn TerminalPort>>,
     remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
 ) -> ToolRuntimeHandles {
-    ToolRuntimeHandles::new(workspace_services, cancellation_token)
+    let handles = ToolRuntimeHandles::new(workspace_services, cancellation_token)
         .with_round_injection_preemption_token(round_injection_preemption_token)
         .with_terminal_port(terminal_port)
-        .with_remote_exec_port(remote_exec_port)
+        .with_remote_exec_port(remote_exec_port);
+    #[cfg(feature = "web-tools")]
+    let handles = handles
+        .with_web_search_provider(Some(crate::service::web_search::global_web_search_runtime()));
+    handles
 }
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {

@@ -170,6 +170,62 @@ pub struct SaveCloudSpeechConfigResult {
 pub struct SaveCloudSpeechConfigResponse(pub SaveCloudSpeechConfigResult);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct WebSearchCredentialProviderRequest {
+    pub provider: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveWebSearchCredentialRequest {
+    pub provider: String,
+    pub secret: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct WebSearchCredentialStatus {
+    pub provider: String,
+    pub configured: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/getWebSearchCredentialStatus", response = GetWebSearchCredentialStatusResponse))]
+pub struct GetWebSearchCredentialStatusMessage {
+    pub request: WebSearchCredentialProviderRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
+pub struct GetWebSearchCredentialStatusResponse(pub WebSearchCredentialStatus);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/saveWebSearchCredential", response = SaveWebSearchCredentialResponse))]
+pub struct SaveWebSearchCredentialMessage {
+    pub request: SaveWebSearchCredentialRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
+pub struct SaveWebSearchCredentialResponse(pub WebSearchCredentialStatus);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
+#[cfg_attr(feature = "rpc", request(method = "config/clearWebSearchCredential", response = ClearWebSearchCredentialResponse))]
+pub struct ClearWebSearchCredentialMessage {
+    pub request: WebSearchCredentialProviderRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "rpc", derive(JsonRpcResponse))]
+pub struct ClearWebSearchCredentialResponse(pub WebSearchCredentialStatus);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]
 #[cfg_attr(feature = "rpc", request(method = "config/validateConfig", response = ValidateConfigResponse))]
 pub struct ValidateConfigMessage {}

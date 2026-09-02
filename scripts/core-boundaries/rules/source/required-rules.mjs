@@ -3461,25 +3461,44 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/tool-execution/src/web_search.rs',
+    path: 'src/crates/contracts/runtime-ports/src/web_search.rs',
     reason:
-      'tool-runtime must own provider-neutral WebSearch result parsing while core keeps product tool envelope assembly',
+      'runtime-ports must own the provider-neutral WebSearch contract while concrete provider translation stays below assembly',
     patterns: [
       {
+        regex: /\bpub struct WebSearchRequest\b/,
+        message: 'missing provider-neutral WebSearch request DTO',
+      },
+      {
+        regex: /\bpub struct WebSearchResponse\b/,
+        message: 'missing provider-neutral WebSearch response DTO',
+      },
+      {
         regex: /\bpub struct WebSearchResult\b/,
-        message: 'missing typed WebSearch result DTO',
+        message: 'missing provider-neutral WebSearch result DTO',
       },
       {
-        regex: /\bpub fn parse_exa_text_results\b/,
-        message: 'missing Exa text result parser owner',
+        regex: /\bpub trait WebSearchProvider\b/,
+        message: 'missing provider-neutral WebSearch runtime port',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/web_tools.rs',
+    reason:
+      'services-integrations must own free Exa MCP transport and provider-specific result translation',
+    patterns: [
+      {
+        regex: /\bpub struct FreeExaMcpProvider\b/,
+        message: 'missing free Exa MCP provider adapter',
       },
       {
-        regex: /\bparses_exa_text_blocks\b/,
-        message: 'missing Exa text parsing regression',
+        regex: /\bfn parse_exa_sse\b/,
+        message: 'missing free Exa MCP protocol parser',
       },
       {
-        regex: /\bfalls_back_for_unstructured_text\b/,
-        message: 'missing unstructured WebSearch result fallback regression',
+        regex: /\bfn parse_exa_text_results\b/,
+        message: 'missing free Exa MCP result translator',
       },
     ],
   },

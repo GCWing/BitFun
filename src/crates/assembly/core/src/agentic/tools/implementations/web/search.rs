@@ -3,13 +3,12 @@ use crate::agentic::tools::framework::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_services_integrations::web_tools::{ExaSearchRequest, WebToolNetworkProvider};
+use bitfun_runtime_ports::{WebSearchRequest, WebSearchResult};
 use log::{error, info};
 use serde_json::{json, Value};
-use tool_runtime::web_search::{parse_exa_text_results, WebSearchResult};
 
-const EXA_RESULTS: u64 = 10;
-const EXA_MAX_RESULTS: u64 = 20;
+const DEFAULT_RESULTS: u64 = 10;
+const MAX_RESULTS: u64 = 20;
 
 pub struct WebSearchTool;
 
@@ -23,64 +22,62 @@ impl WebSearchTool {
     pub fn new() -> Self {
         Self
     }
-
-    async fn search(&self, query: &str, num: u64) -> BitFunResult<String> {
-        WebToolNetworkProvider::search_exa(ExaSearchRequest {
-            query,
-            num_results: num,
-        })
-        .await
-        .map_err(|error| {
-            error!("WebSearch Exa error: {}", error);
-            BitFunError::tool(error.to_string())
-        })
-    }
-
-    pub(crate) fn results(&self, text: &str) -> Vec<Value> {
-        parse_exa_text_results(text)
-            .into_iter()
-            .map(search_result_to_value)
-            .collect()
-    }
 }
 
 fn search_result_to_value(result: WebSearchResult) -> Value {
-    json!({
-        "title": result.title,
-        "url": result.url,
-        "published": result.published,
-        "author": result.author,
-    })
+    let mut value = serde_json::Map::from_iter([
+        ("title".to_string(), Value::String(result.title)),
+        ("url".to_string(), Value::String(result.url)),
+    ]);
+    if let Some(published) = result.published_at {
+        value.insert("published".to_string(), Value::String(published));
+    }
+    if let Some(author) = result.author {
+        value.insert("author".to_string(), Value::String(author));
+    }
+    Value::Object(value)
 }
 
-pub(super) fn build_web_search_tool_result(query: &str, results: Vec<Value>) -> ToolResult {
+pub(super) fn build_web_search_tool_result(
+    query: &str,
+    provider: &str,
+    results: Vec<WebSearchResult>,
+) -> ToolResult {
+    let result_values = results
+        .iter()
+        .cloned()
+        .map(search_result_to_value)
+        .collect::<Vec<_>>();
     let formatted_results = results
         .iter()
         .enumerate()
-        .map(|(i, r)| {
-            format!(
-                "{}. {}\n   URL: {}\n   Published: {}\n   Author: {}\n",
-                i + 1,
-                r["title"].as_str().unwrap_or("Untitled"),
-                r["url"].as_str().unwrap_or(""),
-                r["published"].as_str().unwrap_or(""),
-                r["author"].as_str().unwrap_or("")
-            )
+        .map(|(index, result)| {
+            let mut lines = vec![
+                format!("{}. {}", index + 1, result.title),
+                format!("   URL: {}", result.url),
+            ];
+            if let Some(published) = result.published_at.as_deref() {
+                lines.push(format!("   Published: {published}"));
+            }
+            if let Some(author) = result.author.as_deref() {
+                lines.push(format!("   Author: {author}"));
+            }
+            lines.join("\n")
         })
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n\n");
 
     ToolResult::Result {
         data: json!({
             "query": query,
-            "results": results,
-            "result_count": results.len(),
-            "provider": "exa_mcp"
+            "results": result_values,
+            "result_count": result_values.len(),
+            "provider": provider
         }),
         result_for_assistant: Some(format!(
             "Search query: '{}'\nFound {} results:\n\n{}",
             query,
-            results.len(),
+            result_values.len(),
             formatted_results
         )),
         image_attachments: None,
@@ -115,7 +112,10 @@ impl Tool for WebSearchTool {
                 },
                 "num_results": {
                     "type": "number",
-                    "description": "Number of search results to return (1-20, default: 10)"
+                    "description": "Number of search results to return (1-20, default: 10)",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 20
                 }
             },
             "required": ["query"],
@@ -151,26 +151,50 @@ impl Tool for WebSearchTool {
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let query = input
             .get("query")
-            .and_then(|v| v.as_str())
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|query| !query.is_empty())
             .ok_or_else(|| BitFunError::tool("query is required".to_string()))?;
-
         let num_results = input
             .get("num_results")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(EXA_RESULTS)
-            .clamp(1, EXA_MAX_RESULTS);
+            .and_then(Value::as_u64)
+            .unwrap_or(DEFAULT_RESULTS)
+            .clamp(1, MAX_RESULTS);
+        let provider = context
+            .runtime_handles
+            .web_search_provider()
+            .cloned()
+            .ok_or_else(|| {
+                BitFunError::tool("WebSearch provider is unavailable in this runtime".to_string())
+            })?;
 
+        info!("WebSearch call started: max_results={num_results}");
+        let response = provider
+            .search(WebSearchRequest {
+                query: query.to_string(),
+                max_results: num_results as u32,
+            })
+            .await
+            .map_err(|search_error| {
+                error!(
+                    "WebSearch provider failed: provider={}, kind={:?}, error={}",
+                    search_error.provider, search_error.kind, search_error.message
+                );
+                BitFunError::tool(search_error.to_string())
+            })?;
         info!(
-            "WebSearch Exa call: query='{}', num_results={}",
-            query, num_results
+            "WebSearch call completed: provider={}, result_count={}",
+            response.provider,
+            response.results.len()
         );
-
-        let raw = self.search(query, num_results).await?;
-        let results = self.results(&raw);
-        Ok(vec![build_web_search_tool_result(query, results)])
+        Ok(vec![build_web_search_tool_result(
+            query,
+            response.provider.as_str(),
+            response.results,
+        )])
     }
 }

@@ -259,7 +259,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'anyhow', ownerFeatures: ['browser-control', 'deep-research', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
-        ownerFeatures: ['deep-research', 'git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
+        ownerFeatures: ['deep-research', 'git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'web-tools', 'workspace-search'],
       },
       {
         depName: 'base64',
@@ -269,7 +269,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-agent-workflows', ownerFeatures: ['deep-research'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['remote-connect', 'speech'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'plugin-source'] },
-      { depName: 'bitfun-runtime-ports', ownerFeatures: ['deep-research', 'git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['deep-research', 'git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime', 'web-tools'] },
       {
         depName: 'bitfun-services-core',
         ownerFeatures: [
@@ -292,12 +292,12 @@ export const optionalDependencyFeatureOwnerRules = [
         ],
       },
       { depName: 'bzip2', ownerFeatures: ['speech'] },
-      { depName: 'chrono', ownerFeatures: ['git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech'] },
+      { depName: 'chrono', ownerFeatures: ['git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools'] },
       { depName: 'dirs', ownerFeatures: ['browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
       { depName: 'dunce', ownerFeatures: ['plugin-source', 'workspace-search'] },
       { depName: 'fs2', ownerFeatures: ['plugin-source'] },
       { depName: 'futures', ownerFeatures: ['mcp', 'remote-connect', 'review-platform'] },
-      { depName: 'futures-util', ownerFeatures: ['speech'] },
+      { depName: 'futures-util', ownerFeatures: ['speech', 'web-tools'] },
       { depName: 'git2', ownerFeatures: ['git'] },
       { depName: 'hex', ownerFeatures: ['hook-import', 'mcp', 'miniapp-market', 'plugin-source', 'remote-connect'] },
       { depName: 'hostname', ownerFeatures: ['remote-connect'] },
@@ -389,6 +389,7 @@ export const capabilityContractDependencyRules = [
       'script-tool-runtime': [],
       'terminal-port': ['dep:tokio'],
       'tool-runtime-handles': ['workspace-ports', 'terminal-port', 'remote-exec-port'],
+      'web-search-port': [],
       ts: [
         'dep:ts-rs',
         'agent-api',
@@ -441,9 +442,10 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('product-search', 'product-search'),
           capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
           capabilityForwarder('ts', 'ts'),
+          capabilityForwarder('web-tools', 'web-search-port'),
         ],
         [],
-        ['external-sources', 'mcp-runtime', 'opencode-plugin-host', 'product-full', 'remote-connect', 'tools-mcp'],
+        ['external-sources', 'mcp-runtime', 'opencode-plugin-host', 'product-full', 'remote-connect', 'tools-browser-web', 'tools-mcp'],
       )],
       ['bitfun-desktop', capabilityConsumer([
         capabilityEdge(['agent-api', 'permission', 'workspace-ports']),
@@ -499,6 +501,7 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('remote-ssh', 'remote-workspace-ports'),
           capabilityForwarder('remote-ssh', 'workspace-ports'),
           capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
+          capabilityForwarder('web-tools', 'web-search-port'),
         ],
         ['remote-ssh-concrete'],
         ['function-agents', 'product-full'],
@@ -1149,9 +1152,15 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'web-tools',
-    requiredFeatureRefs: ['bitfun-services-integrations/web-tools', 'tool-runtime/web-readable'],
+    requiredFeatureRefs: [
+      'bitfun-runtime-ports/web-search-port',
+      'bitfun-services-core/credential-vault',
+      'bitfun-services-integrations/web-tools',
+      'tool-runtime/web-readable',
+    ],
     exact: true,
-    reason: 'web-tools must own only web network and readable-content support',
+    reason:
+      'web-tools must own the WebSearch port, device-local credential vault, provider integrations, and readable-content support',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',

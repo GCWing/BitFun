@@ -56,6 +56,12 @@ pub struct AppendFlowChatDiagnosticsRequest {
     pub entries: Vec<Value>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetWebSearchCredentialStatusRequest {
+    pub provider: String,
+}
+
 fn to_json_value<T: Serialize>(value: T, context: &str) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|e| format!("Failed to serialize {}: {}", context, e))
 }
@@ -232,6 +238,36 @@ pub async fn save_cloud_speech_config(
             ))
         }
     }
+}
+
+#[tauri::command]
+pub async fn get_web_search_credential_status(
+    _state: State<'_, AppState>,
+    request: GetWebSearchCredentialStatusRequest,
+) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String> {
+    bitfun_core::service::web_search::get_web_search_credential_status(&request.provider)
+        .await
+        .map_err(|error| format!("Failed to read WebSearch credential status: {error}"))
+}
+
+#[tauri::command]
+pub async fn save_web_search_credential(
+    _state: State<'_, AppState>,
+    request: bitfun_core::service::web_search::SaveWebSearchCredentialRequest,
+) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String> {
+    bitfun_core::service::web_search::save_web_search_credential(request)
+        .await
+        .map_err(|error| format!("Failed to save WebSearch credential: {error}"))
+}
+
+#[tauri::command]
+pub async fn clear_web_search_credential(
+    _state: State<'_, AppState>,
+    request: bitfun_core::service::web_search::ClearWebSearchCredentialRequest,
+) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String> {
+    bitfun_core::service::web_search::clear_web_search_credential(request)
+        .await
+        .map_err(|error| format!("Failed to clear WebSearch credential: {error}"))
 }
 
 #[tauri::command]

@@ -201,7 +201,23 @@ impl ConfigService {
             )
             .await;
         }
+        #[cfg(feature = "web-tools")]
+        if Self::path_touches_web_search(path) {
+            self.refresh_web_search_runtime().await;
+        }
         self.local_changes.send_replace(());
+    }
+
+    #[cfg(feature = "web-tools")]
+    async fn refresh_web_search_runtime(&self) {
+        match self.get_config::<AIConfig>(Some("ai")).await {
+            Ok(ai_config) => {
+                crate::service::web_search::refresh_global_web_search_runtime(&ai_config).await;
+            }
+            Err(error) => {
+                warn!("Failed to refresh WebSearch runtime from config: {error}");
+            }
+        }
     }
 
     /// Atomically replaces one JSON configuration value when its current value
@@ -237,6 +253,11 @@ impl ConfigService {
             || path.starts_with("ai.task_models")
     }
 
+    #[cfg(feature = "web-tools")]
+    fn path_touches_web_search(path: &str) -> bool {
+        path.is_empty() || path == "ai" || path.starts_with("ai.web_search")
+    }
+
     /// Resets configuration.
     ///
     /// When the reset target touches AI models (or is a global reset),
@@ -263,6 +284,11 @@ impl ConfigService {
                 super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
             )
             .await;
+        }
+
+        #[cfg(feature = "web-tools")]
+        if path.is_none_or(Self::path_touches_web_search) {
+            self.refresh_web_search_runtime().await;
         }
 
         self.local_changes.send_replace(());
@@ -374,6 +400,8 @@ impl ConfigService {
                     super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
                 )
                 .await;
+                #[cfg(feature = "web-tools")]
+                self.refresh_web_search_runtime().await;
                 if source == ConfigImportSource::Explicit {
                     self.local_changes.send_replace(());
                 }
@@ -461,6 +489,8 @@ impl ConfigService {
             super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
         )
         .await;
+        #[cfg(feature = "web-tools")]
+        self.refresh_web_search_runtime().await;
         Ok(())
     }
 

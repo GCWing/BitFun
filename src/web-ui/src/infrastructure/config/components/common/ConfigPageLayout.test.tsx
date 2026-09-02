@@ -147,6 +147,20 @@ describe('ConfigPageLayout', () => {
     expect(body?.getAttribute('data-bf-component')).toBe('field-group');
   });
 
+  it('supports a header-only section with a title-side action', () => {
+    act(() => {
+      root.render(
+        <ConfigPageSection title="Search provider" extra={<button>Exa</button>}>
+          {null}
+        </ConfigPageSection>,
+      );
+    });
+
+    expect(container.querySelector('[data-bf-part="sectionTitle"]')?.textContent).toBe('Search provider');
+    expect(container.querySelector('.bitfun-config-page-section__extra button')?.textContent).toBe('Exa');
+    expect(container.querySelector('.bitfun-config-page-section__body')).toBeNull();
+  });
+
   it('lets copy use the full row when there is no control', () => {
     act(() => {
       root.render(

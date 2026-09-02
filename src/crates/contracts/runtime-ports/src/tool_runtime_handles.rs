@@ -14,6 +14,8 @@ pub struct ToolRuntimeHandles {
     round_injection_preemption_token: Option<CancellationToken>,
     terminal_port: Option<Arc<dyn TerminalPort>>,
     remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
+    #[cfg(feature = "web-search-port")]
+    web_search_provider: Option<Arc<dyn WebSearchProvider>>,
 }
 
 impl ToolRuntimeHandles {
@@ -27,6 +29,8 @@ impl ToolRuntimeHandles {
             round_injection_preemption_token: None,
             terminal_port: None,
             remote_exec_port: None,
+            #[cfg(feature = "web-search-port")]
+            web_search_provider: None,
         }
     }
 
@@ -51,6 +55,15 @@ impl ToolRuntimeHandles {
         self
     }
 
+    #[cfg(feature = "web-search-port")]
+    pub fn with_web_search_provider(
+        mut self,
+        web_search_provider: Option<Arc<dyn WebSearchProvider>>,
+    ) -> Self {
+        self.web_search_provider = web_search_provider;
+        self
+    }
+
     pub fn workspace_services(&self) -> Option<&WorkspaceServices> {
         self.workspace_services.as_ref()
     }
@@ -69,6 +82,11 @@ impl ToolRuntimeHandles {
 
     pub fn remote_exec_port(&self) -> Option<&Arc<dyn RemoteExecPort>> {
         self.remote_exec_port.as_ref()
+    }
+
+    #[cfg(feature = "web-search-port")]
+    pub fn web_search_provider(&self) -> Option<&Arc<dyn WebSearchProvider>> {
+        self.web_search_provider.as_ref()
     }
 }
 
@@ -107,6 +125,18 @@ impl std::fmt::Debug for ToolRuntimeHandles {
                     .as_ref()
                     .map(|_| "<dyn RemoteExecPort>"),
             )
+            .field("web_search_provider", &{
+                #[cfg(feature = "web-search-port")]
+                {
+                    self.web_search_provider
+                        .as_ref()
+                        .map(|_| "<dyn WebSearchProvider>")
+                }
+                #[cfg(not(feature = "web-search-port"))]
+                {
+                    None::<&str>
+                }
+            })
             .finish()
     }
 }
@@ -152,7 +182,7 @@ mod tests {
         ));
         assert_eq!(
             format!("{:?}", handles),
-            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), round_injection_preemption_token: Some(\"<CancellationToken>\"), terminal_port: None, remote_exec_port: None }"
+            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), round_injection_preemption_token: Some(\"<CancellationToken>\"), terminal_port: None, remote_exec_port: None, web_search_provider: None }"
         );
     }
 }

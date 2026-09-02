@@ -16,6 +16,7 @@ mod tests {
     };
     use super::search::{build_web_search_tool_result, WebSearchTool};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+    use bitfun_runtime_ports::WebSearchResult;
     use serde_json::json;
     use std::io::ErrorKind;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -282,18 +283,6 @@ mod tests {
     }
 
     #[test]
-    fn websearch_parses_exa_text_into_results() {
-        let out = WebSearchTool::new().results(websearch_sample_text());
-        assert_eq!(out.len(), 2);
-        assert_eq!(out[0]["title"], "Result One");
-        assert_eq!(out[0]["url"], "https://example.com/one");
-        assert_eq!(out[0]["published"], "2026-08-30T00:00:00.000Z");
-        assert_eq!(out[0]["author"], "First Author");
-        assert!(out[0].get("snippet").is_none());
-        assert_eq!(out[1]["title"], "Result Two");
-    }
-
-    #[test]
     fn websearch_schema_contains_only_supported_arguments() {
         let schema = WebSearchTool::new().input_schema();
         let properties = schema["properties"].as_object().expect("properties");
@@ -308,11 +297,41 @@ mod tests {
         assert_eq!(schema["additionalProperties"], false);
     }
 
+    #[tokio::test]
+    async fn websearch_model_contract_is_byte_stable_across_providers() {
+        async fn contract_bytes() -> Vec<u8> {
+            let tool = WebSearchTool::new();
+            serde_json::to_vec(&json!({
+                "name": tool.name(),
+                "description": tool.description().await.expect("description"),
+                "shortDescription": tool.short_description(),
+                "exposure": tool.default_exposure(),
+                "schema": tool.input_schema_for_model().await,
+            }))
+            .expect("serialize WebSearch model contract")
+        }
+
+        let baseline = contract_bytes().await;
+        for provider in [
+            "exa_mcp_free",
+            "exa_search_api",
+            "tavily",
+            "bitfun_search_http",
+        ] {
+            assert_eq!(
+                contract_bytes().await,
+                baseline,
+                "provider {provider} must not change the model-visible contract"
+            );
+        }
+    }
+
     #[test]
     fn websearch_preserves_public_result_contract() {
         let result = build_web_search_tool_result(
             "example query",
-            WebSearchTool::new().results(websearch_sample_text()),
+            "exa_mcp_free",
+            websearch_sample_results(),
         );
 
         match &result {
@@ -323,12 +342,14 @@ mod tests {
             } => {
                 assert_eq!(data["query"], "example query");
                 assert_eq!(data["result_count"], 2);
-                assert_eq!(data["provider"], "exa_mcp");
+                assert_eq!(data["provider"], "exa_mcp_free");
                 assert_eq!(data["results"][0]["title"], "Result One");
                 assert_eq!(data["results"][0]["url"], "https://example.com/one");
                 assert_eq!(data["results"][0]["published"], "2026-08-30T00:00:00.000Z");
                 assert_eq!(data["results"][0]["author"], "First Author");
                 assert!(data["results"][0].get("snippet").is_none());
+                assert!(data["results"][1].get("published").is_none());
+                assert!(data["results"][1].get("author").is_none());
 
                 let assistant_text = result_for_assistant.as_deref().expect("assistant text");
                 assert!(assistant_text.contains("Search query: 'example query'"));
@@ -337,26 +358,28 @@ mod tests {
                 assert!(assistant_text.contains("URL: https://example.com/one"));
                 assert!(assistant_text.contains("Published: 2026-08-30T00:00:00.000Z"));
                 assert!(assistant_text.contains("Author: First Author"));
+                assert_eq!(assistant_text.matches("Published:").count(), 1);
+                assert_eq!(assistant_text.matches("Author:").count(), 1);
                 assert!(!assistant_text.contains("Highlights:"));
             }
             other => panic!("unexpected tool result variant: {:?}", other),
         }
     }
 
-    fn websearch_sample_text() -> &'static str {
-        r#"Title: Result One
-URL: https://example.com/one
-Published: 2026-08-30T00:00:00.000Z
-Author: First Author
-Highlights:
-Very long first highlight that should not enter the tool result.
-
-Title: Result Two
-URL: https://example.com/two
-Published: N/A
-Author: N/A
-Highlights:
-Very long second highlight that should not enter the tool result.
-"#
+    fn websearch_sample_results() -> Vec<WebSearchResult> {
+        vec![
+            WebSearchResult {
+                title: "Result One".to_string(),
+                url: "https://example.com/one".to_string(),
+                published_at: Some("2026-08-30T00:00:00.000Z".to_string()),
+                author: Some("First Author".to_string()),
+            },
+            WebSearchResult {
+                title: "Result Two".to_string(),
+                url: "https://example.com/two".to_string(),
+                published_at: None,
+                author: None,
+            },
+        ]
     }
 }

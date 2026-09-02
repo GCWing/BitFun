@@ -271,6 +271,21 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
     load: () => import('./pages/AutomationSettingsPage'),
   }),
   definePage({
+    id: 'tools.webSearch',
+    categoryId: 'tools',
+    labelKey: 'navigation.pages.webSearch.label',
+    descriptionKey: 'navigation.pages.webSearch.description',
+    keywords: ['web search', 'exa', 'tavily', 'http', 'provider', 'api key'],
+    namespaces: ['settings/web-search'],
+    searchPhrases: [
+      phrase('settings/web-search', 'title'),
+      phrase('settings/web-search', 'sections.provider.title'),
+      phrase('settings/web-search', 'sections.http.title'),
+      phrase('settings/web-search', 'sections.credential.title'),
+    ],
+    load: () => import('../../../infrastructure/config/components/WebSearchSettingsPage'),
+  }),
+  definePage({
     id: 'tools.mcp',
     categoryId: 'tools',
     labelKey: 'navigation.pages.mcp.label',

@@ -13,7 +13,7 @@ vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
 }));
 
 describe('settings information architecture', () => {
-  it('uses five ownership categories and sixteen canonical pages', () => {
+  it('uses five ownership categories and seventeen canonical pages', () => {
     expect(SETTINGS_CATEGORIES.map((category) => category.id)).toEqual([
       'application',
       'ai',
@@ -21,8 +21,8 @@ describe('settings information architecture', () => {
       'tools',
       'data',
     ]);
-    expect(SETTINGS_PAGE_MANIFESTS).toHaveLength(16);
-    expect(new Set(SETTINGS_PAGE_MANIFESTS.map((page) => page.id)).size).toBe(16);
+    expect(SETTINGS_PAGE_MANIFESTS).toHaveLength(17);
+    expect(new Set(SETTINGS_PAGE_MANIFESTS.map((page) => page.id)).size).toBe(17);
   });
 
   it('keeps memory with AI, pet with application, and review inside execution', () => {
@@ -55,11 +55,12 @@ describe('settings information architecture', () => {
       ]));
   });
 
-  it('keeps external-source governance outside Settings while retaining MCP and ACP owners', () => {
+  it('keeps external-source governance outside Settings while retaining WebSearch, MCP, and ACP owners', () => {
     expect(SETTINGS_CATEGORIES.find((category) => category.id === 'tools')?.pages.map((page) => page.id))
       .toEqual([
         'tools.execution',
         'tools.automation',
+        'tools.webSearch',
         'tools.mcp',
         'tools.acp',
       ]);

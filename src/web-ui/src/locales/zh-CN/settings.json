@@ -26,6 +26,7 @@
       "execution": { "label": "执行与权限", "description": "工具权限、执行策略、Review 容量与容错。" },
       "deviceControl": { "label": "桌面与浏览器", "description": "Computer Use、系统授权与浏览器连接。" },
       "automation": { "label": "自动化", "description": "快捷动作与 Agent 生命周期 Hooks。" },
+      "webSearch": { "label": "网页搜索", "description": "选择 WebSearch 服务、端点与设备本地凭据。" },
       "mcp": { "label": "MCP", "description": "管理 MCP 服务器、连接与对外提供的工具。" },
       "acp": { "label": "ACP Agent", "description": "配置通过 Agent Client Protocol 接入的外部 Agent。" },
       "usage": { "label": "调用统计", "description": "模型请求数、Token 用量与缓存命中率。" },

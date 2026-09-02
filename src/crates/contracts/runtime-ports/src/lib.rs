@@ -25,6 +25,8 @@ mod plugin;
 mod product_search;
 #[cfg(feature = "script-tool-runtime")]
 mod script_tool;
+#[cfg(feature = "web-search-port")]
+mod web_search;
 #[cfg(feature = "product-search")]
 pub use bitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse,
@@ -78,6 +80,8 @@ pub use script_tool::{
     ScriptToolInvokeResponse, ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
     ScriptToolRuntimeAvailability,
 };
+#[cfg(feature = "web-search-port")]
+pub use web_search::*;
 
 pub type PortResult<T> = Result<T, PortError>;
 

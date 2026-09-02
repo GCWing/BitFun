@@ -419,7 +419,17 @@ script-tool-runtime = [
     "tokio/time",
     "which",
 ]
-web-tools = ["bitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "thiserror"]
+web-tools = [
+    "async-trait",
+    "bitfun-runtime-ports/web-search-port",
+    "bitfun-services-core/tls-provider",
+    "chrono",
+    "futures-util",
+    "reqwest",
+    "reqwest/json",
+    "reqwest/rustls-no-provider",
+    "thiserror",
+]
 product-full = [
     "announcement",
     "models-dev",

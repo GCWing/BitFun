@@ -119,6 +119,39 @@ pub(crate) async fn set_config(state: &PeerHostState, args: &Value) -> Result<Va
     Ok(outcome)
 }
 
+pub(crate) async fn get_web_search_credential_status(args: &Value) -> Result<Value, String> {
+    let request = request_value(args);
+    let provider = request
+        .get("provider")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Missing or invalid 'provider' field".to_string())?;
+    let status = bitfun_core::service::web_search::get_web_search_credential_status(provider)
+        .await
+        .map_err(|error| format!("Failed to read WebSearch credential status: {error}"))?;
+    serde_json::to_value(status)
+        .map_err(|error| format!("Failed to serialize WebSearch credential status: {error}"))
+}
+
+pub(crate) async fn save_web_search_credential(args: &Value) -> Result<Value, String> {
+    let request = serde_json::from_value(request_value(args).clone())
+        .map_err(|error| format!("Invalid WebSearch credential request: {error}"))?;
+    let status = bitfun_core::service::web_search::save_web_search_credential(request)
+        .await
+        .map_err(|error| format!("Failed to save WebSearch credential: {error}"))?;
+    serde_json::to_value(status)
+        .map_err(|error| format!("Failed to serialize WebSearch credential status: {error}"))
+}
+
+pub(crate) async fn clear_web_search_credential(args: &Value) -> Result<Value, String> {
+    let request = serde_json::from_value(request_value(args).clone())
+        .map_err(|error| format!("Invalid WebSearch credential clear request: {error}"))?;
+    let status = bitfun_core::service::web_search::clear_web_search_credential(request)
+        .await
+        .map_err(|error| format!("Failed to clear WebSearch credential: {error}"))?;
+    serde_json::to_value(status)
+        .map_err(|error| format!("Failed to serialize WebSearch credential status: {error}"))
+}
+
 pub(crate) async fn get_agent_profile_config(args: &Value) -> Result<Value, String> {
     // Desktop Tauri takes top-level `agentId` (not always under `request`).
     let agent_id = crate::peer_host::args::get_string(args, "agentId")

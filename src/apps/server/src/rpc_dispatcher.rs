@@ -172,6 +172,29 @@ pub async fn dispatch(
                 .map_err(|e| anyhow!("{}", e))?;
             Ok(serde_json::json!("ok"))
         }
+        "get_web_search_credential_status" => {
+            let request = extract_request(&params)?;
+            let provider = get_string(&request, "provider")?;
+            let status =
+                bitfun_core::service::web_search::get_web_search_credential_status(&provider)
+                    .await
+                    .map_err(|error| anyhow!(error.to_string()))?;
+            Ok(serde_json::to_value(status)?)
+        }
+        "save_web_search_credential" => {
+            let request = serde_json::from_value(extract_request(&params)?.clone())?;
+            let status = bitfun_core::service::web_search::save_web_search_credential(request)
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
+            Ok(serde_json::to_value(status)?)
+        }
+        "clear_web_search_credential" => {
+            let request = serde_json::from_value(extract_request(&params)?.clone())?;
+            let status = bitfun_core::service::web_search::clear_web_search_credential(request)
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
+            Ok(serde_json::to_value(status)?)
+        }
         "get_model_configs" => {
             let models = state
                 .config_service
