@@ -40,23 +40,28 @@ pub(crate) async fn attach_controller(device_id: String) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) async fn detach_controller(device_id: &str) -> bool {
+/// Remove one DeviceEvent delivery target.
+///
+/// Controller presence is not Runtime ownership. In particular, removing the
+/// final target must not expose a lifecycle signal that callers could turn into
+/// cancellation of a Host-accepted Turn.
+pub(crate) async fn detach_controller(device_id: &str) {
     let _delivery = controller_delivery().write().await;
-    control_subscribers()
-        .lock()
-        .map(|mut registry| detach_from_registry(&mut registry, device_id))
-        .unwrap_or(false)
+    if let Ok(mut registry) = control_subscribers().lock() {
+        detach_from_registry(&mut registry, device_id);
+    }
 }
 
-pub(crate) async fn retain_online_controllers<'a>(
-    online: impl IntoIterator<Item = &'a str>,
-) -> bool {
+/// Retain only currently reachable DeviceEvent delivery targets.
+///
+/// Losing every target does not end Host-owned Turns; the Runtime projection is
+/// kept for a later controller attachment.
+pub(crate) async fn retain_online_controllers<'a>(online: impl IntoIterator<Item = &'a str>) {
     let online = online.into_iter().collect::<HashSet<_>>();
     let _delivery = controller_delivery().write().await;
-    control_subscribers()
-        .lock()
-        .map(|mut registry| retain_online_in_registry(&mut registry, &online))
-        .unwrap_or(false)
+    if let Ok(mut registry) = control_subscribers().lock() {
+        retain_online_in_registry(&mut registry, &online);
+    }
 }
 
 pub(crate) async fn controller_delivery_lease(
@@ -70,17 +75,14 @@ pub(crate) async fn controller_delivery_lease(
     attached.then_some(lease)
 }
 
-fn detach_from_registry(registry: &mut ControllerRegistry, device_id: &str) -> bool {
-    let was_attached = registry.ids.remove(device_id);
-    was_attached && registry.ids.is_empty()
+fn detach_from_registry(registry: &mut ControllerRegistry, device_id: &str) {
+    registry.ids.remove(device_id);
 }
 
-fn retain_online_in_registry(registry: &mut ControllerRegistry, online: &HashSet<&str>) -> bool {
-    let had_controllers = !registry.ids.is_empty();
+fn retain_online_in_registry(registry: &mut ControllerRegistry, online: &HashSet<&str>) {
     registry
         .ids
         .retain(|device_id| online.contains(device_id.as_str()));
-    had_controllers && registry.ids.is_empty()
 }
 
 pub(crate) fn attached_controllers() -> Vec<String> {
@@ -148,24 +150,31 @@ mod tests {
     };
 
     #[test]
-    fn only_the_last_detach_reports_loss_of_all_controllers() {
+    fn detach_only_updates_delivery_subscribers() {
         let mut registry = ControllerRegistry {
             ids: HashSet::from(["controller-1".to_string(), "controller-2".to_string()]),
         };
-        assert!(!detach_from_registry(&mut registry, "controller-1"));
-        assert!(detach_from_registry(&mut registry, "controller-2"));
-        assert!(!detach_from_registry(&mut registry, "controller-2"));
+        detach_from_registry(&mut registry, "controller-1");
+        assert_eq!(registry.ids, HashSet::from(["controller-2".to_string()]));
+
+        detach_from_registry(&mut registry, "controller-2");
+        assert!(registry.ids.is_empty());
+
+        detach_from_registry(&mut registry, "controller-2");
+        assert!(registry.ids.is_empty());
     }
 
     #[test]
-    fn presence_removal_reports_when_the_last_controller_goes_offline() {
+    fn presence_removal_only_updates_delivery_subscribers() {
         let mut registry = ControllerRegistry {
             ids: HashSet::from(["controller-1".to_string(), "controller-2".to_string()]),
         };
         let first_online = HashSet::from(["controller-1"]);
-        assert!(!retain_online_in_registry(&mut registry, &first_online));
+        retain_online_in_registry(&mut registry, &first_online);
+        assert_eq!(registry.ids, HashSet::from(["controller-1".to_string()]));
 
-        assert!(retain_online_in_registry(&mut registry, &HashSet::new()));
+        retain_online_in_registry(&mut registry, &HashSet::new());
+        assert!(registry.ids.is_empty());
     }
 
     #[tokio::test]

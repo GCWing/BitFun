@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn attach_detach_updates_subscribers() {
+    async fn attach_detach_only_updates_delivery_subscribers() {
         let _ = handle_host_invoke(
             "peer_control_attach",
             json!({ "controller_device_id": "ctrl-test-1" }),

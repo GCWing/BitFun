@@ -210,7 +210,11 @@ FS) and must not be mixed with Peer Device Mode.
   any other.
 - Selecting this machine only changes what is rendered; peers stay attached and
   keep working. `Disconnect` in the switcher is the separate, explicit action
-  that ends a peer's control link and cancels the work it runs for us.
+  that ends a peer's control link and discards that peer's cached Surface state
+  on the controller. It does not cancel a Turn the peer has already accepted;
+  reconnecting later reattaches to the Host-owned Runtime projection. Pending
+  controller-only interactions still follow their owner's mailbox or fail-closed
+  policy.
 - Local-only commands (window chrome, updater, account login/logout, peer
   control plane) never execute on the peer on behalf of a controller.
 - Unsupported or denied commands fail loudly; they must not fall back to the
@@ -286,17 +290,21 @@ FS) and must not be mixed with Peer Device Mode.
   the exact observed tool and turn. Confirmable Peer tools always wait for the
   controller even when the host's global policy skips confirmation, so an Agent
   pauses until the controller responds; exact background-result follow-ups
-  retain this Peer-only confirmation requirement. The host cancels tracked turns when the
-  last controller detaches/goes offline or the agent-event subscription
-  lags/closes; continuity loss also projects the existing dialog-turn-failed
-  terminal event. Terminal ownership remains tracked until the event reaches the
-  delivery attempt, and a closed local delivery queue uses the same direct
-  DeviceEvent path. Delivery targets are captured when an event is queued and
-  rechecked against the currently attached set before each send. A per-target
-  delivery lease serializes detach or offline removal with the local Relay
-  enqueue attempt. An explicit disconnect still restores the local controller
-  UI, but reports a warning when host cancellation was not confirmed. This
-  boundary does not change the Relay envelope or add ACK or replay.
+  retain this Peer-only confirmation requirement. The host keeps tracked Turns
+  running when the last controller detaches or goes offline and continues
+  materializing their Runtime projection for a later attach. Actual agent-event
+  subscription lag or closure remains a continuity failure: it cancels tracked
+  Turns and projects the existing dialog-turn-failed terminal event. Terminal
+  ownership remains tracked until the event reaches the delivery attempt, and a
+  closed local delivery queue uses the same direct DeviceEvent path. Delivery
+  targets are captured when an event is queued and rechecked against the
+  currently attached set before each send. A per-target delivery lease serializes
+  detach or offline removal with the local Relay enqueue attempt. An explicit
+  disconnect still restores the local controller UI and reports a warning when
+  the host does not confirm attachment teardown; that uncertainty concerns the
+  control link and controller-scoped interaction cleanup, not cancellation of
+  Host-accepted work. This boundary does not change the Relay envelope or add
+  ACK or replay.
 - Relay `POST /api/devices/:id/rpc` still permits up to **120s** for generic
   callers. Peer controllers normally cancel earlier through their per-command
   10s/30s deadlines; reverse proxies must still accommodate any other caller

@@ -323,7 +323,7 @@ describe('PeerConnectionManager disposal', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('detaches, disposes the transport, and drops the entry', async () => {
+  it('detaches without issuing a Turn cancellation command', async () => {
     const rpc = createRpc();
     const manager = createManager(rpc.deviceRpc);
     const connection = await manager.connect('peer-1', 'Studio');
@@ -331,6 +331,8 @@ describe('PeerConnectionManager disposal', () => {
     await manager.dispose('peer-1');
 
     expect(rpc.commands()).toContain('peer_control_detach');
+    expect(rpc.commands()).not.toContain('cancel_dialog_turn');
+    expect(rpc.commands()).not.toContain('cancel_acp_dialog_turn');
     expect(connection.adapter.isDisposed()).toBe(true);
     expect(manager.get('peer-1')).toBeUndefined();
     expect(manager.list()).toEqual([]);

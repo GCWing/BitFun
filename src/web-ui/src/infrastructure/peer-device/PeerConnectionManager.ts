@@ -271,9 +271,11 @@ export class PeerConnectionManager {
    * End a control link for good: stop its timers, settle everything still
    * waiting on its transport, then tell the peer.
    *
-   * The detach RPC is last and its failure is re-thrown, because a peer that
-   * did not confirm may still be running our work — the caller decides whether
-   * that is worth surfacing. Local teardown has already completed either way.
+   * The detach RPC is last and its failure is re-thrown because the controller
+   * cannot otherwise confirm that the Host removed its delivery subscription
+   * and finalized controller-scoped interactions. Host-accepted work remains
+   * Host-owned and keeps running either way. Local teardown has already
+   * completed before the RPC settles.
    */
   async dispose(deviceId: string, options: PeerDisposeOptions = {}): Promise<void> {
     const entry = this.entries.get(deviceId);
