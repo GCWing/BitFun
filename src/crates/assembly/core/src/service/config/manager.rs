@@ -151,6 +151,7 @@ fn config_value_for_persistence(config: &GlobalConfig) -> BitFunResult<Value> {
     prune_default_ai_tool_argument_json_repair(&mut value);
     prune_default_ai_max_rounds(&mut value);
     prune_default_memories_config(&mut value)?;
+    prune_default_web_search_config(&mut value)?;
     Ok(value)
 }
 
@@ -204,6 +205,56 @@ fn prune_default_memories_config(config_value: &mut Value) -> BitFunResult<()> {
     }
 
     Ok(())
+}
+
+fn prune_default_web_search_config(config_value: &mut Value) -> BitFunResult<()> {
+    let Some(ai_config) = config_value.get_mut("ai").and_then(Value::as_object_mut) else {
+        return Ok(());
+    };
+    let Some(web_search) = ai_config
+        .get_mut("web_search")
+        .and_then(Value::as_object_mut)
+    else {
+        return Ok(());
+    };
+
+    let defaults = serde_json::to_value(WebSearchConfig::default()).map_err(|e| {
+        BitFunError::config(format!(
+            "Failed to serialize default WebSearch config: {}",
+            e
+        ))
+    })?;
+    let defaults = defaults
+        .as_object()
+        .expect("WebSearchConfig serializes as an object");
+    prune_matching_default_fields(web_search, defaults);
+
+    if web_search.is_empty() {
+        ai_config.remove("web_search");
+    }
+    Ok(())
+}
+
+fn prune_matching_default_fields(
+    current: &mut serde_json::Map<String, Value>,
+    defaults: &serde_json::Map<String, Value>,
+) {
+    for (key, default_value) in defaults {
+        let should_remove = match current.get_mut(key) {
+            Some(current_value) if current_value == default_value => true,
+            Some(Value::Object(current_object)) => {
+                let Value::Object(default_object) = default_value else {
+                    continue;
+                };
+                prune_matching_default_fields(current_object, default_object);
+                current_object.is_empty()
+            }
+            _ => false,
+        };
+        if should_remove {
+            current.remove(key);
+        }
+    }
 }
 
 /// Configuration manager.
@@ -1383,5 +1434,66 @@ mod tests {
                 "max_rollouts_per_startup": 12
             }))
         );
+    }
+
+    #[test]
+    fn persistence_omits_default_web_search_config_and_restores_defaults() {
+        let config = GlobalConfig::default();
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert!(value["ai"].get("web_search").is_none());
+
+        let restored: GlobalConfig =
+            serde_json::from_value(value).expect("default-sparse config should deserialize");
+        assert_eq!(restored.ai.web_search, config.ai.web_search);
+    }
+
+    #[test]
+    fn persistence_keeps_only_non_default_web_search_fields_and_unknown_extensions() {
+        let mut config = GlobalConfig::default();
+        let web_search = &mut config.ai.web_search;
+        web_search.provider = "bitfun_search_http".to_string();
+        web_search
+            .unknown
+            .insert("selectionRevision".to_string(), serde_json::json!(7));
+        web_search.providers.unknown.insert(
+            "future_search".to_string(),
+            serde_json::json!({ "endpoint": "https://future.example/search" }),
+        );
+        let http = &mut web_search.providers.bitfun_search_http;
+        http.endpoint = "https://search.example.com/search".to_string();
+        http.auth.mode = "header".to_string();
+        http.auth.header_name = "X-Search-Key".to_string();
+        http.unknown
+            .insert("futureHttpOption".to_string(), serde_json::json!(true));
+
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert_eq!(
+            value["ai"].get("web_search"),
+            Some(&serde_json::json!({
+                "provider": "bitfun_search_http",
+                "providers": {
+                    "bitfun_search_http": {
+                        "endpoint": "https://search.example.com/search",
+                        "auth": {
+                            "mode": "header",
+                            "headerName": "X-Search-Key"
+                        },
+                        "futureHttpOption": true
+                    },
+                    "future_search": {
+                        "endpoint": "https://future.example/search"
+                    }
+                },
+                "selectionRevision": 7
+            }))
+        );
+
+        let restored: GlobalConfig =
+            serde_json::from_value(value).expect("sparse config should deserialize");
+        assert_eq!(restored.ai.web_search, config.ai.web_search);
     }
 }

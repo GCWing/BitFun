@@ -95,6 +95,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   bodySurface = true,
   ...props
 }) => {
+  const hasBody = children !== null && children !== undefined && children !== false;
   const bodyClassName = [
     'bitfun-config-page-section__body',
     !bodySurface && 'bitfun-config-page-section__body--flush',
@@ -120,15 +121,17 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
       ) : undefined}
       {...props}
     >
-      <FieldGroup
-        appearance={bodySurface ? 'subtle' : 'plain'}
-        className={bodyClassName}
-        data-bf-component="config"
-        data-bf-part="sectionBody"
-        dividers={false}
-      >
-        {children}
-      </FieldGroup>
+      {hasBody ? (
+        <FieldGroup
+          appearance={bodySurface ? 'subtle' : 'plain'}
+          className={bodyClassName}
+          data-bf-component="config"
+          data-bf-part="sectionBody"
+          dividers={false}
+        >
+          {children}
+        </FieldGroup>
+      ) : null}
     </FormSection>
   );
 };

@@ -303,6 +303,8 @@ browser-control = [
     "tokio/time",
 ]
 web-tools = [
+    "bitfun-runtime-ports/web-search-port",
+    "bitfun-services-core/credential-vault",
     "bitfun-services-integrations/web-tools",
     "tool-runtime/web-readable",
 ]

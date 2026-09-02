@@ -1414,6 +1414,7 @@ export function findProductEntrypointCoreFeatureViolations(
       'git',
       'i18n-runtime',
       'remote-connect',
+      'web-tools',
     ]],
     ['bitfun-sdk-host-app', coreCompatibilityReviewedFeatures],
   ]);
@@ -1497,6 +1498,7 @@ export function findProductEntrypointCoreFeatureViolations(
       'tools-agent-control',
       'tools-basic',
       'ts',
+      'web-tools',
       'workspace-search',
       'workspace-runtime',
       'workspace-watch',

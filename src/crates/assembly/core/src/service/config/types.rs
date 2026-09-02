@@ -996,6 +996,11 @@ pub struct AIConfig {
     #[serde(default)]
     pub browser_control_preferred_browser: String,
 
+    /// Provider-neutral WebSearch runtime configuration. Credentials are
+    /// referenced by logical id and remain in the device-local encrypted vault.
+    #[serde(default)]
+    pub web_search: WebSearchConfig,
+
     /// Reattach to an already-running browser when BitFun starts. Off by
     /// default: the browser forgets its approval when it restarts, so this can
     /// put an approval dialog in front of the user before they asked for the
@@ -1007,6 +1012,132 @@ pub struct AIConfig {
     /// Zero disables the fixed round limit.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
+}
+
+fn default_web_search_provider() -> String {
+    "exa_mcp_free".to_string()
+}
+
+fn default_exa_search_credential_id() -> String {
+    "exa-search-api".to_string()
+}
+
+fn default_tavily_credential_id() -> String {
+    "tavily-search-api".to_string()
+}
+
+fn default_bitfun_search_http_credential_id() -> String {
+    "bitfun-search-http".to_string()
+}
+
+/// Non-secret WebSearch settings that are safe to persist and synchronize.
+/// Unknown fields are retained so a newer provider configuration survives an
+/// older BitFun build reading and writing the document.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WebSearchConfig {
+    #[serde(default = "default_web_search_provider")]
+    pub provider: String,
+    #[serde(default)]
+    pub providers: WebSearchProviderConfigs,
+    #[serde(flatten)]
+    pub unknown: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_web_search_provider(),
+            providers: WebSearchProviderConfigs::default(),
+            unknown: serde_json::Map::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "snake_case")]
+pub struct WebSearchProviderConfigs {
+    pub exa_search_api: WebSearchCredentialProviderConfig,
+    pub tavily: WebSearchCredentialProviderConfig,
+    pub bitfun_search_http: BitFunSearchHttpConfig,
+    #[serde(flatten)]
+    pub unknown: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for WebSearchProviderConfigs {
+    fn default() -> Self {
+        Self {
+            exa_search_api: WebSearchCredentialProviderConfig {
+                credential_id: default_exa_search_credential_id(),
+                unknown: serde_json::Map::new(),
+            },
+            tavily: WebSearchCredentialProviderConfig {
+                credential_id: default_tavily_credential_id(),
+                unknown: serde_json::Map::new(),
+            },
+            bitfun_search_http: BitFunSearchHttpConfig::default(),
+            unknown: serde_json::Map::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WebSearchCredentialProviderConfig {
+    pub credential_id: String,
+    #[serde(flatten)]
+    pub unknown: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for WebSearchCredentialProviderConfig {
+    fn default() -> Self {
+        Self {
+            credential_id: String::new(),
+            unknown: serde_json::Map::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BitFunSearchHttpConfig {
+    pub endpoint: String,
+    pub auth: BitFunSearchHttpAuthConfig,
+    #[serde(flatten)]
+    pub unknown: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for BitFunSearchHttpConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: String::new(),
+            auth: BitFunSearchHttpAuthConfig::default(),
+            unknown: serde_json::Map::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BitFunSearchHttpAuthConfig {
+    /// `none`, `bearer`, or `header`. Kept as a string so unknown future modes
+    /// round-trip and fail explicitly only when selected at runtime.
+    pub mode: String,
+    pub credential_id: String,
+    pub header_name: String,
+    #[serde(flatten)]
+    pub unknown: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for BitFunSearchHttpAuthConfig {
+    fn default() -> Self {
+        Self {
+            mode: "none".to_string(),
+            credential_id: default_bitfun_search_http_credential_id(),
+            header_name: String::new(),
+            unknown: serde_json::Map::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1827,6 +1958,7 @@ impl Default for AIConfig {
             allow_tool_json_repair: true,
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
+            web_search: WebSearchConfig::default(),
             browser_control_auto_connect_on_startup: false,
             max_rounds: default_max_rounds(),
         }
@@ -2101,7 +2233,7 @@ mod tests {
         AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, GlobalConfig,
         MemoryExternalContextPolicy, ModelExchangeTracingMode, NotificationConfig, OpenCodePlan,
         SubagentBatchExecutionPolicy, SubagentModelSelection, SubscriptionProvider,
-        UserSkillGroupsConfig, UserToolGroupsConfig,
+        UserSkillGroupsConfig, UserToolGroupsConfig, WebSearchConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
 
@@ -3312,5 +3444,49 @@ mod tests {
         let serialized =
             serde_json::to_value(&config).expect("review team auxiliary config should serialize");
         assert!(serialized["review_teams"]["rate_limit_status"].is_null());
+    }
+
+    #[test]
+    fn legacy_ai_config_defaults_web_search_to_free_exa() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": []
+        }))
+        .expect("legacy AI config should deserialize");
+
+        assert_eq!(config.web_search.provider, "exa_mcp_free");
+        assert_eq!(
+            config.web_search.providers.exa_search_api.credential_id,
+            "exa-search-api"
+        );
+    }
+
+    #[test]
+    fn web_search_config_preserves_unknown_provider_and_fields() {
+        let config: WebSearchConfig = serde_json::from_value(serde_json::json!({
+            "provider": "future_search",
+            "providers": {
+                "exa_search_api": {
+                    "credentialId": "exa-device-ref",
+                    "futureOption": true
+                },
+                "future_search": {
+                    "endpoint": "https://future.example/search"
+                }
+            },
+            "selectionRevision": 7
+        }))
+        .expect("future WebSearch config should deserialize");
+
+        let serialized = serde_json::to_value(config).expect("WebSearch config should serialize");
+        assert_eq!(serialized["provider"], "future_search");
+        assert_eq!(serialized["selectionRevision"], 7);
+        assert_eq!(
+            serialized["providers"]["exa_search_api"]["futureOption"],
+            true
+        );
+        assert_eq!(
+            serialized["providers"]["future_search"]["endpoint"],
+            "https://future.example/search"
+        );
     }
 }

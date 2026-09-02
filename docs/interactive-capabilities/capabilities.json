@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "8014d639f49b04d3364042fa99feceed760568682cea66995ff798862f07977b",
+  "digest": "e6de7c47ef80d430801ba783d5adb016c7e6367a147a6eb54cdb9f70a746a61d",
   "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
   "searchAcceptance": [
     {
@@ -136,13 +136,13 @@
   ],
   "counts": {
     "features": 22,
-    "settings": 16,
-    "userFacing": 38,
-    "documentedItems": 317,
+    "settings": 17,
+    "userFacing": 39,
+    "documentedItems": 321,
     "controlCoverage": {
       "direct": 49,
       "delegated": 62,
-      "interactive": 206,
+      "interactive": 210,
       "unsupported": 0
     }
   },
@@ -16347,6 +16347,238 @@
       }
     },
     {
+      "id": "setting.tools.web-search:query",
+      "capabilityId": "setting.tools.web-search",
+      "itemIds": [
+        "provider",
+        "http-endpoint",
+        "device-credential",
+        "http-protocol"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      }
+    },
+    {
+      "id": "setting.tools.web-search:open:provider",
+      "capabilityId": "setting.tools.web-search",
+      "itemIds": [
+        "provider"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      }
+    },
+    {
+      "id": "setting.tools.web-search:open:http-endpoint",
+      "capabilityId": "setting.tools.web-search",
+      "itemIds": [
+        "http-endpoint"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      }
+    },
+    {
+      "id": "setting.tools.web-search:open:device-credential",
+      "capabilityId": "setting.tools.web-search",
+      "itemIds": [
+        "device-credential"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "secretEntry",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      }
+    },
+    {
+      "id": "setting.tools.web-search:open:http-protocol",
+      "capabilityId": "setting.tools.web-search",
+      "itemIds": [
+        "http-protocol"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "visualSelection",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      }
+    },
+    {
       "id": "setting.tools.mcp:query",
       "capabilityId": "setting.tools.mcp",
       "itemIds": [
@@ -27174,6 +27406,149 @@
         "Apply a focused Edit only to handlers or events the user requested, then read back to verify; the existing Hooks contract reloads it at runtime"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.automation/"
+    },
+    {
+      "id": "setting.tools.web-search",
+      "kind": "setting",
+      "categoryId": "automation",
+      "titleZh": "网页搜索",
+      "titleEn": "Web Search",
+      "summaryZh": "选择 WebSearch 工具运行时使用的搜索服务，并配置自建 HTTP 端点与当前执行主机的设备凭据。",
+      "summaryEn": "Choose the search provider used by the WebSearch tool at runtime and configure custom HTTP endpoints and credentials on the current execution host.",
+      "keywordsZh": [
+        "网页搜索",
+        "WebSearch",
+        "Exa",
+        "Tavily",
+        "搜索服务",
+        "API Key",
+        "自定义端点"
+      ],
+      "keywordsEn": [
+        "web search",
+        "WebSearch",
+        "Exa",
+        "Tavily",
+        "search provider",
+        "API key",
+        "custom endpoint"
+      ],
+      "highlightsZh": [
+        "切换 WebSearch 运行时搜索服务",
+        "在执行主机上加密保存设备凭据",
+        "配置和查看 BitFun Search HTTP Protocol v1"
+      ],
+      "highlightsEn": [
+        "Switch the WebSearch runtime provider",
+        "Store device credentials encrypted on the execution host",
+        "Configure and inspect BitFun Search HTTP Protocol v1"
+      ],
+      "items": [
+        {
+          "id": "provider",
+          "titleZh": "在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务",
+          "titleEn": "Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务”与各服务的配置状态相关，目前没有一个能安全完成选择、检查和保存整个流程的单一结构化 Command；Agent 会打开精确设置入口，由用户确认配置。",
+            "reasonEn": "“Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider” depends on provider-specific configuration state, and no single structured Command can safely complete selection, validation, and saving; the Agent opens the exact settings entry for user confirmation."
+          }
+        },
+        {
+          "id": "http-endpoint",
+          "titleZh": "为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
+          "titleEn": "Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header”包含 URL、安全限制和认证方式等关联字段，需要在设置页中一起校验并明确保存；Agent 会打开对应入口而不猜测端点配置。",
+            "reasonEn": "“Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol” combines URL, security restrictions, and authentication fields that must be validated and explicitly saved together in Settings; the Agent opens the corresponding entry instead of guessing endpoint configuration."
+          }
+        },
+        {
+          "id": "device-credential",
+          "titleZh": "查看当前执行主机的凭据状态，并保存、替换或清除 API Key/Secret",
+          "titleEn": "Inspect credential status on the current execution host and save, replace, or clear an API key or secret",
+          "control": {
+            "kind": "open",
+            "reasonCode": "secretEntry",
+            "reasonZh": "WebSearch API Key 和 Secret 只应在受保护的设备凭据输入框中录入或清除；Agent 可以打开该设置入口，但不会读取、回显或代填凭据原值。",
+            "reasonEn": "WebSearch API keys and secrets must only be entered or cleared through the protected device-credential field; the Agent can open that settings entry but does not read, echo, or fill raw credential values."
+          }
+        },
+        {
+          "id": "http-protocol",
+          "titleZh": "查看并复制 BitFun Search HTTP Protocol v1 的请求、响应和传输限制",
+          "titleEn": "Inspect and copy the request, response, and transport limits for BitFun Search HTTP Protocol v1",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "协议说明仅在选中 BitFun Search HTTP Protocol 时显示，并由设置页提供完整可复制内容；Agent 会打开精确入口，避免用不完整摘要替代产品内协议。",
+            "reasonEn": "The protocol specification is shown only when BitFun Search HTTP Protocol is selected and the Settings page owns the complete copyable content; the Agent opens the exact entry instead of substituting an incomplete summary."
+          }
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 网页搜索”",
+        "选择搜索服务，完成所需配置并保存"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Web Search",
+        "Choose a provider, complete its required configuration, and save"
+      ],
+      "agentExamplesZh": [
+        "打开网页搜索设置",
+        "带我配置 WebSearch 搜索服务"
+      ],
+      "agentExamplesEn": [
+        "Open Web Search settings",
+        "Take me to WebSearch provider setup"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.tools.web-search",
+        "网页搜索",
+        "Web Search",
+        "扩展与自动化",
+        "Extensions & automation",
+        "WebSearch",
+        "Exa",
+        "Tavily",
+        "搜索服务",
+        "API Key",
+        "自定义端点",
+        "web search",
+        "search provider",
+        "API key",
+        "custom endpoint",
+        "切换 WebSearch 运行时搜索服务",
+        "在执行主机上加密保存设备凭据",
+        "配置和查看 BitFun Search HTTP Protocol v1",
+        "Switch the WebSearch runtime provider",
+        "Store device credentials encrypted on the execution host",
+        "Configure and inspect BitFun Search HTTP Protocol v1",
+        "在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务",
+        "Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider",
+        "为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
+        "Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol",
+        "查看当前执行主机的凭据状态，并保存、替换或清除 API Key/Secret",
+        "Inspect credential status on the current execution host and save, replace, or clear an API key or secret",
+        "查看并复制 BitFun Search HTTP Protocol v1 的请求、响应和传输限制",
+        "Inspect and copy the request, response, and transport limits for BitFun Search HTTP Protocol v1",
+        "打开网页搜索设置",
+        "带我配置 WebSearch 搜索服务",
+        "Open Web Search settings",
+        "Take me to WebSearch provider setup"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.web-search/"
     },
     {
       "id": "setting.tools.mcp",

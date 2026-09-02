@@ -47,6 +47,8 @@ pub mod session_usage; // Session runtime usage reports
 pub mod snapshot; // Snapshot-based change tracking
 #[cfg(feature = "agent-runtime")]
 pub mod token_usage; // Token usage tracking
+#[cfg(feature = "web-tools")]
+pub mod web_search; // Provider-neutral WebSearch runtime and local credentials
 #[cfg(feature = "workspace-runtime")]
 pub mod workspace; // Workspace management // Diff calculation and merge service
 #[cfg(feature = "workspace-runtime")]

@@ -17,6 +17,7 @@ export type SettingsPageId =
   | 'workspace.worktrees'
   | 'tools.execution'
   | 'tools.automation'
+  | 'tools.webSearch'
   | 'tools.mcp'
   | 'tools.acp'
   | 'data.usage'

@@ -26,6 +26,7 @@
       "execution": { "label": "Execution & Permissions", "description": "Tool permissions, execution policy, review capacity, and recovery." },
       "deviceControl": { "label": "Desktop & Browser", "description": "Computer Use, OS grants, and browser connections." },
       "automation": { "label": "Automation", "description": "Quick actions and Agent lifecycle hooks." },
+      "webSearch": { "label": "Web Search", "description": "Choose the WebSearch provider, endpoint, and device-local credential." },
       "mcp": { "label": "MCP", "description": "Manage MCP servers, connections, and exposed tools." },
       "acp": { "label": "ACP Agents", "description": "Configure external agents that connect through Agent Client Protocol." },
       "usage": { "label": "Call Statistics", "description": "Model requests, token usage, and cache hit rates." },

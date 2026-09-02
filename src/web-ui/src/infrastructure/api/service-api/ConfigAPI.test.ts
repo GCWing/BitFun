@@ -96,6 +96,31 @@ describe('ConfigAPI batch config reads', () => {
     });
   });
 
+  it('keeps WebSearch credentials on the dedicated secret commands', async () => {
+    invokeMock
+      .mockResolvedValueOnce({ provider: 'tavily', configured: false })
+      .mockResolvedValueOnce({ provider: 'tavily', configured: true })
+      .mockResolvedValueOnce({ provider: 'tavily', configured: false });
+
+    await configAPI.getWebSearchCredentialStatus('tavily');
+    await configAPI.saveWebSearchCredential('tavily', 'tvly-secret');
+    await configAPI.clearWebSearchCredential('tavily');
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'get_web_search_credential_status', {
+      request: { provider: 'tavily' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'save_web_search_credential', {
+      request: { provider: 'tavily', secret: 'tvly-secret' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, 'clear_web_search_credential', {
+      request: { provider: 'tavily' },
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'set_config',
+      expect.objectContaining({ request: expect.objectContaining({ value: 'tvly-secret' }) }),
+    );
+  });
+
   it('bounds Skill catalog requests at sixty seconds', async () => {
     invokeMock.mockResolvedValue([]);
 

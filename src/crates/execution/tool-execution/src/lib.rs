@@ -11,4 +11,3 @@ pub mod shell_analysis;
 pub mod util;
 #[cfg(feature = "web-readable")]
 pub mod web_readable;
-pub mod web_search;

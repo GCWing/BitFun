@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "8014d639f49b04d3364042fa99feceed760568682cea66995ff798862f07977b",
-  "count": 206,
+  "catalogDigest": "e6de7c47ef80d430801ba783d5adb016c7e6367a147a6eb54cdb9f70a746a61d",
+  "count": 210,
   "reasonCounts": {
     "externalAuth": 4,
-    "secretEntry": 4,
-    "unstructuredInteraction": 183,
-    "visualSelection": 15
+    "secretEntry": 5,
+    "unstructuredInteraction": 185,
+    "visualSelection": 16
   },
   "entries": [
     {
@@ -3183,6 +3183,77 @@
         "command:plan_external_hook_import_command",
         "command:mutate_external_hook_import_command",
         "command:apply_external_hook_import_command"
+      ]
+    },
+    {
+      "capabilityId": "setting.tools.web-search",
+      "itemId": "provider",
+      "titleZh": "在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务",
+      "titleEn": "Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "“在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务”与各服务的配置状态相关，目前没有一个能安全完成选择、检查和保存整个流程的单一结构化 Command；Agent 会打开精确设置入口，由用户确认配置。",
+      "reasonEn": "“Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider” depends on provider-specific configuration state, and no single structured Command can safely complete selection, validation, and saving; the Agent opens the exact settings entry for user confirmation.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      },
+      "evidence": [
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#providers"
+      ]
+    },
+    {
+      "capabilityId": "setting.tools.web-search",
+      "itemId": "http-endpoint",
+      "titleZh": "为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
+      "titleEn": "Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "“为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header”包含 URL、安全限制和认证方式等关联字段，需要在设置页中一起校验并明确保存；Agent 会打开对应入口而不猜测端点配置。",
+      "reasonEn": "“Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol” combines URL, security restrictions, and authentication fields that must be validated and explicitly saved together in Settings; the Agent opens the corresponding entry instead of guessing endpoint configuration.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      },
+      "evidence": [
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#fields.endpoint",
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#fields.authMode",
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#fields.headerName"
+      ]
+    },
+    {
+      "capabilityId": "setting.tools.web-search",
+      "itemId": "device-credential",
+      "titleZh": "查看当前执行主机的凭据状态，并保存、替换或清除 API Key/Secret",
+      "titleEn": "Inspect credential status on the current execution host and save, replace, or clear an API key or secret",
+      "reasonCode": "secretEntry",
+      "reasonZh": "WebSearch API Key 和 Secret 只应在受保护的设备凭据输入框中录入或清除；Agent 可以打开该设置入口，但不会读取、回显或代填凭据原值。",
+      "reasonEn": "WebSearch API keys and secrets must only be entered or cleared through the protected device-credential field; the Agent can open that settings entry but does not read, echo, or fill raw credential values.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      },
+      "evidence": [
+        "command:get_web_search_credential_status",
+        "command:save_web_search_credential",
+        "command:clear_web_search_credential",
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#sections.credential.description"
+      ]
+    },
+    {
+      "capabilityId": "setting.tools.web-search",
+      "itemId": "http-protocol",
+      "titleZh": "查看并复制 BitFun Search HTTP Protocol v1 的请求、响应和传输限制",
+      "titleEn": "Inspect and copy the request, response, and transport limits for BitFun Search HTTP Protocol v1",
+      "reasonCode": "visualSelection",
+      "reasonZh": "协议说明仅在选中 BitFun Search HTTP Protocol 时显示，并由设置页提供完整可复制内容；Agent 会打开精确入口，避免用不完整摘要替代产品内协议。",
+      "reasonEn": "The protocol specification is shown only when BitFun Search HTTP Protocol is selected and the Settings page owns the complete copyable content; the Agent opens the exact entry instead of substituting an incomplete summary.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.webSearch"
+      },
+      "evidence": [
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#protocol.request.description",
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#protocol.success.description",
+        "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#protocol.notes.transportLimits"
       ]
     },
     {
