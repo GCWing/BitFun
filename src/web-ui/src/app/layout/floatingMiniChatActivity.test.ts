@@ -20,10 +20,11 @@ function readSource(relativePath: string): string {
 }
 
 describe('floating MiniApp chat activity', () => {
-  it('uses a compact glyph for the standalone chat trigger', () => {
+  it('uses a text-only label for the standalone Hello trigger', () => {
     const component = readSource('./FloatingMiniChat.tsx');
-    expect(component).toContain('<Icon name="side-chat" size="md" />');
-    expect(component).not.toContain('<Icon name="side-chat" size="lg" />');
+    expect(component).toContain('className="bitfun-fmc__button-label"');
+    expect(component).toContain("tVoice('voiceCall.call.launcherLabel')");
+    expect(component).not.toContain('<Icon name="side-chat" size="md" />');
   });
 
   it.each([
