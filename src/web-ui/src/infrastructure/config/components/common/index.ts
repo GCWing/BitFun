@@ -27,3 +27,5 @@ export { ConfigMessage } from './ConfigMessage';
 export type { ConfigMessageData, ConfigMessageProps } from './ConfigMessage';
 export { ConfigRefreshButton } from './ConfigRefreshButton';
 export type { ConfigRefreshButtonProps } from './ConfigRefreshButton';
+export { ConfigRetryState } from './ConfigRetryState';
+export type { ConfigRetryStateProps } from './ConfigRetryState';

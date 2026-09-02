@@ -6,7 +6,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
 import type { AIModelConfig, TaskModelSelection, TaskModelsConfig } from '../types';
-import { ConfigPageRow, ConfigPageSection } from './common';
+import { ConfigPageRow, ConfigPageSection, ConfigRetryState } from './common';
 import { type ModelSelectOption, useModelSelectPresentation } from './ModelSelectPresentation';
 import './RuntimeSettingsPages.scss';
 
@@ -32,6 +32,7 @@ export const SessionTitleConfig: React.FC = () => {
   const { t } = useTranslation('settings/models');
   const { success: notifySuccess, error: notifyError } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [taskModels, setTaskModels] = useState<TaskModelsConfig>(DEFAULT_TASK_MODELS);
@@ -39,6 +40,7 @@ export const SessionTitleConfig: React.FC = () => {
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       const [loadedSettings, allModels, taskModelsData] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
@@ -50,11 +52,11 @@ export const SessionTitleConfig: React.FC = () => {
       setTaskModels(normalizeTaskModels(taskModelsData));
     } catch (error) {
       log.error('Failed to load session title config', error);
-      notifyError(t('sessionTitle.loadFailed'));
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
-  }, [notifyError, t]);
+  }, []);
 
   useEffect(() => {
     void loadData();
@@ -75,16 +77,28 @@ export const SessionTitleConfig: React.FC = () => {
     selection.kind === 'inherit' ? 'inherit' : selection.model_id
   );
   const sessionTitleModelId = selectionValue(taskModels.session_title);
-  const modelOptions = useMemo<ModelSelectOption[]>(() => [
-    { label: t('sessionTitle.model.inherit'), value: 'inherit' },
-    { label: t('sessionTitle.model.fast'), value: 'fast' },
-    { label: t('sessionTitle.model.primary'), value: 'primary' },
-    ...enabledModels
-      .filter((model): model is AIModelConfig & { id: string } => (
-        typeof model.id === 'string' && model.id.trim().length > 0
-      ))
-      .map(buildModelOption),
-  ], [buildModelOption, enabledModels, t]);
+  const modelOptions = useMemo<ModelSelectOption[]>(() => {
+    const options: ModelSelectOption[] = [
+      { label: t('sessionTitle.model.inherit'), value: 'inherit' },
+      { label: t('sessionTitle.model.fast'), value: 'fast' },
+      { label: t('sessionTitle.model.primary'), value: 'primary' },
+      ...enabledModels
+        .filter((model): model is AIModelConfig & { id: string } => (
+          typeof model.id === 'string' && model.id.trim().length > 0
+        ))
+        .map(buildModelOption),
+    ];
+    if (sessionTitleModelId
+      && !['inherit', 'fast', 'primary'].includes(sessionTitleModelId)
+      && !options.some(option => option.value === sessionTitleModelId)) {
+      options.push({
+        label: t('sessionTitle.models.unavailable', { id: sessionTitleModelId }),
+        value: sessionTitleModelId,
+        disabled: true,
+      });
+    }
+    return options;
+  }, [buildModelOption, enabledModels, sessionTitleModelId, t]);
 
   const updateEnabled = async (checked: boolean) => {
     if (!settings) return;
@@ -139,6 +153,24 @@ export const SessionTitleConfig: React.FC = () => {
       notificationService.error(t('sessionTitle.messages.updateFailed'), { duration: 3000 });
     }
   };
+
+  if (loadError) {
+    return (
+      <ConfigPageSection
+        className="bitfun-runtime-settings"
+        data-bf-component="session-title-config"
+        data-bf-part="root"
+        title={t('sessionTitle.title')}
+        description={t('sessionTitle.subtitle')}
+      >
+        <ConfigRetryState
+          message={t('sessionTitle.loadFailedLocked')}
+          retryLabel={t('sessionTitle.retry')}
+          onRetry={() => void loadData()}
+        />
+      </ConfigPageSection>
+    );
+  }
 
   return (
     <>

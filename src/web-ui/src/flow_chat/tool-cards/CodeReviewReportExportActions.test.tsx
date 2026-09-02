@@ -11,12 +11,6 @@ function Icon({ name }: { name: string }) {
 }
 
 vi.mock('lucide-react', () => ({
-  Check: () => <Icon name="check" />,
-  ClipboardCopy: () => <Icon name="clipboard-copy" />,
-  Copy: () => <Icon name="copy" />,
-  Download: () => <Icon name="download" />,
-  FileDown: () => <Icon name="file-down" />,
-  FilePenLine: () => <Icon name="file-pen-line" />,
   Loader2: () => <Icon name="loader" />,
 }));
 
@@ -35,6 +29,7 @@ vi.mock('@bitfun/ui', () => ({
       {children}
     </button>
   ),
+  Icon: ({ name }: { name: string }) => <Icon name={name} />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -74,7 +69,7 @@ describe('CodeReviewReportExportActions', () => {
     );
 
     expect(html).toContain('aria-label="Copy Markdown"');
-    expect(html).toContain('data-icon="copy"');
+    expect(html).toContain('data-icon="duplicate"');
     expect(html).not.toContain('data-icon="clipboard-copy"');
   });
 
@@ -84,8 +79,7 @@ describe('CodeReviewReportExportActions', () => {
     );
 
     expect(html).toContain('aria-label="Save Markdown"');
-    expect(html).toContain('data-icon="download"');
-    expect(html).not.toContain('data-icon="file-down"');
+    expect(html).toContain('data-icon="arrow-down"');
   });
 
   it('can limit the visible export actions for compact surfaces', () => {

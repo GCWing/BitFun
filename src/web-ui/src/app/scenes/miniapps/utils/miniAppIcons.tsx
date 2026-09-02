@@ -7,14 +7,12 @@ import pptLiveIcon from '@/assets/miniapps/catalog/ppt-live.png';
 import regexPlaygroundIcon from '@/assets/miniapps/catalog/regex-playground.png';
 import {
   Aperture,
-  AppWindow,
   Box,
   Bot,
   Code,
   Database,
   FileText,
   GitPullRequest,
-  Globe,
   Grid3x3,
   LayoutGrid,
   Presentation,
@@ -53,14 +51,12 @@ const ICON_GRADIENTS = [
 
 const MINI_APP_ICONS = {
   Aperture,
-  AppWindow,
   Box,
   Bot,
   Code,
   Database,
   FileText,
   GitPullRequest,
-  Globe,
   Grid3x3,
   LayoutGrid,
   Presentation,
@@ -89,7 +85,13 @@ export function renderMiniAppIcon(name: string, size = 28): React.ReactNode {
     .join('') as keyof typeof MINI_APP_ICONS;
   const catalogName = MINI_APP_CATALOG[key];
   if (catalogName) {
-    return <Icon name={catalogName} size={catalogSize(size)} />;
+    return (
+      <Icon
+        name={catalogName}
+        size={catalogSize(size)}
+        style={{ width: size, height: size }}
+      />
+    );
   }
   const LucideGlyph = MINI_APP_ICONS[key];
 

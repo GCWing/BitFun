@@ -1,6 +1,7 @@
 {
   "title": "记忆",
   "subtitle": "控制自动记忆的生成、使用与整理范围。",
+  "scopeNotice": "这里的配置、会话候选和记忆文件都属于当前执行 BitFun 的主机。切换到其他设备或 Peer 主机后，其记忆数据与设置可能不同。",
   "sections": {
     "basic": {
       "title": "基础",
@@ -85,7 +86,8 @@
     "primary": "主模型",
     "fast": "快速模型",
     "followPrimary": "跟随主模型",
-    "followExtraction": "跟随抽取模型"
+    "followExtraction": "跟随抽取模型",
+    "unavailable": "{{id}}（已停用或不存在）"
   },
   "externalContextPolicy": {
     "clearToolResults": "清空外部工具结果",
@@ -96,6 +98,9 @@
     "expandAdvanced": "展开高级设置",
     "collapseAdvanced": "收起高级设置",
     "resetSettings": "重置记忆设置",
+    "resetSettingsConfirmTitle": "重置记忆设置？",
+    "resetSettingsConfirm": "将把当前执行主机上的记忆开关、模型与高级参数恢复为默认值。已有记忆数据不会被删除。",
+    "resetSettingsConfirmAction": "恢复默认设置",
     "openDirectory": "打开记忆目录",
     "resetMemory": "重置记忆",
     "resetMemoryConfirm": "确定要清空所有记忆数据和记忆工作区文件吗？此操作不可撤销。",
@@ -108,6 +113,8 @@
   "messages": {
     "loading": "加载记忆配置…",
     "loadFailed": "加载记忆配置失败",
+    "loadFailedLocked": "无法读取记忆设置。为避免覆盖当前执行主机上的配置，页面已锁定。",
+    "retry": "重新加载",
     "saved": "记忆配置已保存",
     "saveFailed": "保存记忆配置失败",
     "rolloutAgeExceedsRetention": "会话最大年龄不能大于候选保留天数",

@@ -234,6 +234,18 @@ describe('McpToolsConfig remote behavior', () => {
     await act(async () => {
       (container.querySelector('[aria-label="actions.jsonConfig"]') as HTMLButtonElement).click();
     });
+    const textarea = container.querySelector(
+      '.bitfun-mcp-tools__json-textarea textarea',
+    ) as HTMLTextAreaElement;
+    const editedJson = '{\n  "mcpServers": {}\n}';
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )?.set;
+      setValue?.call(textarea, editedJson);
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     const saveButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'actions.saveConfig',
     );
@@ -243,7 +255,7 @@ describe('McpToolsConfig remote behavior', () => {
       await Promise.resolve();
     });
 
-    expect(saveJsonConfigMock).toHaveBeenCalledWith('{"mcpServers":{}}', 'sha256:test');
+    expect(saveJsonConfigMock).toHaveBeenCalledWith(editedJson, 'sha256:test');
     expect(initializeServersMock).not.toHaveBeenCalled();
   });
 

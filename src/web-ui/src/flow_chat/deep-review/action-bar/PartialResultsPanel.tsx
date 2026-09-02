@@ -1,6 +1,7 @@
+import { Icon } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye } from 'lucide-react';
+
 import type {
   PartialReviewData,
   ReviewerProgressSummary,
@@ -38,7 +39,7 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
             className="deep-review-action-bar__partial-link"
             onClick={onTogglePartialResults}
           >
-            <Eye size={12} />
+            <Icon name="eye" size="xs" />
             {showPartialResults
               ? t('deepReviewActionBar.hidePartialResults')
               : t('deepReviewActionBar.viewPartialResults')}

@@ -15,16 +15,81 @@ function source(relativePath: string): string {
 
 function filesIn(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-    if (entry.name === 'flow_chat' || entry.name === 'generated') return [];
+    if (entry.name === 'generated') return [];
     const file = path.join(directory, entry.name);
     if (entry.isDirectory()) return filesIn(file);
-    return /\.tsx$/.test(file) && !/\.(test|appearance)\./.test(file) ? [file] : [];
+    return /\.tsx?$/.test(file) && !/\.(test|appearance)\./.test(file) ? [file] : [];
   });
 }
 
 describe('catalog icon consumer integration', () => {
-  it('keeps migrated common actions on the shared catalog outside FlowChat', () => {
-    const migrated = new Set(['RefreshCw', 'ChevronUp', 'Download', 'Pencil', 'Copy', 'Check', 'SquareTerminal']);
+  it('keeps every migrated legacy icon on the shared catalog', () => {
+    const migrated = new Set([
+      'AppWindow',
+      'ArrowDownToLine',
+      'ArrowUp',
+      'BadgeCheck',
+      'Check',
+      'CheckCircle',
+      'CheckCircle2',
+      'ChevronDown',
+      'ChevronLeft',
+      'ChevronRight',
+      'ChevronUp',
+      'Circle',
+      'Clock',
+      'Clock3',
+      'ClipboardCopy',
+      'Copy',
+      'Download',
+      'Edit',
+      'Edit3',
+      'ExternalLink',
+      'Eye',
+      'Files',
+      'FileDown',
+      'FileEdit',
+      'FileImage',
+      'FileInput',
+      'FileOutput',
+      'FilePenLine',
+      'Folder',
+      'GitBranch',
+      'GitCommitHorizontal',
+      'Globe',
+      'Globe2',
+      'Image',
+      'Info',
+      'Link',
+      'Link2',
+      'ListFilter',
+      'MessageSquarePlus',
+      'Mic',
+      'MoreHorizontal',
+      'Pencil',
+      'PictureInPicture2',
+      'Paintbrush',
+      'PanelRightOpen',
+      'Plus',
+      'Puzzle',
+      'RefreshCw',
+      'Search',
+      'Settings',
+      'Settings2',
+      'SlidersHorizontal',
+      'Sparkle',
+      'Sparkles',
+      'SquareTerminal',
+      'Terminal',
+      'Trash2',
+      'User',
+      'WandSparkles',
+      'X',
+    ]);
+    const exemptions = new Set([
+      'flow_chat/components/ChatInputWorkspaceStrip.tsx: Circle',
+      'flow_chat/components/ReasoningPresetSelector.tsx: Circle',
+    ]);
     const leftovers: string[] = [];
     for (const file of filesIn(sourceRoot)) {
       const ast = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
@@ -35,7 +100,10 @@ describe('catalog icon consumer integration', () => {
         if (!bindings || !ts.isNamedImports(bindings)) continue;
         for (const item of bindings.elements) {
           const name = item.propertyName?.text ?? item.name.text;
-          if (!item.isTypeOnly && migrated.has(name)) leftovers.push(`${path.relative(sourceRoot, file)}: ${name}`);
+          const location = `${path.relative(sourceRoot, file).replaceAll('\\', '/')}: ${name}`;
+          if (!item.isTypeOnly && migrated.has(name) && !exemptions.has(location)) {
+            leftovers.push(location);
+          }
         }
       }
     }
@@ -47,7 +115,21 @@ describe('catalog icon consumer integration', () => {
     expect(source('app/components/NavBar/NavBar.tsx')).toContain('<Icon name="sidebar-left"');
     expect(source('app/scenes/agents/AgentsScene.tsx')).toContain('<Icon name="creative"');
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("RefreshCw: 'refresh'");
+    expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("MessageSquarePlus: 'side-chat'");
+    expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("FileInput: 'duplicate'");
+    expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("FileOutput: 'duplicate'");
+    expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("PanelRightOpen: 'browser'");
     expect(source('app/components/NavBar/NavBar.tsx')).not.toContain('PanelLeftIcon');
+  });
+
+  it('uses canonical catalog names instead of compatibility aliases', () => {
+    const leftovers = filesIn(sourceRoot).flatMap(file => {
+      const contents = readFileSync(file, 'utf8');
+      return ['download', 'circle']
+        .filter(name => contents.includes(`name="${name}"`))
+        .map(name => `${path.relative(sourceRoot, file).replaceAll('\\', '/')}: ${name}`);
+    });
+    expect(leftovers).toEqual([]);
   });
 
   it('keeps the shared refresh action compact and disables it while loading', () => {

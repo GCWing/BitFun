@@ -15,15 +15,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Menu, MenuItem } from '@bitfun/ui';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import {
-  Square,
-  Check,
-  X,
-  Maximize2,
-  MoreVertical,
-  PanelTopOpen,
-  PanelTopClose
-} from 'lucide-react';
+import { Square, Maximize2, MoreVertical, PanelTopOpen, PanelTopClose } from 'lucide-react';
 import { useToolbarModeContext } from './ToolbarModeContext';
 import { type FlowToolItem } from '../../types/flow-chat';
 import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
@@ -36,7 +28,7 @@ import { SessionMenu, useFlowChatSessions } from '../session-menu';
 
 const log = createLogger('ToolbarMode');
 import ChatPane from '@/app/scenes/session/ChatPane';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {
@@ -377,12 +369,12 @@ export const ToolbarMode: React.FC = () => {
               <>
                 <Tooltip content={t('toolCards.common.confirm')}>
                   <button className="toolbar-btn toolbar-btn--confirm" onClick={handleConfirm}>
-                    <Check size={16} />
+                    <Icon name="check-line" size="md" />
                   </button>
                 </Tooltip>
                 <Tooltip content={t('toolCards.common.cancel')}>
                   <button className="toolbar-btn toolbar-btn--reject" onClick={handleReject}>
-                    <X size={16} />
+                    <Icon name="xmark" size="md" />
                   </button>
                 </Tooltip>
               </>

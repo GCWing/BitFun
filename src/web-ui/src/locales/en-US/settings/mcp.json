@@ -189,6 +189,7 @@
     "remoteOAuthRedirectUri": "Callback URL: {{redirectUri}}",
     "remoteOAuthStatus": "OAuth status: {{status}} - {{message}}",
     "remoteAuthHint": "Paste a Bearer token or a full Authorization header value. Saving will restart the remote MCP server.",
+    "remoteAuthSecretHint": "Authorization is masked by default and saved only on the current execution host. Do not paste it into chats, tickets, or online troubleshooting tools.",
     "remoteAuthServerUrl": "Server URL: {{url}}",
     "remoteAuthPlaceholder": "Bearer eyJ... or eyJ..."
   },
@@ -197,6 +198,10 @@
     "loadFailed": "MCP configuration could not be loaded.",
     "hint1": "Use standard Cursor format for MCP configuration. Config will be saved to app.json in user directory.",
     "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as sse (remote service). You can also set type=\"stdio\"/\"sse\" explicitly for compatibility.",
+    "secretWarning": "env, headers, and URLs may contain API keys. Inspect and save the configuration only in BitFun; do not paste it into online JSON validators.",
+    "discardTitle": "Discard MCP JSON changes?",
+    "discardMessage": "Closing now will lose the unsaved MCP configuration changes.",
+    "discardConfirm": "Discard changes",
     "lintLocation": " (line {{line}}, col {{column}})",
     "lintError": "JSON syntax error{{location}}: {{message}}",
     "exampleTitle": "Configuration Examples:",
@@ -268,7 +273,7 @@
     "operationFailed": "{{context}} Failed",
     "suggestions": {
       "jsonFormat": [
-        "Use online JSON validator to check format",
+        "Use BitFun's inline syntax location to check the format; do not upload configuration that may contain secrets",
         "Ensure all strings use double quotes",
         "Check for extra commas",
         "Verify all brackets are properly closed"

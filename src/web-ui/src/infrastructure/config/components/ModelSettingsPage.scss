@@ -2173,6 +2173,22 @@
     }
   }
 
+  &__loading {
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-type-label-md-font-size);
+  }
+
+  &__save-state {
+    display: flex;
+    align-items: center;
+    gap: var(--bf-space-2);
+
+    > span {
+      color: var(--bf-color-content-secondary);
+      font-size: var(--bf-type-label-sm-font-size);
+    }
+  }
+
   @container config-panel (max-width: 760px) {
     &__cli-account {
       grid-template-columns: minmax(0, 1fr);

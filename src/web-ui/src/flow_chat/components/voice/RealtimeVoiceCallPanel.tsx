@@ -1,5 +1,5 @@
-import { IconButton, Tooltip } from '@bitfun/ui';
-import { Bot, Loader2, Mic, MicOff, PhoneOff, Settings2, User } from 'lucide-react';
+import { Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Bot, Loader2, MicOff, PhoneOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
 import './RealtimeVoiceCall.scss';
@@ -66,7 +66,7 @@ export function RealtimeVoiceCallPanel() {
             data-bf-component="realtime-voice-call"
             data-bf-part="utterance"
           >
-            <User size={14} aria-hidden="true" />
+            <Icon name="user" size="lg" style={{ width: 14, height: 14 }} aria-hidden="true" />
             <span>{controller.userTranscript}</span>
           </div>
         ) : null}
@@ -134,7 +134,9 @@ export function RealtimeVoiceCallPanel() {
             aria-label={controller.muted ? t('voiceCall.call.unmute') : t('voiceCall.call.mute')}
             disabled={connecting}
             onClick={controller.toggleMute}
-            icon={controller.muted ? <MicOff size={18} /> : <Mic size={18} />}
+            icon={controller.muted
+              ? <MicOff size={18} />
+              : <Icon name="mic" size="lg" style={{ width: 18, height: 18 }} />}
           />
         </Tooltip>
         <Tooltip content={t('voiceCall.call.settings')}>
@@ -145,7 +147,7 @@ export function RealtimeVoiceCallPanel() {
             data-bf-part="control"
             aria-label={t('voiceCall.call.settings')}
             onClick={controller.openSettings}
-            icon={<Settings2 size={18} />}
+            icon={<Icon name="settings" size="lg" style={{ width: 18, height: 18 }} />}
           />
         </Tooltip>
         <Tooltip content={t('voiceCall.call.hangUp')}>

@@ -27,7 +27,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import { ArrowDownToLine, EyeOff, FolderOpen, Key, Loader2, Lock, Play, Server } from 'lucide-react';
+import { EyeOff, FolderOpen, Key, Loader2, Lock, Play, Server } from 'lucide-react';
 import type {
   ConnectionTestReport,
   ConnectionTestStage,
@@ -866,7 +866,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         }}
                         disabled={isConnecting || status === 'connecting'}
                         title={t('ssh.remote.fillForm')}
-                        leadingIcon={<ArrowDownToLine size={12} />}
+                        leadingIcon={<Icon name="arrow-down" size="xs" />}
                       >
 
                         {t('ssh.remote.fillForm')}

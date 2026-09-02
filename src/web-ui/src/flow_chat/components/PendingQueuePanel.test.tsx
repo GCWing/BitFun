@@ -22,6 +22,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
   IconButton: ({ icon, loading: _loading, size: _size, variant: _variant, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
     icon?: ReactNode;
     loading?: boolean;

@@ -1,7 +1,7 @@
 import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Bot, CircleUserRound, MessageSquarePlus, Network, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
+import { Bot, CircleUserRound, Network, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -580,7 +580,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                   <div className="ecosystem-compatibility__runtime-mode-grid">
                     <div className="ecosystem-compatibility__runtime-mode">
                       <span className="ecosystem-compatibility__runtime-mode-icon" aria-hidden="true">
-                        <MessageSquarePlus size={16} />
+                        <Icon name="side-chat" size="md" />
                       </span>
                       <div className="ecosystem-compatibility__runtime-mode-copy">
                         <strong>{t('run.session.title')}</strong>

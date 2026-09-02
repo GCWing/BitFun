@@ -2,9 +2,9 @@
  * MiniAppToolDisplay — InitMiniApp result on the prominent FlowChat framework.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Spinner } from '@bitfun/ui';
+import { Button, Spinner, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { AppWindow, ExternalLink } from 'lucide-react';
+
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -86,7 +86,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
 
   const renderHeader = () => (
     <ProminentToolCardHeader
-      icon={<span className="miniapp-icon"><AppWindow size={16} /></span>}
+      icon={<span className="miniapp-icon"><Icon name="floating-window" size="md" /></span>}
       action={`${t('toolCards.initMiniApp.title')}:`}
       content={
         <span data-bf-component="mini-app-tool-display" data-bf-part="info" className="miniapp-tool-info">
@@ -158,7 +158,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
             type="button"
             variant="outline"
             size="sm"
-            leadingIcon={<ExternalLink size={12} />}
+            leadingIcon={<Icon name="arrow-up-right" size="xs" />}
             data-testid="chat-miniapp-open-btn"
             data-app-id={appId}
             onClick={() => openScene(`miniapp:${appId}`)}

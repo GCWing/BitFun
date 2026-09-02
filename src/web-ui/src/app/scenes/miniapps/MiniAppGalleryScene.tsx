@@ -25,7 +25,7 @@ const MiniAppGalleryScene: React.FC = () => {
       options={[
         {
           value: 'installed',
-          icon: <Icon name="download" size="sm" />,
+          icon: <Icon name="arrow-down" size="sm" />,
           label: t('market.tabs.installed'),
         },
         {

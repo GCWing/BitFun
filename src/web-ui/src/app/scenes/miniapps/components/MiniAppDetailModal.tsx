@@ -47,7 +47,7 @@ function capabilityIcon(capability: MiniAppDetailCapability): React.ReactNode {
   switch (capability.kind) {
     case 'ai': return <Icon name="spark" size="lg" />;
     case 'workspace': return <FolderKanban size={28} strokeWidth={1.6} />;
-    case 'export': return <Icon name="download" size="lg" />;
+    case 'export': return <Icon name="arrow-down" size="lg" />;
     case 'shell': return <Icon name="terminal" size="lg" />;
     case 'network': return <Icon name="browser" size="lg" />;
     case 'worker': return <Cpu size={28} strokeWidth={1.6} />;

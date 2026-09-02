@@ -510,7 +510,7 @@ const SkillsConfig: React.FC = () => {
                               size="sm"
                               onClick={() => handleDownload(skill, 'project')}
                               disabled={isDownloading || !hasWorkspace}
-                              leadingIcon={<Icon name="download" size="sm" />}
+                              leadingIcon={<Icon name="arrow-down" size="sm" />}
                             >
 
                               {isDownloading ? t('market.item.downloading') : t('market.item.downloadProject')}
@@ -526,7 +526,7 @@ const SkillsConfig: React.FC = () => {
                             size="sm"
                             onClick={() => handleDownload(skill, 'user')}
                             disabled={isDownloading}
-                            leadingIcon={<Icon name="download" size="sm" />}
+                            leadingIcon={<Icon name="arrow-down" size="sm" />}
                           >
 
                             {isDownloading ? t('market.item.downloading') : t('market.item.downloadUser')}

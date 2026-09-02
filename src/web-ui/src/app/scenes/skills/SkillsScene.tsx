@@ -713,7 +713,7 @@ const SkillsScene: React.FC = () => {
                           actions={[
                             {
                               id: 'download',
-                              icon: isInstalled ? <Icon name="check-circle" size="xs" /> : <Icon name="download" size="xs" />,
+                              icon: isInstalled ? <Icon name="check-circle" size="xs" /> : <Icon name="arrow-down" size="xs" />,
                               ariaLabel: isInstalled ? t('market.item.installed') : t('market.item.downloadProject'),
                               title: isDownloading
                                 ? t('market.item.downloading')

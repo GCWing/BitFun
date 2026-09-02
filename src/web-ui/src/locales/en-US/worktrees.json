@@ -15,11 +15,13 @@
   },
   "settings": {
     "title": "Worktrees",
-    "description": "Defaults used when a session runs in its own Git worktree. Root path changes affect new worktrees only.",
+    "description": "Defaults used when a session runs in its own Git worktree. Paths are resolved on the current execution host; root changes affect new worktrees only.",
     "loading": "Loading worktree settings…",
     "loadFailed": "Could not load worktree settings.",
+    "retry": "Try again",
     "saveFailed": "Could not save worktree settings.",
     "saved": "Worktree settings saved.",
+    "unsaved": "You have unsaved worktree settings.",
     "required": "The root path and branch prefix are required.",
     "save": "Save",
     "reset": "Restore defaults",
@@ -29,7 +31,7 @@
     },
     "rootPath": {
       "label": "Worktree root",
-      "description": "Worktrees created later are stored under this directory."
+      "description": "New worktrees are stored under this directory on the current execution host."
     },
     "branchPrefix": {
       "label": "Branch prefix",
@@ -51,7 +53,7 @@
   },
   "management": {
     "title": "Workspace worktrees",
-    "description": "Worktrees inside the configured BitFun root, grouped by owning workspace.",
+    "description": "Worktrees under the configured BitFun root on the current execution host, grouped by owning workspace.",
     "loading": "Scanning BitFun worktrees…",
     "loadFailed": "Could not load the BitFun worktree list.",
     "refresh": "Refresh worktrees",

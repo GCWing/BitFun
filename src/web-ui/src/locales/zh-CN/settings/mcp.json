@@ -189,6 +189,7 @@
     "remoteOAuthRedirectUri": "回调地址：{{redirectUri}}",
     "remoteOAuthStatus": "OAuth 详情：{{status}} - {{message}}",
     "remoteAuthHint": "粘贴 Bearer token 或完整的 Authorization 请求头值。保存后会重启远程 MCP 服务器。",
+    "remoteAuthSecretHint": "Authorization 会默认遮挡，并仅保存到当前执行主机。请勿粘贴到聊天、工单或在线排错工具。",
     "remoteAuthServerUrl": "服务器地址：{{url}}",
     "remoteAuthPlaceholder": "Bearer eyJ... 或 eyJ..."
   },
@@ -197,6 +198,10 @@
     "loadFailed": "无法加载 MCP 配置。",
     "hint1": "使用标准 Cursor 格式的 MCP 配置。配置将自动保存到用户目录下的 app.json 文件中。",
     "hint2": "格式说明：可以省略 type 字段。提供 \"command\" 时按 stdio（本地进程）解析；提供 \"url\" 时按 sse（远程服务）解析。也可显式设置 type=\"stdio\"/\"sse\" 以保持兼容。",
+    "secretWarning": "配置中的 env、headers 或 URL 可能包含 API 密钥。请只在 BitFun 内检查和保存，不要粘贴到在线 JSON 校验工具。",
+    "discardTitle": "放弃 MCP JSON 修改？",
+    "discardMessage": "关闭后，尚未保存的 MCP 配置修改将丢失。",
+    "discardConfirm": "放弃修改",
     "lintLocation": "（第 {{line}} 行，第 {{column}} 列）",
     "lintError": "JSON 有语法错误{{location}}：{{message}}",
     "exampleTitle": "配置示例：",
@@ -268,7 +273,7 @@
     "operationFailed": "{{context}}失败",
     "suggestions": {
       "jsonFormat": [
-        "使用在线 JSON 验证工具检查格式",
+        "使用 BitFun 编辑器内的语法位置提示检查格式，不要上传可能含密钥的配置",
         "确保所有字符串使用双引号",
         "检查是否有多余的逗号",
         "确认所有括号正确闭合"

@@ -18,6 +18,9 @@
   &--collapsed {
     justify-content: flex-start;
     padding-inline: 7px;
+    // The collapsed toolbar floats above the scene surface. Keep the sidebar
+    // recipe for the expanded navigation only so this does not paint a tile.
+    background: transparent;
   }
 
   &--macos {

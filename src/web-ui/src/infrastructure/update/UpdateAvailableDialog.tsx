@@ -81,7 +81,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
             data-bf-component="update"
             data-bf-part="leadIcon"
           >
-            <Icon name="download" size="lg" />
+            <Icon name="arrow-down" size="lg" />
           </div>
           <p
             className="bitfun-update-available__subtitle"

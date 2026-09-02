@@ -15,6 +15,12 @@
       "description": "Reads and runs .bitfun/config/hooks.json from the workspace. Enable only for trusted repositories."
     }
   },
+  "projectHooksRisk": {
+    "title": "Allow workspace code to run Hooks?",
+    "message": "When enabled, .bitfun/config/hooks.json in “{{workspace}}” can run commands with your user permissions. Enable this only for a workspace you trust after reviewing its Hook file.",
+    "currentWorkspace": "the current workspace",
+    "confirm": "I reviewed it, enable Hooks"
+  },
   "locations": {
     "title": "Where hooks are declared",
     "description": "Changes to hooks.json take effect without restarting BitFun.",
@@ -88,6 +94,8 @@
   "messages": {
     "saved": "Hook settings saved",
     "saveFailed": "Failed to save hook settings",
-    "loadFailed": "Failed to load hook settings"
+    "loadFailed": "Failed to load hook settings",
+    "loadFailedLocked": "Hook settings could not be read. Related switches are locked to avoid enabling command execution by mistake.",
+    "retry": "Reload"
   }
 }

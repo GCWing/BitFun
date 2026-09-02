@@ -1,6 +1,6 @@
 import React, { useCallback, useId, useMemo, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
-import { Tooltip } from '@bitfun/ui';
+import { AlertCircle } from 'lucide-react';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   getAiErrorPresentation,
@@ -73,7 +73,7 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
                 aria-label={t(isOpen ? 'turnFailure.hideDetails' : 'turnFailure.showDetails')}
                 onClick={() => setIsOpen(current => !current)}
               >
-                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {isOpen ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
               </button>
             </Tooltip>
           )}
@@ -104,7 +104,7 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
                       onClick={() => void copyRawError()}
                       aria-label={t('turnFailure.copy')}
                     >
-                      {copied ? <Check size={13} /> : <Copy size={13} />}
+                      {copied ? <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="duplicate" size="lg" style={{ width: 13, height: 13 }} />}
                     </button>
                   </Tooltip>
                 </div>

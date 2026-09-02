@@ -711,7 +711,7 @@ const AgentsHomeView: React.FC = () => {
               <div className="bitfun-agents-scene__harness-rail" aria-hidden>
                 <span className="bitfun-agents-scene__harness-rail-line" />
                 {HARNESS_GEAR_PROFILES.map(({ id }) => (
-                  <Icon name="circle" size="2xs" key={id} className={[
+                  <Icon name="unselected" size="2xs" key={id} className={[
                       'bitfun-agents-scene__harness-rail-node',
                       id === HARNESS_DEFAULT_PROFILE_ID && 'is-default',
                     ].filter(Boolean).join(' ')} />

@@ -1,7 +1,7 @@
 import { Button, IconButton } from '@bitfun/ui';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ClipboardCopy, Copy, Keyboard, Loader2, Terminal } from 'lucide-react';
-import { Checkbox, Textarea, Tooltip } from '@bitfun/ui';
+import { AlertCircle, Keyboard, Loader2 } from 'lucide-react';
+import { Checkbox, Textarea, Tooltip, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { agentAPI } from '@/infrastructure/api';
 import type {
@@ -295,7 +295,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
         <header data-bf-component="background-command-output-panel" data-bf-part="header" className="background-command-output-panel__header">
           <div data-bf-component="background-command-output-panel" data-bf-part="title" className="background-command-output-panel__title-group">
             <span className="background-command-output-panel__icon">
-              <Terminal size={16} aria-hidden="true" />
+              <Icon name="terminal" size="md" aria-hidden="true" />
             </span>
             <div>
               <h2>{t('backgroundCommandOutput.title')}</h2>
@@ -320,7 +320,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                 onClick={copyCommand}
                 aria-label={t('backgroundCommandOutput.copyCommand')}
                 disabled={!command}
-                icon={<ClipboardCopy size={14} aria-hidden="true" />}
+                icon={<Icon name="duplicate" size="sm" aria-hidden="true" />}
               />
             </Tooltip>
             <Tooltip content={t('backgroundCommandOutput.copy')}>
@@ -329,7 +329,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                 onClick={copyOutput}
                 aria-label={t('backgroundCommandOutput.copy')}
                 disabled={!displayedOutput}
-                icon={<Copy size={14} aria-hidden="true" />}
+                icon={<Icon name="duplicate" size="sm" aria-hidden="true" />}
               />
             </Tooltip>
           </div>

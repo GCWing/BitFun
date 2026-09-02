@@ -29,6 +29,7 @@ export const configAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'collectionFilters' },
     { id: 'collectionList' },
     { id: 'loadingState' },
+    { id: 'retryState' },
     { id: 'message' },
     { id: 'pageHeaderInner' },
     { id: 'pageHeaderInfo' },

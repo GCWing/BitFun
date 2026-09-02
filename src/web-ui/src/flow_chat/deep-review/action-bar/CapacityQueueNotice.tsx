@@ -1,12 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Clock,
-  Pause,
-  Play,
-  SkipForward,
-} from 'lucide-react';
+import { Pause, Play, SkipForward } from 'lucide-react';
 import type {
   DeepReviewCapacityQueueReason,
   DeepReviewCapacityQueueState,
@@ -140,7 +135,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
   return (
     <div className="deep-review-action-bar__capacity-queue" aria-live="polite">
       <div className="deep-review-action-bar__capacity-queue-main">
-        <Clock size={14} className="deep-review-action-bar__capacity-queue-icon" />
+        <Icon name="clock" size="sm" className="deep-review-action-bar__capacity-queue-icon" />
         <div className="deep-review-action-bar__capacity-queue-copy">
           <span className="deep-review-action-bar__capacity-queue-title">
             {capacityQueueTitle}

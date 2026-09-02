@@ -6,8 +6,10 @@
 
 import {
   Button,
+  ConfirmDialog,
   Icon,
   IconButton,
+  Input,
   Textarea,
   Tooltip,
   Dialog,
@@ -189,6 +191,7 @@ const McpToolsConfig: React.FC = () => {
   const [serverLoadFailed, setServerLoadFailed] = useState(false);
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
+  const [jsonSavedConfig, setJsonSavedConfig] = useState('');
   const [jsonConfigFingerprint, setJsonConfigFingerprint] = useState('');
   const [jsonLoading, setJsonLoading] = useState(true);
   const [jsonLoadFailed, setJsonLoadFailed] = useState(false);
@@ -208,6 +211,18 @@ const McpToolsConfig: React.FC = () => {
     column?: number;
     position?: number;
   } | null>(null);
+  const [discardJsonConfirmOpen, setDiscardJsonConfirmOpen] = useState(false);
+
+  const jsonDirty = jsonConfig !== jsonSavedConfig;
+  const jsonSyntaxValid = (() => {
+    if (!jsonConfig.trim()) return false;
+    try {
+      JSON.parse(jsonConfig);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
 
   useLayoutEffect(() => {
     if (capabilityRef.current.available !== desktopConfigAvailable) {
@@ -316,6 +331,7 @@ const McpToolsConfig: React.FC = () => {
         return false;
       }
       setJsonConfig(config.jsonConfig);
+      setJsonSavedConfig(config.jsonConfig);
       setJsonConfigFingerprint(config.fingerprint);
       setJsonLoadFailed(false);
       return true;
@@ -501,6 +517,24 @@ const McpToolsConfig: React.FC = () => {
     }, 150);
     return () => window.clearTimeout(handle);
   }, [jsonConfig, showJsonEditor]);
+
+  useEffect(() => {
+    if (!showJsonEditor || !jsonDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [jsonDirty, showJsonEditor]);
+
+  const requestCloseJsonEditor = () => {
+    if (jsonDirty) {
+      setDiscardJsonConfirmOpen(true);
+      return;
+    }
+    setShowJsonEditor(false);
+  };
 
   const handleSaveJsonConfig = async () => {
     const capabilityEpoch = currentCapabilityEpoch();
@@ -1180,7 +1214,10 @@ const McpToolsConfig: React.FC = () => {
       <Tooltip content={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}>
         <IconButton
           size="sm"
-          onClick={() => setShowJsonEditor(!showJsonEditor)}
+          onClick={() => {
+            if (showJsonEditor) requestCloseJsonEditor();
+            else setShowJsonEditor(true);
+          }}
           aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
           icon={showJsonEditor ? <Icon name="xmark" size="md" /> : <FileJson size={16} />}
         />
@@ -1430,6 +1467,7 @@ const McpToolsConfig: React.FC = () => {
                 <h3>{tMcp('jsonEditor.title')}</h3>
                 <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.hint1')}</p>
                 <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.hint2')}</p>
+                <p className="bitfun-mcp-tools__json-hint" role="note" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.secretWarning')}</p>
               </div>
               <Textarea
                 ref={jsonEditorRef}
@@ -1461,14 +1499,14 @@ const McpToolsConfig: React.FC = () => {
                 }
               />
               <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
-                <Button variant="outline" onClick={() => setShowJsonEditor(false)} disabled={mcpSaving}>
+                <Button variant="outline" onClick={requestCloseJsonEditor} disabled={mcpSaving}>
                   {tMcp('actions.cancel')}
                 </Button>
                 <Button
                   variant="fill"
                   onClick={handleSaveJsonConfig}
                   loading={mcpSaving}
-                  disabled={mcpSaving}
+                  disabled={mcpSaving || !jsonDirty || !jsonSyntaxValid || Boolean(jsonLintError)}
                 >
                   {tMcp('actions.saveConfig')}
                 </Button>
@@ -1582,6 +1620,9 @@ const McpToolsConfig: React.FC = () => {
             <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
               {tMcp('modal.remoteAuthHint')}
             </p>
+            <p className="bitfun-mcp-tools__json-hint" role="note" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
+              {tMcp('modal.remoteAuthSecretHint')}
+            </p>
             {authDialogServer.url && (
               <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
                 {tMcp('modal.remoteAuthServerUrl', {
@@ -1589,15 +1630,14 @@ const McpToolsConfig: React.FC = () => {
                 })}
               </p>
             )}
-            <Textarea
+            <Input
+              type="password"
               value={authValue}
               onChange={(e) => setAuthValue(e.target.value)}
-              rows={4}
               placeholder={tMcp('modal.remoteAuthPlaceholder')}
-              variant="outlined"
               className="bitfun-mcp-tools__json-textarea"
               data-bf-component="mcp-tools-config"
-              data-bf-part="jsonTextarea"
+              data-bf-part="authorizationInput"
               spellCheck={false}
             />
             <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
@@ -1623,6 +1663,19 @@ const McpToolsConfig: React.FC = () => {
         )}
               </DialogBody>
       </Dialog>
+      <ConfirmDialog
+        open={discardJsonConfirmOpen}
+        onOpenChange={(open) => { if (!open) setDiscardJsonConfirmOpen(false); }}
+        onConfirm={() => {
+          setDiscardJsonConfirmOpen(false);
+          setJsonConfig(jsonSavedConfig);
+          setShowJsonEditor(false);
+        }}
+        title={tMcp('jsonEditor.discardTitle')}
+        message={tMcp('jsonEditor.discardMessage')}
+        confirmText={tMcp('jsonEditor.discardConfirm')}
+        type="warning"
+      />
     </ConfigPageLayout>
   );
 };

@@ -18,7 +18,7 @@ import {
 } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ConfigLoadingState } from '@/infrastructure/config/components/common';
+import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -146,6 +146,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
 
   // ── Session config state ─────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [companionPets, setCompanionPets] = useState<AgentCompanionPetPackage[]>([]);
   const [companionPetsLoading, setCompanionPetsLoading] = useState(false);
@@ -180,6 +181,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   const [computerUseScreen, setComputerUseScreen] = useState(false);
   const [computerUseBusy, setComputerUseBusy] = useState(false);
   const [computerUseStatusLoading, setComputerUseStatusLoading] = useState(false);
+  const [computerUseStatusError, setComputerUseStatusError] = useState(false);
   const [computerUsePlatformNote, setComputerUsePlatformNote] = useState<string | null>(null);
 
   // ── Browser control state ───────────────────────────────────────────────
@@ -196,12 +198,14 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   const [preferredBrowser, setPreferredBrowser] = useState(DEFAULT_BROWSER_CONTROL_BROWSER);
   const [browserControlBusy, setBrowserControlBusy] = useState(false);
   const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
+  const [browserStatusError, setBrowserStatusError] = useState(false);
   const [platform, setPlatform] = useState<string>('');
   const [browserRestartPrompt, setBrowserRestartPrompt] = useState<BrowserControlLaunchResponse | null>(null);
 
   const refreshComputerUseStatus = useCallback(async (): Promise<boolean> => {
     if (!IS_TAURI_DESKTOP) return false;
     setComputerUseStatusLoading(true);
+    setComputerUseStatusError(false);
     try {
       const s = await api.invoke<ComputerUseStatusPayload>('computer_use_get_status');
       setPeerBrowserControlUnsupported(false);
@@ -213,9 +217,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     } catch (error) {
       if (isPeerUnsupportedBrowserControlError(error)) {
         setPeerBrowserControlUnsupported(true);
+        setComputerUseStatusError(false);
         return false;
       }
       log.error('computer_use_get_status failed', error);
+      setComputerUseStatusError(true);
       return false;
     } finally {
       setComputerUseStatusLoading(false);
@@ -225,6 +231,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   const refreshBrowserControlStatus = useCallback(async () => {
     if (!IS_TAURI_DESKTOP) return;
     setBrowserStatusLoading(true);
+    setBrowserStatusError(false);
     try {
       const [s, browsers] = await Promise.all([
         api.invoke<{
@@ -253,10 +260,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     } catch (error) {
       if (isPeerUnsupportedBrowserControlError(error)) {
         setPeerBrowserControlUnsupported(true);
+        setBrowserStatusError(false);
       } else {
+        setBrowserStatusError(true);
         log.error('browser_control_get_status failed', error);
       }
-      log.error('browser_control_get_status failed', error);
     } finally {
       setBrowserStatusLoading(false);
     }
@@ -296,6 +304,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
 
   const loadPageData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       if (page === 'pet') {
         const [loadedSettings, loadedCompanionPets] = await Promise.all([
@@ -354,9 +363,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       refreshDesktopStatus(computerUseCfg);
     } catch (error) {
       log.error('Failed to load settings page data', { page, error });
-      if (page === 'pet' || page === 'session-workspace') {
-        setSettings(await aiExperienceConfigService.getSettingsAsync());
-      }
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -640,23 +647,35 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
 
   const handleSwarmMaxConcurrencyChange = async (value: number) => {
     if (Number.isNaN(value) || value < 1) return;
+    const previous = swarmMaxConcurrency;
     setSwarmMaxConcurrency(value);
+    setToolExecConfigLoading(true);
     try {
       await configManager.setConfig('ai.swarm_max_concurrency', value);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
     } catch (error) {
       log.error('Failed to save swarm_max_concurrency', error);
+      setSwarmMaxConcurrency(previous);
       notificationService.error(tTools('messages.saveFailed'));
+    } finally {
+      setToolExecConfigLoading(false);
     }
   };
 
   const handleSubagentMaxConcurrencyChange = async (value: number) => {
     if (Number.isNaN(value) || value < 1) return;
+    const previous = subagentMaxConcurrency;
     setSubagentMaxConcurrency(value);
+    setToolExecConfigLoading(true);
     try {
       await configManager.setConfig('ai.subagent_max_concurrency', value);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
     } catch (error) {
       log.error('Failed to save subagent_max_concurrency', error);
+      setSubagentMaxConcurrency(previous);
       notificationService.error(tTools('messages.saveFailed'));
+    } finally {
+      setToolExecConfigLoading(false);
     }
   };
 
@@ -870,13 +889,18 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       const numValue = parseInt(trimmedValue, 10);
       if (Number.isNaN(numValue) || numValue < 0) return;
     }
+    const previous = executionTimeout;
     setExecutionTimeout(trimmedValue);
+    setToolExecConfigLoading(true);
     const numValue = trimmedValue === '' ? null : parseInt(trimmedValue, 10);
     try {
       await configManager.setConfig(configKey, numValue);
     } catch (error) {
       log.error('Failed to save tool timeout config', { error });
+      setExecutionTimeout(previous);
       notificationService.error(tTools('messages.saveFailed'));
+    } finally {
+      setToolExecConfigLoading(false);
     }
   };
 
@@ -884,9 +908,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
 
   const computerUseAccessLabel = computerUseStatusLoading
     ? t('loading.text')
+    : computerUseStatusError ? t('computerUse.statusUnavailable')
     : computerUseAccess ? t('computerUse.granted') : t('computerUse.notGranted');
   const computerUseScreenLabel = computerUseStatusLoading
     ? t('loading.text')
+    : computerUseStatusError ? t('computerUse.statusUnavailable')
     : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
   const computerUsePlatformMessage = computerUsePlatformNote
     ? platform === 'macos'
@@ -903,6 +929,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
     : browserStatusLoading
       ? t('loading.text')
+      : browserStatusError
+        ? t('browserControl.statusUnavailable')
       : browserReady
         ? t('browserControl.readyNotConnected')
         : t('browserControl.notConnected');
@@ -923,6 +951,20 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   const pageSubtitle = tNavigation(`navigation.pages.${pageCopyKey}.description`);
 
   const requiresExperienceSettings = page === 'pet' || page === 'session-workspace';
+  if (loadError) {
+    return (
+      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={page}>
+        <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
+        <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
+          <ConfigRetryState
+            message={t('loading.failed')}
+            retryLabel={t('loading.retry')}
+            onRetry={() => void loadPageData()}
+          />
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
   if (isLoading || (requiresExperienceSettings && !settings)) {
     return (
       <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={page}>
@@ -1251,6 +1293,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 unit={tTools('config.seconds')}
                 size="sm"
                 variant="compact"
+                disabled={toolExecConfigLoading}
               />
             </div>
           </ConfigPageRow>
@@ -1287,6 +1330,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 step={1}
                 size="sm"
                 variant="compact"
+                disabled={toolExecConfigLoading}
               />
             </div>
           </ConfigPageRow>
@@ -1304,6 +1348,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 step={1}
                 size="sm"
                 variant="compact"
+                disabled={toolExecConfigLoading}
               />
             </div>
           </ConfigPageRow>
@@ -1346,12 +1391,17 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         >
           {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
             <>
+              <ConfigMessage
+                message={computerUseStatusError
+                  ? { type: 'error', text: t('computerUse.statusLoadFailed') }
+                  : null}
+              />
               <ConfigPageRow label={t('computerUse.enable')} description={t('computerUse.enableDesc')} align="center">
                 <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
                   <Switch
                     checked={computerUseEnabled}
                     onChange={(e) => handleComputerUseEnabledChange(e.target.checked)}
-                    disabled={computerUseBusy || computerUseStatusLoading}
+                    disabled={computerUseBusy || computerUseStatusLoading || computerUseStatusError}
                   />
                 </div>
               </ConfigPageRow>
@@ -1489,6 +1539,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         >
           {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
             <>
+              <ConfigMessage
+                message={browserStatusError
+                  ? { type: 'error', text: t('browserControl.statusLoadFailed') }
+                  : null}
+              />
               {/* Only show browser selector when CDP is not connected */}
               {!browserCdpAvailable && (
               <ConfigPageRow
@@ -1502,7 +1557,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     value={preferredBrowser}
                     options={browserSelectOptions}
                     size="sm"
-                    disabled={browserControlBusy || browserStatusLoading || browserSelectOptions.length === 0}
+                    disabled={browserControlBusy || browserStatusLoading || browserStatusError || browserSelectOptions.length === 0}
                     onValueChange={(value) => void handleBrowserControlBrowserChange(value)}
                   />
                 </div>
@@ -1538,7 +1593,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                         className="bitfun-runtime-settings__row-action-btn"
                         size="sm"
                         variant="outline"
-                        disabled={browserControlBusy || browserStatusLoading}
+                        disabled={browserControlBusy || browserStatusLoading || browserStatusError}
                         onClick={() => void handleBrowserControlEnableDefaultCdp()}
                       >
                         {t(browserDefaultCdpEnabled
@@ -1560,6 +1615,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     <Switch
                       checked={browserAutoConnectOnStartup}
                       onChange={(e) => void handleBrowserAutoConnectChange(e.target.checked)}
+                      disabled={browserStatusError}
                     />
                   </div>
                 </ConfigPageRow>

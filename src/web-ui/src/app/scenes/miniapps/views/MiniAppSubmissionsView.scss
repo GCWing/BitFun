@@ -214,7 +214,8 @@
       line-height: var(--bf-type-body-sm-line-height);
       letter-spacing: var(--bf-type-body-sm-letter-spacing);
 
-      svg {
+      svg,
+      [data-bf-component='icon'] {
         color: var(--bf-color-content-muted);
       }
 

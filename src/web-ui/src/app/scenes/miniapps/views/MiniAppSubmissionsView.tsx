@@ -11,7 +11,7 @@ import {
 } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { AlertTriangle, Camera, FileImage, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
+import { AlertTriangle, Camera, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { MarketAccountControls } from '@/features/market-account';
@@ -356,7 +356,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
                 variant="outline"
                 disabled={busy || localActionsDisabled}
                 onClick={() => void chooseScreenshots()}
-                leadingIcon={<FileImage size={14} />}
+                leadingIcon={<Icon name="image" size="sm" />}
               >
 
                 {t('market.submissions.choose')}
@@ -378,7 +378,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
             <div className="miniapp-submissions__files">
               {screenshotPaths.map((path) => (
                 <div key={path}>
-                  <FileImage size={14} />
+                  <Icon name="image" size="sm" />
                   <span title={path}>{fileName(path)}</span>
                   <IconButton
                     size="xs"

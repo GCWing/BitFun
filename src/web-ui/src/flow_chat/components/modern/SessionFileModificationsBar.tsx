@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { FileEdit, FilePlus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { Tooltip } from '@bitfun/ui';
+import { FilePlus } from 'lucide-react';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
@@ -330,9 +330,9 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
       case 'write':
         return <FilePlus size={14} className="icon-write" />;
       case 'delete':
-        return <Trash2 size={14} className="icon-delete" />;
+        return <Icon name="delete" size="sm" className="icon-delete" />;
       default:
-        return <FileEdit size={14} className="icon-edit" />;
+        return <Icon name="edit" size="sm" className="icon-edit" />;
     }
   };
 
@@ -367,9 +367,9 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
             disabled={loadingStats}
           >
             {isExpanded ? (
-              <ChevronUp size={16} strokeWidth={2.5} />
+              <Icon name="chevron-up" size="md" />
             ) : (
-              <ChevronDown size={16} strokeWidth={2.5} />
+              <Icon name="chevron-down" size="md" />
             )}
           </button>
         </Tooltip>

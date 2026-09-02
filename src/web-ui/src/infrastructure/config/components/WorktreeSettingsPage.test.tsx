@@ -142,6 +142,16 @@ vi.mock('@bitfun/ui', () => ({
 vi.mock('./common', () => ({
   ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
   ConfigMessage: ({ message }: { message: { text: string } | null }) => message ? <div>{message.text}</div> : null,
+  ConfigRetryState: ({ message, onRetry, retryLabel }: {
+    message: string;
+    onRetry: () => void;
+    retryLabel: string;
+  }) => (
+    <div>
+      <span>{message}</span>
+      <button type="button" onClick={onRetry}>{retryLabel}</button>
+    </div>
+  ),
   ConfigRefreshButton: ({ onClick }: { onClick: () => void }) => (
     <button type="button" onClick={onClick}>refresh</button>
   ),
@@ -287,6 +297,37 @@ describe('WorktreeSettingsPage', () => {
     expect(container.textContent).toContain('/repo');
     expect(container.textContent).toContain('/managed/BitFun-wt-1');
     expect(container.textContent).toContain('Ship worktree management');
+  });
+
+  it('locks untrusted fallback settings after a failed read and supports retry', async () => {
+    getConfigMock
+      .mockRejectedValueOnce(new Error('read failed'))
+      .mockResolvedValueOnce({
+        rootPath: '/retried/worktrees',
+        branchPrefix: 'retried/',
+        copyLocalChanges: true,
+      });
+
+    await act(async () => {
+      root.render(<WorktreeSettingsPage />);
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain('settings.loadFailed');
+    expect(container.textContent).not.toContain('settings.save');
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'settings.retry');
+    await act(async () => {
+      retryButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getConfigMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector<HTMLInputElement>('input[value="/retried/worktrees"]'))
+      .not.toBeNull();
   });
 
   it('saves the auto-delete policy with the existing worktree settings', async () => {

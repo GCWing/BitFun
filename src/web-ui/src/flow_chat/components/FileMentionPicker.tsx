@@ -5,24 +5,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  IconButton,
-  KeyHint,
-  Listbox,
-  ListboxEmpty,
-  ListboxOption,
-  Tooltip,
-} from '@bitfun/ui';
+import { IconButton, KeyHint, Listbox, ListboxEmpty, ListboxOption, Tooltip, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import {
-  File,
-  Folder,
-  Loader2,
-  MessageCircle,
-  Search,
-  ChevronRight,
-  ChevronLeft,
-} from 'lucide-react';
+import { File, Loader2, MessageCircle } from 'lucide-react';
 import { sessionAPI, workspaceAPI } from '@/infrastructure/api';
 import {
   externalSourcesAPI,
@@ -590,14 +575,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           <Tooltip content={t('fileMention.goBack')}>
             <IconButton
               aria-label={t('fileMention.goBack')}
-              icon={<ChevronLeft aria-hidden="true" />}
+              icon={<Icon name="chevron-left" size="lg" aria-hidden="true" />}
               onClick={goBack}
               size="xs"
               variant="quiet"
             />
           </Tooltip>
         )}
-        {isSearchMode ? <><Search size={11} /><span>{t('fileMention.searchResults')}</span></> : (
+        {isSearchMode ? <><Icon name="search" size="lg" style={{ width: 11, height: 11 }} /><span>{t('fileMention.searchResults')}</span></> : (
           <div className="file-mention-picker__directory-label" title={currentDirectoryDisplay.fullPath}>
             <span
               data-bf-component="file-mention-picker"
@@ -651,12 +636,12 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                   key={key}
                   data-index={index}
                   indicator={file?.isDirectory && !isSearchMode
-                    ? <ChevronRight aria-hidden="true" />
+                    ? <Icon name="chevron-right" size="lg" aria-hidden="true" />
                     : undefined}
                   leading={isSession
                     ? <MessageCircle aria-hidden="true" />
                     : file?.isDirectory
-                      ? <Folder aria-hidden="true" />
+                      ? <Icon name="folder" size="lg" aria-hidden="true" />
                       : <File aria-hidden="true" />}
                   metadata={session?.workspaceLabel
                     ?? (file?.referenceStableKey

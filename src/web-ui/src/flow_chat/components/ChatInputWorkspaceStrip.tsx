@@ -13,24 +13,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Circle,
-  Clock3,
-  EyeOff,
-  GitBranch,
-  RefreshCw,
-  Settings,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Square,
-  SquareCheck,
-} from 'lucide-react';
+import { Circle, EyeOff, Shield, ShieldAlert, ShieldCheck, Square, SquareCheck } from 'lucide-react';
 import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { BranchQuickSwitch } from '@/tools/git/components/BranchQuickSwitch';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
@@ -506,12 +491,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const renderBranchChip = () => {
     const contents = (
       <>
-        <GitBranch
-          className="bitfun-chat-input-workspace-strip__branch-icon"
-          size={12}
-          strokeWidth={1.8}
-          aria-hidden
-        />
+        <Icon name="git" size="xs" className="bitfun-chat-input-workspace-strip__branch-icon" aria-hidden />
         <span
           data-bf-component="chat-input-workspace-strip"
           data-bf-part="branch"
@@ -627,7 +607,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   data-bf-part="workspaceOption"
                   data-bf-state={isActive ? 'active' : undefined}
                   data-testid={`chat-input-workspace-option-${workspace.id}`}
-                  metadata={isActive ? <Check size={13} strokeWidth={2.2} aria-hidden /> : null}
+                  metadata={isActive ? <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} aria-hidden /> : null}
                   onClick={event => {
                     event.stopPropagation();
                     setWorkspaceMenuOpen(false);
@@ -734,12 +714,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             />
           )}
           metadata={selected ? (
-            <Check
-              size={14}
-              strokeWidth={2.2}
-              data-testid={selectedTestId}
-              aria-hidden
-            />
+            <Icon name="check-line" size="sm" data-testid={selectedTestId} aria-hidden />
           ) : null}
           disabled={permissionControl?.saving}
           data-testid={optionTestId}
@@ -812,7 +787,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 onClick={() => setResultDialogOpen(true)}
                 data-testid="dispatch-sync-trigger"
               >
-                <RefreshCw size={12} strokeWidth={1.8} aria-hidden />
+                <Icon name="refresh" size="xs" aria-hidden />
                 <span>{tCommon('dispatch.syncAction')}</span>
               </button>
             </Tooltip>
@@ -930,9 +905,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                       <>
                         <MenuSeparator />
                         <MenuItem
-                          leading={<Clock3 size={14} strokeWidth={2} aria-hidden />}
+                          leading={<Icon name="clock" size="sm" aria-hidden />}
                           metadata={permissionNextTurnArmed ? permissionModeLabel : undefined}
-                          shortcut={<ChevronRight size={14} strokeWidth={2} aria-hidden />}
+                          shortcut={<Icon name="chevron-right" size="sm" aria-hidden />}
                           aria-haspopup="menu"
                           data-testid="chat-input-permission-turn-scope"
                           onClick={event => {
@@ -959,7 +934,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                           actions={permissionControl.onOpenDefaultSettings ? [{
                             id: 'open-default-settings',
                             label: t('chatInput.permissionMode.openDefaultSettings'),
-                            icon: <Settings size={13} strokeWidth={2} aria-hidden />,
+                            icon: <Icon name="gear" size="lg" style={{ width: 13, height: 13 }} aria-hidden />,
                             testId: 'chat-input-permission-open-default-settings',
                             onClick: event => {
                               event.stopPropagation();
@@ -1001,7 +976,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                     data-bf-part="permissionOptions"
                   >
                     <MenuItem
-                      leading={<ChevronLeft size={14} strokeWidth={2} aria-hidden />}
+                      leading={<Icon name="chevron-left" size="sm" aria-hidden />}
                       metadata={permissionCopy[permissionMode].label}
                       aria-label={t('chatInput.permissionMode.backToSessionSettings')}
                       data-testid="chat-input-permission-turn-back"
@@ -1026,12 +1001,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                         />
                       )}
                       metadata={!permissionNextTurnArmed ? (
-                        <Check
-                          size={14}
-                          strokeWidth={2.2}
-                          data-testid="chat-input-permission-follow-session-selected"
-                          aria-hidden
-                        />
+                        <Icon name="check-line" size="sm" data-testid="chat-input-permission-follow-session-selected" aria-hidden />
                       ) : null}
                       disabled={permissionControl.saving}
                       data-testid="chat-input-permission-follow-session"

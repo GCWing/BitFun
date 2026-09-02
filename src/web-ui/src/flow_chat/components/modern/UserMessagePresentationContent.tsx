@@ -1,41 +1,40 @@
 import React from 'react';
+import { Icon } from '@bitfun/ui';
 import {
   AtSign,
   Code2,
   File,
-  Folder,
-  GitBranch,
-  Link,
   MessageCircle,
-  Puzzle,
-  Terminal,
-  type LucideIcon,
 } from 'lucide-react';
 import type { ContextItem } from '@/shared/types/context';
 import type { ComposerPresentation } from '../../utils/composerPresentation';
 
-function contextIcon(type: ContextItem['type']): LucideIcon {
+const catalogIcon = (name: 'extension' | 'folder' | 'git' | 'link' | 'terminal') => (
+  <Icon name={name} size="lg" style={{ width: 13, height: 13 }} aria-hidden />
+);
+
+function contextIcon(type: ContextItem['type']): React.ReactNode {
   switch (type) {
     case 'session-reference':
-      return MessageCircle;
+      return <MessageCircle size={13} aria-hidden />;
     case 'file':
     case 'image':
-      return File;
+      return <File size={13} aria-hidden />;
     case 'directory':
-      return Folder;
+      return catalogIcon('folder');
     case 'code-snippet':
     case 'mermaid-node':
     case 'mermaid-diagram':
-      return Code2;
+      return <Code2 size={13} aria-hidden />;
     case 'pull-request':
     case 'git-ref':
-      return GitBranch;
+      return catalogIcon('git');
     case 'terminal-command':
-      return Terminal;
+      return catalogIcon('terminal');
     case 'url':
-      return Link;
+      return catalogIcon('link');
     case 'web-element':
-      return AtSign;
+      return <AtSign size={13} aria-hidden />;
     default: {
       const exhaustive: never = type;
       return exhaustive;
@@ -53,27 +52,28 @@ export const UserMessagePresentationContent: React.FC<{
       }
 
       if (segment.kind === 'inline-token') {
-        const Icon = segment.tokenType === 'skill' ? Puzzle : AtSign;
+        const icon = segment.tokenType === 'skill'
+          ? catalogIcon('extension')
+          : <AtSign size={13} aria-hidden />;
         return (
           <span
             key={`token-${index}`}
             className={`user-message-item__reference user-message-item__reference--${segment.tokenType}`}
             title={segment.label}
           >
-            <Icon size={13} aria-hidden />
+            {icon}
             <span className="user-message-item__reference-label">{segment.label}</span>
           </span>
         );
       }
 
-      const Icon = contextIcon(segment.context.type);
       return (
         <span
           key={`context-${index}`}
           className={`user-message-item__reference user-message-item__reference--${segment.context.type}`}
           title={segment.title}
         >
-          <Icon size={13} aria-hidden />
+          {contextIcon(segment.context.type)}
           <span className="user-message-item__reference-label">{segment.label}</span>
         </span>
       );

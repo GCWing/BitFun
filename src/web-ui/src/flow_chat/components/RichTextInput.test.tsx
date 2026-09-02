@@ -218,7 +218,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     ) as HTMLElement | null;
     expect(skillPill).toBeTruthy();
     expect(skillPill?.getAttribute('data-tag-format')).toBe('[$pdf]');
-    expect(skillPill?.querySelector('.lucide-puzzle')).toBeTruthy();
+    expect(skillPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
     expect(editor.textContent).toContain('pdf');
   });
 
@@ -236,7 +236,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(reviewPill).toBeTruthy();
     expect(reviewPill?.classList.contains('rich-text-tag-pill--skill-ref')).toBe(true);
     expect(reviewPill?.getAttribute('data-bf-context-type')).toBe('additional-mode-reference');
-    expect(reviewPill?.querySelector('.lucide-puzzle')).toBeTruthy();
+    expect(reviewPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
     expect(reviewPill?.textContent).toContain('Review');
   });
 
@@ -429,7 +429,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(onChange).toHaveBeenCalledWith('[$pdf]', emptyContexts);
     const skillPill = editor?.querySelector('.rich-text-tag-pill--skill-ref');
     expect(skillPill).toBeTruthy();
-    expect(skillPill?.querySelector('.lucide-puzzle')).toBeTruthy();
+    expect(skillPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
     expect(skillPill?.nextSibling?.textContent).toBe(' ');
     const selection = window.getSelection();
     expect(selection?.anchorNode).toBe(editor);

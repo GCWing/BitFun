@@ -1,8 +1,7 @@
 import React from 'react';
+import { Icon } from '@bitfun/ui';
 import {
-  BadgeCheck,
   BookOpenCheck,
-  CheckCircle2,
   Compass,
   FileText,
   Gavel,
@@ -12,7 +11,6 @@ import {
   ShieldCheck,
   Swords,
   UsersRound,
-  type LucideIcon,
 } from 'lucide-react';
 import { StatusPill, type StatusPillTone } from '@bitfun/ui';
 import { AmbientToolCard, AmbientToolCardHeader } from '@bitfun/ui/flow-chat';
@@ -36,17 +34,17 @@ type VerdictMarker = Extract<DeepResearchProtocolMarker, { kind: 'verdict' }>;
 
 const PHASE_PRESENTATION: Record<DeepResearchPhaseId, {
   current: number;
-  icon: LucideIcon;
+  icon: React.ReactNode;
 }> = {
-  'phase-0-orient': { current: 1, icon: Compass },
-  'phase-1-specialists': { current: 2, icon: UsersRound },
-  'phase-2-citations': { current: 3, icon: BookOpenCheck },
-  'phase-3-debate-r1': { current: 4, icon: Swords },
-  'phase-3-debate-r2': { current: 5, icon: Scale },
-  'phase-4-factcheck': { current: 6, icon: ShieldCheck },
-  'phase-5-arbitration': { current: 7, icon: Gavel },
-  'phase-6-report': { current: 8, icon: FileText },
-  complete: { current: 8, icon: CheckCircle2 },
+  'phase-0-orient': { current: 1, icon: <Compass aria-hidden="true" /> },
+  'phase-1-specialists': { current: 2, icon: <UsersRound aria-hidden="true" /> },
+  'phase-2-citations': { current: 3, icon: <BookOpenCheck aria-hidden="true" /> },
+  'phase-3-debate-r1': { current: 4, icon: <Swords aria-hidden="true" /> },
+  'phase-3-debate-r2': { current: 5, icon: <Scale aria-hidden="true" /> },
+  'phase-4-factcheck': { current: 6, icon: <ShieldCheck aria-hidden="true" /> },
+  'phase-5-arbitration': { current: 7, icon: <Gavel aria-hidden="true" /> },
+  'phase-6-report': { current: 8, icon: <FileText aria-hidden="true" /> },
+  complete: { current: 8, icon: <Icon name="check-circle" size="md" /> },
 };
 
 const PHASE_COUNT = 8;
@@ -110,7 +108,6 @@ const PhaseGroup: React.FC<{ markers: PhaseMarker[] }> = ({ markers }) => {
     >
       {markers.map((marker, index) => {
         const presentation = PHASE_PRESENTATION[marker.phaseId];
-        const Icon = presentation.icon;
         const complete = marker.phaseId === 'complete';
         const progress = t('deepResearchProtocol.phaseProgress', {
           current: formatNumber(presentation.current),
@@ -125,7 +122,7 @@ const PhaseGroup: React.FC<{ markers: PhaseMarker[] }> = ({ markers }) => {
             status="completed"
             header={(
               <AmbientToolCardHeader
-                icon={<Icon aria-hidden="true" />}
+                icon={presentation.icon}
                 content={phaseLabel(marker.phaseId, t)}
                 extra={(
                   <StatusPill tone={complete ? 'success' : 'accent'}>
@@ -235,7 +232,7 @@ const VerdictGroup: React.FC<{ markers: VerdictMarker[] }> = ({ markers }) => {
       isExpanded
       header={(
         <AmbientToolCardHeader
-          icon={<BadgeCheck aria-hidden="true" />}
+          icon={<Icon name="check-circle" size="lg" aria-hidden="true" />}
           content={t('deepResearchProtocol.verdicts.title')}
           extra={<StatusPill tone="success">{t('deepResearchProtocol.verdicts.count', { count })}</StatusPill>}
         />

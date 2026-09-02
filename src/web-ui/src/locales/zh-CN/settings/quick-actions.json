@@ -29,7 +29,10 @@
     "button": "编辑"
   },
   "delete": {
-    "button": "删除"
+    "button": "删除",
+    "confirmTitle": "删除自定义动作？",
+    "confirmMessage": "将删除“{{name}}”。此动作及其指令无法恢复。",
+    "confirmAction": "删除动作"
   },
   "add": {
     "button": "添加动作"
@@ -44,10 +47,15 @@
     "promptHint": "触发动作时，此指令会发送给 AI 执行。",
     "cancel": "取消",
     "saveEdit": "保存",
-    "confirmAdd": "添加"
+    "confirmAdd": "添加",
+    "discardTitle": "放弃未保存的修改？",
+    "discardMessage": "关闭后，本次编辑的动作名称和触发指令将丢失。",
+    "discardConfirm": "放弃修改"
   },
   "messages": {
     "saved": "已保存",
-    "saveFailed": "保存失败"
+    "saveFailed": "保存失败，编辑内容已保留，可重新保存",
+    "loadFailedLocked": "无法读取快捷动作。为避免把现有配置覆盖为空，当前页面已锁定。",
+    "retry": "重新加载"
   }
 }

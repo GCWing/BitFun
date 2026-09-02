@@ -1018,7 +1018,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           disabled={exportingHtml}
           onClick={handleExportHtml}
         >
-          {exportingHtml ? <Loader2 size={15} className="bitfun-canvas-panel__toolbar-icon--spin" /> : <Icon name="download" size="sm" />}
+          {exportingHtml ? <Loader2 size={15} className="bitfun-canvas-panel__toolbar-icon--spin" /> : <Icon name="arrow-down" size="sm" />}
         </button>
       </div>
       {isFrameReady && (

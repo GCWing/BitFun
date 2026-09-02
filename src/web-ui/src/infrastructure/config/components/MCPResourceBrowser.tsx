@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Icon, ScrollArea, SearchField } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { FileText, FileImage, FileJson, FileCode } from 'lucide-react';
+import { FileText, FileJson, FileCode } from 'lucide-react';
 import MCPAPI, { MCPResource } from '../../api/service-api/MCPAPI';
 import { createLogger } from '@/shared/utils/logger';
 import './MCPResourceBrowser.scss';
@@ -117,7 +117,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
   const getMimeTypeIcon = (mimeType?: string): React.ReactNode => {
     if (!mimeType) return <Icon name="files" size="md" />;
     if (mimeType.startsWith('text/')) return <FileText size={16} />;
-    if (mimeType.startsWith('image/')) return <FileImage size={16} />;
+    if (mimeType.startsWith('image/')) return <Icon name="image" size="md" />;
     if (mimeType.includes('json')) return <FileJson size={16} />;
     if (mimeType.includes('html')) return <FileCode size={16} />;
     if (mimeType.includes('pdf')) return <FileText size={16} />;

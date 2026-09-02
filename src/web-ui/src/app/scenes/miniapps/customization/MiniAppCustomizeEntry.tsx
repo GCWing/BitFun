@@ -1,6 +1,5 @@
 import React from 'react';
-import { IconButton, Tooltip } from '@bitfun/ui';
-import { WandSparkles } from 'lucide-react';
+import { Icon, IconButton, Tooltip } from '@bitfun/ui';
 
 import { useI18n } from '@/infrastructure/i18n';
 
@@ -24,7 +23,7 @@ export const MiniAppCustomizeEntry: React.FC<MiniAppCustomizeEntryProps> = ({
         onClick={onOpen}
         disabled={disabled}
         aria-label={label}
-        icon={<WandSparkles />}
+        icon={<Icon name="spark" size="md" />}
       />
     </Tooltip>
   );

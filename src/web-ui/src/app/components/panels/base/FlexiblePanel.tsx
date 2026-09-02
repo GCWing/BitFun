@@ -1006,7 +1006,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                   <IconButton
                     size="sm"
                     aria-label={t('flexiblePanel.actions.downloadContent')}
-                    icon={<Icon name="download" size="lg" />}
+                    icon={<Icon name="arrow-down" size="lg" />}
                     onClick={handleDownload}
                   />
                 </Tooltip>

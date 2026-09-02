@@ -4,16 +4,9 @@
  * Uses the shared prominent FlowChat framework.
  */
 
+import { Icon } from '@bitfun/ui';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import {
-  Loader2,
-  AlertTriangle,
-  AlertCircle,
-  Clock,
-  Info,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+import { Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
@@ -95,7 +88,7 @@ const ReviewReportSection: React.FC<ReviewReportSectionProps> = ({
     >
       <span className="review-report-section__title">{title}</span>
       {summary && <span className="review-report-section__summary">{summary}</span>}
-      {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      {expanded ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="lg" style={{ width: 13, height: 13 }} />}
     </button>
     {expanded && (
       <div className="review-report-section__body">
@@ -202,7 +195,7 @@ function getReliabilityNoticeIcon(notice: ReviewReliabilityNotice): React.ReactN
     notice.kind === 'partial_reviewer' ||
     notice.kind === 'retry_guidance'
   ) {
-    return <Clock size={13} />;
+    return <Icon name="clock" size="lg" style={{ width: 13, height: 13 }} />;
   }
   if (
     notice.kind === 'user_decision' ||
@@ -212,7 +205,7 @@ function getReliabilityNoticeIcon(notice: ReviewReliabilityNotice): React.ReactN
   ) {
     return <AlertTriangle size={13} />;
   }
-  return <Info size={13} />;
+  return <Icon name="info" size="lg" style={{ width: 13, height: 13 }} />;
 }
 
 function getDeepReviewRunManifestForSession(sessionId?: string): ReviewTeamRunManifest | undefined {
@@ -339,11 +332,11 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       case 'medium':
         return <AlertTriangle size={14} style={{ color: riskLevelColors.medium }} />;
       case 'low':
-        return <Info size={14} style={{ color: riskLevelColors.low }} />;
+        return <Icon name="info" size="sm" style={{ color: riskLevelColors.low }} />;
       case 'info':
-        return <Info size={14} style={{ color: 'var(--bf-color-content-muted)' }} />;
+        return <Icon name="info" size="sm" style={{ color: 'var(--bf-color-content-muted)' }} />;
       default:
-        return <Info size={14} style={{ color: 'var(--bf-color-content-muted)' }} />;
+        return <Icon name="info" size="sm" style={{ color: 'var(--bf-color-content-muted)' }} />;
     }
   };
 
@@ -841,7 +834,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                         }}
                         aria-expanded={expanded}
                       >
-                        {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        {expanded ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="lg" style={{ width: 13, height: 13 }} />}
                         <span>
                           {expanded
                             ? t('toolCards.codeReview.remediationActions.collapsePlan')

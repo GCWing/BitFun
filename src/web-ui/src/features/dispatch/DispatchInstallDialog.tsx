@@ -526,7 +526,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                     {preparationPhase ? (
                       <Loader2 size={14} className="dispatch-install-dialog__spin" />
                     ) : (
-                      <Icon name="download" size="sm" aria-hidden />
+                      <Icon name="arrow-down" size="sm" aria-hidden />
                     )}
                     {preparationPhase === 'installing'
                       ? t('dispatch.installingCli')

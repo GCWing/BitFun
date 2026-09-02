@@ -11,16 +11,10 @@ import React, {
   useMemo,
   useSyncExternalStore,
 } from 'react';
-import {
-  AlertTriangle,
-  Split,
-  ChevronRight,
-  Loader2,
-  Square,
-} from 'lucide-react';
+import { AlertTriangle, Split, Loader2, Square } from 'lucide-react';
 
 import { useTranslation } from 'react-i18next';
-import { Spinner } from '@bitfun/ui';
+import { Spinner, Icon } from '@bitfun/ui';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import {
@@ -866,7 +860,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                 title={t('toolCards.taskTool.openInPanel')}
               />
               <div className="task-header-rail__visual" aria-hidden>
-                <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{effectiveIsRunning ? (
+                <Icon name="chevron-right" size="md" />{effectiveIsRunning ? (
                   <ToolCardStatusIcon
                     icon={<Spinner size="sm" />}
                     className="task-status-icon--rail"
