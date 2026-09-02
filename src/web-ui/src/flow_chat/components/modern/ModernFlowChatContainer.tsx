@@ -59,7 +59,6 @@ import {
   useBackgroundSubagentActivityStore,
 } from '../../store/backgroundSubagentActivityStore';
 import { type LineRange } from '@/shared/editor/LineRange';
-import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { createLogger } from '@/shared/utils/logger';
@@ -467,17 +466,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const [queuedTurnNavigation, setQueuedTurnNavigation] = useState<QueuedTurnNavigation | null>(null);
   const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
-  // Track whether a slash-command or @-mention popup is open in ChatInput.
-  // When a popup is active, the global Escape shortcut is disabled so the
-  // popup can be closed with Escape instead of cancelling the current task.
-  const [chatPopupActive, setChatPopupActive] = useState(() => isChatPopupActive());
   const backgroundCommandActivities = useBackgroundCommandActivityStore(state => state.activities);
-
-  useEffect(() => {
-    return subscribeChatPopupChange(() => {
-      setChatPopupActive(isChatPopupActive());
-    });
-  }, []);
   const [stoppingBackgroundCommandIds, setStoppingBackgroundCommandIds] = useState<Set<string>>(() => new Set());
   const [backgroundCommandInputTarget, setBackgroundCommandInputTarget] = useState<FlowChatHeaderCommandSummary | null>(null);
   const [isSendingBackgroundCommandInput, setIsSendingBackgroundCommandInput] = useState(false);
@@ -2489,15 +2478,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       void handleStopBackgroundCommand(command);
     }
   }, [handleStopBackgroundCommand, headerBackgroundCommands]);
-
-  useShortcut(
-    'chat.stopGeneration',
-    { key: 'Escape', scope: 'chat', allowInInput: true },
-    () => {
-      void FlowChatManager.getInstance().cancelCurrentTask();
-    },
-    { priority: 20, enabled: !chatPopupActive, description: 'keyboard.shortcuts.chat.stopGeneration' }
-  );
 
   useShortcut(
     'chat.newSession',

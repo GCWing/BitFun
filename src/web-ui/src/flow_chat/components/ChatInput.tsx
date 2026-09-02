@@ -112,6 +112,7 @@ import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/
 import { findWorkspaceForSession } from '../utils/workspaceScope';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip } from '@bitfun/ui';
+import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -237,7 +238,15 @@ import {
 } from './chatInputRegistration';
 import './ChatInput.scss';
 
-import { setChatPopupActive } from './chatPopupState';
+import {
+  isChatPopupActive,
+  setChatPopupActive,
+  subscribeChatPopupChange,
+} from './chatPopupState';
+import {
+  resolveChatInputTargetSessionId,
+  type ChatInputTarget,
+} from '../utils/chatInputTarget';
 import { Menu, MenuItem, MenuSeparator, Icon } from '@bitfun/ui';
 import {
   ChatComposer,
@@ -323,8 +332,6 @@ type SlashPickerItem =
   | SlashAcpCommandItem
   | SlashSkillItem
   | SlashExternalPromptCommandItem;
-type ChatInputTarget = 'main' | 'btw';
-
 function nativePromptCommandCandidateId(
   kind: Exclude<SlashPickerItem['kind'], 'externalCommand'>,
   id: string,
@@ -547,8 +554,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeBtwSessionId = activeBtwSessionData?.parentSessionId === currentSessionId
     ? activeBtwSessionData.childSessionId
     : undefined;
-  const effectiveTargetSessionId =
-    inputTarget === 'btw' && activeBtwSessionId ? activeBtwSessionId : currentSessionId;
+  const effectiveTargetSessionId = resolveChatInputTargetSessionId({
+    currentSessionId,
+    inputTarget,
+    activeBtwSessionId,
+  });
   const effectiveTargetSessionIdRef = useRef<string | null>(effectiveTargetSessionId);
   effectiveTargetSessionIdRef.current = effectiveTargetSessionId;
 
@@ -1668,8 +1678,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [externalPromptCommandsLoading, externalPromptCommandsPending, refreshExternalPromptCommands, slashCommandState.isActive]);
 
-  // Keep the module-level popup-active flag in sync so ModernFlowChatContainer
-  // can disable the global Escape shortcut while popups are open.
+  const reportedChatPopupActive = useSyncExternalStore(
+    subscribeChatPopupChange,
+    isChatPopupActive,
+    isChatPopupActive,
+  );
+  const chatPopupActive =
+    slashCommandState.isActive || mentionState.isActive || reportedChatPopupActive;
+
+  // Keep the module-level flag in sync for other Escape owners such as modal
+  // surfaces. The local state is included above so this composer does not wait
+  // for the effect before giving the key to its popup.
   useEffect(() => {
     setChatPopupActive(slashCommandState.isActive || mentionState.isActive);
   }, [slashCommandState.isActive, mentionState.isActive]);
@@ -4309,6 +4328,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     await FlowChatManager.getInstance().cancelCurrentTask();
   }, [effectiveTargetSessionId]);
 
+  useShortcut(
+    'chat.stopGeneration',
+    { key: 'Escape', scope: 'chat', allowInInput: true },
+    () => {
+      void handleCancelCurrentTask();
+    },
+    {
+      priority: 20,
+      enabled: isSceneActive && !chatPopupActive && Boolean(derivedState?.canCancel),
+      description: 'keyboard.shortcuts.chat.stopGeneration',
+    },
+  );
+
   const handleModelLoadingChange = useCallback((loading: boolean) => {
     setIsModelSwitching(loading);
   }, []);
@@ -5201,11 +5233,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       handleSendOrCancel();
     }
     
-    if (e.key === 'Escape' && derivedState?.canCancel) {
-      e.preventDefault();
-      void handleCancelCurrentTask();
-    }
-  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;

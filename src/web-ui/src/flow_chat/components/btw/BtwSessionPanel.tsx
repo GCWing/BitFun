@@ -64,6 +64,8 @@ import { sessionLineageLifecycleForSession } from '../../utils/sessionLineage';
 import {
   SubagentAvatar,
 } from '../../subagent-identity';
+import { FlowChatManager } from '../../services/FlowChatManager';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
 function findReviewChildByRequestId(
   parentSessionId: string | null | undefined,
@@ -995,6 +997,23 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     );
   }, [btwOrigin, parentSessionId]);
 
+  const handlePanelKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key !== 'Escape' ||
+      event.defaultPrevented ||
+      childKind !== 'btw' ||
+      !isTurnProcessing ||
+      !childSessionId ||
+      isImeOwnedKeyboardEvent(event.nativeEvent)
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    void FlowChatManager.getInstance().cancelSessionTask(childSessionId);
+  }, [childKind, childSessionId, isTurnProcessing]);
+
   if (!childSessionId || !childSession) {
     return (
       <div className="btw-session-panel btw-session-panel--empty" data-bf-component="btw-session-panel" data-bf-part="root" data-bf-view="empty">
@@ -1010,6 +1029,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
         className={`btw-session-panel${retainsReviewActionBarLayout ? ' btw-session-panel--has-action-bar' : ''}`}
+        onKeyDown={handlePanelKeyDown}
         data-bf-component="btw-session-panel"
         data-bf-part="root"
         data-bf-view="session"
