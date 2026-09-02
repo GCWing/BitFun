@@ -484,6 +484,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
+  const [pendingLargePastes, setPendingLargePastes] = useState<PendingLargePasteMap>({});
   const composerMutationRevisionsRef = useRef(new Map<string, number>());
   const isRestoringSessionDraftRef = useRef(false);
   const sessionConflictRetryBaselinesRef = useRef(new Map<string, number>());
@@ -1746,7 +1747,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     dispatchLocalInput({ type: 'SET_VALUE', payload: nextValue });
     inputValueRef.current = nextValue;
-    pendingLargePastesRef.current = { ...nextPendingLargePastes };
+    const restoredPendingLargePastes = { ...nextPendingLargePastes };
+    pendingLargePastesRef.current = restoredPendingLargePastes;
+    setPendingLargePastes(restoredPendingLargePastes);
     isRestoringSessionDraftRef.current = true;
     try {
       replaceContexts(nextContexts);
@@ -1810,6 +1813,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       markComposerMutation();
     }
     pendingLargePastesRef.current = nextPendingLargePastes;
+    setPendingLargePastes(nextPendingLargePastes);
 
     const sessionId = effectiveTargetSessionIdRef.current;
     if (sessionId) {
@@ -1949,28 +1953,55 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     replaceContexts,
   ]);
 
+  const allocateLargePastePlaceholder = useCallback((charCount: number, excluded?: string): string => {
+    const base = t('input.largePastePlaceholder', { count: charCount });
+    let suffix = largePasteCountersRef.current[charCount] ?? 0;
+    let placeholder: string;
+    do {
+      suffix += 1;
+      placeholder = suffix === 1 ? base : `${base} #${suffix}`;
+    } while (
+      placeholder !== excluded
+      && Object.prototype.hasOwnProperty.call(pendingLargePastesRef.current, placeholder)
+    );
+    largePasteCountersRef.current[charCount] = suffix;
+    return placeholder;
+  }, [t]);
+
   const createLargePastePlaceholder = useCallback((text: string): string | null => {
     const charCount = getCharacterCount(text);
     if (charCount <= CHAT_INPUT_CONFIG.largePaste.thresholdChars) {
       return null;
     }
 
-    const nextCounters = largePasteCountersRef.current;
-    const nextSuffix = (nextCounters[charCount] ?? 0) + 1;
-    nextCounters[charCount] = nextSuffix;
-
-    const base = t('input.largePastePlaceholder', {
-      count: charCount,
-    });
-    const placeholder = nextSuffix === 1 ? base : `${base} #${nextSuffix}`;
-
+    const placeholder = allocateLargePastePlaceholder(charCount);
     replacePendingLargePastes({
       ...pendingLargePastesRef.current,
       [placeholder]: text,
     });
 
     return placeholder;
-  }, [replacePendingLargePastes, t]);
+  }, [allocateLargePastePlaceholder, replacePendingLargePastes]);
+
+  const updateLargePaste = useCallback((placeholder: string, text: string): string => {
+    const currentText = pendingLargePastesRef.current[placeholder];
+    const charCount = getCharacterCount(text);
+    const nextPlaceholder = currentText !== undefined && getCharacterCount(currentText) === charCount
+      ? placeholder
+      : allocateLargePastePlaceholder(charCount, placeholder);
+    const nextPendingLargePastes = { ...pendingLargePastesRef.current };
+    delete nextPendingLargePastes[placeholder];
+    nextPendingLargePastes[nextPlaceholder] = text;
+    replacePendingLargePastes(nextPendingLargePastes);
+    return nextPlaceholder;
+  }, [allocateLargePastePlaceholder, replacePendingLargePastes]);
+
+  const removeLargePaste = useCallback((placeholder: string) => {
+    if (!Object.prototype.hasOwnProperty.call(pendingLargePastesRef.current, placeholder)) return;
+    const nextPendingLargePastes = { ...pendingLargePastesRef.current };
+    delete nextPendingLargePastes[placeholder];
+    replacePendingLargePastes(nextPendingLargePastes);
+  }, [replacePendingLargePastes]);
 
   const prunePendingLargePastes = useCallback((text: string) => {
     const entries = Object.entries(pendingLargePastesRef.current);
@@ -2891,7 +2922,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       // (EventHandlerModule sets queuedInput on failed turns), NOT for live typing.
       // Restoring while the user is actively typing would overwrite their draft.
       log.debug('Detected queuedInput, restoring message to input', { queuedInput });
-      clearPendingLargePastes();
+      // Keep the session-scoped paste map restored with this draft. Remote and
+      // detached submissions must still expand placeholders before transport.
       dispatchInput({ type: 'SET_VALUE', payload: queuedInput });
       inputValueRef.current = queuedInput;
       if (richTextInputRef.current) {
@@ -2901,7 +2933,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     derivedState?.queuedInput,
     effectiveTargetSessionId,
-    clearPendingLargePastes,
     dispatchInput,
   ]);
 
@@ -4416,7 +4447,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         effectiveTargetSessionIdRef.current = newSessionId;
         dispatchLocalInput({ type: 'SET_VALUE', payload: transferredDraft.value });
         inputValueRef.current = transferredDraft.value;
-        pendingLargePastesRef.current = transferredDraft.pendingLargePastes;
+        const transferredPendingLargePastes = { ...transferredDraft.pendingLargePastes };
+        pendingLargePastesRef.current = transferredPendingLargePastes;
+        setPendingLargePastes(transferredPendingLargePastes);
         isRestoringSessionDraftRef.current = true;
         try {
           replaceContexts(transferredDraft.contexts);
@@ -5679,6 +5712,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 value={inputState.value}
                 onChange={handleInputChange}
                 onLargePaste={createLargePastePlaceholder}
+                pendingLargePastes={pendingLargePastes}
+                onUpdateLargePaste={updateLargePaste}
+                onRemoveLargePaste={removeLargePaste}
                 onKeyDown={handleKeyDown}
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}

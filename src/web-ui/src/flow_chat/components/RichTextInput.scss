@@ -303,10 +303,81 @@
   }
 }
 
+.rich-text-large-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(100%, 320px);
+  margin: 0 3px;
+  padding: 2px 6px 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 72%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bf-color-surface-subtle) 82%, transparent);
+  color: var(--bf-color-content-secondary);
+  font-family: var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-flow-control-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-flow-support-line-height);
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--bf-color-accent-default) 42%, var(--bf-color-border-default));
+    background: color-mix(in srgb, var(--bf-color-accent-default) 8%, var(--bf-color-surface-subtle));
+    color: var(--bf-color-content-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.rich-text-large-paste__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-text-large-paste__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: currentColor;
+  font-size: var(--bf-type-flow-section-title-font-size);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
+  opacity: 0.6;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    opacity: 1;
+  }
+}
+
+.rich-text-large-paste-dialog__textarea {
+  min-height: 280px;
+  font-family: var(--bf-type-code-md-font-family);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rich-text-placeholder,
   .rich-text-tag-pill,
-  .rich-text-tag-pill__remove {
+  .rich-text-tag-pill__remove,
+  .rich-text-large-paste {
     transition-duration: 0ms;
   }
 }

@@ -1,6 +1,7 @@
 import React, { act, createRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { Simulate } from 'react-dom/test-utils';
 import RichTextInput, { type RichTextInputElement } from './RichTextInput';
 import type { ContextItem } from '../../shared/types/context';
 
@@ -69,6 +70,10 @@ describeWithJsdom('RichTextInput external sync', () => {
     vi.stubGlobal('InputEvent', window.InputEvent);
     vi.stubGlobal('getSelection', window.getSelection.bind(window));
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    Object.assign(window.HTMLElement.prototype, {
+      attachEvent: () => {},
+      detachEvent: () => {},
+    });
 
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
@@ -591,5 +596,255 @@ describeWithJsdom('RichTextInput external sync', () => {
       query: '',
       startOffset: 6,
     });
+  });
+
+  it('renders a semantic large-paste capsule without leaking its controls into input text', async () => {
+    const placeholder = '[Pasted Content 1001 chars]';
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value={`before ${placeholder} after`}
+          onChange={onChange}
+          pendingLargePastes={{ [placeholder]: 'x'.repeat(1001) }}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    const capsule = editor.querySelector('[data-large-paste-placeholder]') as HTMLElement | null;
+    expect(capsule).toBeTruthy();
+    expect(capsule?.getAttribute('contenteditable')).toBe('false');
+    expect(capsule?.getAttribute('role')).toBe('button');
+
+    await act(async () => {
+      editor.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith(`before ${placeholder} after`, emptyContexts);
+  });
+
+  it('lets users view, copy, cancel, edit, save, and remove a large paste', async () => {
+    const placeholder = '[Pasted Content 1001 chars]';
+    const updatedPlaceholder = '[Pasted Content 1002 chars]';
+    const originalText = 'a'.repeat(1001);
+    const editedText = `${originalText}b`;
+    const onChange = vi.fn();
+    const onUpdateLargePaste = vi.fn(() => updatedPlaceholder);
+    const onRemoveLargePaste = vi.fn();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value={placeholder}
+          onChange={onChange}
+          pendingLargePastes={{ [placeholder]: originalText }}
+          onUpdateLargePaste={onUpdateLargePaste}
+          onRemoveLargePaste={onRemoveLargePaste}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    const getCapsule = () => editor.querySelector('[data-large-paste-placeholder]') as HTMLElement;
+    await act(async () => {
+      getCapsule().click();
+    });
+
+    let textarea = document.body.querySelector(
+      '.rich-text-large-paste-dialog__textarea textarea',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe(originalText);
+
+    const dialog = textarea.closest('[role="dialog"]') as HTMLElement;
+    const dialogButtons = Array.from(dialog.querySelectorAll('button'));
+    const [copyButton, cancelButton, saveButton] = dialogButtons.slice(-3);
+    await act(async () => {
+      copyButton?.click();
+    });
+    expect(writeText).toHaveBeenCalledWith(originalText);
+
+    await act(async () => {
+      Simulate.change(textarea, { target: { value: editedText } } as never);
+    });
+    await act(async () => {
+      cancelButton?.click();
+    });
+    await act(async () => {
+      getCapsule().click();
+    });
+    textarea = document.body.querySelector(
+      '.rich-text-large-paste-dialog__textarea textarea',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe(originalText);
+
+    await act(async () => {
+      Simulate.change(textarea, { target: { value: editedText } } as never);
+    });
+    await act(async () => {
+      saveButton?.click();
+    });
+
+    expect(onUpdateLargePaste).toHaveBeenCalledWith(placeholder, editedText);
+    expect(getCapsule().dataset.largePastePlaceholder).toBe(updatedPlaceholder);
+    expect(onChange).toHaveBeenLastCalledWith(updatedPlaceholder, emptyContexts);
+
+    const removeButton = getCapsule().querySelector('button');
+    await act(async () => {
+      removeButton?.click();
+    });
+    expect(onRemoveLargePaste).toHaveBeenCalledWith(updatedPlaceholder);
+    expect(editor.querySelector('[data-large-paste-placeholder]')).toBeNull();
+  });
+
+  it('inserts Unicode large pastes as capsules at the caret', async () => {
+    const text = '文😀'.repeat(501);
+    const placeholder = '[Pasted Content 1002 chars]';
+    const onChange = vi.fn();
+    const onLargePaste = vi.fn(() => placeholder);
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={onChange}
+          onLargePaste={onLargePaste}
+          pendingLargePastes={{ [placeholder]: text }}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    setCaret(editor, 0);
+    const pasteEvent = new window.Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        items: [],
+        getData: (type: string) => type === 'text/plain' ? text : '',
+      },
+    });
+    await act(async () => {
+      editor.dispatchEvent(pasteEvent);
+    });
+
+    expect(onLargePaste).toHaveBeenCalledWith(text);
+    expect(editor.querySelector('[data-large-paste-placeholder]')).toBeTruthy();
+    expect(onChange).toHaveBeenLastCalledWith(placeholder, emptyContexts);
+    const selection = window.getSelection();
+    expect(selection?.anchorNode?.nodeType).toBe(Node.TEXT_NODE);
+    expect(selection?.anchorNode?.textContent).toBe('\u200B');
+    expect(selection?.anchorOffset).toBe(1);
+  });
+
+  it('keeps the caret visually anchored after consecutive large-paste capsules', async () => {
+    const text = 'x'.repeat(1001);
+    const placeholders = [
+      '[Pasted Content 1001 chars]',
+      '[Pasted Content 1001 chars] #2',
+      '[Pasted Content 1001 chars] #3',
+    ];
+    const onChange = vi.fn();
+    let pasteIndex = 0;
+    const onLargePaste = vi.fn(() => placeholders[pasteIndex++] ?? null);
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={onChange}
+          onLargePaste={onLargePaste}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    setCaret(editor, 0);
+    const dispatchPaste = async () => {
+      const pasteEvent = new window.Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: {
+          items: [],
+          getData: (type: string) => type === 'text/plain' ? text : '',
+        },
+      });
+      await act(async () => {
+        editor.dispatchEvent(pasteEvent);
+      });
+    };
+
+    await dispatchPaste();
+    await dispatchPaste();
+    await dispatchPaste();
+
+    expect(editor.querySelectorAll('[data-large-paste-placeholder]')).toHaveLength(3);
+    expect(onChange).toHaveBeenLastCalledWith(placeholders.join(''), emptyContexts);
+    const selection = window.getSelection();
+    expect(selection?.anchorNode?.nodeType).toBe(Node.TEXT_NODE);
+    expect(selection?.anchorNode?.textContent).toBe('\u200B');
+    expect(selection?.anchorOffset).toBe(1);
+
+    const pressBackspace = async () => {
+      await act(async () => {
+        editor.dispatchEvent(new window.KeyboardEvent('keydown', {
+          key: 'Backspace',
+          bubbles: true,
+          cancelable: true,
+        }));
+      });
+    };
+    await pressBackspace();
+    expect(editor.querySelectorAll('[data-large-paste-placeholder]')).toHaveLength(2);
+    expect(selection?.anchorNode?.previousSibling).toBe(
+      editor.querySelector('[data-large-paste-placeholder]:nth-of-type(2)'),
+    );
+    expect(selection?.anchorOffset).toBe(1);
+
+    await pressBackspace();
+    expect(editor.querySelectorAll('[data-large-paste-placeholder]')).toHaveLength(1);
+    expect(selection?.anchorNode?.previousSibling).toBe(
+      editor.querySelector('[data-large-paste-placeholder]'),
+    );
+    expect(selection?.anchorOffset).toBe(1);
+  });
+
+  it('closes an open large-paste editor when the surface-scoped source changes', async () => {
+    const placeholder = '[Pasted Content 1001 chars]';
+    const renderInput = (text: string) => (
+      <RichTextInput
+        value={placeholder}
+        onChange={() => {}}
+        pendingLargePastes={{ [placeholder]: text }}
+        contexts={emptyContexts}
+        onRemoveContext={() => {}}
+      />
+    );
+
+    await act(async () => {
+      root.render(renderInput('surface-a'));
+    });
+    const capsule = container.querySelector('[data-large-paste-placeholder]') as HTMLElement;
+    await act(async () => {
+      capsule.click();
+    });
+    expect(document.body.querySelector('textarea')).toBeTruthy();
+
+    await act(async () => {
+      root.render(renderInput('surface-b'));
+    });
+    expect(document.body.querySelector('[role="dialog"][data-state="open"]')).toBeNull();
   });
 });

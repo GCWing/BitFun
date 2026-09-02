@@ -43,7 +43,13 @@ describe('L1 Chat Input Validation', () => {
         await ensureCodeSessionOpen();
       } catch (error) {
         console.error('[L1] Failed to ensure Code session is open:', error);
-        hasWorkspace = false;
+        const existingSessions = await $$('[data-testid="nav-session-item"]').getElements();
+        if (existingSessions.length > 0) {
+          await existingSessions[existingSessions.length - 1].click();
+          await browser.pause(500);
+        }
+        const existingInput = await $('.rich-text-input[contenteditable="true"]');
+        hasWorkspace = await existingInput.isExisting();
       }
     }
 
@@ -156,6 +162,69 @@ describe('L1 Chat Input Validation', () => {
       const value = await chatInput.getValue();
       expect(value).toContain(specialChars);
       console.log('[L1] Special characters handled');
+    });
+
+    it('should keep the caret after the previous capsule across repeated Backspace', async function () {
+      if (!hasWorkspace) {
+        this.skip();
+        return;
+      }
+
+      const editor = await $('.rich-text-input[contenteditable="true"]');
+      const pasteLargeText = async () => {
+        await browser.execute((element: HTMLElement) => {
+          element.focus();
+          const event = new Event('paste', { bubbles: true, cancelable: true });
+          Object.defineProperty(event, 'clipboardData', {
+            value: {
+              items: [],
+              getData: (type: string) => type === 'text/plain' ? 'x'.repeat(1001) : '',
+            },
+          });
+          element.dispatchEvent(event);
+        }, editor);
+        await browser.pause(100);
+      };
+      const readCaret = async () => browser.execute((element: HTMLElement) => {
+        const selection = window.getSelection();
+        const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+        const container = range?.startContainer ?? null;
+        const previousSibling = container?.previousSibling;
+        return {
+          capsuleCount: element.querySelectorAll('[data-large-paste-placeholder]').length,
+          containerType: container?.nodeType ?? null,
+          containerText: container?.textContent ?? null,
+          offset: range?.startOffset ?? null,
+          previousPlaceholder: previousSibling instanceof HTMLElement
+            ? previousSibling.dataset.largePastePlaceholder ?? null
+            : null,
+        };
+      }, editor);
+
+      await pasteLargeText();
+      await pasteLargeText();
+      await pasteLargeText();
+      expect((await readCaret()).capsuleCount).toBe(3);
+
+      await browser.keys(['Backspace']);
+      await browser.pause(100);
+      const afterFirstDelete = await readCaret();
+      console.log('[L1] Caret after first capsule deletion:', afterFirstDelete);
+      expect(afterFirstDelete.capsuleCount).toBe(2);
+      expect(afterFirstDelete.containerType).toBe(3);
+      expect(afterFirstDelete.containerText).toBe('\u200B');
+      expect(afterFirstDelete.offset).toBe(1);
+      expect(afterFirstDelete.previousPlaceholder).toContain('#2');
+
+      await browser.keys(['Backspace']);
+      await browser.pause(100);
+      const afterSecondDelete = await readCaret();
+      console.log('[L1] Caret after second capsule deletion:', afterSecondDelete);
+      expect(afterSecondDelete.capsuleCount).toBe(1);
+      expect(afterSecondDelete.containerType).toBe(3);
+      expect(afterSecondDelete.containerText).toBe('\u200B');
+      expect(afterSecondDelete.offset).toBe(1);
+      expect(afterSecondDelete.previousPlaceholder).not.toContain('#');
     });
   });
 
