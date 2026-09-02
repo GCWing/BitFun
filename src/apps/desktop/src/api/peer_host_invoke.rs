@@ -470,6 +470,7 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
             // catalog UI on these the same way it does on the CLI peer host.
             "cancel_tool": true,
             "tool_catalog": true,
+            "user_question_response": true,
         },
     }))
 }
@@ -635,6 +636,12 @@ mod tests {
         assert_eq!(
             value
                 .pointer("/capabilities/tool_catalog")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/user_question_response")
                 .and_then(Value::as_bool),
             Some(true)
         );

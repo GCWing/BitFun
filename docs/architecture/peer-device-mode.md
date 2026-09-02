@@ -136,6 +136,16 @@ ordering, so an old response cannot erase a newer request or revive one that was
 already answered. Reattachment only repairs presentation state: it never
 restarts, cancels, or moves the Session, Dialog Turn, or Tool future.
 
+Rendering a mailbox entry and answering it are separate compatibility
+contracts. A Peer Host that accepts `submit_user_answers` advertises
+`peer_mode_ping.capabilities.user_question_response`. Older Desktop hosts are
+compatible because they already exposed the command; older CLI hosts are not,
+so controllers must leave the card visible but disabled with an explicit
+upgrade/unsupported state instead of sending a mutation that cannot complete.
+Current controllers include the owning Session id, and the host rejects an
+answer when that Session no longer owns the pending Tool id. New hosts retain
+the legacy process-wide Tool-id form for older controllers that omit Session id.
+
 This is the contract for any new blocking interaction: its execution owner must
 retain replayable request state and expose it through an attach/snapshot path.
 A one-shot frontend event plus an unresolved channel is not a complete

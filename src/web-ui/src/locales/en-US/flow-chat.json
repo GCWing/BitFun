@@ -1819,6 +1819,8 @@
       "completed": "Completed",
       "submittedWaiting": "Submitted, waiting for processing",
       "submitting": "Submitting...",
+      "submitFailed": "Could not submit the answer. Check the connection and try again.",
+      "unsupportedOnPeer": "This device's BitFun version cannot answer the question. Update BitFun on that device.",
       "waitingAnswer": "Waiting for answer",
       "questionsCount": "{{count}} questions",
       "answerAllBeforeSubmit": "Please answer all questions before submitting",

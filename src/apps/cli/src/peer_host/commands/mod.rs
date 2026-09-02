@@ -116,6 +116,7 @@ pub(crate) async fn dispatch(
         // Dialog / tools
         "start_dialog_turn" => dialog::start_dialog_turn(state, args).await,
         "cancel_dialog_turn" => dialog::cancel_dialog_turn(state, args).await,
+        "submit_user_answers" => dialog::submit_user_answers(state, args).await,
         // Per-tool interrupt. The controller renders Terminal cards for Turns
         // this host owns, so it must be able to stop a running tool here —
         // same owner as cancel_dialog_turn, one level finer. Reaches the Core
