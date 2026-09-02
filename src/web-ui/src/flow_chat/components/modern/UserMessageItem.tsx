@@ -53,6 +53,7 @@ import {
   parseComposerPresentation,
   type ComposerPresentation,
 } from '../../utils/composerPresentation';
+import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
 import { UserMessagePresentationContent } from './UserMessagePresentationContent';
 import './UserMessageItem.scss';
 
@@ -126,6 +127,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       return hasComposerPresentationReferences(presentation) ? presentation : null;
     }, [message?.metadata?.composerPresentation]);
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
+    const restoredComposerContexts = useMemo(() => [
+      ...(composerPresentation ? composerPresentationContexts(composerPresentation) : []),
+      ...restoreImageContextsFromPayload({
+        id: message?.id ?? turnId,
+        timestamp: message?.timestamp ?? 0,
+        imageDisplayData: messageImages,
+      }),
+    ], [composerPresentation, message?.id, message?.timestamp, messageImages, turnId]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
     const isGoalLoadingMessage = Boolean(message?.metadata?.threadGoalKickoff);
     const isThreadGoalContinuationCheck = Boolean(message?.metadata?.threadGoalContinuation);
@@ -306,9 +315,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         });
 
         const composerContent = result.composerText ?? messageContent;
-        if (composerContent.trim().length > 0) {
+        if (composerContent.trim().length > 0 || restoredComposerContexts.length > 0) {
           globalEventBus.emit('fill-chat-input', {
             content: composerContent,
+            contexts: restoredComposerContexts,
             ...(composerPresentation ? { composerPresentation } : {}),
           });
         }
@@ -318,7 +328,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         log.error('Rollback failed', error);
         notificationService.error(`${t('message.rollbackFailed')}: ${error instanceof Error ? error.message : String(error)}`);
       }
-    }, [actionTurnIndex, canRollback, composerPresentation, resolvedSessionId, t, turnId, messageContent]);
+    }, [actionTurnIndex, canRollback, composerPresentation, resolvedSessionId, restoredComposerContexts, t, turnId, messageContent]);
 
     const handleBeginEdit = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
@@ -429,9 +439,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       e.stopPropagation();
       globalEventBus.emit('fill-chat-input', {
         content: messageContent,
+        contexts: restoredComposerContexts,
         ...(composerPresentation ? { composerPresentation } : {}),
       });
-    }, [composerPresentation, messageContent]);
+    }, [composerPresentation, messageContent, restoredComposerContexts]);
 
     const handleOpenUsageReport = useCallback((report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => {
       void import('../../services/openSessionUsageReport').then(({ openSessionUsagePanel }) => {
