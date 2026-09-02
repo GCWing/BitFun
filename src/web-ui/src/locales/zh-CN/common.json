@@ -820,7 +820,7 @@
       "switched": "已切换到 {{name}}",
       "switchedLocal": "已切换回本机",
       "disconnected": "已断开 {{name}}",
-      "disconnectHint": "结束对该设备的控制，并取消它正在为你执行的任务"
+      "disconnectHint": "结束对该设备的控制；已开始的任务仍会在该设备上继续执行"
     },
     "peerAutoExitOffline": "远程设备「{{name}}」已离线 — 已断开",
     "peerAutoExitRpc": "与远程设备「{{name}}」连接丢失 — 已断开",

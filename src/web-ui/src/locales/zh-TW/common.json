@@ -820,7 +820,7 @@
       "switched": "已切換至 {{name}}",
       "switchedLocal": "已切換回本機",
       "disconnected": "已中斷 {{name}} 的連線",
-      "disconnectHint": "結束對該裝置的控制，並取消它正在為你執行的工作"
+      "disconnectHint": "結束對該裝置的控制；已開始的工作仍會在該裝置上繼續執行"
     },
     "peerAutoExitOffline": "遠端裝置「{{name}}」已離線 — 已中斷連線",
     "peerAutoExitRpc": "與遠端裝置「{{name}}」連線遺失 — 已中斷連線",

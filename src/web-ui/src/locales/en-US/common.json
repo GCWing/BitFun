@@ -820,7 +820,7 @@
       "switched": "Now showing {{name}}",
       "switchedLocal": "Now showing this device",
       "disconnected": "Disconnected from {{name}}",
-      "disconnectHint": "Stop controlling this device and cancel work it is running for you"
+      "disconnectHint": "Stop controlling this device; work already started there will continue"
     },
     "peerAutoExitOffline": "Remote device \"{{name}}\" went offline — disconnected",
     "peerAutoExitRpc": "Lost connection to remote device \"{{name}}\" — disconnected",

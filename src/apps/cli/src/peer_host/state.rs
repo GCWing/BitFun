@@ -1090,17 +1090,17 @@ mod tests {
     }
 
     #[test]
-    fn detach_reports_any_unconfirmed_cancellation_round() {
+    fn continuity_loss_reports_any_unconfirmed_cancellation_round() {
         assert!(aggregate_cancellation_results(Ok(()), Ok(())).is_ok());
 
         let error =
             aggregate_cancellation_results(Err("initial cancellation failed".to_string()), Ok(()))
-                .expect_err("detach must not hide an unconfirmed cancellation");
+                .expect_err("continuity loss must not hide an unconfirmed cancellation");
         assert!(error.contains("initial cancellation failed"), "{error}");
 
         let error =
             aggregate_cancellation_results(Ok(()), Err("raced cancellation failed".to_string()))
-                .expect_err("detach must report a raced cancellation failure");
+                .expect_err("continuity loss must report a raced cancellation failure");
         assert!(error.contains("raced cancellation failed"), "{error}");
     }
 

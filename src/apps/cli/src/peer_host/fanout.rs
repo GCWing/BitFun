@@ -802,7 +802,7 @@ mod tests {
     }
 
     #[test]
-    fn record_only_gap_keeps_running_turn_owned_until_reattach() {
+    fn zero_controllers_keep_running_turn_owned_until_reattach() {
         let tracker = PeerTurnTracker::new();
         tracker.mark_event_stream_ready();
         let turn = PeerTurnKey::new("session-1", "turn-1");
