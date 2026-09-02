@@ -120,7 +120,6 @@ import { resolveSessionRelationship } from '../utils/sessionMetadata';
 import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
-  agentExecutionTier,
   canSwitchSessionMainAgent,
   isChatInputActionVisibleForTarget,
   normalizeUserDefaultChatInputModeId,
@@ -181,9 +180,7 @@ import { useRealtimeVoiceCallActive } from './voice/RealtimeVoiceCallContext';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import {
-  createAdditionalModePromptReferenceToken,
   expandAdditionalModePromptReferenceTokens,
-  type AdditionalModePromptReferenceId,
 } from '../utils/additionalModePromptReference';
 import {
   composerPresentationContexts,
@@ -262,15 +259,11 @@ export interface ChatInputProps {
   registration?: ChatInputRegistration;
 }
 
-type ChatInputAdditionalModeSelection =
-  | { kind: 'skill'; skillName: string }
-  | { kind: 'additional-mode'; modeId: AdditionalModePromptReferenceId };
-
 interface ChatInputAdditionalModeItem {
   id: string;
   label: string;
   title: string;
-  selection: ChatInputAdditionalModeSelection;
+  skillName: string;
 }
 
 type SlashActionItem = {
@@ -1152,9 +1145,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
-  // Other Agents sit on the Standard execution surface. Minimal and Ultimate
-  // keep their deliberately fixed capability sets.
-  const showStandardExecutionOptions = agentExecutionTier(currentMode) === 'balanced';
   const selectedHarnessProfile = resolveSelectedComposerExecutionLevel({
     currentMode,
   });
@@ -1440,12 +1430,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       : [],
     [canUseSkillsForTarget, resolvedModeSkills],
   );
-  const showReviewAdditionalMode = canLaunchReview && canSwitchModes && showStandardExecutionOptions;
-  const showAdditionalModes = quickSkillShortcuts.length > 0 || showReviewAdditionalMode;
-  const boostMenuLayoutRevision = [
-    ...quickSkillShortcuts.map(shortcut => shortcut.id),
-    showReviewAdditionalMode ? 'review' : '',
-  ].filter(Boolean).join('|');
+  const showAdditionalModes = quickSkillShortcuts.length > 0;
+  const boostMenuLayoutRevision = quickSkillShortcuts
+    .map(shortcut => shortcut.id)
+    .join('|');
   const boostMenuLayout = useAnchoredPopoverPosition({
     open: modeState.dropdownOpen,
     anchorRef: boostTriggerRef,
@@ -5255,38 +5243,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     insertInlineReferenceIntoInput(createSkillPromptReferenceToken(skillName));
   }, [insertInlineReferenceIntoInput]);
 
-  const insertAdditionalModeIntoInput = useCallback((modeId: AdditionalModePromptReferenceId) => {
-    insertInlineReferenceIntoInput(createAdditionalModePromptReferenceToken(modeId));
-  }, [insertInlineReferenceIntoInput]);
-
   const additionalModeItems = useMemo<ChatInputAdditionalModeItem[]>(() => [
     ...quickSkillShortcuts.map(shortcut => ({
       id: shortcut.id,
       label: shortcut.label,
       title: shortcut.skill.description || shortcut.label,
-      selection: {
-        kind: 'skill' as const,
-        skillName: shortcut.skill.name,
-      },
+      skillName: shortcut.skill.name,
     })),
-    ...(showReviewAdditionalMode
-      ? [{
-          id: 'review',
-          label: t('chatInput.agents.review.name'),
-          title: t('chatInput.agents.review.name'),
-          selection: { kind: 'additional-mode' as const, modeId: 'review' as const },
-        }]
-      : []),
-  ], [quickSkillShortcuts, showReviewAdditionalMode, t]);
+  ], [quickSkillShortcuts]);
 
-  const selectAdditionalMode = useCallback((selection: ChatInputAdditionalModeSelection) => {
-    if (selection.kind === 'skill') {
-      insertSkillIntoInput(selection.skillName);
-      return;
-    }
-
-    insertAdditionalModeIntoInput(selection.modeId);
-  }, [insertAdditionalModeIntoInput, insertSkillIntoInput]);
+  const selectAdditionalMode = useCallback((skillName: string) => {
+    insertSkillIntoInput(skillName);
+  }, [insertSkillIntoInput]);
 
   const handleBoostPickImage = useCallback(
     (e: React.MouseEvent) => {
@@ -6098,7 +6066,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 leading={<Icon name="spark" size="xs" aria-hidden />}
                                 onClick={event => {
                                   event.stopPropagation();
-                                  selectAdditionalMode(item.selection);
+                                  selectAdditionalMode(item.skillName);
                                 }}
                               >
                                 {item.label}
