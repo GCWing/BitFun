@@ -235,9 +235,30 @@ const COPY = {
     publishApprovalApprove: '批准并创建 PR',
     publishApprovalReject: '暂不发布',
     genericApprovalTitle: '是否继续处理这个 Issue？',
+    genericApprovalSummary: 'Agent 在执行任务时请求一个决定。具体内容见下方原始请求；不确定时可以先在时间线里确认它做了什么再决定。',
     genericApprovalApproveEffect: '执行当前操作，然后继续后续处理；完成后会再次汇报结果。',
     genericApprovalRejectEffect: '本次不执行该操作，任务不会继续进入后续步骤。现有修改、调查结果和工作区都会保留。',
     genericApprovalRecommendation: '建议：确认下面的操作符合预期后再继续；不确定时可以暂不执行，并在备注中说明需要补充的信息。',
+    gateRawDetails: '原始请求（来自 Agent，英文原文）',
+    gateGrantAuthorityScopes: '需要的权限：{scopes}。',
+    gateGatedReadTitle: '允许读取 Issue 正文与维护者评论？',
+    gateGatedReadSummary: 'Agent 目前只能看到这条 Issue 的元数据（标题、标签、状态）。要判断它是否值得修复、是否已经有人处理过，需要进一步读取正文和评论内容。这些内容仅用于本任务的分析，不会原样写入公开状态。',
+    gateGatedReadApproveEffect: 'Agent 将读取该 Issue 的正文与维护者评论，继续「是否已有人修复」的证据评估，然后汇报结论或继续修复。',
+    gateGatedReadRejectEffect: 'Agent 不会读取任何正文内容，任务保持等待。你也可以在备注中直接粘贴关键信息后再批准。',
+    gateGatedReadApprove: '允许读取',
+    gateGatedReadReject: '暂不读取',
+    gateClarifyTitle: '维护者反馈存在歧义，需要你澄清方向',
+    gateClarifySummary: '维护者对该修复提出的修改要求存在多种理解方式，Agent 无法确定预期行为，需要你给出明确方向。原始反馈见下方。',
+    gateClarifyApproveEffect: '批准后请在备注中写清预期的行为或取舍，Agent 会按你的说明继续修改。',
+    gateClarifyRejectEffect: '本次不处理该反馈，任务保持等待；维护者后续补充说明后可以再次处理。',
+    gateGrantAuthorityTitle: '需要授予额外写权限',
+    gateGrantAuthoritySummary: '维护者的修改要求已被理解，但执行它需要的写权限当前未授权。请确认范围后决定是否授予。',
+    gateGrantAuthorityApproveEffect: 'Agent 将以授予的权限应用维护者的修改要求，完成后汇报结果。',
+    gateGrantAuthorityRejectEffect: '不授予权限；Agent 会把该要求记录为阻塞项并保持等待。',
+    gateDraftReadyTitle: '将 Draft PR 标记为「准备评审」？',
+    gateDraftReadySummary: '修复 PR 目前是草稿状态。是否标记为 ready for review 并进入评审流程由你决定。',
+    gateDraftReadyApproveEffect: 'PR 将标记为 ready for review，随后按仓库政策邀请评审人。',
+    gateDraftReadyRejectEffect: 'PR 保持草稿状态，继续监控；你可以稍后再批准。',
     justNow: '刚刚',
     seconds: '{value} 秒',
     minutes: '{value} 分钟',
@@ -544,9 +565,30 @@ const COPY = {
     publishApprovalApprove: 'Approve and create PR',
     publishApprovalReject: 'Keep local only',
     genericApprovalTitle: 'Continue handling this Issue?',
+    genericApprovalSummary: 'The agent requested a decision while working. See the original request below; when unsure, check the timeline first to see what it did.',
     genericApprovalApproveEffect: 'Perform the current operation and continue processing. Results will be reported again afterward.',
     genericApprovalRejectEffect: 'Do not perform this operation or continue to later steps. Keep existing changes, investigation results, and the workspace.',
     genericApprovalRecommendation: 'Recommendation: continue only when the operation below matches your expectation. Otherwise pause and note what information is missing.',
+    gateRawDetails: 'Original request (from agent)',
+    gateGrantAuthorityScopes: 'Required scopes: {scopes}.',
+    gateGatedReadTitle: 'Allow reading the issue body and maintainer comments?',
+    gateGatedReadSummary: 'The agent can only see metadata (title, labels, state) so far. To judge whether this issue is worth fixing and whether someone already handled it, it needs to read the issue body and comments. That content is only used for this task\'s analysis and is never copied into public state.',
+    gateGatedReadApproveEffect: 'The agent will read the issue body and maintainer comments, continue the prior-work evidence check, then report a conclusion or continue the fix.',
+    gateGatedReadRejectEffect: 'No content will be read and the task stays waiting. You can also paste key details in the note and approve.',
+    gateGatedReadApprove: 'Allow reading',
+    gateGatedReadReject: 'Not now',
+    gateClarifyTitle: 'Maintainer feedback is ambiguous — clarification needed',
+    gateClarifySummary: 'The maintainer\'s requested change can be interpreted in multiple ways; the agent cannot determine the intended behavior and needs your direction. The original feedback is below.',
+    gateClarifyApproveEffect: 'After approving, describe the intended behavior or tradeoff in the note; the agent will continue accordingly.',
+    gateClarifyRejectEffect: 'The feedback will not be processed for now and the task stays waiting; it can be revisited after the maintainer clarifies.',
+    gateGrantAuthorityTitle: 'Additional write authority required',
+    gateGrantAuthoritySummary: 'The maintainer\'s requested change is understood, but applying it requires write authority that is not currently granted. Confirm the scope before deciding.',
+    gateGrantAuthorityApproveEffect: 'The agent will apply the maintainer\'s change with the granted authority and report back when done.',
+    gateGrantAuthorityRejectEffect: 'Authority will not be granted; the agent records the request as blocked and keeps waiting.',
+    gateDraftReadyTitle: 'Mark the draft PR as ready for review?',
+    gateDraftReadySummary: 'The fix PR is still a draft. Decide whether to mark it ready for review and start the review process.',
+    gateDraftReadyApproveEffect: 'The PR will be marked ready for review and reviewers invited per repository policy.',
+    gateDraftReadyRejectEffect: 'The PR stays a draft and monitoring continues; you can approve later.',
     justNow: 'just now',
     seconds: '{value}s',
     minutes: '{value}m',
@@ -707,6 +749,8 @@ const view = {
   unselectTask: byId('unselect-task'),
   issueDetail: byId('issue-detail'),
   issueApprovalPanel: byId('issue-approval-panel'),
+  issueApprovalRaw: byId('issue-approval-raw'),
+  issueApprovalRawText: byId('issue-approval-raw-text'),
   issueApprovalKind: byId('issue-approval-kind'),
   issueApprovalTitle: byId('issue-approval-title'),
   issueApprovalMessage: byId('issue-approval-message'),
@@ -1927,28 +1971,57 @@ function gateRawMessage(gate) {
   return String(gate && gate.event && gate.event.message || '').trim();
 }
 
+function stripGatePriorityPrefix(message) {
+  return message.replace(/^\[[Pp]\d\]\s*/, '').trim();
+}
+
+function authorityScopeLabels(rawMessage) {
+  const rawScopes = rawMessage.match(/\[([^\]]+)\]/)?.[1] || '';
+  if (!rawScopes) return '';
+  const zh = localeId() === 'zh-CN';
+  const scopeNames = zh
+    ? {
+        write: '写入仓库',
+        publish: '发布 PR / 公开内容',
+        external_review_request: '邀请评审',
+        merge: '合并代码',
+      }
+    : {
+        write: 'repository write',
+        publish: 'publish (PR / public content)',
+        external_review_request: 'review requests',
+        merge: 'merge',
+      };
+  const labels = rawScopes
+    .split(/[，,]/)
+    .map((scope) => scopeNames[scope.trim().toLowerCase()] || scope.trim())
+    .filter(Boolean);
+  return labels.join(zh ? '、' : ', ');
+}
+
 function approvalPresentation(task, gate) {
   const rawMessage = gateRawMessage(gate);
+  const body = stripGatePriorityPrefix(rawMessage);
   const actionKind = String(gate && gate.actionKind || '').toLowerCase();
 
   const publishPullRequest = actionKind.includes('publish')
     || actionKind.includes('pull_request')
-    || /\bpr bundle\b|(?:publish|push|creat(?:e|ing|ion)).{0,100}(?:pull request|\bpr\b)/i.test(rawMessage);
+    || /\bpr bundle\b|(?:publish|push|creat(?:e|ing|ion)).{0,100}(?:pull request|\bpr\b)/i.test(body);
   if (publishPullRequest) {
-    const branch = rawMessage.match(/\bbranch\s+([^,\s)]+)/i)?.[1] || '';
-    const commit = rawMessage.match(/\bcommit\s+([0-9a-f]{7,40})\b/i)?.[1] || '';
-    const messageRepository = rawMessage.match(/\bto\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?=;|[\s.,]|$)/i)?.[1] || '';
+    const branch = body.match(/\bbranch\s+([^,\s)]+)/i)?.[1] || '';
+    const commit = body.match(/\bcommit\s+([0-9a-f]{7,40})\b/i)?.[1] || '';
+    const messageRepository = body.match(/\bto\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?=;|[\s.,]|$)/i)?.[1] || '';
     const item = task && task.identity && task.identity.item;
     const repository = messageRepository || repositoryLabel(item && item.repository) || '--';
     const evidence = taskProgressEvidence(task);
-    const validated = evidence.validated || evidence.settled || /\b(?:validated|verified)\b/i.test(rawMessage);
+    const validated = evidence.validated || evidence.settled || /\b(?:validated|verified)\b/i.test(body);
     return {
       kind: 'publish',
       title: text('publishApprovalTitle'),
       summary: branch && commit
         ? text('publishApprovalSummary', { branch, commit, repository })
         : text('publishApprovalSummaryGeneric', { repository }),
-      message: rawMessage,
+      rawMessage,
       approveEffect: text('publishApprovalApproveEffect'),
       rejectEffect: text('publishApprovalRejectEffect'),
       recommendation: text(validated ? 'publishApprovalRecommendationReady' : 'publishApprovalRecommendationReview'),
@@ -1957,11 +2030,75 @@ function approvalPresentation(task, gate) {
     };
   }
 
+  // LoopX issue-fix 契约中的已知 gate 类型：面向人给出中文说明，
+  // 原始待办文本（英文、技术性）折叠进「原始请求」而不是当作正文。
+  const gatedRead = actionKind.includes('body_or_comment_read')
+    || actionKind.includes('gated_read')
+    || /gated read|approve a gated read/i.test(body);
+  if (gatedRead) {
+    return {
+      kind: 'gated_read',
+      title: text('gateGatedReadTitle'),
+      summary: text('gateGatedReadSummary'),
+      rawMessage: body,
+      approveEffect: text('gateGatedReadApproveEffect'),
+      rejectEffect: text('gateGatedReadRejectEffect'),
+      recommendation: '',
+      approveLabel: text('gateGatedReadApprove'),
+      rejectLabel: text('gateGatedReadReject'),
+    };
+  }
+
+  if (actionKind.includes('clarify') || actionKind.includes('semantic_ambiguity')) {
+    return {
+      kind: 'clarify',
+      title: text('gateClarifyTitle'),
+      summary: text('gateClarifySummary'),
+      rawMessage: body,
+      approveEffect: text('gateClarifyApproveEffect'),
+      rejectEffect: text('gateClarifyRejectEffect'),
+      recommendation: '',
+      approveLabel: text('approve'),
+      rejectLabel: text('reject'),
+    };
+  }
+
+  if (actionKind.includes('authority') || actionKind.includes('grant_')) {
+    const scopes = authorityScopeLabels(body);
+    return {
+      kind: 'grant_authority',
+      title: text('gateGrantAuthorityTitle'),
+      summary: scopes
+        ? `${text('gateGrantAuthoritySummary')} ${text('gateGrantAuthorityScopes', { scopes })}`
+        : text('gateGrantAuthoritySummary'),
+      rawMessage: body,
+      approveEffect: text('gateGrantAuthorityApproveEffect'),
+      rejectEffect: text('gateGrantAuthorityRejectEffect'),
+      recommendation: '',
+      approveLabel: text('approve'),
+      rejectLabel: text('reject'),
+    };
+  }
+
+  if (actionKind.includes('draft') || actionKind.includes('ready_for_review')) {
+    return {
+      kind: 'draft_ready',
+      title: text('gateDraftReadyTitle'),
+      summary: text('gateDraftReadySummary'),
+      rawMessage: body,
+      approveEffect: text('gateDraftReadyApproveEffect'),
+      rejectEffect: text('gateDraftReadyRejectEffect'),
+      recommendation: '',
+      approveLabel: text('approve'),
+      rejectLabel: text('reject'),
+    };
+  }
+
   return {
     kind: 'generic',
     title: text('genericApprovalTitle'),
-    summary: rawMessage,
-    message: rawMessage,
+    summary: text('genericApprovalSummary'),
+    rawMessage: body,
     approveEffect: text('genericApprovalApproveEffect'),
     rejectEffect: text('genericApprovalRejectEffect'),
     recommendation: text('genericApprovalRecommendation'),
@@ -1982,7 +2119,7 @@ function syncApprovalAttention(autoOpen = false) {
   view.approvalAlertTitle.textContent = `${issueDisplayTitle(task) || itemLabel(item)} · ${text('decisionRequired')}`;
   view.approvalAlertOpen.title = presentation.summary;
   view.approvalAlertOpen.setAttribute('aria-label', `${presentation.title} ${presentation.summary}`);
-  view.approvalAlertMessage.textContent = presentation.message || presentation.summary;
+  view.approvalAlertMessage.textContent = presentation.summary;
 
   if (
     autoOpen
@@ -2332,7 +2469,11 @@ function renderIssueApproval(task) {
     ? text('gateKindPublish')
     : text('gateKindDecision');
   view.issueApprovalTitle.textContent = presentation.title;
-  view.issueApprovalMessage.textContent = presentation.message || presentation.summary;
+  view.issueApprovalMessage.textContent = presentation.summary;
+  const rawBody = String(presentation.rawMessage || '').trim();
+  const rawDiffers = rawBody && rawBody !== presentation.summary;
+  view.issueApprovalRaw.hidden = !rawDiffers;
+  view.issueApprovalRawText.textContent = rawDiffers ? rawBody : '';
   view.issueApprovalApproveEffect.textContent = presentation.approveEffect;
   view.issueApprovalRejectEffect.textContent = presentation.rejectEffect;
   view.issueApprovalRecommendation.textContent = presentation.recommendation;

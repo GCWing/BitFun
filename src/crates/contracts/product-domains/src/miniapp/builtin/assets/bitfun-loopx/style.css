@@ -696,6 +696,27 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.issue-approval-raw { margin: 8px 0 0 38px; }
+.issue-approval-raw summary {
+  color: var(--lx-text-muted);
+  cursor: pointer;
+  font-size: 10.5px;
+  user-select: none;
+}
+.issue-approval-raw summary:hover { color: var(--lx-text-soft); }
+.issue-approval-raw p {
+  margin: 5px 0 0;
+  padding: 7px 9px;
+  border: 1px dashed var(--lx-border);
+  border-radius: 7px;
+  background: var(--lx-muted-surface);
+  color: var(--lx-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .issue-approval-effects {
   display: grid;
   grid-template-columns: 1fr 1fr;

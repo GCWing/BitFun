@@ -649,6 +649,10 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     );
     assert.match(
       window.document.querySelector('#issue-approval-message').textContent,
+      /requested a decision/i,
+    );
+    assert.match(
+      window.document.querySelector('#issue-approval-raw-text').textContent,
       /Approve repository write scope for the issue repair/,
     );
     assert.match(window.document.querySelector('#issue-approval-approve-effect').textContent, /perform the current operation and continue processing/i);
