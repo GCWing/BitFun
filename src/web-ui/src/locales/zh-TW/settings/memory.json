@@ -95,6 +95,7 @@
     "skipSession": "跳過整個會話"
   },
   "actions": {
+    "menu": "記憶操作",
     "expandAdvanced": "展開進階設定",
     "collapseAdvanced": "收合進階設定",
     "resetSettings": "重設記憶設定",
@@ -102,9 +103,9 @@
     "resetSettingsConfirm": "將把目前執行主機上的記憶開關、模型與進階參數恢復為預設值。現有記憶資料不會被刪除。",
     "resetSettingsConfirmAction": "恢復預設設定",
     "openDirectory": "開啟記憶目錄",
-    "resetMemory": "重設記憶",
-    "resetMemoryConfirm": "確定要清空所有記憶資料和記憶工作區檔案嗎？此操作不可撤銷。",
-    "resetMemoryConfirmAction": "確認重設"
+    "resetMemory": "永久清空記憶",
+    "resetMemoryConfirm": "將永久刪除目前執行主機上的所有記憶資料和記憶工作區檔案。此操作不可撤銷。",
+    "resetMemoryConfirmAction": "永久清空"
   },
   "units": {
     "hours": "小時",
@@ -121,7 +122,7 @@
     "settingsReset": "記憶設定已重設",
     "settingsResetFailed": "重設記憶設定失敗",
     "openDirectoryFailed": "開啟記憶目錄失敗",
-    "memoryReset": "記憶已重設",
-    "memoryResetFailed": "重設記憶失敗"
+    "memoryReset": "記憶已永久清空",
+    "memoryResetFailed": "永久清空記憶失敗"
   }
 }

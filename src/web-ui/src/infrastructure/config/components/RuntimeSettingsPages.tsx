@@ -45,7 +45,7 @@ import type {
   ToolPermissionConfig,
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
-import { ChatInputPixelPet } from '@/flow_chat/components/ChatInputPixelPet';
+import { AgentCompanionPet } from '@/flow_chat/components/AgentCompanionPet';
 import SessionTitleConfig from './SessionTitleConfig';
 import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
@@ -131,14 +131,20 @@ export type RuntimeSettingsPageKind =
   | 'pet'
   | 'session-workspace'
   | 'execution'
-  | 'execution-control'
-  | 'device-control';
+  | 'desktop-control'
+  | 'browser-control';
+
+export type ExecutionSettingsView = 'common' | 'advanced';
 
 interface RuntimeSettingsPageProps {
   page: RuntimeSettingsPageKind;
+  executionView?: ExecutionSettingsView;
 }
 
-const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
+const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
+  page,
+  executionView = 'common',
+}) => {
   const { t } = useTranslation('settings/runtime');
   const { t: tNavigation } = useTranslation('settings');
   const { t: tTools } = useTranslation('settings/agentic-tools');
@@ -270,23 +276,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     }
   }, []);
 
-  const refreshDesktopStatus = useCallback((computerUseCfg: boolean | null | undefined) => {
-    if (!IS_TAURI_DESKTOP) {
-      setComputerUseEnabled(computerUseCfg ?? false);
-      return;
-    }
-
-    void refreshComputerUseStatus().then((ok) => {
-      if (!ok) setComputerUseEnabled(computerUseCfg ?? false);
-    });
-
-    void refreshBrowserControlStatus();
-
-    void systemAPI.getSystemInfo()
-      .then((info) => setPlatform(info.platform || ''))
-      .catch((error) => log.warn('getSystemInfo failed', error));
-  }, [refreshComputerUseStatus, refreshBrowserControlStatus, setComputerUseEnabled]);
-
   // Browser Control / Computer Use route to the rendered host. Re-probe on every
   // surface switch (local ↔ peer A ↔ peer B): a CLI Peer returns unsupported,
   // a Desktop Peer / local host returns status. Resets the unsupported flag so
@@ -298,9 +287,21 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   useEffect(() => {
     if (!IS_TAURI_DESKTOP) return;
     setPeerBrowserControlUnsupported(false);
-    void refreshComputerUseStatus();
-    void refreshBrowserControlStatus();
-  }, [peerModeActive, renderedPeerDeviceId, refreshComputerUseStatus, refreshBrowserControlStatus]);
+    if (page === 'desktop-control') {
+      void refreshComputerUseStatus();
+      void systemAPI.getSystemInfo()
+        .then((info) => setPlatform(info.platform || ''))
+        .catch((error) => log.warn('getSystemInfo failed', error));
+    } else if (page === 'browser-control') {
+      void refreshBrowserControlStatus();
+    }
+  }, [
+    page,
+    peerModeActive,
+    renderedPeerDeviceId,
+    refreshComputerUseStatus,
+    refreshBrowserControlStatus,
+  ]);
 
   const loadPageData = useCallback(async () => {
     setIsLoading(true);
@@ -321,7 +322,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         return;
       }
 
-      if (page === 'execution' || page === 'execution-control') {
+      if (page === 'execution') {
         const [
           deferredToolLoadingEnabled,
           loadedSubagentMaxConcurrency,
@@ -350,24 +351,30 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
         setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
         setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
-        if (page === 'execution') return;
+        return;
       }
 
-      const [computerUseCfg, browserControlPreferredBrowser, browserControlAutoConnect] = await Promise.all([
-        configManager.getConfig<boolean>('ai.computer_use_enabled'),
+      if (page === 'desktop-control') {
+        const computerUseCfg = await configManager.getConfig<boolean>('ai.computer_use_enabled');
+        if (!IS_TAURI_DESKTOP) {
+          setComputerUseEnabled(computerUseCfg ?? false);
+        }
+        return;
+      }
+
+      const [browserControlPreferredBrowser, browserControlAutoConnect] = await Promise.all([
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
         configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
       ]);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
       setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
-      refreshDesktopStatus(computerUseCfg);
     } catch (error) {
       log.error('Failed to load settings page data', { page, error });
       setLoadError(true);
     } finally {
       setIsLoading(false);
     }
-  }, [page, refreshDesktopStatus]);
+  }, [page, setComputerUseEnabled]);
 
   const saveToolPermissionConfig = async (
     nextConfig: ToolPermissionConfig,
@@ -555,19 +562,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         : t('features.pet.groupImported'),
     };
   });
-
-  const companionDisplayModeOptions: DescribedSelectOption[] = [
-    {
-      value: 'desktop',
-      label: t('features.pet.displayDesktop'),
-      description: t('features.pet.displayDesktopDesc'),
-    },
-    {
-      value: 'input',
-      label: t('features.pet.displayInput'),
-      description: t('features.pet.displayInputDesc'),
-    },
-  ];
 
   const subagentBatchExecutionPolicyOptions: DescribedSelectOption[] = [
     {
@@ -942,18 +936,23 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
 
   const pageCopyKey = page === 'session-workspace'
     ? 'sessionWorkspace'
-    : page === 'execution-control'
-      ? 'executionControl'
-      : page === 'device-control'
-        ? 'deviceControl'
+    : page === 'desktop-control'
+      ? 'desktopControl'
+      : page === 'browser-control'
+        ? 'browserControl'
         : page;
   const pageTitle = tNavigation(`navigation.pages.${pageCopyKey}.label`);
   const pageSubtitle = tNavigation(`navigation.pages.${pageCopyKey}.description`);
+  const appearanceView = page === 'execution'
+    ? `execution-${executionView}`
+    : page;
+  const showsExecutionCommon = page === 'execution' && executionView === 'common';
+  const showsExecutionAdvanced = page === 'execution' && executionView === 'advanced';
 
   const requiresExperienceSettings = page === 'pet' || page === 'session-workspace';
   if (loadError) {
     return (
-      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={page}>
+      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={appearanceView}>
         <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
         <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
           <ConfigRetryState
@@ -967,7 +966,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   }
   if (isLoading || (requiresExperienceSettings && !settings)) {
     return (
-      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={page}>
+      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={appearanceView}>
         <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
         <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
           <ConfigLoadingState label={t('loading.text')} />
@@ -977,7 +976,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   }
 
   return (
-    <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={page}>
+    <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={appearanceView}>
       <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
 
       <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
@@ -985,7 +984,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
         {page === 'pet' && settings ? (
           <>
 
-        {/* ── Agent companion (collapsed input) ─────────────────── */}
+        {/* ── Desktop Agent companion ───────────────────────────── */}
         <ConfigPageSection
           title={t('features.pet.title')}
           description={t('features.pet.subtitle')}
@@ -997,29 +996,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                 onChange={(e) => updateSetting('enable_agent_companion', e.target.checked)}
               />
             </div>
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={t('features.pet.displayModeLabel')}
-            description={t('features.pet.displayModeDescription')}
-            align="center"
-          >
-            <Select
-              className="bitfun-runtime-settings__pet-select"
-              size="sm"
-              options={companionDisplayModeOptions.map(option => ({
-                disabled: option.disabled,
-                label: option.description ? `${option.label} — ${option.description}` : option.label,
-                value: option.value,
-              }))}
-              value={settings.agent_companion_display_mode}
-              onValueChange={(value) => {
-                const selectedValue = String(value);
-                void updateSetting(
-                  'agent_companion_display_mode',
-                  selectedValue === 'desktop' ? 'desktop' : 'input',
-                );
-              }}
-            />
           </ConfigPageRow>
           <ConfigPageRow
             label={(
@@ -1081,7 +1057,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                           style={{ '--bitfun-pet-preview-src': `url("${selectedCompanionPetPackage.previewSrc}")` } as React.CSSProperties}
                         />
                       ) : (
-                        <ChatInputPixelPet mood="rest" pet={selectedCompanionPet} className="bitfun-runtime-settings__pet-select-panda" />
+                        <AgentCompanionPet mood="rest" pet={selectedCompanionPet} className="bitfun-runtime-settings__pet-select-panda" />
                       )}
                     </span>
                     <span className="bitfun-runtime-settings__pet-select-value">
@@ -1136,7 +1112,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                                     style={{ '--bitfun-pet-preview-src': `url("${pet.previewSrc}")` } as React.CSSProperties}
                                   />
                                 ) : (
-                                  <ChatInputPixelPet
+                                  <AgentCompanionPet
                                     mood="rest"
                                     pet={DEFAULT_AGENT_COMPANION_PET}
                                     className="bitfun-runtime-settings__pet-select-panda"
@@ -1203,7 +1179,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           </>
         ) : null}
 
-        {page === 'execution' || page === 'execution-control' ? (
+        {showsExecutionCommon ? (
           <>
 
         <ConfigPageSection
@@ -1272,6 +1248,12 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           onSave={handleSaveGlobalPermissionRules}
           onClose={() => setIsGlobalPermissionRulesDialogOpen(false)}
         />
+
+          </>
+        ) : null}
+
+        {showsExecutionAdvanced ? (
+          <>
 
         {/* ── Tool execution behavior ────────────────────────────── */}
         <ConfigPageSection
@@ -1379,7 +1361,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           </>
         ) : null}
 
-        {page === 'device-control' || page === 'execution-control' ? (
+        {page === 'desktop-control' ? (
           <>
 
         {/* ── Computer use (desktop) ─────────────────────────────── */}
@@ -1529,6 +1511,12 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             </ConfigPageRow>
           ) : null}
         </ConfigPageSection>
+
+          </>
+        ) : null}
+
+        {page === 'browser-control' ? (
+          <>
 
         {/* ── Browser control (CDP) ──────────────────────────────── */}
         <ConfigPageSection
@@ -1763,14 +1751,18 @@ export function SessionWorkspaceSettingsPage(): React.ReactElement {
   return <RuntimeSettingsPage page="session-workspace" />;
 }
 
-export function ExecutionSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="execution" />;
+export function ExecutionCommonSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="execution" executionView="common" />;
 }
 
-export function ExecutionControlSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="execution-control" />;
+export function ExecutionAdvancedSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="execution" executionView="advanced" />;
 }
 
-export function DeviceControlSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="device-control" />;
+export function DesktopControlSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="desktop-control" />;
+}
+
+export function BrowserControlSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="browser-control" />;
 }

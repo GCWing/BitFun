@@ -4,6 +4,16 @@
   "common": {
     "retry": "Retry"
   },
+  "applicationGroups": {
+    "startupAndUpdates": {
+      "title": "Startup & updates",
+      "description": "Manage launch at login, wake behavior while running, and update checks."
+    },
+    "windowAndNotifications": {
+      "title": "Window & notifications",
+      "description": "Manage what closing the window does and which events should notify you."
+    }
+  },
   "appearance": {
     "title": "Appearance",
     "hint": "Interface language, current appearance, effects, and appearance package management",

@@ -4,6 +4,16 @@
   "common": {
     "retry": "重试"
   },
+  "applicationGroups": {
+    "startupAndUpdates": {
+      "title": "启动与更新",
+      "description": "管理登录启动、运行时唤醒和版本检查。"
+    },
+    "windowAndNotifications": {
+      "title": "窗口与通知",
+      "description": "管理关闭窗口时的行为，以及需要提醒你的事件。"
+    }
+  },
   "appearance": {
     "title": "外观",
     "hint": "界面语言、当前外观、动态效果与外观包管理",

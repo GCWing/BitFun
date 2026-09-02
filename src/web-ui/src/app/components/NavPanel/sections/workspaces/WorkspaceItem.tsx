@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
+  OverflowText,
 } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
@@ -237,25 +238,37 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     const statusLabel = t(`nav.workspaces.remote.status.${status}`, {
       defaultValue: t('nav.workspaces.remote.status.unknown'),
     });
-    const connectionLabel = workspace.connectionName?.trim() || workspace.sshHost?.trim() || '';
+    const connectionLabel =
+      workspace.connectionName?.trim()
+      || workspace.sshHost?.trim()
+      || workspace.connectionId?.trim()
+      || '';
+    const hostLabel = workspace.sshHost?.trim() || connectionLabel;
 
     return {
       status,
       statusLabel,
-      connectionLabel,
+      hostLabel,
       /** A green dot already reads as "fine"; spell out only the states that need attention. */
       showStatusText: status !== 'connected',
       tooltip: t('nav.workspaces.remote.tooltip', {
         connection: connectionLabel,
-        host: workspace.sshHost?.trim() || connectionLabel,
+        host: hostLabel,
         status: statusLabel,
       }),
       ariaLabel: t('nav.workspaces.remote.ariaLabel', {
-        connection: connectionLabel,
+        connection: hostLabel,
         status: statusLabel,
       }),
     };
-  }, [remoteConnStatus, t, workspace.connectionName, workspace.sshHost, workspaceIsRemote]);
+  }, [
+    remoteConnStatus,
+    t,
+    workspace.connectionId,
+    workspace.connectionName,
+    workspace.sshHost,
+    workspaceIsRemote,
+  ]);
 
   const searchIndexIndicator = useMemo(() => {
     if (!canShowSearchIndex) {
@@ -1144,7 +1157,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </span>
         </button>
         <div className="bitfun-nav-panel__workspace-item-name-cluster">
-          <div className={`bitfun-nav-panel__workspace-item-name-stack${remoteMeta ? ' is-remote' : ''}`}>
+          <div className="bitfun-nav-panel__workspace-item-name-stack">
             <div className="bitfun-nav-panel__workspace-item-name-row">
               <Tooltip content={workspace.rootPath} placement="right" followCursor>
                 <button
@@ -1157,7 +1170,20 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   data-workspace-id={workspace.id}
                 >
                   <span className="bitfun-nav-panel__workspace-item-name-line">
-                    <span className="bitfun-nav-panel__workspace-item-label" data-bf-component="workspace-item" data-bf-part="label">{workspaceDisplayName}</span>
+                    {workspaceIsRemote ? (
+                      <OverflowText
+                        behavior="marquee"
+                        className="bitfun-nav-panel__workspace-item-label"
+                        data-bf-component="workspace-item"
+                        data-bf-part="label"
+                      >
+                        {workspaceDisplayName}
+                      </OverflowText>
+                    ) : (
+                      <span className="bitfun-nav-panel__workspace-item-label" data-bf-component="workspace-item" data-bf-part="label">
+                        {workspaceDisplayName}
+                      </span>
+                    )}
                     {relatedPathCount > 0 ? (
                       <span className="bitfun-nav-panel__workspace-item-badge" data-bf-component="workspace-item" data-bf-part="badge">
                         {t('nav.workspaces.relatedPaths.badge', { count: relatedPathCount })}
@@ -1297,9 +1323,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   </Dialog>
                 </>
               )}
-            </div>
-            {remoteMeta && (
-              <div className="bitfun-nav-panel__workspace-item-subtitle">
+              {remoteMeta && (
                 <Tooltip content={remoteMeta.tooltip} placement="right" followCursor>
                   <span
                     data-bf-component="workspace-item"
@@ -1310,22 +1334,22 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     data-testid="nav-workspace-remote-meta"
                     data-remote-status={remoteMeta.status}
                   >
-                    <span className="bitfun-nav-panel__workspace-item-remote-name">
-                      {remoteMeta.connectionLabel}
+                    <span
+                      className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteMeta.status}`}
+                      aria-hidden="true"
+                    />
+                    <span className="bitfun-nav-panel__workspace-item-remote-host">
+                      {remoteMeta.hostLabel}
                     </span>
                     {remoteMeta.showStatusText ? (
                       <span className="bitfun-nav-panel__workspace-item-remote-status">
                         {remoteMeta.statusLabel}
                       </span>
                     ) : null}
-                    <span
-                      className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteMeta.status}`}
-                      aria-hidden="true"
-                    />
                   </span>
                 </Tooltip>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 

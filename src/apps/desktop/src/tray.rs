@@ -64,7 +64,7 @@ fn tray_strings(locale: &LocaleId) -> &'static TrayStrings {
 }
 
 fn desktop_pet_should_show(exp: &AIExperienceConfig) -> bool {
-    exp.enable_agent_companion && exp.agent_companion_display_mode == "desktop"
+    exp.enable_agent_companion
 }
 
 async fn load_ai_experience(app: &AppHandle) -> Option<AIExperienceConfig> {
@@ -144,7 +144,6 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
                 exp.enable_agent_companion = false;
             } else {
                 exp.enable_agent_companion = true;
-                exp.agent_companion_display_mode = "desktop".to_string();
             }
             Ok(desktop_pet_should_show(exp))
         })

@@ -255,17 +255,6 @@
     }
   }
 
-  /**
-   * Remote metadata makes the row taller than its primary title line. Keep the
-   * 30px collapse hit target, but pin it to the top and align its 16px icon with
-   * the remote title's 16px line instead of centring it across both text rows.
-   */
-  &__workspace-item[data-bf-state~='remote'] &__workspace-item-collapse-btn {
-    align-self: flex-start;
-    align-items: flex-start;
-    padding-top: 2px;
-  }
-
   &__workspace-item-name-cluster {
     display: inline-flex;
     align-items: stretch;
@@ -285,21 +274,6 @@
     padding: 0 4px;
     /** Row actions appear on hover and widen the reserved gutter — glide instead of snapping. */
     transition: padding-right var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    /**
-     * Remote rows carry a second metadata line. Collapse the single-line 30px
-     * title block so both lines read as one centred unit at the same row rhythm
-     * as local workspaces instead of a top-heavy title with an orphaned subtitle.
-     */
-    &.is-remote {
-      gap: 1px;
-      padding-top: 2px;
-      padding-bottom: 2px;
-
-      .bitfun-nav-panel__workspace-item-name-btn {
-        min-height: 17px;
-      }
-    }
   }
 
   &__workspace-item-name-row {
@@ -308,6 +282,15 @@
     gap: 4px;
     min-width: 0;
     width: 100%;
+  }
+
+  &__workspace-item[data-bf-state~='remote'] &__workspace-item-name-row {
+    gap: var(--bf-space-2);
+  }
+
+  &__workspace-item[data-bf-state~='remote'] &__workspace-item-name-btn {
+    flex: 1 1 0;
+    max-width: none;
   }
 
   &__workspace-item-name-btn {
@@ -486,36 +469,19 @@
     overflow: hidden;
   }
 
-  &__workspace-item-subtitle {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    max-width: 100%;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-label-md-line-height);
-    opacity: 0.75;
-
-    svg {
-      flex-shrink: 0;
-      color: var(--bf-color-status-success-content);
-    }
-
-    &.is-connecting {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
-      color: var(--bf-color-status-warning-content);
-    }
+  &__workspace-item[data-bf-state~='remote'] &__workspace-item-label {
+    text-overflow: clip;
   }
 
   &__workspace-item-remote {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    min-width: 0;
-    max-width: 100%;
-    margin-left: -6px;
-    padding: 0 5px 0 6px;
-    border-radius: 999px;
+    gap: var(--bf-space-2);
+    flex: 0 0 auto;
+    margin-left: auto;
+    min-height: 24px;
+    padding: 0 var(--bf-space-2);
+    border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 62%, transparent);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-micro-font-size);
@@ -525,24 +491,25 @@
       background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
+    &.is-connected {
+      background: var(--bf-color-status-success-surface);
+      color: var(--bf-color-status-success-content);
+    }
+
     &.is-error,
     &.is-disconnected {
-      background: color-mix(in srgb, var(--bf-color-status-danger-content) 14%, transparent);
+      background: var(--bf-color-status-danger-surface);
       color: var(--bf-color-status-danger-content);
     }
 
     &.is-connecting {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
+      background: var(--bf-color-status-warning-surface);
       color: var(--bf-color-status-warning-content);
     }
   }
 
-  &__workspace-item-remote-name {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 160px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  &__workspace-item-remote-host {
+    flex: 0 0 auto;
     white-space: nowrap;
   }
 
@@ -564,8 +531,8 @@
 
   &__workspace-item-status-dot {
     flex-shrink: 0;
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--bf-color-content-muted);
 
@@ -1563,7 +1530,6 @@
     color: var(--bf-color-content-secondary);
   }
 
-  &__workspace-item-subtitle,
   &__workspace-item-remote,
   &__workspace-item-badge {
     @include nav-font.nav-panel-text-meta;

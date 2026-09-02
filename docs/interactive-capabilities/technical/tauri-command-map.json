@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "e6de7c47ef80d430801ba783d5adb016c7e6367a147a6eb54cdb9f70a746a61d",
+  "catalogDigest": "bf23a4123f01486935eb491f77cd73cddc5fb54a82f9b53798ab2181b8ffe483",
   "commandCount": 657,
   "coverage": {
     "commandCount": 657,
@@ -786,10 +786,12 @@
       "capabilityId": null,
       "capabilityIds": [
         "feature.computer-use",
+        "setting.tools.browser-control",
         "setting.tools.execution"
       ],
       "documentedItemIds": [
         "feature.computer-use:default-cdp",
+        "setting.tools.browser-control:connection",
         "setting.tools.execution:browser-setup"
       ],
       "visibility": "documented",
@@ -801,12 +803,14 @@
     {
       "id": "browser_control_get_status",
       "moduleId": "browser_control",
-      "capabilityId": "feature.computer-use",
+      "capabilityId": null,
       "capabilityIds": [
-        "feature.computer-use"
+        "feature.computer-use",
+        "setting.tools.browser-control"
       ],
       "documentedItemIds": [
-        "feature.computer-use:browser-discovery"
+        "feature.computer-use:browser-discovery",
+        "setting.tools.browser-control:connection"
       ],
       "visibility": "documented",
       "rustPath": "api::browser_control_api::browser_control_get_status",
@@ -836,10 +840,12 @@
       "capabilityId": null,
       "capabilityIds": [
         "feature.computer-use",
+        "setting.tools.browser-control",
         "setting.tools.execution"
       ],
       "documentedItemIds": [
         "feature.computer-use:browser-discovery",
+        "setting.tools.browser-control:connection",
         "setting.tools.execution:browser-setup"
       ],
       "visibility": "documented",
@@ -1430,10 +1436,12 @@
       "capabilityId": null,
       "capabilityIds": [
         "feature.computer-use",
+        "setting.tools.desktop-control",
         "setting.tools.execution"
       ],
       "documentedItemIds": [
         "feature.computer-use:status",
+        "setting.tools.desktop-control:permissions",
         "setting.tools.execution:computer-use-permissions"
       ],
       "visibility": "documented",
@@ -1464,10 +1472,12 @@
       "capabilityId": null,
       "capabilityIds": [
         "feature.computer-use",
+        "setting.tools.desktop-control",
         "setting.tools.execution"
       ],
       "documentedItemIds": [
         "feature.computer-use:request-permissions",
+        "setting.tools.desktop-control:permissions",
         "setting.tools.execution:computer-use-permissions"
       ],
       "visibility": "documented",
@@ -9858,11 +9868,11 @@
       "capabilityId": null,
       "capabilityIds": [
         "feature.terminal",
-        "setting.application.development"
+        "setting.application.terminal"
       ],
       "documentedItemIds": [
         "feature.terminal:shells",
-        "setting.application.development:default-shell"
+        "setting.application.terminal:default-shell"
       ],
       "visibility": "documented",
       "rustPath": "api::terminal_api::terminal_get_shells",

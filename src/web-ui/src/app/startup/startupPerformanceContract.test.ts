@@ -417,8 +417,6 @@ describe('startup performance contract', () => {
     const sceneSource = readSource('../scenes/settings/SettingsScene.tsx');
     const registrySource = readSource('../scenes/settings/settingsRegistry.ts');
     const viewPageSources = [
-      readSource('../scenes/settings/pages/InputSettingsPage.tsx'),
-      readSource('../scenes/settings/pages/DevelopmentSettingsPage.tsx'),
       readSource('../scenes/settings/pages/AutomationSettingsPage.tsx'),
     ];
     const lazyPanelSpecifiers = [
@@ -430,19 +428,17 @@ describe('startup performance contract', () => {
       '../../../infrastructure/config/components/WorktreeSettingsPage',
       '../../../infrastructure/config/components/UsageStatisticsConfig',
       '../../../infrastructure/config/components/McpToolsConfig',
-      '../../../infrastructure/config/components/AcpAgentsConfig',
+      '../../../infrastructure/config/components/VoiceInputConfig',
       './components/ArchivedSessionsConfig',
-      './pages/InputSettingsPage',
-      './pages/DevelopmentSettingsPage',
+      './components/KeyboardShortcutsTab',
+      './pages/EditorSettingsPage',
+      './pages/ExecutionSettingsPage',
       './pages/AutomationSettingsPage',
+      './pages/AcpSettingsPage',
     ];
     const sceneImports = staticImportSpecifiers(sceneSource);
     const registryImports = staticImportSpecifiers(registrySource);
     const lazyViewSpecifiers = [
-      '@/infrastructure/config/components/VoiceInputConfig',
-      '../components/KeyboardShortcutsTab',
-      '@/infrastructure/config/components/EditorConfig',
-      '@/infrastructure/config/components/ApplicationSettingsPages',
       '@/infrastructure/config/components/QuickActionsConfig',
       '@/infrastructure/config/components/HooksConfig',
     ];

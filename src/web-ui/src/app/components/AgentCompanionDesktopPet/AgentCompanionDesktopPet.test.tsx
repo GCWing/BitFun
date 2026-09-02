@@ -42,14 +42,13 @@ vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({
     getSettings: () => ({ agent_companion_pet: null }),
     getSettingsAsync: () => Promise.resolve({
       enable_agent_companion: true,
-      agent_companion_display_mode: 'desktop',
       agent_companion_pet: null,
     }),
   },
 }));
 
-vi.mock('@/flow_chat/components/ChatInputPixelPet', () => ({
-  ChatInputPixelPet: () => <div data-testid="pixel-pet" />,
+vi.mock('@/flow_chat/components/AgentCompanionPet', () => ({
+  AgentCompanionPet: () => <div data-testid="pixel-pet" />,
 }));
 
 const PET_COMMAND_EVENT = 'agent-companion://pet-command';

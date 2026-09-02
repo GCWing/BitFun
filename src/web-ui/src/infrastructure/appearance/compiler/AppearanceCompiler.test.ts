@@ -84,6 +84,27 @@ describe('AppearanceCompiler', () => {
                 },
               },
             },
+            content: {
+              facets: {
+                view: {
+                  execution: { color: { kind: 'hex', value: '#4488ff' } },
+                },
+              },
+            },
+            control: {
+              facets: {
+                view: {
+                  'device-control': { color: { kind: 'hex', value: '#4488ff' } },
+                },
+              },
+            },
+            platformNote: {
+              facets: {
+                view: {
+                  'execution-control': { color: { kind: 'hex', value: '#4488ff' } },
+                },
+              },
+            },
           },
         },
       },
@@ -92,6 +113,14 @@ describe('AppearanceCompiler', () => {
     const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="petTrigger"][data-bf-view="pet"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="petTrigger"][data-bf-view="session-workspace"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution-common"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution-advanced"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="control"][data-bf-view="desktop-control"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="control"][data-bf-view="browser-control"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution-common"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution-advanced"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="desktop-control"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="browser-control"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="session-config"]');
     expect(snapshot.components).toHaveProperty('runtime-settings');
   });
@@ -145,6 +174,15 @@ describe('AppearanceCompiler', () => {
             retry: { base: { opacity: retired } },
           },
         },
+        'editor-config': {
+          parts: {
+            root: {
+              base: { opacity: visible },
+              states: { saving: { opacity: retired } },
+            },
+            saving: { base: { opacity: retired } },
+          },
+        },
       },
       scenes: {
         skills: {
@@ -159,9 +197,12 @@ describe('AppearanceCompiler', () => {
     const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
     expect(snapshot.cssText).toContain('[data-bf-component="copy-output-button"][data-bf-part="root"]');
     expect(snapshot.cssText).toContain('[data-bf-component="sessions-section"][data-bf-part="root"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="editor-config"][data-bf-part="root"]');
     expect(snapshot.cssText).toContain('[data-bf-scene="skills"][data-bf-part="root"]');
     expect(snapshot.cssText).not.toContain('[data-bf-part="action"]');
     expect(snapshot.cssText).not.toContain('[data-bf-part="retry"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="editor-config"][data-bf-part="saving"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="editor-config"][data-bf-state~="saving"]');
     expect(snapshot.cssText).not.toContain('[data-bf-part="addAction"]');
   });
 
@@ -887,9 +928,6 @@ describe('AppearanceCompiler', () => {
         'create-plan-display': {
           parts: { todos: { states: { expanded: { backgroundColor: accent } } } },
         },
-        'editor-config': {
-          parts: { saving: { states: { saving: { color: accent } } } },
-        },
         'workspace-project-permissions-dialog': {
           parts: { rule: { base: { borderColor: accent } } },
         },
@@ -990,7 +1028,6 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="user-message-item"][data-bf-part="root"][data-bf-state~="failed"]');
     expect(snapshot.cssText).toContain('[data-bf-component="session-usage-report-card"][data-bf-part="loading"][data-bf-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-bf-component="create-plan-display"][data-bf-part="todos"][data-bf-state~="expanded"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="editor-config"][data-bf-part="saving"][data-bf-state~="saving"]');
     expect(snapshot.cssText).toContain('[data-bf-component="workspace-project-permissions-dialog"][data-bf-part="rule"]');
     expect(snapshot.cssText).toContain('[data-bf-component="workspace-session-batch-modal"][data-bf-part="row"][data-bf-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-bf-component="archived-sessions-config"][data-bf-part="group"][data-bf-state~="collapsed"]');

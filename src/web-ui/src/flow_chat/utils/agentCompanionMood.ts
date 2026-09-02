@@ -1,5 +1,5 @@
 /**
- * Maps session state machine snapshot to chat input pixel pet mood.
+ * Maps a session state-machine snapshot to the Agent companion mood.
  *
  * Design:
  * - rest: task not running (idle / before start / after completion)
@@ -14,9 +14,9 @@ import {
   type SessionStateMachine,
 } from '../state-machine/types';
 
-export type ChatInputPetMood = 'rest' | 'analyzing' | 'waiting' | 'working';
+export type AgentCompanionMood = 'rest' | 'analyzing' | 'waiting' | 'working';
 
-export function deriveChatInputPetMood(snapshot: SessionStateMachine | null): ChatInputPetMood {
+export function deriveAgentCompanionMood(snapshot: SessionStateMachine | null): AgentCompanionMood {
   if (!snapshot) return 'rest';
 
   const { currentState, context } = snapshot;

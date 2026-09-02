@@ -384,6 +384,19 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
+        extra={(
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setResetConfirmOpen(true)}
+            loading={isSaving}
+            disabled={isSaving}
+            data-bf-component="editor-config"
+            data-bf-part="actions"
+          >
+            {t('actions.reset')}
+          </Button>
+        )}
       />
 
       <ConfigPageContent className="bitfun-editor-config__content" data-bf-component="editor-config" data-bf-part="content">
@@ -579,27 +592,6 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
               checked={config.trimAutoWhitespace}
               onChange={(e) => updateConfig('trimAutoWhitespace', e.target.checked)}
             />
-          </ConfigPageRow>
-        </ConfigPageSection>
-
-        <ConfigPageSection
-          title={t('actions.save')}
-          description={t('actions.saveDesc')}
-        >
-          <ConfigPageRow label={t('actions.reset')} description={t('messages.confirmReset')} align="center">
-            <div className="bitfun-editor-config__actions" data-bf-component="editor-config" data-bf-part="actions">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setResetConfirmOpen(true)}
-                disabled={isSaving}
-              >
-                {t('actions.reset')}
-              </Button>
-              {isSaving && (
-                <span className="bitfun-editor-config__saving" data-bf-component="editor-config" data-bf-part="saving" data-bf-state="saving">{t('messages.saving')}</span>
-              )}
-            </div>
           </ConfigPageRow>
         </ConfigPageSection>
 

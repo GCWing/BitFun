@@ -3,24 +3,20 @@
 id: setting.application.development
 kind: setting
 category: application
-title_zh: "终端与编辑器设置"
-title_en: "Terminal & editor settings"
+title_zh: "编辑器"
+title_en: "Editor"
 ---
 
-# 终端与编辑器设置 / Terminal & editor settings
+# 编辑器 / Editor
 
 > 设置 / Setting
 
-选择默认 Shell，并调整代码编辑器的字体、缩进、换行、格式化与 Minimap。
+调整代码编辑器的字体、缩进、换行、格式化与 Minimap。
 
-Choose the default shell and tune editor font, indentation, wrapping, formatting, and minimap behavior.
+Tune code editor font, indentation, wrapping, formatting, and minimap behavior.
 
 ## 完整功能清单 / Everything included
 
-- **Agent 可直接控制 / Direct Agent control** · 自动检测或指定默认终端 Shell
-  - Auto-detect or choose the default terminal shell
-- **Agent 可直接控制 / Direct Agent control** · 把终端面板放在右侧或底部
-  - Place the terminal panel on the right or at the bottom
 - **Agent 可直接控制 / Direct Agent control** · 设置编辑器字体、字重、字号、行高与光标样式
   - Configure editor font, weight, size, line height, and cursor behavior
 - **Agent 可直接控制 / Direct Agent control** · 设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动
@@ -34,10 +30,8 @@ Choose the default shell and tune editor font, indentation, wrapping, formatting
 
 1. 打开设置
    Open Settings
-2. 进入“应用 > 开发”
-   Go to Application > Development
-3. 切换“终端”或“编辑器”视图
-   Switch between Terminal and Editor
+2. 进入“应用与界面 > 编辑器”
+   Go to App & Interface > Editor
 
 入口 / Entry: BitFun 设置
 
@@ -51,8 +45,6 @@ Choose the default shell and tune editor font, indentation, wrapping, formatting
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
-| 默认终端 Shell / Default terminal shell | `string` | 设置 Shell 路径；空字符串表示自动检测。 | Set the shell path; an empty string enables automatic detection. |
-| 终端面板位置 / Terminal panel position | `right` / `bottom` | 把终端面板放在右侧或底部。 | Place the terminal panel on the right or at the bottom. |
 | 编辑器字体 / Editor font family | `string` | 设置代码编辑器字体族与回退字体。 | Set the code editor font family and fallbacks. |
 | 编辑器字重 / Editor font weight | `normal` / `bold` | 选择普通或粗体字重。 | Choose normal or bold text weight. |
 | 编辑器字号 / Editor font size | `integer` (10–32) | 设置代码编辑器的字体大小。 | Set the code editor font size. |
@@ -82,8 +74,6 @@ Choose the default shell and tune editor font, indentation, wrapping, formatting
 
 - “把编辑器字号改成 15”
   - “Set the editor font size to 15”
-- “打开终端设置”
-  - “Open terminal settings”
 
 Agent 会先查找相关功能或设置，确认目标后再替你打开、执行或修改。完整能力目录不会预先塞进对话上下文。
 

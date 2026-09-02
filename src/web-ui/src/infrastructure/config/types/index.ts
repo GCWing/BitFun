@@ -147,11 +147,8 @@ export interface AIExperienceConfig {
   /** Whether to enable visual mode (use Mermaid diagrams to illustrate complex logic and flows). */
   enable_visual_mode: boolean;
 
-  /** Whether to show the pixel Agent companion in the collapsed chat input. */
+  /** Whether to show the desktop Agent companion. */
   enable_agent_companion: boolean;
-
-  /** Where to show the Agent companion. */
-  agent_companion_display_mode: 'input' | 'desktop';
 
   /** Optional Petdex-compatible companion package selected by the user. */
   agent_companion_pet?: {

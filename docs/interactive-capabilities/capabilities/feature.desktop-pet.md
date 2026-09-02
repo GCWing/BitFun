@@ -11,16 +11,14 @@ title_en: "Agent desktop companion"
 
 > 功能 / Feature
 
-在输入框或桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。
+在桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。
 
-Show an agent companion in the composer or on the desktop, and choose, import, or manage Petdex character packs.
+Show an agent companion on the desktop, and choose, import, or manage Petdex character packs.
 
 ## 完整功能清单 / Everything included
 
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `BitFunControl` · 整体启用或停用 Agent 桌面伙伴
   - Enable or disable the agent desktop companion globally
-- **由专用 Agent 工具控制 / Delegated Agent tool** · `BitFunControl` · 选择在聊天输入框或独立桌面窗口显示
-  - Show the companion in the chat composer or a desktop window
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `BitFunControl` · 查看并切换内置或已导入的 Petdex 角色
   - Browse and switch among built-in or imported Petdex characters
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `BitFunControl` · 从本地 Petdex 包导入并使用新的角色与动画
@@ -34,8 +32,8 @@ Show an agent companion in the composer or on the desktop, and choose, import, o
 
 1. 打开桌面伙伴设置
    Open Companion settings
-2. 启用伙伴并选择显示位置
-   Enable it and choose where it appears
+2. 启用或停用桌面伙伴
+   Enable or disable the desktop companion
 3. 选择预设或导入 Petdex 包
    Choose a preset or import a Petdex pack
 
@@ -46,7 +44,7 @@ Show an agent companion in the composer or on the desktop, and choose, import, o
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
 | BitFunControl · 1 | 先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作 | Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations |
-| BitFunControl · 2 | 用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色 | Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character |
+| BitFunControl · 2 | 用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色 | Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character |
 | BitFunControl · 3 | 执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功 | Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit |
 
 ## 可配置选项 / Configurable options

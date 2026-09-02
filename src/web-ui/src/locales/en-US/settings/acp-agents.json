@@ -1,6 +1,11 @@
 {
   "title": "ACP Agents",
   "subtitle": "Manage external agents connected through ACP.",
+  "views": {
+    "local": "Local",
+    "ssh": "SSH",
+    "json": "Advanced JSON"
+  },
   "actions": {
     "add": "Add",
     "addConfig": "Add config",
@@ -12,8 +17,6 @@
     "save": "Save",
     "refresh": "Recheck",
     "learnMore": "ACP docs",
-    "editJson": "Edit JSON",
-    "closeJson": "Close JSON",
     "saveJson": "Save JSON",
     "revert": "Revert",
     "install": "Install",
@@ -22,8 +25,11 @@
     "retry": "Reload"
   },
   "json": {
-    "title": "JSON config",
-    "description": "Edit the acpClients config directly."
+    "title": "Advanced JSON configuration",
+    "description": "Edit acpClients on the current execution host directly. Use this only for parameters the list cannot express.",
+    "discardTitle": "Discard unsaved JSON changes?",
+    "discardMessage": "These unsaved changes will be lost when you leave Advanced JSON.",
+    "discardConfirm": "Discard changes"
   },
   "security": {
     "secretWarning": "ACP JSON and environment variables may contain API keys or access tokens. BitFun saves them in the configuration on the current execution host. Do not paste them into online JSON validators, chats, or support tickets."

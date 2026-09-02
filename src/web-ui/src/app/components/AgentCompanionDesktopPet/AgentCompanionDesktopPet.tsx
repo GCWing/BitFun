@@ -5,8 +5,8 @@ import { emit, listen } from '@tauri-apps/api/event';
 import { cursorPosition, getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
-import type { ChatInputPetMood } from '@/flow_chat/utils/chatInputPetMood';
+import { AgentCompanionPet, type AgentCompanionPetMood } from '@/flow_chat/components/AgentCompanionPet';
+import type { AgentCompanionMood } from '@/flow_chat/utils/agentCompanionMood';
 import type {
   AgentCompanionActivityPayload,
   AgentCompanionTaskState,
@@ -119,7 +119,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [pet, setPet] = useState<AgentCompanionPetSelection | null>(
     () => aiExperienceConfigService.getSettings().agent_companion_pet ?? null,
   );
-  const [mood, setMood] = useState<ChatInputPetMood>('rest');
+  const [mood, setMood] = useState<AgentCompanionMood>('rest');
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
   const [typedOutputBySessionId, setTypedOutputBySessionId] = useState<Record<string, TypewriterOutputState>>({});
   const [isHoveringPet, setIsHoveringPet] = useState(false);
@@ -171,7 +171,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     const applySettings = (settings: AIExperienceSettings) => {
       setPet(settings.agent_companion_pet ?? null);
       setPetFrameSize(null);
-      if (!settings.enable_agent_companion || settings.agent_companion_display_mode !== 'desktop') {
+      if (!settings.enable_agent_companion) {
         hidePetWindowForInactiveSettings();
       }
     };
@@ -825,7 +825,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     clearPetPointerSession(event.currentTarget, event.pointerId);
   };
 
-  const displayMood: ChatInputPixelPetMood = isDraggingPet
+  const displayMood: AgentCompanionPetMood = isDraggingPet
     ? 'dragging'
     : isHoveringPet
       ? 'hover'
@@ -1068,7 +1068,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             onPointerCancel={onPetPointerCancel}
             onContextMenu={onPetContextMenu}
            data-bf-component="agent-companion-desktop-pet" data-bf-part="hitbox" data-bf-state={hasAttentionTask ? 'attention' : undefined}>
-            <ChatInputPixelPet
+            <AgentCompanionPet
               mood={displayMood}
               pet={pet}
               nativePetdexSize

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveChatInputPetMood } from './chatInputPetMood';
+import { deriveAgentCompanionMood } from './agentCompanionMood';
 import {
   SessionExecutionState,
   ProcessingPhase,
@@ -41,18 +41,18 @@ function makeSnapshot(
   };
 }
 
-describe('deriveChatInputPetMood', () => {
+describe('deriveAgentCompanionMood', () => {
   it('returns rest when snapshot is null', () => {
-    expect(deriveChatInputPetMood(null)).toBe('rest');
+    expect(deriveAgentCompanionMood(null)).toBe('rest');
   });
 
   it('returns rest when idle', () => {
-    expect(deriveChatInputPetMood(makeSnapshot(SessionExecutionState.IDLE, null))).toBe('rest');
+    expect(deriveAgentCompanionMood(makeSnapshot(SessionExecutionState.IDLE, null))).toBe('rest');
   });
 
   it('maps only THINKING to analyzing', () => {
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.THINKING),
       ),
     ).toBe('analyzing');
@@ -60,12 +60,12 @@ describe('deriveChatInputPetMood', () => {
 
   it('maps starting and compacting to working', () => {
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.STARTING),
       ),
     ).toBe('working');
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.COMPACTING),
       ),
     ).toBe('working');
@@ -73,12 +73,12 @@ describe('deriveChatInputPetMood', () => {
 
   it('maps tool phases to waiting', () => {
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.TOOL_CALLING),
       ),
     ).toBe('waiting');
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.TOOL_CONFIRMING),
       ),
     ).toBe('waiting');
@@ -86,23 +86,23 @@ describe('deriveChatInputPetMood', () => {
 
   it('maps streaming, finalizing, and null phase to working', () => {
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.STREAMING),
       ),
     ).toBe('working');
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.PROCESSING, ProcessingPhase.FINALIZING),
       ),
     ).toBe('working');
     expect(
-      deriveChatInputPetMood(makeSnapshot(SessionExecutionState.PROCESSING, null)),
+      deriveAgentCompanionMood(makeSnapshot(SessionExecutionState.PROCESSING, null)),
     ).toBe('working');
   });
 
   it('treats finishing state like processing for mood', () => {
     expect(
-      deriveChatInputPetMood(
+      deriveAgentCompanionMood(
         makeSnapshot(SessionExecutionState.FINISHING, ProcessingPhase.FINALIZING),
       ),
     ).toBe('working');

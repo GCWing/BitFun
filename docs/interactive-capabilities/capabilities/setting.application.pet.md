@@ -11,18 +11,14 @@ title_en: "Companion settings"
 
 > 设置 / Setting
 
-启用 Agent 伙伴、选择显示位置，并管理当前角色。
+启用桌面 Agent 伙伴并管理当前角色。
 
-Enable the agent companion, choose where it appears, and manage the active character.
+Enable the desktop agent companion and manage the active character.
 
 ## 完整功能清单 / Everything included
 
 - **Agent 可直接控制 / Direct Agent control** · 整体启用或停用 Agent 伙伴
   - Enable or disable the agent companion
-- **Agent 可直接控制 / Direct Agent control** · 控制伙伴是否显示在聊天输入框旁
-  - Choose whether the companion appears beside the chat composer
-- **Agent 可直接控制 / Direct Agent control** · 控制伙伴是否显示为独立桌面窗口
-  - Choose whether the companion appears as a standalone desktop window
 - **Agent 可直接控制 / Direct Agent control** · 从内置与已导入角色中选择当前伙伴
   - Choose the active companion from built-in and imported characters
 - **Agent 可直接控制 / Direct Agent control** · 导入本地 Petdex 角色包
@@ -36,8 +32,8 @@ Enable the agent companion, choose where it appears, and manage the active chara
    Open Settings
 2. 进入“应用 > 桌面伙伴”
    Go to Application > Companion
-3. 选择开关、位置和角色
-   Choose its state, location, and character
+3. 选择开关和角色
+   Choose its state and character
 
 入口 / Entry: BitFun 设置
 
@@ -54,7 +50,6 @@ Enable the agent companion, choose where it appears, and manage the active chara
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
 | 启用桌面伙伴 / Enable companion | `boolean` | 显示或隐藏 Agent 伙伴。 | Show or hide the agent companion. |
-| 显示位置 / Display location | `desktop` / `input` | 在桌面或聊天输入框中显示。 | Show on the desktop or in the chat composer. |
 
 ## 可以直接对 Agent 说 / Try saying
 

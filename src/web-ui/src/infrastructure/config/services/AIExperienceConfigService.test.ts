@@ -100,17 +100,19 @@ describe('AIExperienceConfigService startup behavior', () => {
     expect(settings.agent_companion_pet).toEqual(selectedPet);
   });
 
-  it('can force refresh settings for cross-window lifecycle synchronization', async () => {
+  it('drops the retired input display mode during cross-window refresh', async () => {
     configApiMock.getConfig.mockResolvedValueOnce({
       enable_agent_companion: true,
-      agent_companion_display_mode: 'desktop',
+      agent_companion_display_mode: 'input',
     });
     const { aiExperienceConfigService } = await import('./AIExperienceConfigService');
 
-    await aiExperienceConfigService.getSettingsAsync({ forceRefresh: true });
+    const settings = await aiExperienceConfigService.getSettingsAsync({ forceRefresh: true });
 
     expect(configApiMock.getConfig).toHaveBeenCalledWith('app.ai_experience');
     expect(configManagerMock.getConfig).not.toHaveBeenCalled();
+    expect(settings.enable_agent_companion).toBe(true);
+    expect(settings).not.toHaveProperty('agent_companion_display_mode');
   });
 
   it('does not reset cloud voice input when a stale settings view toggles another feature', async () => {

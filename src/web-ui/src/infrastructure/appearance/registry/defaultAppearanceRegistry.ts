@@ -125,12 +125,10 @@ import { archivedSessionsConfigAppearanceDescriptor } from '@/app/scenes/setting
 import { settingsViewPageAppearanceDescriptor } from '@/app/scenes/settings/components/SettingsViewPage.appearance';
 import {
   automationSettingsPageAppearanceDescriptor,
-  developmentSettingsPageAppearanceDescriptor,
-  inputSettingsPageAppearanceDescriptor,
 } from '@/app/scenes/settings/pages/appearance';
 import { settingsNavAppearanceDescriptor } from '@/app/scenes/settings/SettingsNav.appearance';
 import { backgroundCommandOutputPanelAppearanceDescriptor } from '@/flow_chat/components/background-command/BackgroundCommandOutputPanel.appearance';
-import { chatInputPixelPetAppearanceDescriptor } from '@/flow_chat/components/ChatInputPixelPet.appearance';
+import { agentCompanionPetAppearanceDescriptor } from '@/flow_chat/components/AgentCompanionPet.appearance';
 import { fileMentionPickerAppearanceDescriptor } from '@/flow_chat/components/FileMentionPicker.appearance';
 import { sessionFileModificationsBarAppearanceDescriptor } from '@/flow_chat/components/modern/SessionFileModificationsBar.appearance';
 import { realtimeVoiceCallAppearanceDescriptor } from '@/flow_chat/components/voice/RealtimeVoiceCall.appearance';
@@ -378,10 +376,8 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(settingsNavAppearanceDescriptor)
     .registerComponent(settingsViewPageAppearanceDescriptor)
     .registerComponent(automationSettingsPageAppearanceDescriptor)
-    .registerComponent(developmentSettingsPageAppearanceDescriptor)
-    .registerComponent(inputSettingsPageAppearanceDescriptor)
     .registerComponent(backgroundCommandOutputPanelAppearanceDescriptor)
-    .registerComponent(chatInputPixelPetAppearanceDescriptor)
+    .registerComponent(agentCompanionPetAppearanceDescriptor)
     .registerComponent(fileMentionPickerAppearanceDescriptor)
     .registerComponent(sessionFileModificationsBarAppearanceDescriptor)
     .registerComponent(realtimeVoiceCallAppearanceDescriptor)

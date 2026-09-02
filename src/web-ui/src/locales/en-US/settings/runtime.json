@@ -1,15 +1,9 @@
 {
   "features": {
     "pet": {
-      "title": "Pet display",
-      "subtitle": "Control where the BitFun pet appears and which character it uses.",
+      "title": "Desktop pet",
+      "subtitle": "Control whether the BitFun desktop pet appears and which character it uses.",
       "enable": "Show pet",
-      "displayModeLabel": "Display location",
-      "displayModeDescription": "Show the pet inside the input, or as a floating desktop pet outside the app.",
-      "displayInput": "Inside input",
-      "displayInputDesc": "Show it when the chat input is collapsed.",
-      "displayDesktop": "Floating desktop pet",
-      "displayDesktopDesc": "Show a borderless always-on-top mini window outside the app. Drag to move it.",
       "petLabel": "Pet appearance",
       "petDescription": "Choose a preset, or import a Petdex zip downloaded from petdex.dev.",
       "petPlaceholder": "Choose pet appearance",

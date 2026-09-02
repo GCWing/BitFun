@@ -1,5 +1,17 @@
-import { ConfirmDialog, Icon, IconButton, NumberInput, Select, type SelectOption, Switch, Tooltip } from '@bitfun/ui';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Button,
+  ConfirmDialog,
+  Icon,
+  IconButton,
+  MenuPopover,
+  NumberInput,
+  Select,
+  type MenuEntry,
+  type SelectOption,
+  Switch,
+  Tooltip,
+} from '@bitfun/ui';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RotateCcw } from 'lucide-react';
 import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
@@ -90,6 +102,8 @@ const MemorySettingsPage: React.FC = () => {
   const [resetMemoryConfirmOpen, setResetMemoryConfirmOpen] = useState(false);
   const [resetSettingsConfirmOpen, setResetSettingsConfirmOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const actionMenuAnchorRef = useRef<HTMLButtonElement>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -238,6 +252,36 @@ const MemorySettingsPage: React.FC = () => {
     }
   }, [notifyError, notifySuccess, t]);
 
+  const actionMenuItems = useMemo<MenuEntry[]>(() => [
+    {
+      id: 'open-directory',
+      label: t('actions.openDirectory'),
+      icon: <FolderOpen size={16} />,
+      disabled: actionBusy !== null,
+      onSelect: () => { void handleOpenMemoryDirectory(); },
+    },
+    {
+      id: 'reset-settings',
+      label: t('actions.resetSettings'),
+      icon: <RotateCcw size={16} />,
+      disabled: actionBusy !== null,
+      onSelect: () => setResetSettingsConfirmOpen(true),
+    },
+    {
+      id: 'separator-danger',
+      label: '',
+      separator: true,
+    },
+    {
+      id: 'clear-memory',
+      label: t('actions.resetMemory'),
+      icon: <Icon name="delete" size="sm" />,
+      tone: 'danger',
+      disabled: actionBusy !== null,
+      onSelect: () => setResetMemoryConfirmOpen(true),
+    },
+  ], [actionBusy, handleOpenMemoryDirectory, t]);
+
   if (loading || loadFailed) {
     return (
       <ConfigPageLayout
@@ -275,40 +319,28 @@ const MemorySettingsPage: React.FC = () => {
         subtitle={t('subtitle')}
         extra={(
           <>
-            <Tooltip content={t('actions.resetSettings')} placement="bottom">
-              <IconButton
-                type="button"
-                size="sm"
-                onClick={() => setResetSettingsConfirmOpen(true)}
-                loading={actionBusy === 'reset-settings'}
-                disabled={actionBusy !== null}
-                aria-label={t('actions.resetSettings')}
-                icon={<RotateCcw />}
-              />
-            </Tooltip>
-            <Tooltip content={t('actions.openDirectory')} placement="bottom">
-              <IconButton
-                type="button"
-                size="sm"
-                onClick={() => void handleOpenMemoryDirectory()}
-                loading={actionBusy === 'open-directory'}
-                disabled={actionBusy !== null}
-                aria-label={t('actions.openDirectory')}
-                icon={<FolderOpen />}
-              />
-            </Tooltip>
-            <Tooltip content={t('actions.resetMemory')} placement="bottom">
-              <IconButton
-                type="button"
-                tone="danger"
-                size="sm"
-                onClick={() => setResetMemoryConfirmOpen(true)}
-                loading={actionBusy === 'reset-memory'}
-                disabled={actionBusy !== null}
-                aria-label={t('actions.resetMemory')}
-                icon={<Icon name="delete" size="lg" />}
-              />
-            </Tooltip>
+            <Button
+              ref={actionMenuAnchorRef}
+              type="button"
+              variant="outline"
+              size="sm"
+              trailingIcon={<Icon name="chevron-down" size="sm" />}
+              onClick={() => setActionMenuOpen((open) => !open)}
+              loading={actionBusy !== null}
+              disabled={actionBusy !== null}
+              aria-haspopup="menu"
+              aria-expanded={actionMenuOpen}
+            >
+              {t('actions.menu')}
+            </Button>
+            <MenuPopover
+              items={actionMenuItems}
+              open={actionMenuOpen}
+              onClose={() => setActionMenuOpen(false)}
+              anchorRef={actionMenuAnchorRef}
+              placement="bottom"
+              aria-label={t('actions.menu')}
+            />
           </>
         )}
       />

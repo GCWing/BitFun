@@ -29,11 +29,11 @@ describe('BitFunControl presentation bridge', () => {
     await executeBitFunPresentationRequest({
       requestId: 'open-shortcuts',
       action: 'open',
-      capabilityId: 'setting.application.input',
+      capabilityId: 'setting.application.shortcuts',
       itemId: 'shortcut-browser',
     });
     expect(mocks.activateInteractiveCapability).toHaveBeenCalledWith(
-      'setting.application.input',
+      'setting.application.shortcuts',
       { itemId: 'shortcut-browser' },
     );
   });

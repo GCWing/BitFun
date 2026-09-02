@@ -570,6 +570,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     const { useSettingsStore } = await import('@/app/scenes/settings/settingsStore');
     expect(useSettingsStore.getState().activePageId).toBe('tools.execution');
+    expect(useSettingsStore.getState().activeViewId).toBe('advanced');
   });
 
   it('sends backend queue control actions for event-driven capacity waits', async () => {

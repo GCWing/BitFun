@@ -1,5 +1,9 @@
 @layer bf.base {
   .root {
+    --_overflow-text-marquee-distance: 0px;
+    --_overflow-text-marquee-duration: 2400ms;
+    --_overflow-text-marquee-offset: calc(0px - var(--_overflow-text-marquee-distance));
+
     display: block;
     min-inline-size: 0;
     max-inline-size: 100%;
@@ -8,7 +12,17 @@
     white-space: nowrap;
   }
 
-  .root[data-overflow="true"] {
+  .content {
+    display: inline-block;
+    min-inline-size: max-content;
+  }
+
+  .root:dir(rtl) {
+    --_overflow-text-marquee-offset: var(--_overflow-text-marquee-distance);
+  }
+
+  .root[data-overflow-behavior="fade"][data-overflow="true"],
+  .root[data-overflow-behavior="marquee"][data-overflow="true"]:not(:hover):not(:focus-visible) {
     -webkit-mask-image: linear-gradient(
       to right,
       currentColor 0,
@@ -25,7 +39,8 @@
     mask-repeat: no-repeat;
   }
 
-  .root:dir(rtl)[data-overflow="true"] {
+  .root:dir(rtl)[data-overflow-behavior="fade"][data-overflow="true"],
+  .root:dir(rtl)[data-overflow-behavior="marquee"][data-overflow="true"]:not(:hover):not(:focus-visible) {
     -webkit-mask-image: linear-gradient(
       to left,
       currentColor 0,
@@ -40,8 +55,67 @@
     );
   }
 
+  .root[data-overflow-behavior="marquee"][data-overflow="true"]:hover .content,
+  .root[data-overflow-behavior="marquee"][data-overflow="true"]:focus-visible .content {
+    animation: bf-overflow-text-marquee var(--_overflow-text-marquee-duration) linear infinite alternate;
+    will-change: transform;
+  }
+
+  @keyframes bf-overflow-text-marquee {
+    0%,
+    12% {
+      transform: translateX(0);
+    }
+
+    88%,
+    100% {
+      transform: translateX(var(--_overflow-text-marquee-offset));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-overflow-behavior="marquee"][data-overflow="true"] {
+      -webkit-mask-image: linear-gradient(
+        to right,
+        currentColor 0,
+        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        to right,
+        currentColor 0,
+        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        transparent 100%
+      );
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+    }
+
+    .root:dir(rtl)[data-overflow-behavior="marquee"][data-overflow="true"] {
+      -webkit-mask-image: linear-gradient(
+        to left,
+        currentColor 0,
+        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        to left,
+        currentColor 0,
+        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        transparent 100%
+      );
+    }
+
+    .root[data-overflow-behavior="marquee"][data-overflow="true"]:hover .content,
+    .root[data-overflow-behavior="marquee"][data-overflow="true"]:focus-visible .content {
+      animation: none;
+      transform: none;
+    }
+  }
+
   @media (forced-colors: active) {
-    .root[data-overflow="true"] {
+    .root[data-overflow-behavior][data-overflow="true"],
+    .root[data-overflow-behavior][data-overflow="true"]:not(:hover):not(:focus-visible) {
       -webkit-mask-image: none;
       mask-image: none;
     }

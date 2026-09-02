@@ -44,7 +44,7 @@
         "labelKey: `navigation.categories.${categoryId}`",
         "labelKey: 'navigation.pages.general.label'",
         "descriptionKey: 'navigation.pages.general.description'",
-        "labelKey: 'navigation.views.voice'"
+        "labelKey: 'navigation.pages.editor.label'"
       ],
       "keyPrefixes": [
         "navigation.categories.",

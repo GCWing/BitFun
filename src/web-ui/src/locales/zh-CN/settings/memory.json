@@ -95,6 +95,7 @@
     "skipSession": "跳过整个会话"
   },
   "actions": {
+    "menu": "记忆操作",
     "expandAdvanced": "展开高级设置",
     "collapseAdvanced": "收起高级设置",
     "resetSettings": "重置记忆设置",
@@ -102,9 +103,9 @@
     "resetSettingsConfirm": "将把当前执行主机上的记忆开关、模型与高级参数恢复为默认值。已有记忆数据不会被删除。",
     "resetSettingsConfirmAction": "恢复默认设置",
     "openDirectory": "打开记忆目录",
-    "resetMemory": "重置记忆",
-    "resetMemoryConfirm": "确定要清空所有记忆数据和记忆工作区文件吗？此操作不可撤销。",
-    "resetMemoryConfirmAction": "确认重置"
+    "resetMemory": "永久清空记忆",
+    "resetMemoryConfirm": "将永久删除当前执行主机上的所有记忆数据和记忆工作区文件。此操作不可撤销。",
+    "resetMemoryConfirmAction": "永久清空"
   },
   "units": {
     "hours": "小时",
@@ -121,7 +122,7 @@
     "settingsReset": "记忆设置已重置",
     "settingsResetFailed": "重置记忆设置失败",
     "openDirectoryFailed": "打开记忆目录失败",
-    "memoryReset": "记忆已重置",
-    "memoryResetFailed": "重置记忆失败"
+    "memoryReset": "记忆已永久清空",
+    "memoryResetFailed": "永久清空记忆失败"
   }
 }

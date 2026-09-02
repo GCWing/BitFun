@@ -67,5 +67,31 @@ describe('NotificationItem accessibility', () => {
       container.querySelector('[data-bf-part="itemClose"] [data-bf-component="icon-button"]')
         ?.getAttribute('aria-label'),
     ).toBe('actions.close');
+    const closeButton = container.querySelector('[data-bf-part="itemClose"] [data-bf-component="icon-button"]');
+    expect(closeButton?.getAttribute('data-bf-shape')).toBe('circle');
+    expect(closeButton?.getAttribute('data-bf-variant')).toBe('fill');
+    expect(closeButton?.getAttribute('data-size')).toBe('xs');
+    expect(item?.classList.contains('notification-item--closable')).toBe(true);
+  });
+
+  it('uses shared catalog icons for supported notification semantics', () => {
+    const notification: Notification = {
+      id: 'saved',
+      type: 'success',
+      variant: 'toast',
+      title: 'Saved',
+      message: 'Your changes were saved.',
+      timestamp: 1,
+      duration: 0,
+      closable: false,
+      status: 'active',
+    };
+
+    act(() => root.render(<NotificationItem notification={notification} />));
+
+    expect(
+      container.querySelector('[data-bf-part="itemIcon"] [data-bf-component="icon"]')
+        ?.getAttribute('data-bf-name'),
+    ).toBe('check-circle');
   });
 });

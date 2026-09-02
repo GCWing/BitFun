@@ -1532,10 +1532,10 @@ mod tests {
     #[test]
     fn open_targets_reject_stale_item_ids_before_surface_dispatch() {
         assert!(
-            validate_open_target("setting.application.input", Some("shortcut-browser")).is_ok()
+            validate_open_target("setting.application.shortcuts", Some("shortcut-browser")).is_ok()
         );
         assert!(
-            validate_open_target("setting.application.input", Some("removed-setting-row"))
+            validate_open_target("setting.application.shortcuts", Some("removed-setting-row"))
                 .unwrap_err()
                 .contains("Unknown documented item")
         );

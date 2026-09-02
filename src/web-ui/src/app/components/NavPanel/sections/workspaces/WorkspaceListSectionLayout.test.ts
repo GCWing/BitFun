@@ -167,43 +167,66 @@ describe('WorkspaceListSection layout styles', () => {
     );
   });
 
-  it('keeps remote connection metadata inside the sidebar with the status dot on the right', () => {
+  it('keeps remote workspace directory and host metadata on one row with the status dot first', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const remoteChip = extractBlock(stylesheet, '&__workspace-item-remote');
-    const remoteName = extractBlock(stylesheet, '&__workspace-item-remote-name');
+    const remoteHost = extractBlock(stylesheet, '&__workspace-item-remote-host');
+    const remoteNameRow = extractBlock(
+      stylesheet,
+      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-name-row",
+    );
+    const remoteNameButton = extractBlock(
+      stylesheet,
+      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-name-btn",
+    );
 
-    expect(remoteChip).toContain('margin-left: -6px;');
-    expect(remoteChip).toContain('padding: 0 5px 0 6px;');
-    expect(remoteName).toContain('flex: 0 1 auto;');
-    expect(remoteName).toContain('max-width: 160px;');
-    expect(remoteName).toContain('overflow: hidden;');
-    expect(remoteName).toContain('text-overflow: ellipsis;');
+    expect(remoteNameRow).toContain('gap: var(--bf-space-2);');
+    expect(remoteNameButton).toContain('flex: 1 1 0;');
+    expect(remoteNameButton).toContain('max-width: none;');
+    expect(remoteChip).toContain('gap: var(--bf-space-2);');
+    expect(remoteChip).toContain('flex: 0 0 auto;');
+    expect(remoteChip).toContain('margin-left: auto;');
+    expect(remoteChip).toContain('padding: 0 var(--bf-space-2);');
+    expect(remoteChip).toContain('border-radius: var(--bf-radius-base);');
+    expect(stylesheet).toContain(
+      '&.is-connected {\n' +
+      '      background: var(--bf-color-status-success-surface);\n' +
+      '      color: var(--bf-color-status-success-content);',
+    );
+    expect(remoteHost).toContain('flex: 0 0 auto;');
+    expect(remoteHost).toContain('white-space: nowrap;');
+    expect(remoteHost).not.toContain('text-overflow: ellipsis;');
 
     const source = readWorkspaceItemSource();
+    const remoteNameStart = source.indexOf('behavior="marquee"');
+    const searchIndicatorStart = source.indexOf('{searchIndexIndicator && (', remoteNameStart);
     const remoteMetaStart = source.indexOf('data-testid="nav-workspace-remote-meta"');
     const remoteMetaEnd = source.indexOf('</Tooltip>', remoteMetaStart);
     const remoteMetaMarkup = source.slice(remoteMetaStart, remoteMetaEnd);
 
     expect(remoteMetaStart).toBeGreaterThanOrEqual(0);
     expect(remoteMetaEnd).toBeGreaterThan(remoteMetaStart);
-    expect(remoteMetaMarkup.indexOf('workspace-item-remote-name'))
-      .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-status-dot'));
+    expect(source).toContain('const hostLabel = workspace.sshHost?.trim() || connectionLabel;');
+    expect(source).toContain('<OverflowText');
+    expect(source).toContain('behavior="marquee"');
+    expect(searchIndicatorStart).toBeGreaterThan(remoteNameStart);
+    expect(remoteMetaStart).toBeGreaterThan(searchIndicatorStart);
+    expect(remoteMetaMarkup).toContain('remoteMeta.hostLabel');
+    expect(remoteMetaMarkup.indexOf('workspace-item-status-dot'))
+      .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-remote-host'));
+    expect(source).not.toContain('workspace-item-subtitle');
   });
 
-  it('anchors remote workspace icons to the primary title line', () => {
+  it('keeps remote workspace icons aligned with the single-line row', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const workspaceCard = extractBlock(stylesheet, '&__workspace-item-card');
     const collapseButton = extractBlock(stylesheet, '&__workspace-item-collapse-btn');
-    const remoteCollapseButton = extractBlock(
-      stylesheet,
-      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-collapse-btn",
-    );
 
     expect(workspaceCard).toContain('align-items: center;');
     expect(collapseButton).toContain('min-height: 30px;');
-    expect(remoteCollapseButton).toContain('align-self: flex-start;');
-    expect(remoteCollapseButton).toContain('align-items: flex-start;');
-    expect(remoteCollapseButton).toContain('padding-top: 2px;');
+    expect(stylesheet).not.toContain(
+      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-collapse-btn",
+    );
   });
 
   it('uses stable BitFun semantics for grouped entries without a redundant aggregate header', () => {

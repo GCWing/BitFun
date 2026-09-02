@@ -38,8 +38,8 @@ Transcribe recordings or hold a client-wide realtime voice call that can enter p
 
 ## 怎么用 / How to use it
 
-1. 打开输入设置的“语音”页
-   Open the Voice input settings view
+1. 打开独立的语音设置页
+   Open the standalone Voice settings page
 2. 启用语音并准备模型
    Enable voice and prepare a model
 3. 在聊天输入框点击麦克风开始录音

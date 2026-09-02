@@ -1,4 +1,4 @@
-import { Button, ConfirmDialog, Icon, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, Select, TabGroup, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, CircleAlert, EyeOff, FileJson, LoaderCircle, Save, Server } from 'lucide-react';
@@ -141,6 +141,18 @@ interface InstallConfirmation {
   remoteConnectionId?: string;
   hostLabel: string;
   packageName: string;
+}
+
+export type AcpConfigView = 'local' | 'ssh' | 'json';
+
+interface AcpAgentsConfigProps {
+  viewId?: AcpConfigView;
+  navigationRequestId?: number;
+  onViewChange?: (view: AcpConfigView) => void;
+}
+
+function normalizeAcpConfigView(viewId?: string): AcpConfigView {
+  return viewId === 'ssh' || viewId === 'json' ? viewId : 'local';
 }
 
 function selfManagedInstallInfoForPreset(preset?: AcpClientPreset): SelfManagedInstallInfo | null {
@@ -411,7 +423,11 @@ function AgentStatusBadge({
   );
 }
 
-const AcpAgentsConfig: React.FC = () => {
+const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
+  viewId,
+  navigationRequestId = 0,
+  onViewChange,
+}) => {
   const { t } = useTranslation('settings/acp-agents');
   const { error: notifyError, info: notifyInfo, success: notifySuccess } = useNotification();
   const jsonEditorRef = useRef<HTMLTextAreaElement>(null);
@@ -423,8 +439,11 @@ const AcpAgentsConfig: React.FC = () => {
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
+  const [jsonBaseline, setJsonBaseline] = useState(formatConfig({ acpClients: {} }));
+  const [jsonDirty, setJsonDirty] = useState(false);
+  const [activeView, setActiveView] = useState<AcpConfigView>(() => normalizeAcpConfigView(viewId));
+  const [pendingView, setPendingView] = useState<AcpConfigView | null>(null);
   const [envDrafts, setEnvDrafts] = useState<Record<string, string>>({});
   const [requirementProbes, setRequirementProbes] = useState<AcpClientRequirementProbe[]>([]);
   const [remoteRequirementProbes, setRemoteRequirementProbes] = useState<Record<string, AcpClientRequirementProbe[]>>({});
@@ -436,10 +455,12 @@ const AcpAgentsConfig: React.FC = () => {
   const [installingRemoteClientIds, setInstallingRemoteClientIds] = useState<Set<string>>(() => new Set());
   const [hiddenRemoteConnectionIds, setHiddenRemoteConnectionIds] = useState(loadHiddenRemoteConnectionIds);
   const [showHiddenRemoteConnections, setShowHiddenRemoteConnections] = useState(false);
-  const [savedConfigText, setSavedConfigText] = useState(formatConfig({ acpClients: {} }));
   const [installConfirmation, setInstallConfirmation] = useState<InstallConfirmation | null>(null);
   const requirementProbeRequestIdRef = useRef(0);
   const savingConfigRef = useRef(false);
+  const lastNavigationRequestIdRef = useRef(navigationRequestId);
+  const activeViewRef = useRef(activeView);
+  const localRequirementProbeStartedRef = useRef(false);
   const loadedRemoteProbeIdsRef = useRef<Set<string>>(new Set());
   const [remoteProbeRefreshNonce, setRemoteProbeRefreshNonce] = useState(0);
 
@@ -562,10 +583,15 @@ const AcpAgentsConfig: React.FC = () => {
     });
   }, [clientsById, config.acpClients, customClientRows, probesById, probingRequirements, registryFilter, registrySearch]);
 
+  useEffect(() => {
+    activeViewRef.current = activeView;
+  }, [activeView]);
+
   const refreshRequirementProbes = useCallback(async (
     options: { force?: boolean; notifyOnError?: boolean } = {}
   ) => {
     const requestId = ++requirementProbeRequestIdRef.current;
+    localRequirementProbeStartedRef.current = true;
     setProbingRequirements(true);
     try {
       const nextRequirementProbes = await loadRequirementProbes({ force: options.force });
@@ -647,7 +673,7 @@ const AcpAgentsConfig: React.FC = () => {
       setConfig(parsed);
       const formattedConfig = formatConfig(parsed);
       setJsonConfig(formattedConfig);
-      setSavedConfigText(formattedConfig);
+      setJsonBaseline(formattedConfig);
       setEnvDrafts(
         Object.fromEntries(
           Object.entries(parsed.acpClients).map(([clientId, clientConfig]) => [
@@ -659,7 +685,8 @@ const AcpAgentsConfig: React.FC = () => {
       setClients(nextClients);
       setSavedConnections(nextSavedConnections);
       setDirty(false);
-      if (refreshRequirements) {
+      setJsonDirty(false);
+      if (refreshRequirements && activeViewRef.current === 'local') {
         void refreshRequirementProbes({ notifyOnError: false });
       }
     } catch (error) {
@@ -678,14 +705,14 @@ const AcpAgentsConfig: React.FC = () => {
   }, [notifyError, refreshRequirementProbes, t]);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !jsonDirty) return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty]);
+  }, [dirty, jsonDirty]);
 
   const hideRemoteConnection = useCallback((connection: SavedConnection) => {
     const connectionName = connection.name || connection.id;
@@ -716,8 +743,13 @@ const AcpAgentsConfig: React.FC = () => {
   }, [loadConfig]);
 
   useEffect(() => {
+    if (loading || activeView !== 'local' || localRequirementProbeStartedRef.current) return;
+    void refreshRequirementProbes({ notifyOnError: false });
+  }, [activeView, loading, refreshRequirementProbes]);
+
+  useEffect(() => {
     const handleAcpClientsChanged = () => {
-      if (savingConfigRef.current) {
+      if (savingConfigRef.current || dirty || jsonDirty) {
         return;
       }
       void loadConfig({ showLoading: false });
@@ -726,14 +758,20 @@ const AcpAgentsConfig: React.FC = () => {
     return () => {
       window.removeEventListener('bitfun:acp-clients-changed', handleAcpClientsChanged);
     };
-  }, [loadConfig]);
+  }, [dirty, jsonDirty, loadConfig]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || activeView !== 'ssh') return;
     for (const connection of visibleRemoteConnectionRows) {
       void refreshRemoteRequirementProbes(connection.id, { notifyOnError: false });
     }
-  }, [loading, refreshRemoteRequirementProbes, remoteProbeRefreshNonce, visibleRemoteConnectionRows]);
+  }, [
+    activeView,
+    loading,
+    refreshRemoteRequirementProbes,
+    remoteProbeRefreshNonce,
+    visibleRemoteConnectionRows,
+  ]);
 
   const patchClientConfig = (clientId: string, patch: Partial<AcpClientConfig>) => {
     setConfig(prev => {
@@ -752,7 +790,9 @@ const AcpAgentsConfig: React.FC = () => {
           },
         },
       };
-      setJsonConfig(formatConfig(next));
+      const formattedConfig = formatConfig(next);
+      setJsonConfig(formattedConfig);
+      setJsonBaseline(formattedConfig);
       return next;
     });
     setDirty(true);
@@ -871,8 +911,9 @@ const AcpAgentsConfig: React.FC = () => {
       setClients(nextClients);
       setConfig(configToSave);
       setJsonConfig(formattedConfig);
-      setSavedConfigText(formattedConfig);
+      setJsonBaseline(formattedConfig);
       setDirty(false);
+      setJsonDirty(false);
       await refreshRequirementProbes({ force: true, notifyOnError: false });
       loadedRemoteProbeIdsRef.current.clear();
       setRemoteProbeRefreshNonce(prev => prev + 1);
@@ -903,7 +944,9 @@ const AcpAgentsConfig: React.FC = () => {
       },
     };
     setConfig(next);
-    setJsonConfig(formatConfig(next));
+    const formattedConfig = formatConfig(next);
+    setJsonConfig(formattedConfig);
+    setJsonBaseline(formattedConfig);
     setEnvDrafts(prev => ({
       ...prev,
       [preset.id]: formatEnv(nextClient.env),
@@ -934,7 +977,7 @@ const AcpAgentsConfig: React.FC = () => {
           ])
         )
       );
-      setShowJsonEditor(false);
+      setJsonDirty(false);
     } catch (error) {
       notifyError(error instanceof Error ? error.message : String(error), {
         title: t('notifications.invalidJson'),
@@ -1104,6 +1147,76 @@ const AcpAgentsConfig: React.FC = () => {
     });
   }, [config.acpClients]);
 
+  const viewTabs = useMemo(() => [
+    {
+      id: 'acp-config-local-tab',
+      label: t('views.local'),
+      panelId: 'acp-config-local-panel',
+      value: 'local',
+    },
+    {
+      id: 'acp-config-ssh-tab',
+      label: t('views.ssh'),
+      panelId: 'acp-config-ssh-panel',
+      value: 'ssh',
+    },
+    {
+      id: 'acp-config-json-tab',
+      label: t('views.json'),
+      panelId: 'acp-config-json-panel',
+      value: 'json',
+    },
+  ], [t]);
+
+  const activateView = useCallback((nextView: AcpConfigView) => {
+    if (nextView === 'json') {
+      const formattedConfig = formatConfig(config);
+      setJsonConfig(formattedConfig);
+      setJsonBaseline(formattedConfig);
+      setJsonDirty(false);
+    }
+    setActiveView(nextView);
+  }, [config]);
+
+  const handleViewChange = useCallback((value: string) => {
+    if (value !== 'local' && value !== 'ssh' && value !== 'json') return;
+    if (value === activeView) return;
+    if (activeView === 'json' && jsonDirty) {
+      setPendingView(value);
+      return;
+    }
+    activateView(value);
+    onViewChange?.(value);
+  }, [activateView, activeView, jsonDirty, onViewChange]);
+
+  const discardJsonChanges = useCallback(() => {
+    const nextView = pendingView;
+    setJsonConfig(jsonBaseline);
+    setJsonDirty(false);
+    setPendingView(null);
+    if (nextView) {
+      activateView(nextView);
+      onViewChange?.(nextView);
+    }
+  }, [activateView, jsonBaseline, onViewChange, pendingView]);
+
+  const keepEditingJson = useCallback(() => {
+    setPendingView(null);
+    onViewChange?.('json');
+  }, [onViewChange]);
+
+  useEffect(() => {
+    if (lastNavigationRequestIdRef.current === navigationRequestId) return;
+    lastNavigationRequestIdRef.current = navigationRequestId;
+    const requestedView = normalizeAcpConfigView(viewId);
+    if (requestedView === activeView) return;
+    if (activeView === 'json' && jsonDirty) {
+      setPendingView(requestedView);
+      return;
+    }
+    activateView(requestedView);
+  }, [activeView, activateView, jsonDirty, navigationRequestId, viewId]);
+
   if (loading || loadFailed) {
     return (
       <ConfigPageLayout
@@ -1132,7 +1245,7 @@ const AcpAgentsConfig: React.FC = () => {
       className="bitfun-acp-agents"
       data-bf-component="acp-agents-config"
       data-bf-part="root"
-      data-bf-view={showJsonEditor ? 'json' : 'registry'}
+      data-bf-view={activeView}
     >
       <ConfigPageHeader
         title={t('title')}
@@ -1150,12 +1263,23 @@ const AcpAgentsConfig: React.FC = () => {
       />
 
       <ConfigPageContent data-bf-component="acp-agents-config" data-bf-part="content">
-        <ConfigMessage message={{ type: 'warning', text: t('security.secretWarning') }} />
+        <TabGroup
+          className="bitfun-acp-agents__tabs"
+          data-bf-component="acp-agents-config"
+          data-bf-part="tabs"
+          items={viewTabs}
+          onValueChange={handleViewChange}
+          value={activeView}
+        />
+        {activeView === 'json' && (
+          <ConfigMessage message={{ type: 'warning', text: t('security.secretWarning') }} />
+        )}
         <ConfigPageSectionStack
           className="bitfun-acp-agents__manager"
           data-bf-component="acp-agents-config"
           data-bf-part="manager"
         >
+          {activeView === 'local' && (
           <div
             className="bitfun-acp-agents__toolbar"
             data-bf-component="acp-agents-config"
@@ -1177,14 +1301,6 @@ const AcpAgentsConfig: React.FC = () => {
                 onValueChange={(value) => setRegistryFilter(value as RegistryFilter)}
                 size="sm"
               />
-              <Button
-                variant="outline"
-                size="sm"
-                leadingIcon={<FileJson />}
-                onClick={() => setShowJsonEditor(prev => !prev)}
-              >
-                {showJsonEditor ? t('actions.closeJson') : t('actions.editJson')}
-              </Button>
               {dirty && (
                 <Button
                   variant="fill"
@@ -1198,8 +1314,9 @@ const AcpAgentsConfig: React.FC = () => {
               )}
             </div>
           </div>
+          )}
 
-          {showJsonEditor && (
+          {activeView === 'json' && (
             <ConfigPageSection
               title={t('json.title')}
               description={t('json.description')}
@@ -1213,7 +1330,7 @@ const AcpAgentsConfig: React.FC = () => {
                 onChange={(event) => {
                   const nextValue = event.target.value;
                   setJsonConfig(nextValue);
-                  setDirty(nextValue !== savedConfigText);
+                  setJsonDirty(nextValue !== jsonBaseline);
                 }}
                 onKeyDown={(event) => {
                   if (event.key !== 'Tab') return;
@@ -1223,7 +1340,7 @@ const AcpAgentsConfig: React.FC = () => {
                   const end = target.selectionEnd ?? 0;
                   const nextValue = jsonConfig.slice(0, start) + '  ' + jsonConfig.slice(end);
                   setJsonConfig(nextValue);
-                  setDirty(nextValue !== savedConfigText);
+                  setJsonDirty(nextValue !== jsonBaseline);
                   requestAnimationFrame(() => {
                     jsonEditorRef.current?.focus();
                     jsonEditorRef.current?.setSelectionRange(start + 2, start + 2);
@@ -1238,19 +1355,25 @@ const AcpAgentsConfig: React.FC = () => {
                 data-bf-part="jsonActions"
               >
                 <Button variant="outline" size="sm" onClick={() => {
-                  const restored = formatConfig(config);
-                  setJsonConfig(restored);
-                  setDirty(restored !== savedConfigText);
+                  setJsonConfig(jsonBaseline);
+                  setJsonDirty(false);
                 }}>
                   {t('actions.revert')}
                 </Button>
-                <Button variant="fill" size="sm" onClick={() => { void saveJsonConfig(); }} loading={saving}>
+                <Button
+                  variant="fill"
+                  size="sm"
+                  onClick={() => { void saveJsonConfig(); }}
+                  loading={saving}
+                  disabled={!jsonDirty && !dirty}
+                >
                   {t('actions.saveJson')}
                 </Button>
               </div>
             </ConfigPageSection>
           )}
 
+          {activeView === 'local' && (
           <ConfigPageSection
             title={t('registry.title')}
             extra={(
@@ -1567,7 +1690,9 @@ const AcpAgentsConfig: React.FC = () => {
             </div>
           )}
           </ConfigPageSection>
+          )}
 
+          {activeView === 'ssh' && (
           <ConfigPageSection
             title={t('remote.title')}
             description={t('remote.description')}
@@ -1940,8 +2065,18 @@ const AcpAgentsConfig: React.FC = () => {
               </div>
             )}
           </ConfigPageSection>
+          )}
         </ConfigPageSectionStack>
       </ConfigPageContent>
+      <ConfirmDialog
+        open={pendingView !== null}
+        onOpenChange={(open) => { if (!open) keepEditingJson(); }}
+        onConfirm={discardJsonChanges}
+        title={t('json.discardTitle')}
+        message={t('json.discardMessage')}
+        confirmText={t('json.discardConfirm')}
+        type="warning"
+      />
       <ConfirmDialog
         open={!!installConfirmation}
         onOpenChange={(open) => { if (!open) setInstallConfirmation(null); }}

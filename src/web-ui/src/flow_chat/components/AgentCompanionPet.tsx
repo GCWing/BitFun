@@ -1,5 +1,5 @@
 /**
- * BitFun chat-input mascot — sleeping panda (user-authored SVG geometry).
+ * BitFun Agent companion renderer — sleeping panda and Petdex sprites.
  *
  * Geometry: lifted verbatim from the user's hand-drawn panda.svg
  * (viewBox 320x204). The component layers:
@@ -11,7 +11,7 @@
  *
  * The panda silhouette stays black-on-white in BOTH themes. In dark theme
  * we add an outer light "halo" via CSS drop-shadow filter so the mascot
- * still pops on a dark chat input background, without inverting fur color.
+ * still pops on a dark background, without inverting fur color.
  *
  * Mood signalling
  *   - rest:      gentle breathing + ZZZ + random in-place micro-actions
@@ -23,22 +23,21 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import type { ChatInputPetMood } from '../utils/chatInputPetMood';
+import type { AgentCompanionMood } from '../utils/agentCompanionMood';
 import type { AgentCompanionPetSelection } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { resolveAgentCompanionPetSrc } from '@/infrastructure/config/services/AgentCompanionPetService';
-import './ChatInputPixelPet.scss';
+import './AgentCompanionPet.scss';
 
-export interface ChatInputPixelPetProps {
-  mood: ChatInputPixelPetMood;
+export interface AgentCompanionPetProps {
+  mood: AgentCompanionPetMood;
   className?: string;
-  layout?: 'center' | 'stopRight';
   pet?: AgentCompanionPetSelection | null;
   nativePetdexSize?: boolean;
   petdexScale?: number;
   onPetFrameSizeChange?: (size: { width: number; height: number } | null) => void;
 }
 
-export type ChatInputPixelPetMood = ChatInputPetMood | 'hover' | 'dragging';
+export type AgentCompanionPetMood = AgentCompanionMood | 'hover' | 'dragging';
 
 const VIEW_W = 320;
 const VIEW_H = 204;
@@ -231,9 +230,9 @@ function FaceDragging() {
   );
 }
 
-const FACE_ORDER: ChatInputPixelPetMood[] = ['rest', 'analyzing', 'waiting', 'working', 'hover', 'dragging'];
+const FACE_ORDER: AgentCompanionPetMood[] = ['rest', 'analyzing', 'waiting', 'working', 'hover', 'dragging'];
 
-function FaceFor(mood: ChatInputPixelPetMood) {
+function FaceFor(mood: AgentCompanionPetMood) {
   switch (mood) {
     case 'rest':
       return <FaceRest />;
@@ -284,18 +283,14 @@ function pickIdleAction(prev: IdleAction | null): IdleAction {
   return pick;
 }
 
-export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
+export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
   mood,
   className = '',
-  layout = 'center',
   pet = null,
   nativePetdexSize = false,
   petdexScale = 1,
   onPetFrameSizeChange,
 }) => {
-  const layoutMod =
-    layout === 'stopRight' ? ' bitfun-chat-input-pixel-pet--layout-stop-right' : '';
-
   const [petSrc, setPetSrc] = useState<string | null>(null);
   const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   useEffect(() => {
@@ -351,7 +346,7 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
   }, [nativePetdexSize, onPetFrameSizeChange, petSrc, petdexScale]);
 
   const [transitioning, setTransitioning] = useState(false);
-  const prevMoodRef = useRef<ChatInputPixelPetMood>(mood);
+  const prevMoodRef = useRef<AgentCompanionPetMood>(mood);
   useEffect(() => {
     if (prevMoodRef.current === mood) return;
     prevMoodRef.current = mood;
@@ -399,16 +394,16 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
   }, [mood]);
 
   const stageClasses = [
-    'bitfun-chat-input-pixel-pet__stage',
-    `bitfun-chat-input-pixel-pet__stage--${mood}`,
-    transitioning ? 'bitfun-chat-input-pixel-pet__stage--transition' : '',
-    idleAction ? `bitfun-chat-input-pixel-pet__stage--idle-${idleAction}` : '',
+    'bitfun-agent-companion-pet__stage',
+    `bitfun-agent-companion-pet__stage--${mood}`,
+    transitioning ? 'bitfun-agent-companion-pet__stage--transition' : '',
+    idleAction ? `bitfun-agent-companion-pet__stage--idle-${idleAction}` : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   if (pet && petSrc) {
-    const rowByMood: Record<ChatInputPixelPetMood, number> = {
+    const rowByMood: Record<AgentCompanionPetMood, number> = {
       rest: 0,
       hover: 1,
       dragging: 2,
@@ -426,14 +421,14 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
       <div data-bf-component="chat-input-pixel-pet" data-bf-part="root"
         data-bf-mood={mood}
         data-bf-layout="petdex"
-        className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()}
+        className={`bitfun-agent-companion-pet ${className}`.trim()}
         style={nativePetdexStyle as React.CSSProperties}
         aria-hidden
       >
         <div
           data-bf-component="chat-input-pixel-pet"
           data-bf-part="petdex"
-          className={`bitfun-chat-input-pixel-pet__petdex bitfun-chat-input-pixel-pet__petdex--${mood}`}
+          className={`bitfun-agent-companion-pet__petdex bitfun-agent-companion-pet__petdex--${mood}`}
           style={{
             '--bitfun-petdex-src': `url("${petSrc}")`,
             '--bitfun-petdex-row': rowByMood[mood],
@@ -445,17 +440,17 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
 
   if (pet) {
     return (
-      <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout={layout ?? 'default'} className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden />
+      <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout="default" className={`bitfun-agent-companion-pet ${className}`.trim()} aria-hidden />
     );
   }
 
   return (
-    <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout={layout ?? 'default'} className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>
+    <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout="default" className={`bitfun-agent-companion-pet ${className}`.trim()} aria-hidden>
       <div data-bf-component="chat-input-pixel-pet" data-bf-part="stage" className={stageClasses}>
         <svg
           data-bf-component="chat-input-pixel-pet"
           data-bf-part="svg"
-          className={`bitfun-chat-input-pixel-pet__svg bitfun-chat-input-pixel-pet__svg--${mood}`}
+          className={`bitfun-agent-companion-pet__svg bitfun-agent-companion-pet__svg--${mood}`}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           xmlns="http://www.w3.org/2000/svg"
           aria-hidden

@@ -6,6 +6,7 @@ export const acpAgentsConfigAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'root' },
     { id: 'content' },
     { id: 'manager' },
+    { id: 'tabs' },
     { id: 'toolbar' },
     { id: 'jsonEditor' },
     { id: 'jsonActions' },
@@ -24,6 +25,6 @@ export const acpAgentsConfigAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'remoteAgents' },
   ],
   facets: [
-    { id: 'view', attribute: 'data-bf-view', values: ['registry', 'json'] },
+    { id: 'view', attribute: 'data-bf-view', values: ['local', 'ssh', 'json'] },
   ],
 };

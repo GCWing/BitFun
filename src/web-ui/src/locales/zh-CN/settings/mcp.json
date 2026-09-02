@@ -157,7 +157,7 @@
     "cancelAdd": "取消添加",
     "close": "关闭",
     "backToList": "返回列表",
-    "jsonConfig": "JSON 配置",
+    "jsonConfig": "高级 JSON 配置",
     "remoteAuth": "远程认证",
     "startRemoteOAuth": "通过 OAuth 连接",
     "restartRemoteOAuth": "重新发起 OAuth",
@@ -194,7 +194,7 @@
     "remoteAuthPlaceholder": "Bearer eyJ... 或 eyJ..."
   },
   "jsonEditor": {
-    "title": "MCP JSON 配置",
+    "title": "高级 JSON 配置",
     "loadFailed": "无法加载 MCP 配置。",
     "hint1": "使用标准 Cursor 格式的 MCP 配置。配置将自动保存到用户目录下的 app.json 文件中。",
     "hint2": "格式说明：可以省略 type 字段。提供 \"command\" 时按 stdio（本地进程）解析；提供 \"url\" 时按 sse（远程服务）解析。也可显式设置 type=\"stdio\"/\"sse\" 以保持兼容。",

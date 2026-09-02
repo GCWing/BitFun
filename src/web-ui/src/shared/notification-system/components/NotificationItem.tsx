@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Button, Icon, IconButton } from '@bitfun/ui';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, XCircle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
 import { notificationService } from '../services/NotificationService';
@@ -22,14 +22,14 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
   const getIcon = () => {
     switch (type) {
       case 'success':
-        return <Icon name="check-circle" size="sm" />;
+        return <Icon name="check-circle" size="lg" />;
       case 'error':
-        return <Icon name="xmark" size="sm" />;
+        return <XCircle aria-hidden="true" />;
       case 'warning':
-        return <AlertTriangle size={14} />;
+        return <AlertTriangle aria-hidden="true" />;
       case 'info':
       default:
-        return <Icon name="info" size="sm" />;
+        return <Icon name="info" size="lg" />;
     }
   };
 
@@ -49,7 +49,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
 
   return (
     <div
-      className={`notification-item notification-item--${type}${isExiting ? ' notification-item--exiting' : ''}`}
+      className={`notification-item notification-item--${type}${closable ? ' notification-item--closable' : ''}${isExiting ? ' notification-item--exiting' : ''}`}
       data-bf-component="notification"
       data-bf-part="item"
       role={isAssertive ? 'alert' : 'status'}
@@ -87,14 +87,17 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
       
       {closable && (
         <span
+          className="notification-item__close"
           data-bf-component="notification"
           data-bf-part="itemClose"
         >
           <IconButton
-            size="sm"
+            shape="circle"
+            size="xs"
+            variant="fill"
             onClick={handleClose}
             aria-label={t('actions.close')}
-            icon={<Icon name="xmark" size="lg" />}
+            icon={<Icon name="xmark" size="sm" />}
           />
         </span>
       )}
