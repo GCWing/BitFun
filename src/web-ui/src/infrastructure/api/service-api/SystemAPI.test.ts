@@ -2,11 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SystemAPI } from './SystemAPI';
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const copyTextToClipboardMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./ApiClient', () => ({
   api: {
     invoke: invokeMock,
   },
+}));
+
+vi.mock('@/shared/utils/textSelection', () => ({
+  copyTextToClipboard: copyTextToClipboardMock,
 }));
 
 describe('SystemAPI', () => {
@@ -15,6 +20,7 @@ describe('SystemAPI', () => {
   beforeEach(() => {
     systemAPI = new SystemAPI();
     invokeMock.mockReset();
+    copyTextToClipboardMock.mockReset();
   });
 
   afterEach(() => {
@@ -73,5 +79,21 @@ describe('SystemAPI', () => {
         value: true,
       },
     });
+  });
+
+  it('writes clipboard text on the controller without invoking a host command', async () => {
+    copyTextToClipboardMock.mockResolvedValueOnce(true);
+
+    await expect(systemAPI.setClipboard('device-code')).resolves.toBeUndefined();
+
+    expect(copyTextToClipboardMock).toHaveBeenCalledWith('device-code');
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a clipboard helper failure to the caller', async () => {
+    copyTextToClipboardMock.mockResolvedValueOnce(false);
+
+    await expect(systemAPI.setClipboard('device-code')).rejects.toThrow('Clipboard write failed');
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });

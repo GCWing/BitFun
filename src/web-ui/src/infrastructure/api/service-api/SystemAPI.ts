@@ -2,6 +2,7 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { createLogger } from '@/shared/utils/logger';
 import { productControlAPI } from './ProductControlAPI';
@@ -142,11 +143,12 @@ export class SystemAPI {
    
   async setClipboard(text: string): Promise<void> {
     try {
-      await api.invoke('set_clipboard', { 
-        request: { text } 
-      });
+      const copied = await copyTextToClipboard(text);
+      if (!copied) {
+        throw new Error('Clipboard write failed');
+      }
     } catch (error) {
-      throw createTauriCommandError('set_clipboard', error, { text });
+      throw createTauriCommandError('set_clipboard', error);
     }
   }
 
