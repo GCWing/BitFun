@@ -356,17 +356,14 @@ fn action_and_create_requests_use_idempotency_and_revision_fields() {
     assert_eq!(install.action, LoopxActionKind::InstallLoopx);
     assert_eq!(install.task_id, None);
 
-    let install_open_viking: LoopxActionRequest = serde_json::from_value(serde_json::json!({
+    let retired_action: LoopxActionRequest = serde_json::from_value(serde_json::json!({
         "action": "install_open_viking",
         "clientRequestId": "request-install-open-viking",
         "expectedRevision": 20
     }))
     .unwrap();
-    assert_eq!(
-        install_open_viking.action,
-        LoopxActionKind::InstallOpenViking
-    );
-    assert_eq!(install_open_viking.task_id, None);
+    assert_eq!(retired_action.action, LoopxActionKind::Unsupported);
+    assert_eq!(retired_action.task_id, None);
 
     let create: LoopxCreateTaskRequest = serde_json::from_value(serde_json::json!({
         "clientRequestId": "request-2",
@@ -455,13 +452,26 @@ fn workspace_agent_and_gate_ports_keep_routes_typed() {
         task_id: "task-1".to_string(),
         generation: 3,
         worktree_path: "/worktrees/task-1".to_string(),
-        prompt: "Fix the selected issue".to_string(),
+        instruction: "Fix the selected issue".to_string(),
         model_id: "primary".to_string(),
         metadata: Default::default(),
     };
     let agent_json = serde_json::to_value(agent).unwrap();
     assert_eq!(agent_json["generation"], 3);
     assert_eq!(agent_json["worktreePath"], "/worktrees/task-1");
+    assert_eq!(agent_json["instruction"], "Fix the selected issue");
+
+    let legacy_agent: LoopxAgentStartRequest = serde_json::from_value(serde_json::json!({
+        "prompt": "Legacy LoopX prompt"
+    }))
+    .unwrap();
+    assert_eq!(legacy_agent.instruction, "Legacy LoopX prompt");
+
+    let legacy_turn: LoopxCliBuildTurnResult = serde_json::from_value(serde_json::json!({
+        "prompt": "Legacy turn prompt"
+    }))
+    .unwrap();
+    assert_eq!(legacy_turn.agent_instruction, "Legacy turn prompt");
 
     let finish = LoopxAgentFinishRequest {
         operation_id: "finish-1".to_string(),
@@ -525,17 +535,7 @@ fn optional_environment_failures_degrade_without_blocking_core_readiness() {
         LoopxEnvironmentStatus::Degraded
     );
 
-    let disabled_optional = LoopxOptionalEnvironmentFacts {
-        open_viking: LoopxEnvironmentFact {
-            status: LoopxEnvironmentFactStatus::Disabled,
-            ..LoopxEnvironmentFact::default()
-        },
-        feedback_memory: LoopxEnvironmentFact {
-            status: LoopxEnvironmentFactStatus::Disabled,
-            ..LoopxEnvironmentFact::default()
-        },
-        ..LoopxOptionalEnvironmentFacts::default()
-    };
+    let disabled_optional = LoopxOptionalEnvironmentFacts::default();
     assert_eq!(
         derive_environment_status(&core, &disabled_optional),
         LoopxEnvironmentStatus::Ready

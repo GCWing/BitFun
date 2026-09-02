@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use bitfun_product_domains::miniapp::loopx::{
-    LoopxCliCallContext, LoopxCliCreateGoalRequest, LoopxCliErrorKind, LoopxCliGoalContext,
-    LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest, LoopxCliInstallManagedSourceRequest,
-    LoopxCliIntakePlan, LoopxCliPlanItemRequest, LoopxCliPort, LoopxCliProgress,
-    LoopxCliProgressSink, LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey,
-    LoopxItemKind, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
+    LoopxCliBuildTurnRequest, LoopxCliCallContext, LoopxCliCreateGoalRequest, LoopxCliErrorKind,
+    LoopxCliGoalContext, LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest,
+    LoopxCliInstallManagedSourceRequest, LoopxCliIntakePlan, LoopxCliPlanItemRequest, LoopxCliPort,
+    LoopxCliProgress, LoopxCliProgressSink, LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan,
+    LoopxIssueKey, LoopxItemKind, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
     LoopxWorkspaceDisposeRequest, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
     LoopxWorkspaceProbeRequest, LoopxWorkspaceResetRequest,
 };
@@ -634,6 +634,7 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
             generation: 1,
             worktree_path: worktree.to_string_lossy().into_owned(),
             registry_path: registry.to_string_lossy().into_owned(),
+            available_capabilities: vec!["shell".to_string()],
         },
         item,
         title: "Issue with “UTF-8” title".to_string(),
@@ -714,6 +715,7 @@ async fn item_plan_process_failure_preserves_the_stderr_cause() {
                     generation: 1,
                     worktree_path: worktree.to_string_lossy().into_owned(),
                     registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: vec!["shell".to_string()],
                 },
                 item: LoopxIssueKey {
                     repository: LoopxRepositoryKey {
@@ -798,6 +800,16 @@ async fn waiting_goal_projects_the_concrete_open_user_gate() {
                     generation: 3,
                     worktree_path: worktree.to_string_lossy().into_owned(),
                     registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: [
+                        "filesystem_read",
+                        "filesystem_write",
+                        "shell",
+                        "network",
+                        "external_evidence_poll",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 },
                 goal_id: "goal-42".to_string(),
                 agent_id: "bitfun-agent".to_string(),
@@ -820,6 +832,14 @@ async fn waiting_goal_projects_the_concrete_open_user_gate() {
         .map(|plan| plan.args)
         .collect::<Vec<_>>();
     assert_eq!(commands.len(), 2);
+    for capability in ["filesystem_read", "filesystem_write", "shell", "network"] {
+        assert!(commands[0].windows(2).any(|args| {
+            args == [
+                OsString::from("--available-capability"),
+                OsString::from(capability),
+            ]
+        }));
+    }
     assert!(commands[1]
         .windows(2)
         .any(|args| { args == [OsString::from("todo"), OsString::from("list")] }));
@@ -871,6 +891,7 @@ async fn ordinary_monitor_wait_does_not_require_a_user_gate() {
                     generation: 1,
                     worktree_path: worktree.to_string_lossy().into_owned(),
                     registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: vec!["shell".to_string()],
                 },
                 goal_id: "goal-monitor".to_string(),
                 agent_id: "bitfun-agent".to_string(),
@@ -886,6 +907,93 @@ async fn ordinary_monitor_wait_does_not_require_a_user_gate() {
 }
 
 #[tokio::test]
+async fn build_turn_uses_one_fresh_quota_envelope_as_gate_and_agent_contract() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let envelope = json!({
+        "ok": true,
+        "schema_version": "loopx_turn_envelope_v0",
+        "goal_id": "goal-42",
+        "agent_id": "bitfun-agent",
+        "should_run": true,
+        "state": "eligible",
+        "action": {
+            "recommended_action": "Fix the selected issue.",
+            "selected_todo": {"todo_id": "todo-42"}
+        },
+        "required_reads": [],
+        "boundary": {"write_scope": "workspace"},
+        "execution_policy": {"normal_delivery_allowed": true},
+        "writeback": {"spend_after_validation": true},
+        "contract_capsule": {"schema_version": "loopx_contract_capsule_v0"},
+        "action_signature": {"source_hash": "sha256:durable-revision"}
+    });
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([output(envelope.to_string())]),
+    ));
+    let adapter = adapter_with_runner(
+        temporary.path(),
+        runner.clone(),
+        Arc::new(FakeLocator::new(None)),
+    );
+
+    let turn = adapter
+        .build_turn(
+            LoopxCliBuildTurnRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "build-turn".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-42".to_string(),
+                    generation: 3,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: vec!["shell".to_string()],
+                },
+                goal_id: "goal-42".to_string(),
+                agent_id: "bitfun-agent".to_string(),
+                expected_durable_revision: "sha256:durable-revision".to_string(),
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert!(turn.agent_instruction.contains("Fix the selected issue."));
+    assert!(turn
+        .agent_instruction
+        .contains("Claim the selected executable todo"));
+    assert_eq!(
+        turn.settlement_token,
+        format!("goal-42:bitfun-agent:todo-42:{}", turn.turn_id)
+    );
+    let commands = runner
+        .plans()
+        .into_iter()
+        .skip(2)
+        .map(|plan| plan.args)
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 1);
+    assert!(commands[0]
+        .windows(2)
+        .any(|args| args == ["quota", "should-run"]));
+    assert!(commands[0].contains(&OsString::from("--turn-envelope")));
+    assert!(commands[0].windows(2).any(|args| {
+        args == [
+            OsString::from("--available-capability"),
+            OsString::from("shell"),
+        ]
+    }));
+    assert!(!commands[0].windows(2).any(|args| args == ["turn", "plan"]));
+}
+
+#[tokio::test]
 async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
     let temporary = tempfile::tempdir().unwrap();
     stage_bundle(temporary.path(), "v0.5.1", 1);
@@ -897,7 +1005,6 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
         task_class: "advancement_task".to_string(),
         action_kind: Some("fix_issue".to_string()),
         text: "[P1] Fix issue #42".to_string(),
-        next_command_preview: None,
         target_key: None,
     };
     let results = handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
@@ -914,18 +1021,6 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
                         "action_kind": planned_todo.action_kind.clone(),
                         "text": planned_todo.text.clone(),
                     }]
-                })
-                .to_string(),
-            ),
-            // Source-backed candidate evidence collection now runs between
-            // the todo reconciliation and the durable-revision inspection.
-            output(
-                json!({
-                    "ok": true,
-                    "schema_version": "issue_fix_workflow_plan_packet_v0",
-                    "candidate_preflight": {
-                        "decision": {"route": "proceed"}
-                    }
                 })
                 .to_string(),
             ),
@@ -966,6 +1061,7 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
             generation: 2,
             worktree_path: worktree.to_string_lossy().into_owned(),
             registry_path: registry.to_string_lossy().into_owned(),
+            available_capabilities: vec!["shell".to_string()],
         },
         goal_id: "goal-42".to_string(),
         agent_id: "bitfun-agent".to_string(),
@@ -973,7 +1069,6 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
             item,
             objective: "Fix issue 42".to_string(),
             todos: vec![planned_todo],
-            raw_packet_json: String::new(),
         },
         granted_scopes: vec![LoopxPermissionScope::WorkspaceWrite],
     };
@@ -985,28 +1080,13 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
 
     assert!(!result.created);
     assert_eq!(result.durable_revision, "sha256:durable-revision");
-    // The evidence packet supersedes the original plan packet for persistence.
-    assert!(result
-        .raw_packet_json
-        .contains("issue_fix_workflow_plan_packet_v0"));
     let commands = runner
         .plans()
         .into_iter()
         .skip(2)
         .map(|plan| plan.args)
         .collect::<Vec<_>>();
-    assert_eq!(commands.len(), 5);
-    // Order: bootstrap, register-agent, todo list, evidence collection, inspection.
-    let evidence_command = commands[3]
-        .iter()
-        .map(|argument| argument.to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join(" ");
-    assert!(evidence_command.contains("--fetch-candidate-evidence"));
-    assert!(evidence_command.contains("--goal-id goal-42"));
-    // The collection command carries no local --format flag of its own; the
-    // global --format json is prepended by the adapter for every command.
-    assert_eq!(evidence_command.matches("--format").count(), 1);
+    assert_eq!(commands.len(), 4);
     assert!(!commands.iter().any(|args| {
         args.windows(2)
             .any(|pair| pair[0] == OsString::from("todo") && pair[1] == OsString::from("add"))

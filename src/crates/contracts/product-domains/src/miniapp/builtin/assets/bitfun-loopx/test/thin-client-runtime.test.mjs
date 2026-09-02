@@ -122,7 +122,6 @@ function controllerSnapshot(now, task) {
           detail: 'Optional fallback is not installed',
           checkedAt: now - 1000,
         },
-        openViking: { status: 'unknown', detail: 'Not configured' },
         githubAuth: available('gh', 'Authenticated'),
       },
       checkedAt: now - 1000,

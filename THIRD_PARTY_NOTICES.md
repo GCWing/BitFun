@@ -73,19 +73,3 @@ sidecar is unavailable, the local Desktop may download the pinned source tag
 into BitFun-managed storage; that checkout retains the same upstream compliance
 files. The `loopx` name is used descriptively to refer to the upstream project;
 bitfun-loopx is a third-party integration and is not a LoopX project release.
-
-## OpenViking CLI
-
-- Project: OpenViking
-- Component: `crates/ov_cli`
-- Source: https://github.com/volcengine/OpenViking
-- Version: 0.4.9
-- License: Apache-2.0
-- Copyright: Copyright 2026 Beijing Volcano Engine Technology Co., Ltd.
-
-The built-in bitfun-loopx MiniApp can build the pinned `ov` CLI revision from
-the official GitHub source into BitFun-managed local storage. The CLI connects
-LoopX to a user-configured local or remote OpenViking service; BitFun does not
-silently deploy that service or copy model credentials into it. The upstream
-Apache-2.0 license for the Rust crates is available at `crates/LICENSE` in the
-pinned source repository.

@@ -89,6 +89,9 @@ pub struct LoopxCliGoalContext {
     pub generation: u64,
     pub worktree_path: String,
     pub registry_path: String,
+    /// Execution capabilities exposed by the selected Agent host. These are
+    /// observed technical facts, not permission grants.
+    pub available_capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,52 +194,6 @@ pub struct LoopxCliInstallManagedSourceResult {
     pub loopx_version: String,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LoopxOpenVikingState {
-    NotInstalled,
-    NotConfigured,
-    Disabled,
-    Ready,
-    Unhealthy,
-    #[default]
-    #[serde(other)]
-    Unknown,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxOpenVikingProbeRequest {
-    #[serde(flatten)]
-    pub call: LoopxCliCallContext,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxOpenVikingProbe {
-    pub state: LoopxOpenVikingState,
-    pub version: Option<String>,
-    pub detail: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliInstallOpenVikingRequest {
-    #[serde(flatten)]
-    pub call: LoopxCliCallContext,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliInstallOpenVikingResult {
-    pub source_repository: String,
-    pub source_tag: String,
-    pub source_commit: String,
-    pub install_path: String,
-    pub open_viking_version: String,
-    pub extension_enabled: bool,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliTodoPlan {
@@ -244,12 +201,6 @@ pub struct LoopxCliTodoPlan {
     pub task_class: String,
     pub action_kind: Option<String>,
     pub text: String,
-    /// Exact next CLI command the workflow plan printed for this todo, when
-    /// the pinned LoopX version provides one. The host persists the full plan
-    /// packet into the worktree because the LoopX `todo add` surface cannot
-    /// carry it; without this pointer the Agent has no reachable path back
-    /// into the issue-fix pipeline.
-    pub next_command_preview: Option<String>,
     /// Stable workflow target key for this todo, when provided.
     pub target_key: Option<String>,
 }
@@ -318,11 +269,6 @@ pub struct LoopxCliIntakePlan {
     pub item: LoopxIssueKey,
     pub objective: String,
     pub todos: Vec<LoopxCliTodoPlan>,
-    /// Raw `issue-fix workflow-plan` packet JSON. Empty when the adapter did
-    /// not capture one or the packet exceeded the bounded size limit. The
-    /// host persists it into the task worktree (`.bitfun/loopx/`) so every
-    /// turn can read the exact issue-fix command forms instead of guessing.
-    pub raw_packet_json: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -342,32 +288,6 @@ pub struct LoopxCliCreateGoalResult {
     pub goal_id: String,
     pub created: bool,
     pub durable_revision: String,
-    /// Newer `issue-fix workflow-plan` packet captured after the source-backed
-    /// candidate evidence collection persisted its admission receipt for this
-    /// goal. Empty when collection was skipped (PR-kind items) or failed
-    /// best-effort; the caller then persists the original plan packet instead.
-    pub raw_packet_json: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliCreateUserGateRequest {
-    #[serde(flatten)]
-    pub context: LoopxCliGoalContext,
-    pub goal_id: String,
-    pub agent_id: String,
-    pub message: String,
-    pub action_kind: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliCreateUserGateResult {
-    pub goal_id: String,
-    pub gate_id: String,
-    pub created: bool,
-    pub durable_revision: String,
-    pub settlement_receipt_count: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -409,26 +329,11 @@ pub struct LoopxCliGoalSnapshot {
     pub open_todo_count: u32,
     pub waiting_user_todo_count: u32,
     pub pending_user_gate: Option<LoopxCliUserGate>,
-    pub last_turn_id: Option<String>,
-    pub settlement_receipt_ids: Vec<String>,
-    /// Bounded projection of open agent todos observed at inspect time. The
-    /// host injects it into the next turn prompt so the Agent does not have to
-    /// re-derive todo state from the registry on every heartbeat. Empty for
-    /// legacy snapshots and non-run decisions.
-    pub open_agent_todos: Vec<LoopxCliTodoSummary>,
     /// LoopX returned the turn envelope over its compaction budget
     /// (`compaction.within_budget == false`, route `contract_error`): the goal
     /// cannot be planned until its durable state shrinks. The host must not
     /// fail the task for this; it degrades to a loud backoff-and-retry wait.
     pub envelope_over_budget: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliTodoSummary {
-    pub todo_id: String,
-    pub status: String,
-    pub text: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -446,10 +351,12 @@ pub struct LoopxCliBuildTurnRequest {
 pub struct LoopxCliBuildTurnResult {
     pub goal_id: String,
     pub turn_id: String,
-    pub prompt: String,
+    /// Stable custom-runner re-entry instruction derived from the fresh LoopX
+    /// TurnEnvelope. It is not a cached LoopX packet or rewritten heartbeat.
+    #[serde(alias = "prompt")]
+    pub agent_instruction: String,
     pub settlement_token: String,
     pub durable_revision: String,
-    pub scheduler_hint_ms: Option<u64>,
     pub deadline_at: Option<i64>,
 }
 
@@ -482,7 +389,6 @@ pub struct LoopxCliAnswerGateResult {
     pub applied: bool,
     pub durable_revision: String,
     pub goal_state: LoopxCliGoalState,
-    pub settlement_receipt_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -506,7 +412,6 @@ pub struct LoopxCliSettleTurnRequest {
     pub settlement_token: String,
     pub expected_durable_revision: String,
     pub agent_status: LoopxAgentTurnStatus,
-    pub agent_summary: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -531,10 +436,6 @@ pub struct LoopxCliSettleTurnResult {
     pub after_revision: String,
     pub validation_succeeded: bool,
     pub scheduler_hint_ms: Option<u64>,
-    /// The todo bound to the matched settlement evidence, when the turn
-    /// advanced a todo. The controller uses it to detect one todo absorbing
-    /// turn after turn without ever being completed.
-    pub binding_todo_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -563,45 +464,6 @@ pub struct LoopxCliResetGoalsRequest {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliShrinkTodoTextsRequest {
-    #[serde(flatten)]
-    pub context: LoopxCliGoalContext,
-    pub goal_id: String,
-    pub agent_id: String,
-    /// Maximum characters kept per open agent todo text.
-    pub max_chars: u32,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliShrinkTodoTextsResult {
-    pub goal_id: String,
-    /// Open agent todos found and examined.
-    pub examined: u32,
-    /// Todos whose text was truncated.
-    pub shortened: u32,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliStopGoalRequest {
-    #[serde(flatten)]
-    pub context: LoopxCliGoalContext,
-    pub goal_id: String,
-    /// Bounded owner-visible reason recorded with the transition.
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxCliStopGoalResult {
-    pub goal_id: String,
-    pub stopped: bool,
-    pub already_stopped: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliResetGoalsResult {
     pub requested_goal_ids: Vec<String>,
     pub retired_goal_ids: Vec<String>,
@@ -619,17 +481,6 @@ pub trait LoopxCliPort: Send + Sync {
         request: LoopxCliInstallManagedSourceRequest,
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliInstallManagedSourceResult>;
-
-    fn install_open_viking<'a>(
-        &'a self,
-        request: LoopxCliInstallOpenVikingRequest,
-        progress: &'a dyn LoopxCliProgressSink,
-    ) -> LoopxCliFuture<'a, LoopxCliInstallOpenVikingResult>;
-
-    fn probe_open_viking<'a>(
-        &'a self,
-        request: LoopxOpenVikingProbeRequest,
-    ) -> LoopxCliFuture<'a, LoopxOpenVikingProbe>;
 
     fn handshake<'a>(
         &'a self,
@@ -660,14 +511,6 @@ pub trait LoopxCliPort: Send + Sync {
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliCreateGoalResult>;
 
-    /// Adds one typed, agent-scoped owner review gate. Implementations own the
-    /// CLI translation; callers cannot inject raw todo arguments.
-    fn create_user_gate<'a>(
-        &'a self,
-        request: LoopxCliCreateUserGateRequest,
-        progress: &'a dyn LoopxCliProgressSink,
-    ) -> LoopxCliFuture<'a, LoopxCliCreateUserGateResult>;
-
     fn inspect_goal<'a>(
         &'a self,
         request: LoopxCliInspectGoalRequest,
@@ -686,11 +529,10 @@ pub trait LoopxCliPort: Send + Sync {
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliAnswerGateResult>;
 
-    /// Finalize one external-host turn from LoopX-owned durable writeback.
-    /// Implementations may append the exact idempotent quota receipt required
-    /// by a matching typed settlement identity, but must never manufacture the
-    /// Agent's progress or durable writeback.
-    fn finalize_turn_settlement<'a>(
+    /// Verify one external-host turn from LoopX-owned durable writeback. This
+    /// read boundary must never repair, synthesize, or spend on the Agent's
+    /// behalf.
+    fn verify_turn_settlement<'a>(
         &'a self,
         request: LoopxCliSettleTurnRequest,
         progress: &'a dyn LoopxCliProgressSink,
@@ -703,30 +545,6 @@ pub trait LoopxCliPort: Send + Sync {
         request: LoopxCliResetGoalsRequest,
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliResetGoalsResult>;
-
-    /// Shortens over-long open agent todo texts of one Goal back to the
-    /// documented bound. LoopX's turn envelope embeds the todo list and must
-    /// fit a fixed compaction budget; long successor texts authored by agents
-    /// have been observed pushing a Goal past it (route contract_error,
-    /// unplannable). Truncation preserves semantics — the full text remains in
-    /// the active state file and rollout history.
-    fn shrink_todo_texts<'a>(
-        &'a self,
-        request: LoopxCliShrinkTodoTextsRequest,
-        progress: &'a dyn LoopxCliProgressSink,
-    ) -> LoopxCliFuture<'a, LoopxCliShrinkTodoTextsResult>;
-
-    /// Stops automatic advancement for one Goal through the LoopX-owned
-    /// lifecycle transition. The host calls this when a Goal has no runnable
-    /// work left (no open todos, or LoopX reported the Goal terminal), so the
-    /// registry stops emitting heartbeat turns that would otherwise run
-    /// forever. Implementations translate this to the pinned version's typed
-    /// lifecycle command; callers cannot inject raw arguments.
-    fn stop_goal<'a>(
-        &'a self,
-        request: LoopxCliStopGoalRequest,
-        progress: &'a dyn LoopxCliProgressSink,
-    ) -> LoopxCliFuture<'a, LoopxCliStopGoalResult>;
 
     fn cancel<'a>(
         &'a self,
@@ -912,84 +730,6 @@ pub trait LoopxWorkspacePort: Send + Sync {
         &self,
         request: LoopxWorkspaceResetRequest,
     ) -> LoopxHostFuture<'_, LoopxWorkspaceResetResult>;
-
-    /// Idempotently ensures the repository-level agent playbook exists in the
-    /// shared repository directory. The playbook carries host-authored CLI
-    /// command forms, the LoopX issue-fix workflow map, and verified lessons
-    /// from earlier tasks so each turn does not have to re-derive them.
-    fn ensure_playbook(
-        &self,
-        request: LoopxWorkspacePlaybookRequest,
-    ) -> LoopxHostFuture<'_, LoopxWorkspacePlaybookResult>;
-
-    /// Read-only worktree mutation probe used by the host convergence gate.
-    /// Reports whether the worktree holds changes outside LoopX bookkeeping
-    /// paths, so stagnation can be measured from durable evidence instead of
-    /// model text. Implementations must never mutate the worktree.
-    fn probe_mutations(
-        &self,
-        request: LoopxWorkspaceMutationsRequest,
-    ) -> LoopxHostFuture<'_, LoopxWorkspaceMutationsResult>;
-
-    /// Persists the raw `issue-fix workflow-plan` packet of one task into the
-    /// task worktree under LoopX bookkeeping paths so every turn can read the
-    /// exact issue-fix command forms. Overwrites the previous packet of the
-    /// same worktree; failures are reported to the caller, which treats the
-    /// pointer as best-effort context.
-    fn persist_intake_plan(
-        &self,
-        request: LoopxWorkspaceIntakePlanRequest,
-    ) -> LoopxHostFuture<'_, LoopxWorkspaceIntakePlanResult>;
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxWorkspacePlaybookRequest {
-    pub operation_id: String,
-    pub worktree_path: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxWorkspacePlaybookResult {
-    pub playbook_path: String,
-    pub created: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxWorkspaceMutationsRequest {
-    pub operation_id: String,
-    pub worktree_path: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxWorkspaceMutationsResult {
-    /// True when the worktree holds changes outside LoopX bookkeeping paths,
-    /// or holds commits that are not reachable from any remote ref.
-    pub has_changes: bool,
-    /// Bounded sample of non-bookkeeping changed paths (porcelain status).
-    pub changed_paths: Vec<String>,
-    /// True when `changed_paths` was truncated at the adapter bound.
-    pub truncated: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxWorkspaceIntakePlanRequest {
-    pub operation_id: String,
-    pub worktree_path: String,
-    /// Raw workflow-plan packet JSON captured by the CLI adapter.
-    pub packet_json: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct LoopxWorkspaceIntakePlanResult {
-    /// Worktree-relative pointer injected into the host goal-facts block.
-    pub path: String,
-    pub wrote: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1008,7 +748,8 @@ pub struct LoopxAgentStartRequest {
     pub task_id: String,
     pub generation: u64,
     pub worktree_path: String,
-    pub prompt: String,
+    #[serde(alias = "prompt")]
+    pub instruction: String,
     pub model_id: String,
     pub metadata: LoopxAgentTurnMetadata,
 }
@@ -1105,6 +846,10 @@ pub struct LoopxAgentOutputSinceResult {
 
 /// Starts fresh transient Agent sessions bound to the prepared worktree.
 pub trait LoopxAgentPort: Send + Sync {
+    /// Reports technical execution capabilities of this concrete Agent host.
+    /// These facts never imply user permission for an individual task.
+    fn available_capabilities(&self) -> Vec<String>;
+
     fn probe(&self, request: LoopxAgentProbeRequest) -> LoopxHostFuture<'_, LoopxAgentProbeResult>;
 
     fn start(&self, request: LoopxAgentStartRequest) -> LoopxHostFuture<'_, LoopxAgentStartResult>;

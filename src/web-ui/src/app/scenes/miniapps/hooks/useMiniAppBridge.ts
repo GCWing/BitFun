@@ -189,7 +189,7 @@ export function useMiniAppBridge(
 
       const { id, method, params = {} } = msg;
       const installAction = method === 'loopx.action'
-        && (params.action === 'install_loopx' || params.action === 'install_open_viking')
+        && params.action === 'install_loopx'
         ? String(params.action)
         : null;
       const installTrace = installAction

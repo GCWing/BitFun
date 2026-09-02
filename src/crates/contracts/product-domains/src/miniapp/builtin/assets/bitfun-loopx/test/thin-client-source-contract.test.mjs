@@ -70,8 +70,6 @@ test('LoopX UI is a thin client of the host-owned controller', async () => {
   }
   assert.match(ui, /remediationAction\s*===\s*['"]install_loopx['"]/);
   assert.match(ui, /performAction\(['"]install_loopx['"]/);
-  assert.match(ui, /remediationAction\s*===\s*['"]install_open_viking['"]/);
-  assert.match(ui, /performAction\(['"]install_open_viking['"]/);
   assert.match(ui, /window\.setTimeout\(\(\)\s*=>\s*\{[\s\S]*submitLoopxInstallation\(\)[\s\S]*\},\s*50\)/);
   for (const phase of [
     'pointer_down',

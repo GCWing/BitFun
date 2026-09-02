@@ -70,15 +70,6 @@ const COPY = {
     optional: '可选',
     retryEnvironment: '重新检查环境',
     installLoopx: '安装兼容版本',
-    installOpenViking: '安装',
-    enableOpenViking: '启用',
-    installingOpenViking: '正在安装…',
-    openVikingInstallStarted: '正在从官方 GitHub 源仓库构建 OpenViking CLI v0.4.9…',
-    openVikingInstallQueued: 'OpenViking 安装已在后台开始，可以继续使用当前窗口。',
-    openVikingInstallComplete: 'OpenViking CLI 与 LoopX 扩展已就绪。',
-    openVikingInstallNeedsConfig: 'OpenViking CLI 已安装，请配置并启动 OpenViking 服务。',
-    openVikingInstallNeedsEnable: 'OpenViking 服务可用，但 LoopX 扩展仍需启用。',
-    openVikingInstallFailed: 'OpenViking 安装失败：{message}',
     loopxInstallStarted: '正在从官方 GitHub 源仓库下载并校验 LoopX v0.5.1…',
     loopxInstallQueued: '安装已在后台开始，可以继续使用当前窗口。',
     loopxInstallComplete: 'LoopX v0.5.1 已安装，环境检查已更新。',
@@ -313,13 +304,10 @@ const COPY = {
     gitWorktree: 'Git / Worktree',
     agentModel: 'Agent 模型',
     pythonFallback: 'Python 备用',
-    openViking: 'OpenViking',
-    feedbackMemory: '反馈记忆',
     githubAuth: 'GitHub 登录',
     status_unknown: '未知',
     status_checking: '检查中',
     status_available: '可用',
-    status_disabled: '未启用',
     status_degraded: '已降级',
     status_unavailable: '不可用',
     status_ready: '就绪',
@@ -400,15 +388,6 @@ const COPY = {
     optional: 'Optional',
     retryEnvironment: 'Check environment again',
     installLoopx: 'Install compatible version',
-    installOpenViking: 'Install',
-    enableOpenViking: 'Enable',
-    installingOpenViking: 'Installing...',
-    openVikingInstallStarted: 'Building OpenViking CLI v0.4.9 from the official GitHub source repository...',
-    openVikingInstallQueued: 'OpenViking installation started in the background. You can keep using this window.',
-    openVikingInstallComplete: 'The OpenViking CLI and LoopX extension are ready.',
-    openVikingInstallNeedsConfig: 'The OpenViking CLI is installed. Configure and start an OpenViking service.',
-    openVikingInstallNeedsEnable: 'The OpenViking service is reachable, but the LoopX extension still needs to be enabled.',
-    openVikingInstallFailed: 'OpenViking installation failed: {message}',
     loopxInstallStarted: 'Downloading and verifying LoopX v0.5.1 from the official GitHub source repository...',
     loopxInstallQueued: 'Installation started in the background. You can keep using this window.',
     loopxInstallComplete: 'LoopX v0.5.1 is installed and the environment check is up to date.',
@@ -643,13 +622,10 @@ const COPY = {
     gitWorktree: 'Git / Worktree',
     agentModel: 'Agent model',
     pythonFallback: 'Python fallback',
-    openViking: 'OpenViking',
-    feedbackMemory: 'Feedback memory',
     githubAuth: 'GitHub sign-in',
     status_unknown: 'Unknown',
     status_checking: 'Checking',
     status_available: 'Available',
-    status_disabled: 'Disabled',
     status_degraded: 'Degraded',
     status_unavailable: 'Unavailable',
     status_ready: 'Ready',
@@ -852,9 +828,6 @@ const state = {
   environmentInstallPending: false,
   environmentInstallObserved: false,
   environmentInstallRequestId: null,
-  openVikingInstallPending: false,
-  openVikingInstallObserved: false,
-  openVikingInstallRequestId: null,
   resetPending: false,
 };
 
@@ -1490,51 +1463,6 @@ function applySnapshot(snapshot) {
       }), 'error');
     }
   }
-  if (state.openVikingInstallObserved) {
-    const openViking = snapshot.environment
-      && snapshot.environment.optional
-      && snapshot.environment.optional.openViking;
-    if (openViking && openViking.status === 'available') {
-      emitInstallDiagnostic(
-        'environment_available',
-        state.openVikingInstallRequestId,
-        'install_open_viking',
-      );
-      state.openVikingInstallObserved = false;
-      state.openVikingInstallRequestId = null;
-      showNotice(text('openVikingInstallComplete'), 'success');
-    } else if (
-      openViking
-      && (openViking.status === 'degraded' || openViking.status === 'disabled')
-    ) {
-      emitInstallDiagnostic(
-        'environment_requires_configuration',
-        state.openVikingInstallRequestId,
-        'install_open_viking',
-      );
-      state.openVikingInstallObserved = false;
-      state.openVikingInstallRequestId = null;
-      showNotice(text(
-        openViking.status === 'disabled'
-          ? 'openVikingInstallNeedsEnable'
-          : 'openVikingInstallNeedsConfig',
-      ));
-    } else if (
-      openViking
-      && openViking.status === 'unavailable'
-    ) {
-      emitInstallDiagnostic(
-        'environment_unavailable',
-        state.openVikingInstallRequestId,
-        'install_open_viking',
-      );
-      state.openVikingInstallObserved = false;
-      state.openVikingInstallRequestId = null;
-      showNotice(text('openVikingInstallFailed', {
-        message: openViking.detail || statusLabel('unavailable'),
-      }), 'error');
-    }
-  }
   if (state.pendingApprovalPrompt) {
     syncApprovalAttention(true);
     if (currentApprovalAttention()) state.pendingApprovalPrompt = false;
@@ -1673,8 +1601,7 @@ function renderExecutionSupport() {
   view.resolveButton.disabled = !supported || environmentBusyOrBlocked || state.resetPending;
   view.retryEnvironment.disabled = !supported
     || environmentStatus === 'checking'
-    || state.environmentInstallPending
-    || state.openVikingInstallPending;
+    || state.environmentInstallPending;
 }
 
 function environmentFact(name, label, fact) {
@@ -1692,32 +1619,6 @@ function environmentFact(name, label, fact) {
   const statusActions = document.createElement('div');
   statusActions.className = 'environment-fact__status-actions';
   statusActions.append(value);
-  if (fact && fact.remediationAction === 'install_open_viking') {
-    const action = document.createElement('button');
-    const pending = state.openVikingInstallPending;
-    action.type = 'button';
-    action.className = 'text-button environment-fact__action';
-    action.disabled = pending;
-    action.textContent = text(
-      pending
-        ? 'installingOpenViking'
-        : (status === 'disabled' ? 'enableOpenViking' : 'installOpenViking'),
-    );
-    action.title = fact.remediation || action.textContent;
-    action.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || pending) return;
-      state.openVikingInstallRequestId = state.openVikingInstallRequestId || requestId();
-      emitInstallDiagnostic(
-        'pointer_down',
-        state.openVikingInstallRequestId,
-        'install_open_viking',
-      );
-    });
-    action.addEventListener('click', () => {
-      void installOpenVikingFromGithub();
-    });
-    statusActions.append(action);
-  }
   title.append(strong, statusActions);
   element.append(title);
 
@@ -1779,8 +1680,6 @@ function renderEnvironment() {
   );
   view.optionalEnvironmentList.replaceChildren(
     environmentFact('pythonFallback', text('pythonFallback'), optional.pythonFallback),
-    environmentFact('openViking', text('openViking'), optional.openViking),
-    environmentFact('feedbackMemory', text('feedbackMemory'), optional.feedbackMemory),
     environmentFact('githubAuth', text('githubAuth'), optional.githubAuth),
   );
 }
@@ -3636,17 +3535,13 @@ async function performAction(action, task, extra = {}) {
       showNotice(
         action === 'install_loopx'
           ? text('loopxInstallQueued')
-          : (action === 'install_open_viking'
-            ? text('openVikingInstallQueued')
-            : (response.message || text('actionDuplicate'))),
+          : (response.message || text('actionDuplicate')),
       );
     } else {
       showNotice(
         action === 'install_loopx'
           ? text('loopxInstallQueued')
-          : (action === 'install_open_viking'
-            ? text('openVikingInstallQueued')
-            : (response && response.message ? response.message : text('actionApplied'))),
+          : (response && response.message ? response.message : text('actionApplied')),
         'success',
       );
       await attachSnapshot(false);
@@ -3696,62 +3591,6 @@ async function submitLoopxInstallation() {
     }
   } finally {
     state.environmentInstallPending = false;
-    renderExecutionSupport();
-    renderEnvironment();
-  }
-}
-
-function installOpenVikingFromGithub() {
-  if (state.openVikingInstallPending) return;
-  state.openVikingInstallRequestId = state.openVikingInstallRequestId || requestId();
-  emitInstallDiagnostic(
-    'click_handler_entered',
-    state.openVikingInstallRequestId,
-    'install_open_viking',
-  );
-  state.openVikingInstallPending = true;
-  state.openVikingInstallObserved = true;
-  renderExecutionSupport();
-  renderEnvironment();
-  showNotice(text('openVikingInstallStarted'));
-  emitInstallDiagnostic(
-    'ui_pending_rendered',
-    state.openVikingInstallRequestId,
-    'install_open_viking',
-  );
-  window.setTimeout(() => {
-    emitInstallDiagnostic(
-      'request_task_started',
-      state.openVikingInstallRequestId,
-      'install_open_viking',
-    );
-    void submitOpenVikingInstallation();
-  }, 50);
-}
-
-async function submitOpenVikingInstallation() {
-  try {
-    emitInstallDiagnostic(
-      'bridge_call_started',
-      state.openVikingInstallRequestId,
-      'install_open_viking',
-    );
-    const started = await performAction('install_open_viking', null, {
-      clientRequestId: state.openVikingInstallRequestId,
-    });
-    emitInstallDiagnostic(
-      started ? 'bridge_call_completed' : 'bridge_call_rejected',
-      state.openVikingInstallRequestId,
-      'install_open_viking',
-    );
-    if (started) {
-      await attachSnapshot(false);
-    } else {
-      state.openVikingInstallObserved = false;
-      state.openVikingInstallRequestId = null;
-    }
-  } finally {
-    state.openVikingInstallPending = false;
     renderExecutionSupport();
     renderEnvironment();
   }

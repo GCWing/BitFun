@@ -16,6 +16,15 @@ use bitfun_runtime_ports::{
 use std::path::Path;
 use std::sync::Arc;
 
+const LOOPX_AGENT_TYPE: &str = "agentic";
+const LOOPX_AGENT_CAPABILITIES: &[&str] = &[
+    "filesystem_read",
+    "filesystem_write",
+    "shell",
+    "network",
+    "external_evidence_poll",
+];
+
 pub struct CoreLoopxAgentPort {
     coordinator: Arc<ConversationCoordinator>,
 }
@@ -27,6 +36,13 @@ impl CoreLoopxAgentPort {
 }
 
 impl LoopxAgentPort for CoreLoopxAgentPort {
+    fn available_capabilities(&self) -> Vec<String> {
+        LOOPX_AGENT_CAPABILITIES
+            .iter()
+            .map(|capability| (*capability).to_string())
+            .collect()
+    }
+
     fn probe(&self, request: LoopxAgentProbeRequest) -> LoopxHostFuture<'_, LoopxAgentProbeResult> {
         Box::pin(async move {
             let config_service = crate::service::config::get_global_config_service()
@@ -107,7 +123,7 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                 session_id.clone(),
                 AgentSessionCreateRequest {
                     session_name: format!("LoopX #{}", request.metadata.item.number),
-                    agent_type: "Cowork".to_string(),
+                    agent_type: LOOPX_AGENT_TYPE.to_string(),
                     workspace_path: Some(request.worktree_path),
                     project_workspace_path: None,
                     execution_target: None,
@@ -131,7 +147,7 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                 self.coordinator.as_ref(),
                 AgentSubmissionRequest {
                     session_id: created.session_id.clone(),
-                    message: with_host_execution_context(request.prompt),
+                    message: request.instruction,
                     turn_id: Some(turn_id.clone()),
                     source: Some(AgentSubmissionSource::DesktopApi),
                     attachments: Vec::new(),
@@ -348,20 +364,6 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
     }
 }
 
-fn with_host_execution_context(prompt: String) -> String {
-    format!(
-        r#"<bitfun_host_execution_context>
-The current workspace is already a dedicated task worktree. Work directly in it; do not create a nested or sibling worktree.
-Before installing dependencies, inspect the existing install state. Package-manager download caches are shared by the host, but mutable node_modules and build outputs remain worktree-local.
-Only call WriteStdin or ExecControl when the immediately preceding tool result returned a concrete session_id. If no session_id was returned, use a new bounded foreground command or inspect the process/result artifact with a new command.
-Prefer targeted checks before repository-wide installs, builds, packaging, or end-to-end smoke tests. Every wait must have a bounded deadline; when it expires, record the evidence and choose a recovery or narrower next action instead of starting an indefinite sleep-poll loop.
-Never raise OS-level notifications, popups, or toasts (Windows Toast/Balloon/BurntToast/msg, macOS notification scripts, or any desktop-automation equivalent), and never play sounds to alert the user. The host owns all user-facing notifications and will surface owner decisions itself; unattended execution must stay completely silent on the desktop.
-</bitfun_host_execution_context>
-
-{prompt}"#
-    )
-}
-
 fn turn_output_event(
     cursor: u64,
     expected_turn_id: &str,
@@ -537,17 +539,6 @@ mod tests {
         let metadata = loopx_session_metadata(&request);
         assert_eq!(metadata["surface"], serde_json::json!("miniapp_agent"));
         assert_eq!(metadata["appId"], serde_json::json!(LOOPX_BUILTIN_APP_ID));
-    }
-
-    #[test]
-    fn loopx_prompt_carries_host_execution_constraints_without_workflow_policy() {
-        let prompt = with_host_execution_context("LoopX-owned turn contract".to_string());
-
-        assert!(prompt.contains("already a dedicated task worktree"));
-        assert!(prompt.contains("concrete session_id"));
-        assert!(prompt.contains("Every wait must have a bounded deadline"));
-        assert!(prompt.contains("Never raise OS-level notifications"));
-        assert!(prompt.ends_with("LoopX-owned turn contract"));
     }
 
     #[test]

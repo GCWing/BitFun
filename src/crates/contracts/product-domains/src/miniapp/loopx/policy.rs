@@ -456,11 +456,7 @@ pub fn derive_environment_status(
         return LoopxEnvironmentStatus::Degraded;
     }
 
-    let optional_statuses = [
-        optional.python_fallback.status,
-        optional.open_viking.status,
-        optional.github_auth.status,
-    ];
+    let optional_statuses = [optional.python_fallback.status, optional.github_auth.status];
     if optional_statuses.iter().any(|status| {
         matches!(
             status,

@@ -2,7 +2,141 @@
 
 本文件仅适用于本目录（bitfun-loopx 内置 MiniApp 的**唯一权威源码**），比仓库根
 `AGENTS.md`、`src/crates/contracts/AGENTS.md` 更具体，冲突时以本文件为准。开发
-流程细节见本目录 `README.md`「高效修改流程」，这里只钉住**用户明确要求的迭代原则**。
+流程细节见本目录 `README.md`「高效修改流程」；本文件同时钉住架构边界与
+**用户明确要求的迭代原则**。
+
+## 架构基线（不可绕过）
+
+规范依据是 LoopX 官方
+[Custom Agent Runner Integration](https://github.com/huangruiteng/loopx/blob/main/docs/guides/custom-agent-runner-integration.zh-CN.md)。
+BitFun 使用 mainstream cooperative runner 路径：保留自己的 Agent Runtime，把 LoopX
+作为跨 Turn 的持久控制面合同。不要复制 Codex runner，也不要把 LoopX 改造成 BitFun
+内部 workflow engine。
+
+### 心智模型与唯一事实源
+
+| Owner | 负责 | 禁止负责 |
+|---|---|---|
+| LoopX CLI | goal、todo、claim、gate、quota、evidence、scheduler hint、已接受的 writeback 和 Goal 终局 | Agent 推理、BitFun session、工具执行、workspace 创建 |
+| BitFun runner/controller | 唤醒、队列、公平调度、workspace/session 生命周期、取消、UI 投影、断点恢复 | 重写 LoopX policy、代写 progress/quota、根据模型文本判定完成 |
+| BitFun Agent | 动态规划并执行一个有界动作、读取真实产物、验证 postcondition、按 packet 写回 LoopX | 保存第二套任务状态、创建 scheduler、创建额外 worktree |
+| MiniApp UI | intake、任务列表、进度、gate 操作、cursor replay | 直接执行 shell/Git/network，或成为 goal/todo 真相源 |
+
+`LoopxTaskSnapshot` 只是 host-job 投影，允许保存 workspace、session、取消、恢复、UI
+摘要和最近一次 LoopX 状态；它不是 LoopX registry 的副本。冲突时以 LoopX CLI 的
+durable readback 为准，禁止用本地计数、transcript 或 UI 状态覆盖它。
+
+### 分层和代码归属
+
+依赖方向必须保持 `UI/Desktop adapter -> assembly controller -> typed ports -> services`：
+
+| 路径 | Owner |
+|---|---|
+| 本目录 `index.html` / `ui.js` / `style.css` | 无 Node 的薄 UI；只调用经过验证的私有 `app.loopx` bridge |
+| `src/apps/desktop/src/api/miniapp_loopx_api.rs` | 验证 built-in source、执行域和 Tauri request；只转发 typed controller 调用 |
+| `src/crates/assembly/core/src/miniapp/loopx/controller.rs` | 进程级 host driver、batch/queue、公平轮转、恢复和状态投影 |
+| `src/crates/assembly/core/src/miniapp/loopx/agent_adapter.rs` | 把通用 `AgentSubmissionPort` 适配成 `LoopxAgentPort`；使用标准 `agentic` coding Agent |
+| `src/crates/contracts/product-domains/src/miniapp/loopx/*` | 稳定 DTO、ports 和纯 policy；不得执行进程、文件、网络或 Agent Runtime |
+| `src/crates/services/services-integrations/src/miniapp/loopx_cli.rs` | 固定版本 sidecar 选择、typed CLI argv/JSON 翻译和 durable readback |
+| `loopx_github.rs` / `loopx_workspace.rs` | GitHub intake adapter 与 Git/worktree service |
+| `src/apps/desktop/src/lib.rs` | 只做 concrete provider 装配、事件订阅和 Tauri registration |
+
+具体 Agent host 自己通过 `LoopxAgentPort::available_capabilities` 报告技术能力。controller
+只转交，CLI adapter 只校验和翻译。`available_capability` 表示执行机制存在，不是用户授权；
+绝不能从 `granted_scopes`、gate approval 或模型能力推导它。以后接 Codex、Claude Code
+或其他 Agent 时，应新增/替换 `LoopxAgentPort` adapter，不修改 LoopX controller 状态机。
+
+### 一项一 Goal 模型
+
+- 一个 GitHub issue/PR 对应一个 LoopX goal、一个 task 和一个独立 worktree。
+- 多 issue 批量是 MiniApp task/batch 层的聚合，不得把多个 issue 压进同一个 goal 的 todo。
+- todo 只表示该 goal 内的推进项、successor 或 user gate。
+- 同一仓库的 tasks 串行占用 repository slot；每次 durable settlement 是公平轮转边界。
+- 不同 tasks 可以共享 bare Git object cache，但不能共享可变 worktree、`node_modules`、
+  build 输出或运行中的进程。
+- LoopX 不负责 clone；workspace service 不负责 todo、quota 或 Agent 决策。
+
+### 每轮执行合同
+
+每次唤醒必须从 durable state 重新开始，不能依赖上一轮模型记忆：
+
+1. controller 用只读 `turn plan` 对账当前 Goal、user channel 和 cadence；该读取不启动 Agent。
+2. 只有 LoopX 投影 `RunNow` 时，adapter 以宿主生成的稳定 Turn id 调用一次
+   `quota should-run --turn-envelope`。这一次调用同时是执行 gate 和 Agent packet，禁止先
+   缓存一个 packet、再用另一个 packet 放行执行。
+3. `should_run=false`、wait、quiet、monitor-only、user-only 或 failed 状态不调用模型，
+   也不消费 quota。
+4. re-entry instruction 只能携带当前 TurnEnvelope 的 selected action、user channel、
+   required reads、boundary、execution policy、writeback、replan/task orchestration contract、
+   detail refs、CLI prefix、registry 和 Turn identity。
+5. Agent 在 write-capable 工作前 claim selected todo，只执行一个有界动作，读取真实
+   repository/test/CI/provider 结果进行验证，然后 complete/update/block/defer 或创建明确的
+   successor，执行 `refresh-state`，最后才以同一 identity spend quota。
+6. Agent terminal 后，宿主只读 `turn plan` 与 history，核验完全匹配的
+   `goal_id + agent_id + turn_id + selected todo/replan obligation` durable writeback 和 quota
+   receipt。任何缺失或错绑都进入显式 recovery。
+7. 只有 LoopX 投影 `Complete` 或 `Archived` 时，host task 才能 Completed。
+   `RunNow + 0 open todo` 是合同矛盾，必须 recovery；禁止宿主调用 `goal-lifecycle stop`
+   来伪造终局。
+
+re-entry instruction 必须稳定且轻量，不得缓存 todo 列表、cadence、project policy、上一轮
+摘要或 raw transcript。`last_agent_summary` 仅用于 UI，不参与执行、settlement 或恢复判断。
+
+### Gate、调度和恢复
+
+- `should_run=true` 优先于并存的 user action：独立安全 todo 可以继续，同时把具体 user
+  gate 投影到 UI；不能因为一个 gate 阻塞整个 frontier。
+- BitFun 是 `generic-cli / outer_controller / isolated-headless` runner。统一 scheduler
+  管所有 task，不得每 issue 创建 timer，也不得调用 Codex App automation API。
+- LoopX `v0.5.1` 的 bootstrap 参数 `--codex-app-heartbeat no` 只是关闭上游遗留的
+  Codex 专用 onboarding 分支，不代表 BitFun 模拟 Codex App。
+- scheduler hint 有数值时按数值调度；当前 outer-controller packet 只有 cadence label 时，
+  使用代码中明确的兼容间隔。只有 packet 要求 ACK 时才按 packet 的 exact argv ACK。
+- runner 重启从 LoopX registry、host task snapshot 和 workspace readback 恢复，不能 replay
+  transcript 重建控制状态。结果不确定时保留数据并进入 recovery，不自动重试外部副作用。
+
+### 允许保留的宿主能力
+
+以下不是“嵌入式改写”，不得因清理架构而误删：
+
+- 打包的固定版本 LoopX sidecar、签名/版本/schema 校验，以及用户显式触发的 managed-source
+  fallback；它们属于可交付性和 process adapter。
+- GitHub issue/PR metadata intake；它属于外部 source adapter。
+- 每 item worktree、共享 bare object cache、显式 archive/reset 清理；它们属于 workspace
+  service 和 host-job 生命周期。
+- cursor event replay、Agent transient session、取消和公平队列；它们属于 runner/UI 体验。
+
+OpenViking、语义偏好、反馈记忆和其他可选 LoopX extensions 不属于 issue-fix MiniApp 的
+核心闭环。没有独立产品需求、owner 和 capability negotiation 前，不得重新塞入本
+controller、environment DTO 或 UI。
+
+### 禁止重新引入
+
+- 不生成、转发、改写或缓存 `heartbeat-prompt`，不复制 Codex prompt/skill 目录约定。
+- 不创建 host-authored `LOOPX_AGENT_PLAYBOOK.md`、`.bitfun/loopx/intake-plan.json` 或类似
+  workflow 镜像文件。
+- 不把上一轮 Agent 摘要、todo 摘要或 raw workflow packet 回灌成下一轮控制事实。
+- 不用字符串替换修改 LoopX packet，不裁剪/改写 LoopX durable todo 来让 envelope 通过。
+- 不维护宿主侧 autonomous-turn、stagnation、same-todo 等第二套收敛计数，也不自造
+  `autonomous_budget_review` gate。
+- 不从 worktree diff、Agent exit code 或完成文本推断 durable progress。
+- 不补写 quota、不伪造 evidence、不启动 settlement-repair Agent，不接受其他 todo 的
+  settlement 作为当前 selected todo 的成功。
+- 不让 UI/Worker 接触 shell、Git、文件或 network primitive，不向普通/市场 MiniApp 暴露
+  `app.loopx` 私有 namespace。
+- 不为 convenience 绕过 typed ports 传 raw argv，也不把 services implementation 上移到
+  assembly 或 Desktop API。
+
+### 当前能力边界
+
+- 当前只支持 Local Desktop workspace。Remote Workspace、Peer Device、Remote Control
+  和 Detached Dispatch 必须明确返回 unsupported，禁止静默回落到 controller 本机。
+- 当前是 cooperative mainstream path：Agent 自己验证真实 postcondition 并写回，宿主再
+  独立核验 LoopX durable evidence；这不等于 experimental `turn run-once` qualification。
+- 在引入 `turn run-once` 前，必须先有 provider-neutral typed result、task-specific independent
+  validator，以及 retry/resume/replay 不重复产生 effect 的证明。
+- persisted DTO 新字段必须有默认值；旧字段/旧 action 要宽容读取并明确降级，不能通过删除
+  registry、task snapshot 或 worktree 来“修复”升级问题。
 
 ## 最高优先级：快速反馈迭代（用户要求，不可违背）
 
