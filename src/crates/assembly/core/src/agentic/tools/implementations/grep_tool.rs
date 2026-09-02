@@ -1763,12 +1763,16 @@ mod tests {
             pending_read: bool,
             pending_operation: Option<&'static str>,
             opened_signal: tokio::sync::Notify,
+            reader_pending_signal: Arc<tokio::sync::Notify>,
             reader_drops: Arc<std::sync::atomic::AtomicUsize>,
         }
-        struct PendingReader(Arc<std::sync::atomic::AtomicUsize>);
+        struct PendingReader {
+            pending_signal: Arc<tokio::sync::Notify>,
+            drops: Arc<std::sync::atomic::AtomicUsize>,
+        }
         impl Drop for PendingReader {
             fn drop(&mut self) {
-                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                self.drops.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
         impl tokio::io::AsyncRead for PendingReader {
@@ -1777,6 +1781,7 @@ mod tests {
                 _: &mut std::task::Context<'_>,
                 _: &mut tokio::io::ReadBuf<'_>,
             ) -> std::task::Poll<std::io::Result<()>> {
+                self.pending_signal.notify_one();
                 std::task::Poll::Pending
             }
         }
@@ -1803,7 +1808,10 @@ mod tests {
                     return std::future::pending().await;
                 }
                 if self.pending_read {
-                    Ok(Box::new(PendingReader(self.reader_drops.clone())))
+                    Ok(Box::new(PendingReader {
+                        pending_signal: self.reader_pending_signal.clone(),
+                        drops: self.reader_drops.clone(),
+                    }))
                 } else {
                     LocalWorkspaceFs.open_read(path).await
                 }
@@ -2350,7 +2358,7 @@ mod tests {
             });
             tokio::time::timeout(
                 std::time::Duration::from_secs(2),
-                fs.opened_signal.notified(),
+                fs.reader_pending_signal.notified(),
             )
             .await
             .unwrap();
@@ -2385,7 +2393,7 @@ mod tests {
             });
             tokio::time::timeout(
                 std::time::Duration::from_secs(2),
-                fs.opened_signal.notified(),
+                fs.reader_pending_signal.notified(),
             )
             .await
             .unwrap();
