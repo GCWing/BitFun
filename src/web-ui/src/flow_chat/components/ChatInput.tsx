@@ -2062,6 +2062,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const handleFillChatInput = (data: {
       content?: string;
       context?: ContextItem;
+      /** Complete composer context replacement, including image attachments. */
+      contexts?: ContextItem[];
       composerPresentation?: ComposerPresentation;
       onlyIfEmpty?: boolean;
       mode?: 'replace' | 'append';
@@ -2086,7 +2088,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const composerPresentation = parseComposerPresentation(data.composerPresentation);
       if (composerPresentation && data.mode !== 'append') {
         const restoredValue = composerPresentationToEditorText(composerPresentation);
-        replaceContexts(composerPresentationContexts(composerPresentation));
+        replaceContexts(data.contexts ?? composerPresentationContexts(composerPresentation));
         clearPendingLargePastes();
         dispatchInput({ type: 'SET_VALUE', payload: restoredValue });
         inputValueRef.current = restoredValue;
@@ -2112,6 +2114,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       if (data.mode !== 'append') {
         clearPendingLargePastes();
+        if (data.contexts) {
+          replaceContexts(data.contexts);
+        }
       }
       dispatchInput({ type: 'SET_VALUE', payload: nextValue });
       inputValueRef.current = nextValue;

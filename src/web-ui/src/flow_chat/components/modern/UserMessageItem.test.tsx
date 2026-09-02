@@ -193,6 +193,11 @@ describe('UserMessageItem steering tag', () => {
     vi.stubGlobal('window', dom.window);
     vi.stubGlobal('document', dom.window.document);
     vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
+    vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
     vi.stubGlobal('navigator', {
       clipboard: {
         writeText: vi.fn(),
@@ -308,7 +313,7 @@ describe('UserMessageItem steering tag', () => {
     expect(content?.querySelectorAll('.user-message-item__reference')).toHaveLength(2);
   });
 
-  it('includes the persisted presentation when a failed message is restored to the input', () => {
+  it('restores persisted references and images from a failed message to the input', () => {
     const composerPresentation = {
       version: 1,
       segments: [
@@ -344,6 +349,13 @@ describe('UserMessageItem steering tag', () => {
               content: '[session: Delete all files]',
               timestamp: 1000,
               metadata: { composerPresentation },
+              images: [{
+                id: 'image-failed-1',
+                name: 'failure.png',
+                dataUrl: 'data:image/png;base64,failed',
+                imagePath: 'E:/uploads/failure.png',
+                mimeType: 'image/png',
+              }],
             }}
             turnId="turn-failed-1"
           />
@@ -359,6 +371,21 @@ describe('UserMessageItem steering tag', () => {
 
     expect(globalEventBus.emit).toHaveBeenCalledWith('fill-chat-input', {
       content: '[session: Delete all files]',
+      contexts: [
+        expect.objectContaining({
+          id: 'session-reference-1',
+          type: 'session-reference',
+          sessionId: 'session-1',
+        }),
+        expect.objectContaining({
+          id: 'image-failed-1',
+          type: 'image',
+          imagePath: 'E:/uploads/failure.png',
+          imageName: 'failure.png',
+          dataUrl: 'data:image/png;base64,failed',
+          isLocal: true,
+        }),
+      ],
       composerPresentation,
     });
   });
@@ -421,6 +448,53 @@ describe('UserMessageItem steering tag', () => {
     });
 
     expect(container.querySelector('.user-message-item__rollback-btn')).not.toBeNull();
+  });
+
+  it('restores image attachments to the composer after rollback', async () => {
+    activeSessionRef.current = {
+      sessionId: 'main-session',
+      sessionKind: 'normal',
+      dialogTurns: [{ id: 'turn-1', status: 'completed' }],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ sessionId: 'main-session', allowUserMessageRollback: true }}>
+          <UserMessageItem
+            message={{
+              id: 'user-main-1',
+              content: 'inspect this image',
+              timestamp: 1000,
+              images: [{
+                id: 'image-1',
+                name: 'screenshot.png',
+                imagePath: 'E:/uploads/screenshot.png',
+                mimeType: 'image/png',
+              }],
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.user-message-item__rollback-btn')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(globalEventBus.emit).toHaveBeenCalledWith('fill-chat-input', {
+      content: 'restored prompt',
+      contexts: [expect.objectContaining({
+        id: 'image-1',
+        type: 'image',
+        imagePath: 'E:/uploads/screenshot.png',
+        imageName: 'screenshot.png',
+        mimeType: 'image/png',
+        isLocal: true,
+      })],
+    });
   });
 
   it('disables file-consistent rollback and message editing for remote workspaces', () => {
