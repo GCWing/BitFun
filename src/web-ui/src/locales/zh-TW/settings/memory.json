@@ -29,6 +29,10 @@
       "label": "記憶",
       "description": "啟用後將自動產生記憶，並在會話中使用記憶。"
     },
+    "memoryActions": {
+      "label": "記憶操作",
+      "description": "開啟記憶目錄、恢復預設設定，或永久清空目前執行主機上的記憶資料。"
+    },
     "generateMemories": {
       "label": "自動生成記憶",
       "description": "後台從已結束的本地會話中抽取並整理可復用記憶。"
@@ -95,7 +99,7 @@
     "skipSession": "跳過整個會話"
   },
   "actions": {
-    "menu": "記憶操作",
+    "manage": "管理",
     "expandAdvanced": "展開進階設定",
     "collapseAdvanced": "收合進階設定",
     "resetSettings": "重設記憶設定",

@@ -141,36 +141,13 @@
     }
   }
 
-  &__tab-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--bf-control-tab-group-item-gap);
+  &__tab-title {
+    display: block;
     min-width: 0;
     max-width: 280px;
-  }
-
-  &__tab-title,
-  &__tab-subtitle {
-    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  &__tab-title {
-    flex: 0 1 auto;
-  }
-
-  &__tab-separator {
-    flex: 0 0 auto;
-    color: var(--bf-color-content-disabled);
-    font-size: var(--bf-type-label-sm-font-size);
-  }
-
-  &__tab-subtitle {
-    flex: 1 1 auto;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
   }
 }
 

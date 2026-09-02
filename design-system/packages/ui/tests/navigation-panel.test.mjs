@@ -84,11 +84,11 @@ test("NavigationPanel separates group captions, destinations, and the selected d
   );
   const heading = styles.match(/\.headingLabel\s*\{([^}]+)\}/)?.[1];
   assert.ok(heading);
-  assert.match(heading, /color: color-mix\(in srgb, var\(--bf-color-content-primary\) 50%, transparent\)/);
-  assert.match(heading, /font-family: var\(--bf-type-meta-font-family\)/);
-  assert.match(heading, /font-size: var\(--bf-type-meta-font-size\)/);
-  assert.match(heading, /font-weight: var\(--bf-type-meta-font-weight\)/);
-  assert.match(heading, /line-height: var\(--bf-type-body-sm-line-height\)/);
+  assert.match(heading, /color: color-mix\(in srgb, var\(--bf-color-content-primary\) 40%, transparent\)/);
+  assert.match(heading, /font-family: var\(--bf-type-label-xs-font-family\)/);
+  assert.match(heading, /font-size: var\(--bf-type-label-xs-font-size\)/);
+  assert.match(heading, /font-weight: var\(--bf-type-label-xs-font-weight\)/);
+  assert.match(heading, /line-height: var\(--bf-type-label-xs-line-height\)/);
   assert.match(styles, /\.item\[data-bf-tone="neutral"\]:not\(\[data-disabled="true"\]\)\s*\{\s*color: var\(--bf-color-content-primary\)/);
   assert.match(actionStyles, /\.label\s*\{[^}]*font-size: var\(--bf-type-label-md-font-size\)/);
   assert.match(actionStyles, /\.label\s*\{[^}]*font-weight: var\(--bf-type-label-md-font-weight\)/);

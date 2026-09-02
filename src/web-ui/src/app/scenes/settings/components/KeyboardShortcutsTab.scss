@@ -100,82 +100,10 @@
     opacity: 0.95;
   }
 
-  &__keybadge--readonly {
-    cursor: default;
-    user-select: none;
-
-    &:hover {
-      border-color: var(--bf-color-border-default);
-      color: var(--bf-color-content-secondary);
-    }
-  }
-
-  &__keybadge {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--bf-color-border-default);
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
-    cursor: pointer;
-    white-space: nowrap;
-    min-width: 60px;
-    justify-content: center;
-
-    &:hover {
-      border-color: var(--bf-color-accent-default);
-      color: var(--bf-color-content-primary);
-    }
-
-    &--recording {
-      border-color: var(--bf-color-accent-default);
-      background: var(--bf-color-action-secondary-background);
-      color: var(--bf-color-accent-default);
-    }
-
-    &--conflict {
-      border-color: var(--bf-color-status-warning-content);
-      color: var(--bf-color-status-warning-content);
-    }
-  }
-
-  &__revert-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    border: 1px solid var(--bf-color-border-default);
-    background: transparent;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-md-font-size);
-    cursor: pointer;
-    padding: 0;
-
-    &:hover {
-      color: var(--bf-color-content-primary);
-      border-color: var(--bf-color-content-secondary);
-    }
-  }
-
   &__empty {
     padding: 32px;
     text-align: center;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-body-md-font-size);
-  }
-}
-
-
-/* Page subtitle: keep primary title dominant */
-.kb-shortcuts-page-header.bitfun-config-page-header {
-  .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
-    opacity: 0.88;
   }
 }

@@ -3,9 +3,11 @@
  * A4-like reading width with centered content.
  */
 @use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
+@use '../../markdown-typography' as markdownTypography;
 
 .virtual-item-wrapper {
   @include flatMarkdownSurfaces.apply;
+  @include markdownTypography.apply;
 
   width: 100%;
   /*

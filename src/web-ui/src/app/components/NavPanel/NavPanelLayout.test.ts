@@ -10,6 +10,14 @@ function readNavPanelStylesheet(): string {
   return stylesheet.replace(/\r\n/g, '\n');
 }
 
+function readNavPanelTypographyStylesheet(): string {
+  const stylesheet = readFileSync(
+    fileURLToPath(new URL('../../styles/nav-panel-font-scope.scss', import.meta.url)),
+    'utf8',
+  );
+  return stylesheet.replace(/\r\n/g, '\n');
+}
+
 function extractBlock(stylesheet: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesheet.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`));
@@ -68,6 +76,18 @@ describe('NavPanel layout styles', () => {
       expect(block).toContain('width: 20px;');
       expect(block).toContain('height: 20px;');
     }
+  });
+
+  it('uses the selected label weight for active navigation rows', () => {
+    const stylesheet = readNavPanelTypographyStylesheet();
+    const activeRowMixin = extractBlock(stylesheet, '@mixin nav-panel-text-row-active');
+
+    expect(activeRowMixin).toContain(
+      'font-weight: var(--bf-type-label-selected-font-weight);',
+    );
+    expect(activeRowMixin).not.toContain(
+      'font-weight: var(--bf-type-label-sm-font-weight);',
+    );
   });
 
   it('centers footer actions with symmetric vertical padding', () => {

@@ -38,9 +38,13 @@
       "borderFocus": { "$type": "color", "$value": "{ref.color.blue.700}" }
     },
     "control": {
+      "highlight": {
+        "background": { "$type": "color", "$value": "{ref.color.blue.700}" },
+        "content": { "$type": "color", "$value": "{color.content.onDark}" }
+      },
       "switch": {
         "track": { "$type": "color", "$value": "{ref.color.gray.650}" },
-        "trackChecked": { "$type": "color", "$value": "{ref.color.blue.700}" },
+        "trackChecked": { "$type": "color", "$value": "{color.control.highlight.background}" },
         "thumb": { "$type": "color", "$value": "{ref.color.gray.0}" }
       }
     },
@@ -49,6 +53,7 @@
     },
     "status": {
       "warning": {
+        "emphasis": { "$type": "color", "$value": "{ref.color.amber.800}" },
         "surface": { "$type": "color", "$value": "rgba(154, 101, 31, 0.04)" }
       }
     }

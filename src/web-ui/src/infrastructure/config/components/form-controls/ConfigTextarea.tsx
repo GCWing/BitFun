@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Textarea } from '@bitfun/ui';
 
@@ -41,9 +41,12 @@ export const ConfigTextarea = forwardRef<HTMLTextAreaElement, ConfigTextareaProp
   maxLength,
   value = '',
   onChange,
+  id,
   ...props
 }, ref) => {
   const { t } = useTranslation('common');
+  const generatedId = useId();
+  const controlId = id ?? `${generatedId}-config-textarea`;
   
   const textareaStyle = {
     minHeight: `${minHeight}px`,
@@ -56,7 +59,9 @@ export const ConfigTextarea = forwardRef<HTMLTextAreaElement, ConfigTextareaProp
   const textareaElement = (
     <Textarea
       ref={ref}
+      id={controlId}
       label={labelIcon ? undefined : label} 
+      required={required || undefined}
       invalid={Boolean(error)}
       errorMessage={error}
       hint={hint}
@@ -74,9 +79,21 @@ export const ConfigTextarea = forwardRef<HTMLTextAreaElement, ConfigTextareaProp
   return (
     <div className="config-form-group">
       {label && labelIcon && (
-        <label className={`config-form-label ${required ? 'required' : ''}`}>
+        <label className="config-form-label" htmlFor={controlId}>
           {labelIcon}
-          {label}
+          <span className="config-form-label__text">
+            {label}
+            {required ? (
+              <span
+                aria-hidden="true"
+                className="config-form-label__required"
+                data-bf-component="config"
+                data-bf-part="required"
+              >
+                *
+              </span>
+            ) : null}
+          </span>
         </label>
       )}
       {textareaElement}

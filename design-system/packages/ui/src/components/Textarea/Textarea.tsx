@@ -11,6 +11,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { useFieldSurface } from "../../internal/fieldSurface";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Textarea.module.css";
 
@@ -57,6 +58,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   ...props
 }, ref) {
   const generatedId = useId();
+  const fieldSurface = useFieldSurface();
   const resolvedId = id ?? `${generatedId}-textarea`;
   const supportId = `${generatedId}-support`;
   const compositionActiveRef = useRef(false);
@@ -90,13 +92,23 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       className={classNames(styles.root, className)}
       data-auto-resize={autoResize ? "true" : "false"}
       data-bf-component="textarea"
+      data-field-surface={fieldSurface}
       data-font={font}
       data-invalid={resolvedInvalid ? "true" : "false"}
       data-layout={layout}
       data-resize={resize}
       data-variant={variant}
     >
-      {label && <label className={styles.label} data-bf-part="label" htmlFor={resolvedId}>{label}{required && <span className={styles.required}>*</span>}</label>}
+      {label && (
+        <label className={styles.label} data-bf-part="label" htmlFor={resolvedId}>
+          {label}
+          {required && (
+            <span aria-hidden="true" className={styles.required} data-bf-part="required">
+              *
+            </span>
+          )}
+        </label>
+      )}
       <textarea
         {...props}
         aria-describedby={hasSupport ? supportId : ariaDescribedBy}

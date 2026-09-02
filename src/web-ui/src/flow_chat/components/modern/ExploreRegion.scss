@@ -25,17 +25,12 @@
   .explore-region__header {
     display: flex;
     align-items: center;
-    width: 100%;
     gap: var(--bf-control-flow-chat-inline-gap);
     padding: 0;
-    border: 0;
-    appearance: none;
     background: transparent;
     color: var(--bf-color-content-muted);
-    font: inherit;
     font-size: var(--bf-type-flow-control-font-size);
     line-height: var(--bf-type-flow-support-line-height);
-    text-align: left;
     cursor: pointer;
     user-select: none;
     border-radius: var(--bf-radius-sm);

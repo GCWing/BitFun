@@ -39,12 +39,6 @@
   line-height: var(--bf-type-label-md-line-height);
 }
 
-.form-label.required::after {
-  content: '*';
-  color: var(--bf-color-status-danger-content);
-  margin-left: var(--bf-space-1);
-}
-
 .form-hint {
   font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);

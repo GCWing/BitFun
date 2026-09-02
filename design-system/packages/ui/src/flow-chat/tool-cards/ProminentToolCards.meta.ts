@@ -7,11 +7,12 @@ const prominentTokens = [
   "color.surface.canvas",
   "color.surface.raised",
   "color.border.default",
+  "color.codeChange.added",
+  "color.codeChange.removed",
   "color.status.danger.content",
   "color.status.success.content",
   "color.status.warning.content",
-  "font.family.control",
-  "font.family.mono",
+  "font.family.sans",
   "font.size.sm",
   "font.weight.medium",
   "font.weight.regular",
@@ -48,7 +49,7 @@ export const fileDiffToolCardMeta = {
     { name: "preview", type: "ReactNode" },
   ],
   states: ["default", "hover", "loading", "expanded", "error"],
-  tokens: prominentTokens,
+  tokens: [...prominentTokens, "font.family.mono"],
 } as const satisfies ComponentMeta;
 
 export const gitToolCardMeta = {

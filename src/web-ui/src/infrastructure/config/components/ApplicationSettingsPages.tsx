@@ -479,28 +479,29 @@ function LoggingSection() {
       <div className="bitfun-logging-config__content">
         <ConfigMessage message={message} />
 
+        {runtimeInfo?.previousUnexpectedExit?.detected && (
+          <Alert
+            tone={runtimeInfo.previousUnexpectedExit.category === 'crash' ? 'warning' : 'info'}
+            message={t(
+              runtimeInfo.previousUnexpectedExit.category === 'crash'
+                ? 'logging.previousCrash.title'
+                : 'logging.previousUncleanShutdown.title'
+            )}
+            description={t(
+              runtimeInfo.previousUnexpectedExit.category === 'crash'
+                ? 'logging.previousCrash.description'
+                : 'logging.previousUncleanShutdown.description',
+              {
+                path: runtimeInfo.previousUnexpectedExit.sessionLogDir || '-',
+              }
+            )}
+          />
+        )}
+
         <ConfigPageSection
           title={t('logging.sections.logging')}
           description={t('logging.sections.loggingHint')}
         >
-          {runtimeInfo?.previousUnexpectedExit?.detected && (
-            <Alert
-              tone={runtimeInfo.previousUnexpectedExit.category === 'crash' ? 'warning' : 'info'}
-              message={t(
-                runtimeInfo.previousUnexpectedExit.category === 'crash'
-                  ? 'logging.previousCrash.title'
-                  : 'logging.previousUncleanShutdown.title'
-              )}
-              description={t(
-                runtimeInfo.previousUnexpectedExit.category === 'crash'
-                  ? 'logging.previousCrash.description'
-                  : 'logging.previousUncleanShutdown.description',
-                {
-                  path: runtimeInfo.previousUnexpectedExit.sessionLogDir || '-',
-                }
-              )}
-            />
-          )}
           <ConfigPageRow
             label={t('logging.sections.level')}
             description={t('logging.level.description')}

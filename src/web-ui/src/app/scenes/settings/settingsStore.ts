@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { InteractionMotion } from '@/shared/utils/motionPreference';
 import { DEFAULT_SETTINGS_PAGE_ID } from './settingsRegistry';
+import { resolveSettingsDestination } from './settingsDestination';
 import type {
   SettingsDestination,
   SettingsPageId,
@@ -30,14 +31,17 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   pageTransitionSequence: 0,
   searchQuery: '',
 
-  openDestination: (destination, motion = 'instant') => set((state) => ({
-    activePageId: destination.pageId,
-    activeViewId: destination.viewId ?? null,
-    navigationRequestId: state.navigationRequestId + 1,
-    pageTransitionTarget: destination.pageId,
-    pageTransitionMotion: motion,
-    pageTransitionSequence: state.pageTransitionSequence + 1,
-  })),
+  openDestination: (destination, motion = 'instant') => set((state) => {
+    const resolvedDestination = resolveSettingsDestination(destination.pageId);
+    return {
+      activePageId: resolvedDestination.pageId,
+      activeViewId: destination.viewId ?? resolvedDestination.viewId ?? null,
+      navigationRequestId: state.navigationRequestId + 1,
+      pageTransitionTarget: resolvedDestination.pageId,
+      pageTransitionMotion: motion,
+      pageTransitionSequence: state.pageTransitionSequence + 1,
+    };
+  }),
   openPage: (pageId, motion = 'instant') => set((state) => ({
     activePageId: pageId,
     activeViewId: null,

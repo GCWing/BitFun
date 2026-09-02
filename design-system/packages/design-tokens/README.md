@@ -57,4 +57,5 @@ When an existing composition intentionally overrides only line height or
 tracking, use `type.modifier.leading.*` or `type.modifier.tracking.*` on top of
 its established role. `type.overline.*` owns extra-small uppercase annotations;
 these modifiers keep product styles semantic without changing their resolved
-metrics during migration.
+metrics during migration. `type.modifier.leading.support` provides the compact
+1.45 supporting-text rhythm used when an 11px role must align to a 16px line.

@@ -8,8 +8,6 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -38,6 +36,10 @@
     background: var(--bf-color-action-neutral-surface);
     font-size: var(--bf-type-body-sm-font-size);
     white-space: nowrap;
+  }
+
+  .warningStatusIcon {
+    color: var(--bf-color-status-warning-emphasis);
   }
 
   .preview {
@@ -69,6 +71,12 @@
     align-items: center;
     gap: var(--bf-space-2);
     font-weight: var(--bf-type-label-selected-font-weight);
+  }
+
+  .errorTitle > :where(svg, img) {
+    flex: 0 0 auto;
+    inline-size: var(--bf-font-size-xl);
+    block-size: var(--bf-font-size-xl);
   }
 
   .errorMessage {

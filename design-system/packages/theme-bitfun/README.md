@@ -33,3 +33,4 @@ The same data is available as `@bitfun/theme-bitfun/reference-colors.json`. Refe
 - `color.surface.tertiary` is an opaque low-emphasis fill for persistent grouped content such as cards and field groups.
 - `color.surface.subtle` is a translucent local tint for transient feedback and small inset details. It must not define a persistent application plane.
 - `color.selection.surface` owns persistent neutral selection. Hover and pressed colors remain action feedback and are not substitutes for selection.
+- `color.codeChange.added` and `color.codeChange.removed` own code-line and compact diff-count accents; success/danger status and Git lifecycle colors remain separate semantics.

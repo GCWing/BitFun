@@ -32,14 +32,26 @@
   min-width: 0;
 }
 
+.bitfun-config-page-header__title {
+  color: var(--bf-color-content-primary);
+  font-size: var(--bf-type-heading-page-font-size);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  line-height: var(--bf-type-heading-page-line-height);
+  letter-spacing: var(--bf-type-heading-page-letter-spacing);
+  overflow-wrap: break-word;
+}
+
 .bitfun-config-page-header__subtitle {
   display: block;
   margin: 0;
   font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-body-lg-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-meta-line-height);
+  line-height: var(--bf-type-body-lg-line-height);
+  letter-spacing: var(--bf-type-body-lg-letter-spacing);
   font-family:var(--bf-type-body-sm-font-family);
   max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 .bitfun-config-page-header__extra {
@@ -68,10 +80,6 @@
 @media (max-width: 600px) {
   .bitfun-config-page-header__left {
     gap: var(--bf-space-3);
-  }
-
-  .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-type-label-sm-font-size);
   }
 }
 
@@ -120,11 +128,7 @@
 
   .bitfun-config-page-header__subtitle {
     margin-top: var(--bf-space-1);
-    font-size: var(--bf-type-label-md-font-size);
     max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .bitfun-config-page-header__extra {

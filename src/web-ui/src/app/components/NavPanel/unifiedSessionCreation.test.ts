@@ -36,21 +36,14 @@ describe('unified project session creation', () => {
     expect(helloLauncher).toContain('data-testid="hello-realtime-voice-mode-switch"');
     expect(helloLauncher).toContain('onClick={isVoiceMode ? endVoiceCall : startVoiceCall}');
     expect(helloLauncher).toContain('<RealtimeVoiceCallPanel />');
+    expect(helloLauncher).toContain('<LauncherButton');
+    expect(helloLauncher).toContain('leadingIcon={<Icon name="mic" />}');
     expect(voicePanel).not.toContain('createPortal');
-    expect(helloLauncherStyles).toContain('$button-width: 104px;');
-    expect(helloLauncherStyles).toContain('$button-height: 40px;');
     expect(helloLauncherStyles).toContain('right: 0;');
     expect(helloLauncherStyles).toContain('bottom: 0;');
     expect(helloLauncherStyles).toContain(
       'z-index: calc(var(--bf-layer-overlay) + 1);',
     );
-    expect(helloLauncherStyles).toContain('font-size: var(--bf-type-body-sm-font-size);');
-    expect(helloLauncherStyles).toContain(
-      'font-weight: var(--bf-type-label-selected-font-weight);',
-    );
-    expect(helloLauncherStyles).toContain('font-synthesis: none;');
-    expect(helloLauncherStyles).toContain('opacity: 0.22;');
-    expect(helloLauncherStyles).toContain('border-radius: var(--bf-radius-lg) 0 0 0;');
     expect(helloLauncherStyles).toContain('.bitfun-fmc__mode-switch');
     expect(mainNav).not.toContain('nav-new-code-session-btn');
     expect(mainNav).not.toContain('nav-new-cowork-session-btn');

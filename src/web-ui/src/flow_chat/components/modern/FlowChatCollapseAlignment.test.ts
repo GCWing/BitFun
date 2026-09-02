@@ -48,11 +48,18 @@ describe('FlowChat collapse spacing', () => {
     );
   });
 
-  it('uses the thinking-style icon swap for the explore disclosure without a hover surface', () => {
+  it('uses the thinking-style non-button disclosure and icon swap for explore', () => {
     const renderer = readSource('./ExploreGroupRenderer.tsx');
     const exploreStyles = readSource('./ExploreRegion.scss');
 
-    expect(renderer).toContain('aria-expanded={isExpanded}');
+    expect(renderer).toMatch(
+      /<div\s+data-bf-component="explore-group"\s+data-bf-part="header"[\s\S]*?data-testid="chat-explore-group-toggle"/,
+    );
+    expect(renderer).not.toMatch(
+      /<button[\s\S]*?data-testid="chat-explore-group-toggle"/,
+    );
+    expect(renderer).not.toContain('aria-expanded={isExpanded}');
+    expect(renderer).not.toContain('data-motion="none"');
     expect(renderer).toContain('name="search" size="sm" className="explore-region__leading-icon--default"');
     expect(renderer).toContain('name="chevron-right" size="sm" className="explore-region__leading-icon--collapsed-hover"');
     expect(renderer).toContain('name="chevron-down" size="sm" className="explore-region__leading-icon--expanded"');

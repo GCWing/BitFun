@@ -17,7 +17,7 @@ export const pageHeaderMeta = {
   ],
   states: ["default"],
   tokens: [
-    "color.accent.default",
+    "color.content.requiredIndicator",
     "color.content.primary",
     "color.content.muted",
     "type.heading.page.fontSize",

@@ -66,6 +66,9 @@ The Web UI's legacy Select implementation is retired. Like retired Button and
 Switch overrides, legacy `components.select` Appearance rules are ignored at
 the existing read-only migration boundary; original packages are not rewritten.
 Selection visuals now come from the public field/menu semantic tokens.
+`FieldGroup fieldSurface="ambient"` keeps text and picker field borders while
+letting their shells reuse the grouped surface. The default field surface stays
+theme-owned, and portalled menus remain on the opaque panel surface.
 
 `Menu` remains composable inline anatomy. `MenuPopover` composes it into a
 controlled anchored or coordinate popup. Pass `items`, `open`, `onClose` and

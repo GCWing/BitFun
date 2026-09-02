@@ -9,7 +9,13 @@ vi.mock('./settingsRegistry', () => {
     'application.general': {
       id: 'application.general',
       categoryId: 'application',
-      component: ({ viewId }: { viewId?: string }) => <div data-testid="general-page" data-view={viewId} />,
+      component: ({ viewId, isActive }: { viewId?: string; isActive?: boolean }) => (
+        <div
+          data-testid="general-page"
+          data-view={viewId}
+          data-settings-scene-active={isActive ? 'true' : 'false'}
+        />
+      ),
     },
     'application.appearance': {
       id: 'application.appearance',
@@ -25,6 +31,7 @@ vi.mock('./settingsRegistry', () => {
   return {
     DEFAULT_SETTINGS_PAGE_ID: 'application.general',
     getSettingsPageManifest: (pageId: keyof typeof pages) => pages[pageId] ?? pages['application.general'],
+    isSettingsPageId: (value: string) => value in pages,
     isSettingsPageReady: () => true,
     preloadSettingsPage: vi.fn(async () => undefined),
   };
@@ -77,5 +84,17 @@ describe('SettingsScene canonical page routing', () => {
     await act(async () => useSettingsStore.getState().openPage('application.appearance'));
     expect(container.querySelector('[data-testid="appearance-page"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="general-page"]')).toBeNull();
+  });
+
+  it('passes scene activation changes to the active settings page', async () => {
+    await act(async () => root.render(<SettingsScene isActive={false} />));
+    expect(container.querySelector('[data-testid="general-page"]')?.getAttribute(
+      'data-settings-scene-active',
+    )).toBe('false');
+
+    await act(async () => root.render(<SettingsScene isActive />));
+    expect(container.querySelector('[data-testid="general-page"]')?.getAttribute(
+      'data-settings-scene-active',
+    )).toBe('true');
   });
 });

@@ -49,7 +49,7 @@
 
   &__registry-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 92px 82px 120px;
+    grid-template-columns: minmax(0, 1fr) 82px 120px;
     gap: var(--bf-space-2);
     align-items: center;
     min-height: 56px;
@@ -63,6 +63,10 @@
 
     &:hover {
       background: var(--bf-color-surface-subtle);
+    }
+
+    &--remote {
+      grid-template-columns: minmax(0, 1fr) 92px 82px 120px;
     }
   }
 
@@ -124,100 +128,12 @@
     justify-content: flex-start;
   }
 
-  &__capability {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 22px;
-    padding: 0 6px;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: 999px;
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    white-space: nowrap;
-
-    &.is-ok {
-      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
-      color: var(--bf-color-status-success-content);
-    }
-
-    &.is-error {
-      border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
-      color: var(--bf-color-status-danger-content);
-    }
-
-    &.is-muted {
-      color: var(--bf-color-content-muted);
-    }
-  }
-
   &__status-cell,
   &__confirmation-cell {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     min-width: 0;
-  }
-
-  &__status {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    min-height: 24px;
-    min-width: 68px;
-    padding: 0 var(--bf-space-2);
-    border: 1px solid transparent;
-    border-radius: 999px;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    white-space: nowrap;
-
-    &.is-enabled {
-      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
-      color: var(--bf-color-status-success-content);
-    }
-
-    &.is-ready {
-      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
-      color: var(--bf-color-status-success-content);
-    }
-
-    &.is-partial {
-      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, transparent);
-      color: var(--bf-color-status-warning-content);
-    }
-
-    &.is-not_installed {
-      border-color: var(--bf-color-border-subtle);
-      background: var(--bf-color-surface-subtle);
-      color: var(--bf-color-content-muted);
-    }
-
-    &.is-invalid {
-      border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
-      color: var(--bf-color-status-danger-content);
-    }
-
-    &.is-checking {
-      border-color: var(--bf-color-border-subtle);
-      background: var(--bf-color-surface-subtle);
-      color: var(--bf-color-content-secondary);
-
-      svg {
-        animation: bitfun-acp-spin 0.9s linear infinite;
-      }
-    }
   }
 
   &__confirmation-select {
@@ -303,31 +219,6 @@
     margin-top: var(--bf-space-1);
   }
 
-  &__summary-pill {
-    display: inline-flex;
-    align-items: center;
-    min-height: 22px;
-    padding: 0 8px;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: 999px;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    white-space: nowrap;
-
-    &.is-success {
-      border-color: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
-      color: var(--bf-color-status-success-content);
-    }
-
-    &.is-warning {
-      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 24%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
-      color: var(--bf-color-status-warning-content);
-    }
-  }
-
   &__remote-agent-list {
     display: flex;
     flex-direction: column;
@@ -354,18 +245,5 @@
     &__confirmation-select {
       width: 150px;
     }
-  }
-}
-
-@keyframes bitfun-acp-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bitfun-acp-agents__status.is-checking svg {
-    animation: none;
-    transform: none;
   }
 }

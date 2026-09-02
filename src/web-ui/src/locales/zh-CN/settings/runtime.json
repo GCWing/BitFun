@@ -19,7 +19,6 @@
       "deleteConfirmBody": "从本机删除该已导入的宠物形象？此操作不可恢复。",
       "deleteSuccess": "已删除导入的形象",
       "deleteFailed": "删除导入形象失败",
-      "refresh": "刷新形象列表",
       "presets": {
         "blueGolden": {
           "name": "困困"

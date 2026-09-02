@@ -134,16 +134,15 @@
       "label": "Input device",
       "description": "Uses the system default unless you choose a device for this computer.",
       "systemDefault": "System default",
-      "unnamed": "Microphone {{index}}",
-      "refresh": "Refresh microphones"
+      "unnamed": "Microphone {{index}}"
     },
     "recognition": {
       "label": "Test voice input",
       "description": "Say a short phrase to check the microphone and local recognition together.",
       "start": "Start test",
-      "finish": "Finish and transcribe",
-      "modelRequired": "Install a local model before testing recognition.",
-      "cloudUnavailable": "Cloud transcription is not connected yet. Switch to local processing first.",
+      "finish": "Stop recording",
+      "preparing": "Preparing",
+      "transcribing": "Recognizing",
       "timing": "Inference took {{duration}} ms"
     },
     "messages": {
@@ -154,35 +153,48 @@
   },
   "status": {
     "label": "Status",
-    "manageModels": "Local models",
+    "manageModels": "Manage models",
     "unknownModel": "Local speech model",
-    "useLocal": "Switch to local processing",
-    "downloadAndEnable": "Download and enable",
-    "repair": "Check and repair",
+    "useLocal": "Switch to local recognition",
+    "downloadModel": "Download model",
+    "viewDetails": "View details",
+    "repair": "Review and repair",
     "ready": {
       "badge": "Ready",
       "title": "Voice input is ready",
-      "description": "Audio is processed by {{model}} on this device and is not uploaded."
+      "description": "{{model}} processes speech on this device. Audio is not uploaded.",
+      "summary": "Downloaded model: <model>{{model}}</model>"
     },
     "setup": {
-      "badge": "Setup needed",
-      "title": "Download local recognition resources",
-      "description": "Download {{size}} for {{model}} to use voice input in the composer."
+      "badge": "Not downloaded",
+      "title": "Voice model not downloaded",
+      "description": "Download it to use voice input. It uses about {{size}}.",
+      "summary": "Voice model <warning>not downloaded</warning> — download it to use voice input."
     },
     "downloading": {
-      "badge": "Preparing",
-      "title": "Preparing voice input",
-      "description": "Downloading or verifying {{model}}."
+      "badge": "Downloading",
+      "title": "Downloading voice model",
+      "description": "Voice input will be available when {{model}} finishes downloading."
+    },
+    "verifying": {
+      "badge": "Verifying",
+      "title": "Verifying voice model",
+      "description": "Checking that {{model}} is complete and ready to use."
+    },
+    "deleting": {
+      "badge": "Removing",
+      "title": "Removing voice model",
+      "description": "Removing {{model}} from this device."
     },
     "unavailable": {
       "badge": "Unavailable",
-      "title": "Cloud transcription is currently unavailable",
-      "description": "Your cloud model configuration is preserved, but this version cannot transcribe with it yet. Switch back to local processing."
+      "title": "Cloud voice input is unavailable",
+      "description": "Your cloud configuration is preserved. Switch to local recognition to use voice input."
     },
     "error": {
-      "badge": "Needs attention",
-      "title": "The local speech model needs repair",
-      "description": "Download or verify the current model again."
+      "badge": "Needs repair",
+      "title": "Voice model unavailable",
+      "description": "{{model}} cannot be used. Review it and download it again."
     }
   },
   "localModels": {

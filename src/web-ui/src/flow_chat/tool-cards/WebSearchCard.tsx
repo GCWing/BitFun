@@ -93,15 +93,15 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
           resultsText = ` (${t('toolCards.webSearch.summaryAvailable')})`;
         }
       }
-      return `${t('toolCards.webSearch.searchTitle', { term: searchTerm })}${resultsText}`;
+      return `${searchTerm}${resultsText}`;
     }
     if (status === 'running' || status === 'streaming' || status === 'preparing') {
-      return t('toolCards.webSearch.searching', { term: searchTerm });
+      return `${searchTerm}...`;
     }
     if (status === 'pending') {
-      return t('toolCards.webSearch.preparingSearch', { term: searchTerm });
+      return searchTerm;
     }
-    return t('toolCards.webSearch.searchTitle', { term: searchTerm });
+    return searchTerm;
   };
 
   if (status === 'error') {
@@ -111,6 +111,7 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
   return (
     <div ref={cardRootRef} data-bf-adapter="web-search" data-tool-card-id={toolId ?? ''}>
       <WebSearchToolCard
+        action={`${t('toolCards.webSearch.action')}:`}
         status={status}
         isExpanded={isExpanded}
         onToggle={isExpandable ? handleClick : undefined}

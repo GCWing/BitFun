@@ -108,6 +108,20 @@ test("reference colors retain the global-search action identity anchors", () => 
   assert.equal(valueAt("purple", 450), "#9e54ff");
 });
 
+test("code-change semantics retain the requested addition and removal accents", () => {
+  for (const mode of themeModes) {
+    assert.equal(themes[mode]["color.codeChange.added"], "#1aa73e");
+    assert.equal(themes[mode]["color.codeChange.removed"], "#ec221f");
+  }
+});
+
+test("warning emphasis retains the product orange anchor in default themes", () => {
+  assert.equal(themes.light["color.status.warning.emphasis"], "#ff8c00");
+  assert.equal(themes.dark["color.status.warning.emphasis"], "#ff8c00");
+  assert.equal(themes.highContrastLight["color.status.warning.emphasis"], "#75501d");
+  assert.equal(themes.highContrastDark["color.status.warning.emphasis"], "#ffcc00");
+});
+
 test("semantic theme documents route solid colors through reference scales", async () => {
   for (const fileName of [
     "light.tokens.json",
@@ -197,6 +211,19 @@ test("primary text and primary action pairs meet normal text contrast", async ()
         backdrop,
       ) >= 4.5,
     );
+    assert.ok(
+      contrastRatio(
+        variant["color.control.highlight.background"].value,
+        variant["color.control.highlight.content"].value,
+        backdrop,
+      ) >= 4.5,
+      `${mode} control highlight contrast fell below 4.5:1`,
+    );
+    assert.equal(
+      variant["color.content.requiredIndicator"].value,
+      variant["color.control.highlight.background"].value,
+      `${mode} required indicator must follow the shared highlight`,
+    );
     for (const status of ["info", "success", "warning", "danger"]) {
       const minimumContrast = 4.5;
       assert.ok(
@@ -213,11 +240,15 @@ test("primary text and primary action pairs meet normal text contrast", async ()
 
 test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.surface.canvas"], "#fdfdfd");
-  assert.equal(themes.light["color.content.primary"], "#1c1c1f");
+  assert.equal(themes.light["color.content.primary"], "rgba(0, 0, 0, 0.80)");
+  assert.equal(themes.light["color.content.secondary"], "rgba(0, 0, 0, 0.60)");
+  assert.equal(themes.light["color.content.disabled"], "rgba(0, 0, 0, 0.30)");
   assert.equal(themes.light["color.action.primary.background"], "#101a27");
   assert.equal(themes.light["color.action.neutral.border"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.action.neutral.content"], "rgba(0, 0, 0, 0.80)");
   assert.equal(themes.light["color.action.neutral.contentDisabled"], "rgba(0, 0, 0, 0.30)");
+  assert.equal(themes.light["color.action.secondary.content"], "rgba(0, 0, 0, 0.80)");
+  assert.equal(themes.light["color.action.quiet.content"], "rgba(0, 0, 0, 0.60)");
   assert.equal(themes.light["color.action.neutral.surface"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.action.neutral.surfaceHover"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.action.neutral.surfacePressed"], "rgba(0, 0, 0, 0.10)");
@@ -227,8 +258,23 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.scrollbar.thumbHover"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.05)");
+  assert.equal(themes.light["color.control.highlight.background"], "#059cb0");
+  assert.equal(themes.light["color.control.highlight.content"], "#000000");
+  assert.equal(themes.light["color.content.requiredIndicator"], "#059cb0");
+  assert.equal(themes.light["color.control.launcher.background"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(
+    themes.light["color.control.launcher.backgroundHover"],
+    "color-mix(in srgb, #059cb0 20%, transparent)",
+  );
+  assert.equal(
+    themes.light["color.control.launcher.backgroundPressed"],
+    "color-mix(in srgb, #059cb0 30%, transparent)",
+  );
+  assert.equal(themes.light["color.control.launcher.content"], "rgba(0, 0, 0, 0.80)");
+  assert.equal(themes.light["color.control.launcher.contentHover"], "#059cb0");
+  assert.equal(themes.light["color.control.launcher.contentPressed"], "#059cb0");
   assert.equal(themes.light["color.control.switch.track"], "#dddddd");
-  assert.equal(themes.light["color.control.switch.trackChecked"], "#34c78c");
+  assert.equal(themes.light["color.control.switch.trackChecked"], "#059cb0");
   assert.equal(themes.light["color.control.switch.thumb"], "#ffffff");
   assert.equal(themes.light["color.identity.harness.minimal"], "#b434ef");
   assert.equal(themes.light["color.identity.harness.standard"], "#1aa73e");
@@ -251,6 +297,21 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.dark["color.keyHint.background"], "rgba(255, 255, 255, 0.1)");
   assert.equal(themes.dark["color.action.primary.background"], "rgba(255, 255, 255, 0.16)");
   assert.equal(themes.dark["color.action.neutral.surface"], "rgba(255, 255, 255, 0.1)");
+  assert.equal(themes.dark["color.control.highlight.background"], "#059cb0");
+  assert.equal(themes.dark["color.control.highlight.content"], "#000000");
+  assert.equal(themes.dark["color.content.requiredIndicator"], "#059cb0");
+  assert.equal(themes.dark["color.control.launcher.background"], "rgba(255, 255, 255, 0.15)");
+  assert.equal(
+    themes.dark["color.control.launcher.backgroundHover"],
+    "color-mix(in srgb, #059cb0 20%, transparent)",
+  );
+  assert.equal(
+    themes.dark["color.control.launcher.backgroundPressed"],
+    "color-mix(in srgb, #059cb0 30%, transparent)",
+  );
+  assert.equal(themes.dark["color.control.launcher.contentHover"], "#059cb0");
+  assert.equal(themes.dark["color.control.launcher.contentPressed"], "#059cb0");
+  assert.equal(themes.dark["color.control.switch.trackChecked"], "#059cb0");
   assert.equal(themes.dark["color.identity.harness.minimal"], "#b434ef");
   assert.equal(themes.dark["color.identity.harness.standard"], "#1aa73e");
   assert.equal(themes.dark["color.identity.harness.ultimate"], "#ff8c00");

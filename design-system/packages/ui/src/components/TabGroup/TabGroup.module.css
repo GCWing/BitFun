@@ -18,7 +18,7 @@
     --_tab-background-hover: var(--bf-color-action-neutral-surface);
     --_tab-background-active: var(--bf-color-action-neutral-surface-pressed);
     --_tab-border: var(--bf-color-action-neutral-border);
-    --_tab-content: var(--bf-color-action-neutral-content);
+    --_tab-content: var(--bf-color-content-primary);
 
     display: inline-flex;
     align-items: center;

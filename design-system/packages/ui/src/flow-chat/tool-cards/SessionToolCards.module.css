@@ -26,10 +26,6 @@
     overflow-wrap: anywhere;
   }
 
-  .field[data-monospace="true"] .fieldValue {
-    font-family:var(--bf-type-code-md-font-family);
-  }
-
   .sessionList {
     display: flex;
     flex-direction: column;
@@ -51,7 +47,6 @@
   .sessionId {
     overflow-wrap: anywhere;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-code-md-font-family);
   }
 
   .sessionName {
@@ -84,7 +79,7 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-raised);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
+    font-family: inherit;
     font-size: var(--bf-type-body-sm-font-size);
     line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;

@@ -4,8 +4,6 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -50,11 +48,18 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-canvas);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
     font-size: var(--bf-type-body-sm-font-size);
     line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+
+  .outputBlock {
+    font-family: inherit;
+  }
+
+  .textPreview {
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   .outputGroup {
@@ -118,10 +123,6 @@
     white-space: nowrap;
   }
 
-  .footerItem[data-monospace="true"] .footerValue {
-    font-family:var(--bf-type-code-md-font-family);
-  }
-
   .footerItem[data-tone="success"] .footerValue {
     color: var(--bf-color-status-success-content);
   }
@@ -141,7 +142,6 @@
   .errorMeta {
     margin-block-start: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-type-code-md-font-family);
     font-size: var(--bf-type-body-sm-font-size);
   }
 
@@ -150,8 +150,6 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -191,7 +189,6 @@
     margin: 0;
     padding-inline-start: var(--bf-space-4);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
     font-size: var(--bf-type-body-sm-font-size);
     line-height: var(--bf-type-body-md-line-height);
   }
@@ -220,10 +217,6 @@
   .fieldValue {
     min-inline-size: 0;
     overflow-wrap: anywhere;
-  }
-
-  .field[data-monospace="true"] .fieldValue {
-    font-family:var(--bf-type-code-md-font-family);
   }
 
   .agentHeader {
@@ -276,13 +269,11 @@
   }
 
   .agentName {
-    font-size: var(--bf-type-body-sm-font-size);
     font-weight: var(--bf-type-label-lg-font-weight);
   }
 
   .agentStatus {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .agentStatus[data-tone="success"] {

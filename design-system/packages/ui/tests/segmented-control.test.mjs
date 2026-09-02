@@ -62,12 +62,14 @@ test("SegmentedControl exposes stable layout and visual variants", () => {
       distribution: "fill",
       options,
       size: "md",
+      tone: "neutral",
       variant: "pills",
     }),
   );
 
   assert.match(markup, /data-distribution="fill"/);
   assert.match(markup, /data-size="md"/);
+  assert.match(markup, /data-tone="neutral"/);
   assert.match(markup, /data-variant="pills"/);
 });
 
@@ -80,12 +82,17 @@ test("SegmentedControl styles bind pill geometry and shared action tokens", asyn
   assert.match(styles, /--bf-control-segmented-control-pill-segment-height/);
   assert.match(styles, /--bf-control-segmented-control-segment-padding-inline/);
   assert.match(styles, /--bf-control-segmented-control-icon-size/);
+  assert.match(styles, /--bf-control-height-md/);
+  assert.match(styles, /--bf-radius-pill/);
+  assert.match(styles, /--bf-space-4/);
   assert.match(styles, /--bf-type-meta-font-size/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-color-surface-raised/);
   assert.match(styles, /--bf-color-action-neutral-surface-hover/);
+  assert.match(styles, /--bf-color-action-neutral-surface-pressed/);
   assert.match(styles, /--bf-color-action-neutral-content-disabled/);
   assert.match(styles, /--bf-color-focus-ring/);
   assert.match(styles, /data-distribution=fill/);
+  assert.match(styles, /data-tone=neutral/);
   assert.match(styles, /data-variant=pills/);
 });

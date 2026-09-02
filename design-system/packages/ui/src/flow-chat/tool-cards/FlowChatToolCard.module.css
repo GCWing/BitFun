@@ -1,6 +1,10 @@
 @layer bf.components {
   .prominentRoot,
   .ambientRoot {
+    --_tool-card-font-family: var(--bf-type-body-sm-font-family);
+    --_tool-card-font-size: var(--bf-type-body-sm-font-size);
+    --_tool-card-title-font-weight: var(--bf-type-label-lg-font-weight);
+    --_tool-card-content-font-weight: var(--bf-type-body-sm-font-weight);
     --_tool-card-action-size: var(--bf-space-6);
     --_flow-chat-tool-card-icon-size: var(--bf-font-size-xl);
     --_tool-card-transition: var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -11,7 +15,10 @@
     min-inline-size: 0;
     flex-direction: column;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-body-md-font-family);
+    font-family: var(--_tool-card-font-family);
+    font-size: var(--_tool-card-font-size);
+    font-variant-numeric: proportional-nums;
+    font-weight: var(--_tool-card-content-font-weight);
   }
 
   .prominentRoot {
@@ -74,20 +81,31 @@
   .actionLabel,
   .content,
   .extra {
-    font-size: var(--bf-type-body-md-font-size);
+    font-family: var(--_tool-card-font-family);
+    font-size: var(--_tool-card-font-size);
   }
 
   .ambientAction,
   .ambientContent,
   .ambientExtra {
     min-inline-size: 0;
-    font-size: var(--bf-type-body-sm-font-size);
+    font-family: var(--_tool-card-font-family);
+    font-size: var(--_tool-card-font-size);
+  }
+
+  .actionLabel > *,
+  .content > *,
+  .extra > *,
+  .ambientAction > *,
+  .ambientContent > *,
+  .ambientExtra > * {
+    font: inherit;
   }
 
   .actionLabel {
     flex: 0 0 auto;
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--_tool-card-title-font-weight);
     white-space: nowrap;
   }
 
@@ -98,7 +116,7 @@
     align-items: center;
     gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-type-body-md-font-weight);
+    font-weight: var(--_tool-card-content-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -121,7 +139,7 @@
     gap: var(--bf-space-1);
     margin-inline-start: auto;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--_tool-card-content-font-weight);
   }
 
   .changeSummary {
@@ -130,19 +148,18 @@
     align-items: center;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-variant-numeric: tabular-nums;
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-family: var(--_tool-card-font-family);
+    font-size: var(--_tool-card-font-size);
+    font-weight: var(--_tool-card-content-font-weight);
     white-space: nowrap;
   }
 
   .changeSummary [data-bf-change="added"] {
-    color: var(--bf-color-status-success-content);
+    color: var(--bf-color-code-change-added);
   }
 
   .changeSummary [data-bf-change="removed"] {
-    color: var(--bf-color-status-danger-content);
+    color: var(--bf-color-code-change-removed);
   }
 
   .actionRegion {
@@ -438,7 +455,7 @@
   .ambientAction {
     flex: 0 0 auto;
     color: inherit;
-    font-weight: var(--bf-type-label-lg-font-weight);
+    font-weight: var(--_tool-card-title-font-weight);
     white-space: nowrap;
   }
 
@@ -446,7 +463,7 @@
     overflow: hidden;
     flex: 1 1 auto;
     color: inherit;
-    font-weight: var(--bf-type-body-md-font-weight);
+    font-weight: var(--_tool-card-content-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

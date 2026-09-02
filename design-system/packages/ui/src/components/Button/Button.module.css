@@ -4,6 +4,8 @@
     --_button-background-hover: var(--bf-color-action-neutral-surface);
     --_button-background-active: var(--bf-color-action-neutral-surface);
     --_button-border: var(--bf-color-action-neutral-border);
+    --_button-border-hover: var(--_button-border);
+    --_button-border-active: var(--_button-border);
     --_button-content: var(--bf-color-action-neutral-content);
     --_button-font-size: var(--bf-type-label-md-font-size);
     --_button-height: var(--bf-control-height-md);
@@ -39,10 +41,12 @@
 
   .button:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
     background: var(--_button-background-hover);
+    border-color: var(--_button-border-hover);
   }
 
   .button:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
     background: var(--_button-background-active);
+    border-color: var(--_button-border-active);
     font-weight: var(--bf-type-label-selected-font-weight);
   }
 
@@ -71,8 +75,23 @@
     --_button-content: var(--bf-color-action-primary-content);
   }
 
+  .button[data-bf-variant="secondary"] {
+    --_button-background: var(--bf-color-surface-tertiary);
+    --_button-background-hover: var(--bf-color-surface-tertiary);
+    --_button-background-active: var(--bf-color-surface-tertiary);
+    --_button-border: transparent;
+    --_button-border-hover: var(--bf-color-border-default);
+    --_button-border-active: var(--bf-color-border-strong);
+    --_button-content: var(--bf-color-action-neutral-content);
+  }
+
   .button[data-bf-variant="primary"]:disabled {
     --_button-background: var(--bf-color-action-neutral-surface);
+    --_button-content: var(--bf-color-action-neutral-content-disabled);
+  }
+
+  .button[data-bf-variant="secondary"]:disabled {
+    --_button-background: var(--bf-color-surface-tertiary);
     --_button-content: var(--bf-color-action-neutral-content-disabled);
   }
 
@@ -126,6 +145,13 @@
     --_button-background-active: var(--bf-color-status-danger-content);
     --_button-border: transparent;
     --_button-content: var(--bf-color-content-inverse);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="secondary"] {
+    --_button-background: var(--bf-color-status-danger-surface);
+    --_button-background-hover: var(--bf-color-status-danger-surface);
+    --_button-background-active: var(--bf-color-status-danger-surface);
+    --_button-border: var(--bf-color-status-danger-border);
   }
 
   .button[data-bf-tone="danger"][data-bf-variant="text"] {

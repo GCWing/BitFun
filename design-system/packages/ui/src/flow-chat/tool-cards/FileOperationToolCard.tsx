@@ -9,6 +9,7 @@ import {
   FilePlus,
   FileX2,
   Info,
+  TriangleAlert,
   XCircle,
 } from "lucide-react";
 import { IconButton } from "../../components/IconButton/IconButton";
@@ -114,20 +115,18 @@ export function FileOperationToolCard({
         <AmbientToolCard
           header={(
             <AmbientToolCardHeader
+              action={actionLabel}
               content={(
-                <>
-                  <span data-bf-part="action" data-testid={actionTestId}>{actionLabel}</span>{": "}
-                  <span
-                    className={styles.path}
-                    data-path={path}
-                    data-bf-operation={operation}
-                    data-bf-part="path"
-                    data-testid={pathTestId}
-                    title={path}
-                  >
-                    {pathLabel}
-                  </span>
-                </>
+                <span
+                  className={styles.path}
+                  data-path={path}
+                  data-bf-operation={operation}
+                  data-bf-part="path"
+                  data-testid={pathTestId}
+                  title={path}
+                >
+                  {pathLabel}
+                </span>
               )}
               icon={(
                 <ToolCardStatusSlot
@@ -144,7 +143,17 @@ export function FileOperationToolCard({
     );
   }
 
+  const errorContent = error ? (
+    <div className={styles.error} data-guidance={error.guidance ? "true" : "false"}>
+      <div className={styles.errorTitle}>
+        {error.guidance ? <Info aria-hidden="true" /> : <XCircle aria-hidden="true" />}
+        <span>{error.title}</span>
+      </div>
+      <div className={styles.errorMessage}>{error.message}</div>
+    </div>
+  ) : undefined;
   const hasPreview = Boolean(preview);
+  const hasExpandedContent = failed ? Boolean(errorContent) : hasPreview;
 
   return (
     <div
@@ -156,15 +165,8 @@ export function FileOperationToolCard({
       data-bf-status={status}
     >
       <ProminentToolCard
-        errorContent={error ? (
-          <div className={styles.error} data-guidance={error.guidance ? "true" : "false"}>
-            <div className={styles.errorTitle}>
-              {error.guidance ? <Info aria-hidden="true" /> : <XCircle aria-hidden="true" />}
-              <span>{error.title}</span>
-            </div>
-            <div className={styles.errorMessage}>{error.message}</div>
-          </div>
-        ) : undefined}
+        collapsibleErrorContent
+        errorContent={errorContent}
         expandedContent={hasPreview ? <div className={styles.preview}>{preview}</div> : undefined}
         header={(
           <ProminentToolCardHeader
@@ -208,13 +210,23 @@ export function FileOperationToolCard({
               />
             ) : undefined}
             icon={<Icon aria-hidden="true" />}
-            statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
+            statusIcon={failed
+              ? (
+                <TriangleAlert
+                  aria-hidden="true"
+                  className={styles.warningStatusIcon}
+                  data-bf-icon="warning"
+                />
+              )
+              : loading
+                ? <ToolProcessingDots size={16} />
+                : undefined}
           />
         )}
-        headerExpandAffordance={hasPreview}
-        isExpanded={Boolean(isExpanded && hasPreview && !failed)}
+        headerExpandAffordance={hasExpandedContent}
+        isExpanded={Boolean(isExpanded && hasExpandedContent)}
         isFailed={failed}
-        onClick={hasPreview && onToggle ? () => onToggle() : undefined}
+        onClick={hasExpandedContent && onToggle ? () => onToggle() : undefined}
         requiresConfirmation={requiresConfirmation}
         status={status}
       />

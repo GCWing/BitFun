@@ -1616,8 +1616,8 @@
       "delete": "刪除檔案",
       "deletedLabel": "刪除",
       "failed": "失敗",
-      "guidanceHint": "提示",
-      "guidanceTitle": "提示",
+      "guidanceHint": " · 需要處理",
+      "guidanceTitle": "重試前需要處理",
       "parsingPath": "解析檔案路徑中...",
       "receivingContent": "接收檔案內容中...",
       "unknownFile": "未知檔案",
@@ -1852,6 +1852,7 @@
       "thinkingCharacters": "思考了 {{count}} 字符"
     },
     "webSearch": {
+      "action": "網絡搜尋",
       "parsingSearchTerm": "解析搜尋詞中...",
       "searchTitle": "網絡搜尋: \"{{term}}\"",
       "resultsCount": "{{count}} 個結果",

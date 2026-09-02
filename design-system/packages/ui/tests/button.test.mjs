@@ -87,6 +87,19 @@ test("primary and text variants expose semantic emphasis without changing button
   assert.match(styles, /text-decoration:underline/);
 });
 
+test("secondary exposes the filled secondary-action contract", async () => {
+  const markup = renderToStaticMarkup(
+    createElement(Button, { variant: "secondary" }, "Cancel"),
+  );
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(markup, /data-bf-variant="secondary"/);
+  assert.match(styles, /--bf-color-surface-tertiary/);
+  assert.match(styles, /--bf-color-border-default/);
+  assert.match(styles, /--bf-color-border-strong/);
+  assert.match(styles, /--bf-color-action-neutral-content/);
+});
+
 test("Button owns the reference pill geometry and typography", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 

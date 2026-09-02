@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { useFieldSurface } from "../../internal/fieldSurface";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Input.module.css";
 
@@ -36,6 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   ...props
 }, ref) {
   const compositionActiveRef = useRef(false);
+  const fieldSurface = useFieldSurface();
   const handleChange: ChangeEventHandler<HTMLInputElement> = (event) => {
     onChange?.(event);
     onValueChange?.(event.currentTarget.value);
@@ -50,6 +52,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
       className={classNames(styles.field, className)}
       data-bf-component="input"
       data-disabled={disabled ? "true" : "false"}
+      data-field-surface={fieldSurface}
       data-invalid={isInvalid ? "true" : "false"}
       data-size={size}
     >

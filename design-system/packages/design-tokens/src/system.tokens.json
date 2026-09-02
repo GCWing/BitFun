@@ -285,6 +285,7 @@
         "snug": { "lineHeight": { "$value": "{lineHeight.snug}" } },
         "balanced": { "lineHeight": { "$value": "{lineHeight.balanced}" } },
         "ui": { "lineHeight": { "$value": "{lineHeight.ui}" } },
+        "support": { "lineHeight": { "$value": "{lineHeight.support}" } },
         "spacious": { "lineHeight": { "$value": "{lineHeight.spacious}" } },
         "loose": { "lineHeight": { "$value": "{lineHeight.loose}" } }
       },
@@ -574,6 +575,16 @@
       "actionsGap": { "$value": "0px" },
       "actionsPaddingInlineEnd": { "$value": "{space.2}" },
       "radius": { "$value": "{radius.base}" }
+    },
+    "launcherButton": {
+      "$description": "Geometry for a shell-edge launcher with an icon and short label.",
+      "$type": "dimension",
+      "minInlineSize": { "$value": "104px" },
+      "blockSize": { "$value": "{control.height.md}" },
+      "paddingInline": { "$value": "14px" },
+      "gap": { "$value": "{space.2}" },
+      "iconSize": { "$value": "16px" },
+      "radius": { "$value": "{radius.lg}" }
     },
     "changeCount": {
       "$type": "dimension",

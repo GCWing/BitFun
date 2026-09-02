@@ -99,14 +99,14 @@ test("ChangeCount formats positive additions and deletions with distinct parts",
   assert.match(markup, /data-bf-part="deletions">-2<\/span>/);
 });
 
-test("ActivityItem styles use public activity, status, and focus tokens", async () => {
+test("ActivityItem styles use public activity, code-change, and focus tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-control-activity-item-surface-height/);
   assert.match(styles, /--bf-control-activity-item-inline-icon-size/);
   assert.match(styles, /--bf-control-change-count-padding-block/);
   assert.match(styles, /--bf-control-icon-button-xs-size/);
-  assert.match(styles, /--bf-color-status-success-content/);
-  assert.match(styles, /--bf-color-status-danger-content/);
+  assert.match(styles, /--bf-color-code-change-added/);
+  assert.match(styles, /--bf-color-code-change-removed/);
   assert.match(styles, /--bf-color-focus-ring/);
 });

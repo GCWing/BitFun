@@ -65,6 +65,7 @@ describe('ConfigPageLayout', () => {
   it('uses the public PageHeader while preserving appearance extension targets', () => {
     act(() => root.render(<ConfigPageHeader title="Models" subtitle="Provider configuration" extra={<button>Import</button>} />));
     const header = container.querySelector('[data-bf-component="page-header"]');
+    expect(header?.getAttribute('data-size')).toBe('md');
     expect(header?.querySelector('h2')?.textContent).toBe('Models');
     expect(header?.querySelector('[data-bf-part="pageHeaderTitle"]')?.textContent).toBe('Models');
     expect(header?.querySelector('[data-bf-part="pageHeaderSubtitle"]')?.textContent).toBe('Provider configuration');
@@ -114,6 +115,29 @@ describe('ConfigPageLayout', () => {
     expect(layout).not.toContain('> :where(span, div)');
   });
 
+  it('renders required state as structured label anatomy with the shared semantic color', () => {
+    const layout = readStyleFixture('ConfigPageLayout.scss');
+
+    act(() => {
+      root.render(
+        <ConfigPageRow label="Provider name" required>
+          <Input aria-label="Provider name" required />
+        </ConfigPageRow>,
+      );
+    });
+
+    const row = container.querySelector('.bitfun-config-page-row');
+    const marker = row?.querySelector('[data-bf-part="required"]');
+    const input = row?.querySelector('input');
+
+    expect(row?.getAttribute('data-required')).toBe('true');
+    expect(marker?.textContent).toBe('*');
+    expect(marker?.getAttribute('aria-hidden')).toBe('true');
+    expect(marker?.getAttribute('data-bf-component')).toBe('config');
+    expect(input?.required).toBe(true);
+    expect(layout).toMatch(/\.bitfun-config-page-row__required\s*\{[\s\S]*?--bf-color-content-required-indicator/);
+  });
+
   it('strips the body surface chrome when the section opts out of the standard surface', () => {
     act(() => {
       root.render(
@@ -128,6 +152,7 @@ describe('ConfigPageLayout', () => {
 
     expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(true);
     expect(body?.getAttribute('data-appearance')).toBe('plain');
+    expect(body?.getAttribute('data-field-surface')).toBe('default');
     // The prop drives styling only; it must never leak onto the DOM node.
     expect(section?.hasAttribute('bodysurface')).toBe(false);
   });
@@ -145,6 +170,24 @@ describe('ConfigPageLayout', () => {
     expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(false);
     expect(body?.getAttribute('data-appearance')).toBe('subtle');
     expect(body?.getAttribute('data-bf-component')).toBe('field-group');
+    expect(body?.getAttribute('data-field-surface')).toBe('ambient');
+  });
+
+  it('lets a surfaced section keep nested fields opaque', () => {
+    act(() => {
+      root.render(
+        <ConfigPageSection title="Provider" fieldSurface="default">
+          <Input aria-label="API URL" />
+        </ConfigPageSection>,
+      );
+    });
+
+    const body = container.querySelector('.bitfun-config-page-section__body');
+    const input = container.querySelector('[data-bf-component="input"]');
+
+    expect(body?.getAttribute('data-appearance')).toBe('subtle');
+    expect(body?.getAttribute('data-field-surface')).toBe('default');
+    expect(input?.getAttribute('data-field-surface')).toBe('default');
   });
 
   it('supports a header-only section with a title-side action', () => {

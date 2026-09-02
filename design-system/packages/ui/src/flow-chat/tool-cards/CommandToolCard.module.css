@@ -13,9 +13,6 @@
     border-radius: 0;
     color: var(--bf-color-content-secondary);
     background: transparent;
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-lg-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -23,7 +20,6 @@
   .command[data-empty="true"] {
     color: var(--bf-color-content-muted);
     font-style: italic;
-    font-weight: var(--bf-type-body-md-font-weight);
   }
 
   .statusSummary {
@@ -178,10 +174,6 @@
     overflow: hidden;
     color: var(--bf-color-content-secondary);
     text-overflow: ellipsis;
-  }
-
-  .footerItem[data-monospace="true"] .footerValue {
-    font-family:var(--bf-type-code-md-font-family);
   }
 
   .footerItem[data-tone="success"] .footerValue {

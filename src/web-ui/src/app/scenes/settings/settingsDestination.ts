@@ -41,6 +41,7 @@ const LEGACY_DESTINATION_MIGRATIONS: Readonly<Record<string, SettingsDestination
   'session-config': { pageId: 'workspace.session' },
   'session-permissions': { pageId: 'tools.execution', viewId: 'common' },
   'tools.device-control': { pageId: 'tools.desktop-control' },
+  'tools.browser-control': { pageId: 'tools.desktop-control' },
   review: { pageId: 'tools.execution', viewId: 'advanced' },
   'deep-review': { pageId: 'tools.execution', viewId: 'advanced' },
   'code-review': { pageId: 'tools.execution', viewId: 'advanced' },

@@ -159,7 +159,30 @@
     gap: var(--bf-space-3);
     padding: var(--bf-space-3) var(--bf-space-4);
     background: var(--bf-color-surface-subtle);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+
+    &[data-expanded='true'] {
+      border-bottom: 1px solid var(--bf-color-border-subtle);
+    }
+  }
+
+  &__provider-group-toggle {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--bf-space-2);
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  &__provider-group-chevron {
+    flex-shrink: 0;
+    color: var(--bf-color-content-muted);
   }
 
   &__provider-group-title {
@@ -181,7 +204,7 @@
     padding: 0 6px;
     border-radius: 999px;
     background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-muted);
+    color: var(--bf-color-content-required-indicator);
     font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-type-label-sm-font-weight);
   }
@@ -206,6 +229,27 @@
     .bitfun-collection-item__details {
       border-top: 1px solid var(--bf-color-border-subtle);
     }
+
+    .bitfun-collection-item__details-toggle {
+      order: 2;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+        visibility 0s linear var(--bf-motion-duration-fast);
+    }
+
+    .bitfun-collection-item:hover,
+    .bitfun-collection-item:focus-within {
+      .bitfun-model-settings__model-actions,
+      .bitfun-collection-item__details-toggle {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition-delay: 0s;
+      }
+    }
   }
 
   &__provider-group-actions {
@@ -217,8 +261,22 @@
 
   &__model-actions {
     display: flex;
+    order: 1;
     align-items: center;
     gap: var(--bf-space-2);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      visibility 0s linear var(--bf-motion-duration-fast);
+  }
+
+  &__model-enable {
+    display: inline-flex;
+    order: 3;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   &__meta-tag {
@@ -1154,7 +1212,7 @@
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-label-md-font-size);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-surface-raised);
     box-sizing: border-box;
   }
 
@@ -1164,8 +1222,8 @@
     gap: var(--bf-space-2);
     padding: var(--bf-space-3);
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-subtle);
+    border-radius: var(--bf-layout-field-group-radius);
+    background: var(--bf-color-surface-raised);
     transition: border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
@@ -1317,8 +1375,8 @@
     min-height: 44px;
     padding: var(--bf-space-2) var(--bf-space-3);
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-subtle);
+    border-radius: var(--bf-radius-lg);
+    background: var(--bf-color-surface-tertiary);
     color: inherit;
     text-align: left;
     cursor: pointer;
@@ -1399,6 +1457,13 @@
     padding-top: var(--bf-space-4);
     padding-bottom: var(--bf-space-4);
     border-top: 1px dashed var(--bf-color-field-border-hover);
+  }
+
+  &__editor-dialog {
+    max-block-size: min(
+      640px,
+      calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter))
+    );
   }
 
   &__form--modal {
@@ -2227,5 +2292,22 @@
   .bitfun-model-settings .spinning {
     animation: none;
     transform: none;
+  }
+
+  .bitfun-model-settings__model-actions,
+  .bitfun-model-settings__provider-group-list .bitfun-collection-item__details-toggle {
+    transition: none;
+  }
+}
+
+@media (hover: none) {
+  .bitfun-model-settings__provider-group-list {
+    .bitfun-model-settings__model-actions,
+    .bitfun-collection-item__details-toggle {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: none;
+    }
   }
 }

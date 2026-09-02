@@ -13,6 +13,8 @@ export interface ConfigCollectionItemProps extends React.HTMLAttributes<HTMLDivE
   disabled?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
+  /** Lets non-interactive row space toggle details while preserving nested controls. */
+  toggleOnRowClick?: boolean;
   className?: string;
 }
 
@@ -25,6 +27,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
   disabled = false,
   expanded: expandedProp,
   onToggle,
+  toggleOnRowClick = false,
   className = '',
   ...rootProps
 }) => {
@@ -44,6 +47,18 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
     }
   };
 
+  const handleRowClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!toggleOnRowClick || !hasDetails || disabled) return;
+    const target = event.target;
+    if (
+      target instanceof Element
+      && target.closest('a, button, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [contenteditable="true"]')
+    ) {
+      return;
+    }
+    toggleDetails();
+  };
+
   return (
     <div
       className={`bitfun-collection-item ${isExpanded ? 'is-expanded' : ''} ${disabled ? 'is-disabled' : ''} ${className}`}
@@ -51,7 +66,14 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
       data-bf-part="collectionItem"
       {...rootProps}
     >
-      <div className="bitfun-config-page-row bitfun-config-page-row--center bitfun-collection-item__row" data-bf-component="config" data-bf-part="collectionRow">
+      <div
+        className={`bitfun-config-page-row bitfun-config-page-row--center bitfun-collection-item__row ${
+          toggleOnRowClick && hasDetails && !disabled ? 'bitfun-collection-item__row--toggleable' : ''
+        }`}
+        data-bf-component="config"
+        data-bf-part="collectionRow"
+        onClick={handleRowClick}
+      >
         <div className="bitfun-config-page-row__meta" data-bf-component="config" data-bf-part="collectionMeta">
           <div
             className={`bitfun-config-page-row__label bitfun-collection-item__label ${

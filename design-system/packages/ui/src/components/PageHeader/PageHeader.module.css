@@ -69,7 +69,7 @@
 
   .required {
     margin-inline-start: var(--bf-space-1);
-    color: var(--bf-color-accent-default);
+    color: var(--bf-color-content-required-indicator);
   }
 
   .description {

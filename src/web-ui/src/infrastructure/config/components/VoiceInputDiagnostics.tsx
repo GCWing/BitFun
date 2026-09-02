@@ -1,6 +1,6 @@
-import { Icon as CatalogIcon, Button, IconButton, Select, type SelectOption, Tooltip } from '@bitfun/ui';
+import { Button, Select, type SelectOption } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Square } from 'lucide-react';
+import { Square } from 'lucide-react';
 
 import {
   DEFAULT_SPEECH_SAMPLE_RATE,
@@ -22,25 +22,21 @@ import { ConfigPageRow } from './common';
 const log = createLogger('VoiceInputDiagnostics');
 const TEST_CHUNK_DURATION_MS = 500;
 const RECOGNITION_TEST_LIMIT_MS = 15000;
+const WAVEFORM_BAR_WEIGHTS = [0.52, 0.78, 1, 0.68, 0.9, 0.62, 0.44];
 
 type DiagnosticPhase = 'idle' | 'preparing' | 'recording' | 'transcribing';
 
 interface VoiceInputDiagnosticsProps {
   settings: VoiceInputSettings;
-  modelInstalled: boolean;
-  unavailableReason?: string;
   onDeviceChange: (deviceId: string) => Promise<void>;
 }
 
 export function VoiceInputDiagnostics({
   settings,
-  modelInstalled,
-  unavailableReason,
   onDeviceChange,
 }: VoiceInputDiagnosticsProps) {
   const { t } = useTranslation('settings/voice-input');
   const [microphones, setMicrophones] = useState<VoiceInputMicrophone[]>([]);
-  const [devicesLoading, setDevicesLoading] = useState(false);
   const [phase, setPhase] = useState<DiagnosticPhase>('idle');
   const [level, setLevel] = useState(0);
   const [result, setResult] = useState<SpeechTranscriptionResult | null>(null);
@@ -50,6 +46,7 @@ export function VoiceInputDiagnostics({
   const pendingAppendRef = useRef<Promise<void>>(Promise.resolve());
   const timerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  const microphoneLoadIdRef = useRef(0);
   const activeCaptureIdRef = useRef(0);
 
   const clearTimer = useCallback(() => {
@@ -60,14 +57,15 @@ export function VoiceInputDiagnostics({
   }, []);
 
   const loadMicrophones = useCallback(async () => {
-    setDevicesLoading(true);
+    const loadId = microphoneLoadIdRef.current + 1;
+    microphoneLoadIdRef.current = loadId;
     try {
       const devices = await listVoiceInputMicrophones();
-      if (mountedRef.current) setMicrophones(devices);
+      if (mountedRef.current && microphoneLoadIdRef.current === loadId) {
+        setMicrophones(devices);
+      }
     } catch (loadError) {
       log.warn('Failed to enumerate voice input microphones', { error: loadError });
-    } finally {
-      if (mountedRef.current) setDevicesLoading(false);
     }
   }, []);
 
@@ -213,9 +211,6 @@ export function VoiceInputDiagnostics({
   }, [finishRecognitionTest, handleDeviceEnded, loadMicrophones, resetCapture, settings, t]);
 
   const testingRecognition = phase !== 'idle';
-  const volumeState = level < 0.01 ? 'silent' : level < 0.08 ? 'low' : 'normal';
-  const recognitionUnavailableReason = unavailableReason
-    ?? (!modelInstalled ? t('diagnostics.recognition.modelRequired') : undefined);
 
   return (
     <div
@@ -232,7 +227,7 @@ export function VoiceInputDiagnostics({
         label={t('diagnostics.microphone.label')}
         description={t('diagnostics.microphone.description')}
         align="center"
-        className="voice-input-config__diagnostic-row"
+        className="voice-input-config__balanced-row"
       >
         <div className="voice-input-config__device-control" data-bf-component="voice-input-diagnostics" data-bf-part="deviceControl">
           <Select
@@ -240,20 +235,11 @@ export function VoiceInputDiagnostics({
             data-bf-part="deviceSelect"
             value={settings.microphone_device_id}
             onValueChange={value => void onDeviceChange(String(value))}
+            onPointerDown={() => void loadMicrophones()}
             options={microphoneOptions}
             size="sm"
-            disabled={devicesLoading}
             className="voice-input-config__device-select"
           />
-          <Tooltip content={t('diagnostics.microphone.refresh')} disabled={phase !== 'idle'}>
-            <IconButton
-              size="sm"
-              aria-label={t('diagnostics.microphone.refresh')}
-              disabled={phase !== 'idle'}
-              icon={<CatalogIcon name="refresh" size="lg" />}
-              onClick={() => void loadMicrophones()}
-            />
-          </Tooltip>
         </div>
       </ConfigPageRow>
 
@@ -261,52 +247,61 @@ export function VoiceInputDiagnostics({
         label={t('diagnostics.recognition.label')}
         description={t('diagnostics.recognition.description')}
         align="start"
-        className="voice-input-config__diagnostic-row"
+        className="voice-input-config__balanced-row"
       >
-        <div className="voice-input-config__recognition-test" data-bf-component="voice-input-diagnostics" data-bf-part="recognitionTest">
-          <div className="voice-input-config__diagnostic-action" data-bf-component="voice-input-diagnostics" data-bf-part="diagnosticAction">
-            <div className="voice-input-config__level" data-bf-component="voice-input-diagnostics" data-bf-part="level" aria-hidden="true">
-              <div
-                data-bf-component="voice-input-diagnostics"
-                data-bf-part="levelValue"
-                data-bf-volume={volumeState}
-                className={`voice-input-config__level-value voice-input-config__level-value--${volumeState}`}
-                style={{ transform: `scaleX(${Math.max(0.02, level)})` }}
-              />
-            </div>
-            <Button
-              className="voice-input-config__diagnostic-button"
-              variant={phase === 'recording' ? 'outline' : 'fill'}
-              size="sm"
-              loading={phase === 'preparing' || phase === 'transcribing'}
-              disabled={!modelInstalled && phase === 'idle'}
-              onClick={() => {
-                if (phase === 'recording') void finishRecognitionTest();
-                else if (phase === 'idle') void startRecognitionTest();
-              }}
-            >
-              {phase === 'recording' ? <Square size={13} /> : <Activity size={14} />}
-              {phase === 'recording'
-                ? t('diagnostics.recognition.finish')
-                : t('diagnostics.recognition.start')}
-            </Button>
-          </div>
-          {recognitionUnavailableReason ? (
-            <span className="voice-input-config__diagnostic-note" data-bf-component="voice-input-diagnostics" data-bf-part="note">
-              {recognitionUnavailableReason}
-            </span>
-          ) : null}
-          {result?.text.trim() ? (
-            <div className="voice-input-config__recognition-result" data-bf-component="voice-input-diagnostics" data-bf-part="result">
-              <span>{result.text.trim()}</span>
-              <small>{t('diagnostics.recognition.timing', { duration: result.durationMs })}</small>
+        <div className="voice-input-config__diagnostic-action" data-bf-component="voice-input-diagnostics" data-bf-part="diagnosticAction">
+          {phase === 'recording' ? (
+            <div className="voice-input-config__waveform" aria-hidden="true">
+              {WAVEFORM_BAR_WEIGHTS.map((weight, index) => (
+                <span
+                  key={index}
+                  className="voice-input-config__waveform-bar"
+                  style={{
+                    transform: `scaleY(${Math.min(1, Math.max(0.16, level * 8 * weight))})`,
+                  }}
+                />
+              ))}
             </div>
           ) : null}
-          {error ? (
-            <span className="voice-input-config__diagnostic-error" data-bf-component="voice-input-diagnostics" data-bf-part="error">{error}</span>
-          ) : null}
+          <Button
+            className="voice-input-config__diagnostic-button"
+            variant={phase === 'recording' ? 'outline' : 'fill'}
+            size="sm"
+            loading={phase === 'preparing' || phase === 'transcribing'}
+            disabled={phase === 'preparing' || phase === 'transcribing'}
+            leadingIcon={phase === 'recording' ? <Square size={13} /> : undefined}
+            onClick={() => {
+              if (phase === 'recording') void finishRecognitionTest();
+              else if (phase === 'idle') void startRecognitionTest();
+            }}
+          >
+            {phase === 'recording'
+              ? t('diagnostics.recognition.finish')
+              : phase === 'preparing'
+                ? t('diagnostics.recognition.preparing')
+                : phase === 'transcribing'
+                  ? t('diagnostics.recognition.transcribing')
+                  : t('diagnostics.recognition.start')}
+          </Button>
         </div>
       </ConfigPageRow>
+
+      <div
+        className="voice-input-config__recognition-feedback"
+        data-bf-component="voice-input-diagnostics"
+        data-bf-part="feedback"
+        aria-live="polite"
+      >
+        {result?.text.trim() ? (
+          <div className="voice-input-config__recognition-result" data-bf-component="voice-input-diagnostics" data-bf-part="result">
+            <span>{result.text.trim()}</span>
+            <small>{t('diagnostics.recognition.timing', { duration: result.durationMs })}</small>
+          </div>
+        ) : null}
+        {error ? (
+          <span className="voice-input-config__diagnostic-error" data-bf-component="voice-input-diagnostics" data-bf-part="error">{error}</span>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
-import { Button, Icon, Input, Select, type SelectOption, StatusPill, type StatusPillTone, Switch } from '@bitfun/ui';
+import { Button, Input, Select, type SelectOption, StatusPill, type StatusPillTone, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { CloudOff, HardDrive, PhoneCall } from 'lucide-react';
 import {
   LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID,
@@ -44,19 +44,42 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
-type VoiceInputStatus = 'ready' | 'setup' | 'downloading' | 'unavailable' | 'error';
+type VoiceInputStatus =
+  | 'ready'
+  | 'setup'
+  | 'downloading'
+  | 'verifying'
+  | 'deleting'
+  | 'unavailable'
+  | 'error';
 
 function statusBadgeVariant(status: VoiceInputStatus): StatusPillTone {
   switch (status) {
     case 'ready':
       return 'success';
     case 'downloading':
+    case 'verifying':
       return 'info';
     case 'unavailable':
     case 'error':
       return 'danger';
     default:
       return 'neutral';
+  }
+}
+
+function statusActionKey(status: VoiceInputStatus): string {
+  switch (status) {
+    case 'setup':
+      return 'status.downloadModel';
+    case 'downloading':
+    case 'verifying':
+    case 'deleting':
+      return 'status.viewDetails';
+    case 'error':
+      return 'status.repair';
+    default:
+      return 'status.manageModels';
   }
 }
 
@@ -92,7 +115,6 @@ const VoiceInputConfig: React.FC = () => {
   const [trustedVoiceCallConfig, setTrustedVoiceCallConfig] = useState<SpeechRealtimeConfig | null>(null);
   const [voiceCallLoading, setVoiceCallLoading] = useState(speechRuntimeSupported);
   const [voiceCallLoadFailed, setVoiceCallLoadFailed] = useState(false);
-  const cancelDownloadRequestedRef = useRef<Set<string>>(new Set());
   const voiceCallRequestIdRef = useRef(0);
   const voiceInputSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingVoiceInputSaveCountRef = useRef(0);
@@ -271,39 +293,7 @@ const VoiceInputConfig: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [voiceCallDirty]);
 
-  const handleDownload = useCallback((model: SpeechModelStatus) => {
-    if (model.state === 'downloading') return;
-    cancelDownloadRequestedRef.current.delete(model.modelId);
-    updateModelStatus({
-      ...model,
-      state: 'downloading',
-      installedBytes: 0,
-      progress: {
-        modelId: model.modelId,
-        downloadedBytes: 0,
-        totalBytes: model.expectedBytes,
-        percent: 0,
-      },
-      error: null,
-    });
-    setBusyAction(`download:${model.modelId}`);
-    void speechAPI.downloadModel(model.modelId).then(async status => {
-      updateModelStatus(status);
-      await updateVoiceInput({ provider: 'local', model_id: model.modelId });
-      notificationService.success(t('messages.downloadSuccess'));
-    }).catch(error => {
-      if (cancelDownloadRequestedRef.current.has(model.modelId)) return;
-      log.error('Failed to download local speech model', { modelId: model.modelId, error });
-      notificationService.error(t('messages.downloadFailed'));
-      void loadModels();
-    }).finally(() => {
-      cancelDownloadRequestedRef.current.delete(model.modelId);
-      setBusyAction(null);
-    });
-  }, [loadModels, t, updateModelStatus, updateVoiceInput]);
-
   const handleCancelDownload = useCallback(async (model: SpeechModelStatus) => {
-    cancelDownloadRequestedRef.current.add(model.modelId);
     setBusyAction(`cancel:${model.modelId}`);
     try {
       const status = await speechAPI.cancelModelDownload(model.modelId);
@@ -365,18 +355,36 @@ const VoiceInputConfig: React.FC = () => {
 
   let status: VoiceInputStatus = 'setup';
   if (legacyCloudSelection) status = 'unavailable';
-  else if (!selectedModel || selectedModel.state === 'error' || selectedModel.state === 'corrupt') status = 'error';
-  else if (selectedModel.state === 'installed') status = 'ready';
-  else if (selectedModel.state === 'downloading' || selectedModel.state === 'verifying') status = 'downloading';
+  else if (!selectedModel) status = 'error';
+  else {
+    switch (selectedModel.state) {
+      case 'installed':
+        status = 'ready';
+        break;
+      case 'downloading':
+        status = 'downloading';
+        break;
+      case 'verifying':
+        status = 'verifying';
+        break;
+      case 'deleting':
+        status = 'deleting';
+        break;
+      case 'corrupt':
+      case 'error':
+        status = 'error';
+        break;
+      default:
+        status = 'setup';
+    }
+  }
 
   const progressPercent = Math.min(100, Math.max(0, selectedModel?.progress?.percent ?? 0));
-  const statusIcon = status === 'ready'
-    ? <Icon name="check-circle" size="lg" />
+  const statusIcon = status === 'ready' || status === 'setup'
+    ? null
     : status === 'unavailable'
       ? <CloudOff size={18} />
-      : status === 'setup'
-        ? <Icon name="arrow-down" size="lg" />
-        : <HardDrive size={18} />;
+      : <HardDrive size={18} />;
 
   return (
     <ConfigPageLayout className="voice-input-config" data-bf-component="voice-input-config" data-bf-part="root">
@@ -407,114 +415,138 @@ const VoiceInputConfig: React.FC = () => {
           ) : (
             <>
               <ConfigPageRow label={t('status.label')} multiline>
-            <div className="voice-input-config__status-panel">
-              <div
-                className={`voice-input-config__status-card voice-input-config__status-card--${status}`}
-                data-bf-component="voice-input-config"
-                data-bf-part="statusCard"
-                data-bf-status={status}
-              >
-                <div className="voice-input-config__status-icon" aria-hidden="true">{statusIcon}</div>
-                <div className="voice-input-config__status-copy">
-                  <div className="voice-input-config__status-heading">
-                    <div className="voice-input-config__status-title">{t(`status.${status}.title`)}</div>
-                    <StatusPill tone={statusBadgeVariant(status)}>{t(`status.${status}.badge`)}</StatusPill>
-                  </div>
-                  <div className="voice-input-config__status-description">
-                    {t(`status.${status}.description`, {
-                      model: selectedModel?.displayName ?? t('status.unknownModel'),
-                      size: formatBytes(selectedModel?.expectedBytes ?? 0),
-                    })}
-                  </div>
-                  {selectedModel?.error && status === 'error' ? (
-                    <div className="voice-input-config__status-error">{selectedModel.error}</div>
-                  ) : null}
-                </div>
-                <div className="voice-input-config__status-actions" data-bf-component="voice-input-config" data-bf-part="statusActions">
-                  {status === 'unavailable' ? (
-                    <Button
-                      variant="fill"
-                      size="sm"
-                      onClick={() => void handleUseLocal()}
-                      disabled={voiceInputSaving}
-                    >
-                      {t('status.useLocal')}
-                    </Button>
-                  ) : null}
-                  {status === 'setup' && selectedModel ? (
-                    <Button
-                      variant="fill"
-                      size="sm"
-                      onClick={() => handleDownload(selectedModel)}
-                      loading={busyAction === `download:${selectedModel.modelId}`}
-                      leadingIcon={<Icon name="arrow-down" size="sm" />}
-                    >
-
-                      {t('status.downloadAndEnable')}
-                    </Button>
-                  ) : null}
-                  {status === 'downloading' && selectedModel?.state === 'downloading' ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleCancelDownload(selectedModel)}
-                      loading={busyAction === `cancel:${selectedModel.modelId}`}
-                    >
-                      {t('model.cancel')}
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant={status === 'error' ? 'outline' : 'outline'}
-                    size="sm"
-                    onClick={() => setLocalModelsOpen(true)}
-                    leadingIcon={<HardDrive size={14} />}
+                <div className="voice-input-config__status-panel">
+                  <div
+                    className={`voice-input-config__status-card voice-input-config__status-card--${status}`}
+                    data-bf-component="voice-input-config"
+                    data-bf-part="statusCard"
+                    data-bf-status={status}
                   >
-
-                    {status === 'error' ? t('status.repair') : t('status.manageModels')}
-                  </Button>
-                </div>
-              </div>
-
-              {status === 'downloading' && selectedModel ? (
-                <div className="voice-input-config__progress voice-input-config__status-progress">
-                  <div className="voice-input-config__progress-track" aria-hidden="true">
-                    <div className="voice-input-config__progress-value" style={{ width: `${progressPercent}%` }} />
+                    {statusIcon ? (
+                      <div className="voice-input-config__status-icon" aria-hidden="true">{statusIcon}</div>
+                    ) : null}
+                    <div className="voice-input-config__status-copy">
+                      {status === 'setup' ? (
+                        <p className="voice-input-config__status-summary">
+                          <Trans
+                            i18nKey="status.setup.summary"
+                            t={t}
+                            components={{
+                              warning: <span className="voice-input-config__status-warning" />,
+                            }}
+                          />
+                        </p>
+                      ) : status === 'ready' ? (
+                        <p className="voice-input-config__status-summary">
+                          <Trans
+                            i18nKey="status.ready.summary"
+                            t={t}
+                            values={{
+                              model: selectedModel?.displayName ?? t('status.unknownModel'),
+                            }}
+                            components={{
+                              model: <span className="voice-input-config__status-model" />,
+                            }}
+                          />
+                        </p>
+                      ) : (
+                        <>
+                          <div className="voice-input-config__status-heading">
+                            <div className="voice-input-config__status-title">{t(`status.${status}.title`)}</div>
+                            <StatusPill tone={statusBadgeVariant(status)}>
+                              {t(`status.${status}.badge`)}
+                            </StatusPill>
+                          </div>
+                          <div className="voice-input-config__status-description">
+                            {t(`status.${status}.description`, {
+                              model: selectedModel?.displayName ?? t('status.unknownModel'),
+                              size: formatBytes(selectedModel?.expectedBytes ?? 0),
+                            })}
+                          </div>
+                          {selectedModel?.error && status === 'error' ? (
+                            <div className="voice-input-config__status-error">{selectedModel.error}</div>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                    <div
+                      className="voice-input-config__status-actions"
+                      data-bf-component="voice-input-config"
+                      data-bf-part="statusActions"
+                    >
+                      {status === 'unavailable' ? (
+                        <Button
+                          variant="fill"
+                          size="sm"
+                          onClick={() => void handleUseLocal()}
+                          disabled={voiceInputSaving}
+                        >
+                          {t('status.useLocal')}
+                        </Button>
+                      ) : null}
+                      {status === 'downloading' && selectedModel?.state === 'downloading' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleCancelDownload(selectedModel)}
+                          loading={busyAction === `cancel:${selectedModel.modelId}`}
+                        >
+                          {t('model.cancel')}
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant={status === 'setup' ? 'fill' : 'outline'}
+                        size="sm"
+                        onClick={() => setLocalModelsOpen(true)}
+                      >
+                        {t(statusActionKey(status))}
+                      </Button>
+                    </div>
                   </div>
-                  <span className="voice-input-config__progress-text">
-                    {t('model.progress', {
-                      percent: Math.round(progressPercent),
-                      downloaded: formatBytes(selectedModel.progress?.downloadedBytes ?? selectedModel.installedBytes),
-                      total: formatBytes(selectedModel.progress?.totalBytes ?? selectedModel.expectedBytes),
-                    })}
-                  </span>
+
+                  {status === 'downloading' && selectedModel ? (
+                    <div className="voice-input-config__progress voice-input-config__status-progress">
+                      <div className="voice-input-config__progress-track" aria-hidden="true">
+                        <div className="voice-input-config__progress-value" style={{ width: `${progressPercent}%` }} />
+                      </div>
+                      <span className="voice-input-config__progress-text">
+                        {t('model.progress', {
+                          percent: Math.round(progressPercent),
+                          downloaded: formatBytes(selectedModel.progress?.downloadedBytes ?? selectedModel.installedBytes),
+                          total: formatBytes(selectedModel.progress?.totalBytes ?? selectedModel.expectedBytes),
+                        })}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
+              </ConfigPageRow>
+
+              {status === 'ready' ? (
+                <>
+                  <ConfigPageRow
+                    label={t('composer.language.label')}
+                    description={t('composer.language.description')}
+                    align="center"
+                    className="voice-input-config__balanced-row"
+                  >
+                    <Select
+                      value={voiceInput.default_language}
+                      onValueChange={(value) => void updateVoiceInput({ default_language: String(value) })}
+                      options={languageOptions}
+                      size="sm"
+                      className="voice-input-config__select"
+                      disabled={voiceInputSaving}
+                    />
+                  </ConfigPageRow>
+
+                  <VoiceInputDiagnostics
+                    settings={voiceInput}
+                    onDeviceChange={async microphoneDeviceId => {
+                      await updateVoiceInput({ microphone_device_id: microphoneDeviceId });
+                    }}
+                  />
+                </>
               ) : null}
-            </div>
-              </ConfigPageRow>
-
-              <ConfigPageRow
-                label={t('composer.language.label')}
-                description={t('composer.language.description')}
-                align="center"
-              >
-                <Select
-                  value={voiceInput.default_language}
-                  onValueChange={(value) => void updateVoiceInput({ default_language: String(value) })}
-                  options={languageOptions}
-                  size="sm"
-                  className="voice-input-config__select"
-                  disabled={voiceInputSaving}
-                />
-              </ConfigPageRow>
-
-              <VoiceInputDiagnostics
-                settings={voiceInput}
-                modelInstalled={!legacyCloudSelection && selectedModel?.state === 'installed'}
-                unavailableReason={legacyCloudSelection ? t('diagnostics.recognition.cloudUnavailable') : undefined}
-                onDeviceChange={async microphoneDeviceId => {
-                  await updateVoiceInput({ microphone_device_id: microphoneDeviceId });
-                }}
-              />
             </>
           )}
         </ConfigPageSection>

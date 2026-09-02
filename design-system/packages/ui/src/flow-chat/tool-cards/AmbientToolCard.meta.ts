@@ -22,7 +22,7 @@ export const ambientToolCardMeta = {
     "color.status.danger.content",
     "control.height.sm",
     "control.height.md",
-    "font.family.control",
+    "font.family.sans",
     "font.size.sm",
     "font.size.xl",
     "font.weight.medium",

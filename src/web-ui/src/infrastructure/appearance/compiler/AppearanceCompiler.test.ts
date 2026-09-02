@@ -115,12 +115,12 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="petTrigger"][data-bf-view="session-workspace"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution-common"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution-advanced"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="control"][data-bf-view="desktop-control"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="control"][data-bf-view="browser-control"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="control"][data-bf-view="browser-desktop-control"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution-common"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution-advanced"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="desktop-control"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="browser-control"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="browser-desktop-control"]');
+    expect(snapshot.cssText).not.toContain('data-bf-view="desktop-control"');
+    expect(snapshot.cssText).not.toContain('data-bf-view="browser-control"');
     expect(snapshot.cssText).not.toContain('[data-bf-component="session-config"]');
     expect(snapshot.components).toHaveProperty('runtime-settings');
   });
@@ -829,7 +829,7 @@ describe('AppearanceCompiler', () => {
         },
         'keyboard-shortcuts': {
           parts: {
-            keyBadge: { states: { recording: { borderColor: accent } } },
+            item: { states: { recording: { borderColor: accent } } },
           },
         },
         'task-tool-display': {
@@ -1005,7 +1005,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="session-files-badge"][data-bf-part="file"][data-bf-operation="modify"]');
     expect(snapshot.cssText).toContain('[data-bf-component="code-review-tool-card"][data-bf-part="group"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="create-agent-page"][data-bf-part="levelOption"][data-bf-state~="active"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="keyboard-shortcuts"][data-bf-part="keyBadge"][data-bf-state~="recording"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="keyboard-shortcuts"][data-bf-part="item"][data-bf-state~="recording"]');
     expect(snapshot.cssText).toContain('[data-bf-component="task-tool-display"][data-bf-part="root"][data-bf-state~="failed"]');
     expect(snapshot.cssText).toContain('[data-bf-component="application-settings"][data-bf-part="notifications"]');
     expect(snapshot.cssText).toContain('[data-bf-component="markdown-editor"][data-bf-part="root"][data-bf-view="source"]');

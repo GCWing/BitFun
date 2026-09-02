@@ -180,7 +180,11 @@ export const SessionTitleConfig: React.FC = () => {
         data-bf-part="root"
         title={t('sessionTitle.title')}
         description={t('sessionTitle.subtitle')}
-        extra={(
+      >
+        <ConfigPageRow
+          label={t('sessionTitle.enable')}
+          align="center"
+        >
           <div
             className="bitfun-runtime-settings__appearance-host"
             data-bf-component="session-title-config"
@@ -193,28 +197,29 @@ export const SessionTitleConfig: React.FC = () => {
               aria-label={t('sessionTitle.title')}
             />
           </div>
-        )}
-      >
-        <ConfigPageRow
-          label={t('sessionTitle.model.label')}
-          description={enabledModels.length === 0 ? t('sessionTitle.models.empty') : undefined}
-          align="center"
-        >
-          <div
-            className="bitfun-runtime-settings__appearance-host"
-            data-bf-component="session-title-config"
-            data-bf-part="modelControl"
-          >
-            <Combobox
-              size="sm"
-              options={modelOptions}
-              value={sessionTitleModelId}
-              onValueChange={(value) => void handleModelChange(normalizeSelectValue(value))}
-              disabled={isLoading}
-              data-testid="settings-session-title-model-select"
-            />
-          </div>
         </ConfigPageRow>
+        {settings?.enable_session_title_generation ? (
+          <ConfigPageRow
+            label={t('sessionTitle.model.label')}
+            description={enabledModels.length === 0 ? t('sessionTitle.models.empty') : undefined}
+            align="center"
+          >
+            <div
+              className="bitfun-runtime-settings__appearance-host"
+              data-bf-component="session-title-config"
+              data-bf-part="modelControl"
+            >
+              <Combobox
+                size="sm"
+                options={modelOptions}
+                value={sessionTitleModelId}
+                onValueChange={(value) => void handleModelChange(normalizeSelectValue(value))}
+                disabled={isLoading}
+                data-testid="settings-session-title-model-select"
+              />
+            </div>
+          </ConfigPageRow>
+        ) : null}
       </ConfigPageSection>
     </>
   );

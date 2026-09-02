@@ -24,6 +24,7 @@ import {
   IconButton,
   Input,
   KeyHint,
+  LauncherButton,
   Listbox,
   ListboxOption,
   LoadingState,
@@ -98,6 +99,7 @@ const componentIcons = {
   IconButton: <List aria-hidden="true" size={19} />,
   Input: <CatalogIcon name="eye" style={{ width: 19, height: 19 }} />,
   KeyHint: <Keyboard aria-hidden="true" size={19} />,
+  LauncherButton: <CatalogIcon name="mic" style={{ width: 19, height: 19 }} />,
   Listbox: <List aria-hidden="true" size={19} />,
   LoadingState: <AppWindow aria-hidden="true" size={19} />,
   Menu: <List aria-hidden="true" size={19} />,
@@ -236,6 +238,15 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "KeyHint":
       return <KeyHint icon={<CatalogIcon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>;
+    case "LauncherButton":
+      return (
+        <LauncherButton
+          leadingIcon={<CatalogIcon name="mic" aria-hidden="true" />}
+          tabIndex={-1}
+        >
+          Hello
+        </LauncherButton>
+      );
     case "Listbox":
       return (
         <Listbox aria-label={t("components.preview.appearance")}>

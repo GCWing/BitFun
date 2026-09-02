@@ -45,6 +45,7 @@ test("registry exposes only the formal stable components", () => {
       "IconButton",
       "Input",
       "KeyHint",
+      "LauncherButton",
       "Listbox",
       "LoadingState",
       "Menu",

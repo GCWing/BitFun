@@ -13,6 +13,7 @@ import {
 import { LoaderCircle } from "lucide-react";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
+import { useFieldSurface } from "../../internal/fieldSurface";
 import { useAnchoredLayer, type LayerPlacement } from "../../internal/useAnchoredLayer";
 import { Portal } from "../../overlay/Portal";
 import { useDesignSystem } from "../../overlay/useDesignSystem";
@@ -116,6 +117,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
   forwardedRef,
 ) {
   const { mode } = pickerProps;
+  const fieldSurface = useFieldSurface();
   const props = pickerProps as ComboboxProps | MultiSelectProps;
   const {
     "aria-describedby": ariaDescribedBy,
@@ -586,6 +588,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       className={classNames(styles.root, className)}
       data-bf-component={multiple ? "multi-select" : "combobox"}
       data-disabled={disabled ? "true" : "false"}
+      data-field-surface={fieldSurface}
       data-invalid={invalid ? "true" : "false"}
       data-open={resolvedOpen ? "true" : "false"}
       data-size={size}

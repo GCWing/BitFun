@@ -23,4 +23,23 @@ describe('Application settings presentation', () => {
   it('does not render an empty desktop-only startup group on web', () => {
     expect(source).toContain('{isTauri && (');
   });
+
+  it('keeps the previous-exit notice outside the settings section surface', () => {
+    const loggingSection = source.match(
+      /function LoggingSection\(\)[\s\S]*?\r?\n}\r?\n\r?\nfunction TerminalSection/,
+    )?.[0] ?? '';
+    const noticeStart = loggingSection.indexOf(
+      '{runtimeInfo?.previousUnexpectedExit?.detected && (',
+    );
+    const settingsSectionStart = loggingSection.indexOf('<ConfigPageSection');
+    const settingsSectionEnd = loggingSection.indexOf('</ConfigPageSection>');
+
+    expect(loggingSection).not.toBe('');
+    expect(noticeStart).toBeGreaterThanOrEqual(0);
+    expect(settingsSectionStart).toBeGreaterThan(noticeStart);
+    expect(settingsSectionEnd).toBeGreaterThan(settingsSectionStart);
+    expect(
+      loggingSection.slice(settingsSectionStart, settingsSectionEnd),
+    ).not.toContain('previousUnexpectedExit');
+  });
 });

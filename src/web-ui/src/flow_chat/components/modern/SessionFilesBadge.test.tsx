@@ -246,6 +246,7 @@ describe('SessionFilesBadge', () => {
 
     const actionsButton = container.querySelector('.session-files-badge__review-btn') as HTMLButtonElement | null;
     expect(actionsButton).not.toBeNull();
+    expect(actionsButton?.dataset.size).toBe('xs');
     expect(actionsButton?.querySelector('[data-bf-name="commit"]')).not.toBeNull();
     expect(actionsButton?.textContent).toBe('');
 

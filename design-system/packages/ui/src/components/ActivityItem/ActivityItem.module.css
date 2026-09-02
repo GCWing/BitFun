@@ -214,11 +214,11 @@
   }
 
   .additions {
-    color: var(--bf-color-status-success-content);
+    color: var(--bf-color-code-change-added);
   }
 
   .deletions {
-    color: var(--bf-color-status-danger-content);
+    color: var(--bf-color-code-change-removed);
   }
 
   @media (prefers-reduced-motion: reduce) {

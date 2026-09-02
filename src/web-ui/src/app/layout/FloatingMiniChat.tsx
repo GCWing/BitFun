@@ -20,7 +20,7 @@ import type {
   ChatInputRegistration,
   ChatInputSubmission,
 } from '@/flow_chat/components/chatInputRegistration';
-import { Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, LauncherButton, Tooltip } from '@bitfun/ui';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
@@ -529,30 +529,30 @@ export const FloatingMiniChat: React.FC = () => {
       {/* Hello trigger — sits above the backdrop and the collapsed panel via
           an explicit z-index, and is taken out of hit testing with
           `visibility` (not just pointer-events) while the panel is open. */}
-      <button
-        data-bf-component="floating-mini-chat"
-        data-bf-part="trigger"
-        type="button"
-        className={[
-          'bitfun-fmc__button',
-          isMiniAppBubbleIsolated && 'bitfun-fmc__button--miniapp',
-          isMiniAppSessionExecuting && 'bitfun-fmc__button--processing',
-        ].filter(Boolean).join(' ')}
-        onPointerDown={handleTriggerPointerDown}
-        onClick={handleOpen}
-        aria-expanded={isOpen}
-        aria-busy={isMiniAppSessionExecuting || undefined}
-        aria-label={isMiniAppBubbleIsolated ? displayedTitle : t('toolCards.toolbar.startNewChat')}
-      >
-        {isMiniAppSessionExecuting && (
-          <span
-            className="bitfun-fmc__button-activity"
-            data-bf-component="floating-mini-chat"
-            data-bf-part="triggerActivity"
-            aria-hidden="true"
-          />
-        )}
-        {isMiniAppBubbleIsolated ? (
+      {isMiniAppBubbleIsolated ? (
+        <button
+          data-bf-component="floating-mini-chat"
+          data-bf-part="trigger"
+          type="button"
+          className={[
+            'bitfun-fmc__button',
+            'bitfun-fmc__button--miniapp',
+            isMiniAppSessionExecuting && 'bitfun-fmc__button--processing',
+          ].filter(Boolean).join(' ')}
+          onPointerDown={handleTriggerPointerDown}
+          onClick={handleOpen}
+          aria-expanded={isOpen}
+          aria-busy={isMiniAppSessionExecuting || undefined}
+          aria-label={displayedTitle}
+        >
+          {isMiniAppSessionExecuting && (
+            <span
+              className="bitfun-fmc__button-activity"
+              data-bf-component="floating-mini-chat"
+              data-bf-part="triggerActivity"
+              aria-hidden="true"
+            />
+          )}
           <span
             className="bitfun-fmc__miniapp-trigger-icon"
             data-bf-component="floating-mini-chat"
@@ -561,12 +561,19 @@ export const FloatingMiniChat: React.FC = () => {
           >
             {renderMiniAppIcon(activeMiniAppIcon, 20)}
           </span>
-        ) : (
-          <span className="bitfun-fmc__button-label">
-            {tVoice('voiceCall.call.launcherLabel')}
-          </span>
-        )}
-      </button>
+        </button>
+      ) : (
+        <LauncherButton
+          aria-expanded={isOpen}
+          aria-label={t('toolCards.toolbar.startNewChat')}
+          className="bitfun-fmc__button"
+          leadingIcon={<Icon name="mic" />}
+          onClick={handleOpen}
+          onPointerDown={handleTriggerPointerDown}
+        >
+          {tVoice('voiceCall.call.launcherLabel')}
+        </LauncherButton>
+      )}
 
       {/* Expanded panel */}
       <div

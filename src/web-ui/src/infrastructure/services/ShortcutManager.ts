@@ -1,6 +1,6 @@
 
 import type { ShortcutConfig, ShortcutScope } from '@/shared/types/shortcut';
-import { compareShortcutScope, NON_USER_CUSTOMIZABLE_SHORTCUT_IDS } from '@/shared/constants/shortcuts';
+import { compareShortcutScope } from '@/shared/constants/shortcuts';
 import { createLogger } from '@/shared/utils/logger';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
@@ -60,7 +60,6 @@ export function buildStoredKeybindings(overrides: KeybindingOverrides): StoredKe
 function sanitizeOverrides(raw: Record<string, unknown>): KeybindingOverrides {
   const result: KeybindingOverrides = {};
   for (const [id, val] of Object.entries(raw)) {
-    if (NON_USER_CUSTOMIZABLE_SHORTCUT_IDS.has(id)) continue;
     if (id.startsWith('__') || !val || typeof val !== 'object') continue;
     const v = val as Record<string, unknown>;
     if (typeof v.key !== 'string' || !v.key) continue;
@@ -414,7 +413,6 @@ export class ShortcutManager {
   }
 
   private applyOverride(id: string, config: ShortcutConfig): ShortcutConfig {
-    if (NON_USER_CUSTOMIZABLE_SHORTCUT_IDS.has(id)) return config;
     const override = this.userOverrides[id];
     if (!override) return config;
     // Stored overrides only persist truthy modifiers. Shallow merge would keep

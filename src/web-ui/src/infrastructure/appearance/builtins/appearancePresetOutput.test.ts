@@ -141,10 +141,10 @@ describe('builtin appearance preset output', () => {
           chrome: '#f8f8f9',
         },
         text: {
-          primary: '#1c1c1f',
-          secondary: '#555555',
+          primary: 'rgba(0, 0, 0, 0.80)',
+          secondary: 'rgba(0, 0, 0, 0.60)',
           muted: '#6a6a6a',
-          disabled: '#9a9a9a',
+          disabled: 'rgba(0, 0, 0, 0.30)',
         },
         accent: {
           50: 'rgba(16, 26, 39, 0.03)',
@@ -214,8 +214,8 @@ describe('builtin appearance preset output', () => {
           scene: '#ffffff',
         },
         text: {
-          primary: '#1c1c1f',
-          secondary: '#555555',
+          primary: 'rgba(0, 0, 0, 0.80)',
+          secondary: 'rgba(0, 0, 0, 0.60)',
           muted: '#6a6a6a',
         },
         border: {
@@ -240,6 +240,8 @@ describe('builtin appearance preset output', () => {
           text: {
             primary: '#f3f3f5',
             secondary: '#b0b0b0',
+            muted: '#858585',
+            disabled: '#555555',
           },
           accent: {
             500: '#f3f3f5',
@@ -268,8 +270,9 @@ describe('builtin appearance preset output', () => {
     });
     expect(tokens).toMatchObject({
       '--bf-color-surface-canvas': '#ffffff',
-      '--bf-color-content-primary': '#1c1c1f',
-      '--bf-color-content-secondary': '#555555',
+      '--bf-color-content-primary': 'rgba(0, 0, 0, 0.80)',
+      '--bf-color-content-secondary': 'rgba(0, 0, 0, 0.60)',
+      '--bf-color-content-disabled': 'rgba(0, 0, 0, 0.30)',
       '--bf-color-border-subtle': 'rgba(16, 26, 39, 0.08)',
       '--bf-color-border-default': 'rgba(16, 26, 39, 0.15)',
       '--bf-color-surface-subtle': 'rgba(16, 26, 39, 0.03)',
@@ -321,12 +324,12 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "cf3b1df5872d83daab7f9dd33671a6f82537c1e07cb90d6a49ac7d7a416cd045",
+          "hash": "b396b5799649aeea82b816511f1187027a92a011473bf60626d1c29ddb7f86db",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "21924d3ea4f17d63e89538e539ed7cdea263b0c31682e1378221e5ac46937d78",
+          "hash": "4674aa933f038aa728fe9013cee2272d3de853e844c7b04708d4aa954d19152c",
           "id": "bitfun-monochrome",
           "type": "light",
         },

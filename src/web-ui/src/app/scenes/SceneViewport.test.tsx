@@ -48,7 +48,12 @@ vi.mock('./session/SessionScene', () => ({
 }));
 
 vi.mock('./settings/SettingsScene', () => ({
-  default: () => <div data-testid="settings-scene-content" />,
+  default: ({ isActive }: { isActive?: boolean }) => (
+    <div
+      data-testid="settings-scene-content"
+      data-scene-prop-active={isActive ? 'true' : 'false'}
+    />
+  ),
 }));
 
 vi.mock('./assistant/AssistantScene', () => ({
@@ -208,5 +213,39 @@ describe('SceneViewport transitions', () => {
     expect(inactive?.getAttribute('aria-hidden')).toBe('true');
     expect(inactive?.hasAttribute('inert')).toBe(true);
     expect(inactive?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('updates a retained Settings scene when it becomes active again', () => {
+    sceneHarness.state = {
+      openTabs: [
+        { id: 'session', lastUsed: 0 },
+        { id: 'settings', lastUsed: 1 },
+      ],
+      activeTabId: 'settings',
+      navigationMotion: 'instant',
+      navigationSequence: 0,
+    };
+
+    act(() => root.render(<SceneViewport />));
+    const settingsContent = container.querySelector('[data-testid="settings-scene-content"]');
+    expect(settingsContent?.getAttribute('data-scene-prop-active')).toBe('true');
+
+    sceneHarness.state = {
+      ...sceneHarness.state,
+      activeTabId: 'session',
+      navigationSequence: 1,
+    };
+    act(() => root.render(<SceneViewport />));
+    expect(container.querySelector('[data-testid="settings-scene-content"]')).toBe(settingsContent);
+    expect(settingsContent?.getAttribute('data-scene-prop-active')).toBe('false');
+
+    sceneHarness.state = {
+      ...sceneHarness.state,
+      activeTabId: 'settings',
+      navigationSequence: 2,
+    };
+    act(() => root.render(<SceneViewport />));
+    expect(container.querySelector('[data-testid="settings-scene-content"]')).toBe(settingsContent);
+    expect(settingsContent?.getAttribute('data-scene-prop-active')).toBe('true');
   });
 });

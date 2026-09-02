@@ -29,6 +29,10 @@
       "label": "Memory",
       "description": "When enabled, memories are generated automatically and used in sessions."
     },
+    "memoryActions": {
+      "label": "Memory actions",
+      "description": "Open the memory folder, restore default settings, or permanently clear memory data on the current execution host."
+    },
     "generateMemories": {
       "label": "Generate memories automatically",
       "description": "Extract and consolidate reusable memory from completed local sessions in the background."
@@ -95,7 +99,7 @@
     "skipSession": "Skip the session"
   },
   "actions": {
-    "menu": "Memory actions",
+    "manage": "Manage",
     "expandAdvanced": "Expand advanced settings",
     "collapseAdvanced": "Collapse advanced settings",
     "resetSettings": "Reset Memory Settings",

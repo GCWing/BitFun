@@ -86,18 +86,23 @@
 
 .bitfun-config-page-section__title {
   margin: 0;
-  font-size: var(--bf-type-body-lg-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-size: var(--bf-type-heading-section-font-size);
+  font-weight: var(--bf-type-heading-section-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-modifier-leading-dense-line-height);
+  line-height: var(--bf-type-heading-section-line-height);
+  letter-spacing: var(--bf-type-heading-section-letter-spacing);
+  overflow-wrap: break-word;
 }
 
 .bitfun-config-page-section__description {
   margin: var(--bf-space-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-type-label-md-font-size);
+  font-size: var(--bf-type-body-sm-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-meta-line-height);
+  line-height: var(--bf-type-body-sm-line-height);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  overflow-wrap: break-word;
   text-wrap: pretty;
 }
 
@@ -180,18 +185,30 @@
 
 .bitfun-config-page-row__label {
   margin: 0;
-  font-size: var(--bf-type-label-md-font-size);
+  font-size: var(--bf-type-label-selected-font-size);
   font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-modifier-leading-dense-line-height);
+  line-height: var(--bf-type-label-selected-line-height);
+  letter-spacing: var(--bf-type-label-selected-letter-spacing);
+  overflow-wrap: break-word;
+}
+
+.bitfun-config-page-row__required {
+  margin-inline-start: var(--bf-space-1);
+  color: var(--bf-color-content-required-indicator);
+  font-size: var(--bf-type-label-selected-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .bitfun-config-page-row__description {
   margin: var(--bf-space-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-type-meta-font-size);
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-support-font-weight);
   color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-modifier-leading-snug-line-height);
+  line-height: var(--bf-type-modifier-leading-support-line-height);
+  letter-spacing: var(--bf-type-support-letter-spacing);
+  overflow-wrap: break-word;
   text-wrap: pretty;
 }
 
@@ -301,5 +318,11 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-config-page-row {
     transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .bitfun-config-page-row__required {
+    color: Highlight;
   }
 }

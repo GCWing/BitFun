@@ -77,12 +77,12 @@
 }
 
 .session-stats .additions {
-  color: var(--bf-domain-git-added);
+  color: var(--bf-color-code-change-added);
   font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .session-stats .deletions {
-  color: var(--bf-domain-git-deleted);
+  color: var(--bf-color-code-change-removed);
   font-weight: var(--bf-type-label-selected-font-weight);
 }
 

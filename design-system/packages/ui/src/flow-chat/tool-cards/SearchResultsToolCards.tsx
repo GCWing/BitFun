@@ -18,7 +18,6 @@ import styles from "./SearchResultsToolCards.module.css";
 
 export interface SearchToolCardDetail {
   label: ReactNode;
-  monospace?: boolean;
   value: ReactNode;
 }
 
@@ -34,6 +33,7 @@ export interface SearchToolCardResult {
 
 interface SearchResultsToolCardBaseProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "onClick" | "results"> {
+  action?: ReactNode;
   details?: readonly SearchToolCardDetail[];
   icon: ReactNode;
   isExpanded?: boolean;
@@ -53,6 +53,7 @@ function ResultIcon({ kind }: { kind?: SearchToolCardResult["icon"] }) {
 }
 
 function SearchResultsToolCardBase({
+  action,
   details = [],
   icon,
   isExpanded = false,
@@ -74,7 +75,6 @@ function SearchResultsToolCardBase({
             <span
               className={styles.detail}
               data-bf-part="detail"
-              data-monospace={detail.monospace ? "true" : "false"}
               key={index}
             >
               <span className={styles.detailLabel}>{detail.label}</span>
@@ -131,6 +131,7 @@ function SearchResultsToolCardBase({
       expandedContent={expandedContent}
       header={(
         <AmbientToolCardHeader
+          action={action}
           content={summary}
           icon={(
             <ToolCardStatusSlot

@@ -140,19 +140,19 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     userConfirmed,
   } = toolItem;
   const toolId = toolItem.id ?? toolCall?.id;
+  const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
   
-  const [isContentExpanded, setIsContentExpanded] = useState(status !== 'completed');
+  const [isContentExpanded, setIsContentExpanded] = useState(status !== 'completed' && !isFailed);
+  const [isFailureExpanded, setIsFailureExpanded] = useState(false);
   const [retainLiveCompletionPreview, setRetainLiveCompletionPreview] = useState(false);
   const [operationDiffStats, setOperationDiffStats] = useState<{ surfaceEpoch: number; additions: number; deletions: number } | null>(null);
   
   const hasInitializedCompletionEffectRef = useRef(false);
   const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
-  const previousFailureStatusRef = useRef(status);
   const userToggledContentRef = useRef(false);
   const {
     cardRootRef,
     applyExpandedState: applyHeightContractExpandedState,
-    dispatchToolCardToggle,
   } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
@@ -275,7 +275,6 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return `${formattedCount} chars received`;
   }, [status, toolItem.toolName, writeContentCharCount]);
   
-  const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
   const {
     begin: beginCompletionPreview,
     isActive: isCompletionPreviewActive,
@@ -381,6 +380,18 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [error, clearError, currentFilePath]);
 
   useLayoutEffect(() => {
+    if (!isFailed && isFailureExpanded) {
+      setIsFailureExpanded(false);
+    }
+  }, [isFailed, isFailureExpanded]);
+
+  useLayoutEffect(() => {
+    if (isFailed) {
+      setRetainLiveCompletionPreview(false);
+      applyContentExpandedState(false, 'auto');
+      return;
+    }
+
     if (userToggledContentRef.current) {
       return;
     }
@@ -540,24 +551,6 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     writeTypewriter.isRevealing,
   ]);
 
-  useLayoutEffect(() => {
-    const previousStatus = previousFailureStatusRef.current;
-    previousFailureStatusRef.current = status;
-    const isNewFailure = previousStatus !== status && status === 'error';
-    if (!isNewFailure || !isContentExpanded) {
-      return;
-    }
-
-    dispatchToolCardToggle();
-  }, [
-    currentFilePath,
-    dispatchToolCardToggle,
-    isContentExpanded,
-    status,
-    toolId,
-    toolItem.toolName,
-  ]);
-
   const getErrorMessage = () => {
     if (rawErrorMessage !== undefined) {
       return rawErrorMessage;
@@ -571,10 +564,6 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       return displayFileToolGuidanceMessage(message);
     }
     return message;
-  };
-
-  const getSingleLineErrorMessage = () => {
-    return String(getDisplayMessage()).replace(/\s+/g, ' ').trim();
   };
 
   const handleOpenInCodeEditor = useCallback(async () => {
@@ -781,13 +770,12 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const expandedContent = renderExpandedContent();
   const hasExpandableContent =
-    !isFailed &&
-    Boolean(expandedContent);
+    !isDeleteTool &&
+    (isFailed || Boolean(expandedContent));
 
   const isCardContentExpanded =
-    !isFailed &&
     !isDeleteTool &&
-    isContentExpanded;
+    (isFailed ? isFailureExpanded : isContentExpanded);
 
   const operation = isDeleteTool
     ? 'delete'
@@ -844,7 +832,6 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
             ? t('toolCards.file.guidanceTitle')
             : `${toolDisplayName}${t('toolCards.file.failed')}`,
         } : undefined}
-        inlineMessage={isFailed && !isDeleteTool ? getSingleLineErrorMessage() : undefined}
         isExpanded={isCardContentExpanded}
         onOpenFile={canOpenFullCode ? {
           label: t('toolCards.file.openFullCodeHint'),
@@ -852,7 +839,13 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
           testId: 'chat-file-change-open-file',
         } : undefined}
         onToggle={hasExpandableContent
-          ? () => applyContentExpandedState(!isContentExpanded, 'manual')
+          ? isFailed
+            ? () => applyHeightContractExpandedState(
+              isFailureExpanded,
+              !isFailureExpanded,
+              setIsFailureExpanded,
+            )
+            : () => applyContentExpandedState(!isContentExpanded, 'manual')
           : undefined}
         operation={operation}
         path={currentFilePath}

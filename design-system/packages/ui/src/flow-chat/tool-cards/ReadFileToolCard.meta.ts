@@ -7,7 +7,8 @@ export const readFileToolCardMeta = {
   name: "ReadFileToolCard",
   props: [
     { name: "status", type: "FlowChatToolStatus" },
-    { name: "summary", type: "ReactNode" },
+    { name: "action", type: "ReactNode" },
+    { name: "content", type: "ReactNode" },
     { defaultValue: "false", name: "interactive", type: "boolean" },
     { name: "onOpen", type: "() => void" },
   ],
@@ -18,7 +19,7 @@ export const readFileToolCardMeta = {
     "color.content.muted",
     "color.status.danger.content",
     "color.status.success.content",
-    "font.family.control",
+    "font.family.sans",
     "font.size.sm",
   ],
 } as const satisfies ComponentMeta;

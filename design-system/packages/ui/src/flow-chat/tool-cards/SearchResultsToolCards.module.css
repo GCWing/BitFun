@@ -29,10 +29,6 @@
     overflow-wrap: anywhere;
   }
 
-  .detail[data-monospace="true"] .detailValue {
-    font-family:var(--bf-type-code-md-font-family);
-  }
-
   .results {
     display: flex;
     max-block-size: 25rem;
@@ -107,7 +103,6 @@
   }
 
   .resultUrl {
-    font-family:var(--bf-type-code-md-font-family);
     font-size: var(--bf-type-body-xs-font-size);
   }
 
@@ -120,7 +115,7 @@
     margin: 0;
     overflow: auto;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
+    font-family: inherit;
     font-size: var(--bf-type-body-sm-font-size);
     line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;

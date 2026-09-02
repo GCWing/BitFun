@@ -206,7 +206,7 @@ test("Button preview exposes the public presentation variants", async () => {
   assert.ok(declaration);
   assert.deepEqual(
     [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ["outline", "fill", "primary", "text"],
+    ["outline", "fill", "secondary", "primary", "text"],
   );
 });
 
@@ -383,7 +383,8 @@ test("Dialog and Sheet previews exercise provider-owned overlays and compound an
   assert.match(detail, /<DialogHeader>/);
   assert.match(detail, /<DialogBody>/);
   assert.match(detail, /<DialogFooter>/);
-  assert.match(detail, /size="2xl"/);
+  assert.match(detail, /size="xl"/);
+  assert.match(detail, /<DialogFooter appearance="floating">/);
   assert.match(detail, /placement=\{placement\}/);
   assert.doesNotMatch(detail, /portalled=|portalContainer=|contentPadding=|overlayClassName=|dialogClassName=/);
   assert.match(styles, /\.component-dialog-preview-stage\s*\{/);

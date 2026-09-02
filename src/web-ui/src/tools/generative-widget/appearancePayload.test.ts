@@ -16,7 +16,7 @@ import {
 } from './appearancePayload';
 
 const CANONICAL_THEME_VARIABLE_NAMES = Object.values(themeCssVariables);
-const CANONICAL_THEME_VARIABLE_NAMES_HASH = '20c775e19798c1fc3add12c0b7c2b61f457bc35fb2bc3d885068e2ecfb011e0a';
+const CANONICAL_THEME_VARIABLE_NAMES_HASH = '9d7c655abec7171f4ab73e8feb34b14d74849e386657ac5a2f5b85ed60b729fe';
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',
@@ -65,7 +65,7 @@ describe('generated widget appearance payload contract', () => {
       first: WIDGET_APPEARANCE_VAR_NAMES[0],
       last: WIDGET_APPEARANCE_VAR_NAMES[WIDGET_APPEARANCE_VAR_NAMES.length - 1],
     }).toEqual({
-      count: 111,
+      count: 124,
       hash: CANONICAL_THEME_VARIABLE_NAMES_HASH,
       first: '--bf-color-accent-border',
       last: '--bf-shadow-xs',
@@ -89,6 +89,8 @@ describe('generated widget appearance payload contract', () => {
       '--bf-color-action-primary-background',
       '--bf-color-action-primary-hover',
       '--bf-color-action-primary-pressed',
+      '--bf-color-code-change-added',
+      '--bf-color-code-change-removed',
       '--bf-color-status-success-content',
       '--bf-color-status-success-surface',
       '--bf-color-status-success-border',

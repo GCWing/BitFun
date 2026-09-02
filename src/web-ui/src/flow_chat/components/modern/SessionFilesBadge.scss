@@ -60,11 +60,11 @@
     line-height: inherit;
 
     &--add {
-      color: var(--bf-color-status-success-content);
+      color: var(--bf-color-code-change-added);
     }
 
     &--del {
-      color: var(--bf-color-status-danger-content);
+      color: var(--bf-color-code-change-removed);
     }
   }
 
@@ -359,11 +359,11 @@
 
   &__file-stat {
     &--add {
-      color: var(--bf-color-status-success-content);
+      color: var(--bf-color-code-change-added);
     }
 
     &--del {
-      color: var(--bf-color-status-danger-content);
+      color: var(--bf-color-code-change-removed);
     }
   }
 

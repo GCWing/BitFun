@@ -66,11 +66,11 @@
     font-family: var(--bf-type-code-md-font-family);
 
     .stat-add {
-      color: var(--bf-color-status-success-content);
+      color: var(--bf-color-code-change-added);
     }
 
     .stat-del {
-      color: var(--bf-color-status-danger-content);
+      color: var(--bf-color-code-change-removed);
     }
   }
 
@@ -224,11 +224,11 @@
       font-family: var(--bf-type-code-md-font-family);
 
       .stat-add {
-        color: var(--bf-color-status-success-content);
+        color: var(--bf-color-code-change-added);
       }
 
       .stat-del {
-        color: var(--bf-color-status-danger-content);
+        color: var(--bf-color-code-change-removed);
       }
     }
 

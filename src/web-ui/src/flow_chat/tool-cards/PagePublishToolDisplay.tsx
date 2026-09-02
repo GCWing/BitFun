@@ -80,10 +80,10 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   }, [isLoading, slug, t]);
 
   const fields = success ? [
-    slug ? { label: `${t('toolCards.pagePublish.labelSlug')}:`, value: slug, monospace: true } : null,
-    versionId ? { label: `${t('toolCards.pagePublish.labelVersion')}:`, value: versionId, monospace: true } : null,
-    deployed && urlPath ? { label: `${t('toolCards.pagePublish.labelPath')}:`, value: urlPath, monospace: true } : null,
-    !deployed && previewPath ? { label: `${t('toolCards.pagePublish.labelPreview')}:`, value: previewPath, monospace: true } : null,
+    slug ? { label: `${t('toolCards.pagePublish.labelSlug')}:`, value: slug } : null,
+    versionId ? { label: `${t('toolCards.pagePublish.labelVersion')}:`, value: versionId } : null,
+    deployed && urlPath ? { label: `${t('toolCards.pagePublish.labelPath')}:`, value: urlPath } : null,
+    !deployed && previewPath ? { label: `${t('toolCards.pagePublish.labelPreview')}:`, value: previewPath } : null,
   ].filter((field): field is NonNullable<typeof field> => Boolean(field)) : [];
 
   return (

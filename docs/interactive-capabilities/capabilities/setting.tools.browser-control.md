@@ -24,8 +24,8 @@ Choose a browser, inspect connection status, and configure CDP and startup conne
 
 1. 打开设置
    Open Settings
-2. 进入“工具 > 浏览器控制”
-   Go to Tools > Browser Control
+2. 进入“工具 > 浏览器与桌面控制”
+   Go to Tools > Browser & Desktop Control
 3. 选择浏览器并检查连接状态
    Choose a browser and inspect its connection status
 

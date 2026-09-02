@@ -144,6 +144,7 @@ const requiredSemanticTokens = [
   "color.status.success.content",
   "color.status.success.surface",
   "color.status.warning.content",
+  "color.status.warning.emphasis",
   "color.status.warning.surface",
   "color.status.danger.content",
   "color.status.danger.surface",

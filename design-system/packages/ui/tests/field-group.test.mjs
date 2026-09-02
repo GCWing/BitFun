@@ -4,11 +4,15 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  Combobox,
   Field,
   FieldGroup,
   FieldRow,
   FormSection,
   Input,
+  NumberInput,
+  Select,
+  Textarea,
 } from "../dist/index.js";
 
 test("form grouping composes semantic sections, grouped surfaces, and independent rows", () => {
@@ -22,6 +26,7 @@ test("form grouping composes semantic sections, grouped surfaces, and independen
     }, createElement(FieldGroup, {
       appearance: "subtle",
       dividers: true,
+      fieldSurface: "ambient",
     },
     createElement(FieldRow, { align: "center", padding: "md" },
       createElement(Field, {
@@ -44,6 +49,8 @@ test("form grouping composes semantic sections, grouped surfaces, and independen
   assert.match(markup, /data-bf-component="field-group"/);
   assert.match(markup, /data-appearance="subtle"/);
   assert.match(markup, /data-dividers="true"/);
+  assert.match(markup, /data-field-surface="ambient"/);
+  assert.match(markup, /data-bf-component="input"[^>]+data-field-surface="ambient"/);
   assert.match(markup, /data-align="center"[^>]+data-bf-part="row"[^>]+data-padding="md"/);
   assert.match(markup, /data-align="start"[^>]+data-bf-part="row"[^>]+data-padding="none"/);
   assert.match(markup, /data-control-width="fill"/);
@@ -57,4 +64,49 @@ test("form grouping styles consume only shared public composition tokens", async
   assert.match(styles, /--bf-layout-field-group-row-padding-block/);
   assert.match(styles, /--bf-color-surface-tertiary/);
   assert.match(styles, /--bf-color-border-subtle/);
+});
+
+test("field surface context reaches canonical field shells and resets for nested groups", () => {
+  const controls = [
+    ["input", createElement(Input)],
+    ["select", createElement(Select, { options: [] })],
+    ["combobox", createElement(Combobox, { options: [] })],
+    ["textarea", createElement(Textarea)],
+    ["number-input", createElement(NumberInput, { onValueChange() {}, value: 1 })],
+  ];
+
+  controls.forEach(([component, control]) => {
+    const markup = renderToStaticMarkup(
+      createElement(FieldGroup, { fieldSurface: "ambient" }, control),
+    );
+    assert.match(markup, new RegExp(`data-bf-component="${component}"[^>]+data-field-surface="ambient"`));
+  });
+
+  const nestedMarkup = renderToStaticMarkup(
+    createElement(FieldGroup, { fieldSurface: "ambient" },
+      createElement(FieldGroup, { fieldSurface: "default" }, createElement(Input)),
+    ),
+  );
+  assert.match(nestedMarkup, /data-bf-component="input"[^>]+data-field-surface="default"/);
+});
+
+test("ambient field groups preserve opaque overlays while field shells reuse the group surface", async () => {
+  const portalSource = await readFile(
+    new URL("../src/overlay/Portal.tsx", import.meta.url),
+    "utf8",
+  );
+  const componentStyles = await Promise.all([
+    "Input/Input.module.css",
+    "Select/Select.module.css",
+    "Combobox/Combobox.module.css",
+    "Textarea/Textarea.module.css",
+    "NumberInput/NumberInput.module.css",
+  ].map((path) => readFile(new URL(`../src/components/${path}`, import.meta.url), "utf8")));
+
+  componentStyles.forEach((styles) => {
+    assert.match(styles, /data-field-surface="ambient"/);
+    assert.match(styles, /background:\s*transparent/);
+  });
+  assert.match(componentStyles[2], /\.popover\s*\{[\s\S]*?background:\s*var\(--bf-color-surface-panel\)/);
+  assert.match(portalSource, /<FieldSurfaceContext\.Provider value="default">/);
 });

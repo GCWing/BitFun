@@ -179,9 +179,11 @@ export const DefaultModelConfig: React.FC = () => {
       <ConfigPageRow
         label={t('core.primary.label')}
         description={t('core.primary.description')}
+        required
         align="center"
       >
         <Combobox
+          aria-required="true"
           data-bf-component="default-model-config"
           data-bf-part="primaryModel"
           value={defaultModels.primary || ''}

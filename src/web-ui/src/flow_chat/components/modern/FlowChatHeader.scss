@@ -32,7 +32,8 @@
     min-width: 0;
 
     &--left {
-      margin-right: var(--bf-space-1);
+      // The chrome container owns the single 4px gap between action groups.
+      margin-right: 0;
     }
   }
 

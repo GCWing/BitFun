@@ -85,13 +85,13 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    /* Group captions carry half the ink of destinations, not the action label tone. */
-    color: color-mix(in srgb, var(--bf-color-content-primary) 50%, transparent);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    /* Keep group captions at 40% semantic ink without borrowing disabled-state color. */
+    color: color-mix(in srgb, var(--bf-color-content-primary) 40%, transparent);
+    font-family: var(--bf-type-label-xs-font-family);
+    font-size: var(--bf-type-label-xs-font-size);
+    font-weight: var(--bf-type-label-xs-font-weight);
+    line-height: var(--bf-type-label-xs-line-height);
+    letter-spacing: var(--bf-type-label-xs-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

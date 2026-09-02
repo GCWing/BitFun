@@ -202,8 +202,8 @@
     color: var(--bf-color-content-muted);
 
     &--added {
-      background: color-mix(in srgb, var(--bf-domain-git-added) 10%, transparent);
-      color: var(--bf-domain-git-added);
+      background: color-mix(in srgb, var(--bf-color-code-change-added) 10%, transparent);
+      color: var(--bf-color-code-change-added);
     }
 
     &--modified {
@@ -212,8 +212,8 @@
     }
 
     &--deleted {
-      background: color-mix(in srgb, var(--bf-domain-git-deleted) 10%, transparent);
-      color: var(--bf-domain-git-deleted);
+      background: color-mix(in srgb, var(--bf-color-code-change-removed) 10%, transparent);
+      color: var(--bf-color-code-change-removed);
     }
 
     &--renamed {
@@ -233,14 +233,14 @@
   }
 
   &__additions {
-    color: var(--bf-domain-git-added);
+    color: var(--bf-color-code-change-added);
     display: flex;
     align-items: center;
     gap: 4px;
   }
 
   &__deletions {
-    color: var(--bf-domain-git-deleted);
+    color: var(--bf-color-code-change-removed);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -271,26 +271,26 @@
     transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &--added {
-      background: color-mix(in srgb, var(--bf-domain-git-added) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-color-code-change-added) 10%, transparent);
       
       &:hover {
-        background: color-mix(in srgb, var(--bf-domain-git-added) 15%, transparent);
+        background: color-mix(in srgb, var(--bf-color-code-change-added) 15%, transparent);
       }
 
       .bitfun-git-diff-view__line-content {
-        color: var(--bf-domain-git-added);
+        color: var(--bf-color-code-change-added);
       }
     }
 
     &--deleted {
-      background: color-mix(in srgb, var(--bf-domain-git-deleted) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-color-code-change-removed) 10%, transparent);
       
       &:hover {
-        background: color-mix(in srgb, var(--bf-domain-git-deleted) 15%, transparent);
+        background: color-mix(in srgb, var(--bf-color-code-change-removed) 15%, transparent);
       }
 
       .bitfun-git-diff-view__line-content {
-        color: var(--bf-domain-git-deleted);
+        color: var(--bf-color-code-change-removed);
       }
     }
 

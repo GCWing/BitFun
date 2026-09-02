@@ -139,6 +139,20 @@ test("ActionCard geometry preserves compact and descriptive entry compositions",
   assert.equal(systemDocument.control.actionCard.radius.$value, "{radius.base}");
 });
 
+test("LauncherButton geometry preserves the shell-edge action contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.launcherButton.minInlineSize"], "104px");
+  assert.equal(tokens["control.launcherButton.blockSize"], "40px");
+  assert.equal(tokens["control.launcherButton.paddingInline"], "14px");
+  assert.equal(tokens["control.launcherButton.gap"], "8px");
+  assert.equal(tokens["control.launcherButton.iconSize"], "16px");
+  assert.equal(
+    systemDocument.control.launcherButton.radius.$value,
+    "{radius.lg}",
+  );
+});
+
 test("AskUser geometry preserves the answered question reference contract", () => {
   assert.equal(tokens["control.askUser.bodyGap"], "12px");
   assert.equal(tokens["control.askUser.bodyPadding"], "16px");
@@ -431,6 +445,7 @@ test("semantic typography roles resolve to the canonical foundation", async () =
   assert.equal(systemDocument.type.overline.xs.fontSize.$value, "{font.size.3xs}");
   assert.equal(systemDocument.type.overline.sm.fontSize.$value, "{font.size.2xs}");
   assert.equal(systemDocument.type.modifier.leading.ui.lineHeight.$value, "{lineHeight.ui}");
+  assert.equal(systemDocument.type.modifier.leading.support.lineHeight.$value, "{lineHeight.support}");
   assert.equal(systemDocument.type.modifier.leading.balanced.lineHeight.$value, "{lineHeight.balanced}");
   assert.equal(systemDocument.type.modifier.tracking.wider.letterSpacing.$value, "{letterSpacing.wider}");
   assert.equal(systemDocument.type.display.xxl.fontSize.$value, "{font.size.9xl}");
@@ -445,6 +460,7 @@ test("semantic typography roles resolve to the canonical foundation", async () =
   assert.equal(tokens["type.label.md.fontWeight"], 400);
   assert.equal(tokens["type.overline.xs.fontSize"], "8px");
   assert.equal(tokens["type.modifier.leading.ui.lineHeight"], 1.4);
+  assert.equal(tokens["type.modifier.leading.support.lineHeight"], 1.45);
   assert.equal(tokens["type.modifier.leading.balanced.lineHeight"], 1.35);
   assert.equal(tokens["type.modifier.tracking.wider.letterSpacing"], "0.04em");
   assert.equal(tokens["type.display.xxl.fontSize"], "64px");
@@ -460,6 +476,7 @@ test("generated CSS preserves semantic typography references", async () => {
   assert.match(css, /--bf-type-label-selected-font-weight: var\(--bf-font-weight-semibold\);/);
   assert.match(css, /--bf-type-heading-compact-page-font-size: var\(--bf-font-size-2xl-plus\);/);
   assert.match(css, /--bf-type-modifier-leading-ui-line-height: var\(--bf-line-height-ui\);/);
+  assert.match(css, /--bf-type-modifier-leading-support-line-height: var\(--bf-line-height-support\);/);
   assert.match(css, /--bf-type-modifier-leading-balanced-line-height: var\(--bf-line-height-balanced\);/);
   assert.match(css, /--bf-type-modifier-tracking-wider-letter-spacing: var\(--bf-letter-spacing-wider\);/);
 });

@@ -9,6 +9,7 @@ import {
   type KeyboardEventHandler,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { useFieldSurface } from "../../internal/fieldSurface";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./NumberInput.module.css";
 
@@ -62,6 +63,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }, ref) {
+  const fieldSurface = useFieldSurface();
   const format = useCallback((next: number) => precision > 0 ? next.toFixed(precision) : String(Math.round(next)), [precision]);
   const clamp = useCallback((next: number) => Math.min(max, Math.max(min, next)), [max, min]);
   const [draft, setDraft] = useState(() => format(value));
@@ -83,7 +85,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   }, [clamp, draft, format, onValueChange, value]);
   const changeBy = (amount: number) => onValueChange(clamp(value + amount));
   return (
-    <span className={classNames(styles.root, className)} data-bf-component="number-input" data-disabled={disabled ? "true" : "false"} data-size={size} data-variant={variant}>
+    <span className={classNames(styles.root, className)} data-bf-component="number-input" data-disabled={disabled ? "true" : "false"} data-field-surface={fieldSurface} data-size={size} data-variant={variant}>
       {label && <span className={styles.label} data-bf-part="label">{label}</span>}
       <span
         className={styles.control}

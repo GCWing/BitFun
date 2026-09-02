@@ -81,27 +81,27 @@
   }
   
   &--added {
-    background: color-mix(in srgb, var(--bf-domain-git-added) 10%, transparent);
+    background: color-mix(in srgb, var(--bf-color-code-change-added) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--bf-domain-git-added) 15%, transparent);
+      background: color-mix(in srgb, var(--bf-color-code-change-added) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--bf-domain-git-added);
+      color: var(--bf-color-code-change-added);
       font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 
   &--removed {
-    background: color-mix(in srgb, var(--bf-domain-git-deleted) 10%, transparent);
+    background: color-mix(in srgb, var(--bf-color-code-change-removed) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--bf-domain-git-deleted) 15%, transparent);
+      background: color-mix(in srgb, var(--bf-color-code-change-removed) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--bf-domain-git-deleted);
+      color: var(--bf-color-code-change-removed);
       font-weight: var(--bf-type-label-sm-font-weight);
     }
     
@@ -225,26 +225,26 @@
 .light .inline-diff-preview {
   .diff-line {
     &--added {
-      background: color-mix(in srgb, var(--bf-domain-git-added) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-color-code-change-added) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--bf-domain-git-added) 18%, transparent);
+        background: color-mix(in srgb, var(--bf-color-code-change-added) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--bf-domain-git-added);
+        color: var(--bf-color-code-change-added);
       }
     }
 
     &--removed {
-      background: color-mix(in srgb, var(--bf-domain-git-deleted) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-color-code-change-removed) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--bf-domain-git-deleted) 18%, transparent);
+        background: color-mix(in srgb, var(--bf-color-code-change-removed) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--bf-domain-git-deleted);
+        color: var(--bf-color-code-change-removed);
       }
     }
 

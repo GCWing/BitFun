@@ -19,7 +19,6 @@
       "deleteConfirmBody": "從本機刪除此已匯入的寵物形象？此操作無法復原。",
       "deleteSuccess": "已刪除匯入的形象",
       "deleteFailed": "刪除匯入形象失敗",
-      "refresh": "重新整理形象列表",
       "presets": {
         "blueGolden": {
           "name": "困困"

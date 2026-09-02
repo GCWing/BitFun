@@ -29,6 +29,7 @@ const LIGHT_PURPLE = '#7c6b99';
 const LIGHT_PURPLE_HOVER = '#655680';
 const LIGHT_SUCCESS = getDesignSystemThemeString('light', 'color.status.success.content');
 const LIGHT_SUCCESS_BG = getDesignSystemThemeString('light', 'color.status.success.surface');
+const LIGHT_INFO = getDesignSystemThemeString('light', 'color.status.info.content');
 const LIGHT_WARNING = getDesignSystemThemeString('light', 'color.status.warning.content');
 const LIGHT_ERROR = getDesignSystemThemeString('light', 'color.status.danger.content');
 const LIGHT_ERROR_BG = getDesignSystemThemeString('light', 'color.status.danger.surface');
@@ -103,7 +104,7 @@ export const bitfunLightPalette: AppearancePalette = {
       success: LIGHT_SUCCESS,
       warning: LIGHT_WARNING,
       error: LIGHT_ERROR,
-      info: LIGHT_TEXT_SECONDARY,
+      info: LIGHT_INFO,
       bgAlpha: 0.08,
       borderAlpha: 0.25,
       overrides: {

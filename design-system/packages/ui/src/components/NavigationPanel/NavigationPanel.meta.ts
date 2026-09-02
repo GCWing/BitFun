@@ -27,7 +27,7 @@ export const navigationPanelMeta = {
     "layout.navigationPanel.headingHeight",
     "layout.navigationPanel.headingPaddingInline",
     "layout.navigationPanel.headingGap",
-    "type.meta.fontSize",
+    "type.label.xs.fontSize",
     "layout.navigationPanel.headingActionSize",
     "layout.navigationPanel.itemHeight",
     "layout.navigationPanel.itemPaddingInline",

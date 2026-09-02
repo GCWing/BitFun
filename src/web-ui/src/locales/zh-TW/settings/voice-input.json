@@ -134,16 +134,15 @@
       "label": "輸入裝置",
       "description": "預設跟隨系統；此選擇僅套用於目前裝置。",
       "systemDefault": "系統預設",
-      "unnamed": "麥克風 {{index}}",
-      "refresh": "重新整理麥克風清單"
+      "unnamed": "麥克風 {{index}}"
     },
     "recognition": {
       "label": "測試語音輸入",
       "description": "說一小段話，同時檢查麥克風與本機辨識。",
       "start": "開始測試",
-      "finish": "結束並轉寫",
-      "modelRequired": "安裝本機模型後才能測試辨識。",
-      "cloudUnavailable": "雲端轉寫通路尚未接入，請先切換到本機處理。",
+      "finish": "結束錄音",
+      "preparing": "正在準備",
+      "transcribing": "正在辨識",
       "timing": "推理耗時 {{duration}} 毫秒"
     },
     "messages": {
@@ -154,35 +153,48 @@
   },
   "status": {
     "label": "使用狀態",
-    "manageModels": "本機模型",
+    "manageModels": "管理模型",
     "unknownModel": "本機語音模型",
-    "useLocal": "切換到本機處理",
-    "downloadAndEnable": "下載並啟用",
-    "repair": "檢查並修復",
+    "useLocal": "切換到本機辨識",
+    "downloadModel": "下載模型",
+    "viewDetails": "查看詳情",
+    "repair": "查看並修復",
     "ready": {
       "badge": "已就緒",
-      "title": "可以使用語音輸入",
-      "description": "音訊由此裝置上的 {{model}} 處理，不會上傳。"
+      "title": "語音輸入已就緒",
+      "description": "使用 {{model}} 在本機辨識，音訊不會上傳。",
+      "summary": "已下載模型：<model>{{model}}</model>"
     },
     "setup": {
-      "badge": "需要設定",
-      "title": "下載本機辨識資源",
-      "description": "需要下載 {{size}} 的 {{model}}；完成後即可在輸入框中使用。"
+      "badge": "未下載",
+      "title": "尚未下載語音模型",
+      "description": "下載後即可使用語音輸入，約佔用 {{size}}。",
+      "summary": "語音模型<warning>未下載</warning>，下載後即可使用語音輸入。"
     },
     "downloading": {
-      "badge": "準備中",
-      "title": "正在準備語音輸入",
-      "description": "正在下載或校驗 {{model}}。"
+      "badge": "下載中",
+      "title": "正在下載語音模型",
+      "description": "{{model}} 下載完成後即可使用語音輸入。"
+    },
+    "verifying": {
+      "badge": "校驗中",
+      "title": "正在校驗語音模型",
+      "description": "正在確認 {{model}} 是否完整可用。"
+    },
+    "deleting": {
+      "badge": "刪除中",
+      "title": "正在刪除語音模型",
+      "description": "正在從此裝置移除 {{model}}。"
     },
     "unavailable": {
       "badge": "不可用",
-      "title": "雲端轉寫目前不可用",
-      "description": "已有雲端模型設定已保留；目前版本尚未接入雲端轉寫，請切換回本機處理。"
+      "title": "雲端語音輸入暫不可用",
+      "description": "雲端設定已保留，請切換到本機辨識。"
     },
     "error": {
-      "badge": "需要處理",
-      "title": "本機語音模型需要修復",
-      "description": "請重新下載或驗證目前模型。"
+      "badge": "需要修復",
+      "title": "語音模型不可用",
+      "description": "{{model}} 無法使用，請查看詳情並重新下載。"
     }
   },
   "localModels": {

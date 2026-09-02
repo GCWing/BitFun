@@ -19,6 +19,26 @@ test("Textarea keeps native semantics, labels, support text, and count", () => {
   assert.match(markup, /data-bf-component="textarea"/);
 });
 
+test("Textarea owns required semantics and renders a decorative required marker", () => {
+  const markup = renderToStaticMarkup(createElement(Textarea, {
+    label: "Provider name",
+    required: true,
+  }));
+
+  assert.match(markup, /<textarea[^>]*required=""/);
+  assert.match(markup, /aria-hidden="true"[^>]*data-bf-part="required"[^>]*>\*<\/span>/);
+});
+
+test("Textarea keeps required emphasis separate from validation danger", async () => {
+  const styles = await readFile(
+    new URL("../src/components/Textarea/Textarea.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(styles, /\.required\s*\{\s*color:\s*var\(--bf-color-content-required-indicator\)/);
+  assert.match(styles, /\.error\s*\{\s*color:\s*var\(--bf-color-status-danger-content\)/);
+});
+
 test("Textarea guards IME-owned commit and cancel keys", async () => {
   const source = await readFile(new URL("../src/components/Textarea/Textarea.tsx", import.meta.url), "utf8");
   assert.match(source, /isImeOwnedKeyboardEvent/);

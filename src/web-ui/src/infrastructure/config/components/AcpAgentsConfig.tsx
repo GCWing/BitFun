@@ -1,7 +1,20 @@
-import { Button, ConfirmDialog, Icon, IconButton, Input, Select, TabGroup, Textarea, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  ConfirmDialog,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  Spinner,
+  StatusPill,
+  TabGroup,
+  Textarea,
+  Tooltip,
+  type StatusPillTone,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, CircleAlert, EyeOff, FileJson, LoaderCircle, Save, Server } from 'lucide-react';
+import { Bot, CircleAlert, EyeOff, FileJson, Save, Server } from 'lucide-react';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -278,9 +291,12 @@ function formatEnv(env: Record<string, string>): string {
   return Object.entries(env).map(([key, value]) => `${key}=${value}`).join('\n');
 }
 
-function requirementTone(item?: AcpRequirementProbeItem): 'ok' | 'error' | 'muted' {
-  if (!item) return 'muted';
-  return item.installed ? 'ok' : 'error';
+function requirementTone(
+  item?: AcpRequirementProbeItem,
+  checking = false,
+): StatusPillTone {
+  if (!item) return checking ? 'info' : 'neutral';
+  return item.installed ? 'success' : 'danger';
 }
 
 type RegistryFilter = 'all' | 'installed' | 'not_installed' | 'invalid';
@@ -371,7 +387,23 @@ function getAgentRowStatus({
   return 'enabled';
 }
 
-function CapabilityBadge({
+function agentStatusTone(status: AgentRowStatus): StatusPillTone {
+  switch (status) {
+    case 'enabled':
+    case 'ready':
+      return 'success';
+    case 'partial':
+      return 'warning';
+    case 'invalid':
+      return 'danger';
+    case 'checking':
+      return 'info';
+    case 'not_installed':
+      return 'neutral';
+  }
+}
+
+function CapabilityStatusPill({
   icon,
   item,
   label,
@@ -388,7 +420,7 @@ function CapabilityBadge({
   missingText: string;
   checkingText: string;
 }) {
-  const tone = item ? requirementTone(item) : 'muted';
+  const tone = requirementTone(item, checking);
   const title = item
     ? [label, item.installed ? installedText : missingText, item.path, item.version, item.error]
       .filter(Boolean)
@@ -396,17 +428,19 @@ function CapabilityBadge({
     : checking ? `${label}\n${checkingText}` : label;
 
   return (
-    <span
-      className={`bitfun-acp-agents__capability is-${tone}`}
+    <StatusPill
+      aria-label={title}
+      data-bf-state={item ? (item.installed ? 'installed' : 'missing') : checking ? 'checking' : 'unknown'}
+      leading={icon}
       title={title}
+      tone={tone}
     >
-      {icon}
-      <span>{label}</span>
-    </span>
+      {label}
+    </StatusPill>
   );
 }
 
-function AgentStatusBadge({
+function AgentStatusPill({
   status,
   label,
   title,
@@ -416,10 +450,15 @@ function AgentStatusBadge({
   title?: string;
 }) {
   return (
-    <span className={`bitfun-acp-agents__status is-${status}`} title={title}>
-      {status === 'checking' && <LoaderCircle size={12} />}
-      <span>{label}</span>
-    </span>
+    <StatusPill
+      aria-label={title ? `${label}. ${title}` : label}
+      data-bf-state={status}
+      leading={status === 'checking' ? <Spinner size="xs" /> : undefined}
+      title={title}
+      tone={agentStatusTone(status)}
+    >
+      {label}
+    </StatusPill>
   );
 }
 
@@ -1475,26 +1514,11 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                       </div>
                     </div>
                     <div
-                      className="bitfun-acp-agents__capabilities"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="capabilities"
-                    >
-                      <CapabilityBadge
-                        icon={<Icon name="terminal" size="xs" />}
-                        item={requirementProbe?.tool}
-                        label={t('requirements.tool')}
-                        installedText={t('requirements.installed')}
-                        missingText={t('requirements.missing')}
-                        checking={probePending}
-                        checkingText={t('requirements.checking')}
-                      />
-                    </div>
-                    <div
                       className="bitfun-acp-agents__status-cell"
                       data-bf-component="acp-agents-config"
                       data-bf-part="status"
                     >
-                      <AgentStatusBadge status={status} label={statusLabel} title={statusTitle} />
+                      <AgentStatusPill status={status} label={statusLabel} title={statusTitle} />
                     </div>
                     <div
                       className="bitfun-acp-agents__confirmation-cell"
@@ -1632,26 +1656,11 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                       </div>
                     </div>
                     <div
-                      className="bitfun-acp-agents__capabilities"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="capabilities"
-                    >
-                      <CapabilityBadge
-                        icon={<Icon name="terminal" size="xs" />}
-                        item={requirementProbe?.tool}
-                        label={t('requirements.tool')}
-                        installedText={t('requirements.installed')}
-                        missingText={t('requirements.missing')}
-                        checking={probePending}
-                        checkingText={t('requirements.checking')}
-                      />
-                    </div>
-                    <div
                       className="bitfun-acp-agents__status-cell"
                       data-bf-component="acp-agents-config"
                       data-bf-part="status"
                     >
-                      <AgentStatusBadge status={status} label={statusLabel} title={statusTitle} />
+                      <AgentStatusPill status={status} label={statusLabel} title={statusTitle} />
                     </div>
                     <div
                       className="bitfun-acp-agents__confirmation-cell"
@@ -1787,6 +1796,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                     row.status === 'not_installed' ||
                     row.status === 'invalid'
                   )).length;
+                  const remoteChecking = remoteRows.some(row => row.status === 'checking');
 
                   return (
                     <div
@@ -1816,13 +1826,16 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                               {hostLabel || connection.id}
                             </p>
                             <div className="bitfun-acp-agents__remote-summary">
-                              <span className="bitfun-acp-agents__summary-pill is-success">
+                              <StatusPill
+                                leading={remoteChecking ? <Spinner size="xs" /> : undefined}
+                                tone={remoteChecking ? 'info' : availableCount > 0 ? 'success' : 'neutral'}
+                              >
                                 {getRemoteSummary(availableCount, remoteRows.length)}
-                              </span>
+                              </StatusPill>
                               {issueCount > 0 && (
-                                <span className="bitfun-acp-agents__summary-pill is-warning">
+                                <StatusPill tone="warning">
                                   {t('remote.issueSummary', { count: issueCount })}
-                                </span>
+                                </StatusPill>
                               )}
                             </div>
                           </div>
@@ -1912,7 +1925,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                 data-bf-component="acp-agents-config"
                                 data-bf-part="capabilities"
                               >
-                                <CapabilityBadge
+                                <CapabilityStatusPill
                                   icon={<Icon name="terminal" size="xs" />}
                                   item={row.requirementProbe?.tool}
                                   label={t('requirements.tool')}
@@ -1922,7 +1935,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                   checkingText={t('requirements.checking')}
                                 />
                                 {row.requirementProbe?.adapter && (
-                                  <CapabilityBadge
+                                  <CapabilityStatusPill
                                     icon={<FileJson size={12} />}
                                     item={row.requirementProbe.adapter}
                                     label={t('requirements.adapter')}
@@ -1938,7 +1951,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                 data-bf-component="acp-agents-config"
                                 data-bf-part="status"
                               >
-                                <AgentStatusBadge status={row.status} label={statusLabel} title={statusTitle} />
+                                <AgentStatusPill status={row.status} label={statusLabel} title={statusTitle} />
                               </div>
                               <div
                                 className="bitfun-acp-agents__confirmation-cell"

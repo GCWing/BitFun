@@ -1616,8 +1616,8 @@
       "delete": "删除文件",
       "deletedLabel": "删除",
       "failed": "失败",
-      "guidanceHint": "提示",
-      "guidanceTitle": "提示",
+      "guidanceHint": " · 需要处理",
+      "guidanceTitle": "重试前需要处理",
       "parsingPath": "解析文件路径中...",
       "receivingContent": "接收文件内容中...",
       "unknownFile": "未知文件",
@@ -1852,6 +1852,7 @@
       "thinkingCharacters": "思考了 {{count}} 字符"
     },
     "webSearch": {
+      "action": "网络搜索",
       "parsingSearchTerm": "解析搜索词中...",
       "searchTitle": "网络搜索: \"{{term}}\"",
       "resultsCount": "{{count}} 个结果",

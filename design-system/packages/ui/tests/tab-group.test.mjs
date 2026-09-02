@@ -104,10 +104,27 @@ test("TabGroup styling uses its geometry contract and Button semantic colors", a
   assert.match(styles, /--bf-control-tab-group-item-radius/);
   assert.match(styles, /--bf-color-action-neutral-border/);
   assert.match(styles, /--bf-color-action-neutral-content/);
+  assert.match(styles, /--bf-color-content-primary/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-type-label-md-font-weight/);
   assert.match(styles, /--bf-type-label-selected-font-weight/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
+});
+
+test("tab labels and icons keep primary content across selection states", async () => {
+  const styles = await readFile(
+    new URL("../src/components/TabGroup/TabGroup.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    styles,
+    /\.tab\s*\{[^}]*--_tab-content:\s*var\(--bf-color-content-primary\);/s,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.tab\[aria-selected="true"\]\s*\{[^}]*--_tab-content:/s,
+  );
 });
 
 test("TabGroup implements wrapped arrow, Home, and End navigation", async () => {

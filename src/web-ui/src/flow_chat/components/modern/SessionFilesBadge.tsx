@@ -787,7 +787,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
                 showReviewReadyGlint && 'session-files-badge__review-btn--glint',
                 activeReviewMode && 'session-files-badge__review-btn--running',
               ].filter(Boolean).join(' ')}
-              size="sm"
+              size="xs"
               icon={<Icon name="commit" size="sm" className="session-files-badge__review-main-icon" />}
               loading={Boolean(activeReviewMode)}
               onClick={(event) => {

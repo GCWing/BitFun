@@ -21,7 +21,7 @@ export const fieldMeta = {
   ],
   states: ["default", "invalid"],
   tokens: [
-    "color.accent.default",
+    "color.content.requiredIndicator",
     "color.content.primary",
     "color.content.muted",
     "color.status.danger.content",

@@ -68,22 +68,20 @@
     },
     "fontSize": {
       "title": "字體大小",
-      "hint": "調整界面與對話區域的字體大小（編輯器字號在編輯器設置中設定）。",
-      "uiSizeLabel": "界面字體",
-      "uiSizeHint": "調整導航、面板、設置等所有界面元素的字體大小。",
+      "hint": "調整介面與對話區域的字體大小；編輯器字體大小請在編輯器設定中另外調整。",
+      "uiSizeLabel": "介面與對話",
+      "uiSizeHint": "選擇舒適的字體大小，套用至導覽、面板、設定與對話內容。",
       "levels": {
         "compact": "緊湊",
         "small": "小",
-        "default": "默認",
+        "default": "預設",
         "medium": "中等",
         "large": "大",
-        "custom": "自定義"
+        "custom": "自訂"
       },
-      "customPxLabel": "自定義大小（12–20 px）",
-      "customPxPlaceholder": "14",
-      "customPxOutOfRange": "請輸入 12–20 之間的整數",
-      "resetButton": "恢復默認",
-      "previewText": "BitFun 是一個由 AI 驅動的編程環境。The quick brown fox jumps over the lazy dog."
+      "customPxLabel": "自訂大小（12–20 px）",
+      "previewLabel": "字體大小預覽",
+      "previewPlaceholder": "輸入文字預覽目前的字體大小"
     }
   },
   "launchAtLogin": {

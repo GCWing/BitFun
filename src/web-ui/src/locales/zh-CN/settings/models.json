@@ -11,6 +11,7 @@
   "sessionTitle": {
     "title": "会话标题自动生成",
     "subtitle": "新对话时 AI 自动生成简洁标题",
+    "enable": "启用",
     "loadFailed": "加载会话标题配置失败",
     "loadFailedLocked": "无法读取会话标题设置。当前开关和模型选择已锁定。",
     "retry": "重新加载",

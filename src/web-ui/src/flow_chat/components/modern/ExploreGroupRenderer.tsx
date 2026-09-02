@@ -230,13 +230,11 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
       className={className}
     >
       {allowManualToggle && (
-        <button
-          type="button"
+        <div
           data-bf-component="explore-group"
           data-bf-part="header"
           className="explore-region__header"
           onClick={handleToggle}
-          aria-expanded={isExpanded}
           data-testid="chat-explore-group-toggle"
           data-group-kind={groupKind}
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -247,7 +245,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
             <Icon name="chevron-down" size="sm" className="explore-region__leading-icon--expanded" />
           </span>
           <span data-bf-component="explore-group" data-bf-part="summary" className="explore-region__summary">{displaySummary}</span>
-        </button>
+        </div>
       )}
       <SmoothHeightCollapse
         isOpen={isExpanded}

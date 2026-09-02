@@ -1,7 +1,7 @@
 .font-pref-panel {
-  /* 界面字体：多行区块，标题与说明之间略松一点 */
   &__row--ui.bitfun-config-page-row--multiline {
-    gap: var(--bf-space-3);
+    gap: var(--bf-space-4);
+    padding-block: var(--bf-space-5);
 
     .bitfun-config-page-row__description {
       max-width: 52ch;
@@ -11,16 +11,11 @@
   &__ui-size {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-3);
+    gap: var(--bf-space-4);
     width: 100%;
     min-width: 0;
     flex: 1 1 auto;
     align-self: stretch;
-  }
-
-  &__ui-segment-block {
-    width: 100%;
-    min-width: 0;
   }
 
   &__level-buttons {
@@ -32,6 +27,11 @@
     min-width: 0;
   }
 
+  &__level-control {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
   &__custom-controls {
     display: inline-flex;
     flex-wrap: nowrap;
@@ -41,39 +41,42 @@
     box-sizing: border-box;
   }
 
-  &__level-label {
-    display: block;
-    line-height: var(--bf-type-label-md-line-height);
-    font-weight: inherit;
-    color: inherit;
-  }
-
   &__custom-number-input {
-    width: 116px;
-  }
-
-  &__custom-hint {
-    width: 100%;
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    width: 128px;
   }
 
   &__preview {
     width: 100%;
-    box-sizing: border-box;
-    margin-top: var(--bf-space-2);
-    padding: var(--bf-space-3) var(--bf-space-4);
-    background: var(--bf-color-surface-panel);
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-sm);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-body-lg-line-height);
-    word-wrap: break-word;
-    transition: font-size var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   }
 
-  &__reset-btn {
-    margin-left: auto;
+  &__preview-input {
+    width: 100%;
+
+    input {
+      transition: font-size var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    }
+  }
+
+  &__surface {
+    width: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__preview-input input {
+      transition: none;
+    }
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .font-pref-panel {
+    &__level-control {
+      width: 100%;
+    }
+
+    &__custom-controls,
+    &__custom-number-input {
+      width: 100%;
+    }
   }
 }

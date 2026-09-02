@@ -68,9 +68,9 @@
     },
     "fontSize": {
       "title": "Font Size",
-      "hint": "Adjust font size for the UI and chat area (editor font is configured in the editor settings).",
-      "uiSizeLabel": "UI Font",
-      "uiSizeHint": "Controls font size across navigation, panels, settings, and all other UI elements.",
+      "hint": "Adjust text size across the interface and conversations. Editor text size is configured separately in Editor settings.",
+      "uiSizeLabel": "Interface and chat",
+      "uiSizeHint": "Choose a comfortable scale for navigation, panels, settings, and conversation content.",
       "levels": {
         "compact": "Compact",
         "small": "Small",
@@ -80,10 +80,8 @@
         "custom": "Custom"
       },
       "customPxLabel": "Custom size (12–20 px)",
-      "customPxPlaceholder": "14",
-      "customPxOutOfRange": "Please enter an integer between 12 and 20",
-      "resetButton": "Reset to Default",
-      "previewText": "BitFun is an AI-driven programming environment. The quick brown fox jumps over the lazy dog."
+      "previewLabel": "Font size preview",
+      "previewPlaceholder": "Type to preview the selected size"
     }
   },
   "autoUpdate": {

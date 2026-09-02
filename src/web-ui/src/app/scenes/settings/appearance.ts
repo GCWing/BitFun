@@ -24,7 +24,6 @@ export const settingsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
       'workspace.worktrees',
       'tools.execution',
       'tools.desktop-control',
-      'tools.browser-control',
       'tools.automation',
       'tools.mcp',
       'tools.acp',

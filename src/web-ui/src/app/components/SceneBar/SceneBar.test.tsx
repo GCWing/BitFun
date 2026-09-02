@@ -19,6 +19,7 @@ const sceneHarness = vi.hoisted(() => ({
     ],
     activeTabId: 'session' as SceneTabId,
     navigationMotion: 'instant' as InteractionMotion,
+    sessionTitle: undefined as string | undefined,
     tabDefs: [
       { id: 'session' as const, label: 'Session', pinned: true, closable: true, singleton: true, defaultOpen: false },
       { id: 'settings' as const, label: 'Settings', pinned: false, singleton: true, defaultOpen: false },
@@ -39,11 +40,7 @@ vi.mock('../../hooks/useSceneManager', () => ({
 }));
 
 vi.mock('../../hooks/useCurrentSessionTitle', () => ({
-  useCurrentSessionTitle: () => undefined,
-}));
-
-vi.mock('../../hooks/useCurrentSettingsPageTitle', () => ({
-  useCurrentSettingsPageTitle: () => undefined,
+  useCurrentSessionTitle: () => sceneHarness.state.sessionTitle ?? '',
 }));
 
 vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
@@ -77,6 +74,7 @@ describe('SceneBar overflow navigation', () => {
     root = createRoot(container);
     sceneHarness.state.activeTabId = 'session';
     sceneHarness.state.navigationMotion = 'instant';
+    sceneHarness.state.sessionTitle = undefined;
     sceneHarness.activateScene.mockReset();
     sceneHarness.closeScene.mockReset();
   });
@@ -96,6 +94,21 @@ describe('SceneBar overflow navigation', () => {
     Object.defineProperty(tabs, 'scrollWidth', { configurable: true, value: 620 });
     Object.defineProperty(tabs, 'scrollLeft', { configurable: true, value: 0, writable: true });
   }
+
+  it('uses the real session title as the single label and keeps Settings static', () => {
+    sceneHarness.state.sessionTitle = 'Investigate top tabs';
+    renderSceneBar();
+
+    const sessionTab = container.querySelector<HTMLElement>('[role="tab"][data-bf-value="session"]')!;
+    const settingsTab = container.querySelector<HTMLElement>('[role="tab"][data-bf-value="settings"]')!;
+
+    expect(sessionTab.querySelector('.bitfun-scene-bar__tab-title')?.textContent)
+      .toBe('Investigate top tabs');
+    expect(settingsTab.querySelector('.bitfun-scene-bar__tab-title')?.textContent)
+      .toBe('Settings');
+    expect(container.querySelector('.bitfun-scene-bar__tab-subtitle')).toBeNull();
+    expect(container.querySelector('.bitfun-scene-bar__tab-separator')).toBeNull();
+  });
 
   it('delegates arrow and Home/End navigation to TabGroup', () => {
     renderSceneBar();

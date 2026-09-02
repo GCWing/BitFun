@@ -37,9 +37,12 @@ $config-input-height: 32px;
 
 
 .bitfun-config-form__label {
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-type-label-selected-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--bf-color-content-primary);
+  line-height: var(--bf-type-label-selected-line-height);
+  letter-spacing: var(--bf-type-label-selected-letter-spacing);
+  overflow-wrap: break-word;
   display: flex;
   align-items: center;
   gap: var(--bf-space-2);
@@ -53,19 +56,16 @@ $config-input-height: 32px;
     content: none !important;
   }
 
-  &--required::after {
-    display: inline-block !important;
-    content: " *" !important;
-    color: var(--bf-color-status-danger-content);
-    font-weight: var(--bf-type-label-selected-font-weight);
-  }
 }
 
 .bitfun-config-form__hint {
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-muted);
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-support-font-weight);
+  color: var(--bf-color-content-secondary);
   margin-top: var(--bf-space-1);
-  line-height: var(--bf-type-body-sm-line-height);
+  line-height: var(--bf-type-modifier-leading-support-line-height);
+  letter-spacing: var(--bf-type-support-letter-spacing);
+  overflow-wrap: break-word;
 }
 
 
@@ -294,16 +294,21 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__checkbox-title {
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
+  font-size: var(--bf-type-label-selected-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  line-height: var(--bf-type-label-selected-line-height);
+  letter-spacing: var(--bf-type-label-selected-letter-spacing);
+  overflow-wrap: break-word;
 }
 
 .bitfun-config-form__checkbox-description {
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-muted);
-  line-height: var(--bf-type-body-sm-line-height);
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-support-font-weight);
+  color: var(--bf-color-content-secondary);
+  line-height: var(--bf-type-modifier-leading-support-line-height);
+  letter-spacing: var(--bf-type-support-letter-spacing);
+  overflow-wrap: break-word;
 }
 
 
@@ -392,9 +397,12 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__section-title {
-  font-size: var(--bf-type-body-lg-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-size: var(--bf-type-heading-section-font-size);
+  font-weight: var(--bf-type-heading-section-font-weight);
   color: var(--bf-color-content-primary);
+  line-height: var(--bf-type-heading-section-line-height);
+  letter-spacing: var(--bf-type-heading-section-letter-spacing);
+  overflow-wrap: break-word;
   margin: 0 0 var(--bf-space-3) 0;
   display: flex;
   align-items: center;
@@ -402,10 +410,13 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__section-description {
-  font-size: var(--bf-type-label-md-font-size);
-  color: var(--bf-color-content-muted);
+  font-size: var(--bf-type-body-sm-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  color: var(--bf-color-content-primary);
   margin: 0 0 var(--bf-space-5) 0;
   line-height: var(--bf-type-body-sm-line-height);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  overflow-wrap: break-word;
 }
 
 
@@ -479,9 +490,23 @@ $config-input-height: 32px;
     display: none !important;
     content: none !important;
   }
-  
-  &.required {
-    @extend .bitfun-config-form__label--required;
+}
+
+.config-form-label__text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bf-space-1);
+}
+
+.config-form-label__required {
+  color: var(--bf-color-content-required-indicator);
+  font-size: var(--bf-type-label-selected-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+}
+
+@media (forced-colors: active) {
+  .config-form-label__required {
+    color: Highlight;
   }
 }
 

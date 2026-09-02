@@ -128,7 +128,7 @@
         "950": { "$value": "#500724" }
       },
       "green": {
-        "$description": "Green scale for affirmative status and the BitFun switch accent.",
+        "$description": "Green scale for affirmative status and positive product identities.",
         "50": { "$value": "#effcf6" },
         "100": { "$value": "#e1fbe9" },
         "200": { "$value": "#b6efd4" },

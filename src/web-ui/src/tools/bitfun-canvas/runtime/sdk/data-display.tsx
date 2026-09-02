@@ -228,8 +228,8 @@ export function DiffStats({ additions = 0, deletions = 0, style, ...props }: Can
         ...style,
       }}
     >
-      {addCount ? <span style={{ color: 'var(--bf-color-status-success-content)' }}>+{addCount}</span> : null}
-      {delCount ? <span style={{ color: 'var(--bf-color-status-danger-content)' }}>-{delCount}</span> : null}
+      {addCount ? <span style={{ color: 'var(--bf-color-code-change-added)' }}>+{addCount}</span> : null}
+      {delCount ? <span style={{ color: 'var(--bf-color-code-change-removed)' }}>-{delCount}</span> : null}
     </span>
   );
 }
@@ -248,15 +248,15 @@ export function DiffView({
         const type = line?.type;
         const accent =
           type === 'added' || type === 'addition'
-            ? 'var(--bf-color-status-success-content)'
+            ? 'var(--bf-color-code-change-added)'
             : type === 'removed' || type === 'removal'
-              ? 'var(--bf-color-status-danger-content)'
+              ? 'var(--bf-color-code-change-removed)'
               : 'transparent';
         const bg =
-          accent === 'var(--bf-color-status-success-content)'
-            ? 'color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent)'
-            : accent === 'var(--bf-color-status-danger-content)'
-              ? 'color-mix(in srgb, var(--bf-color-status-danger-content) 12%, transparent)'
+          accent === 'var(--bf-color-code-change-added)'
+            ? 'color-mix(in srgb, var(--bf-color-code-change-added) 12%, transparent)'
+            : accent === 'var(--bf-color-code-change-removed)'
+              ? 'color-mix(in srgb, var(--bf-color-code-change-removed) 12%, transparent)'
               : 'transparent';
         return (
           <div
@@ -288,7 +288,7 @@ export function DiffView({
                 userSelect: 'none',
               }}
             >
-              {accent === 'var(--bf-color-status-success-content)' ? '+' : accent === 'var(--bf-color-status-danger-content)' ? '-' : ' '}
+              {accent === 'var(--bf-color-code-change-added)' ? '+' : accent === 'var(--bf-color-code-change-removed)' ? '-' : ' '}
             </span>
             <span style={{ paddingRight: 10, color: 'var(--bf-color-content-primary)' }}>
               {line?.content || ''}
