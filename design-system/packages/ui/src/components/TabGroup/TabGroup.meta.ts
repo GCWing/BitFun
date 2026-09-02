@@ -19,6 +19,7 @@ export const tabGroupMeta = {
     "color.action.neutral.surface",
     "color.action.neutral.surfaceHover",
     "color.action.neutral.surfacePressed",
+    "color.content.primary",
     "color.focus.ring",
     "control.tabGroup.gap",
     "control.tabGroup.itemGap",

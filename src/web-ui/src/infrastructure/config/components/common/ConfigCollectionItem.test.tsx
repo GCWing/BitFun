@@ -93,4 +93,36 @@ describe('ConfigCollectionItem', () => {
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
     expect(container.querySelector('.bitfun-collection-item__details-collapse')).toBeNull();
   });
+
+  it('optionally toggles from the row without stealing nested control clicks', () => {
+    act(() => {
+      root.render(
+        <ConfigCollectionItem
+          label="Model A"
+          control={<button type="button">Edit</button>}
+          details={<span>Model details</span>}
+          toggleOnRowClick
+        />,
+      );
+    });
+
+    const row = container.querySelector<HTMLElement>('.bitfun-collection-item__row');
+    const label = container.querySelector<HTMLElement>('.bitfun-collection-item__name');
+    const control = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Edit');
+    const toggle = container.querySelector<HTMLButtonElement>('.bitfun-collection-item__details-toggle');
+
+    expect(row?.classList.contains('bitfun-collection-item__row--toggleable')).toBe(true);
+
+    act(() => {
+      control?.click();
+    });
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      label?.click();
+    });
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('Model details');
+  });
 });

@@ -961,11 +961,11 @@
   }
 
   &__additions {
-    color: var(--bf-color-status-success-content) !important;
+    color: var(--bf-color-code-change-added) !important;
   }
 
   &__deletions {
-    color: var(--bf-color-status-danger-content) !important;
+    color: var(--bf-color-code-change-removed) !important;
   }
 
   &__file-list,

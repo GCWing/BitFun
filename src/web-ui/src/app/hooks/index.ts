@@ -7,5 +7,4 @@ export * from './useWindowControls';
 export * from './useSceneManager';
 export * from './useNavHistory';
 export * from './useCurrentSessionTitle';
-export * from './useCurrentSettingsPageTitle';
 export * from './useGlobalSceneShortcuts';

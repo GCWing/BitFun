@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { DialogFooter } from "../dist/index.js";
 
 test("Dialog and Sheet compose the shared overlay kernel and compound anatomy", async () => {
   const source = await readFile(
@@ -64,4 +67,22 @@ test("Dialog geometry and typography use public design tokens", async () => {
     assert.match(styles, new RegExp(token));
   }
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
+});
+
+test("DialogFooter exposes a centered transparent floating action layer", async () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      DialogFooter,
+      { appearance: "floating" },
+      createElement("button", null, "Cancel"),
+      createElement("button", null, "Save"),
+    ),
+  );
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(markup, /data-appearance="floating"/);
+  assert.match(styles, /\[data-appearance=floating\]\{[^}]*position:absolute/);
+  assert.match(styles, /\[data-appearance=floating\]\{[^}]*justify-content:center/);
+  assert.match(styles, /\[data-appearance=floating\]\{[^}]*background:transparent/);
+  assert.match(styles, /--bf-overlay-dialog-footer-action-min-width/);
 });

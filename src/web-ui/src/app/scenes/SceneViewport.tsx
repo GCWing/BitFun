@@ -301,7 +301,7 @@ function renderScene(
     case 'git':
       return <GitScene workspacePath={workspacePath} isActive={isActive} />;
     case 'settings':
-      return <SettingsScene />;
+      return <SettingsScene isActive={isActive} />;
     case 'file-viewer':
       return <FileViewerScene workspacePath={workspacePath} />;
     case 'profile':

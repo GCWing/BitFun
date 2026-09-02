@@ -9,7 +9,7 @@
       "bgSecondary": "#ffffff",
       "bgScene": "#ffffff",
       "isLight": true,
-      "textPrimary": "#1c1c1f",
+      "textPrimary": "rgba(0, 0, 0, 0.80)",
       "textMuted": "#6a6a6a",
       "accentColor": "#101a27"
     },
@@ -20,7 +20,7 @@
       "bgScene": "#ffffff",
       "isLight": true,
       "textPrimary": "#f3f3f5",
-      "textMuted": "#9a9a9a",
+      "textMuted": "#858585",
       "accentColor": "#f3f3f5"
     },
     {

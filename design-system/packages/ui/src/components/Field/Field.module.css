@@ -74,7 +74,7 @@
   }
 
   .required {
-    color: var(--bf-color-accent-default);
+    color: var(--bf-color-content-required-indicator);
   }
 
   .labelAction {

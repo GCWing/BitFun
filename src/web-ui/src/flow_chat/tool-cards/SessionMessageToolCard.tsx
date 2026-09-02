@@ -76,9 +76,9 @@ export const SessionMessageToolCard: React.FC<ToolCardProps> = React.memo(({
 
   const fields = [
     targetSessionId
-      ? { label: `${t('toolCards.sessionMessage.targetSession')}:`, value: targetSessionId, monospace: true }
+      ? { label: `${t('toolCards.sessionMessage.targetSession')}:`, value: targetSessionId }
       : null,
-    workspace ? { label: `${t('shared:features.workspace')}:`, value: workspace, monospace: true } : null,
+    workspace ? { label: `${t('shared:features.workspace')}:`, value: workspace } : null,
     agentType ? { label: `${t('toolCards.sessionMessage.agentType')}:`, value: agentType } : null,
   ].filter((field): field is NonNullable<typeof field> => Boolean(field));
 

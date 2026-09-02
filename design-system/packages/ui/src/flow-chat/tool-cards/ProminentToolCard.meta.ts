@@ -30,7 +30,7 @@ export const prominentToolCardMeta = {
     "color.status.warning.border",
     "color.status.warning.surface",
     "control.height.sm",
-    "font.family.control",
+    "font.family.sans",
     "font.size.base",
     "font.size.base",
     "font.size.lg",

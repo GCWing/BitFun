@@ -133,6 +133,11 @@
     gap: 0;
   }
 
+  &__item {
+    // Match MainNav child rows: parent icon slot (22px) + row gap (8px).
+    padding-inline-start: calc(var(--bf-layout-navigation-panel-item-padding-inline) + 30px);
+  }
+
   &__item-label {
     flex: 1;
     min-width: 0;

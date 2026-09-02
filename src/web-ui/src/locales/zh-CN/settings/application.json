@@ -68,9 +68,9 @@
     },
     "fontSize": {
       "title": "字体大小",
-      "hint": "调整界面与对话区域的字体大小（编辑器字号在编辑器设置中配置）。",
-      "uiSizeLabel": "界面字体",
-      "uiSizeHint": "调整导航、面板、设置等所有界面元素的字体大小。",
+      "hint": "调整界面与对话区域的字号；编辑器字号请在编辑器设置中单独配置。",
+      "uiSizeLabel": "界面与对话",
+      "uiSizeHint": "选择舒适的字号档位，应用于导航、面板、设置与对话内容。",
       "levels": {
         "compact": "紧凑",
         "small": "小",
@@ -79,11 +79,9 @@
         "large": "大",
         "custom": "自定义"
       },
-      "customPxLabel": "自定义大小（12–20 px）",
-      "customPxPlaceholder": "14",
-      "customPxOutOfRange": "请输入 12–20 之间的整数",
-      "resetButton": "恢复默认",
-      "previewText": "BitFun 是一个由 AI 驱动的编程环境。The quick brown fox jumps over the lazy dog."
+      "customPxLabel": "自定义字号（12–20 px）",
+      "previewLabel": "字号预览",
+      "previewPlaceholder": "输入文字预览当前字号"
     }
   },
   "autoUpdate": {

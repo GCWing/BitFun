@@ -14,11 +14,6 @@
     white-space: nowrap;
   }
 
-  .summary {
-    font-family:var(--bf-type-code-md-font-family);
-    font-variant-numeric: tabular-nums;
-  }
-
   .processing {
     color: var(--bf-color-content-muted);
     font-style: italic;

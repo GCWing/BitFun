@@ -163,6 +163,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
               label={t('dialog.createNewBranch.nameLabel')}
               controlWidth="fill"
               error={error || undefined}
+              required
             >
               <Input
                 value={branchName}

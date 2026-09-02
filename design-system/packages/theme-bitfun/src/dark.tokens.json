@@ -60,6 +60,11 @@
         "$description": "Content that must remain legible on a known light surface.",
         "$type": "color",
         "$value": "{ref.color.neutral.1000}"
+      },
+      "requiredIndicator": {
+        "$description": "Required-field marker content aligned with the shared highlight color, distinct from validation danger.",
+        "$type": "color",
+        "$value": "{color.control.highlight.background}"
       }
     },
     "accent": {
@@ -159,14 +164,34 @@
       "borderFocus": { "$type": "color", "$value": "{ref.color.blue.400}" }
     },
     "control": {
+      "highlight": {
+        "$description": "Shared active-control highlight for checked switches and prominent launchers. High-contrast modes may replace this pair.",
+        "background": { "$type": "color", "$value": "{ref.color.cyan.500}" },
+        "content": { "$type": "color", "$value": "{color.content.onLight}" }
+      },
+      "launcher": {
+        "$description": "Shell-edge launcher states: neutral at rest, then cyan-tinted with cyan content on hover and press.",
+        "background": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
+        "backgroundHover": { "$type": "color", "$value": "color-mix(in srgb, {color.control.highlight.background} 20%, transparent)" },
+        "backgroundPressed": { "$type": "color", "$value": "color-mix(in srgb, {color.control.highlight.background} 30%, transparent)" },
+        "content": { "$type": "color", "$value": "{color.action.neutral.content}" },
+        "contentHover": { "$type": "color", "$value": "{color.control.highlight.background}" },
+        "contentPressed": { "$type": "color", "$value": "{color.control.highlight.background}" },
+        "contentDisabled": { "$type": "color", "$value": "{color.action.neutral.contentDisabled}" }
+      },
       "switch": {
         "track": { "$type": "color", "$value": "{ref.color.neutral.750}" },
-        "trackChecked": { "$type": "color", "$value": "{ref.color.green.500}" },
+        "trackChecked": { "$type": "color", "$value": "{color.control.highlight.background}" },
         "thumb": { "$type": "color", "$value": "{ref.color.neutral.0}" }
       }
     },
     "focus": {
       "ring": { "$type": "color", "$value": "{color.accent.default}" }
+    },
+    "codeChange": {
+      "$description": "Stable code-change accents shared by diff lines and compact addition/deletion counts.",
+      "added": { "$type": "color", "$value": "{ref.color.green.550}" },
+      "removed": { "$type": "color", "$value": "{ref.color.red.650}" }
     },
     "status": {
       "info": {
@@ -181,6 +206,11 @@
       },
       "warning": {
         "content": { "$type": "color", "$value": "{ref.color.amber.500}" },
+        "emphasis": {
+          "$description": "Short warning-state emphasis using the product orange anchor; use warning content for longer text.",
+          "$type": "color",
+          "$value": "{ref.color.amber.550}"
+        },
         "surface": { "$type": "color", "$value": "rgba(245, 158, 11, 0.1)" },
         "border": { "$type": "color", "$value": "rgba(245, 158, 11, 0.3)" }
       },

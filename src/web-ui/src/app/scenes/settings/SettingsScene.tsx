@@ -26,7 +26,11 @@ function SettingsSceneLoading() {
   );
 }
 
-const SettingsScene: React.FC = () => {
+interface SettingsSceneProps {
+  isActive?: boolean;
+}
+
+const SettingsScene: React.FC<SettingsSceneProps> = ({ isActive = true }) => {
   const activePageId = useSettingsStore((state) => state.activePageId);
   const activeViewId = useSettingsStore((state) => state.activeViewId);
   const navigationRequestId = useSettingsStore((state) => state.navigationRequestId);
@@ -90,6 +94,7 @@ const SettingsScene: React.FC = () => {
           >
             <Suspense fallback={<SettingsSceneLoading />}>
               <Content
+                isActive={isActive}
                 viewId={activeViewId ?? undefined}
                 navigationRequestId={navigationRequestId}
               />

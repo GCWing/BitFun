@@ -70,8 +70,8 @@ export const bitfunMonochromePalette: AppearancePalette = {
       text: {
         primary: content.colors.element.soft,
         secondary: bitfunDarkPalette.colors.text.secondary,
-        muted: content.colors.text.disabled,
-        disabled: content.colors.text.muted,
+        muted: bitfunDarkPalette.colors.text.muted,
+        disabled: bitfunDarkPalette.colors.text.disabled,
       },
       accent: createAccentScale({
         base: content.colors.element.soft,

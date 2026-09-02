@@ -95,11 +95,12 @@ test("Field keeps label and control adornments outside the associated control", 
 });
 
 test("Field styles consume shared content and typography tokens", async () => {
-  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/components/Field/Field.module.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-color-content-primary/);
   assert.match(styles, /--bf-color-content-muted/);
-  assert.match(styles, /--bf-color-accent-default/);
+  assert.match(styles, /--bf-color-content-required-indicator/);
+  assert.doesNotMatch(styles, /--bf-color-status-danger-content[^\n]*required/);
   assert.match(styles, /--bf-type-label-md-font-size/);
   assert.match(styles, /--bf-type-support-font-size/);
   assert.match(styles, /--bf-layout-field-root-gap/);

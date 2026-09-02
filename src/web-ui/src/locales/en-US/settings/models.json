@@ -11,6 +11,7 @@
   "sessionTitle": {
     "title": "Auto Session Title",
     "subtitle": "AI automatically generates concise titles for new conversations",
+    "enable": "Enable",
     "loadFailed": "Failed to load session title settings",
     "loadFailedLocked": "Session title settings could not be read. The switch and model selector are locked.",
     "retry": "Reload",

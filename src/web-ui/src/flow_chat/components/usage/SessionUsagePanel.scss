@@ -1,7 +1,9 @@
 @use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
+@use '../../markdown-typography' as markdownTypography;
 
 .session-usage-panel {
   @include flatMarkdownSurfaces.apply;
+  @include markdownTypography.apply;
 
   display: flex;
   flex-direction: column;

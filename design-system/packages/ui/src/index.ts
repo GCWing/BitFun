@@ -100,6 +100,7 @@ export {
   FieldRow,
   FormSection,
   type FieldGroupAppearance,
+  type FieldGroupFieldSurface,
   type FieldGroupProps,
   type FieldRowAlignment,
   type FieldRowPadding,
@@ -120,6 +121,10 @@ export {
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
+export {
+  LauncherButton,
+  type LauncherButtonProps,
+} from "./components/LauncherButton";
 export {
   Listbox,
   ListboxEmpty,

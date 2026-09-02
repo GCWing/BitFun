@@ -40,6 +40,7 @@ import {
   NumberBadge,
   Input,
   KeyHint,
+  LauncherButton,
   Listbox,
   ListboxOption,
   LoadingState,
@@ -124,7 +125,7 @@ type FieldOrientation = "horizontal" | "vertical";
 type PageHeaderAlign = "center" | "start";
 type PageHeaderSize = "display" | "lg" | "md" | "sm";
 
-const buttonVariants = ["outline", "fill", "primary", "text"] as const;
+const buttonVariants = ["outline", "fill", "secondary", "primary", "text"] as const;
 const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
@@ -351,6 +352,8 @@ export function ComponentDetailPage({
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
+      case "LauncherButton":
+        return ["default", "hover", "active", "focus-visible", "disabled"] as const;
       case "Composer":
         return ["default", "focus-within", "with-context", "invalid", "disabled"] as const;
       case "Combobox":
@@ -417,6 +420,9 @@ export function ComponentDetailPage({
 
     if (component.name === "ActionCard") {
       return `import { Icon, ActionCard } from "@bitfun/ui";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <Icon name="more" />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<Icon name="session" />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
+    }
+    if (component.name === "LauncherButton") {
+      return 'import { Icon, LauncherButton } from "@bitfun/ui";\n\n<LauncherButton leadingIcon={<Icon name="mic" />}>\n  Hello\n</LauncherButton>';
     }
     if (component.name === "ActionItem") {
       const metadataProp = actionItemShowMetadata ? `\n  metadata="12"` : "";
@@ -503,7 +509,7 @@ export function ComponentDetailPage({
       return `import { Icon, Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
     }
     if (component.name === "Dialog") {
-      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@bitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="2xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
+      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@bitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter appearance="floating">\n    <Button onClick={() => setOpen(false)} variant="secondary">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
     }
     if (component.name === "Sheet") {
       return `import { Button, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Sheet } from "@bitfun/ui";\n\n<Sheet onOpenChange={() => setOpen(false)} open={open} placement="right" size="lg">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Sheet>`;
@@ -728,7 +734,7 @@ export function ComponentDetailPage({
         <Dialog
           onOpenChange={closePreview}
           open={overlayOpen}
-          size="2xl"
+          size="xl"
         >
           <DialogHeader>
             <DialogHeading>
@@ -736,9 +742,9 @@ export function ComponentDetailPage({
             </DialogHeading>
             <DialogClose />
           </DialogHeader>
-          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
-          <DialogFooter>
-            <Button onClick={closePreview} variant="fill">
+          <DialogBody className="component-dialog-example__body">{renderDialogConfigurationContent()}</DialogBody>
+          <DialogFooter appearance="floating">
+            <Button onClick={closePreview} variant="secondary">
               {t("components.preview.modalCancel")}
             </Button>
             <Button onClick={closePreview} variant="primary">
@@ -918,6 +924,24 @@ export function ComponentDetailPage({
         >
           {t("components.preview.actionCardTitle")}
         </ActionCard>
+      );
+    }
+
+    if (component.name === "LauncherButton") {
+      return (
+        <LauncherButton
+          className={state === "focus-visible" ? "lab-force-focus" : undefined}
+          data-bf-preview-state={
+            state === "hover" || state === "active" || state === "focus-visible"
+              ? state
+              : undefined
+          }
+          disabled={state === "disabled"}
+          leadingIcon={<Icon name="mic" aria-hidden="true" />}
+          tabIndex={-1}
+        >
+          Hello
+        </LauncherButton>
       );
     }
 

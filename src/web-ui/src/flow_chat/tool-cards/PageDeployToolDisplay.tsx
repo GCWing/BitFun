@@ -82,9 +82,9 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   }, [isLoading, slug, t]);
 
   const fields = success ? [
-    slug ? { label: `${t('toolCards.pageDeploy.labelSlug')}:`, value: slug, monospace: true } : null,
-    deployedVersion ? { label: `${t('toolCards.pageDeploy.labelVersion')}:`, value: deployedVersion, monospace: true } : null,
-    urlPath ? { label: `${t('toolCards.pageDeploy.labelPath')}:`, value: urlPath, monospace: true } : null,
+    slug ? { label: `${t('toolCards.pageDeploy.labelSlug')}:`, value: slug } : null,
+    deployedVersion ? { label: `${t('toolCards.pageDeploy.labelVersion')}:`, value: deployedVersion } : null,
+    urlPath ? { label: `${t('toolCards.pageDeploy.labelPath')}:`, value: urlPath } : null,
   ].filter((field): field is NonNullable<typeof field> => Boolean(field)) : [];
 
   return (

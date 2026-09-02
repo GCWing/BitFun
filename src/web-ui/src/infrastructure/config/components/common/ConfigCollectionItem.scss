@@ -20,6 +20,10 @@
 
 // ─── clickable row ─────────────────────────────────────────────────────────────
 
+.bitfun-collection-item__row--toggleable {
+  cursor: pointer;
+}
+
 // ─── label + inline badge ──────────────────────────────────────────────────────
 
 .bitfun-collection-item__label {

@@ -7,13 +7,15 @@ import {
   SETTINGS_CATEGORIES,
   SETTINGS_PAGE_MANIFESTS,
 } from './settingsRegistry';
+import { useSettingsStore } from './settingsStore';
+import type { SettingsDestination } from './settingsTypes';
 
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: { loadNamespace: vi.fn(async () => undefined) },
 }));
 
 describe('settings information architecture', () => {
-  it('uses five ownership categories and twenty-one canonical pages', () => {
+  it('uses five ownership categories and twenty canonical pages', () => {
     expect(SETTINGS_CATEGORIES.map((category) => category.id)).toEqual([
       'application',
       'ai',
@@ -21,8 +23,8 @@ describe('settings information architecture', () => {
       'tools',
       'data',
     ]);
-    expect(SETTINGS_PAGE_MANIFESTS).toHaveLength(21);
-    expect(new Set(SETTINGS_PAGE_MANIFESTS.map((page) => page.id)).size).toBe(21);
+    expect(SETTINGS_PAGE_MANIFESTS).toHaveLength(20);
+    expect(new Set(SETTINGS_PAGE_MANIFESTS.map((page) => page.id)).size).toBe(20);
   });
 
   it('keeps memory with AI, pet with application, and review inside execution', () => {
@@ -34,22 +36,35 @@ describe('settings information architecture', () => {
       .toContainEqual({ namespace: 'settings/review-capacity', key: 'capacity.title' });
   });
 
-  it('groups execution into common and advanced views, with desktop and browser control as pages', () => {
+  it('groups execution into common and advanced views, with browser and desktop control in one page', () => {
     const execution = SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.execution');
+    const control = SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.desktop-control');
 
     expect(SETTINGS_PAGE_MANIFESTS.some((page) => page.id === 'tools.device-control')).toBe(false);
+    expect(SETTINGS_PAGE_MANIFESTS.some((page) => page.id === 'tools.browser-control')).toBe(false);
     expect(execution?.views?.map((view) => view.id)).toEqual(['common', 'advanced']);
     expect(execution?.views?.find((view) => view.id === 'common')?.searchPhrases)
       .toContainEqual({ namespace: 'settings/runtime', key: 'permissionPolicy.sectionTitle' });
-    expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.desktop-control')?.searchPhrases)
+    expect(control?.labelKey).toBe('navigation.pages.browserDesktopControl.label');
+    expect(control?.searchPhrases)
       .toContainEqual({ namespace: 'settings/runtime', key: 'computerUse.sectionTitle' });
-    expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.browser-control')?.searchPhrases)
+    expect(control?.searchPhrases)
       .toContainEqual({ namespace: 'settings/runtime', key: 'browserControl.sectionTitle' });
     expect(resolveSettingsDestination('tools.device-control')).toEqual({ pageId: 'tools.desktop-control' });
+    expect(resolveSettingsDestination('tools.browser-control')).toEqual({ pageId: 'tools.desktop-control' });
     expect(resolveSettingsDestination('review')).toEqual({
       pageId: 'tools.execution',
       viewId: 'advanced',
     });
+  });
+
+  it('normalizes the retired browser-control page at the store boundary', () => {
+    useSettingsStore.getState().openDestination({
+      pageId: 'tools.browser-control',
+    } as unknown as SettingsDestination);
+
+    expect(useSettingsStore.getState().activePageId).toBe('tools.desktop-control');
+    expect(useSettingsStore.getState().pageTransitionTarget).toBe('tools.desktop-control');
   });
 
   it('keeps Assistant ownership outside Settings and model preferences with network proxy', () => {
@@ -66,7 +81,6 @@ describe('settings information architecture', () => {
       .toEqual([
         'tools.execution',
         'tools.desktop-control',
-        'tools.browser-control',
         'tools.automation',
         'tools.webSearch',
         'tools.mcp',

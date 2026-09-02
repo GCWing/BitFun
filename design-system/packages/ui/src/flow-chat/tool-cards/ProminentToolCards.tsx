@@ -35,7 +35,6 @@ interface ProminentCardProps
 export interface GitToolCardFooterItem {
   grow?: boolean;
   label?: ReactNode;
-  monospace?: boolean;
   tone?: "danger" | "neutral" | "success";
   value: ReactNode;
 }
@@ -97,7 +96,6 @@ export function GitToolCard({
             <span
               className={styles.footerItem}
               data-grow={item.grow ? "true" : "false"}
-              data-monospace={item.monospace ? "true" : "false"}
               data-tone={item.tone ?? "neutral"}
               key={index}
             >
@@ -258,7 +256,7 @@ export function ReviewSummaryToolCard({
       )}
       header={(
         <ProminentToolCardHeader
-          content={title}
+          action={title}
           extra={changedFiles.length > 0 && fileCountLabel ? (
             <span className={styles.fileCount}><FileText aria-hidden="true" />{fileCountLabel}</span>
           ) : undefined}
@@ -275,7 +273,6 @@ export function ReviewSummaryToolCard({
 
 export interface PageLifecycleToolCardField {
   label: ReactNode;
-  monospace?: boolean;
   value: ReactNode;
 }
 
@@ -308,7 +305,7 @@ function PageLifecycleToolCardBase({
   const body = hasDetails ? (
     <div className={styles.lifecycleDetails} data-bf-part="details">
       {fields.map((field, index) => (
-        <div className={styles.field} data-monospace={field.monospace ? "true" : "false"} key={index}>
+        <div className={styles.field} key={index}>
           <span className={styles.fieldLabel}>{field.label}</span>
           <span className={styles.fieldValue}>{field.value}</span>
         </div>

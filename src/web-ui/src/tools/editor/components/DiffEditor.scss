@@ -9,16 +9,16 @@ $_diff-error-max-width: 400px;
 
 // Main Container
 .diff-editor-container {
-  --diff-editor-added-soft-bg: color-mix(in srgb, var(--bf-domain-git-added) 15%, transparent);
-  --diff-editor-deleted-soft-bg: color-mix(in srgb, var(--bf-domain-git-deleted) 15%, transparent);
-  --diff-editor-added-line-bg: color-mix(in srgb, var(--bf-domain-git-added) 18%, transparent);
-  --diff-editor-deleted-line-bg: color-mix(in srgb, var(--bf-domain-git-deleted) 18%, transparent);
-  --diff-editor-added-emphasis-bg: color-mix(in srgb, var(--bf-domain-git-added) 20%, transparent);
-  --diff-editor-deleted-emphasis-bg: color-mix(in srgb, var(--bf-domain-git-deleted) 20%, transparent);
-  --diff-editor-added-border: color-mix(in srgb, var(--bf-domain-git-added) 30%, transparent);
-  --diff-editor-deleted-border: color-mix(in srgb, var(--bf-domain-git-deleted) 30%, transparent);
-  --diff-editor-added-char-bg: color-mix(in srgb, var(--bf-domain-git-added) 38%, transparent);
-  --diff-editor-deleted-char-bg: color-mix(in srgb, var(--bf-domain-git-deleted) 38%, transparent);
+  --diff-editor-added-soft-bg: color-mix(in srgb, var(--bf-color-code-change-added) 15%, transparent);
+  --diff-editor-deleted-soft-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 15%, transparent);
+  --diff-editor-added-line-bg: color-mix(in srgb, var(--bf-color-code-change-added) 18%, transparent);
+  --diff-editor-deleted-line-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 18%, transparent);
+  --diff-editor-added-emphasis-bg: color-mix(in srgb, var(--bf-color-code-change-added) 20%, transparent);
+  --diff-editor-deleted-emphasis-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 20%, transparent);
+  --diff-editor-added-border: color-mix(in srgb, var(--bf-color-code-change-added) 30%, transparent);
+  --diff-editor-deleted-border: color-mix(in srgb, var(--bf-color-code-change-removed) 30%, transparent);
+  --diff-editor-added-char-bg: color-mix(in srgb, var(--bf-color-code-change-added) 38%, transparent);
+  --diff-editor-deleted-char-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 38%, transparent);
 
   display: flex;
   flex-direction: column;
@@ -66,13 +66,13 @@ $_diff-error-max-width: 400px;
     font-size: var(--bf-type-label-sm-font-size);
 
     &--add {
-      color: var(--bf-domain-git-staged);
+      color: var(--bf-color-code-change-added);
       background: var(--diff-editor-added-soft-bg);
       border: 1px solid var(--diff-editor-added-border);
     }
 
     &--del {
-      color: var(--bf-domain-git-deleted);
+      color: var(--bf-color-code-change-removed);
       background: var(--diff-editor-deleted-soft-bg);
       border: 1px solid var(--diff-editor-deleted-border);
     }
@@ -562,12 +562,12 @@ $_diff-error-max-width: 400px;
       .monaco-diff-editor {
         .line-insert {
           background-color: var(--diff-editor-added-emphasis-bg) !important;
-          border-left: 3px solid var(--bf-domain-git-staged);
+          border-left: 3px solid var(--bf-color-code-change-added);
         }
 
         .line-delete {
           background-color: var(--diff-editor-deleted-emphasis-bg) !important;
-          border-left: 3px solid var(--bf-domain-git-deleted);
+          border-left: 3px solid var(--bf-color-code-change-removed);
         }
       }
     }

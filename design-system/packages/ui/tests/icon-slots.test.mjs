@@ -7,6 +7,7 @@ import { Button, Icon, IconButton, SessionIcon, TabGroup } from "../dist/index.j
 
 const slots = [
   ["Button", "icon", "inline-size", "100%"],
+  ["LauncherButton", "icon", "inline-size", "100%"],
   ["IconButton", "icon", "inline-size", "100%"],
   ["TabGroup", "icon", "inline-size", "100%"],
   ["ActionCard", "leading", "inline-size", "var(--bf-control-action-card-icon-size)"],

@@ -63,6 +63,15 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     const warning = readToken(tokens.warning, 'var(--bitfun-canvas-warning)');
     const danger = readToken(tokens.danger, 'var(--bitfun-canvas-danger)');
     const info = readToken(tokens.info, 'var(--bitfun-canvas-info)');
+    const appearanceVars = tokens.vars && typeof tokens.vars === 'object' ? tokens.vars : {};
+    const codeChangeAdded = readToken(
+      appearanceVars['--bf-color-code-change-added'],
+      'var(--bf-color-code-change-added)',
+    );
+    const codeChangeRemoved = readToken(
+      appearanceVars['--bf-color-code-change-removed'],
+      'var(--bf-color-code-change-removed)',
+    );
     const token = (value: string, fields: CanvasRuntimeRecord = {}) =>
       Object.assign(new String(value), {
         toString() {
@@ -118,10 +127,10 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       orange: warning,
     };
     const diff = {
-      insertedLine: 'color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent)',
-      removedLine: 'color-mix(in srgb, var(--bf-color-status-danger-content) 12%, transparent)',
-      stripAdded: success,
-      stripRemoved: danger,
+      insertedLine: `color-mix(in srgb, ${codeChangeAdded} 12%, transparent)`,
+      removedLine: `color-mix(in srgb, ${codeChangeRemoved} 12%, transparent)`,
+      stripAdded: codeChangeAdded,
+      stripRemoved: codeChangeRemoved,
     };
     const semanticTokens = {
       bg: semanticBg,

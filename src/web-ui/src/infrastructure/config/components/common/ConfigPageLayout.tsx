@@ -1,4 +1,4 @@
- import { FieldGroup, FormSection, ScrollArea } from '@bitfun/ui';
+ import { FieldGroup, FormSection, ScrollArea, type FieldGroupFieldSurface } from '@bitfun/ui';
 import React from 'react';
 import './ConfigPageLayout.scss';
 
@@ -83,6 +83,8 @@ export interface ConfigPageSectionProps extends Omit<React.HTMLAttributes<HTMLEl
   className?: string;
   /** Disable when children own the surface and the standard body background/radius should be removed. */
   bodySurface?: boolean;
+  /** Controls whether nested design-system fields are opaque or reuse the section surface. */
+  fieldSurface?: FieldGroupFieldSurface;
 }
 
 export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
@@ -93,6 +95,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   children,
   className = '',
   bodySurface = true,
+  fieldSurface,
   ...props
 }) => {
   const hasBody = children !== null && children !== undefined && children !== false;
@@ -128,6 +131,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
           data-bf-component="config"
           data-bf-part="sectionBody"
           dividers={false}
+          fieldSurface={fieldSurface ?? (bodySurface ? 'ambient' : 'default')}
         >
           {children}
         </FieldGroup>
@@ -138,6 +142,8 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
 
 export interface ConfigPageRowProps {
   label: React.ReactNode;
+  /** Marks the row label as required. The control still owns its native required or aria-required state. */
+  required?: boolean;
   description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -155,6 +161,7 @@ export interface ConfigPageRowProps {
 
 export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
   label,
+  required = false,
   description,
   children,
   className = '',
@@ -192,10 +199,23 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
       data-bf-part="row"
       data-bf-align={align}
       data-bf-layout={wide ? 'wide' : balanced ? 'balanced' : multiline ? 'multiline' : 'default'}
+      data-required={required ? 'true' : 'false'}
     >
       <div className="bitfun-config-page-row__meta">
         {/* div (not p): label may contain buttons; button-in-p freezes React event path */}
-        <div className="bitfun-config-page-row__label" data-bf-component="config" data-bf-part="rowLabel">{label}</div>
+        <div className="bitfun-config-page-row__label" data-bf-component="config" data-bf-part="rowLabel">
+          {label}
+          {required ? (
+            <span
+              aria-hidden="true"
+              className="bitfun-config-page-row__required"
+              data-bf-component="config"
+              data-bf-part="required"
+            >
+              *
+            </span>
+          ) : null}
+        </div>
         {description ? (
           <div className="bitfun-config-page-row__description" data-bf-component="config" data-bf-part="rowDescription">{description}</div>
         ) : null}

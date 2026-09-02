@@ -89,18 +89,31 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
     }
   }, [applyExpandedState, hasDetails, isExpanded, onExpand]);
 
+  const renderAction = () => {
+    if (status === 'completed') {
+      return `${t('toolCards.ls.listDirectory')}:`;
+    }
+    if (status === 'running' || status === 'streaming') {
+      return t('toolCards.ls.listingDirectory');
+    }
+    if (status === 'pending') {
+      return t('toolCards.ls.preparingList');
+    }
+    return undefined;
+  };
+
   const renderContent = () => {
     if (status === 'completed') {
       const statsText = stats.directories > 0 
         ? t('toolCards.ls.filesAndDirs', { files: stats.files, directories: stats.directories })
         : t('toolCards.ls.filesCount', { count: stats.files });
-      return `${t('toolCards.ls.listDirectory')}: ${directoryPath}${hasResultData ? ` (${statsText})` : ''}`;
+      return `${directoryPath}${hasResultData ? ` (${statsText})` : ''}`;
     }
     if (status === 'running' || status === 'streaming') {
-      return `${t('toolCards.ls.listingDirectory')} ${directoryPath}...`;
+      return `${directoryPath}...`;
     }
     if (status === 'pending') {
-      return `${t('toolCards.ls.preparingList')} ${directoryPath}`;
+      return directoryPath;
     }
     return directoryPath;
   };
@@ -112,12 +125,13 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
   return (
     <div ref={cardRootRef} data-bf-adapter="directory-list" data-tool-card-id={toolId ?? ''}>
       <DirectoryListToolCard
+        action={renderAction()}
         status={status}
         isExpanded={isExpanded}
         onToggle={hasDetails ? handleClick : undefined}
         summary={renderContent()}
         details={hasDetails ? [
-          { label: `${t('toolCards.ls.labelPath')}:`, value: directoryPath, monospace: true },
+          { label: `${t('toolCards.ls.labelPath')}:`, value: directoryPath },
           {
             label: `${t('toolCards.ls.labelStats')}:`,
             value: stats.directories > 0

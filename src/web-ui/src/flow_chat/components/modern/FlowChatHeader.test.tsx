@@ -51,7 +51,7 @@ vi.mock('@bitfun/ui', async importOriginal => {
       variant,
       ...props
     }, ref) => (
-      <button ref={ref} type="button" title={tooltip} {...props}>
+      <button ref={ref} type="button" title={tooltip} data-size={size} {...props}>
         {icon}
         {children}
       </button>
@@ -172,6 +172,9 @@ describe('FlowChatHeader', () => {
     act(() => renderInScene('session', true));
     expect(host?.querySelector('[data-testid="flowchat-header-search"]')).not.toBeNull();
     expect(host?.querySelector('[data-testid="flowchat-header-search"] [data-bf-name="search"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-search"]')?.getAttribute('data-size')).toBe('xs');
+    expect(host?.querySelector('[data-testid="flowchat-header-session-overview"]')?.getAttribute('data-size')).toBe('xs');
+    expect(host?.querySelector('[data-testid="flowchat-header-right-panel"]')?.getAttribute('data-size')).toBe('xs');
   });
 
   it('omits the list, previous-turn, and next-turn navigation controls', () => {

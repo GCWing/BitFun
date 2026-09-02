@@ -276,7 +276,6 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   if (model.sessionId != null) {
     footerMetadataItems.push({
       label: t('toolCards.execProcess.session'),
-      monospace: true,
       value: `#${model.sessionId}`,
     });
   }
@@ -288,14 +287,12 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   }
   const exitCodeFooterItem: CommandToolCardFooterItem | undefined = model.exitCode != null
     ? {
-        monospace: true,
         tone: model.exitCode === 0 ? 'success' : 'danger',
         value: t('toolCards.terminal.exitCode', { code: model.exitCode }),
       }
     : undefined;
   const wallTimeFooterItem: CommandToolCardFooterItem | undefined = model.wallTimeSeconds != null
     ? {
-        monospace: true,
         value: t('toolCards.execProcess.wallTime', { seconds: model.wallTimeSeconds.toFixed(3) }),
       }
     : undefined;

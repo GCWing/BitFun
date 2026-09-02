@@ -442,7 +442,7 @@ describe('FileOperationToolCard', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders failed write cards outside WorkspaceProvider', () => {
+  it('keeps failed write cards compact until the user expands the error', async () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
@@ -485,7 +485,75 @@ describe('FileOperationToolCard', () => {
     }).not.toThrow();
 
     expect(container.textContent).toContain('toolCards.file.write');
-    expect(container.textContent).toContain('toolCards.file.failedArguments are invalid JSON.');
+    expect(container.textContent).toContain('toolCards.file.failed');
+    expect(container.textContent).toContain('newFile.ts');
+    expect(container.textContent).not.toContain('Arguments are invalid JSON.');
+    expect(container.querySelector('[data-bf-icon="warning"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+
+    const toggle = container.querySelector(
+      '[data-bf-part="affordanceButton"]',
+    ) as HTMLButtonElement | null;
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => {
+      toggle?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('true');
+    expect(container.querySelector('[data-bf-part="error"]')).not.toBeNull();
+    expect(container.textContent).toContain('Arguments are invalid JSON.');
+  });
+
+  it('collapses an open edit preview when the operation changes to failed', async () => {
+    const config: ToolCardConfig = {
+      toolName: 'Edit',
+      displayName: 'Edit',
+      icon: 'EDIT',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Edit a file',
+      displayMode: 'standard',
+    };
+    const running = {
+      id: 'tool-edit-transition',
+      type: 'tool',
+      toolName: 'Edit',
+      status: 'running',
+      toolCall: {
+        id: 'call-edit-transition',
+        name: 'Edit',
+        input: {
+          file_path: 'src/index.ts',
+          old_string: 'before',
+          new_string: 'after',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(<FileOperationToolCard toolItem={running} config={config} sessionId="session-1" />);
+    });
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('true');
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={{
+            ...running,
+            status: 'error',
+            toolResult: { success: false, error: 'The target text was not found.' },
+          }}
+          config={config}
+          sessionId="session-1"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('false');
+    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+    expect(container.textContent).not.toContain('The target text was not found.');
+    expect(container.querySelector('[data-bf-icon="warning"]')).not.toBeNull();
   });
 
   it('opens completed write cards with the resolved result path', async () => {
@@ -780,6 +848,17 @@ describe('FileOperationToolCard', () => {
 
     expect(container.textContent).toContain('toolCards.file.guidanceHint');
     expect(container.textContent).not.toContain('toolCards.file.failed');
+    expect(container.textContent).toContain('report.md');
+    expect(container.textContent).not.toContain(
+      'Use Read to load the current contents of docs/report.md before calling Write on it.',
+    );
+    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+
+    await act(async () => {
+      container.querySelector('[data-bf-part="affordanceButton"]')
+        ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
     expect(container.textContent).toContain(
       'Use Read to load the current contents of docs/report.md before calling Write on it.',
     );
@@ -830,6 +909,17 @@ describe('FileOperationToolCard', () => {
 
     expect(container.textContent).toContain('toolCards.file.guidanceHint');
     expect(container.textContent).not.toContain('toolCards.file.failed');
+    expect(container.textContent).toContain('main.rs');
+    expect(container.textContent).not.toContain(
+      'Use Read to load the current contents of src/main.rs before calling Edit on it.',
+    );
+    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+
+    await act(async () => {
+      container.querySelector('[data-bf-part="affordanceButton"]')
+        ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
     expect(container.textContent).toContain(
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );

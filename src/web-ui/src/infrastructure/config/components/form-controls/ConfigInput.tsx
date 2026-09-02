@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@bitfun/ui';
 
@@ -32,13 +32,18 @@ export const ConfigInput = forwardRef<HTMLInputElement, ConfigInputProps>(({
   inline = false,
   className = '',
   style,
+  id,
   ...props
 }, ref) => {
   const { t } = useTranslation('common');
+  const generatedId = useId();
+  const controlId = id ?? `${generatedId}-config-input`;
   
   const inputElement = (
     <Input
       ref={ref}
+      id={controlId}
+      required={required || undefined}
       trailing={rightIcon}
       invalid={!!error}
       className={className}
@@ -50,9 +55,21 @@ export const ConfigInput = forwardRef<HTMLInputElement, ConfigInputProps>(({
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', ...style }}>
         {label && (
-          <label className={`config-form-label ${required ? 'required' : ''}`}>
+          <label className="config-form-label" htmlFor={controlId}>
             {labelIcon}
-            {label}
+            <span className="config-form-label__text">
+              {label}
+              {required ? (
+                <span
+                  aria-hidden="true"
+                  className="config-form-label__required"
+                  data-bf-component="config"
+                  data-bf-part="required"
+                >
+                  *
+                </span>
+              ) : null}
+            </span>
           </label>
         )}
         <div style={{ flex: 1 }}>
@@ -66,9 +83,21 @@ export const ConfigInput = forwardRef<HTMLInputElement, ConfigInputProps>(({
   return (
     <div className="config-form-group" style={style}>
       {label && (
-        <label className={`config-form-label ${required ? 'required' : ''}`}>
+        <label className="config-form-label" htmlFor={controlId}>
           {labelIcon}
-          {label}
+          <span className="config-form-label__text">
+            {label}
+            {required ? (
+              <span
+                aria-hidden="true"
+                className="config-form-label__required"
+                data-bf-component="config"
+                data-bf-part="required"
+              >
+                *
+              </span>
+            ) : null}
+          </span>
         </label>
       )}
       {inputElement}

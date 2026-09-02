@@ -9,6 +9,7 @@
 
 @use './_tool-card-common.scss';
 @use '@/infrastructure/markdown/layout' as markdown;
+@use '../markdown-typography' as markdownTypography;
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:
@@ -150,7 +151,10 @@
 }
 
 .thinking-content {
-  font-size: var(--bf-type-flow-body-font-size);
+  @include markdownTypography.apply;
+
+  font-size: var(--bf-type-flow-control-font-size);
+  font-weight: var(--bf-type-flow-control-font-weight);
   line-height: var(--bf-type-flow-body-line-height);
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
   font-family:var(--bf-type-body-sm-font-family);
@@ -250,7 +254,7 @@
 /* Markdown body: same sans as rest of chat; code stays mono via Appearance. */
 .thinking-content .markdown-renderer.thinking-markdown {
   --markdown-font-heading: var(--bf-type-flow-title-font-family);
-  --markdown-font-size: var(--bf-type-flow-body-font-size);
+  --markdown-font-size: var(--bf-type-flow-control-font-size);
   --markdown-font-size-sm: var(--bf-type-flow-control-font-size);
   --markdown-code-font-size: var(--bf-type-flow-support-font-size);
   --markdown-line-height: var(--bf-type-flow-body-line-height);
@@ -258,7 +262,6 @@
   --markdown-paragraph-gap: #{markdown.$paragraph-gap};
 
   font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-flow-body-font-size);
   line-height: var(--bf-type-flow-body-line-height);
   color: var(--bf-color-content-muted);
   animation: none;
@@ -347,7 +350,7 @@
   }
 
   .table-wrapper {
-    font-size: var(--bf-type-flow-body-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   .table-wrapper th,

@@ -27,6 +27,7 @@ export interface SegmentedControlProps
   onValueChange?: (value: string) => void;
   options: readonly SegmentedControlOption[];
   size?: "sm" | "md";
+  tone?: "accent" | "neutral";
   value?: string;
   variant?: "bar" | "pills";
 }
@@ -54,6 +55,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
     onValueChange,
     options,
     size = "sm",
+    tone = "accent",
     value,
     variant = "bar",
     ...props
@@ -130,6 +132,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
         data-disabled={disabled ? "true" : "false"}
         data-distribution={distribution}
         data-size={size}
+        data-tone={tone}
         data-variant={variant}
         ref={ref}
         role="radiogroup"

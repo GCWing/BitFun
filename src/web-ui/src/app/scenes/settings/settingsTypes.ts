@@ -19,7 +19,6 @@ export type SettingsPageId =
   | 'workspace.worktrees'
   | 'tools.execution'
   | 'tools.desktop-control'
-  | 'tools.browser-control'
   | 'tools.automation'
   | 'tools.webSearch'
   | 'tools.mcp'
@@ -43,6 +42,7 @@ export interface SettingsDestination {
 }
 
 export interface SettingsPageProps {
+  isActive?: boolean;
   viewId?: SettingsViewId;
   navigationRequestId: number;
 }

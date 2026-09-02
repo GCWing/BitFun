@@ -268,18 +268,16 @@ function migrateLegacyRendererDefinitions(value: unknown): Record<string, unknow
 const LEGACY_RUNTIME_VIEW_IDS: Readonly<Record<string, readonly string[]>> = {
   personalization: ['pet', 'session-workspace'],
   execution: ['execution-common', 'execution-advanced'],
-  'device-control': ['desktop-control', 'browser-control'],
+  'device-control': ['browser-desktop-control'],
   'execution-control': [
     'execution-common',
     'execution-advanced',
-    'desktop-control',
-    'browser-control',
+    'browser-desktop-control',
   ],
   permissions: [
     'execution-common',
     'execution-advanced',
-    'desktop-control',
-    'browser-control',
+    'browser-desktop-control',
   ],
 };
 

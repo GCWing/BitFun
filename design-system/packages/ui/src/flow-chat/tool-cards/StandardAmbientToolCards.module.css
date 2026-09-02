@@ -40,7 +40,7 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-canvas);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
+    font-family: inherit;
     font-size: var(--bf-type-body-sm-font-size);
     line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
@@ -71,7 +71,6 @@
   }
 
   .metaLabel {
-    font-family:var(--bf-type-code-md-font-family);
     font-weight: var(--bf-type-label-selected-font-weight);
   }
 
@@ -230,7 +229,6 @@
   }
 
   .todoCompactMeta {
-    font-family:var(--bf-type-code-md-font-family);
     white-space: nowrap;
   }
 
@@ -247,7 +245,6 @@
 
   .todoStats {
     flex: 0 0 auto;
-    font-variant-numeric: tabular-nums;
   }
 
   .todoList {

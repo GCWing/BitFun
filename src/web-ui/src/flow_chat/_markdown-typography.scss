@@ -1,0 +1,21 @@
+@mixin apply {
+  .markdown-renderer {
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-type-flow-control-font-weight);
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+    }
+
+    strong,
+    em {
+      font-weight: var(--bf-type-label-lg-font-weight);
+    }
+  }
+}

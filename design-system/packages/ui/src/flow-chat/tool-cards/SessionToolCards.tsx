@@ -10,7 +10,6 @@ import styles from "./SessionToolCards.module.css";
 
 export interface SessionToolCardField {
   label: ReactNode;
-  monospace?: boolean;
   value: ReactNode;
 }
 
@@ -61,7 +60,6 @@ function SessionToolCardBase({
         <div
           className={styles.field}
           data-bf-part="field"
-          data-monospace={field.monospace ? "true" : "false"}
           key={index}
         >
           <span className={styles.fieldLabel}>{field.label}</span>

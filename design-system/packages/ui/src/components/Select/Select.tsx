@@ -5,6 +5,7 @@ import {
   type SelectHTMLAttributes,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { useFieldSurface } from "../../internal/fieldSurface";
 import { Icon } from "../Icon";
 import styles from "./Select.module.css";
 
@@ -84,6 +85,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   ...props
 }, ref) {
   const { groups, ungrouped } = groupOptions(options);
+  const fieldSurface = useFieldSurface();
 
   const handleChange: ChangeEventHandler<HTMLSelectElement> = (event) => {
     const option = options.find((candidate) => String(candidate.value) === event.currentTarget.value);
@@ -95,6 +97,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       className={classNames(styles.root, className)}
       data-bf-component="select"
       data-disabled={disabled ? "true" : "false"}
+      data-field-surface={fieldSurface}
       data-has-leading={leading !== undefined && leading !== null ? "true" : "false"}
       data-invalid={invalid ? "true" : "false"}
       data-size={size}

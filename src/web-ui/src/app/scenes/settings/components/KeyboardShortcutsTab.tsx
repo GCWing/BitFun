@@ -10,7 +10,7 @@
  * - Reset button restores all defaults
  */
 
-import { Button, Icon, SearchField, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
@@ -31,7 +31,6 @@ import {
   SCOPE_ORDER,
   SCOPE_LABEL_KEYS,
   getShortcutDescriptionI18nKey,
-  NON_USER_CUSTOMIZABLE_SHORTCUT_IDS,
 } from '@/shared/constants/shortcuts';
 import { createLogger } from '@/shared/utils/logger';
 import './KeyboardShortcutsTab.scss';
@@ -437,7 +436,7 @@ const KeyboardShortcutsTab: React.FC = () => {
       //    preventing unbounded storage growth as shortcuts are added/removed.
       const knownIds = new Set(ALL_SHORTCUTS.map((d) => d.id));
       for (const id of Object.keys(merged)) {
-        if (!knownIds.has(id) || NON_USER_CUSTOMIZABLE_SHORTCUT_IDS.has(id)) delete merged[id];
+        if (!knownIds.has(id)) delete merged[id];
       }
 
       // 5. Persist with versioned format + sync in-memory state
@@ -702,36 +701,25 @@ const KeyboardShortcutsTab: React.FC = () => {
                     </div>
                     <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
                       <Tooltip content={t('keyboard.clickToRecord')} placement="top">
-                        <button
-                          type="button"
-                          className={[
-                            'kb-shortcuts__keybadge',
-                            recordingId === MERGED_TAB_RECORD_ID ? 'kb-shortcuts__keybadge--recording' : '',
-                            mergedTabConflict ? 'kb-shortcuts__keybadge--conflict' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          data-bf-component="keyboard-shortcuts"
-                          data-bf-part="keyBadge"
-                          data-bf-state={[
-                            recordingId === MERGED_TAB_RECORD_ID && 'recording',
-                            mergedTabConflict && 'conflict',
-                          ].filter(Boolean).join(' ') || undefined}
+                        <Button
+                          aria-pressed={recordingId === MERGED_TAB_RECORD_ID}
+                          size="xs"
+                          tone={mergedTabConflict ? 'danger' : 'neutral'}
+                          variant={recordingId === MERGED_TAB_RECORD_ID ? 'primary' : 'outline'}
                           onClick={() =>
                             setRecordingId(recordingId === MERGED_TAB_RECORD_ID ? null : MERGED_TAB_RECORD_ID)
                           }
                         >
                           {recordingId === MERGED_TAB_RECORD_ID ? t('keyboard.recording') : mergedTabKeyLabel}
-                        </button>
+                        </Button>
                       </Tooltip>
                       {mergedTabPending && recordingId !== MERGED_TAB_RECORD_ID && (
                         <Tooltip content={t('keyboard.revertChange')} placement="top">
-                          <button
-                            type="button"
-                            className="kb-shortcuts__revert-btn"
-                            data-bf-component="keyboard-shortcuts"
-                            data-bf-part="revert"
+                          <IconButton
                             aria-label={t('keyboard.revertChange')}
+                            icon="↩"
+                            size="xs"
+                            variant="quiet"
                             onClick={() => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
@@ -739,9 +727,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                                 return next;
                               });
                             }}
-                          >
-                            ↩
-                          </button>
+                          />
                         </Tooltip>
                       )}
                     </div>
@@ -777,36 +763,25 @@ const KeyboardShortcutsTab: React.FC = () => {
                     </div>
                     <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
                       <Tooltip content={t('keyboard.clickToRecord')} placement="top">
-                        <button
-                          type="button"
-                          className={[
-                            'kb-shortcuts__keybadge',
-                            recordingId === MERGED_SCENE_RECORD_ID ? 'kb-shortcuts__keybadge--recording' : '',
-                            mergedSceneConflict ? 'kb-shortcuts__keybadge--conflict' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          data-bf-component="keyboard-shortcuts"
-                          data-bf-part="keyBadge"
-                          data-bf-state={[
-                            recordingId === MERGED_SCENE_RECORD_ID && 'recording',
-                            mergedSceneConflict && 'conflict',
-                          ].filter(Boolean).join(' ') || undefined}
+                        <Button
+                          aria-pressed={recordingId === MERGED_SCENE_RECORD_ID}
+                          size="xs"
+                          tone={mergedSceneConflict ? 'danger' : 'neutral'}
+                          variant={recordingId === MERGED_SCENE_RECORD_ID ? 'primary' : 'outline'}
                           onClick={() =>
                             setRecordingId(recordingId === MERGED_SCENE_RECORD_ID ? null : MERGED_SCENE_RECORD_ID)
                           }
                         >
                           {recordingId === MERGED_SCENE_RECORD_ID ? t('keyboard.recording') : mergedSceneKeyLabel}
-                        </button>
+                        </Button>
                       </Tooltip>
                       {mergedScenePending && recordingId !== MERGED_SCENE_RECORD_ID && (
                         <Tooltip content={t('keyboard.revertChange')} placement="top">
-                          <button
-                            type="button"
-                            className="kb-shortcuts__revert-btn"
-                            data-bf-component="keyboard-shortcuts"
-                            data-bf-part="revert"
+                          <IconButton
                             aria-label={t('keyboard.revertChange')}
+                            icon="↩"
+                            size="xs"
+                            variant="quiet"
                             onClick={() => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
@@ -814,9 +789,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                                 return next;
                               });
                             }}
-                          >
-                            ↩
-                          </button>
+                          />
                         </Tooltip>
                       )}
                     </div>
@@ -825,7 +798,6 @@ const KeyboardShortcutsTab: React.FC = () => {
                 {items.map((reg) => {
                   const pending = pendingChanges[reg.id];
                   const isRecording = recordingId === reg.id;
-                  const fixed = NON_USER_CUSTOMIZABLE_SHORTCUT_IDS.has(reg.id);
                   const conflict = finalConflicts.get(reg.id) ?? null;
                   const displayName = shortcutDisplayName(reg, t);
                   const formattedKey = formatKey(reg, pending);
@@ -835,17 +807,16 @@ const KeyboardShortcutsTab: React.FC = () => {
                       data-bf-component="keyboard-shortcuts"
                       data-bf-part="item"
                       data-bf-state={[
-                        !fixed && isRecording && 'recording',
+                        isRecording && 'recording',
                         conflict && 'conflict',
-                        pending && !fixed && 'modified',
-                        fixed && 'readonly',
+                        pending && 'modified',
                       ].filter(Boolean).join(' ') || undefined}
                       key={reg.id}
                       className={[
                         'kb-shortcuts__item',
-                        !fixed && isRecording ? 'kb-shortcuts__item--recording' : '',
+                        isRecording ? 'kb-shortcuts__item--recording' : '',
                         conflict ? 'kb-shortcuts__item--conflict' : '',
-                        pending && !fixed ? 'kb-shortcuts__item--modified' : '',
+                        pending ? 'kb-shortcuts__item--modified' : '',
                       ].filter(Boolean).join(' ')}
                     >
                       <div className="kb-shortcuts__item-label" data-bf-component="keyboard-shortcuts" data-bf-part="label">
@@ -859,65 +830,35 @@ const KeyboardShortcutsTab: React.FC = () => {
                         )}
                       </div>
                       <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
-                        {fixed ? (
-                          <Tooltip content={t('keyboard.fixedBinding')} placement="top">
-                            <kbd
-                              className={['kb-shortcuts__keybadge', 'kb-shortcuts__keybadge--readonly'].join(' ')}
-                              data-bf-component="keyboard-shortcuts"
-                              data-bf-part="keyBadge"
-                              data-bf-state="readonly"
-                              aria-label={t('keyboard.fixedBindingLabel', {
-                                action: displayName,
-                                shortcut: formattedKey,
-                              })}
-                            >
-                              {formattedKey}
-                            </kbd>
+                        <Tooltip content={t('keyboard.clickToRecord')} placement="top">
+                          <Button
+                            aria-pressed={isRecording}
+                            size="xs"
+                            tone={conflict ? 'danger' : 'neutral'}
+                            variant={isRecording ? 'primary' : 'outline'}
+                            onClick={() => setRecordingId(isRecording ? null : reg.id)}
+                          >
+                            {isRecording
+                              ? t('keyboard.recording')
+                              : formattedKey}
+                          </Button>
+                        </Tooltip>
+                        {pending && !isRecording && (
+                          <Tooltip content={t('keyboard.revertChange')} placement="top">
+                            <IconButton
+                              aria-label={t('keyboard.revertChange')}
+                              icon="↩"
+                              size="xs"
+                              variant="quiet"
+                              onClick={() => {
+                                setPendingChanges((prev) => {
+                                  const next = { ...prev };
+                                  delete next[reg.id];
+                                  return next;
+                                });
+                              }}
+                            />
                           </Tooltip>
-                        ) : (
-                          <>
-                            <Tooltip content={t('keyboard.clickToRecord')} placement="top">
-                              <button
-                                type="button"
-                                className={[
-                                  'kb-shortcuts__keybadge',
-                                  isRecording ? 'kb-shortcuts__keybadge--recording' : '',
-                                  conflict ? 'kb-shortcuts__keybadge--conflict' : '',
-                                ].filter(Boolean).join(' ')}
-                                data-bf-component="keyboard-shortcuts"
-                                data-bf-part="keyBadge"
-                                data-bf-state={[
-                                  isRecording && 'recording',
-                                  conflict && 'conflict',
-                                ].filter(Boolean).join(' ') || undefined}
-                                onClick={() => setRecordingId(isRecording ? null : reg.id)}
-                              >
-                                {isRecording
-                                  ? t('keyboard.recording')
-                                  : formattedKey}
-                              </button>
-                            </Tooltip>
-                            {pending && !isRecording && (
-                              <Tooltip content={t('keyboard.revertChange')} placement="top">
-                                <button
-                                  type="button"
-                                  className="kb-shortcuts__revert-btn"
-                                  data-bf-component="keyboard-shortcuts"
-                                  data-bf-part="revert"
-                                  aria-label={t('keyboard.revertChange')}
-                                  onClick={() => {
-                                    setPendingChanges((prev) => {
-                                      const next = { ...prev };
-                                      delete next[reg.id];
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  ↩
-                                </button>
-                              </Tooltip>
-                            )}
-                          </>
                         )}
                       </div>
                     </div>

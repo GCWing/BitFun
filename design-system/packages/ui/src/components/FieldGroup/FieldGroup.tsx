@@ -5,9 +5,11 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { FieldSurfaceContext, type FieldSurface } from "../../internal/fieldSurface";
 import styles from "./FieldGroup.module.css";
 
 export type FieldGroupAppearance = "plain" | "subtle";
+export type FieldGroupFieldSurface = FieldSurface;
 export type FieldRowAlignment = "center" | "start";
 export type FieldRowPadding = "none" | "md";
 export type FormSectionHeading = "h2" | "h3" | "h4";
@@ -24,6 +26,8 @@ export interface FormSectionProps
 export interface FieldGroupProps extends HTMLAttributes<HTMLDivElement> {
   appearance?: FieldGroupAppearance;
   dividers?: boolean;
+  /** Lets text and picker field shells reuse the surrounding grouped surface. */
+  fieldSurface?: FieldGroupFieldSurface;
 }
 
 export interface FieldRowProps extends HTMLAttributes<HTMLDivElement> {
@@ -95,19 +99,23 @@ export const FieldGroup = forwardRef<HTMLDivElement, FieldGroupProps>(
     children,
     className,
     dividers = true,
+    fieldSurface = "default",
     ...props
   }, ref) {
     return (
-      <div
-        {...props}
-        className={classNames(styles.group, className)}
-        data-appearance={appearance}
-        data-bf-component="field-group"
-        data-dividers={dividers ? "true" : "false"}
-        ref={ref}
-      >
-        {children}
-      </div>
+      <FieldSurfaceContext.Provider value={fieldSurface}>
+        <div
+          {...props}
+          className={classNames(styles.group, className)}
+          data-appearance={appearance}
+          data-bf-component="field-group"
+          data-dividers={dividers ? "true" : "false"}
+          data-field-surface={fieldSurface}
+          ref={ref}
+        >
+          {children}
+        </div>
+      </FieldSurfaceContext.Provider>
     );
   },
 );

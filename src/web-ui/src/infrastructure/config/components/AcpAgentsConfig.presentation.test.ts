@@ -27,6 +27,25 @@ function readBlock(stylesheet: string, start: string, end: string): string {
 }
 
 describe('ACP Agent settings presentation', () => {
+  it('delegates capability, agent status, and remote summary badges to the design system', () => {
+    const source = readSource('./AcpAgentsConfig.tsx');
+    const stylesheet = readStylesheet();
+
+    expect(source).toContain('StatusPill');
+    expect(source).toContain('type StatusPillTone');
+    expect(source).toContain('function CapabilityStatusPill');
+    expect(source).toContain('function AgentStatusPill');
+    expect(source.match(/<CapabilityStatusPill/g)).toHaveLength(2);
+    expect(source).toContain('bitfun-acp-agents__registry-row--remote');
+    expect(source).toContain('<Spinner size="xs" />');
+    expect(source).not.toContain('LoaderCircle');
+    expect(stylesheet).not.toContain('&__capability {');
+    expect(stylesheet).not.toContain('&__status {');
+    expect(stylesheet).not.toContain('&__summary-pill {');
+    expect(stylesheet).not.toContain('border-radius: 999px;');
+    expect(stylesheet).not.toContain('@keyframes bitfun-acp-spin');
+  });
+
   it('separates local, SSH, and advanced JSON views with guarded JSON changes', () => {
     const source = readSource('./AcpAgentsConfig.tsx');
     const appearance = readSource('./AcpAgentsConfig.appearance.ts');

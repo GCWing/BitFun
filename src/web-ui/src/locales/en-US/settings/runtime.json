@@ -19,7 +19,6 @@
       "deleteConfirmBody": "Delete this imported pet from your device? This cannot be undone.",
       "deleteSuccess": "Imported appearance removed",
       "deleteFailed": "Failed to remove imported appearance",
-      "refresh": "Refresh appearances",
       "presets": {
         "blueGolden": {
           "name": "困困"

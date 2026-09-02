@@ -147,6 +147,22 @@
     border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
   }
 
+  .footer[data-appearance="floating"] {
+    position: absolute;
+    z-index: var(--bf-layer-content);
+    inset-inline: 0;
+    inset-block-end: 0;
+    justify-content: center;
+    border-block-start: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .footer[data-appearance="floating"] > * {
+    min-inline-size: var(--bf-overlay-dialog-footer-action-min-width);
+    pointer-events: auto;
+  }
+
   .overlay[data-state="exiting"] {
     pointer-events: none;
     animation: bf-dialog-overlay-exit var(--bf-motion-duration-base) var(--bf-motion-easing-exit) both;

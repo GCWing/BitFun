@@ -115,11 +115,27 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     return null;
   }
 
+  const renderAction = () => {
+    if (status === 'completed') {
+      return `${t('toolCards.readFile.readFile')}:`;
+    }
+    if (status === 'running' || status === 'streaming') {
+      return t('toolCards.readFile.readingFile');
+    }
+    if (showConfirmationActions || status === 'pending_confirmation') {
+      return t('toolCards.readFile.permissionRequest');
+    }
+    if (status === 'pending') {
+      return t('toolCards.readFile.preparingRead');
+    }
+    return undefined;
+  };
+
   const renderContent = () => {
     if (status === 'completed') {
       return (
         <>
-          {t('toolCards.readFile.readFile')}: {fileName}
+          {fileName}
           {lineRange && <> {lineRange}</>}
           {fileSize && <> ({fileSize})</>}
         </>
@@ -128,7 +144,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     if (status === 'running' || status === 'streaming') {
       return (
         <>
-          {t('toolCards.readFile.readingFile')} {fileName}
+          {fileName}
           {lineRange && <> {lineRange}</>}
           ...
         </>
@@ -137,7 +153,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     if (showConfirmationActions || status === 'pending_confirmation') {
       return (
         <>
-          {t('toolCards.readFile.permissionRequest')} {permissionTargetPath}
+          {permissionTargetPath}
           {lineRange && <> {lineRange}</>}
         </>
       );
@@ -145,7 +161,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     if (status === 'pending') {
       return (
         <>
-          {t('toolCards.readFile.preparingRead')} {fileName}
+          {fileName}
           {lineRange && <> {lineRange}</>}
         </>
       );
@@ -155,10 +171,11 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
 
   return (
     <ReadFileToolCard
+      action={renderAction()}
+      content={renderContent()}
       status={status}
       interactive={canOpenFile}
       onOpen={canOpenFile ? handleOpenInEditor : undefined}
-      summary={renderContent()}
     />
   );
 });

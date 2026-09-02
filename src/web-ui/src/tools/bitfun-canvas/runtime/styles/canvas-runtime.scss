@@ -24,6 +24,8 @@
   --bf-color-status-success-content: var(--bitfun-canvas-success);
   --bf-color-status-warning-content: var(--bitfun-canvas-warning);
   --bf-color-status-danger-content: var(--bitfun-canvas-danger);
+  --bf-color-code-change-added: var(--bitfun-canvas-success);
+  --bf-color-code-change-removed: var(--bitfun-canvas-danger);
   --bf-color-border-subtle: color-mix(in srgb, var(--bitfun-canvas-border) 70%, transparent);
   --bf-color-border-default: var(--bitfun-canvas-border);
   --bf-color-surface-subtle: color-mix(in srgb, var(--bf-color-content-primary) 5%, transparent);

@@ -314,36 +314,7 @@ const MemorySettingsPage: React.FC = () => {
       data-bf-component="config"
       data-bf-part="root"
     >
-      <ConfigPageHeader
-        title={t('title')}
-        subtitle={t('subtitle')}
-        extra={(
-          <>
-            <Button
-              ref={actionMenuAnchorRef}
-              type="button"
-              variant="outline"
-              size="sm"
-              trailingIcon={<Icon name="chevron-down" size="sm" />}
-              onClick={() => setActionMenuOpen((open) => !open)}
-              loading={actionBusy !== null}
-              disabled={actionBusy !== null}
-              aria-haspopup="menu"
-              aria-expanded={actionMenuOpen}
-            >
-              {t('actions.menu')}
-            </Button>
-            <MenuPopover
-              items={actionMenuItems}
-              open={actionMenuOpen}
-              onClose={() => setActionMenuOpen(false)}
-              anchorRef={actionMenuAnchorRef}
-              placement="bottom"
-              aria-label={t('actions.menu')}
-            />
-          </>
-        )}
-      />
+      <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent>
         <ConfigMessage message={{ type: 'info', text: t('scopeNotice') }} />
         <ConfigPageSection title={t('sections.basic.title')} description={t('sections.basic.description')}>
@@ -388,6 +359,38 @@ const MemorySettingsPage: React.FC = () => {
               size="sm"
               disabled={savingKey === 'external_context_policy' || memoryWorkDisabled}
             />
+          </ConfigPageRow>
+
+          <ConfigPageRow
+            label={t('fields.memoryActions.label')}
+            description={t('fields.memoryActions.description')}
+            align="center"
+          >
+            <>
+              <Button
+                ref={actionMenuAnchorRef}
+                type="button"
+                variant="outline"
+                size="sm"
+                trailingIcon={<Icon name="chevron-down" size="sm" />}
+                onClick={() => setActionMenuOpen((open) => !open)}
+                loading={actionBusy !== null}
+                disabled={actionBusy !== null}
+                aria-label={t('fields.memoryActions.label')}
+                aria-haspopup="menu"
+                aria-expanded={actionMenuOpen}
+              >
+                {t('actions.manage')}
+              </Button>
+              <MenuPopover
+                items={actionMenuItems}
+                open={actionMenuOpen}
+                onClose={() => setActionMenuOpen(false)}
+                anchorRef={actionMenuAnchorRef}
+                placement="bottom"
+                aria-label={t('fields.memoryActions.label')}
+              />
+            </>
           </ConfigPageRow>
         </ConfigPageSection>
 

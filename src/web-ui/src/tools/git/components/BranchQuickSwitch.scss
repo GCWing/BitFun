@@ -104,10 +104,13 @@
 }
 
 .branch-switch-conflict-dialog__additions {
-  color: var(--bf-color-status-success-content);
+  color: var(--bf-color-code-change-added);
 }
 
-.branch-switch-conflict-dialog__deletions,
+.branch-switch-conflict-dialog__deletions {
+  color: var(--bf-color-code-change-removed);
+}
+
 .branch-switch-commit-dialog__error {
   color: var(--bf-color-status-danger-content);
 }

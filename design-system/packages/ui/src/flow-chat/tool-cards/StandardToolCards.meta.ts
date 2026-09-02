@@ -9,8 +9,7 @@ const ambientTokens = [
   "color.border.default",
   "color.status.danger.content",
   "color.status.success.content",
-  "font.family.control",
-  "font.family.mono",
+  "font.family.sans",
   "font.size.sm",
   "font.weight.medium",
   "font.weight.regular",
@@ -25,6 +24,14 @@ const activityProps = [
 
 const expandableProps = [
   { name: "status", type: "FlowChatToolStatus" },
+  { name: "summary", type: "ReactNode" },
+  { defaultValue: "false", name: "isExpanded", type: "boolean" },
+  { name: "onToggle", type: "() => void" },
+] as const;
+
+const searchProps = [
+  { name: "status", type: "FlowChatToolStatus" },
+  { name: "action", type: "ReactNode" },
   { name: "summary", type: "ReactNode" },
   { defaultValue: "false", name: "isExpanded", type: "boolean" },
   { name: "onToggle", type: "() => void" },
@@ -55,7 +62,7 @@ export const directoryListToolCardMeta = {
   description: "An ambient directory-list card with structured metadata and file results.",
   maturity: "stable",
   name: "DirectoryListToolCard",
-  props: expandableProps,
+  props: searchProps,
   states: ["default", "hover", "loading", "expanded", "error"],
   tokens: ambientTokens,
 } as const satisfies ComponentMeta;
@@ -75,7 +82,7 @@ export const globSearchToolCardMeta = {
   description: "An ambient file-pattern search card with reusable result-list anatomy.",
   maturity: "stable",
   name: "GlobSearchToolCard",
-  props: expandableProps,
+  props: searchProps,
   states: ["default", "hover", "loading", "expanded", "error"],
   tokens: ambientTokens,
 } as const satisfies ComponentMeta;
@@ -85,7 +92,7 @@ export const grepSearchToolCardMeta = {
   description: "An ambient text-search card with query metadata and a scrollable result preview.",
   maturity: "stable",
   name: "GrepSearchToolCard",
-  props: expandableProps,
+  props: searchProps,
   states: ["default", "hover", "loading", "expanded", "error"],
   tokens: ambientTokens,
 } as const satisfies ComponentMeta;
@@ -175,7 +182,7 @@ export const webSearchToolCardMeta = {
   description: "An ambient web-search card with link, snippet, URL, and summary result presentations.",
   maturity: "stable",
   name: "WebSearchToolCard",
-  props: expandableProps,
+  props: searchProps,
   states: ["default", "hover", "loading", "expanded", "error"],
   tokens: ambientTokens,
 } as const satisfies ComponentMeta;

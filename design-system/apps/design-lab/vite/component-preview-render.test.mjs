@@ -67,6 +67,20 @@ test("other components formerly using the fallback render their own state specim
   assert.match(render("Avatar").preview, /<img/);
 });
 
+test("LauncherButton renders every interaction state with the catalog mic", () => {
+  const { html, preview } = render("LauncherButton");
+
+  assert.equal(
+    (preview.match(/data-bf-component="launcher-button"/g) ?? []).length,
+    5,
+  );
+  assert.match(preview, /data-bf-name="mic"/);
+  assert.match(preview, /data-bf-preview-state="hover"/);
+  assert.match(preview, /data-bf-preview-state="active"/);
+  assert.match(preview, /<button[^>]*disabled=""/);
+  assert.match(html, /import \{ Icon, LauncherButton \}/);
+});
+
 test("FieldGroup states use independent full-width stages with distinct labels", () => {
   const { preview } = render("FieldGroup");
   assert.equal((preview.match(/class="component-surface-state-list__item"/g) ?? []).length, 3);

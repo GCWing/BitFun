@@ -29,6 +29,10 @@
       "label": "记忆",
       "description": "启用后将自动生成记忆，并在会话中使用记忆。"
     },
+    "memoryActions": {
+      "label": "记忆操作",
+      "description": "打开记忆目录、恢复默认设置，或永久清空当前执行主机上的记忆数据。"
+    },
     "generateMemories": {
       "label": "自动生成记忆",
       "description": "后台从已结束的本地会话中抽取并整理可复用记忆。"
@@ -95,7 +99,7 @@
     "skipSession": "跳过整个会话"
   },
   "actions": {
-    "menu": "记忆操作",
+    "manage": "管理",
     "expandAdvanced": "展开高级设置",
     "collapseAdvanced": "收起高级设置",
     "resetSettings": "重置记忆设置",

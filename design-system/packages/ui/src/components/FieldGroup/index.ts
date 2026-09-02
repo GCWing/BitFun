@@ -3,6 +3,7 @@ export {
   FieldRow,
   FormSection,
   type FieldGroupAppearance,
+  type FieldGroupFieldSurface,
   type FieldGroupProps,
   type FieldRowAlignment,
   type FieldRowPadding,

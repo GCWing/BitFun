@@ -435,6 +435,7 @@ const ModelSettingsPage: React.FC = () => {
   const [testingConfigs, setTestingConfigs] = useState<Record<string, boolean>>({});
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string } | null>>({});
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedProviderGroupKeys, setExpandedProviderGroupKeys] = useState<Set<string>>(new Set());
   const notification = useNotification();
   
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -2017,6 +2018,18 @@ const ModelSettingsPage: React.FC = () => {
     });
   }, [aiModels, providerOrder]);
 
+  const toggleProviderGroup = (groupKey: string) => {
+    setExpandedProviderGroupKeys(previous => {
+      const next = new Set(previous);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  };
+
   
   if (isConfigLoading || configLoadError) {
     return (
@@ -2567,9 +2580,10 @@ const ModelSettingsPage: React.FC = () => {
     );
 
     const renderApiKeyRow = (label: string) => (
-      <ConfigPageRow label={label} align="center" wide>
+      <ConfigPageRow label={label} required align="center" wide>
         <Input
           data-testid="settings-model-api-key-input"
+          required
           type={showApiKey ? 'text' : 'password'}
           value={editingConfig.api_key || ''}
           onChange={(e) => {
@@ -2590,12 +2604,14 @@ const ModelSettingsPage: React.FC = () => {
             <ConfigPageSection
               title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
               className="bitfun-model-settings__edit-section"
+              fieldSurface="default"
             >
             {isFromTemplate ? (
               <>
-                <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
+                <ConfigPageRow label={t('form.configName')} required align="center" wide>
                   <Input
                     data-testid="settings-model-provider-name-input"
+                    required
                     value={editingConfig.name || ''}
                     onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
                     placeholder={t('form.configNamePlaceholder')}
@@ -2603,7 +2619,7 @@ const ModelSettingsPage: React.FC = () => {
                   />
                 </ConfigPageRow>
                 {renderAuthRow()}
-                {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
+                {!authIsSubscription && renderApiKeyRow(t('form.apiKey'))}
                 <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
                   <div className="bitfun-model-settings__control-stack">
                     {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
@@ -2672,10 +2688,11 @@ const ModelSettingsPage: React.FC = () => {
                     size="sm"
                   />
                 </ConfigPageRow>
-                <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
+                <ConfigPageRow label={t('form.modelSelection')} required wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
                       <MultiSelect
+                        aria-required="true"
                         data-testid="settings-model-select"
                         value={selectedModelValues}
                         onValueChange={(value) => {
@@ -2704,7 +2721,7 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         size="sm"
                       />
-                      <Button className="bitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
+                      <Button className="bitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="secondary" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2721,9 +2738,10 @@ const ModelSettingsPage: React.FC = () => {
               <>
                 {isProviderScopedEditing && (
                   <>
-                    <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
+                    <ConfigPageRow label={t('form.configName')} required align="center" wide>
                       <Input
                         data-testid="settings-model-provider-name-input"
+                        required
                         value={editingConfig.name || ''}
                         onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
                         placeholder={t('form.configNamePlaceholder')}
@@ -2731,11 +2749,12 @@ const ModelSettingsPage: React.FC = () => {
                       />
                     </ConfigPageRow>
                     {renderAuthRow()}
-                    {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
-                    <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
+                    {!authIsSubscription && renderApiKeyRow(t('form.apiKey'))}
+                    <ConfigPageRow label={t('form.baseUrl')} required align="center" wide>
                       <div className="bitfun-model-settings__control-stack">
                         <Input
                           data-testid="settings-model-base-url-input"
+                          required
                           type="url"
                           value={editingConfig.base_url || ''}
                           onChange={(e) => {
@@ -2781,11 +2800,12 @@ const ModelSettingsPage: React.FC = () => {
 
             {!isFromTemplate && (
               <>
-                <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
+                <ConfigPageRow label={t('form.modelSelection')} required wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
                       {editingConfig.id ? (
                         <Combobox
+                          aria-required="true"
                           data-testid="settings-model-select"
                           value={selectedModelValues[0] || ''}
                           onValueChange={(value) => {
@@ -2800,6 +2820,7 @@ const ModelSettingsPage: React.FC = () => {
                         />
                       ) : (
                         <MultiSelect
+                          aria-required="true"
                           data-testid="settings-model-select"
                           value={selectedModelValues}
                           onValueChange={(value) => {
@@ -2828,7 +2849,7 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         size="sm"
                       />
-                      <Button className="bitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
+                      <Button className="bitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="secondary" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2847,6 +2868,7 @@ const ModelSettingsPage: React.FC = () => {
           <ConfigPageSection
             title={t('advancedSettings.title')}
             className="bitfun-model-settings__edit-section"
+            fieldSurface="default"
           >
             <ConfigPageRow className="bitfun-model-settings__toggle-row" label={t('advancedSettings.title')} align="center">
               <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
@@ -3129,44 +3151,48 @@ const ModelSettingsPage: React.FC = () => {
     );
 
     const control = (
-      <div
-        className="bitfun-model-settings__model-actions"
-        data-bf-component="model-settings"
-        data-bf-part="modelActions"
-      >
-        <Switch
-          checked={config.enabled}
-          onChange={(e) => {
-            void handleToggleEnabled(config, e.target.checked);
-          }}
-        />
-        <Tooltip content={t('actions.test')}>
-          <IconButton
-            aria-label={t('actions.test')}
-            size="sm"
-            loading={isTesting}
-            onClick={() => void handleTest(config)}
-            icon={isTesting ? <Loader size={14} /> : <Wifi size={14} />}
+      <>
+        <span className="bitfun-model-settings__model-enable">
+          <Switch
+            checked={config.enabled}
+            onChange={(e) => {
+              void handleToggleEnabled(config, e.target.checked);
+            }}
           />
-        </Tooltip>
-        <Tooltip content={t('actions.edit')}>
-          <IconButton
-            aria-label={t('actions.edit')}
-            size="sm"
-            onClick={() => handleEdit(config)}
-            icon={<Icon name="edit" size="sm" />}
-          />
-        </Tooltip>
-        <Tooltip content={t('actions.delete')}>
-          <IconButton
-            aria-label={t('actions.delete')}
-            tone="danger"
-            size="sm"
-            onClick={() => void requestDelete(config)}
-            icon={<Icon name="delete" size="sm" />}
-          />
-        </Tooltip>
-      </div>
+        </span>
+        <div
+          className="bitfun-model-settings__model-actions"
+          data-bf-component="model-settings"
+          data-bf-part="modelActions"
+        >
+          <Tooltip content={t('actions.test')}>
+            <IconButton
+              aria-label={t('actions.test')}
+              size="sm"
+              loading={isTesting}
+              onClick={() => void handleTest(config)}
+              icon={isTesting ? <Loader size={14} /> : <Wifi size={14} />}
+            />
+          </Tooltip>
+          <Tooltip content={t('actions.edit')}>
+            <IconButton
+              aria-label={t('actions.edit')}
+              size="sm"
+              onClick={() => handleEdit(config)}
+              icon={<Icon name="edit" size="sm" />}
+            />
+          </Tooltip>
+          <Tooltip content={t('actions.delete')}>
+            <IconButton
+              aria-label={t('actions.delete')}
+              tone="danger"
+              size="sm"
+              onClick={() => void requestDelete(config)}
+              icon={<Icon name="delete" size="sm" />}
+            />
+          </Tooltip>
+        </div>
+      </>
     );
 
     return (
@@ -3178,6 +3204,7 @@ const ModelSettingsPage: React.FC = () => {
         details={details}
         expanded={isExpanded}
         onToggle={() => config.id && toggleExpanded(config.id)}
+        toggleOnRowClick
         disabled={!config.enabled}
         data-testid="settings-model-row"
         data-config-id={config.id || ''}
@@ -3547,32 +3574,63 @@ const ModelSettingsPage: React.FC = () => {
             </div>
           ) : (
             <div className="bitfun-model-settings__collection" data-bf-component="model-settings" data-bf-part="collection" data-testid="settings-model-list">
-              {providerGroups.map(group => (
-                <div key={group.key} className="bitfun-model-settings__provider-group" data-bf-component="model-settings" data-bf-part="providerGroup">
-                  <div className="bitfun-model-settings__provider-group-header" data-bf-component="model-settings" data-bf-part="providerGroupHeader">
-                    <div className="bitfun-model-settings__provider-group-title" data-bf-component="model-settings" data-bf-part="providerGroupTitle">
-                      <span>{group.providerName}</span>
-                      <span className="bitfun-model-settings__provider-group-count">{group.models.length}</span>
-                      <span className="bitfun-model-settings__meta-tag">
-                        {requestFormatLabelMap[group.models[0]?.provider || 'openai'] || (group.models[0]?.provider || 'openai')}
-                      </span>
-                    </div>
-                    <div className="bitfun-model-settings__provider-group-actions" data-bf-component="model-settings" data-bf-part="providerGroupActions">
-                      <Tooltip content={t('actions.edit')}>
-                        <IconButton
-                          aria-label={t('actions.edit')}
+              {providerGroups.map(group => {
+                const isExpanded = expandedProviderGroupKeys.has(group.key);
+
+                return (
+                  <div
+                    key={group.key}
+                    className="bitfun-model-settings__provider-group"
+                    data-bf-component="model-settings"
+                    data-bf-part="providerGroup"
+                    data-bf-state={isExpanded ? 'expanded' : undefined}
+                  >
+                    <div
+                      className="bitfun-model-settings__provider-group-header"
+                      data-bf-component="model-settings"
+                      data-bf-part="providerGroupHeader"
+                      data-expanded={isExpanded ? 'true' : 'false'}
+                    >
+                      <button
+                        type="button"
+                        className="bitfun-model-settings__provider-group-toggle"
+                        aria-expanded={isExpanded}
+                        aria-label={`${tComponents(isExpanded ? 'tooltip.collapse' : 'tooltip.expand')} ${group.providerName}`}
+                        onClick={() => toggleProviderGroup(group.key)}
+                      >
+                        <Icon
+                          name={isExpanded ? 'chevron-down' : 'chevron-right'}
                           size="sm"
-                          onClick={() => handleEditProvider(group.models[0])}
-                          icon={<Icon name="edit" size="sm" />}
+                          className="bitfun-model-settings__provider-group-chevron"
+                          aria-hidden="true"
                         />
-                      </Tooltip>
+                        <span className="bitfun-model-settings__provider-group-title" data-bf-component="model-settings" data-bf-part="providerGroupTitle">
+                          <span>{group.providerName}</span>
+                          <span className="bitfun-model-settings__provider-group-count">{group.models.length}</span>
+                          <span className="bitfun-model-settings__meta-tag">
+                            {requestFormatLabelMap[group.models[0]?.provider || 'openai'] || (group.models[0]?.provider || 'openai')}
+                          </span>
+                        </span>
+                      </button>
+                      <div className="bitfun-model-settings__provider-group-actions" data-bf-component="model-settings" data-bf-part="providerGroupActions">
+                        <Tooltip content={t('actions.edit')}>
+                          <IconButton
+                            aria-label={t('actions.edit')}
+                            size="sm"
+                            onClick={() => handleEditProvider(group.models[0])}
+                            icon={<Icon name="edit" size="sm" />}
+                          />
+                        </Tooltip>
+                      </div>
                     </div>
+                    {isExpanded && (
+                      <div className="bitfun-model-settings__provider-group-list" data-bf-component="model-settings" data-bf-part="providerGroupList">
+                        {group.models.map(config => renderModelCollectionItem(config))}
+                      </div>
+                    )}
                   </div>
-                  <div className="bitfun-model-settings__provider-group-list" data-bf-component="model-settings" data-bf-part="providerGroupList">
-                    {group.models.map(config => renderModelCollectionItem(config))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ConfigPageSection>
@@ -3859,7 +3917,8 @@ const ModelSettingsPage: React.FC = () => {
             else requestCloseEditingModal();
           }
         }}
-        size="2xl"
+        className="bitfun-model-settings__editor-dialog"
+        size="xl"
       >
         <DialogHeader>
           <DialogHeading>
@@ -3906,9 +3965,11 @@ const ModelSettingsPage: React.FC = () => {
           />
         ) : renderEditingForm()}
               </DialogBody>
-        <DialogFooter>{reasoningPanelDraft ? undefined : (
+        <DialogFooter appearance="floating">{reasoningPanelDraft ? undefined : (
           <>
-            <Button variant="fill" onClick={requestCloseEditingModal}>{t('actions.cancel')}</Button>
+            <Button variant="secondary" onClick={requestCloseEditingModal}>
+              {t('actions.cancel')}
+            </Button>
             <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>
               {t('actions.save')}
             </Button>

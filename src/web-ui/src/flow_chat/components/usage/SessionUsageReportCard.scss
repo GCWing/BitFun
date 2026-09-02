@@ -1,7 +1,9 @@
 @use '../../flat-markdown-surfaces' as flatMarkdownSurfaces;
+@use '../../markdown-typography' as markdownTypography;
 
 .session-usage-report-card {
   @include flatMarkdownSurfaces.apply;
+  @include markdownTypography.apply;
 
   display: flex;
   flex-direction: column;
@@ -417,11 +419,11 @@
   }
 
   &__file-stat--added {
-    color: var(--bf-color-status-success-content);
+    color: var(--bf-color-code-change-added);
   }
 
   &__file-stat--deleted {
-    color: var(--bf-color-status-danger-content);
+    color: var(--bf-color-code-change-removed);
   }
 
   &__file-stat-separator {

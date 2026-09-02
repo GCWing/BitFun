@@ -110,6 +110,11 @@
     background: var(--bf-color-field-background-hover);
   }
 
+  .root[data-field-surface="ambient"] .trigger,
+  .root[data-field-surface="ambient"] .trigger:not(:disabled):hover {
+    background: transparent;
+  }
+
   .trigger:focus-visible,
   .root[data-open="true"] .trigger {
     border-color: var(--bf-color-field-border-focus);

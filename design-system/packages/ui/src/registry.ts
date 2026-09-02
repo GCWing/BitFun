@@ -17,6 +17,7 @@ import { iconMeta } from "./components/Icon/Icon.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
 import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
+import { launcherButtonMeta } from "./components/LauncherButton/LauncherButton.meta";
 import { listboxMeta } from "./components/Listbox/Listbox.meta";
 import { menuMeta } from "./components/Menu/Menu.meta";
 import { dialogMeta, sheetMeta } from "./components/Dialog/Dialog.meta";
@@ -113,6 +114,7 @@ export const componentRegistry = [
   iconButtonMeta,
   inputMeta,
   keyHintMeta,
+  launcherButtonMeta,
   listboxMeta,
   loadingStateMeta,
   menuMeta,

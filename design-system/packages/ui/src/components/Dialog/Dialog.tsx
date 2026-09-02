@@ -26,6 +26,7 @@ import styles from "./Dialog.module.css";
 const EXIT_DURATION_MS = 180;
 
 export type DialogCloseReason = "close-button" | "escape-key" | "pointer-outside";
+export type DialogFooterAppearance = "attached" | "floating";
 export type DialogSize = "sm" | "md" | "lg" | "xl" | "2xl";
 export type SheetPlacement = "left" | "right" | "bottom";
 export type SheetSize = "sm" | "md" | "lg";
@@ -283,8 +284,20 @@ export const DialogBody = forwardRef<HTMLDivElement, DialogBodyProps>(
   },
 );
 
-export const DialogFooter = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(
-  function DialogFooter({ className, ...props }, ref) {
-    return <footer {...props} className={classNames(styles.footer, className)} data-bf-part="footer" ref={ref} />;
+export interface DialogFooterProps extends HTMLAttributes<HTMLElement> {
+  appearance?: DialogFooterAppearance;
+}
+
+export const DialogFooter = forwardRef<HTMLElement, DialogFooterProps>(
+  function DialogFooter({ appearance = "attached", className, ...props }, ref) {
+    return (
+      <footer
+        {...props}
+        className={classNames(styles.footer, className)}
+        data-appearance={appearance}
+        data-bf-part="footer"
+        ref={ref}
+      />
+    );
   },
 );

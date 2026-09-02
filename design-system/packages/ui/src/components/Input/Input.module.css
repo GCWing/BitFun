@@ -24,6 +24,11 @@
     background: var(--bf-color-field-background-hover);
   }
 
+  .field[data-field-surface="ambient"],
+  .field[data-field-surface="ambient"]:hover:not([data-disabled="true"]) {
+    background: transparent;
+  }
+
   .field:focus-within {
     border-color: var(--bf-color-field-border-focus);
     box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);

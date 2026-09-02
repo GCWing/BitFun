@@ -38,14 +38,23 @@
       "borderFocus": { "$type": "color", "$value": "{ref.color.amber.400}" }
     },
     "control": {
+      "highlight": {
+        "background": { "$type": "color", "$value": "{ref.color.amber.400}" },
+        "content": { "$type": "color", "$value": "{color.content.onLight}" }
+      },
       "switch": {
         "track": { "$type": "color", "$value": "{ref.color.gray.250}" },
-        "trackChecked": { "$type": "color", "$value": "{ref.color.amber.400}" },
+        "trackChecked": { "$type": "color", "$value": "{color.control.highlight.background}" },
         "thumb": { "$type": "color", "$value": "{ref.color.gray.1000}" }
       }
     },
     "focus": {
       "ring": { "$type": "color", "$value": "{ref.color.amber.400}" }
+    },
+    "status": {
+      "warning": {
+        "emphasis": { "$type": "color", "$value": "{ref.color.amber.400}" }
+      }
     }
   }
 }

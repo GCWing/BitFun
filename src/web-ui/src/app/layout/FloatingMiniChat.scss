@@ -11,8 +11,6 @@ $fmc-ease: cubic-bezier(0.23, 1, 0.32, 1);
 $fmc-open-duration: 0.22s;
 $fmc-close-duration: 0.16s;
 
-$button-width: 104px;
-$button-height: 40px;
 $miniapp-button-size: 42px;
 $miniapp-button-offset: 20px;
 // Sized for the full session composer (workspace strip, model/permission
@@ -67,49 +65,6 @@ $panel-height: 680px;
   position: relative;
   z-index: 2;
   pointer-events: auto;
-  display: inline-flex;
-  width: $button-width;
-  height: $button-height;
-  align-items: center;
-  justify-content: center;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--bf-radius-lg) 0 0 0;
-  background: color-mix(
-    in srgb,
-    var(--bf-color-content-on-light) 79%,
-    var(--bf-color-content-on-dark)
-  );
-  color: var(--bf-color-content-on-dark);
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-body-sm-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  font-synthesis: none;
-  line-height: var(--bf-type-label-md-line-height);
-  opacity: 0.22;
-  cursor: pointer;
-  transition:
-    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    opacity $fmc-close-duration $fmc-ease;
-
-  &:hover,
-  &:focus-visible {
-    opacity: 1;
-    background: color-mix(
-      in srgb,
-      var(--bf-color-content-on-light) 72%,
-      var(--bf-color-content-on-dark)
-    );
-  }
-
-  &:active {
-    opacity: 0.86;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
-    outline-offset: -3px;
-  }
 
   // Hide when the panel is open. `visibility` (delayed until the fade-out
   // finishes) is what actually removes it from hit testing; opacity alone
@@ -124,16 +79,11 @@ $panel-height: 680px;
   }
 }
 
-.bitfun-fmc__button-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .bitfun-fmc__button--miniapp {
+  display: inline-flex;
   width: $miniapp-button-size;
   height: $miniapp-button-size;
+  align-items: center;
   justify-content: center;
   padding: 0;
   border: 1px solid var(--bf-color-field-border-hover);
@@ -144,6 +94,12 @@ $panel-height: 680px;
     0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 35%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
   opacity: 1;
+  cursor: pointer;
+  transition:
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
     color: var(--bf-color-content-primary);

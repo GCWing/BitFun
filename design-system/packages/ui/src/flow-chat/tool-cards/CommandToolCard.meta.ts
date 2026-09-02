@@ -28,8 +28,9 @@ export const commandToolCardMeta = {
     "color.status.warning.content",
     "color.surface.canvas",
     "color.surface.raised",
-    "font.family.mono",
+    "font.family.sans",
     "font.size.sm",
+    "font.weight.regular",
     "radius.sm",
   ],
 } as const satisfies ComponentMeta;

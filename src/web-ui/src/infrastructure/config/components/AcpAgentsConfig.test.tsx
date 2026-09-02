@@ -304,6 +304,37 @@ describe('AcpAgentsConfig', () => {
     expect(container.textContent).not.toContain('registry.configInvalid');
   });
 
+  it('omits the redundant CLI capability column from local agent rows', async () => {
+    probeClientRequirementsMock.mockResolvedValue([{
+      id: 'opencode',
+      tool: { name: 'opencode', installed: false },
+      runnable: false,
+      notes: [],
+    }]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const row = Array.from(
+      container.querySelectorAll('.bitfun-acp-agents__registry-row'),
+    ).find(candidate => candidate.querySelector('.bitfun-acp-agents__registry-name')
+      ?.textContent === 'opencode');
+    expect(row).toBeTruthy();
+
+    const status = row?.querySelector(
+      '[data-bf-component="status-pill"][data-bf-state="not_installed"]',
+    );
+
+    expect(row?.querySelector('[data-bf-part="capabilities"]')).toBeNull();
+    expect(row?.querySelectorAll('[data-bf-component="status-pill"]')).toHaveLength(1);
+    expect(status?.getAttribute('data-tone')).toBe('neutral');
+  });
+
   it('keeps page help and agent detection with their owning surfaces', async () => {
     await act(async () => {
       root.render(<AcpAgentsConfig />);

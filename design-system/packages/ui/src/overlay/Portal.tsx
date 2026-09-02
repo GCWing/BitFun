@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { FieldSurfaceContext } from "../internal/fieldSurface";
 import { useDesignSystem } from "./useDesignSystem";
 import type {
   OverlayPortalContainer,
@@ -29,5 +30,12 @@ export function Portal({ children, ownerDocument, target }: PortalProps) {
     target === undefined ? designSystem.portalHost : target,
     ownerDocument,
   );
-  return container ? createPortal(children, container) : null;
+  return container
+    ? createPortal(
+        <FieldSurfaceContext.Provider value="default">
+          {children}
+        </FieldSurfaceContext.Provider>,
+        container,
+      )
+    : null;
 }

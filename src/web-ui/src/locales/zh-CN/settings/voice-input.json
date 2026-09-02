@@ -134,16 +134,15 @@
       "label": "输入设备",
       "description": "默认跟随系统；此选择仅应用于当前设备。",
       "systemDefault": "系统默认",
-      "unnamed": "麦克风 {{index}}",
-      "refresh": "刷新麦克风列表"
+      "unnamed": "麦克风 {{index}}"
     },
     "recognition": {
       "label": "测试语音输入",
       "description": "说一小段话，同时检查麦克风和本地识别。",
       "start": "开始测试",
-      "finish": "结束并转写",
-      "modelRequired": "安装本地模型后才能测试识别。",
-      "cloudUnavailable": "云端转写通路尚未接入，请先切换到本地处理。",
+      "finish": "结束录音",
+      "preparing": "正在准备",
+      "transcribing": "正在识别",
       "timing": "推理耗时 {{duration}} 毫秒"
     },
     "messages": {
@@ -154,35 +153,48 @@
   },
   "status": {
     "label": "使用状态",
-    "manageModels": "本地模型",
+    "manageModels": "管理模型",
     "unknownModel": "本地语音模型",
-    "useLocal": "切换到本地处理",
-    "downloadAndEnable": "下载并启用",
-    "repair": "检查并修复",
+    "useLocal": "切换到本地识别",
+    "downloadModel": "下载模型",
+    "viewDetails": "查看详情",
+    "repair": "查看并修复",
     "ready": {
       "badge": "已就绪",
-      "title": "可以使用语音输入",
-      "description": "音频由此设备上的 {{model}} 处理，不会上传。"
+      "title": "语音输入已就绪",
+      "description": "使用 {{model}} 在本机识别，音频不会上传。",
+      "summary": "已下载模型：<model>{{model}}</model>"
     },
     "setup": {
-      "badge": "需要设置",
-      "title": "下载本地识别资源",
-      "description": "需要下载 {{size}} 的 {{model}}；完成后即可在输入框中使用。"
+      "badge": "未下载",
+      "title": "尚未下载语音模型",
+      "description": "下载后即可使用语音输入，约占用 {{size}}。",
+      "summary": "语音模型<warning>未下载</warning>，下载后即可使用语音输入。"
     },
     "downloading": {
-      "badge": "准备中",
-      "title": "正在准备语音输入",
-      "description": "正在下载或校验 {{model}}。"
+      "badge": "下载中",
+      "title": "正在下载语音模型",
+      "description": "{{model}} 下载完成后即可使用语音输入。"
+    },
+    "verifying": {
+      "badge": "校验中",
+      "title": "正在校验语音模型",
+      "description": "正在确认 {{model}} 是否完整可用。"
+    },
+    "deleting": {
+      "badge": "删除中",
+      "title": "正在删除语音模型",
+      "description": "正在从此设备移除 {{model}}。"
     },
     "unavailable": {
       "badge": "不可用",
-      "title": "云端转写当前不可用",
-      "description": "已有云端模型配置已保留；当前版本尚未接入云端转写，请切换回本地处理。"
+      "title": "云端语音输入暂不可用",
+      "description": "云端配置已保留，请切换到本地识别。"
     },
     "error": {
-      "badge": "需要处理",
-      "title": "本地语音模型需要修复",
-      "description": "请重新下载或校验当前模型。"
+      "badge": "需要修复",
+      "title": "语音模型不可用",
+      "description": "{{model}} 无法使用，请查看详情并重新下载。"
     }
   },
   "localModels": {

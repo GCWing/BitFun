@@ -39,6 +39,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   IconButton: "component.IconButton.description",
   Input: "component.Input.description",
   KeyHint: "component.KeyHint.description",
+  LauncherButton: "component.LauncherButton.description",
   LoadingState: "component.LoadingState.description",
   Menu: "component.Menu.description",
   Dialog: "component.Dialog.description",

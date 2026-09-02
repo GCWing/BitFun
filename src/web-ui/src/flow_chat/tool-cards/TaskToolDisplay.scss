@@ -378,31 +378,6 @@
     padding-bottom: 0;
   }
 
-  .duration-text {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
-    line-height: var(--bf-type-flow-meta-line-height);
-
-    svg {
-      flex-shrink: 0;
-      opacity: 0.95;
-    }
-  }
-
-  .duration-text--completed-success {
-    color: var(--bf-color-status-success-content);
-  }
-
-  .duration-text--completed-error,
-  .duration-text--completed-cancelled {
-    color: var(--bf-color-status-danger-content);
-  }
-
   .section-header {
     display: flex;
     align-items: center;

@@ -264,33 +264,23 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
   definePage({
     id: 'tools.desktop-control',
     categoryId: 'tools',
-    labelKey: 'navigation.pages.desktopControl.label',
-    descriptionKey: 'navigation.pages.desktopControl.description',
-    keywords: ['desktop', 'computer use', 'accessibility', 'screen capture', 'mouse', 'keyboard'],
+    labelKey: 'navigation.pages.browserDesktopControl.label',
+    descriptionKey: 'navigation.pages.browserDesktopControl.description',
+    keywords: [
+      'browser', 'cdp', 'chrome', 'edge', 'remote debugging', 'connection',
+      'desktop', 'computer use', 'accessibility', 'screen capture', 'mouse', 'keyboard',
+    ],
     namespaces: ['settings', 'settings/runtime'],
     searchPhrases: [
       phrase('settings/runtime', 'computerUse.sectionTitle'),
       phrase('settings/runtime', 'computerUse.accessibility'),
       phrase('settings/runtime', 'computerUse.screenCapture'),
-    ],
-    load: () => import('../../../infrastructure/config/components/RuntimeSettingsPages').then((module) => ({
-      default: module.DesktopControlSettingsPage,
-    })),
-  }),
-  definePage({
-    id: 'tools.browser-control',
-    categoryId: 'tools',
-    labelKey: 'navigation.pages.browserControl.label',
-    descriptionKey: 'navigation.pages.browserControl.description',
-    keywords: ['browser', 'cdp', 'chrome', 'edge', 'remote debugging', 'connection'],
-    namespaces: ['settings', 'settings/runtime'],
-    searchPhrases: [
       phrase('settings/runtime', 'browserControl.sectionTitle'),
       phrase('settings/runtime', 'browserControl.preferredBrowser'),
       phrase('settings/runtime', 'browserControl.autoConnectOnStartup'),
     ],
     load: () => import('../../../infrastructure/config/components/RuntimeSettingsPages').then((module) => ({
-      default: module.BrowserControlSettingsPage,
+      default: module.BrowserDesktopControlSettingsPage,
     })),
   }),
   definePage({

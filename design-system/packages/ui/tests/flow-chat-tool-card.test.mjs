@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -88,6 +88,22 @@ test("flow-chat entry publishes the ambient and prominent framework anatomy", ()
   assert.match(prominentMarkup, /aria-expanded="false"/);
 });
 
+test("tool-card change summaries use dedicated code-change colors", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    styles,
+    /\.changeSummary \[data-bf-change="added"\]\s*\{\s*color: var\(--bf-color-code-change-added\);/,
+  );
+  assert.match(
+    styles,
+    /\.changeSummary \[data-bf-change="removed"\]\s*\{\s*color: var\(--bf-color-code-change-removed\);/,
+  );
+});
+
 test("prominent error status opens error content without a separate failure flag", () => {
   const markup = renderToStaticMarkup(
     createElement(ProminentToolCard, {
@@ -125,6 +141,52 @@ test("prominent error status can opt into expandable supporting details", () => 
   assert.match(markup, /Command failed/);
 });
 
+test("file-operation failures stay collapsed and use the warning emphasis status icon", async () => {
+  const createFailedCard = (isExpanded) => renderToStaticMarkup(
+    createElement(FileOperationToolCard, {
+      actionLabel: "Edit failed",
+      error: {
+        message: "The target text was not found.",
+        title: "Detailed failure",
+      },
+      isExpanded,
+      onToggle() {},
+      operation: "edit",
+      path: "src/index.ts",
+      pathLabel: "src/index.ts",
+      status: "error",
+    }),
+  );
+  const collapsedMarkup = createFailedCard(false);
+  const expandedMarkup = createFailedCard(true);
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FileOperationToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(collapsedMarkup, /data-bf-state="failed"/);
+  assert.match(collapsedMarkup, /data-bf-expandable="true"/);
+  assert.match(collapsedMarkup, /aria-expanded="false"/);
+  assert.match(collapsedMarkup, /data-bf-icon="warning"/);
+  assert.match(collapsedMarkup, /data-bf-part="errorCollapse"[^>]+data-open="false"/);
+  assert.match(collapsedMarkup, /src\/index\.ts/);
+  assert.doesNotMatch(collapsedMarkup, /Detailed failure/);
+  assert.doesNotMatch(collapsedMarkup, /The target text was not found\./);
+  assert.match(expandedMarkup, /data-bf-state="expanded failed"/);
+  assert.match(expandedMarkup, /aria-expanded="true"/);
+  assert.match(expandedMarkup, /data-bf-part="errorCollapse"[^>]+data-open="true"/);
+  assert.match(expandedMarkup, /Detailed failure/);
+  assert.match(expandedMarkup, /The target text was not found\./);
+  assert.match(
+    styles,
+    /\.warningStatusIcon\s*\{\s*color: var\(--bf-color-status-warning-emphasis\);/,
+  );
+  assert.match(
+    styles,
+    /\.errorTitle > :where\(svg, img\)\s*\{[^}]*inline-size: var\(--bf-font-size-xl\);[^}]*block-size: var\(--bf-font-size-xl\);/s,
+  );
+});
+
 test("prominent actions stay hidden until hover, preview-hover, or keyboard focus", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
@@ -134,7 +196,7 @@ test("prominent actions stay hidden until hover, preview-hover, or keyboard focu
   assert.match(styles, /opacity:\s*0/);
   assert.match(styles, /pointer-events:\s*none/);
   assert.match(styles, /margin-inline-start:\s*auto/);
-  assert.match(styles, /font-variant-numeric:\s*tabular-nums/);
+  assert.match(styles, /font-variant-numeric:\s*proportional-nums/);
   assert.match(styles, /--bf-control-height-sm/);
   assert.match(styles, /--bf-space-6/);
   assert.match(styles, /--bf-radius-md/);
@@ -155,6 +217,86 @@ test("FlowChat tool-card shells stay flat at rest and on hover", async () => {
   assert.match(ambientExpandedRule, /box-shadow:\s*none/);
   assert.doesNotMatch(styles, /box-shadow:\s*var\(--bf-shadow-(?:xs|sm)\)/);
   assert.doesNotMatch(styles, /box-shadow\s+var\(--_tool-card-transition\)/);
+});
+
+test("FlowChat tool-card headers share compact title and content typography", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const commandStyles = await readFile(
+    new URL("../src/flow-chat/tool-cards/CommandToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const fileOperationStyles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FileOperationToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const rootRule = styles.match(/\.prominentRoot,\s*\.ambientRoot\s*\{([^}]*)\}/s)?.[1];
+  const prominentSizeRule = styles.match(/\.actionLabel,\s*\.content,\s*\.extra\s*\{([^}]*)\}/s)?.[1];
+  const ambientSizeRule = styles.match(/\.ambientAction,\s*\.ambientContent,\s*\.ambientExtra\s*\{([^}]*)\}/s)?.[1];
+  const directChildRule = styles.match(/\.actionLabel > \*,[\s\S]*?\.ambientExtra > \*\s*\{([^}]*)\}/s)?.[1];
+  const prominentTitleRule = styles.match(/\.actionLabel\s*\{([^}]*)\}/s)?.[1];
+  const prominentContentRule = styles.match(/\.content\s*\{([^}]*)\}/s)?.[1];
+  const ambientTitleRule = styles.match(/\.ambientAction\s*\{([^}]*)\}/s)?.[1];
+  const ambientContentRule = styles.match(/\.ambientContent\s*\{([^}]*)\}/s)?.[1];
+  const changeSummaryRule = styles.match(/\.changeSummary\s*\{([^}]*)\}/s)?.[1];
+  const commandRule = commandStyles.match(/\.command\s*\{([^}]*)\}/s)?.[1];
+  const filePathRule = fileOperationStyles.match(/\.path\s*\{([^}]*)\}/s)?.[1];
+
+  assert.ok(rootRule);
+  assert.ok(prominentSizeRule);
+  assert.ok(ambientSizeRule);
+  assert.ok(directChildRule);
+  assert.ok(prominentTitleRule);
+  assert.ok(prominentContentRule);
+  assert.ok(ambientTitleRule);
+  assert.ok(ambientContentRule);
+  assert.ok(changeSummaryRule);
+  assert.ok(commandRule);
+  assert.ok(filePathRule);
+  assert.match(rootRule, /--_tool-card-font-family:\s*var\(--bf-type-body-sm-font-family\)/);
+  assert.match(rootRule, /--_tool-card-font-size:\s*var\(--bf-type-body-sm-font-size\)/);
+  assert.match(rootRule, /--_tool-card-title-font-weight:\s*var\(--bf-type-label-lg-font-weight\)/);
+  assert.match(rootRule, /--_tool-card-content-font-weight:\s*var\(--bf-type-body-sm-font-weight\)/);
+  assert.match(rootRule, /font-variant-numeric:\s*proportional-nums/);
+  assert.match(prominentSizeRule, /font-size:\s*var\(--_tool-card-font-size\)/);
+  assert.match(ambientSizeRule, /font-size:\s*var\(--_tool-card-font-size\)/);
+  assert.match(directChildRule, /font:\s*inherit/);
+  assert.match(prominentTitleRule, /font-weight:\s*var\(--_tool-card-title-font-weight\)/);
+  assert.match(ambientTitleRule, /font-weight:\s*var\(--_tool-card-title-font-weight\)/);
+  assert.match(prominentContentRule, /font-weight:\s*var\(--_tool-card-content-font-weight\)/);
+  assert.match(ambientContentRule, /font-weight:\s*var\(--_tool-card-content-font-weight\)/);
+  assert.match(changeSummaryRule, /font-family:\s*var\(--_tool-card-font-family\)/);
+  assert.match(changeSummaryRule, /font-weight:\s*var\(--_tool-card-content-font-weight\)/);
+  assert.doesNotMatch(commandRule, /font-(?:family|size|weight):/);
+  assert.doesNotMatch(filePathRule, /font-(?:family|size|weight):/);
+});
+
+test("tool cards reserve monospace for file-edit code previews", async () => {
+  const directory = new URL("../src/flow-chat/tool-cards/", import.meta.url);
+  const files = (await readdir(directory)).filter((file) => file.endsWith(".module.css"));
+  const allowedMonoUses = new Map([
+    ["ProminentToolCards.module.css", 1],
+  ]);
+
+  for (const file of files) {
+    const stylesheet = await readFile(new URL(file, directory), "utf8");
+    const monoUses = stylesheet.match(/--bf-type-code-md-font-family/g)?.length ?? 0;
+    assert.equal(monoUses, allowedMonoUses.get(file) ?? 0, file);
+    assert.doesNotMatch(stylesheet, /font-variant-numeric:\s*tabular-nums/, file);
+  }
+
+  const previewStyles = await readFile(
+    new URL("../../../apps/design-lab/src/preview/FlowChatPreviewRegistry.css", import.meta.url),
+    "utf8",
+  );
+  assert.equal(previewStyles.match(/--bf-type-code-md-font-family/g)?.length ?? 0, 1);
+  assert.doesNotMatch(previewStyles, /font-variant-numeric:\s*tabular-nums/);
+  assert.match(
+    previewStyles,
+    /\.flow-chat-tool-card-preview__diff\s*\{[^}]*font-family:\s*var\(--bf-type-code-md-font-family\)/s,
+  );
 });
 
 test("command text remains plain when a host applies inline-code chrome", async () => {
@@ -195,11 +337,12 @@ test("ambient card cursors distinguish static traces from interactive cards", as
 test("standard FlowChat tool views publish their concrete component contracts", () => {
   const readMarkup = renderToStaticMarkup(
     createElement(ReadFileToolCard, {
+      action: "Read file:",
       accessibleLabel: "Open src/index.ts",
+      content: "src/index.ts · 128 lines",
       interactive: true,
       onOpen() {},
       status: "completed",
-      summary: "src/index.ts · 128 lines",
     }),
   );
   const contextMarkup = renderToStaticMarkup(
@@ -267,6 +410,8 @@ test("standard FlowChat tool views publish their concrete component contracts", 
   assert.match(commandMarkup, /57 tests passed/);
   assert.match(deleteMarkup, /data-bf-operation="delete"/);
   assert.match(deleteMarkup, /data-bf-attention="ambient"/);
+  assert.match(deleteMarkup, /data-bf-part="action">Delete file<\/span>/);
+  assert.match(deleteMarkup, /data-bf-part="content">/);
   assert.match(editMarkup, /data-bf-operation="edit"/);
   assert.match(editMarkup, /data-bf-attention="prominent"/);
   assert.match(editMarkup, /\+ migrated view/);
@@ -434,8 +579,7 @@ test("file diff header matches the compact file-operation information hierarchy"
   assert.doesNotMatch(markup, /Git HEAD|data-bf-part="diffType"/);
   assert.ok(pathRule, "file-diff path rule should exist");
   assert.match(pathRule, /var\(--bf-color-content-secondary\)/);
-  assert.match(pathRule, /var\(--bf-type-code-md-font-family\)/);
-  assert.match(pathRule, /var\(--bf-type-body-sm-font-size\)/);
+  assert.doesNotMatch(pathRule, /font-(?:family|size|weight):/);
 });
 
 test("concrete tool views expose semantic parts instead of legacy CSS selectors", () => {

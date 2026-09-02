@@ -16,19 +16,7 @@
 }
 
 @mixin nav-panel-text-body {
-  color: color-mix(
-    in srgb,
-    var(--bf-color-content-primary) 88%,
-    var(--bf-color-content-secondary)
-  );
-
-  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
-    color: color-mix(
-      in srgb,
-      var(--bf-color-content-on-light) 86%,
-      transparent
-    );
-  }
+  color: var(--bf-color-content-primary);
 }
 
 @mixin nav-panel-text-meta {
@@ -72,7 +60,7 @@
 @mixin nav-panel-text-row-active {
   @include nav-panel-text-heading;
 
-  font-weight: var(--bf-type-label-sm-font-weight);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 @mixin nav-panel-text-group {

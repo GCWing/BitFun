@@ -638,7 +638,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <Tooltip content={t('flowChatHeader.searchClose')}>
               <IconButton
                 className="flowchat-header__search-close"
-                size="sm"
+                size="xs"
                 onClick={handleCloseSearch}
                 aria-label={t('flowChatHeader.searchClose')}
                 icon={<Icon name="xmark" size="sm" />}
@@ -649,7 +649,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           <Tooltip content={t('flowChatHeader.searchOpen')}>
             <IconButton
               className="flowchat-header__search-btn"
-              size="sm"
+              size="xs"
               onClick={handleOpenSearch}
               aria-label={t('flowChatHeader.searchOpen')}
               data-testid="flowchat-header-search"
@@ -677,7 +677,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                 isSessionOverviewOpen ? 'open' : null,
                 hasSessionActivity ? 'active' : null,
               ].filter(Boolean).join(' ') || undefined}
-              size="sm"
+              size="xs"
               onClick={handleToggleSessionOverview}
               aria-label={sessionOverviewLabel}
               aria-expanded={isSessionOverviewOpen}
@@ -968,7 +968,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               data-bf-component="flow-chat-header"
               data-bf-part="rightPanelTrigger"
               data-bf-state={isRightPanelOpen ? 'open' : 'collapsed'}
-              size="sm"
+              size="xs"
               onClick={onToggleRightPanel}
               aria-label={rightPanelLabel}
               aria-pressed={isRightPanelOpen}

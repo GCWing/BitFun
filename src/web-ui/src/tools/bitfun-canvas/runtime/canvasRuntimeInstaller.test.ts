@@ -62,6 +62,18 @@ describe('Canvas runtime installer', () => {
     expect(script).toContain('document.documentElement.style.colorScheme = nextAppearance.type');
   });
 
+  it('projects code-change colors into the renderer without changing status colors', () => {
+    const runtimeCss = readFileSync(new URL('./styles/canvas-runtime.scss', import.meta.url), 'utf8');
+    const script = buildCanvasRuntimeInstallerScript('rev_test');
+
+    expect(runtimeCss).toContain('--bf-color-code-change-added: var(--bitfun-canvas-success)');
+    expect(runtimeCss).toContain('--bf-color-code-change-removed: var(--bitfun-canvas-danger)');
+    expect(script).toContain('appearanceVars["--bf-color-code-change-added"]');
+    expect(script).toContain('appearanceVars["--bf-color-code-change-removed"]');
+    expect(script).toContain('stripAdded: codeChangeAdded');
+    expect(script).toContain('stripRemoved: codeChangeRemoved');
+  });
+
   it('installs design-mode element selection handlers', () => {
     const script = buildCanvasRuntimeInstallerScript('rev_test');
 

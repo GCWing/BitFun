@@ -124,7 +124,7 @@
   overflow: hidden;
   min-inline-size: 0;
   color: inherit;
-  font-family:var(--bf-type-code-md-font-family);
+  font-family: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -167,7 +167,7 @@
 .flow-chat-tool-card-preview__details code {
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-type-code-md-font-family);
+  font-family: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -181,8 +181,6 @@
   align-items: center;
   gap: var(--bf-space-1);
   color: var(--bf-color-content-muted);
-  font-family:var(--bf-type-code-md-font-family);
-  font-variant-numeric: tabular-nums;
 }
 
 .flow-chat-tool-card-preview__duration[data-status="completed"] {
@@ -200,18 +198,25 @@
   gap: var(--bf-space-1);
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-family:var(--bf-type-code-md-font-family);
   font-size: var(--bf-type-body-sm-font-size);
   line-height: var(--bf-type-body-md-line-height);
   white-space: pre-wrap;
 }
 
+.flow-chat-tool-card-preview__output {
+  font-family: inherit;
+}
+
+.flow-chat-tool-card-preview__diff {
+  font-family: var(--bf-type-code-md-font-family);
+}
+
 .flow-chat-tool-card-preview__diff [data-change="added"] {
-  color: var(--bf-color-status-success-content);
+  color: var(--bf-color-code-change-added);
 }
 
 .flow-chat-tool-card-preview__diff [data-change="removed"] {
-  color: var(--bf-color-status-danger-content);
+  color: var(--bf-color-code-change-removed);
 }
 
 @media (prefers-reduced-motion: reduce) {

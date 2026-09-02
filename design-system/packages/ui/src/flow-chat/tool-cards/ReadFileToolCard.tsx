@@ -8,21 +8,23 @@ import {
 import { ToolCardStatusSlot } from "./ToolCardStatusSlot";
 
 export interface ReadFileToolCardProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "onClick"> {
+  extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "content" | "onClick"> {
   accessibleLabel?: string;
+  action?: ReactNode;
+  content?: ReactNode;
   interactive?: boolean;
   onOpen?: () => void;
   status: FlowChatToolStatus;
-  summary: ReactNode;
 }
 
 export function ReadFileToolCard({
   accessibleLabel,
+  action,
   className,
+  content,
   interactive = false,
   onOpen,
   status,
-  summary,
   ...props
 }: ReadFileToolCardProps) {
   const canOpen = interactive && Boolean(onOpen);
@@ -35,7 +37,8 @@ export function ReadFileToolCard({
       data-bf-tool-card="read-file"
       header={(
         <AmbientToolCardHeader
-          content={summary}
+          action={action}
+          content={content}
           icon={(
             <ToolCardStatusSlot
               status={status}

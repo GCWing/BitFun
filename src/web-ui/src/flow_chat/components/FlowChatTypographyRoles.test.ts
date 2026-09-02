@@ -62,6 +62,45 @@ describe('FlowChat semantic typography roles', () => {
     }
   });
 
+  it('keeps every FlowChat Markdown surface on one compact weight hierarchy', () => {
+    const policy = readSource('../_markdown-typography.scss');
+    const renderer = extractBlock(policy, '.markdown-renderer {');
+    const headings = extractBlock(policy, 'h1,');
+    const emphasis = extractBlock(policy, 'strong,');
+
+    expect(renderer).toContain('font-size: var(--bf-type-flow-control-font-size);');
+    expect(renderer).toContain('font-weight: var(--bf-type-flow-control-font-weight);');
+    expect(headings).toContain('font-size: var(--bf-type-flow-control-font-size);');
+    expect(headings).toContain('font-weight: var(--bf-type-label-selected-font-weight);');
+    expect(emphasis).toContain('font-weight: var(--bf-type-label-lg-font-weight);');
+
+    for (const consumer of [
+      './FlowTextBlock.scss',
+      './modern/VirtualItemRenderer.scss',
+      './usage/SessionUsagePanel.scss',
+      './usage/SessionUsageReportCard.scss',
+      '../tool-cards/ModelThinkingDisplay.scss',
+    ]) {
+      expect(readSource(consumer)).toContain('@include markdownTypography.apply;');
+    }
+
+    const flowTextBlock = extractBlock(
+      readSource('./FlowTextBlock.scss'),
+      '.markdown-renderer {',
+    );
+    const thinkingMarkdown = extractBlock(
+      readSource('../tool-cards/ModelThinkingDisplay.scss'),
+      '.thinking-content .markdown-renderer.thinking-markdown {',
+    );
+
+    expect(flowTextBlock).not.toContain(
+      'font-size: var(--bf-type-flow-body-font-size);',
+    );
+    expect(thinkingMarkdown).not.toContain(
+      'font-size: var(--bf-type-flow-body-font-size);',
+    );
+  });
+
   it('keeps frequent composer and menu actions on the control role', () => {
     const chatInput = readSource('./ChatInput.scss');
     const harness = readSource('./HarnessProfileSelector.scss');

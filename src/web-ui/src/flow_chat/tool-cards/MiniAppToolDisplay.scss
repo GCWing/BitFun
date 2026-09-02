@@ -50,7 +50,6 @@
     }
 
     .command-text {
-      font-family:var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-control-font-size);
       font-weight: var(--bf-type-label-sm-font-weight);
       color: var(--bf-color-content-primary);
@@ -68,7 +67,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 200px;
-    font-family:var(--bf-type-code-md-font-family);
   }
 
   .error-indicator {
@@ -113,7 +111,6 @@
   }
 
   .miniapp-result-value {
-    font-family:var(--bf-type-code-md-font-family);
     font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-color-content-primary);
     flex: 1;
@@ -146,7 +143,6 @@
       color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
       font-size: var(--bf-type-flow-control-font-size);
       margin-bottom: var(--bf-control-flow-chat-card-gap);
-      font-family:var(--bf-type-code-md-font-family);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -160,7 +156,6 @@
 
       .error-operation {
         color: color-mix(in srgb, var(--bf-color-status-danger-content) 70%, transparent);
-        font-family:var(--bf-type-code-md-font-family);
       }
     }
   }

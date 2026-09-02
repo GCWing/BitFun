@@ -5,6 +5,8 @@ import {
   Alert,
   Callout,
   CollapsibleSection,
+  DiffStats,
+  DiffView,
   FileTree,
   KeyValueList,
   ProgressBar,
@@ -103,6 +105,20 @@ describe('BitFun Canvas data display components', () => {
     expect(markup).toContain('<details open="">');
     expect(markup).toContain('main.rs');
     expect(markup).toContain('+12');
+  });
+
+  it('uses dedicated code-change colors for diff counts and lines', () => {
+    const markup = renderToStaticMarkup(
+      <>
+        <DiffStats additions={12} deletions={3} />
+        <DiffView lines={['+added', '-removed']} />
+      </>,
+    );
+
+    expect(markup).toContain('--bf-color-code-change-added');
+    expect(markup).toContain('--bf-color-code-change-removed');
+    expect(markup).not.toContain('--bf-color-status-success-content');
+    expect(markup).not.toContain('--bf-color-status-danger-content');
   });
 
   it('renders progress bars with bounded values', () => {

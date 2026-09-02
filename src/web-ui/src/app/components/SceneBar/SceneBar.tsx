@@ -2,7 +2,7 @@
  * SceneBar — horizontally scrollable scene-level tab bar.
  *
  * Delegates state to useSceneManager.
- * AI Agent tab shows the current session title as a subtitle.
+ * The Session tab uses the current session title as its single visible label.
  */
 
 import React, { useCallback } from 'react';
@@ -11,7 +11,6 @@ import { Icon, TabGroup, type TabGroupItem } from '@bitfun/ui';
 import { useSceneTabNavigation } from './useSceneTabNavigation';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
-import { useCurrentSettingsPageTitle } from '../../hooks/useCurrentSettingsPageTitle';
 import { isSceneTabClosable } from '../../scenes/registry';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from './types';
@@ -40,7 +39,6 @@ const SceneBar: React.FC<SceneBarProps> = ({
     closeScene,
   } = useSceneManager();
   const sessionTitle = useCurrentSessionTitle();
-  const settingsPageTitle = useCurrentSettingsPageTitle();
   const { t } = useI18n('common');
   const sceneBarClassName = `bitfun-scene-bar ${className}`.trim();
   const {
@@ -92,26 +90,16 @@ const SceneBar: React.FC<SceneBarProps> = ({
     if (!def) return items;
 
     const translatedLabel = def.labelKey ? t(def.labelKey) : def.label;
-    const subtitle =
-      (tab.id === 'session' && sessionTitle ? sessionTitle : undefined)
-      ?? (tab.id === 'settings' && settingsPageTitle ? settingsPageTitle : undefined);
-    const closeLabel = t('sceneBar.closeTab', { label: translatedLabel });
+    const displayLabel = tab.id === 'session' && sessionTitle
+      ? sessionTitle
+      : translatedLabel;
+    const closeLabel = t('sceneBar.closeTab', { label: displayLabel });
     const closable = isSceneTabClosable(def);
 
     items.push({
       value: tab.id,
       icon: def.Icon ? <def.Icon aria-hidden="true" /> : undefined,
-      label: (
-        <span className="bitfun-scene-bar__tab-label">
-          <span className="bitfun-scene-bar__tab-title">{translatedLabel}</span>
-          {subtitle && (
-            <>
-              <span className="bitfun-scene-bar__tab-separator" aria-hidden="true">/</span>
-              <span className="bitfun-scene-bar__tab-subtitle">{subtitle}</span>
-            </>
-          )}
-        </span>
-      ),
+      label: <span className="bitfun-scene-bar__tab-title">{displayLabel}</span>,
       // Keep the close hit target stationary between pointer down and up;
       // shrinking it can retarget the click at the button edge (issue #2210).
       endAction: closable ? (

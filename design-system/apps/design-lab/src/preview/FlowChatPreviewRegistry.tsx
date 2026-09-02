@@ -343,21 +343,23 @@ function FrameworkPreview({
 function ReadFilePreview({ interactive, state }: PreviewProps) {
   const { t } = useI18n();
   const status = resolveStatus(state);
-  const summary = state === "loading"
+  const action = state === "loading"
     ? t("components.preview.flowChat.readingFile")
-    : state === "error"
-      ? t("components.preview.flowChat.readFailed")
-      : "src/flow_chat/tool-cards/index.ts · 128 lines";
+    : t("components.preview.flowChat.readFile");
+  const content = state === "error"
+    ? t("components.preview.flowChat.readFailed")
+    : "src/flow_chat/tool-cards/index.ts · 128 lines";
 
   return (
     <div className="flow-chat-tool-card-preview">
       <ReadFileToolCard
         accessibleLabel={t("components.preview.flowChat.readFile")}
+        action={action}
+        content={content}
         data-bf-preview-state={state === "hover" ? "hover" : undefined}
         interactive={interactive}
         onOpen={interactive ? () => undefined : undefined}
         status={status}
-        summary={summary}
       />
     </div>
   );
@@ -426,7 +428,6 @@ function CommandPreview({ interactive, specimen, state }: PreviewProps) {
   const footerItems = completed ? [
     {
       label: t("components.preview.flowChat.exitCode"),
-      monospace: true,
       tone: "success" as const,
       value: "0",
     },
@@ -606,9 +607,10 @@ function SearchPreview({
   return (
     <div className="flow-chat-tool-card-preview">
       <Component
+        action={kind === "grep" ? "Search text:" : kind === "glob" ? "Search files:" : "Search:"}
         data-bf-preview-state={state === "hover" ? "hover" : undefined}
         details={[
-          { label: "Scope", monospace: true, value: "src/flow_chat" },
+          { label: "Scope", value: "src/flow_chat" },
           { label: "Results", value: "3" },
         ]}
         isExpanded={isExpanded}
@@ -649,8 +651,8 @@ function SessionPreview({
     action: kind === "control" ? "SessionControl" : "SessionMessage",
     error: state === "error" ? t("components.preview.flowChat.failed") : undefined,
     fields: [
-      { label: "Session", monospace: true, value: "review-42" },
-      { label: "Workspace", monospace: true, value: "BitFun" },
+      { label: "Session", value: "review-42" },
+      { label: "Workspace", value: "BitFun" },
     ],
     isExpanded,
     onToggle: interactive ? () => setIsExpanded((value) => !value) : undefined,
@@ -832,7 +834,7 @@ function ConcreteProminentPreview({
         action="Git:"
         command="git diff --stat"
         error={state === "error" ? t("components.preview.flowChat.commandFailed") : undefined}
-        footerItems={[{ label: "Exit", monospace: true, tone: "success", value: "0" }]}
+        footerItems={[{ label: "Exit", tone: "success", value: "0" }]}
         loading={state === "loading"}
         statusSummary="21 files changed"
         stdout="21 files changed, 842 insertions(+), 517 deletions(-)"
@@ -859,8 +861,8 @@ function ConcreteProminentPreview({
         action={kind === "page-deploy" ? "PageDeploy:" : "PagePublish:"}
         error={state === "error" ? t("components.preview.flowChat.failed") : undefined}
         fields={[
-          { label: "Slug", monospace: true, value: "flow-chat-cards" },
-          { label: "Version", monospace: true, value: "v42" },
+          { label: "Slug", value: "flow-chat-cards" },
+          { label: "Version", value: "v42" },
         ]}
         loading={state === "loading"}
         subject="flow-chat-cards"
@@ -1142,7 +1144,7 @@ export const flowChatPreviewDefinitions = {
   },
   ReadFileToolCard: {
     attention: "ambient",
-    codeSample: (t) => `import { ReadFileToolCard } from "@bitfun/ui/flow-chat";\n\n<ReadFileToolCard\n  accessibleLabel="${t("components.preview.flowChat.readFile")}"\n  interactive\n  onOpen={openFile}\n  status="completed"\n  summary="src/flow_chat/tool-cards/index.ts · 128 lines"\n/>`,
+    codeSample: (t) => `import { ReadFileToolCard } from "@bitfun/ui/flow-chat";\n\n<ReadFileToolCard\n  accessibleLabel="${t("components.preview.flowChat.readFile")}"\n  action="${t("components.preview.flowChat.readFile")}"\n  content="src/flow_chat/tool-cards/index.ts · 128 lines"\n  interactive\n  onOpen={openFile}\n  status="completed"\n/>`,
     icon: FileText,
     render: (options) => <ReadFilePreview {...options} />,
     section: "tool-card",

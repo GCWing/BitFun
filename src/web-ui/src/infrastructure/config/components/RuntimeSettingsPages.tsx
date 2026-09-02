@@ -6,7 +6,6 @@ import {
   Select,
   Switch,
   Tooltip,
-  ScrollArea,
   type ComboboxOption,
   type SelectOption,
   Dialog,
@@ -16,7 +15,7 @@ import {
   DialogHeading,
   DialogTitle,
 } from '@bitfun/ui';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
@@ -45,7 +44,6 @@ import type {
   ToolPermissionConfig,
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
-import { AgentCompanionPet } from '@/flow_chat/components/AgentCompanionPet';
 import SessionTitleConfig from './SessionTitleConfig';
 import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
@@ -131,19 +129,20 @@ export type RuntimeSettingsPageKind =
   | 'pet'
   | 'session-workspace'
   | 'execution'
-  | 'desktop-control'
-  | 'browser-control';
+  | 'browser-desktop-control';
 
 export type ExecutionSettingsView = 'common' | 'advanced';
 
 interface RuntimeSettingsPageProps {
   page: RuntimeSettingsPageKind;
   executionView?: ExecutionSettingsView;
+  isActive?: boolean;
 }
 
 const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   page,
   executionView = 'common',
+  isActive = true,
 }) => {
   const { t } = useTranslation('settings/runtime');
   const { t: tNavigation } = useTranslation('settings');
@@ -153,12 +152,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   // ── Session config state ─────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const hasLoadedPageDataRef = useRef(false);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [companionPets, setCompanionPets] = useState<AgentCompanionPetPackage[]>([]);
-  const [companionPetsLoading, setCompanionPetsLoading] = useState(false);
   const [companionPetImporting, setCompanionPetImporting] = useState(false);
   const [companionPetDeletingPath, setCompanionPetDeletingPath] = useState<string | null>(null);
-  const [companionPetListExpanded, setCompanionPetListExpanded] = useState(false);
   const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
   const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
   const [swarmMaxConcurrency, setSwarmMaxConcurrency] = useState(DEFAULT_SWARM_MAX_CONCURRENCY);
@@ -287,13 +285,12 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   useEffect(() => {
     if (!IS_TAURI_DESKTOP) return;
     setPeerBrowserControlUnsupported(false);
-    if (page === 'desktop-control') {
+    if (page === 'browser-desktop-control') {
       void refreshComputerUseStatus();
+      void refreshBrowserControlStatus();
       void systemAPI.getSystemInfo()
         .then((info) => setPlatform(info.platform || ''))
         .catch((error) => log.warn('getSystemInfo failed', error));
-    } else if (page === 'browser-control') {
-      void refreshBrowserControlStatus();
     }
   }, [
     page,
@@ -303,26 +300,26 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     refreshBrowserControlStatus,
   ]);
 
+  const reloadCompanionPets = useCallback(async () => {
+    setCompanionPets(await listAgentCompanionPets());
+  }, []);
+
   const loadPageData = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(false);
+    const isInitialLoad = !hasLoadedPageDataRef.current;
+    if (isInitialLoad) {
+      setIsLoading(true);
+      setLoadError(false);
+    }
     try {
       if (page === 'pet') {
-        const [loadedSettings, loadedCompanionPets] = await Promise.all([
+        const [loadedSettings] = await Promise.all([
           aiExperienceConfigService.getSettingsAsync(),
-          listAgentCompanionPets(),
+          reloadCompanionPets(),
         ]);
         setSettings(loadedSettings);
-        setCompanionPets(loadedCompanionPets);
-        return;
-      }
-
-      if (page === 'session-workspace') {
+      } else if (page === 'session-workspace') {
         setSettings(await aiExperienceConfigService.getSettingsAsync());
-        return;
-      }
-
-      if (page === 'execution') {
+      } else if (page === 'execution') {
         const [
           deferredToolLoadingEnabled,
           loadedSubagentMaxConcurrency,
@@ -351,30 +348,30 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
         setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
         setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
         setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
-        return;
-      }
-
-      if (page === 'desktop-control') {
-        const computerUseCfg = await configManager.getConfig<boolean>('ai.computer_use_enabled');
+      } else if (page === 'browser-desktop-control') {
+        const [
+          computerUseCfg,
+          browserControlPreferredBrowser,
+          browserControlAutoConnect,
+        ] = await Promise.all([
+          configManager.getConfig<boolean>('ai.computer_use_enabled'),
+          configManager.getConfig<string>('ai.browser_control_preferred_browser'),
+          configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
+        ]);
         if (!IS_TAURI_DESKTOP) {
           setComputerUseEnabled(computerUseCfg ?? false);
         }
-        return;
+        setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
+        setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
       }
-
-      const [browserControlPreferredBrowser, browserControlAutoConnect] = await Promise.all([
-        configManager.getConfig<string>('ai.browser_control_preferred_browser'),
-        configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
-      ]);
-      setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
-      setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
+      hasLoadedPageDataRef.current = true;
     } catch (error) {
       log.error('Failed to load settings page data', { page, error });
-      setLoadError(true);
+      if (isInitialLoad) setLoadError(true);
     } finally {
-      setIsLoading(false);
+      if (isInitialLoad) setIsLoading(false);
     }
-  }, [page, setComputerUseEnabled]);
+  }, [page, reloadCompanionPets, setComputerUseEnabled]);
 
   const saveToolPermissionConfig = async (
     nextConfig: ToolPermissionConfig,
@@ -459,8 +456,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   };
 
   useEffect(() => {
+    if (page === 'pet' && !isActive) return;
     void loadPageData();
-  }, [loadPageData]);
+  }, [isActive, loadPageData, page]);
 
   // ── Session config handlers ──────────────────────────────────────────────
 
@@ -481,15 +479,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     }
   };
 
-  const handleRefreshCompanionPets = async () => {
-    setCompanionPetsLoading(true);
-    try {
-      setCompanionPets(await listAgentCompanionPets());
-    } finally {
-      setCompanionPetsLoading(false);
-    }
-  };
-
   const handleImportCompanionPet = async () => {
     if (!IS_TAURI_DESKTOP) return;
     setCompanionPetImporting(true);
@@ -502,8 +491,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
       });
       if (!selected || Array.isArray(selected)) return;
       const imported = await importAgentCompanionPetPackage(selected);
-      const refreshed = await listAgentCompanionPets();
-      setCompanionPets(refreshed);
+      await reloadCompanionPets();
       await updateSetting('agent_companion_pet', {
         id: imported.id,
         displayName: imported.displayName,
@@ -534,8 +522,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     try {
       await deleteAgentCompanionPetPackage(pet.packagePath);
       releaseAgentCompanionPetPreviewBlobs(pet.packagePath, pet.spritesheetPath);
-      const refreshed = await listAgentCompanionPets();
-      setCompanionPets(refreshed);
+      await reloadCompanionPets();
       if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
         const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
         setSettings(next);
@@ -550,19 +537,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     }
   };
 
-  const companionPetOptions: ComboboxOption[] = companionPets.map(pet => {
-    const displayName = pet.source === 'preset' && pet.id === 'blue-golden'
-      ? t('features.pet.presets.blueGolden.name')
-      : pet.displayName;
-    return {
-      value: pet.packagePath,
-      label: displayName,
-      group: pet.source === 'preset'
-        ? t('features.pet.groupPreset')
-        : t('features.pet.groupImported'),
-    };
-  });
-
   const subagentBatchExecutionPolicyOptions: DescribedSelectOption[] = [
     {
       value: 'safe_only',
@@ -576,13 +550,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     },
   ];
 
-  const selectedCompanionPetPackage = settings?.agent_companion_pet
-    ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
-    : null;
-  const selectedCompanionPet = selectedCompanionPetPackage ?? settings?.agent_companion_pet ?? DEFAULT_AGENT_COMPANION_PET;
-  const selectedCompanionPetValue = selectedCompanionPet.packagePath;
-  const selectedCompanionPetOption = companionPetOptions.find(option => option.value === selectedCompanionPetValue)
-    ?? companionPetOptions[0];
+  const selectedCompanionPetValue = settings?.agent_companion_pet?.packagePath
+    ?? DEFAULT_AGENT_COMPANION_PET.packagePath;
 
   const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
     const selectedValue = String(Array.isArray(value) ? value[0] : value);
@@ -597,7 +566,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
       spritesheetPath: pet.spritesheetPath,
       spritesheetMimeType: pet.spritesheetMimeType,
     });
-    setCompanionPetListExpanded(false);
   };
 
   const handleDeferredToolLoadingChange = async (checked: boolean) => {
@@ -936,11 +904,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
 
   const pageCopyKey = page === 'session-workspace'
     ? 'sessionWorkspace'
-    : page === 'desktop-control'
-      ? 'desktopControl'
-      : page === 'browser-control'
-        ? 'browserControl'
-        : page;
+    : page === 'browser-desktop-control'
+      ? 'browserDesktopControl'
+      : page;
   const pageTitle = tNavigation(`navigation.pages.${pageCopyKey}.label`);
   const pageSubtitle = tNavigation(`navigation.pages.${pageCopyKey}.description`);
   const appearanceView = page === 'execution'
@@ -997,160 +963,140 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
               />
             </div>
           </ConfigPageRow>
-          <ConfigPageRow
-            label={(
-              <span className="bitfun-runtime-settings__pet-row-heading">
-                <span className="bitfun-runtime-settings__pet-row-copy">
-                  <span className="bitfun-runtime-settings__pet-row-title">
-                    {t('features.pet.petLabel')}
-                  </span>
-                  <span className="bitfun-runtime-settings__pet-row-description">
-                    {t('features.pet.petDescription')}
-                  </span>
-                </span>
-                <span className="bitfun-runtime-settings__pet-actions" data-bf-component="runtime-settings" data-bf-part="petActions">
-                  <Tooltip content={t('features.pet.refresh')}>
-                    <IconButton
-                      type="button"
-                      size="sm"
-                      onClick={() => void handleRefreshCompanionPets()}
-                      disabled={companionPetsLoading}
-                      aria-label={t('features.pet.refresh')}
-                      icon={<Icon name="refresh" size="sm" />}
-                    />
-                  </Tooltip>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void handleImportCompanionPet()}
-                    disabled={!IS_TAURI_DESKTOP || companionPetImporting}
-                    title={t('features.pet.importHint')}
-                    leadingIcon={<Icon name="plus" size="sm" />}
-                  >
+        </ConfigPageSection>
 
-                    {companionPetImporting ? t('features.pet.importing') : t('features.pet.import')}
-                  </Button>
-                </span>
-              </span>
-            )}
-            align="start"
-            multiline
-            className="bitfun-runtime-settings__pet-row"
-          >
-            <div className="bitfun-runtime-settings__pet-picker" data-bf-component="runtime-settings" data-bf-part="petPicker">
-              <div className="bitfun-runtime-settings__pet-chooser" data-bf-component="runtime-settings" data-bf-part="petChooser">
-                <button
-                  type="button"
-                  className="bitfun-runtime-settings__pet-expand-button"
-                  data-bf-component="runtime-settings"
-                  data-bf-part="petTrigger"
-                  data-bf-state={companionPetListExpanded ? 'expanded' : ''}
-                  aria-expanded={companionPetListExpanded}
-                  aria-controls="bitfun-companion-pet-list"
-                  onClick={() => setCompanionPetListExpanded((expanded) => !expanded)}
-                >
-                  <span className="bitfun-runtime-settings__pet-expand-current">
-                    <span className="bitfun-runtime-settings__pet-select-thumb" aria-hidden>
-                      {selectedCompanionPetPackage ? (
-                        <span
-                          className="bitfun-runtime-settings__pet-preview-sprite"
-                          style={{ '--bitfun-pet-preview-src': `url("${selectedCompanionPetPackage.previewSrc}")` } as React.CSSProperties}
-                        />
-                      ) : (
-                        <AgentCompanionPet mood="rest" pet={selectedCompanionPet} className="bitfun-runtime-settings__pet-select-panda" />
-                      )}
-                    </span>
-                    <span className="bitfun-runtime-settings__pet-select-value">
-                      {selectedCompanionPetOption?.label ?? t('features.pet.petPlaceholder')}
-                    </span>
-                  </span>
-                  <Icon name="chevron-down" size="sm" className={companionPetListExpanded ? 'bitfun-runtime-settings__pet-expand-chevron--open' : undefined} />
-                </button>
-                {companionPetListExpanded && (
-                  <ScrollArea
-                    id="bitfun-companion-pet-list"
-                    className="bitfun-runtime-settings__pet-list"
-                    data-bf-component="runtime-settings"
-                    data-bf-part="petList"
-                    role="radiogroup"
-                    aria-label={t('features.pet.petLabel')}
-                  >
-                    {companionPetOptions.map((option, index) => {
-                      const pet = companionPets.find(item => item.packagePath === option.value);
-                      const isUserPet = pet?.source === 'user';
-                      const isDeleting = !!pet && companionPetDeletingPath === pet.packagePath;
-                      const isSelected = option.value === selectedCompanionPetValue;
-                      const showGroup = option.group && option.group !== companionPetOptions[index - 1]?.group;
-                      return (
-                        <React.Fragment key={String(option.value)}>
-                          {showGroup && (
-                            <div className="bitfun-runtime-settings__pet-list-group" data-bf-component="runtime-settings" data-bf-part="petGroup">
-                              {option.group}
-                            </div>
-                          )}
-                          <div
-                            className={`bitfun-runtime-settings__pet-select-option${isSelected ? ' bitfun-runtime-settings__pet-select-option--selected' : ''}`}
-                            data-bf-component="runtime-settings"
-                            data-bf-part="petOption"
-                            data-bf-state={isSelected ? 'selected' : ''}
-                            role="radio"
-                            tabIndex={0}
-                            aria-checked={isSelected}
-                            onClick={() => void handleCompanionPetChange(option.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                void handleCompanionPetChange(option.value);
-                              }
-                            }}
-                          >
-                            <div className="bitfun-runtime-settings__pet-select-option-main" data-bf-component="runtime-settings" data-bf-part="petOptionMain">
-                              <span className="bitfun-runtime-settings__pet-select-thumb" aria-hidden>
-                                {pet ? (
-                                  <span
-                                    className="bitfun-runtime-settings__pet-preview-sprite"
-                                    style={{ '--bitfun-pet-preview-src': `url("${pet.previewSrc}")` } as React.CSSProperties}
-                                  />
-                                ) : (
-                                  <AgentCompanionPet
-                                    mood="rest"
-                                    pet={DEFAULT_AGENT_COMPANION_PET}
-                                    className="bitfun-runtime-settings__pet-select-panda"
-                                  />
-                                )}
-                              </span>
-                              <span className="bitfun-runtime-settings__pet-select-text">
-                                <span className="bitfun-runtime-settings__pet-select-label">{option.label}</span>
-                              </span>
-                            </div>
-                            <div className={`bitfun-runtime-settings__pet-select-actions${isUserPet && IS_TAURI_DESKTOP && pet ? ' bitfun-runtime-settings__pet-select-actions--deletable' : ''}`} data-bf-component="runtime-settings" data-bf-part="petActions">
-                              {isSelected && (
-                                <Icon name="check-line" size="sm" className="bitfun-runtime-settings__pet-select-check" aria-hidden />
-                              )}
-                              {isUserPet && IS_TAURI_DESKTOP && pet && (
-                                <Tooltip content={t('features.pet.delete')}>
-                                  <IconButton
-                                    type="button"
-                                    size="sm"
-                                    tone="danger"
-                                    className="bitfun-runtime-settings__pet-select-delete"
-                                    disabled={isDeleting}
-                                    aria-label={t('features.pet.delete')}
-                                    onClick={(e) => void handleDeleteCompanionPet(e, pet)}
-                                    icon={<Icon name="delete" size="sm" />}
-                                  />
-                                </Tooltip>
-                              )}
-                            </div>
-                          </div>
-                        </React.Fragment>
-                      );
-                    })}
-                  </ScrollArea>
-                )}
-              </div>
+        <ConfigPageSection
+          className="bitfun-runtime-settings__pet-picker"
+          title={t('features.pet.petLabel')}
+          description={t('features.pet.petDescription')}
+          bodySurface={false}
+          extra={(
+            <div
+              className="bitfun-runtime-settings__pet-actions"
+              data-bf-component="runtime-settings"
+              data-bf-part="petActions"
+            >
+              <Button
+                size="md"
+                variant="fill"
+                onClick={() => void handleImportCompanionPet()}
+                disabled={!IS_TAURI_DESKTOP || companionPetImporting}
+                title={t('features.pet.importHint')}
+              >
+                {companionPetImporting ? t('features.pet.importing') : t('features.pet.import')}
+              </Button>
             </div>
-          </ConfigPageRow>
+          )}
+          data-bf-component="runtime-settings"
+          data-bf-part="petPicker"
+        >
+          <div
+            className="bitfun-runtime-settings__pet-chooser"
+            data-bf-component="runtime-settings"
+            data-bf-part="petChooser"
+          >
+            <div
+              className="bitfun-runtime-settings__pet-gallery"
+              data-bf-component="runtime-settings"
+              data-bf-part="petList"
+              role="radiogroup"
+              aria-label={t('features.pet.petLabel')}
+            >
+              {companionPets.map((pet) => {
+                const label = pet.source === 'preset' && pet.id === 'blue-golden'
+                  ? t('features.pet.presets.blueGolden.name')
+                  : pet.displayName;
+                const sourceLabel = pet.source === 'preset'
+                  ? t('features.pet.groupPreset')
+                  : t('features.pet.groupImported');
+                const isUserPet = pet.source === 'user';
+                const isDeleting = companionPetDeletingPath === pet.packagePath;
+                const isSelected = pet.packagePath === selectedCompanionPetValue;
+                const isDisabled = isDeleting;
+                const previewStyle = {
+                  '--bitfun-pet-preview-src': `url("${pet.previewSrc}")`,
+                } as React.CSSProperties;
+
+                return (
+                  <article
+                    key={pet.packagePath}
+                    className="bitfun-runtime-settings__pet-card"
+                    data-testid="companion-pet-card"
+                    data-pet-id={pet.id}
+                    data-bf-component="runtime-settings"
+                    data-bf-part="petOption"
+                    data-bf-state={isSelected ? 'selected' : undefined}
+                  >
+                    <Tooltip
+                      placement="top"
+                      delay={180}
+                      disabled={isDisabled}
+                      content={(
+                        <div className="bitfun-runtime-settings__pet-preview-popover">
+                          <div className="bitfun-runtime-settings__pet-preview-popover-image" aria-hidden>
+                            <span
+                              className="bitfun-runtime-settings__pet-preview-sprite bitfun-runtime-settings__pet-preview-sprite--popover"
+                              style={previewStyle}
+                            />
+                          </div>
+                          <span>{label}</span>
+                        </div>
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="bitfun-runtime-settings__pet-card-select"
+                        data-bf-component="runtime-settings"
+                        data-bf-part="petTrigger"
+                        data-bf-state={isSelected ? 'selected' : undefined}
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={label}
+                        disabled={isDisabled}
+                        onClick={() => void handleCompanionPetChange(pet.packagePath)}
+                      >
+                        <span className="bitfun-runtime-settings__pet-card-preview" aria-hidden>
+                          <span
+                            className="bitfun-runtime-settings__pet-preview-sprite"
+                            style={previewStyle}
+                          />
+                          {isSelected && (
+                            <span className="bitfun-runtime-settings__pet-selected-mark">
+                              <Icon name="check-line" size="xs" />
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className="bitfun-runtime-settings__pet-card-body"
+                          data-bf-component="runtime-settings"
+                          data-bf-part="petOptionMain"
+                        >
+                          <strong>{label}</strong>
+                          <span data-bf-component="runtime-settings" data-bf-part="petGroup">
+                            {sourceLabel}
+                          </span>
+                        </span>
+                      </button>
+                    </Tooltip>
+                    {isUserPet && IS_TAURI_DESKTOP && (
+                      <Tooltip content={t('features.pet.delete')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          tone="danger"
+                          className="bitfun-runtime-settings__pet-card-delete"
+                          disabled={isDeleting}
+                          aria-label={`${t('features.pet.delete')}: ${label}`}
+                          onClick={(event) => void handleDeleteCompanionPet(event, pet)}
+                          icon={<Icon name="delete" size="sm" />}
+                        />
+                      </Tooltip>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </div>
         </ConfigPageSection>
 
           </>
@@ -1361,7 +1307,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           </>
         ) : null}
 
-        {page === 'desktop-control' ? (
+        {page === 'browser-desktop-control' ? (
           <>
 
         {/* ── Computer use (desktop) ─────────────────────────────── */}
@@ -1486,15 +1432,15 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                   className="bitfun-runtime-settings__platform-note"
                   data-bf-component="runtime-settings"
                   data-bf-part="platformNote"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 6,
-                    padding: '8px 0 4px',
-                  }}
+                  role="note"
                 >
-                  <Icon name="info" size="sm" style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
-                  <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
+                  <Icon
+                    aria-hidden="true"
+                    className="bitfun-runtime-settings__platform-note-icon"
+                    name="info"
+                    size="sm"
+                  />
+                  <p className="bitfun-runtime-settings__platform-note-copy">
                     <strong>{t('computerUse.platformNote')}: </strong>
                     {computerUsePlatformMessage}
                   </p>
@@ -1511,12 +1457,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
             </ConfigPageRow>
           ) : null}
         </ConfigPageSection>
-
-          </>
-        ) : null}
-
-        {page === 'browser-control' ? (
-          <>
 
         {/* ── Browser control (CDP) ──────────────────────────────── */}
         <ConfigPageSection
@@ -1743,8 +1683,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   );
 };
 
-export function PetSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="pet" />;
+export function PetSettingsPage({ isActive }: { isActive?: boolean }): React.ReactElement {
+  return <RuntimeSettingsPage page="pet" isActive={isActive} />;
 }
 
 export function SessionWorkspaceSettingsPage(): React.ReactElement {
@@ -1759,10 +1699,6 @@ export function ExecutionAdvancedSettingsPage(): React.ReactElement {
   return <RuntimeSettingsPage page="execution" executionView="advanced" />;
 }
 
-export function DesktopControlSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="desktop-control" />;
-}
-
-export function BrowserControlSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="browser-control" />;
+export function BrowserDesktopControlSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="browser-desktop-control" />;
 }

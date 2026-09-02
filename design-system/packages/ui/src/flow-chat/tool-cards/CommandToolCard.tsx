@@ -36,7 +36,6 @@ export interface CommandToolCardCopyAction extends CommandToolCardAction {
 export interface CommandToolCardFooterItem {
   grow?: boolean;
   label?: ReactNode;
-  monospace?: boolean;
   pushToEnd?: boolean;
   tone?: "danger" | "neutral" | "success" | "warning";
   value: ReactNode;
@@ -165,7 +164,6 @@ export function CommandToolCard({
             <span
               className={styles.footerItem}
               data-grow={item.grow ? "true" : "false"}
-              data-monospace={item.monospace ? "true" : "false"}
               data-push-to-end={item.pushToEnd ? "true" : "false"}
               data-tone={item.tone ?? "neutral"}
               key={index}
