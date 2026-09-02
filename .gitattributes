@@ -16,12 +16,24 @@
 # reads LF fine and pinning them would churn every non-Windows working tree.
 #**
 
+/.gitattributes     text eol=lf
 *.sh                text eol=lf
 *.bash              text eol=lf
 *.rs                text eol=lf
 *.py                text eol=lf
 *.mjs               text eol=lf
 *.cjs               text eol=lf
+
+# Generated frontend/mobile contracts compare exact file contents. Keep both
+# their source fragments and generated outputs stable on every checkout so a
+# Windows or hosted runner cannot report newline-only generated drift.
+MiniApp/Demo/git-graph/source/** text eol=lf
+src/crates/assembly/core/builtin_skills/miniapp-dev/references/examples/demo-git-graph/source/** text eol=lf
+src/apps/mobile/**/*.json text eol=lf
+src/apps/mobile/**/*.js text eol=lf
+src/apps/mobile/**/*.ets text eol=lf
+src/apps/mobile/**/*.kt text eol=lf
+src/apps/mobile/**/*.swift text eol=lf
 
 # models.dev provenance hashes exact redistributed bytes. Keep these assets
 # stable across checkout platforms so the offline release check is reproducible.
