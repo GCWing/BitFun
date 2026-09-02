@@ -189,6 +189,16 @@ describe('SceneBar overflow navigation', () => {
     expect(sceneHarness.closeScene).toHaveBeenCalledWith('settings');
   });
 
+  it('keeps close targets out of press transforms so pointer hit testing stays stable', () => {
+    renderSceneBar();
+    const closeButtons = container.querySelectorAll<HTMLButtonElement>('[data-scene-bar-part="closeTab"]');
+
+    expect(closeButtons.length).toBeGreaterThan(0);
+    for (const closeButton of closeButtons) {
+      expect(closeButton.dataset.motion).toBe('none');
+    }
+  });
+
   it('supports standard middle-click and Delete-key close interactions for session', () => {
     renderSceneBar();
     const sessionTab = container.querySelector<HTMLElement>('[role="tab"][data-bf-value="session"]')!;
