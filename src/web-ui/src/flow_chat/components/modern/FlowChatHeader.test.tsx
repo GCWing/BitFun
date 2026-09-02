@@ -456,7 +456,9 @@ describe('FlowChatHeader', () => {
       '[data-testid="flowchat-header-pull-request-item"]',
     );
     expect(pullRequestItem?.textContent).toBe('#42 Keep status lists compact');
-    expect(pullRequestItem?.querySelector('.lucide-chevron-right')).not.toBeNull();
+    expect(
+      pullRequestItem?.querySelector('[data-bf-component="icon"][data-bf-name="chevron-right"]'),
+    ).not.toBeNull();
 
     act(() => {
       pullRequestItem?.click();

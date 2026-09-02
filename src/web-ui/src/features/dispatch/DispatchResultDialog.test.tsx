@@ -22,6 +22,7 @@ vi.mock('@/infrastructure/i18n', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
   Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Button: ({
