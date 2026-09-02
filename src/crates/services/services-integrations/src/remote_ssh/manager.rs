@@ -7421,10 +7421,15 @@ mod tests {
 
     fn assert_fixture_server_disconnected(result: Result<(), russh::Error>) {
         // Only used after the assertions and an explicit client disconnect.
-        // russh may observe the closing transport before the disconnect frame.
+        // russh may observe the closing transport before the disconnect frame;
+        // Darwin reports that race as ConnectionReset instead of UnexpectedEof.
         match result {
             Ok(()) => {}
-            Err(russh::Error::IO(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => {}
+            Err(russh::Error::IO(error))
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
+                ) => {}
             Err(error) => panic!("SSH fixture failed during disconnect: {error:?}"),
         }
     }
