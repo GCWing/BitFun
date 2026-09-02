@@ -64,6 +64,72 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun initialListingAndCatalogRequestsOverlapWithoutChangingReadyOrdering() = runTest {
+        val transport = FakeSessionTransport()
+        val listGate = CompletableDeferred<Unit>()
+        val catalogGate = CompletableDeferred<Unit>()
+        transport.commandGates["list_sessions"] = listGate
+        transport.commandGates["get_model_catalog"] = catalogGate
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        runCurrent()
+
+        // Workspace discovery remains authoritative and precedes both requests;
+        // once it completes, the independent requests are in flight together.
+        assertEquals("get_workspace_info", transport.commands.first().cmd)
+        assertEquals(
+            setOf("get_workspace_info", "list_sessions", "get_model_catalog"),
+            transport.commands.map { it.cmd }.toSet(),
+        )
+        assertIs<RemoteSessionUiState.Loading>(store.state.value)
+
+        listGate.complete(Unit)
+        runCurrent()
+        assertIs<RemoteSessionUiState.Loading>(store.state.value)
+
+        catalogGate.complete(Unit)
+        advanceUntilIdle()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("s-code", "s-cowork", "s-agentic"), ready.sessions.map { it.id })
+        assertEquals("model-primary", ready.modelCatalog?.defaultModels?.primary)
+    }
+
+    @Test
+    fun cancelledInitialCatalogCannotOverwriteANewerTargetLoad() = runTest {
+        val transport = FakeSessionTransport()
+        // Keep the catalog uncached so the replacement load has a real request
+        // whose late completion can be exercised.
+        transport.modelCatalogFailure = RelayFailure.Timeout
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        transport.modelCatalogFailure = null
+        transport.nonCancellableCommands += "get_model_catalog"
+
+        // Start the delayed request from an already usable state. This lets the
+        // replacement search exercise target switching rather than being rejected
+        // by the cold-start Loading guard.
+        store.dispatch(RemoteSessionIntent.Search("old target"))
+        runCurrent()
+        val lateCatalog = transport.lateCommandContinuations.remove("get_model_catalog")!!
+
+        store.dispatch(RemoteSessionIntent.Search("new target"))
+        runCurrent()
+        val current = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("new target", current.query)
+
+        // Complete the cancelled request after the replacement is authoritative.
+        // Its result must not restore the previous query or generation's state.
+        lateCatalog.resume(Unit)
+        runCurrent()
+        val afterLateCatalog = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("new target", afterLateCatalog.query)
+        assertEquals(current.sessions, afterLateCatalog.sessions)
+    }
+
+    @Test
     fun modelCatalogRemoteRejectedIsRetryableAndRefreshRecovers() = runTest {
         val transport = FakeSessionTransport()
         transport.modelCatalogFailure = RelayFailure.RemoteRejected("Unknown command")

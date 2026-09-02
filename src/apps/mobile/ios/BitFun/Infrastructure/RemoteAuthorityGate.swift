@@ -53,6 +53,52 @@ enum RemoteAuthorityInvalidationResult: Equatable {
     case notMatched(currentTargetKey: String?, currentEpoch: UInt64)
 }
 
+/// Target-scoped lifecycle of the workspace catalog used by remote creation.
+///
+/// This is intentionally separate from session `busy`: workspace discovery is
+/// an independent request and should become interactive as soon as its own
+/// authority is ready, regardless of a slower session-directory refresh.
+enum RemoteCreateWorkspacePhase: Equatable {
+    case unavailable
+    case loading
+    case ready
+    case failed
+}
+
+struct RemoteCreateInteractionState: Equatable {
+    let canOpenDevicePicker: Bool
+    let canOpenWorkspacePicker: Bool
+    let canSelectWorkspace: Bool
+    let canSubmit: Bool
+}
+
+enum RemoteCreateInteractionPolicy {
+    static func resolve(
+        hasTarget: Bool,
+        remoteConnected: Bool,
+        accountSwitching: Bool,
+        workspacePhase: RemoteCreateWorkspacePhase,
+        workspaceSelecting: Bool,
+        createSubmitting: Bool,
+        activeTurn: Bool
+    ) -> RemoteCreateInteractionState {
+        let contextMutationBlocked = createSubmitting || activeTurn
+        let canOpenDevicePicker = !accountSwitching && !contextMutationBlocked
+        let canOpenWorkspacePicker = hasTarget && !accountSwitching && !contextMutationBlocked
+        let workspaceReady = workspacePhase == .ready && !workspaceSelecting
+
+        return RemoteCreateInteractionState(
+            canOpenDevicePicker: canOpenDevicePicker,
+            // Loading and failure are deliberately openable: the picker owns
+            // progress, retry, and cached-list presentation for its request.
+            canOpenWorkspacePicker: canOpenWorkspacePicker,
+            canSelectWorkspace: canOpenWorkspacePicker && workspaceReady,
+            canSubmit: remoteConnected && hasTarget && !accountSwitching &&
+                !contextMutationBlocked && workspaceReady
+        )
+    }
+}
+
 enum RemoteAuthorityGate {
     static func targetBoundTransition(
         currentTargetKey: String?,

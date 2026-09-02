@@ -319,7 +319,6 @@ struct MobileShellView: View {
                     sidebarAction: sidebarAction,
                     sidebarActionLabel: sidebarActionLabel
                 )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .background(BitFunTheme.page)

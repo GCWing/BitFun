@@ -34,7 +34,10 @@ class RemoteWorkspaceStoreTest {
         assertEquals(listOf("/repo"), ready.workspaces.map { it.path })
         assertEquals(listOf("/assistant"), ready.assistants.map { it.path })
         assertEquals("/repo", ready.selected?.path)
-        assertEquals(listOf("list_recent_workspaces", "list_assistants", "get_workspace_info"), transport.commands.map { it.cmd })
+        assertEquals(
+            setOf("list_recent_workspaces", "list_assistants", "get_workspace_info"),
+            transport.commands.map { it.cmd }.toSet(),
+        )
     }
 
     @Test
@@ -280,6 +283,72 @@ class RemoteWorkspaceStoreTest {
     }
 
     @Test
+    fun initialWorkspaceRequestsOverlapAndReadyWaitsForAllAuthoritativeResults() = runTest {
+        val transport = OverlappingWorkspaceTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        runCurrent()
+
+        assertEquals(
+            setOf("list_recent_workspaces", "list_assistants", "get_workspace_info"),
+            transport.started,
+        )
+        assertIs<RemoteWorkspaceUiState.Loading>(store.state.value)
+
+        transport.release("list_recent_workspaces")
+        runCurrent()
+        assertIs<RemoteWorkspaceUiState.Loading>(store.state.value)
+        transport.release("list_assistants")
+        runCurrent()
+        assertIs<RemoteWorkspaceUiState.Loading>(store.state.value)
+        transport.release("get_workspace_info")
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
+        assertEquals("/authoritative", ready.selected?.path)
+    }
+
+    @Test
+    fun switchingLoadRejectsLateResultsFromThePreviousTargetGeneration() = runTest {
+        val transport = SwitchingWorkspaceTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        assertEquals("/new", assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).selected?.path)
+
+        transport.releaseFirstLoad()
+        advanceUntilIdle()
+        assertEquals("/new", assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).selected?.path)
+    }
+
+    @Test
+    fun initialWorkspaceFailureRemainsExplicit() = runTest {
+        val transport = FailingWorkspaceTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+
+        assertIs<RemoteWorkspaceUiState.Failed>(store.state.value)
+    }
+
+    @Test
+    fun anImmediateInitialFailureCancelsHeldSiblingAndPublishesFailure() = runTest {
+        val transport = FailingAndHeldWorkspaceTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        runCurrent()
+
+        assertTrue(transport.heldRequestCancelled)
+        assertIs<RemoteWorkspaceUiState.Failed>(store.state.value)
+    }
+
+    @Test
     fun downloadsAFileInChunksAndWaitsForThePlatformSaver() = runTest {
         val transport = FakeWorkspaceTransport(downloadChunks = true)
         val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
@@ -312,6 +381,98 @@ class RemoteWorkspaceStoreTest {
             assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).download,
         )
         assertEquals(FilePreviewFailureKind.LOAD_FAILED, download.kind)
+    }
+}
+
+private class OverlappingWorkspaceTransport : RemoteCommandTransport {
+    val started = mutableSetOf<String>()
+    private val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
+
+    fun release(command: String) {
+        gates.getValue(command).complete(Unit)
+    }
+
+    override suspend fun <T : CommandStatus> send(
+        deserializer: DeserializationStrategy<T>,
+        command: RemoteCommand,
+        timeoutMs: Long,
+    ): T {
+        started += command.cmd
+        val gate = CompletableDeferred<Unit>().also { gates[command.cmd] = it }
+        gate.await()
+        val json = when (command.cmd) {
+            "list_recent_workspaces" -> """{"resp":"ok","workspaces":[{"path":"/repo"}]}"""
+            "list_assistants" -> """{"resp":"ok","assistants":[]}"""
+            "get_workspace_info" -> """{"resp":"ok","has_workspace":true,"path":"/authoritative"}"""
+            else -> error("Unexpected command ${command.cmd}")
+        }
+        return RelayJson.decodeFromString(deserializer, json)
+    }
+}
+
+private class SwitchingWorkspaceTransport : RemoteCommandTransport {
+    private var loadCount = 0
+    private val firstLoadGates = mutableListOf<CompletableDeferred<Unit>>()
+
+    fun releaseFirstLoad() {
+        firstLoadGates.forEach { it.complete(Unit) }
+    }
+
+    override suspend fun <T : CommandStatus> send(
+        deserializer: DeserializationStrategy<T>,
+        command: RemoteCommand,
+        timeoutMs: Long,
+    ): T {
+        val firstLoad = loadCount < 3
+        if (command.cmd in setOf("list_recent_workspaces", "list_assistants", "get_workspace_info")) loadCount += 1
+        if (firstLoad) {
+            val gate = CompletableDeferred<Unit>()
+            firstLoadGates += gate
+            withContext(NonCancellable) { gate.await() }
+        }
+        val path = if (firstLoad) "/old" else "/new"
+        val json = when (command.cmd) {
+            "list_recent_workspaces" -> """{"resp":"ok","workspaces":[{"path":"$path"}]}"""
+            "list_assistants" -> """{"resp":"ok","assistants":[]}"""
+            "get_workspace_info" -> """{"resp":"ok","has_workspace":true,"path":"$path"}"""
+            else -> error("Unexpected command ${command.cmd}")
+        }
+        return RelayJson.decodeFromString(deserializer, json)
+    }
+}
+
+private class FailingWorkspaceTransport : RemoteCommandTransport {
+    override suspend fun <T : CommandStatus> send(
+        deserializer: DeserializationStrategy<T>,
+        command: RemoteCommand,
+        timeoutMs: Long,
+    ): T {
+        error("workspace catalog unavailable")
+    }
+}
+
+private class FailingAndHeldWorkspaceTransport : RemoteCommandTransport {
+    var heldRequestCancelled = false
+
+    override suspend fun <T : CommandStatus> send(
+        deserializer: DeserializationStrategy<T>,
+        command: RemoteCommand,
+        timeoutMs: Long,
+    ): T {
+        when (command.cmd) {
+            "list_recent_workspaces" -> {
+                try {
+                    CompletableDeferred<Unit>().await()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    heldRequestCancelled = true
+                    throw cancelled
+                }
+            }
+            "get_workspace_info" -> error("workspace info failed")
+            "list_assistants" -> Unit
+            else -> error("Unexpected command ${command.cmd}")
+        }
+        error("held request should not complete")
     }
 }
 

@@ -65,6 +65,10 @@ extension MobileAppModel {
         remoteExpectedDeviceKey = "account:\(device.id)"
         remoteInitialSessionReady = false
         remoteInitialWorkspaceReady = false
+        remoteCreateWorkspacePhase = .loading
+        workspaceLoading = true
+        workspaceLoadFailed = false
+        workspaceSelectionBusy = false
         pendingDirectorySession = pendingDirectorySession.map { ($0.deviceKey, $0.sessionID, remoteTargetEpoch) }
         remoteCreateSubmitting = false
         remoteCreateRequestID = nil
@@ -140,6 +144,8 @@ extension MobileAppModel {
             remoteSessions = []
             remoteWorkspaces = []
             workspaceCatalog = []
+            workspaceSelectionBusy = false
+            remoteCreateWorkspacePhase = .unavailable
             pendingRemoteWorkspaceCreate = nil
             pendingRemoteAssistantCreate = false
             selectedRemoteWorkspaceKind = ""

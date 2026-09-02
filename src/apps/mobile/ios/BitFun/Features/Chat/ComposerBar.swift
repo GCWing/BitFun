@@ -40,12 +40,11 @@ struct ComposerBar: View {
                 attachmentStrip
             }
 
+            stableInputRow
+
             if expanded {
-                expandedInputRow
                 expandedActionRow
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                collapsedRow
             }
         }
         .padding(.horizontal, 8)
@@ -129,22 +128,26 @@ struct ComposerBar: View {
         }
     }
 
-    private var collapsedRow: some View {
-        HStack(spacing: 5) {
-            attachmentAction
-            inputField(maxLines: 1)
-                .frame(height: MobileDesignGeometry.composerInputHeight)
-            primaryAction
+    /// Keep the same TextField instance alive while focus expands the composer.
+    /// Replacing the collapsed row with a separate expanded row destroys the
+    /// first responder during the keyboard transition and leaves UIKit without
+    /// a focused input target.
+    private var stableInputRow: some View {
+        HStack(spacing: expanded ? 0 : 5) {
+            if !expanded {
+                attachmentAction
+            }
+            inputField(maxLines: expanded ? 4 : 1)
+                .frame(height: expanded
+                    ? MobileDesignGeometry.composerExpandedInputHeight
+                    : MobileDesignGeometry.composerInputHeight)
+            if !expanded {
+                primaryAction
+            }
         }
-        .frame(height: MobileDesignGeometry.composerCollapsedHeight)
-    }
-
-    private var expandedInputRow: some View {
-        HStack(spacing: 0) {
-            inputField(maxLines: 4)
-                .frame(height: MobileDesignGeometry.composerExpandedInputHeight)
-        }
-        .frame(height: MobileDesignGeometry.composerExpandedInputRowHeight)
+        .frame(height: expanded
+            ? MobileDesignGeometry.composerExpandedInputRowHeight
+            : MobileDesignGeometry.composerCollapsedHeight)
     }
 
     private var expandedActionRow: some View {
@@ -191,6 +194,7 @@ struct ComposerBar: View {
             .foregroundStyle(BitFunTheme.ink)
             .lineLimit(1...maxLines)
             .focused($focused)
+            .accessibilityIdentifier("composer.input")
             .submitLabel(.send)
             .onSubmit {
                 if canSend { model.send() }

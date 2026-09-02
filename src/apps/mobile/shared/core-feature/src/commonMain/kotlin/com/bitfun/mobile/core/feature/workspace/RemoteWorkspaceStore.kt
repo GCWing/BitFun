@@ -26,8 +26,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +49,7 @@ public class RemoteWorkspaceStore internal constructor(
     /** Changes only when this target store is stopped; useful to cancel observers. */
     public val stopVersion: StateFlow<Long> = _stopVersion.asStateFlow()
     private var work: Job? = null
+    private var loadGeneration: Long = 0
     private var targetEpoch: Int = 0
     private var previewGeneration: Long = 0
     private var activePreviewRequestId: String? = null
@@ -81,41 +85,69 @@ public class RemoteWorkspaceStore internal constructor(
 
     public fun stop() {
         _stopVersion.value += 1
+        loadGeneration += 1
         invalidatePreview()
         work?.cancel()
         work = null
     }
 
     private fun load() {
+        val generation = ++loadGeneration
         invalidatePreview()
         work?.cancel()
         _state.value = RemoteWorkspaceUiState.Loading
         work = scope.launch {
             try {
-                val recent = transport.send<RecentWorkspaceListResponse>(RemoteCommand(cmd = "list_recent_workspaces"))
-                val assistants = transport.send<AssistantListResponse>(RemoteCommand(cmd = "list_assistants"))
-                val info = transport.send<WorkspaceInfoResponse>(RemoteCommand(cmd = "get_workspace_info"))
-                _state.value = RemoteWorkspaceUiState.Ready(
-                    workspaces = recent.workspaces.map { item ->
-                        RecentWorkspace(
-                            path = item.path.orEmpty(),
-                            name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
-                            lastOpened = item.lastOpened,
-                            kind = item.workspaceKind.orEmpty(),
-                        )
-                    }.filter { it.path.isNotEmpty() },
-                    assistants = assistants.assistants.map { item ->
-                        WorkspaceAssistant(item.path, item.name, item.assistantId)
-                    },
-                    selected = info.asSelectedWorkspace(),
-                    preview = RemoteFilePreviewUiState.None,
-                    busy = false,
-                    download = RemoteFileDownloadUiState.None,
-                )
+                supervisorScope {
+                    val recentDeferred = async<Any> {
+                        transport.send<RecentWorkspaceListResponse>(RemoteCommand(cmd = "list_recent_workspaces"))
+                    }
+                    val assistantsDeferred = async<Any> {
+                        transport.send<AssistantListResponse>(RemoteCommand(cmd = "list_assistants"))
+                    }
+                    val infoDeferred = async<Any> {
+                        transport.send<WorkspaceInfoResponse>(RemoteCommand(cmd = "get_workspace_info"))
+                    }
+                    try {
+                        val results = awaitAll(recentDeferred, assistantsDeferred, infoDeferred)
+                        val recent = results[0] as RecentWorkspaceListResponse
+                        val assistants = results[1] as AssistantListResponse
+                        val info = results[2] as WorkspaceInfoResponse
+                        if (generation == loadGeneration) {
+                            _state.value = RemoteWorkspaceUiState.Ready(
+                                workspaces = recent.workspaces.map { item ->
+                                    RecentWorkspace(
+                                        path = item.path.orEmpty(),
+                                        name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
+                                        lastOpened = item.lastOpened,
+                                        kind = item.workspaceKind.orEmpty(),
+                                    )
+                                }.filter { it.path.isNotEmpty() },
+                                assistants = assistants.assistants.map { item ->
+                                    WorkspaceAssistant(item.path, item.name, item.assistantId)
+                                },
+                                selected = info.asSelectedWorkspace(),
+                                preview = RemoteFilePreviewUiState.None,
+                                busy = false,
+                                download = RemoteFileDownloadUiState.None,
+                            )
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Throwable) {
+                        recentDeferred.cancel()
+                        assistantsDeferred.cancel()
+                        infoDeferred.cancel()
+                        recentDeferred.join()
+                        assistantsDeferred.join()
+                        infoDeferred.join()
+                        if (generation == loadGeneration) _state.value = RemoteWorkspaceUiState.Failed(true)
+                    }
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                _state.value = RemoteWorkspaceUiState.Failed(true)
+                if (generation == loadGeneration) _state.value = RemoteWorkspaceUiState.Failed(true)
             }
         }
     }
@@ -134,6 +166,7 @@ public class RemoteWorkspaceStore internal constructor(
 
     private fun runSelection(command: RemoteCommand, assistant: Boolean) {
         val current = _state.value as? RemoteWorkspaceUiState.Ready ?: return
+        val generation = ++loadGeneration
         invalidatePreview()
         work?.cancel()
         _state.value = current.copy(busy = true)
@@ -145,11 +178,12 @@ public class RemoteWorkspaceStore internal constructor(
                     transport.send<SetWorkspaceResponse>(command)
                 }
                 val info = transport.send<WorkspaceInfoResponse>(RemoteCommand(cmd = "get_workspace_info"))
+                if (generation != loadGeneration) return@launch
                 updateReady { it.copy(selected = info.asSelectedWorkspace(), busy = false) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                _state.value = RemoteWorkspaceUiState.Failed(true)
+                if (generation == loadGeneration) _state.value = RemoteWorkspaceUiState.Failed(true)
             }
         }
     }

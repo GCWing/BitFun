@@ -133,9 +133,15 @@ enum MobileLaunchConfiguration {
             arguments.contains("--pairing-account") {
             model.pairingSheetOpen = true
         }
-        if arguments.contains("--remote-create") || arguments.contains("--remote-create-workspace-picker") {
+        if arguments.contains("--remote-create") || arguments.contains("--remote-create-workspace-picker") ||
+            arguments.contains("--remote-create-session-loading") {
             model.remoteCreatePreview = true
             if !model.remoteConnected { model.configureConnectedPreview() }
+            if arguments.contains("--remote-create-session-loading") {
+                // Reproduces the real-device race: workspace authority is ready
+                // while the independent session directory still reports busy.
+                model.busy = true
+            }
             model.remoteCreateOpen = true
         }
         if arguments.contains("--remote-home-preview") {
@@ -212,6 +218,13 @@ private extension MobileAppModel {
         directPairingConnected = true
         surface = .remote
         remoteConnected = true
+        remoteExpectedDeviceKey = "pairing"
+        remoteInitialSessionReady = true
+        remoteInitialWorkspaceReady = true
+        remoteCreateWorkspacePhase = .ready
+        workspaceLoading = false
+        workspaceLoadFailed = false
+        workspaceSelectionBusy = false
         connectionPhase = .connected
         remoteSessionSelected = true
         accountUser = "preview@bitfun"
