@@ -22,7 +22,7 @@
   color: var(--bf-color-content-secondary);
   font: inherit;
   font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   white-space: nowrap;
   text-align: left;
   cursor: pointer;
@@ -85,21 +85,21 @@
   [data-bf-part='label'] {
     color: var(--bitfun-harness-profile-accent);
     font-family: var(--bf-type-flow-control-font-family);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &[data-bf-profile='ultimate'] [data-bf-component='action-item'] {
     [data-bf-part='label'] {
       font-style: italic;
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 
   &[data-bf-profile='creative'] [data-bf-component='action-item'] {
     [data-bf-part='label'] {
       font-family: var(--bf-type-flow-code-font-family);
-      font-weight: var(--bf-font-weight-medium);
-      letter-spacing: var(--bf-letter-spacing-subtle);
+      font-weight: var(--bf-type-label-sm-font-weight);
+      letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
     }
   }
 }

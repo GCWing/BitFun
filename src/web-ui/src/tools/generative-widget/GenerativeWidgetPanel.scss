@@ -16,7 +16,7 @@
 
 .bitfun-generative-widget-panel__empty-copy {
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .bitfun-generative-widget-panel__toolbar {
@@ -38,7 +38,7 @@
 }
 
 .bitfun-generative-widget-panel__save-state {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-secondary);
 }
 
@@ -86,8 +86,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
 }
 
@@ -103,5 +103,5 @@
   border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 50%, transparent);
   background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
   color: var(--bf-color-status-danger-content);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }

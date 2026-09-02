@@ -15,10 +15,10 @@
 
 .session-usage-dialog__title {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-3xl);
-  font-weight: var(--bf-font-weight-bold);
-  letter-spacing: var(--bf-letter-spacing-tight);
-  line-height: var(--bf-line-height-dense);
+  font-size: var(--bf-type-heading-dialog-font-size);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
 }
 
 .session-usage-dialog__body {
@@ -56,6 +56,6 @@
   }
 
   .session-usage-dialog__title {
-    font-size: var(--bf-font-size-2xl);
+    font-size: var(--bf-type-flow-section-title-font-size);
   }
 }

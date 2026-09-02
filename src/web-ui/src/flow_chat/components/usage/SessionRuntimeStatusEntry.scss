@@ -10,7 +10,7 @@
   background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 58%, transparent);
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-line-height-none);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
   cursor: pointer;
   min-width: 0;
 

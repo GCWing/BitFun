@@ -90,14 +90,14 @@
     padding: 5px 7px 7px;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__header-hint {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     opacity: 0.8;
   }
 
@@ -108,9 +108,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      letter-spacing: var(--bf-letter-spacing-normal);
+      letter-spacing: var(--bf-type-body-sm-letter-spacing);
       font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
   }

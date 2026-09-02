@@ -36,7 +36,7 @@
 
       p {
         color: var(--bf-color-content-secondary);
-        font-size: var(--bf-font-size-base);
+        font-size: var(--bf-type-body-md-font-size);
         margin: 0;
       }
 
@@ -105,17 +105,17 @@
       }
 
       .file-name {
-        font-size: var(--bf-font-size-base);
-        font-weight: var(--bf-font-weight-medium);
+        font-size: var(--bf-type-body-md-font-size);
+        font-weight: var(--bf-type-label-sm-font-weight);
         color: var(--bf-color-content-primary);
-        font-family:var(--bf-font-family-mono);
+        font-family:var(--bf-type-code-md-font-family);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .unsaved-indicator {
-        font-size: var(--bf-font-size-meta);
+        font-size: var(--bf-type-meta-font-size);
         color: var(--bf-color-status-warning-content);
         padding: 2px 6px;
         background: var(--bf-color-status-warning-surface);
@@ -131,14 +131,14 @@
       flex-shrink: 0;
 
       .todos-count {
-        font-size: var(--bf-font-size-meta);
-        font-weight: var(--bf-font-weight-medium);
+        font-size: var(--bf-type-meta-font-size);
+        font-weight: var(--bf-type-label-sm-font-weight);
         color: var(--bf-color-content-muted);
         padding: 2px 8px;
         border-radius: 999px;
         border: 1px solid var(--bf-color-border-default);
         background: var(--bf-color-surface-canvas);
-        letter-spacing: var(--bf-letter-spacing-subtle);
+        letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
       }
 
     }
@@ -242,8 +242,8 @@
       }
 
       .todo-content {
-        font-size: var(--bf-font-size-sm);
-        line-height: var(--bf-line-height-base);
+        font-size: var(--bf-type-label-md-font-size);
+        line-height: var(--bf-type-body-sm-line-height);
         color: var(--bf-color-content-secondary);
         flex: 1;
         min-width: 0;
@@ -266,7 +266,7 @@
 
         .todo-content {
           color: var(--bf-color-content-primary);
-          font-weight: var(--bf-font-weight-medium);
+          font-weight: var(--bf-type-label-sm-font-weight);
         }
       }
 

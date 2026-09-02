@@ -185,8 +185,8 @@
 .markdown-renderer ul > li::marker,
 .markdown-renderer ol > li::marker {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-regular);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
 }
 
 .markdown-renderer code {
@@ -203,7 +203,7 @@
   color: var(--bf-color-content-secondary);
   font-family: var(--bf-type-flow-code-font-family);
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   line-height: var(--bf-type-flow-support-line-height);
   white-space: nowrap;
   vertical-align: baseline;
@@ -293,8 +293,8 @@
   color: var(--bf-color-content-muted);
   font-family: var(--bf-type-flow-micro-font-family);
   font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-wider);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   line-height: var(--bf-type-flow-meta-line-height);
   text-transform: uppercase;
   user-select: none;
@@ -413,7 +413,7 @@
 .markdown-renderer summary {
   color: var(--bf-color-content-primary);
   cursor: pointer;
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   line-height: var(--bf-type-flow-support-line-height);
 }
 
@@ -523,8 +523,8 @@
 .markdown-renderer .table-wrapper th {
   background: var(--markdown-table-header-bg);
   color: var(--markdown-table-header-fg);
-  font-family:var(--bf-font-family-sans);
-  font-weight: var(--bf-font-weight-semibold);
+  font-family:var(--bf-type-body-sm-font-family);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .markdown-renderer .table-wrapper tr:last-child td {
@@ -579,14 +579,14 @@
   max-width: min(520px, 80vw);
   overflow-wrap: anywhere;
   text-align: left;
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-xs);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
   line-height: var(--bf-type-flow-support-line-height);
 }
 
 .markdown-renderer strong {
   color: var(--bf-color-content-primary);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .markdown-renderer em {

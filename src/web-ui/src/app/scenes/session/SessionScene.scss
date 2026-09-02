@@ -143,7 +143,7 @@
       transform: translate(-50%, -50%);
       color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;

@@ -13,7 +13,7 @@
   padding: 24px 48px;
   background: var(--bf-color-surface-scene);
   box-sizing: border-box;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
   /* Use a fixed 800px layout context so text wraps at exactly the same
      width regardless of the wrapper's position or viewport. */
   container-type: inline-size;
@@ -90,8 +90,8 @@
   }
 
   &__title {
-    font-size: var(--bf-font-size-xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     display: inline-block;
   }
@@ -120,7 +120,7 @@
     border: 1px solid var(--bf-color-border-default);
     border-radius: 12px;
     padding: 14px 16px;
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     line-height: var(--bf-type-flow-body-line-height);
     color: var(--bf-color-content-primary);
     white-space: pre-wrap !important;
@@ -201,7 +201,7 @@
   }
 
   &__footer-brand {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
   }

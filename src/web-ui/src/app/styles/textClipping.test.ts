@@ -100,7 +100,7 @@ describe('Truncated product text line boxes', () => {
     ['scenes/skills/SkillsScene.scss', '.skills-card__name'],
     ['scenes/skills/SkillsScene.scss', '.skills-card__desc'],
   ])('%s gives %s a font-relative, descender-safe line height', (filename, selector) => {
-    expect(compiledRules(filename)(selector)['line-height']).toBe('var(--bf-line-height-base)');
+    expect(compiledRules(filename)(selector)['line-height']).toBe('var(--bf-type-body-sm-line-height)');
   });
 
   it('retains single-line ellipsis and the two-line skills description clamp', () => {

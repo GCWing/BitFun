@@ -52,7 +52,7 @@
 
   .file-count {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
   }
@@ -62,8 +62,8 @@
     align-items: center;
     gap: var(--bf-space-2);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
-    font-family: var(--bf-font-family-mono);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    font-family: var(--bf-type-code-md-font-family);
 
     .stat-add {
       color: var(--bf-color-status-success-content);
@@ -195,7 +195,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     &__source {
@@ -208,8 +208,8 @@
       background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 9%, transparent);
       color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 72%, var(--bf-color-content-secondary));
       font-size: var(--bf-type-flow-micro-font-size);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-none);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-modifier-leading-none-line-height);
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -220,8 +220,8 @@
       gap: 6px;
       flex-shrink: 0;
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-medium);
-      font-family: var(--bf-font-family-mono);
+      font-weight: var(--bf-type-label-sm-font-weight);
+      font-family: var(--bf-type-code-md-font-family);
 
       .stat-add {
         color: var(--bf-color-status-success-content);

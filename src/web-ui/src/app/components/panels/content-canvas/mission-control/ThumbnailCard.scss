@@ -88,13 +88,13 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--bf-font-size-meta);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-meta-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       color: var(--bf-color-content-primary);
 
       &.is-preview {
         font-style: italic;
-        font-weight: var(--bf-font-weight-regular);
+        font-weight: var(--bf-type-body-sm-font-weight);
         opacity: 0.65;
       }
     }
@@ -107,7 +107,7 @@
   &__dirty {
     display: none;
     flex-shrink: 0;
-    font-size: var(--bf-font-size-3xs);
+    font-size: var(--bf-type-overline-xs-font-size);
     color: var(--bf-color-status-warning-content);
   }
 
@@ -166,10 +166,10 @@
     padding: 0;
     background: transparent;
     border: none;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-base);
-    letter-spacing: var(--bf-letter-spacing-tight);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
     color: var(--bf-color-content-secondary);
     tab-size: 2;
   }
@@ -210,8 +210,8 @@
     }
 
     span {
-      font-size: var(--bf-font-size-2xs);
-      letter-spacing: var(--bf-letter-spacing-wider);
+      font-size: var(--bf-type-overline-sm-font-size);
+      letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
       text-transform: uppercase;
     }
   }
@@ -244,8 +244,8 @@
     bottom: 6px;
     right: 6px;
     padding: 2px 6px;
-    font-size: var(--bf-font-size-2xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-overline-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     background: color-mix(in srgb, var(--bf-color-surface-canvas) 82%, var(--private-thumbnail-group-color) 18%);
     border: 1px solid var(--private-thumbnail-group-color);

@@ -37,10 +37,7 @@ export const cardMeta = {
     "layout.card.titleDescriptionGap",
     "layout.card.footerGap",
     "layout.card.mediaMinBlockSize",
-    "font.family.control",
-    "font.size.lg",
-    "font.size.sm",
-    "font.weight.regular",
-    "font.weight.semibold",
+    "type.heading.card.fontSize",
+    "type.body.sm.fontSize",
   ],
 } as const satisfies ComponentMeta;

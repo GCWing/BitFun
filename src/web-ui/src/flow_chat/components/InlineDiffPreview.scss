@@ -7,9 +7,9 @@
   position: relative;
   width: 100%;
   background: transparent;
-  font-family:var(--bf-font-family-mono);
+  font-family:var(--bf-type-code-md-font-family);
   font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-font-weight-regular);
+  font-weight: var(--bf-type-body-sm-font-weight);
   
   &__content {
     overflow-y: auto;
@@ -89,7 +89,7 @@
 
     .diff-line__prefix {
       color: var(--bf-domain-git-added);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 
@@ -102,7 +102,7 @@
 
     .diff-line__prefix {
       color: var(--bf-domain-git-deleted);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
     
     .diff-line__content {
@@ -186,7 +186,7 @@
     justify-content: center;
     width: 18px;
     flex-shrink: 0;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     user-select: none;
   }
   
@@ -214,7 +214,7 @@
     }
 
     code span[style] {
-      font-weight: var(--bf-font-weight-regular) !important;
+      font-weight: var(--bf-type-body-sm-font-weight) !important;
     }
   }
 }

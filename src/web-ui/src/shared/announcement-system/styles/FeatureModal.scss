@@ -209,11 +209,11 @@
   // Large display title
   &__title {
     margin: 0;
-    font-size: var(--bf-font-size-3xl);
-    font-weight: var(--bf-font-weight-bold);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    font-weight: var(--bf-type-heading-page-font-weight);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-dense);
-    letter-spacing: var(--bf-letter-spacing-tight);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
     // Tight, impactful — like a magazine headline
   }
 
@@ -228,16 +228,16 @@
 
   // Body text: comfortable reading
   &__body {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-spacious);
+    line-height: var(--bf-type-modifier-leading-spacious-line-height);
     flex: 1;
 
     // First paragraph lead: slightly larger
     p:first-child {
-      font-size: var(--bf-font-size-base);
+      font-size: var(--bf-type-body-md-font-size);
       color: var(--bf-color-content-primary);
-      line-height: var(--bf-line-height-relaxed);
+      line-height: var(--bf-type-body-lg-line-height);
       margin: 0 0 1em;
     }
 
@@ -253,15 +253,15 @@
       border: 1px solid var(--bf-color-border-default);
       border-radius: var(--bf-radius-sm);
       padding: 1px 5px;
-      font-size: var(--bf-font-size-xs);
-      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-family: var(--bf-type-code-md-font-family);
       color: var(--bf-color-content-primary);
       white-space: nowrap;
     }
 
     strong {
       color: var(--bf-color-content-primary);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
 
     // Bullet lists (rendered as <p> with leading dash from markdown)
@@ -270,22 +270,22 @@
       width: 100%;
       border-collapse: collapse;
       margin: 0.5em 0 1em;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
 
       th, td {
         padding: 6px 12px;
         text-align: left;
         border: 1px solid var(--bf-color-border-default);
-        line-height: var(--bf-line-height-base);
+        line-height: var(--bf-type-body-sm-line-height);
         vertical-align: middle;
       }
 
       thead th {
         background: var(--bf-color-surface-panel);
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
         color: var(--bf-color-content-primary);
-        font-size: var(--bf-font-size-meta);
-        letter-spacing: var(--bf-letter-spacing-wider);
+        font-size: var(--bf-type-meta-font-size);
+        letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
         text-transform: uppercase;
       }
 
@@ -319,7 +319,7 @@
     align-items: center;
     justify-content: center;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 }
 

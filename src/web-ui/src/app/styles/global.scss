@@ -18,16 +18,16 @@
 @layer bf.base {
 /* Root element styles */
 html {
-  font-size: var(--bf-font-size-xl);
+  font-size: var(--bf-type-flow-title-font-size);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
 body {
-  font-family:var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-base);
-  line-height: var(--bf-line-height-base);
+  font-family:var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   color: var(--bf-color-content-primary);
   background: var(--bf-color-surface-canvas);
   overflow: hidden;
@@ -105,7 +105,7 @@ td {
 }
 
 th {
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   background: var(--bf-color-action-neutral-surface);
 }
@@ -113,8 +113,8 @@ th {
 /* Code styles */
 code,
 pre {
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
   background: var(--bf-color-action-neutral-surface);
   border: 1px solid var(--bf-color-border-default);
   border-radius: var(--bf-radius-sm);
@@ -127,7 +127,7 @@ code {
 pre {
   padding: var(--bf-space-3);
   overflow-x: auto;
-  line-height: var(--bf-line-height-relaxed);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 pre code {

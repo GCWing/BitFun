@@ -83,11 +83,11 @@
 }
 
 .branch-select-dialog__title {
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   margin: 0;
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-snug);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
 }
 
 // ==================== Content Area ====================
@@ -120,7 +120,7 @@
   border: 1px solid var(--bf-color-status-danger-border);
   border-radius: 6px;
   color: var(--bf-color-status-danger-content);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 // ==================== Branch List ====================
@@ -143,7 +143,7 @@
   align-items: center;
   gap: 10px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .branch-select-dialog__loading-dots {
@@ -171,7 +171,7 @@
   padding: 24px;
   text-align: center;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 // ==================== Branch Item ====================
@@ -194,7 +194,7 @@
 
   &.current {
     .branch-select-dialog__item-name {
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 
@@ -228,7 +228,7 @@
 
 .branch-select-dialog__item-name {
   flex: 1;
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -242,8 +242,8 @@
 .branch-select-dialog__item-badge {
   flex-shrink: 0;
   padding: 2px 6px;
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   text-transform: uppercase;
   color: var(--bf-color-accent-default);
   background: var(--bf-color-action-secondary-background);

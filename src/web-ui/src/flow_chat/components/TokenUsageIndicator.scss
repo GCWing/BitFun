@@ -9,7 +9,7 @@
   padding: 0;
   border-radius: 8px;
   font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   transition: opacity 140ms ease;
   cursor: default;
   white-space: nowrap;
@@ -71,7 +71,7 @@
 
   &__percentage {
     line-height: var(--bf-type-flow-meta-line-height);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     font-size: var(--bf-type-flow-micro-font-size);
   }
 

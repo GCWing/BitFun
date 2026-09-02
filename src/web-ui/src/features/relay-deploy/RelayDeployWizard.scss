@@ -13,7 +13,7 @@
   min-height: min(640px, calc(100vh - 96px));
   max-height: min(640px, calc(100vh - 96px));
   overflow: hidden;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
 
   // ── step indicator ──────────────────────────────────────────────────────
   &__steps {
@@ -54,14 +54,14 @@
     height: 18px;
     border-radius: 50%;
     border: 1px solid var(--bf-color-border-default);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     flex-shrink: 0;
   }
 
   &__step-label {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
   }
 
@@ -96,9 +96,9 @@
   &__desc {
     margin: 0;
     padding: 0 16px 10px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__section {
@@ -116,11 +116,11 @@
 
   &__section-title {
     margin: 0;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__search {
@@ -139,7 +139,7 @@
     min-height: 42px;
     padding: 8px 10px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     text-align: center;
   }
 
@@ -179,8 +179,8 @@
   }
 
   &__server-name {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -188,9 +188,9 @@
   }
 
   &__server-detail {
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   &__divider {
@@ -199,7 +199,7 @@
     gap: 10px;
     padding: 10px 16px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
 
     &::before,
     &::after {
@@ -237,7 +237,7 @@
     border: 1px solid var(--bf-color-border-subtle);
     background: var(--bf-color-surface-panel);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
 
@@ -253,7 +253,7 @@
     &.is-active {
       border-color: var(--bf-color-accent-default);
       color: var(--bf-color-accent-default);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 
@@ -271,8 +271,8 @@
   }
 
   &__label {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
     margin-bottom: 4px;
   }
@@ -290,7 +290,7 @@
   }
 
   &__hint {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     margin-right: auto;
   }
@@ -305,8 +305,8 @@
     border-radius: 6px;
     background: var(--bf-color-surface-panel);
     border: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-font-size-meta);
-    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-type-meta-font-size);
+    font-family:var(--bf-type-code-md-font-family);
     color: var(--bf-color-content-secondary);
   }
 
@@ -317,7 +317,7 @@
     gap: 8px;
     padding: 32px 16px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     // Match terminal pane height so swap does not jump the dialog.
     &--terminal {
@@ -346,7 +346,7 @@
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     background: var(--bf-color-surface-canvas);
 
     &:not(:last-child) {
@@ -363,14 +363,14 @@
   }
 
   &__check-label {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     flex-shrink: 0;
   }
 
   &__check-detail {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -385,9 +385,9 @@
 
   &__port-hint {
     margin: 0 0 6px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     flex: 1;
     min-width: 160px;
   }
@@ -407,9 +407,9 @@
 
   &__mirror-hint {
     margin: 0 0 6px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     flex: 1;
     min-width: 200px;
   }
@@ -421,7 +421,7 @@
     margin: 0 16px 10px;
     padding: 10px 12px;
     border-radius: 8px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     &--info {
       background: color-mix(in srgb, var(--bf-color-accent-default) 8%, var(--bf-color-surface-panel));
@@ -447,13 +447,13 @@
   }
 
   &__notice-title {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__notice-desc {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   // ── embedded remote PTY ─────────────────────────────────────────────────
@@ -478,7 +478,7 @@
       height: 100%;
       // Slightly denser than default panel terminal (fontSize 12 via options).
       .xterm {
-        font-size: var(--bf-font-size-xs);
+        font-size: var(--bf-type-label-sm-font-size);
       }
     }
 
@@ -495,9 +495,9 @@
     border-radius: 6px;
     background: var(--bf-color-surface-panel);
     border: 1px solid var(--bf-color-border-subtle);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     color: var(--bf-color-content-secondary);
     white-space: pre-wrap;
     word-break: break-all;
@@ -516,7 +516,7 @@
     align-items: center;
     gap: 6px;
     padding: 0 16px 8px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     flex-shrink: 0;
     min-height: 22px;
@@ -548,15 +548,15 @@
   }
 
   &__task-title {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   &__task-desc {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   // ── done ────────────────────────────────────────────────────────────────
@@ -574,8 +574,8 @@
   }
 
   &__done-title {
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -584,8 +584,8 @@
     border-radius: 6px;
     background: var(--bf-color-surface-panel);
     border: 1px solid var(--bf-color-border-subtle);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-accent-default);
   }
 
@@ -593,9 +593,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     max-width: 100%;
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
 
     &.ok { color: var(--bf-color-status-success-content); }
     &.failed { color: var(--bf-color-status-warning-content); }

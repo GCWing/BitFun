@@ -90,7 +90,8 @@
     font-family: var(--bf-type-meta-font-family);
     font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -132,7 +133,7 @@
   }
 
   .item > [data-bf-part="trigger"][aria-current] > [data-bf-part="label"] {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .separator {

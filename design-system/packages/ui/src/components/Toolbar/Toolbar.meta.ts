@@ -35,8 +35,6 @@ export const toolbarMeta = {
     "type.meta.fontSize",
     "layout.toolbar.separatorBlockSize",
     "layout.toolbar.overflowFadeExtent",
-    "font.family.control",
-    "font.weight.medium",
     "radius.pill",
   ],
 } as const satisfies ComponentMeta;

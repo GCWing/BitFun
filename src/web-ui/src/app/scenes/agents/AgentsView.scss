@@ -54,11 +54,11 @@
   &__panel-label {
     flex-shrink: 0;
     padding: 10px var(--bf-space-4);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-widest);
+    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
     border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
@@ -104,25 +104,25 @@
 
   &__title {
     margin: 0;
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-section-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
-    letter-spacing: var(--bf-letter-spacing-tight);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
   }
 
   &__sub {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-spacious);
+    line-height: var(--bf-type-modifier-leading-spacious-line-height);
   }
 
   &__section-label {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-widest);
+    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
     align-self: flex-start;
     width: 100%;
     max-width: 520px;
@@ -151,7 +151,7 @@
       border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     text-align: left;
-    font-family: var(--bf-font-family-sans);
+    font-family: var(--bf-type-body-sm-font-family);
 
     &:hover {
       background: var(--bf-color-surface-subtle);
@@ -179,13 +179,13 @@
   }
 
   &__tpl-name {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   &__tpl-desc {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -194,7 +194,7 @@
 
   &__tpl-cnt {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-disabled);
     background: var(--bf-color-action-neutral-surface-hover);
     padding: 2px 7px;
@@ -219,14 +219,14 @@
     border-radius: var(--bf-radius-sm);
     padding: 7px var(--bf-space-6);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     cursor: pointer;
     transition:
       transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-    font-family: var(--bf-font-family-sans);
+    font-family: var(--bf-type-body-sm-font-family);
 
     &:hover {
       color: var(--bf-color-content-secondary);

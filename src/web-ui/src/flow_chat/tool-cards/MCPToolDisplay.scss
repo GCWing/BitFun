@@ -14,7 +14,7 @@
     min-width: 0;
 
     .tool-name {
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
       white-space: nowrap;
       overflow: hidden;
@@ -35,7 +35,7 @@
     .error-text {
       font-size: var(--bf-type-flow-control-font-size);
       color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 
@@ -62,7 +62,7 @@
       border-radius: var(--bf-radius-sm);
       background: var(--bf-color-action-neutral-surface);
       color: var(--bf-color-content-primary);
-      font-family: var(--bf-font-family-mono);
+      font-family: var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-control-font-size);
       line-height: var(--bf-type-flow-support-line-height);
       white-space: pre-wrap;
@@ -117,7 +117,7 @@
       border-radius: 4px;
 
       .resource-name {
-        font-weight: var(--bf-font-weight-semibold);
+        font-weight: var(--bf-type-label-selected-font-weight);
         color: var(--bf-color-content-primary);
         margin-bottom: var(--bf-control-flow-chat-inline-gap);
       }
@@ -125,7 +125,7 @@
       .resource-uri {
         font-size: var(--bf-type-flow-support-font-size);
         color: color-mix(in srgb, var(--bf-color-accent-secondary) 70%, transparent);
-        font-family: var(--bf-font-family-mono);
+        font-family: var(--bf-type-code-md-font-family);
         margin-bottom: var(--bf-control-flow-chat-inline-gap);
       }
 

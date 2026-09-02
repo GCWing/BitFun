@@ -40,8 +40,8 @@
   &__primary-setting-label {
     flex-shrink: 0;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
   }
 
@@ -64,7 +64,7 @@
     gap: var(--bf-space-5);
     min-width: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__models-dev-search-input {
@@ -91,8 +91,8 @@
 
   &__models-dev-search-hint {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-ui);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   &__models-dev-search-results {
@@ -113,7 +113,7 @@
   &__models-dev-search-limit {
     padding: var(--bf-space-2) var(--bf-space-3);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__models-dev-search-limit {
@@ -126,7 +126,7 @@
     gap: var(--bf-space-3);
     min-width: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     > span {
       flex-shrink: 0;
@@ -173,8 +173,8 @@
 
   &__section-title {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__section-title-group {
@@ -203,13 +203,13 @@
 
   &__generated-title {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__hint,
   &__empty {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__generated {
@@ -229,7 +229,7 @@
     border-radius: 999px;
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__unavailable-warning {
@@ -257,14 +257,14 @@
 
     strong {
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     span {
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-meta);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-meta-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
     }
   }
 
@@ -333,8 +333,8 @@
     border: 0;
     background: transparent;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -361,7 +361,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -378,7 +378,7 @@
     border-radius: 999px;
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__row-editor {

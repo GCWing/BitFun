@@ -41,6 +41,22 @@ platform presentation primitives.
   scale. Validate the standard size and at least one enlarged accessibility size
   without changing display zoom, and prefer wrapping or ellipsis over clipping.
 
+The native role names map to the product's formal content purposes as follows:
+
+| Content purpose | Native role |
+| --- | --- |
+| Page title | `display_large`, or `headline_large` in a compact container |
+| Section title | `headline_small` |
+| Card or row title | `title_small` / `title_medium` |
+| Body copy | `body_medium`, with `body_large` for reading emphasis |
+| Supporting text | `body_small` |
+| Control label | `label_medium` / `label_large` |
+| Compact metadata | `label_small` |
+
+Platform renderers may choose the listed size variant for available width, but
+must not substitute a different content purpose merely to obtain a preferred
+metric.
+
 ## Simulator captures
 
 The native galleries can be launched without changing the normal app path:

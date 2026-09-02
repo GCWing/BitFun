@@ -138,7 +138,7 @@ function renderGraphSvg({
               fill={color}
               opacity={0.78}
             />
-            <text x={14} y={description ? 18 : layoutNode.height / 2 + 4} fill="var(--bf-color-content-primary)" fontSize="var(--bf-type-support-font-size)" fontWeight="var(--bf-font-weight-semibold)">
+            <text x={14} y={description ? 18 : layoutNode.height / 2 + 4} fill="var(--bf-color-content-primary)" fontSize="var(--bf-type-support-font-size)" fontWeight="var(--bf-type-label-selected-font-weight)">
               {String(label).slice(0, 22)}
             </text>
             {description ? (

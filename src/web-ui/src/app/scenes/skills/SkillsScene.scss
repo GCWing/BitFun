@@ -54,9 +54,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: 4px;
   background: transparent;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-regular);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
   cursor: pointer;
   transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
@@ -66,7 +66,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
   &.is-active {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &:focus-visible {
@@ -124,10 +124,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-sidebar__title {
   margin: 0;
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
-  letter-spacing: var(--bf-letter-spacing-snug);
+  letter-spacing: var(--bf-type-flow-title-letter-spacing);
 }
 
 .skills-sidebar__nav {
@@ -149,8 +149,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: var(--bf-radius-base);
   background: transparent;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-regular);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
   cursor: pointer;
   text-align: left;
   transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -169,7 +169,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &.is-active {
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &:focus-visible {
@@ -202,8 +202,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: 999px;
   background: var(--bf-color-action-neutral-surface-hover);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
 
   .skills-sidebar__item.is-active & {
     background: var(--bf-color-action-quiet-hover);
@@ -222,10 +222,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-sidebar__hint {
   margin: 0;
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   color: var(--bf-color-content-muted);
   opacity: 0.75;
-  line-height: var(--bf-line-height-support);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 // ── Main Content ──────────────────────────────────────────────────────────────
@@ -263,8 +263,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: var(--bf-radius-pill);
   background: transparent;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   cursor: pointer;
   transition:
     background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -329,18 +329,18 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__eyebrow {
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-caps);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
   color: var(--bf-color-accent-default);
 }
 
 .skills-suite__title {
   margin: 0;
-  font-size: var(--bf-font-size-3xl);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-heading-dialog-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
   color: var(--bf-color-content-primary);
 }
 
@@ -348,8 +348,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   margin: 0;
   max-width: 720px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-comfortable);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-support-line-height);
 }
 
 .skills-suite__mode-toolbar {
@@ -422,9 +422,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__mode-tab-label {
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .skills-suite__mode-reset {
@@ -436,7 +436,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   color: var(--bf-color-content-muted);
 }
 
@@ -471,9 +471,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-suite__section-label {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-wider);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   text-transform: uppercase;
 }
 
@@ -524,13 +524,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__group-title {
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
 }
 
 .skills-suite__group-count {
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   color: var(--bf-color-content-muted);
 }
 
@@ -550,9 +550,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: 999px;
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
   cursor: pointer;
   transition:
     background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -615,8 +615,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-suite__skill-chip-status {
   color: var(--bf-color-status-warning-content);
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   white-space: nowrap;
 }
 
@@ -649,8 +649,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-height: 28px;
   padding: 0 12px 8px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-meta);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-meta-font-size);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .skills-main__list-heading {
@@ -659,8 +659,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-width: 0;
   gap: 7px;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .skills-main__list-count {
@@ -673,8 +673,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: var(--bf-radius-pill);
   background: var(--bf-color-action-neutral-surface-hover);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
 }
 
 .skills-main__column-label {
@@ -787,20 +787,20 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-card__name {
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .skills-card__desc {
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   color: var(--bf-color-content-muted);
   opacity: 0.82;
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -835,7 +835,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-card__level {
   gap: 6px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   white-space: nowrap;
 
   span {
@@ -851,7 +851,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-card__status-unavailable {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .skills-card__actions {
@@ -921,7 +921,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-discover__page-info {
   min-width: 60px;
   text-align: center;
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-secondary);
 }
 
@@ -938,7 +938,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   gap: 12px;
   min-height: 200px;
   padding: 32px;
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-muted);
   text-align: center;
 
@@ -986,17 +986,17 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-discover__title {
   margin: 0 0 4px;
-  font-size: var(--bf-font-size-2xl);
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-tight);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .skills-discover__subtitle {
   margin: 0 0 12px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
-  line-height: var(--bf-line-height-comfortable);
+  line-height: var(--bf-type-support-line-height);
 }
 
 .skills-discover__search-wrapper {
@@ -1015,7 +1015,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-discover__results-info {
   margin-bottom: 10px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
 }
 
@@ -1048,7 +1048,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -1060,9 +1060,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     border: none;
     background: none;
     font: inherit;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: left;
     word-break: break-all;
     color: var(--bf-color-accent-default);
@@ -1088,14 +1088,14 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__detail-label {
     flex-shrink: 0;
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__detail-value,
   &__detail-link {
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-meta);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-meta-font-size);
     word-break: break-all;
   }
 
@@ -1118,14 +1118,14 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__path-hint,
   &__form-hint,
   &__validating {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
   &__validation {
     padding: var(--bf-space-2) var(--bf-space-3);
     border-radius: var(--bf-radius-base);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
 
     &.is-valid {
       background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
@@ -1140,9 +1140,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     }
   }
 
-  &__validation-name  { font-weight: var(--bf-font-weight-medium); }
-  &__validation-desc  { margin-top: 2px; font-size: var(--bf-font-size-xs); opacity: 0.85; }
-  &__validation-error { font-weight: var(--bf-font-weight-medium); }
+  &__validation-name  { font-weight: var(--bf-type-label-sm-font-weight); }
+  &__validation-desc  { margin-top: 2px; font-size: var(--bf-type-label-sm-font-size); opacity: 0.85; }
+  &__validation-error { font-weight: var(--bf-type-label-sm-font-weight); }
 
   &__modal-form {
     display: flex;

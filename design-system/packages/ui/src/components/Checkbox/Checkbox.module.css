@@ -7,9 +7,11 @@
     min-inline-size: 0;
     gap: var(--bf-space-2);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
     cursor: pointer;
   }
 
@@ -77,7 +79,7 @@
   .input:is(:checked, :indeterminate) + .box .icon { opacity: 1; }
   .content { display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--bf-space-1); }
   .label { color: inherit; }
-  .description { color: var(--bf-color-content-muted); font-size: var(--bf-font-size-xs); }
+  .description { color: var(--bf-color-content-muted); font-family: var(--bf-type-support-font-family); font-size: var(--bf-type-support-font-size); font-weight: var(--bf-type-support-font-weight); line-height: var(--bf-type-support-line-height); letter-spacing: var(--bf-type-support-letter-spacing); }
 
   @media (prefers-reduced-motion: reduce) { .box { transition: none; } }
   @media (forced-colors: active) {

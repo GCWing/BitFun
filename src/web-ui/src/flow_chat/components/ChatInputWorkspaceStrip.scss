@@ -50,7 +50,7 @@ $track-item-gap: 10px;
   // controls restate it here. Shape — the pill and its hover fill — is what
   // says a control is a control, so a label never needs a size of its own.
   font-size: var(--bf-type-flow-meta-font-size);
-  line-height: var(--bf-line-height-none);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
   letter-spacing: inherit;
   white-space: nowrap;
   cursor: pointer;
@@ -96,11 +96,11 @@ $track-item-gap: 10px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
   font-size: var(--bf-type-flow-meta-font-size);
   line-height: var(--bf-type-flow-support-line-height);
-  font-weight: var(--bf-font-weight-regular);
-  letter-spacing: var(--bf-letter-spacing-subtle);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
   color: var(--bf-color-content-muted);
   user-select: text;
   pointer-events: auto;
@@ -246,7 +246,7 @@ $track-item-gap: 10px;
     padding-bottom: 1px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__permission-option-icon {
@@ -414,10 +414,10 @@ $track-item-gap: 10px;
     border-radius: 999px;
     background: transparent;
     color: inherit;
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
     font-size: inherit;
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-none);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     white-space: nowrap;
     cursor: default;
   }
@@ -461,7 +461,7 @@ $track-item-gap: 10px;
   &__branch {
     min-width: 0;
     white-space: nowrap;
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
     font-size: inherit;
     font-weight: inherit;
     flex: 1 1 auto;

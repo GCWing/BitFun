@@ -27,8 +27,8 @@
   flex-shrink: 0;
 
   h1 {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 }
@@ -48,7 +48,7 @@
   height: 100%;
   gap: var(--size-gap-4);
   color: var(--bf-color-content-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-type-body-md-font-size);
 }
 
 .workspace-page__current {
@@ -59,11 +59,11 @@
 
 .workspace-page__current-label,
 .workspace-page__recent-label {
-  font-size: 9px;
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-overline-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-accent-default);
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
 }
 
 .workspace-page__current-card {
@@ -76,25 +76,25 @@
 }
 
 .workspace-page__project-name {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--bf-type-flow-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   margin-bottom: var(--size-gap-1);
 }
 
 .workspace-page__project-path {
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-muted);
   word-break: break-all;
   margin-bottom: var(--size-gap-2);
-  font-family: var(--font-family-mono);
+  font-family: var(--bf-type-code-md-font-family);
 }
 
 .workspace-page__git-branch {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-accent-default);
   background: var(--bf-color-accent-surface);
   padding: 3px var(--size-gap-2);
@@ -112,8 +112,8 @@
   padding: var(--size-gap-3) var(--size-gap-4);
   border: none;
   @include squircle(12px);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 
@@ -161,13 +161,13 @@
 }
 
 .workspace-page__no-workspace-text {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-primary);
 }
 
 .workspace-page__no-workspace-hint {
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-content-muted);
   max-width: 280px;
 }
@@ -183,7 +183,7 @@
 .workspace-page__recent-empty {
   text-align: center;
   color: var(--bf-color-content-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   padding: var(--size-gap-6) 0;
 }
 
@@ -226,17 +226,17 @@
 }
 
 .workspace-page__recent-item-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
   color: var(--bf-color-content-primary);
   margin-bottom: 2px;
 }
 
 .workspace-page__recent-item-path {
-  font-size: 11px;
+  font-size: var(--bf-type-support-font-size);
   color: var(--bf-color-content-muted);
   word-break: break-all;
-  font-family: var(--font-family-mono);
+  font-family: var(--bf-type-code-md-font-family);
 }
 
 .workspace-page__switching {
@@ -246,12 +246,12 @@
   gap: var(--size-gap-2);
   padding: var(--size-gap-4);
   color: var(--bf-color-content-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
 }
 
 .workspace-page__error {
   margin-top: var(--size-gap-3);
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-type-body-xs-font-size);
   color: var(--bf-color-status-danger-content);
   text-align: center;
   padding: var(--size-gap-2) var(--size-gap-3);

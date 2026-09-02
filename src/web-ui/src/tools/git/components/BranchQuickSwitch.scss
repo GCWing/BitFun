@@ -10,7 +10,7 @@
   width: min(280px, calc(100vw - 16px));
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
   user-select: none;
 }
 
@@ -36,7 +36,7 @@
   gap: 8px;
   padding: 20px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   text-align: center;
 }
 
@@ -89,8 +89,8 @@
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -99,8 +99,8 @@
   display: inline-flex;
   flex: 0 0 auto;
   gap: 7px;
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .branch-switch-conflict-dialog__additions {
@@ -125,8 +125,8 @@
   p {
     margin: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   > .branch-switch-commit-dialog__input {

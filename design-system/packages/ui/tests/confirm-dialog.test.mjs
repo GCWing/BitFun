@@ -53,5 +53,5 @@ test("ConfirmDialog styles use public status, layout, and typography tokens", as
   assert.match(styles, /--bf-layout-confirm-dialog-preview-padding-inline/);
   assert.match(styles, /--bf-color-status-warning-content/);
   assert.match(styles, /--bf-color-status-danger-surface/);
-  assert.match(styles, /--bf-font-family-mono/);
+  assert.match(styles, /--bf-type-code-sm-font-family/);
 });

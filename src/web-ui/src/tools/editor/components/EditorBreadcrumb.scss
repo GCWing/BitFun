@@ -29,8 +29,8 @@ $_dropdown-width: 220px;
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: var(--bf-font-size-xs);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-family: var(--bf-type-code-md-font-family);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
     border-radius: 3px;
@@ -92,7 +92,7 @@ $_dropdown-width: 220px;
     gap: var(--bf-space-2);
     padding: 16px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__spinner {
@@ -103,7 +103,7 @@ $_dropdown-width: 220px;
     padding: 16px;
     text-align: center;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
 }

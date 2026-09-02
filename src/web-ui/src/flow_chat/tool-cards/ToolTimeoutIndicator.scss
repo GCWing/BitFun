@@ -10,8 +10,8 @@
   gap: var(--bf-control-flow-chat-inline-gap);
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-subtle);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
   line-height: var(--bf-type-flow-meta-line-height);
 
   svg {
@@ -22,7 +22,7 @@
 
 .duration-text--live {
   color: var(--bf-color-content-muted);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   font-variant-numeric: tabular-nums;
 }
 
@@ -46,14 +46,14 @@
 .duration-separator {
   color: var(--bf-color-content-muted);
   opacity: 0.5;
-  font-weight: var(--bf-font-weight-regular);
+  font-weight: var(--bf-type-body-sm-font-weight);
   margin: 0 1px;
 }
 
 .duration-timeout {
   color: var(--bf-color-content-muted);
   opacity: 0.7;
-  font-weight: var(--bf-font-weight-regular);
+  font-weight: var(--bf-type-body-sm-font-weight);
   font-variant-numeric: tabular-nums;
 }
 
@@ -92,8 +92,8 @@
   cursor: pointer;
   flex-shrink: 0;
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-medium);
-  letter-spacing: var(--bf-letter-spacing-subtle);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
   line-height: var(--bf-type-flow-meta-line-height);
   transition:
     scale 120ms cubic-bezier(0.23, 1, 0.32, 1),

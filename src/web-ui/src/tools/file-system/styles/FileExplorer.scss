@@ -64,7 +64,7 @@ $_indent-width: 8px;
   gap: 1px;
   padding: 4px 8px;
   height: 24px;
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   color: var(--bf-color-content-muted);
   background: linear-gradient(
     180deg,
@@ -169,7 +169,7 @@ $_indent-width: 8px;
 
     .bitfun-file-explorer__node-name {
       color: var(--bf-domain-git-branch);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     &:hover {
@@ -205,7 +205,7 @@ $_indent-width: 8px;
     
     .bitfun-file-explorer__node-name {
       color: var(--bf-domain-git-branch);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 }
@@ -321,8 +321,8 @@ $_indent-width: 8px;
 
 .bitfun-file-explorer__node-name {
   flex: 1;
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-regular);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -348,7 +348,7 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__node-size {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
   opacity: 0.7;
   flex-shrink: 0;
@@ -357,7 +357,7 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__node-modified {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
   opacity: 0.7;
   flex-shrink: 0;
@@ -435,7 +435,7 @@ $_indent-width: 8px;
   }
 
   .bitfun-file-explorer__node-name {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   .bitfun-file-explorer__node-size,

@@ -2,7 +2,10 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import {
   FolderPlus,
+  Gamepad2,
+  House,
   LayoutGrid,
+  Lightbulb,
   PackagePlus,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -57,7 +60,11 @@ import './MiniAppGalleryView.scss';
 const log = createLogger('MiniAppGalleryView');
 const MINIAPP_CARD_MIN_WIDTH = 280;
 
-const MiniAppGalleryView: React.FC = () => {
+interface MiniAppGalleryViewProps {
+  tabs?: React.ReactNode;
+}
+
+const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
   const apps = useMiniAppStore((state) => state.apps);
   const loading = useMiniAppStore((state) => state.loading);
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
@@ -409,7 +416,6 @@ const MiniAppGalleryView: React.FC = () => {
             marketReleaseNumber={marketOrigins[app.id]?.releaseNumber}
             onOpenDetails={setSelectedApp}
             onOpen={handleOpenApp}
-            onDelete={handleDeleteRequest}
             onStop={handleStopRunning}
           />
         ))}
@@ -434,7 +440,7 @@ const MiniAppGalleryView: React.FC = () => {
             <span className="miniapp-gallery__import-anchor">
               <IconButton
                 ref={importTriggerRef}
-                size="md"
+                size="xs"
                 onClick={() => setImportMenuOpen(open => !open)}
                 disabled={loading}
                 title={t('importAction')}
@@ -442,7 +448,7 @@ const MiniAppGalleryView: React.FC = () => {
                 aria-haspopup="menu"
                 aria-expanded={importMenuOpen}
                 data-testid="miniapp-import-action"
-                icon={<FolderPlus size={15} />}
+                icon={<Icon name="plus" size="sm" />}
               />
               {importMenuOpen ? createPortal(
                 <Menu
@@ -481,27 +487,28 @@ const MiniAppGalleryView: React.FC = () => {
               ) : null}
             </span>
             <IconButton
-              size="md"
-              variant="primary"
+              size="xs"
               onClick={() => void handleCreateWithCreative()}
               loading={creatingWithCreative}
               title={t('creationMode.action')}
               aria-label={t('creationMode.action')}
               data-testid="miniapp-create-action"
-              icon={<PackagePlus size={15} />}
+              icon={<Icon name="edit" size="sm" />}
             />
           </>
         )}
       />
 
+      {tabs}
+
       <div data-bf-component="miniapp-gallery-view" data-bf-part="content" className="gallery-zones">
-        <GalleryZone
-          title={t('running')}
-          data-testid="miniapp-running-zone"
-          className={activeApps.length === 0 ? 'miniapp-gallery__running-zone is-empty' : 'miniapp-gallery__running-zone'}
-          tools={activeApps.length > 0 ? <NumberBadge value={activeApps.length} /> : null}
-        >
-          {activeApps.length > 0 ? (
+        {activeApps.length > 0 ? (
+          <GalleryZone
+            title={t('running')}
+            titleAdornment={<NumberBadge value={activeApps.length} />}
+            data-testid="miniapp-running-zone"
+            className="miniapp-gallery__running-zone"
+          >
             <GalleryGrid minCardWidth={MINIAPP_CARD_MIN_WIDTH} className="miniapp-gallery__card-grid">
               {activeApps.map((app, index) => (
                 <MiniAppCard
@@ -513,48 +520,57 @@ const MiniAppGalleryView: React.FC = () => {
                   marketReleaseNumber={marketOrigins[app.id]?.releaseNumber}
                   onOpenDetails={setSelectedApp}
                   onOpen={handleOpenApp}
-                  onDelete={handleDeleteRequest}
                   onStop={handleStopRunning}
                 />
               ))}
             </GalleryGrid>
-          ) : (
-            <div className="gallery-run-empty">
-              {t('noRunningApps')}
-            </div>
-          )}
-        </GalleryZone>
+          </GalleryZone>
+        ) : null}
 
         <GalleryZone
           title={t('allApps')}
+          titleAdornment={<NumberBadge value={filtered.length} />}
           tools={(
-            <>
-              {categories.length > 1 ? (
-                <div
-                  data-bf-component="miniapp-gallery-view"
-                  data-bf-part="categoryFilters"
-                >
-                  <SegmentedControl
-                    className="miniapp-gallery__categories"
-                    options={categories.map((category) => ({
+            categories.length > 1 ? (
+              <div
+                data-bf-component="miniapp-gallery-view"
+                data-bf-part="categoryFilters"
+              >
+                <SegmentedControl
+                  className="miniapp-gallery__categories"
+                  options={categories.map((category) => {
+                    const normalizedCategory = category.toLowerCase();
+                    const categoryIcon = normalizedCategory === 'productivity'
+                      ? <Lightbulb size={12} />
+                      : normalizedCategory === 'developer'
+                        ? <Icon name="terminal" size="xs" aria-hidden />
+                        : normalizedCategory === 'lifestyle'
+                          ? <House size={12} />
+                          : normalizedCategory === 'game'
+                            ? <Gamepad2 size={12} />
+                            : undefined;
+                    return {
+                      icon: categoryIcon,
                       label: (
                         <span
                           data-bf-component="miniapp-gallery-view"
                           data-bf-part="categoryFilter"
                         >
-                          {category === 'all' ? t('all') : category}
+                          {category === 'all'
+                            ? t('all')
+                            : category.replace(/^./, (character) => character.toUpperCase())}
                         </span>
                       ),
                       value: category,
-                    }))}
-                    value={categoryFilter}
-                    onValueChange={setCategoryFilter}
-                    aria-label={t('allApps')}
-                  />
-                </div>
-              ) : null}
-              <span className="gallery-zone-count">{t('count', { count: filtered.length })}</span>
-            </>
+                    };
+                  })}
+                  value={categoryFilter}
+                  onValueChange={setCategoryFilter}
+                  aria-label={t('allApps')}
+                  variant="pills"
+                />
+              </div>
+            ) : null
           )}
         >
           {renderGrid()}

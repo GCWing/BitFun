@@ -17,9 +17,9 @@
   background: transparent;
   color: var(--bf-color-content-secondary);
   cursor: pointer;
-  font-family:var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-snug);
+  font-family:var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
   text-align: left;
   transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
               color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -71,7 +71,7 @@
     border-radius: var(--bf-radius-sm);
     background: color-mix(in srgb, var(--bf-color-status-success-content) 18%, transparent);
     color: var(--bf-color-status-success-content);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     font-variant-numeric: tabular-nums;
   }
 
@@ -121,7 +121,7 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     white-space: nowrap;
 
     &.is-busy {
@@ -134,8 +134,8 @@
   &__hint {
     padding: var(--bf-space-1) var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-ui);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   &__hint {

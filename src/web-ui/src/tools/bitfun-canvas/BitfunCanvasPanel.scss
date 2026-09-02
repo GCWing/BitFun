@@ -91,7 +91,7 @@
 
   h3 {
     margin: 0 0 var(--bf-space-1);
-    font-size: var(--bf-font-size-lg);
+    font-size: var(--bf-type-body-lg-font-size);
     color: var(--bf-color-content-primary);
   }
 
@@ -100,8 +100,8 @@
   }
 
   span {
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
   }
 }
 
@@ -121,8 +121,8 @@
   color: var(--bf-color-content-primary);
   overflow: auto;
   white-space: pre-wrap;
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .bitfun-canvas-panel__source-overlay {
@@ -170,5 +170,5 @@
   justify-content: center;
   height: 100%;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 }

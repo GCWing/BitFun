@@ -53,9 +53,9 @@ $_editor-padding-desktop: 32px;
 
   &__loading-text {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
     animation: code-editor-pulse var(--bf-motion-duration-slow) ease-in-out infinite;
   }
 
@@ -82,9 +82,9 @@ $_editor-padding-desktop: 32px;
 
   &__error-message {
     margin: 0 0 var(--bf-space-3) 0;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   // Editor Content Area
@@ -134,9 +134,9 @@ $_editor-padding-desktop: 32px;
     color: var(--bf-color-surface-canvas);
     padding: var(--bf-space-2) var(--bf-space-4);
     border-radius: var(--bf-radius-base);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    font-family: var(--bf-type-code-md-font-family);
     box-shadow: var(--bf-shadow-accent-glow);
     z-index: 50;
     animation: code-editor-fade-in 0.2s ease-out;
@@ -173,21 +173,21 @@ $_editor-padding-desktop: 32px;
 
     .monaco-hover,
     .monaco-editor-hover {
-      font-size: var(--bf-font-size-xs) !important;
+      font-size: var(--bf-type-label-sm-font-size) !important;
 
       .hover-row,
       .hover-contents {
-        font-size: var(--bf-font-size-xs) !important;
+        font-size: var(--bf-type-label-sm-font-size) !important;
         color: var(--bf-color-content-on-light) !important;
       }
 
       p, span, div {
-        font-size: var(--bf-font-size-xs) !important;
+        font-size: var(--bf-type-label-sm-font-size) !important;
         color: var(--bf-color-content-on-light) !important;
       }
 
       .markdown-string {
-        font-size: var(--bf-font-size-xs) !important;
+        font-size: var(--bf-type-label-sm-font-size) !important;
         color: var(--bf-color-content-on-light) !important;
       }
     }
@@ -260,7 +260,7 @@ $_editor-padding-desktop: 32px;
 
     &__loading-text,
     &__error-message {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       max-width: 300px;
     }
 
@@ -292,10 +292,10 @@ $_editor-padding-desktop: 32px;
   body > .monaco-hover,
   body > .monaco-editor-hover,
   .monaco-hover-content {
-    font-size: var(--bf-font-size-xs) !important;
+    font-size: var(--bf-type-label-sm-font-size) !important;
 
     * {
-      font-size: var(--bf-font-size-xs) !important;
+      font-size: var(--bf-type-label-sm-font-size) !important;
       color: var(--bf-color-content-on-light) !important;
     }
   }

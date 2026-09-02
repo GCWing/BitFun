@@ -105,8 +105,8 @@ test("TabGroup styling uses its geometry contract and Button semantic colors", a
   assert.match(styles, /--bf-color-action-neutral-border/);
   assert.match(styles, /--bf-color-action-neutral-content/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
-  assert.match(styles, /--bf-font-weight-regular/);
-  assert.match(styles, /--bf-font-weight-semibold/);
+  assert.match(styles, /--bf-type-label-md-font-weight/);
+  assert.match(styles, /--bf-type-label-selected-font-weight/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
 

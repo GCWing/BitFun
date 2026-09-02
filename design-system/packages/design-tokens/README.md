@@ -17,3 +17,44 @@ import "@bitfun/design-tokens/tokens.css";
 Only semantic and system token names are public API. Density modes reuse the same names and override values through a scoped `data-density` attribute.
 
 `tokenCatalog` is the authoring contract for visual tools. Each entry exposes its type, CSS variable, category, description, and resolved value in every density mode. Applications normally consume `tokens`; editors consume the catalog instead of maintaining a second token list.
+
+## Semantic typography roles
+
+Text-bearing components consume a complete semantic role rather than assembling
+font family, size, weight, line height, and letter spacing from foundation
+tokens. The core interface roles are:
+
+| Content purpose | Token role | Default contract |
+| --- | --- | --- |
+| Page title | `type.heading.page` | Control, 24px, 700, 1.2, normal |
+| Compact page title | `type.heading.compactPage` | Control, 20px, 600, 1.2, normal |
+| Navigation title | `type.heading.navigation` | Control, 17px, 600, 1.2, normal |
+| Section title | `type.heading.section` | Control, 15px, 600, 1.2, normal |
+| Card title | `type.heading.card` | Control, 13px, 600, 1.2, normal |
+| Body copy | `type.body.sm` | Sans, 13px, 400, 1.5, normal |
+| Supporting text | `type.support` | Control, 11px, 400, 1.55, normal |
+| Control label | `type.label.md` | Control, 13px, 400, 1.2, normal |
+| Selected control label | `type.label.selected` | Control, 13px, 600, 1.2, normal |
+
+Use every property from the selected role so localization, platform font
+fallbacks, density, and the runtime font-size preference remain synchronized:
+
+```css
+.title {
+  font-family: var(--bf-type-heading-card-font-family);
+  font-size: var(--bf-type-heading-card-font-size);
+  font-weight: var(--bf-type-heading-card-font-weight);
+  line-height: var(--bf-type-heading-card-line-height);
+  letter-spacing: var(--bf-type-heading-card-letter-spacing);
+}
+```
+
+Foundation variables such as `--bf-font-size-sm` remain available for renderer
+adapters and non-text geometry. Public text components should use `--bf-type-*`
+roles.
+
+When an existing composition intentionally overrides only line height or
+tracking, use `type.modifier.leading.*` or `type.modifier.tracking.*` on top of
+its established role. `type.overline.*` owns extra-small uppercase annotations;
+these modifiers keep product styles semantic without changing their resolved
+metrics during migration.

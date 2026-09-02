@@ -166,8 +166,8 @@ $_section-header-height: 22px;
   &__mode-pill-caption {
     margin: 0;
     padding: 0 4px;
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-meta-line-height);
     color: var(--bf-color-content-muted);
     opacity: 0.78;
     overflow-wrap: break-word;
@@ -286,9 +286,9 @@ $_section-header-height: 22px;
     gap: 4px;
     min-width: 0;
     padding: 6px 4px;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-muted);
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
@@ -387,8 +387,8 @@ $_section-header-height: 22px;
     border-radius: var(--bf-radius-base) 0 0 var(--bf-radius-base);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     cursor: pointer;
     transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -544,9 +544,9 @@ $_section-header-height: 22px;
   }
 
   &__section-label {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wider);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
     color: var(--bf-color-content-muted);
     flex: 1;
@@ -581,8 +581,8 @@ $_section-header-height: 22px;
     background: transparent;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -664,9 +664,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-display);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-display-sm-line-height);
   }
 
   &__miniapp-entry-wrap {
@@ -764,9 +764,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-display);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-display-sm-line-height);
   }
 
   &__miniapp-entry-apps {
@@ -838,9 +838,9 @@ $_section-header-height: 22px;
     &--more {
       background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 92%, transparent);
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-micro);
-      font-weight: var(--bf-font-weight-bold);
-      letter-spacing: var(--bf-letter-spacing-subtle);
+      font-size: var(--bf-type-micro-font-size);
+      font-weight: var(--bf-type-heading-page-font-weight);
+      letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
       filter: none;
       opacity: 1;
 
@@ -1011,14 +1011,14 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__workspace-menu-item-host-sep {
     flex: 0 0 auto;
     color: var(--bf-color-content-muted);
     opacity: 0.55;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__workspace-menu-item-name {
@@ -1031,7 +1031,7 @@ $_section-header-height: 22px;
   &__workspace-menu-empty {
     padding: var(--bf-space-2) var(--bf-space-3);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__workspace-menu-workspaces {
@@ -1132,8 +1132,8 @@ $_section-header-height: 22px;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     text-align: left;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     width: 100%;
     position: relative;
     opacity: 1;
@@ -1156,7 +1156,7 @@ $_section-header-height: 22px;
       opacity: 1;
       color: var(--bf-color-content-primary);
       background: var(--bf-color-action-quiet-hover);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
 
       &::before {
         content: '';
@@ -1209,7 +1209,7 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 
   // ──────────────────────────────────────────────
@@ -1218,14 +1218,14 @@ $_section-header-height: 22px;
 
   &__item-badge {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     margin-left: auto;
     max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-type-label-md-line-height);
 
     &--clickable {
       cursor: pointer;
@@ -1438,7 +1438,7 @@ $_section-header-height: 22px;
   background: transparent;
   color: var(--bf-color-content-muted);
   cursor: pointer;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   text-align: left;
   transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
               background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -1467,9 +1467,9 @@ $_section-header-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-dense);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
 }
 
 // Attached remote parties are shown once per device kind. Message-app marks
@@ -1495,7 +1495,7 @@ $_section-header-height: 22px;
   border: 1px solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
-  line-height: var(--bf-line-height-none);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 
   &[data-bf-device-kind='message-app'] {
     border: 0;
@@ -1505,9 +1505,9 @@ $_section-header-height: 22px;
 }
 
 .bitfun-nav-panel__footer-device-status-attached-count {
-  font-size: var(--bf-font-size-2xs);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-overline-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 }
 
 // Footer notification: yellow only when there are unread messages (BellDot)
@@ -1721,16 +1721,16 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 }
 
 .bitfun-device-overview__detail {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .bitfun-device-overview__tag {
@@ -1741,9 +1741,9 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-pill);
   background: transparent;
   color: var(--bf-color-accent-default);
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-meta-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1754,9 +1754,9 @@ $_section-header-height: 22px;
   h3 {
     margin: 0 0 10px;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 }
 
@@ -1782,9 +1782,9 @@ $_section-header-height: 22px;
   min-width: 0;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-snug);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1797,8 +1797,8 @@ $_section-header-height: 22px;
   box-sizing: border-box;
   margin-top: 20px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .bitfun-device-overview__backup.is-done {
@@ -1847,10 +1847,10 @@ $_section-header-height: 22px;
 
   .bitfun-device-overview__title {
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     text-align: center;
     overflow-wrap: anywhere;
   }
@@ -1907,17 +1907,17 @@ $_section-header-height: 22px;
   box-sizing: border-box;
   padding-inline: var(--bf-space-5);
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-control);
-  font-size: var(--bf-font-size-meta);
-  line-height: var(--bf-line-height-base);
+  font-family: var(--bf-type-label-md-font-family);
+  font-size: var(--bf-type-meta-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   overflow-wrap: anywhere;
 }
 
 .bitfun-device-overview__activity {
   padding: var(--bf-space-1) var(--bf-space-5) 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-meta);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-meta-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   overflow-wrap: anywhere;
 }
 
@@ -1927,9 +1927,9 @@ $_section-header-height: 22px;
   h3 {
     margin: 0 6px 7px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-meta-line-height);
   }
 }
 
@@ -1958,8 +1958,8 @@ $_section-header-height: 22px;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1967,8 +1967,8 @@ $_section-header-height: 22px;
   > span:not(.bitfun-device-overview__device-icon) {
     grid-column: 2;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     overflow-wrap: anywhere;
 
     // Green dot plus muted label, the live-state pairing the workspace list
@@ -2015,15 +2015,15 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-micro);
+  font-size: var(--bf-type-micro-font-size);
 
   strong {
     grid-column: 2;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2034,7 +2034,7 @@ $_section-header-height: 22px;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-2xs);
+    font-size: var(--bf-type-overline-sm-font-size);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2051,8 +2051,8 @@ $_section-header-height: 22px;
 
 .bitfun-nav-panel__remote-disclaimer-text {
   margin: 0;
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-label-md-line-height);
   color: var(--bf-color-content-muted);
 }
 
@@ -2064,8 +2064,8 @@ $_section-header-height: 22px;
   gap: 0;
 
   li {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-secondary);
     padding-right: 0;
   }
@@ -2085,7 +2085,7 @@ $_section-header-height: 22px;
   border: 1px solid transparent;
   min-width: 112px;
   padding: 7px 16px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   cursor: pointer;
   transition:
     background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -2251,9 +2251,9 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-pill);
   background: var(--bf-color-action-quiet-hover);
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 
 }
 
@@ -2322,8 +2322,8 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-base);
   background: transparent;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   cursor: pointer;
   text-align: left;
   transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -2507,8 +2507,8 @@ $_section-header-height: 22px;
     gap: var(--bf-space-1);
     padding: 0 var(--bf-space-2) 0 38px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
 
     > span:first-child {
       flex: 1;
@@ -2896,7 +2896,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel {
   @include nav-font.nav-panel-text-body;
 
-  line-height: var(--bf-line-height-compact);
+  line-height: var(--bf-type-meta-line-height);
 
   &__search-trigger {
     @include nav-font.nav-panel-text-meta;
@@ -2909,10 +2909,10 @@ $_section-header-height: 22px;
     height: 34px;
     padding: 0 var(--bf-space-2);
     border: 0;
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: left;
   }
 

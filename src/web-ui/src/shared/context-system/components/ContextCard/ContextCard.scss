@@ -105,8 +105,8 @@
   }
   
   &__title {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     display: flex;
     align-items: center;
@@ -119,7 +119,7 @@
   }
   
   &__subtitle {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     display: flex;
     align-items: center;
@@ -138,8 +138,8 @@
     display: inline-flex;
     align-items: center;
     padding: 2px 6px;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
     background: var(--bf-color-action-neutral-surface-hover);
     border-radius: var(--bf-radius-sm);
@@ -160,9 +160,9 @@
   }
   
   &__code {
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     color: var(--bf-color-content-secondary);
     white-space: pre-wrap;
     word-break: break-all;
@@ -222,7 +222,7 @@
     align-items: center;
     gap: var(--bf-space-1);
     padding: var(--bf-space-2);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     border-radius: var(--bf-radius-sm);
     margin-top: var(--bf-space-2);
     
@@ -232,7 +232,7 @@
     
     span {
       flex: 1;
-      line-height: var(--bf-line-height-ui);
+      line-height: var(--bf-type-modifier-leading-ui-line-height);
     }
   }
   
@@ -284,7 +284,7 @@
     }
     
     .bitfun-context-card__title {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
     }
     
     .bitfun-context-card__preview,

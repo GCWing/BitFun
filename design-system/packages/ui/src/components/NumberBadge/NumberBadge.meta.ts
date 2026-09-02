@@ -11,8 +11,7 @@ export const numberBadgeMeta = {
   ],
   states: ["default"],
   tokens: [
-    "space.1", "space.5", "space.6", "font.family.control", "font.size.meta",
-    "font.weight.medium", "lineHeight.tight", "radius.pill",
+    "space.1", "space.5", "space.6", "type.meta.fontSize", "radius.pill",
     "color.action.neutral.content", "color.action.neutral.surface",
   ],
 } as const satisfies ComponentMeta;

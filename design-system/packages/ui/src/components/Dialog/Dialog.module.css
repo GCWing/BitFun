@@ -95,7 +95,8 @@
     font-family: var(--bf-type-heading-dialog-font-family);
     font-size: var(--bf-type-heading-dialog-font-size);
     font-weight: var(--bf-type-heading-dialog-font-weight);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

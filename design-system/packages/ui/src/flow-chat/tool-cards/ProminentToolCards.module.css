@@ -4,8 +4,8 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -17,7 +17,7 @@
     align-items: center;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .summary {
@@ -50,9 +50,9 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-canvas);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -66,10 +66,10 @@
   .outputLabel,
   .sectionLabel {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   .outputGroup[data-tone="warning"] .outputBlock {
@@ -92,7 +92,7 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-raised);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .footerItem {
@@ -107,7 +107,7 @@
   }
 
   .footerLabel {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .footerValue {
@@ -119,7 +119,7 @@
   }
 
   .footerItem[data-monospace="true"] .footerValue {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   .footerItem[data-tone="success"] .footerValue {
@@ -132,8 +132,8 @@
 
   .error {
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -141,8 +141,8 @@
   .errorMeta {
     margin-block-start: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .diffPath {
@@ -150,8 +150,8 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -167,7 +167,7 @@
     padding-block-end: var(--bf-space-2);
     border-block-end: 1px solid var(--bf-color-border-subtle);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .reviewDetails,
@@ -181,8 +181,8 @@
   .reviewSummary {
     margin: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
   }
 
   .fileList {
@@ -191,9 +191,9 @@
     margin: 0;
     padding-inline-start: var(--bf-space-4);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
   }
 
   .actions {
@@ -209,12 +209,12 @@
     grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
     gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .fieldLabel {
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .fieldValue {
@@ -223,7 +223,7 @@
   }
 
   .field[data-monospace="true"] .fieldValue {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   .agentHeader {
@@ -276,13 +276,13 @@
   }
 
   .agentName {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-label-lg-font-weight);
   }
 
   .agentStatus {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .agentStatus[data-tone="success"] {
@@ -323,8 +323,8 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-canvas);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
   }
 
   @media (prefers-reduced-motion: reduce) {

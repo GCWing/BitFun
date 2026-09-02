@@ -48,11 +48,11 @@
 
 .welcome-panel__heading {
   margin: 0;
-  font-size: var(--bf-font-size-4xl);
-  font-weight: var(--bf-font-weight-bold);
+  font-size: var(--bf-type-heading-display-font-size);
+  font-weight: var(--bf-type-heading-page-font-weight);
   color: var(--bf-color-content-primary);
   line-height: var(--bf-type-flow-meta-line-height);
-  letter-spacing: var(--bf-letter-spacing-tight);
+  letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
 }
 
 .welcome-panel__tagline {
@@ -107,8 +107,8 @@
   border-radius: 5px;
   color: var(--bf-color-content-primary);
   font-size: inherit;
-  font-family:var(--bf-font-family-sans);
-  font-weight: var(--bf-font-weight-semibold);
+  font-family:var(--bf-type-body-sm-font-family);
+  font-weight: var(--bf-type-label-selected-font-weight);
   line-height: inherit;
   cursor: default;
   vertical-align: baseline;
@@ -175,7 +175,7 @@
   line-height: inherit;
   color: var(--bf-color-content-muted);
   opacity: 0.4;
-  font-weight: var(--bf-font-weight-regular);
+  font-weight: var(--bf-type-body-sm-font-weight);
   user-select: none;
 }
 

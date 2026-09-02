@@ -7,7 +7,7 @@
   flex: 1;
   background: var(--bf-color-surface-canvas);
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
 
   &__header {
     display: flex;
@@ -37,8 +37,8 @@
     background: var(--bf-color-action-neutral-surface);
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-xs);
-    font-size: var(--bf-font-size-meta);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-meta-font-size);
+    font-family: var(--bf-type-code-md-font-family);
     color: var(--bf-color-content-secondary);
   }
 
@@ -46,7 +46,7 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-2);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
   }
 
@@ -71,7 +71,7 @@
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     cursor: pointer;
     transition:
       transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -116,14 +116,14 @@
     }
 
     h3 {
-      font-size: var(--bf-font-size-lg);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-body-lg-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       margin-bottom: var(--bf-space-2);
       color: var(--bf-color-content-primary);
     }
 
     p {
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
       opacity: var(--bf-opacity-hover);
     }
   }
@@ -177,10 +177,10 @@
   }
 
   &__file-path {
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -196,9 +196,9 @@
   &__file-status {
     padding: 2px var(--bf-space-2);
     border-radius: var(--bf-radius-sm);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    font-family: var(--bf-type-code-md-font-family);
     color: var(--bf-color-content-muted);
 
     &--added {
@@ -226,9 +226,9 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-3);
-    font-size: var(--bf-font-size-xs);
-    font-family: var(--bf-font-family-mono);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-family: var(--bf-type-code-md-font-family);
+    font-weight: var(--bf-type-label-sm-font-weight);
     flex-shrink: 0;
   }
 
@@ -257,9 +257,9 @@
   &__diff-content {
     padding: 0;
     background: var(--bf-color-surface-canvas);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
     overflow-x: auto;
     border-top: 1px solid var(--bf-color-border-default);
 
@@ -307,7 +307,7 @@
 
       .bitfun-git-diff-view__line-content {
         color: var(--bf-color-accent-default);
-        font-weight: var(--bf-font-weight-medium);
+        font-weight: var(--bf-type-label-sm-font-weight);
       }
     }
   }
@@ -321,7 +321,7 @@
     user-select: none;
     border-right: 1px solid var(--bf-color-border-default);
     background: var(--bf-color-surface-subtle);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 
   &__line-content {
@@ -365,8 +365,8 @@
   }
 
   &__dialog-title {
-    font-size: var(--bf-font-size-xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -396,7 +396,7 @@
     border: 1px solid var(--bf-color-status-danger-border);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     animation: bitfun-git-diff-view-shake 0.4s ease-in-out;
   }
 
@@ -413,9 +413,9 @@
   }
 
   &__form-label {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__form-textarea {
@@ -425,9 +425,9 @@
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
     resize: vertical;
     transition:
       background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -467,18 +467,18 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-2);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__ai-info-label {
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__ai-info-badge {
     padding: 2px 8px;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-accent-default);
     background: var(--bf-color-action-secondary-hover);
     border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
@@ -488,8 +488,8 @@
 
   &__ai-info-value {
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__ai-confidence {
@@ -514,9 +514,9 @@
   }
 
   &__ai-confidence-text {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__amend-warning {
@@ -529,7 +529,7 @@
     border: 1px solid var(--bf-color-status-warning-border);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-status-warning-content);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__form-checkbox {
@@ -545,7 +545,7 @@
     }
 
     label {
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
       color: var(--bf-color-content-secondary);
       cursor: pointer;
     }
@@ -566,11 +566,11 @@
     background: var(--bf-color-action-neutral-surface);
     border-radius: var(--bf-radius-base);
     margin-bottom: var(--bf-space-4);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
 
     strong {
       color: var(--bf-color-content-primary);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 }
@@ -659,7 +659,7 @@
     }
 
     &__diff-content {
-      font-size: var(--bf-font-size-meta);
+      font-size: var(--bf-type-meta-font-size);
     }
 
     &__line-number {

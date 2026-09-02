@@ -21,11 +21,11 @@
     var(--bf-color-content-on-dark)
   );
   color: var(--bf-color-content-on-dark);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-regular);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
   font-synthesis: none;
-  line-height: var(--bf-line-height-tight);
+  line-height: var(--bf-type-label-md-line-height);
   opacity: 0.22;
   cursor: pointer;
   transition:

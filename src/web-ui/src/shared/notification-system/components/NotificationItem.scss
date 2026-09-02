@@ -10,7 +10,7 @@
   min-width: 280px;
   max-width: 320px;
   animation: bitfun-notification-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
 
   
   &--success {
@@ -51,8 +51,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-weight: var(--bf-font-weight-semibold);
-    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   
@@ -65,16 +65,16 @@
   }
 
   &__title {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-snug);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 
   &__message {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     word-break: break-word;
   }
 

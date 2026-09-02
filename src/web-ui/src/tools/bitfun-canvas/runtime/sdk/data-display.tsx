@@ -78,9 +78,9 @@ export function Stat({ value, label, tone, style, ...props }: CanvasStatProps) {
       <strong
         style={{
           color: toneColor(tone),
-          fontSize: 'var(--bf-font-size-3xl)',
-          fontWeight: 'var(--bf-font-weight-semibold)',
-          lineHeight: 'var(--bf-line-height-display)',
+          fontSize: 'var(--bf-type-heading-dialog-font-size)',
+          fontWeight: 'var(--bf-type-label-selected-font-weight)',
+          lineHeight: 'var(--bf-type-display-sm-line-height)',
           fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -356,8 +356,8 @@ export function KeyValueList({
                 margin: '2px 0 0',
                 color: toneColor(item.tone),
                 fontSize: compact ? 'var(--bf-type-body-xs-font-size)' : 'var(--bf-type-body-sm-font-size)',
-                fontWeight: 'var(--bf-font-weight-semibold)',
-                lineHeight: 'var(--bf-line-height-compact)',
+                fontWeight: 'var(--bf-type-label-selected-font-weight)',
+                lineHeight: 'var(--bf-type-meta-line-height)',
                 overflowWrap: 'anywhere',
               }}
             >
@@ -409,7 +409,7 @@ export function Timeline({
                   background: 'color-mix(in srgb, currentColor 16%, transparent)',
                   color,
                   fontSize: 'var(--bf-type-micro-font-size)',
-                  fontWeight: 'var(--bf-font-weight-bold)',
+                  fontWeight: 'var(--bf-type-heading-page-font-weight)',
                 }}
               >
                 {item.icon ?? ''}
@@ -645,7 +645,7 @@ export function UsageBar({
             marginBottom: 6,
             color: 'var(--bf-color-content-secondary)',
             fontSize: 'var(--bf-type-support-font-size)',
-            lineHeight: 'var(--bf-line-height-compact)',
+            lineHeight: 'var(--bf-type-meta-line-height)',
           }}
         >
           <span>{topLeftLabel}</span>
@@ -735,8 +735,8 @@ function TodoMarker({ status }: { status: CanvasTodoItem['status'] }) {
         background: isCompleted ? color : 'transparent',
         color: 'var(--bf-color-surface-canvas)',
         fontSize: 'var(--bf-type-micro-font-size)',
-        lineHeight: 'var(--bf-line-height-none)',
-        fontWeight: 'var(--bf-font-weight-bold)',
+        lineHeight: 'var(--bf-type-modifier-leading-none-line-height)',
+        fontWeight: 'var(--bf-type-heading-page-font-weight)',
       }}
     >
       {isCompleted ? '✓' : ''}
@@ -877,7 +877,7 @@ export function TodoListCard({
         >
           ›
         </span>
-        <span style={{ fontWeight: 'var(--bf-font-weight-semibold)', fontSize: 'var(--bf-type-support-font-size)' }}>Tasks</span>
+        <span style={{ fontWeight: 'var(--bf-type-label-selected-font-weight)', fontSize: 'var(--bf-type-support-font-size)' }}>Tasks</span>
         <span style={{ marginLeft: 'auto', color: 'var(--bf-color-content-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>
           {completed}/{todos.length} done
         </span>

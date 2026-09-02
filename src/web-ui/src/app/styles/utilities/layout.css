@@ -55,14 +55,14 @@
 .u-text-left { text-align: left; }
 .u-text-right { text-align: right; }
 
-.u-font-normal { font-weight: var(--bf-font-weight-regular); }
-.u-font-medium { font-weight: var(--bf-font-weight-medium); }
-.u-font-semibold { font-weight: var(--bf-font-weight-semibold); }
-.u-font-bold { font-weight: var(--bf-font-weight-semibold); }
+.u-font-normal { font-weight: var(--bf-type-body-sm-font-weight); }
+.u-font-medium { font-weight: var(--bf-type-label-sm-font-weight); }
+.u-font-semibold { font-weight: var(--bf-type-label-selected-font-weight); }
+.u-font-bold { font-weight: var(--bf-type-label-selected-font-weight); }
 
-.u-leading-tight { line-height: var(--bf-line-height-tight); }
-.u-leading-normal { line-height: var(--bf-line-height-base); }
-.u-leading-relaxed { line-height: var(--bf-line-height-relaxed); }
+.u-leading-tight { line-height: var(--bf-type-label-md-line-height); }
+.u-leading-normal { line-height: var(--bf-type-body-sm-line-height); }
+.u-leading-relaxed { line-height: var(--bf-type-body-lg-line-height); }
 
 /* Opacity utilities */
 .u-opacity-disabled { opacity: var(--bf-opacity-disabled); }

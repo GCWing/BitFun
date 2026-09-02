@@ -49,9 +49,11 @@
     max-width: 100%;
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-heading-section-font-family);
+    font-size: var(--bf-type-heading-section-font-size);
+    font-weight: var(--bf-type-heading-section-font-weight);
+    line-height: var(--bf-type-heading-section-line-height);
+    letter-spacing: var(--bf-type-heading-section-letter-spacing);
   }
 
   &__details {
@@ -72,8 +74,11 @@
   &__description {
     margin: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   &__meta {
@@ -82,7 +87,11 @@
     gap: var(--bf-space-2);
     flex-wrap: wrap;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
   }
 
   &__content {
@@ -125,7 +134,11 @@
   }
 
   .gallery-detail-modal__title {
-    font-size: var(--bf-font-size-3xl);
+    font-family: var(--bf-type-heading-page-font-family);
+    font-size: var(--bf-type-heading-page-font-size);
+    font-weight: var(--bf-type-heading-page-font-weight);
+    line-height: var(--bf-type-heading-page-line-height);
+    letter-spacing: var(--bf-type-heading-page-letter-spacing);
   }
 
   .gallery-detail-modal__hero-actions {
@@ -153,7 +166,7 @@
       border-radius: var(--bf-radius-pill);
       background: var(--bf-color-surface-subtle);
       color: var(--bf-color-content-secondary);
-      line-height: var(--bf-line-height-none);
+      line-height: var(--bf-type-meta-line-height);
     }
   }
 

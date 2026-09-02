@@ -57,7 +57,7 @@
     }
 
     &-text {
-      font-size: var(--bf-font-size-base);
+      font-size: var(--bf-type-body-md-font-size);
     }
   }
 
@@ -73,11 +73,11 @@
     padding: 20px;
 
     &-icon {
-      font-size: var(--bf-font-size-5xl);
+      font-size: var(--bf-type-display-sm-font-size);
     }
 
     &-message {
-      font-size: var(--bf-font-size-base);
+      font-size: var(--bf-type-body-md-font-size);
       text-align: center;
       max-width: 300px;
     }
@@ -108,7 +108,7 @@
     }
 
     &-title {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-secondary);
 
       .shell-type {
@@ -155,7 +155,7 @@
     justify-content: space-between;
     padding: 2px 8px;
     background: var(--bf-color-status-info-content);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-on-dark);
 
     &--error {

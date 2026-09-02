@@ -6,16 +6,16 @@
 
   &__title {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-ui);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     overflow-wrap: anywhere;
   }
 
   &__description {
     margin-top: var(--bf-space-1);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-support);
+    line-height: var(--bf-type-flow-support-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -36,22 +36,22 @@
 
     dt {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-ui);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-modifier-leading-ui-line-height);
     }
 
     dd {
       min-width: 0;
       margin: 0;
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-ui);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-modifier-leading-ui-line-height);
       overflow-wrap: anywhere;
       text-align: right;
     }
   }
 
   .is-monospace {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 }

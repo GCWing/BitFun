@@ -63,8 +63,8 @@
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
   text-align: center;
   opacity: 0;
   transform: translate(-50%, -2px);

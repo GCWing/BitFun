@@ -28,7 +28,7 @@ $_icon-size: 16px;
   }
 
   &-hint {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     opacity: 0.7;
     margin-top: var(--bf-space-2);
   }
@@ -42,9 +42,9 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__count {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
 }
 
 .bitfun-search-results__list {
@@ -136,8 +136,8 @@ $_icon-size: 16px;
   }
 
   &-name {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -146,7 +146,7 @@ $_icon-size: 16px;
   }
 
   &-path {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     opacity: 0.6;
     overflow: hidden;
@@ -195,9 +195,9 @@ $_icon-size: 16px;
   }
 
   &-toggle-count {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 }
 
@@ -248,13 +248,13 @@ $_icon-size: 16px;
     
     code {
       display: block;
-      font-size: var(--bf-font-size-xs);
-      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-family: var(--bf-type-code-md-font-family);
       color: var(--bf-color-content-secondary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      line-height: var(--bf-line-height-base);
+      line-height: var(--bf-type-body-sm-line-height);
     }
   }
 }
@@ -264,12 +264,12 @@ $_icon-size: 16px;
   color: var(--bf-color-accent-default);
   padding: 1px 2px;
   border-radius: 2px;
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
 }
 
 .bitfun-search-results__showing {
   color: var(--bf-color-content-muted);
-  font-weight: var(--bf-font-weight-regular);
+  font-weight: var(--bf-type-body-sm-font-weight);
   opacity: 0.7;
 }
 
@@ -284,7 +284,7 @@ $_icon-size: 16px;
   border-top: 1px solid var(--bf-color-border-default);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   cursor: pointer;
   transition:
     transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),

@@ -434,8 +434,8 @@ test("file diff header matches the compact file-operation information hierarchy"
   assert.doesNotMatch(markup, /Git HEAD|data-bf-part="diffType"/);
   assert.ok(pathRule, "file-diff path rule should exist");
   assert.match(pathRule, /var\(--bf-color-content-secondary\)/);
-  assert.match(pathRule, /var\(--bf-font-family-mono\)/);
-  assert.match(pathRule, /var\(--bf-font-size-sm\)/);
+  assert.match(pathRule, /var\(--bf-type-code-md-font-family\)/);
+  assert.match(pathRule, /var\(--bf-type-body-sm-font-size\)/);
 });
 
 test("concrete tool views expose semantic parts instead of legacy CSS selectors", () => {

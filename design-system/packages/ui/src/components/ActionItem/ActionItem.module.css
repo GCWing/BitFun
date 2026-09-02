@@ -26,7 +26,7 @@
 
   .root:not([data-disabled="true"]):has(.trigger:active) .label,
   .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) .label {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .root:has(.trigger:focus-visible) {
@@ -94,10 +94,11 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -112,9 +113,11 @@
 
   .metadata {
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
     white-space: nowrap;
   }
 

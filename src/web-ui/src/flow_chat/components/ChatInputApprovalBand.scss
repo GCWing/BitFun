@@ -29,7 +29,7 @@
 
   &__action {
     flex: none;
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__separator {
@@ -64,7 +64,7 @@
     color: var(--bf-color-content-on-dark);
     background: var(--bf-color-status-warning-content);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-bold);
+    font-weight: var(--bf-type-heading-page-font-weight);
     cursor: default;
   }
 

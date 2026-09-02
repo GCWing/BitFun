@@ -23,8 +23,6 @@ export const tooltipMeta = {
     "color.border.subtle",
     "color.border.default",
     "color.border.strong",
-    "font.family.sans",
-    "font.weight.regular",
     "shadow.sm",
     "overlay.tooltip.maxInlineSize",
     "overlay.tooltip.maxBlockSize",

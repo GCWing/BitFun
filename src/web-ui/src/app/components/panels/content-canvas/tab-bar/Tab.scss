@@ -83,10 +83,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     // Inactive state: lighter text color
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     transition: color 0.15s ease;
   }
 
@@ -99,7 +99,7 @@
   &__dirty-indicator {
     display: none;
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-status-warning-content);
     margin-left: 2px;
   }

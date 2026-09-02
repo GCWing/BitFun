@@ -13,8 +13,8 @@
    z-index: $popover-z;
    min-width: 200px;
    max-width: 320px;
-   font-size: var(--bf-font-size-xs);
-   font-family: var(--bf-font-family-sans);
+   font-size: var(--bf-type-label-sm-font-size);
+   font-family: var(--bf-type-body-sm-font-family);
    color: var(--bf-color-content-primary);
    transform: translateY(-100%);
    animation: status-bar-popover-enter 0.15s var(--bf-motion-easing-decelerate) forwards;
@@ -30,8 +30,8 @@
     border-radius: 4px;
 
     input {
-      font-size: var(--bf-font-size-xs);
-      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-family: var(--bf-type-code-md-font-family);
     }
    }
 
@@ -42,7 +42,7 @@
 
    &__hint {
      padding: 6px 12px;
-     font-size: var(--bf-font-size-meta);
+     font-size: var(--bf-type-meta-font-size);
      color: var(--bf-color-content-muted);
      border-bottom: 1px solid var(--bf-color-border-subtle);
    }

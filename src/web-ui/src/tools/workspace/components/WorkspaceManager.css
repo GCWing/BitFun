@@ -25,17 +25,17 @@
 
 .workspace-manager h3 {
   margin: 0 0 16px 0;
-  font-size: var(--bf-font-size-2xl);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-accent-default);
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .workspace-card {
@@ -158,28 +158,28 @@
 }
 
 .workspace-name {
-  font-size: var(--bf-font-size-2xl);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-flow-section-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-accent-default);
   margin-bottom: 6px;
   word-break: break-all;
-  line-height: var(--bf-line-height-snug);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
 }
 
 .workspace-name__ssh-host {
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 55%, transparent);
   margin-right: 2px;
   color: var(--bf-color-content-muted);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
 }
 
 .workspace-path {
-  font-size: var(--bf-font-size-base);
+  font-size: var(--bf-type-body-md-font-size);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
   margin-bottom: 12px;
   word-break: break-all;
-  font-family: var(--bf-font-family-mono);
+  font-family: var(--bf-type-code-md-font-family);
   background: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
   padding: 4px 8px;
   border-radius: 6px;
@@ -208,7 +208,7 @@
 
 .workspace-type {
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   text-transform: capitalize;
 }
 
@@ -217,7 +217,7 @@
   align-items: center;
   gap: 4px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .workspace-identity {
@@ -231,14 +231,14 @@
 }
 
 .workspace-identity__label {
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   text-transform: uppercase;
-  letter-spacing: var(--bf-letter-spacing-wide);
+  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 55%, transparent);
 }
 
 .workspace-identity__value {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-accent-default);
 }
 
@@ -250,9 +250,9 @@
 }
 
 .workspace-related-paths__label {
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   text-transform: uppercase;
-  letter-spacing: var(--bf-letter-spacing-wide);
+  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 55%, transparent);
 }
 
@@ -272,8 +272,8 @@
 
 .workspace-related-paths__path {
   display: block;
-  font-size: var(--bf-font-size-xs);
-  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-family: var(--bf-type-code-md-font-family);
   color: var(--bf-color-accent-default);
   word-break: break-all;
 }
@@ -281,18 +281,18 @@
 .workspace-related-paths__desc {
   display: block;
   margin-top: 4px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 72%, transparent);
-  line-height: var(--bf-line-height-support);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .workspace-related-paths__more {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 62%, transparent);
 }
 
 .workspace-type {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   padding: 2px 8px;
   background-color: var(--bf-color-surface-panel);
   color: var(--bf-color-content-secondary);
@@ -304,7 +304,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
 }
 
@@ -352,16 +352,16 @@
 }
 
 .stat-label {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
-  font-weight: var(--bf-font-weight-medium);
+  font-weight: var(--bf-type-label-sm-font-weight);
   text-transform: uppercase;
-  letter-spacing: var(--bf-letter-spacing-wider);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
 }
 
 .stat-value {
-  font-size: var(--bf-font-size-xl);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-flow-title-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-accent-default);
 }
 
@@ -395,7 +395,7 @@
 .no-workspace p,
 .no-recent p {
   margin: 0;
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .workspace-list {

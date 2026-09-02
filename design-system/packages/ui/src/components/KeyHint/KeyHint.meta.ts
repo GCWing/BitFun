@@ -13,9 +13,7 @@ export const keyHintMeta = {
   tokens: [
     "color.content.muted",
     "color.keyHint.background",
-    "font.family.control",
-    "font.size.micro",
-    "font.weight.regular",
+    "type.micro.fontSize",
     "radius.xs",
   ],
 } as const satisfies ComponentMeta;

@@ -11,7 +11,7 @@
     justify-content: center;
     padding: 32px 16px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__empty {
@@ -22,7 +22,7 @@
     padding: 32px 16px;
     color: var(--bf-color-content-muted);
     text-align: center;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__empty-icon {
@@ -45,10 +45,10 @@
     align-items: center;
     gap: var(--bf-space-2);
     padding: 6px 16px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     width: 100%;
     border: none;
     background: transparent;
@@ -67,7 +67,7 @@
   }
 
   &__group-name {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -83,8 +83,8 @@
     padding: 0 5px;
     border-radius: 9px;
     background: var(--bf-color-action-quiet-hover);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
   }
 
@@ -118,19 +118,19 @@
   }
 
   &__row-name {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__row-date {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   &__row-actions {

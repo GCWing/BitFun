@@ -105,9 +105,9 @@
   &__tooltip-turn {
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
-    letter-spacing: var(--bf-letter-spacing-normal);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   &__tooltip-message {
@@ -116,7 +116,7 @@
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
     line-height: var(--bf-type-flow-support-line-height);
-    letter-spacing: var(--bf-letter-spacing-normal);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     -webkit-box-orient: vertical;

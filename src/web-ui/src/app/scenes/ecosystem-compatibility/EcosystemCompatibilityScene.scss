@@ -39,8 +39,8 @@ $compatibility-sidebar-width: 236px;
     border-radius: var(--bf-radius-base);
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-xs);
+    font-family:var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
     text-align: left;
     cursor: pointer;
 
@@ -59,7 +59,7 @@ $compatibility-sidebar-width: 236px;
 
     strong {
       overflow: hidden;
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
       text-align: right;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -85,10 +85,10 @@ $compatibility-sidebar-width: 236px;
       margin: 0 0 var(--bf-space-2);
       padding-inline: var(--bf-space-2);
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
-      font-weight: var(--bf-font-weight-semibold);
-      letter-spacing: var(--bf-letter-spacing-wider);
-      line-height: var(--bf-line-height-relaxed);
+      font-size: var(--bf-type-micro-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+      line-height: var(--bf-type-body-lg-line-height);
     }
   }
 
@@ -173,14 +173,14 @@ $compatibility-sidebar-width: 236px;
     }
 
     strong {
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     small {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-micro-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
     }
   }
 
@@ -189,7 +189,7 @@ $compatibility-sidebar-width: 236px;
     align-items: center;
     gap: 4px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-2xs);
+    font-size: var(--bf-type-overline-sm-font-size);
     white-space: nowrap;
 
     &.is-connected,
@@ -214,7 +214,7 @@ $compatibility-sidebar-width: 236px;
   &__sidebar-empty {
     padding: var(--bf-space-5) var(--bf-space-3);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     text-align: center;
   }
 
@@ -225,8 +225,8 @@ $compatibility-sidebar-width: 236px;
     padding: var(--bf-space-3) var(--bf-space-4);
     border-top: 1px solid var(--bf-color-border-subtle);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-relaxed);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
 
     svg {
       margin-top: 1px;
@@ -281,10 +281,10 @@ $compatibility-sidebar-width: 236px;
 
     h1 {
       margin: 0;
-      font-size: var(--bf-font-size-3xl);
-      font-weight: var(--bf-font-weight-semibold);
-      letter-spacing: var(--bf-letter-spacing-tight);
-      line-height: var(--bf-line-height-tight);
+      font-size: var(--bf-type-heading-dialog-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+      line-height: var(--bf-type-label-md-line-height);
     }
 
     > span {
@@ -292,7 +292,7 @@ $compatibility-sidebar-width: 236px;
       border: 1px solid var(--bf-color-border-subtle);
       border-radius: var(--bf-radius-pill);
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
       white-space: nowrap;
     }
   }
@@ -310,7 +310,7 @@ $compatibility-sidebar-width: 236px;
     dt {
       margin-bottom: 2px;
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
 
     dd {
@@ -321,7 +321,7 @@ $compatibility-sidebar-width: 236px;
       margin: 0;
       overflow: hidden;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       text-overflow: ellipsis;
       white-space: nowrap;
 
@@ -351,15 +351,15 @@ $compatibility-sidebar-width: 236px;
 
     span {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
 
     strong {
       margin-top: 3px;
       overflow: hidden;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -384,7 +384,7 @@ $compatibility-sidebar-width: 236px;
     align-items: center;
     gap: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__loading {
@@ -451,16 +451,16 @@ $compatibility-sidebar-width: 236px;
 
     h2 {
       margin: 0;
-      font-size: var(--bf-font-size-base);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-tight);
+      font-size: var(--bf-type-body-md-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-label-md-line-height);
     }
 
     p {
       margin: var(--bf-space-1) 0 0;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-relaxed);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-lg-line-height);
     }
   }
 
@@ -487,15 +487,15 @@ $compatibility-sidebar-width: 236px;
 
     strong {
       display: block;
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-md-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     p {
       margin: var(--bf-space-1) 0 0;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-relaxed);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-lg-line-height);
     }
   }
 
@@ -518,7 +518,7 @@ $compatibility-sidebar-width: 236px;
     min-width: 700px;
     min-height: 52px;
     padding: var(--bf-space-2) var(--bf-space-4);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     & + & {
       border-top: 1px solid var(--bf-color-border-subtle);
@@ -538,8 +538,8 @@ $compatibility-sidebar-width: 236px;
       padding-block: 0;
       background: var(--bf-color-surface-subtle);
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-micro-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
 
       > span:last-child {
         text-align: right;
@@ -582,19 +582,19 @@ $compatibility-sidebar-width: 236px;
 
     strong {
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     small {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
   }
 
   &__import-state {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
 
     &.is-ready,
     &.is-readyRename,
@@ -646,7 +646,7 @@ $compatibility-sidebar-width: 236px;
       max-width: 220px;
       overflow: hidden;
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -667,13 +667,13 @@ $compatibility-sidebar-width: 236px;
     gap: 2px;
 
     strong {
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     span {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
   }
 
@@ -719,8 +719,8 @@ $compatibility-sidebar-width: 236px;
     > strong,
     .ecosystem-compatibility__runtime-mode-title strong {
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     p {
@@ -728,7 +728,7 @@ $compatibility-sidebar-width: 236px;
       margin: 3px 0 0;
       overflow: hidden;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -737,7 +737,7 @@ $compatibility-sidebar-width: 236px;
       margin-top: 2px;
       overflow: hidden;
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -750,7 +750,7 @@ $compatibility-sidebar-width: 236px;
 
     > span {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-2xs);
+      font-size: var(--bf-type-overline-sm-font-size);
 
       &.is-configured,
       &.is-defaultProfile {
@@ -777,14 +777,14 @@ $compatibility-sidebar-width: 236px;
     gap: var(--bf-space-4);
 
     strong {
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-semibold);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
 
     p {
       margin: 3px 0 0;
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
   }
 
@@ -794,7 +794,7 @@ $compatibility-sidebar-width: 236px;
     gap: var(--bf-space-2);
     flex: none;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
   }
 
   &__subagent-fields {
@@ -810,8 +810,8 @@ $compatibility-sidebar-width: 236px;
         display: block;
         margin-bottom: var(--bf-space-1);
         color: var(--bf-color-content-secondary);
-        font-size: var(--bf-font-size-micro);
-        font-weight: var(--bf-font-weight-medium);
+        font-size: var(--bf-type-micro-font-size);
+        font-weight: var(--bf-type-label-sm-font-weight);
       }
     }
 
@@ -833,7 +833,7 @@ $compatibility-sidebar-width: 236px;
       align-items: center;
       gap: var(--bf-space-1);
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
 
     > div {

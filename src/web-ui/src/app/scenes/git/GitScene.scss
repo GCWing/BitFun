@@ -75,19 +75,19 @@
 
     h3 {
       margin: 0 0 4px;
-      font-size: var(--bf-font-size-base);
-      font-weight: var(--bf-font-weight-semibold);
+      font-size: var(--bf-type-body-md-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-primary);
     }
     p {
       margin: 0;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-secondary);
     }
   }
 
   &__init-hint {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -105,7 +105,7 @@
   }
 
   &__loading-hint {
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     margin: 0;
     opacity: 0.6;
   }

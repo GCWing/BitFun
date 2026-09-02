@@ -88,11 +88,11 @@ test("NavigationPanel separates group captions, destinations, and the selected d
   assert.match(heading, /font-family: var\(--bf-type-meta-font-family\)/);
   assert.match(heading, /font-size: var\(--bf-type-meta-font-size\)/);
   assert.match(heading, /font-weight: var\(--bf-type-meta-font-weight\)/);
-  assert.match(heading, /line-height: var\(--bf-line-height-base\)/);
+  assert.match(heading, /line-height: var\(--bf-type-body-sm-line-height\)/);
   assert.match(styles, /\.item\[data-bf-tone="neutral"\]:not\(\[data-disabled="true"\]\)\s*\{\s*color: var\(--bf-color-content-primary\)/);
-  assert.match(actionStyles, /\.label\s*\{[^}]*font-size: var\(--bf-font-size-sm\)/);
-  assert.match(actionStyles, /\.label\s*\{[^}]*font-weight: var\(--bf-font-weight-regular\)/);
-  assert.match(styles, /\.item > \[data-bf-part="trigger"\]\[aria-current\] > \[data-bf-part="label"\]\s*\{\s*font-weight: var\(--bf-font-weight-semibold\)/);
+  assert.match(actionStyles, /\.label\s*\{[^}]*font-size: var\(--bf-type-label-md-font-size\)/);
+  assert.match(actionStyles, /\.label\s*\{[^}]*font-weight: var\(--bf-type-label-md-font-weight\)/);
+  assert.match(styles, /\.item > \[data-bf-part="trigger"\]\[aria-current\] > \[data-bf-part="label"\]\s*\{\s*font-weight: var\(--bf-type-label-selected-font-weight\)/);
   assert.match(styles, /@media \(prefers-contrast: more\)[\s\S]*?color: var\(--bf-color-content-muted\)/);
   assert.match(styles, /:global\(\[data-contrast="high"\]\) \.headingLabel\s*\{\s*color: var\(--bf-color-content-muted\)/);
   assert.match(styles, /@media \(forced-colors: active\)[\s\S]*?color: CanvasText/);

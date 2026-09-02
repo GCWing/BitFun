@@ -30,8 +30,8 @@
   margin: 2px 0 0;
   flex: 1;
   min-width: 0;
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-comfortable);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-support-line-height);
   color: var(--bf-color-content-secondary);
 }
 
@@ -55,8 +55,8 @@
   align-items: center;
   gap: 12px 20px;
   padding: 12px 16px;
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
   border-bottom: 1px solid var(--bf-color-border-subtle);
 
   &:last-child {
@@ -68,21 +68,21 @@
 
     .bitfun-update-available__value {
       color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 }
 
 .bitfun-update-available__label {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
-  letter-spacing: var(--bf-letter-spacing-wide);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
 }
 
 .bitfun-update-available__value {
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-xs);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-primary);
   text-align: right;
   word-break: break-all;
@@ -93,10 +93,10 @@
 }
 
 .bitfun-update-available__notes-label {
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   text-transform: uppercase;
-  letter-spacing: var(--bf-letter-spacing-widest);
+  letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
   color: var(--bf-color-content-muted);
   margin-bottom: 8px;
 }
@@ -105,8 +105,8 @@
   margin: 0;
   max-height: 200px;
   padding: 12px 14px;
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   white-space: pre-wrap;
   word-break: break-word;
   border-radius: 8px;

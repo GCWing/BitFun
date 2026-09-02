@@ -95,8 +95,8 @@
     border-radius: 6px;
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: center;
     overflow-wrap: anywhere;
     pointer-events: none;
@@ -111,8 +111,8 @@
     justify-content: center;
     gap: 6px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     pointer-events: none;
     overflow-anchor: none;
     visibility: hidden;

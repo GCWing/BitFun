@@ -67,10 +67,10 @@ body {
   margin: 0;
   background: var(--bf-color-surface-scene);
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-regular);
-  line-height: var(--bf-line-height-base);
+  font-family: var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  line-height: var(--bf-type-body-sm-line-height);
   text-rendering: geometricPrecision;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -140,9 +140,9 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 9px 12px;
   border-bottom: 1px solid var(--bf-color-border-subtle);
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-dense);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
 }
 
 .bf-card-body {
@@ -175,15 +175,15 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-callout-title {
   margin-bottom: 6px;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .bf-callout-body {
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-comfortable);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-support-line-height);
 }
 
 .bf-callout-body > :first-child {
@@ -203,8 +203,8 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 3px 9px;
   background: var(--bf-color-action-neutral-surface);
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   white-space: nowrap;
 }
 
@@ -241,8 +241,8 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 1px 5px;
   background: var(--bf-color-action-neutral-surface);
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .bf-table-wrap {
@@ -255,7 +255,7 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .bf-table th,
@@ -268,7 +268,7 @@ html[data-bitfun-canvas-design-mode] body {
 
 .bf-table th {
   color: var(--bf-color-content-primary);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   background: var(--bf-color-surface-chrome);
 }
 
@@ -279,10 +279,10 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-diff {
   overflow: auto;
   background: color-mix(in srgb, var(--bf-color-surface-canvas) 54%, transparent);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-regular);
-  line-height: var(--bf-line-height-comfortable);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  line-height: var(--bf-type-support-line-height);
 }
 
 .bf-chart {
@@ -306,9 +306,9 @@ html[data-bitfun-canvas-design-mode] body {
   min-width: 0;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-dense);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -318,7 +318,7 @@ html[data-bitfun-canvas-design-mode] body {
   flex-wrap: wrap;
   gap: 6px 10px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
 }
 
 .bf-chart__legend-item {
@@ -356,13 +356,13 @@ html[data-bitfun-canvas-design-mode] body {
 
 .bf-canvas-toggle__label {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .bf-canvas-toggle__description,
 .bf-canvas-toggle__status {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
 }
 
 .bf-input,

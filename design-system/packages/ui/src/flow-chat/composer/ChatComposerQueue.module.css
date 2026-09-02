@@ -11,7 +11,7 @@
     border-radius: var(--bf-radius-lg);
     color: var(--bf-color-content-primary);
     background: var(--bf-color-surface-subtle);
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-md-font-family);
   }
 
   .header {
@@ -20,9 +20,9 @@
     align-items: center;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-md-font-weight);
+    line-height: var(--bf-type-body-md-line-height);
   }
 
   .header > :where(svg, img) {
@@ -105,9 +105,9 @@
     flex-direction: column;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-body-md-font-weight);
+    line-height: var(--bf-type-body-md-line-height);
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
@@ -127,10 +127,10 @@
     border-radius: var(--bf-radius-pill);
     color: var(--bf-color-content-secondary);
     background: var(--bf-color-surface-raised);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-label-lg-font-weight);
     font-variant-numeric: tabular-nums;
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 
   .actions {

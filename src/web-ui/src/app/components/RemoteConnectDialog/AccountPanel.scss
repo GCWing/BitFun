@@ -6,7 +6,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
 
   &__scroll {
     flex: 1;
@@ -32,8 +32,8 @@
     max-width: 520px;
     margin: 0 0 16px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-comfortable);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-support-line-height);
   }
 
   &__form {
@@ -68,14 +68,14 @@
     gap: 10px;
     padding-top: 3px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
   }
 
   &__security-note {
     margin: -4px 0 0;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__actions {
@@ -105,7 +105,7 @@
     border-radius: var(--bf-radius-base);
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
 
     svg {
       flex-shrink: 0;
@@ -117,7 +117,7 @@
     min-width: 0;
     flex: 1;
     overflow: hidden;
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -135,8 +135,8 @@
 
     p {
       margin: 0;
-      font-size: var(--bf-font-size-sm);
-      line-height: var(--bf-line-height-relaxed);
+      font-size: var(--bf-type-label-md-font-size);
+      line-height: var(--bf-type-body-lg-line-height);
     }
   }
 
@@ -195,14 +195,14 @@
   }
 
   &__sync-option-title {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__sync-option-desc {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__sync-indicator {
@@ -214,7 +214,7 @@
     border-radius: var(--bf-radius-base);
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
 
     &.done {
       color: var(--bf-color-status-success-content);
@@ -276,7 +276,7 @@
     border: var(--bf-border-width-default) dashed var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     text-align: center;
 
     &--loading {
@@ -363,8 +363,8 @@
   &__device-name {
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -373,18 +373,18 @@
     display: inline-flex;
     align-items: baseline;
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-ui);
+    font-family:var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   &__device-id {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     font-variant-numeric: tabular-nums;
   }
 
   &__device-status {
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
   }
 
   &__device-badge {
@@ -398,8 +398,8 @@
       transparent
     );
     color: var(--bf-color-accent-default);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     vertical-align: middle;
   }
 
@@ -415,7 +415,7 @@
     border-radius: inherit;
     background: color-mix(in srgb, var(--bf-color-surface-raised) 92%, transparent);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     backdrop-filter: var(--bf-effect-blur-subtle);
   }
 

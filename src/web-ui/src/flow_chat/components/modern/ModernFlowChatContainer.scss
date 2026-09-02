@@ -3,7 +3,7 @@
  */
 
 .modern-flowchat-container.flow-chat-typography {
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
   font-size: var(--bf-type-flow-body-font-size);
   line-height: var(--bf-type-flow-body-line-height);
 }
@@ -87,7 +87,7 @@
   margin: 0;
   color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-title-font-size);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   line-height: var(--bf-type-flow-support-line-height);
 }
 

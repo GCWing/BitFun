@@ -44,7 +44,7 @@
     margin: 0;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
   }
 
@@ -100,7 +100,7 @@
     margin: 0;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-lead-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
     white-space: nowrap;
   }
@@ -131,7 +131,7 @@
     gap: 4px;
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     white-space: nowrap;
     cursor: pointer;
 
@@ -162,7 +162,7 @@
     padding: 0 8px;
     border-radius: 999px;
     font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     white-space: nowrap;
 
     &--complete {
@@ -241,7 +241,7 @@
     margin-left: auto;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     white-space: nowrap;
 
     &--help {
@@ -278,7 +278,7 @@
   &__mini-list-title {
     min-width: 0;
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__mini-list-empty {
@@ -291,7 +291,7 @@
 
     strong {
       color: var(--bf-color-content-secondary);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
 
     span {
@@ -338,7 +338,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -411,7 +411,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   &__file-stat--added {
@@ -469,8 +469,8 @@
   flex-basis: auto;
   flex-wrap: nowrap;
   gap: 0;
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .session-usage-report-card--compact .session-usage-report-card__meta span {
@@ -534,9 +534,9 @@
 .session-usage-report-card__compact-token-label {
   gap: 9px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .session-usage-report-card__compact-token-label svg,
@@ -549,11 +549,11 @@
   margin-top: 15px;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-6xl);
+  font-size: var(--bf-type-display-md-font-size);
   font-variant-numeric: tabular-nums;
-  font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: var(--bf-letter-spacing-subtle);
-  line-height: var(--bf-line-height-none);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -562,8 +562,8 @@
   min-width: 0;
   margin-top: 17px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-snug);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
 }
 
 .session-usage-report-card__compact-model-name {
@@ -595,8 +595,8 @@
   gap: 8px;
   border-top: 1px solid color-mix(in srgb, var(--bf-color-border-default) 68%, transparent);
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-snug);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
 }
 
 .session-usage-report-card__compact-cache-label {
@@ -607,8 +607,8 @@
   margin-left: 0;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-lg);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   text-overflow: ellipsis;
 }
 
@@ -636,9 +636,9 @@
   min-width: 0;
   gap: 10px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .session-usage-report-card__compact-metric-label svg {
@@ -660,10 +660,10 @@
   margin: 5px 0 0 28px;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-2xl);
+  font-size: var(--bf-type-flow-section-title-font-size);
   font-variant-numeric: tabular-nums;
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
   text-decoration: none;
   text-overflow: ellipsis;
 }
@@ -682,10 +682,10 @@
   margin: 0;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-2xl);
+  font-size: var(--bf-type-flow-section-title-font-size);
   font-variant-numeric: tabular-nums;
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
   text-decoration: none;
   text-overflow: ellipsis;
 }
@@ -717,9 +717,9 @@
 .session-usage-report-card__compact-tools-header h4 {
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xl);
-  font-weight: var(--bf-font-weight-bold);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-flow-title-font-size);
+  font-weight: var(--bf-type-heading-page-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
 }
 
 .session-usage-report-card__compact-tool-list {
@@ -754,15 +754,15 @@
 .session-usage-report-card__compact-tool-name {
   min-width: 0;
   overflow: hidden;
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-usage-report-card__compact-tool-calls {
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -770,7 +770,7 @@
 .session-usage-report-card__compact-tool-empty {
   padding: 18px 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 }
 
 .session-usage-report-card__compact-disclaimer {
@@ -778,8 +778,8 @@
   margin: auto 0 0;
   padding-top: 11px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-meta-line-height);
   text-align: center;
 }
 
@@ -836,7 +836,7 @@
 
 @media (max-width: 420px) {
   .session-usage-report-card__compact-token-value {
-    font-size: var(--bf-font-size-5xl);
+    font-size: var(--bf-type-display-sm-font-size);
   }
 
   .session-usage-report-card__compact-metric {
@@ -846,6 +846,6 @@
   .session-usage-report-card__compact-metric > .session-usage-report-card__metric-value,
   .session-usage-report-card__compact-metric > [data-tooltip] .session-usage-report-card__metric-value {
     margin-left: 28px;
-    font-size: var(--bf-font-size-2xl);
+    font-size: var(--bf-type-flow-section-title-font-size);
   }
 }

@@ -154,7 +154,7 @@
   }
 
   &__status-title {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-color-content-primary);
   }
@@ -186,7 +186,7 @@
     border: none;
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     cursor: pointer;
     transition: background 0.2s;
     width: fit-content;
@@ -263,7 +263,7 @@
   }
 
   &__remediation-group-title {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     flex: 1;
   }
 
@@ -339,7 +339,7 @@
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
     vertical-align: text-bottom;
   }
@@ -433,7 +433,7 @@
 
     &.is-recommended .deep-review-action-bar__decision-option-text {
       color: var(--bf-color-accent-default);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
   }
 
@@ -456,7 +456,7 @@
     padding: 1px 6px;
     border-radius: 4px;
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-accent-default);
     background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
     margin-right: 6px;
@@ -520,7 +520,7 @@
   &__decision-gate-title {
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__decision-gate-desc {
@@ -548,7 +548,7 @@
 
   &__decision-question {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     line-height: var(--bf-type-flow-support-line-height);
   }
 
@@ -604,7 +604,7 @@
     }
 
     &.is-recommended .deep-review-action-bar__decision-gate-option-text {
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 
@@ -803,7 +803,7 @@
 
   &__progress-text {
     color: var(--bf-color-content-secondary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__elapsed {
@@ -847,7 +847,7 @@
 
   &__capacity-queue-title {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__capacity-queue-detail {
@@ -885,7 +885,7 @@
   &__capacity-queue-reviewers-title {
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__capacity-queue-reviewer-list {
@@ -909,7 +909,7 @@
 
   &__capacity-queue-reviewer-name {
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__capacity-queue-reviewer-meta {
@@ -975,7 +975,7 @@
   }
 
   &__partial-section-title {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__partial-list {
@@ -1090,7 +1090,7 @@
 
   &__degradation-title {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
@@ -1119,7 +1119,7 @@
 
   &__degradation-label {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
   }
 

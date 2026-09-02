@@ -11,7 +11,7 @@
   cursor: pointer;
   padding: 4px 6px;
   border-radius: var(--bf-radius-sm);
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   flex-shrink: 0;
   position: relative;
   transition:
@@ -45,7 +45,7 @@
   }
 
   &__progress-text {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
   }
@@ -64,7 +64,7 @@
   &__menu-count {
     flex-shrink: 0;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     font-variant-numeric: tabular-nums;
   }
 
@@ -74,7 +74,7 @@
     border-radius: var(--bf-radius-pill);
     background: var(--bf-color-action-neutral-surface-hover);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-type-label-md-line-height);
     text-align: center;
   }
 
@@ -94,7 +94,7 @@
     border: 1px solid var(--bf-color-field-border-hover);
     border-radius: var(--bf-radius-sm);
     padding: 4px 8px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-primary);
     box-shadow: var(--bf-shadow-base);
     max-width: 300px;

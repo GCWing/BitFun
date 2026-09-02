@@ -22,10 +22,10 @@
 
   &__head-title {
     flex: 1;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-widest);
+    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
     color: var(--bf-color-content-muted);
   }
 
@@ -47,10 +47,10 @@
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-action-neutral-surface) 78%, transparent);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     white-space: nowrap;
   }
 
@@ -65,14 +65,14 @@
   &__target-main {
     flex: 0 1 auto;
     max-width: 42%;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   &__target-sub {
     flex: 1 1 auto;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -98,16 +98,16 @@
 
   &__empty-title {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
   }
 
   &__empty-text {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
   }
 
   // ── Job list ────────────────────────────────────────────────────────────────
@@ -183,8 +183,8 @@
   &__item-name {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -200,9 +200,9 @@
   }
 
   &__item-meta {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -219,9 +219,9 @@
   }
 
   &__item-error {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-status-danger-content);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
     word-break: break-word;
   }
 
@@ -301,18 +301,18 @@
   }
 
   &__field-label {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-compact);
-    letter-spacing: var(--bf-letter-spacing-wider);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
   }
 
   &__field-note {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
   }
 
   &__control-grid {
@@ -352,8 +352,8 @@
   }
 
   &__toggle-label {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
   }
 
@@ -377,21 +377,21 @@
   &__agent-option-label {
     flex: 0 0 auto;
     max-width: 40%;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
   }
 
   &__agent-option-description {
     flex: 1 1 auto;
     text-align: right;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
   &__warning {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-status-danger-content);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
     padding: var(--bf-space-2) var(--bf-space-3);
     border-radius: var(--bf-radius-base);
     background: color-mix(in srgb, var(--bf-color-status-danger-content) 6%, transparent);

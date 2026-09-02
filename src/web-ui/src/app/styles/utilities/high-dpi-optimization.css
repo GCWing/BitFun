@@ -60,8 +60,8 @@
   
   /* Finer font rendering */
   input, textarea, [contenteditable] {
-    font-weight: var(--bf-font-weight-regular); /* Avoid overly thin fonts */
-    letter-spacing: var(--bf-letter-spacing-subtle); /* Slightly increase spacing */
+    font-weight: var(--bf-type-body-sm-font-weight); /* Avoid overly thin fonts */
+    letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing); /* Slightly increase spacing */
   }
   
   /* More precise pixel alignment */

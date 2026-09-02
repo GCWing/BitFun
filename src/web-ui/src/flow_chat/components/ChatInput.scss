@@ -134,7 +134,7 @@
   overflow: hidden;
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -200,9 +200,9 @@
   min-width: 36px;
   color: var(--bf-color-content-primary);
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   font-variant-numeric: tabular-nums;
-  line-height: var(--bf-line-height-none);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 }
 
 .bitfun-chat-input__voice-pill-timeline {
@@ -406,8 +406,8 @@
     padding: 0 4px;
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-medium);
-    letter-spacing: var(--bf-letter-spacing-subtle);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
     background: transparent;
     border: none;
     box-shadow: none;
@@ -696,11 +696,11 @@
   &__target-switcher-label {
     font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     padding: 0.12rem var(--bf-control-flow-chat-card-expanded-padding-block) 0.12rem 0;
     margin-right: var(--bf-control-flow-chat-inline-gap);
     flex-shrink: 0;
-    letter-spacing: var(--bf-letter-spacing-wide);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     opacity: 0.72;
   }
 
@@ -713,7 +713,7 @@
     background: transparent;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     border-radius: 5px;
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -736,7 +736,7 @@
 
     &--active {
       color: color-mix(in srgb, var(--bf-color-accent-default) 95%, var(--bf-color-content-primary));
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
       background: color-mix(in srgb, var(--bf-color-accent-default) 9%, transparent);
     }
   }
@@ -747,7 +747,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     opacity: 0.65;
 
     &::before {
@@ -946,7 +946,7 @@
     margin-left: 4px;
     display: inline-flex;
     align-items: center;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     line-height: var(--bf-type-flow-meta-line-height);
     vertical-align: middle;
   }
@@ -965,7 +965,7 @@
     overflow: hidden;
     z-index: var(--bf-layer-dropdown);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
     font-size: var(--bf-type-flow-control-font-size);
     // Slash commands are opened by typing, so their keyboard path is instant.
     animation: none;
@@ -978,18 +978,18 @@
     padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
     border-bottom: 1px solid var(--bf-color-border-subtle);
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__slash-command-hint {
     font-size: var(--bf-type-flow-meta-font-size);
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     text-transform: none;
-    letter-spacing: var(--bf-letter-spacing-normal);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
   }
 
   &__slash-command-list {
@@ -1032,8 +1032,8 @@
   &__slash-command-section-title {
     flex: 0 0 auto;
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wider);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
     color: var(--bf-color-content-muted);
   }
@@ -1068,9 +1068,9 @@
 
   &__slash-command-name {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     flex: 0 0 112px;
     min-width: 0;
     overflow: hidden;
@@ -1083,7 +1083,7 @@
     color: var(--bf-color-content-secondary);
     flex: 1;
     min-width: 0;
-    line-height: var(--bf-line-height-compact);
+    line-height: var(--bf-type-meta-line-height);
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -1103,7 +1103,7 @@
     border-radius: 3px;
     background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
     color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     flex: 0 0 auto;
   }
 
@@ -1116,7 +1116,7 @@
     font-size: var(--bf-type-flow-meta-font-size);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     flex: 0 0 auto;
     white-space: nowrap;
 
@@ -1309,8 +1309,8 @@
     align-items: center;
     justify-content: center;
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-bold);
-    line-height: var(--bf-line-height-none);
+    font-weight: var(--bf-type-heading-page-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     box-shadow: 0 0 0 1px var(--bf-color-surface-panel);
     pointer-events: none;
   }
