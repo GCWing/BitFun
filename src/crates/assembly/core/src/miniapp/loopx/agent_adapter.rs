@@ -355,6 +355,7 @@ The current workspace is already a dedicated task worktree. Work directly in it;
 Before installing dependencies, inspect the existing install state. Package-manager download caches are shared by the host, but mutable node_modules and build outputs remain worktree-local.
 Only call WriteStdin or ExecControl when the immediately preceding tool result returned a concrete session_id. If no session_id was returned, use a new bounded foreground command or inspect the process/result artifact with a new command.
 Prefer targeted checks before repository-wide installs, builds, packaging, or end-to-end smoke tests. Every wait must have a bounded deadline; when it expires, record the evidence and choose a recovery or narrower next action instead of starting an indefinite sleep-poll loop.
+Never raise OS-level notifications, popups, or toasts (Windows Toast/Balloon/BurntToast/msg, macOS notification scripts, or any desktop-automation equivalent), and never play sounds to alert the user. The host owns all user-facing notifications and will surface owner decisions itself; unattended execution must stay completely silent on the desktop.
 </bitfun_host_execution_context>
 
 {prompt}"#
@@ -545,6 +546,7 @@ mod tests {
         assert!(prompt.contains("already a dedicated task worktree"));
         assert!(prompt.contains("concrete session_id"));
         assert!(prompt.contains("Every wait must have a bounded deadline"));
+        assert!(prompt.contains("Never raise OS-level notifications"));
         assert!(prompt.ends_with("LoopX-owned turn contract"));
     }
 

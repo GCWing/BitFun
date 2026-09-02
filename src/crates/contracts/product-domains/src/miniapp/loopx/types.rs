@@ -118,6 +118,9 @@ pub struct LoopxIntakeCandidate {
     pub description: String,
     pub state: LoopxRemoteItemState,
     pub state_reason: Option<String>,
+    /// Bounded label names from the remote item (capped to match LoopX's own
+    /// metadata projection). Empty for legacy snapshots.
+    pub labels: Vec<String>,
     pub from_repository: bool,
     pub has_images: bool,
     /// Repository/list intake must not silently select every candidate.
@@ -187,11 +190,22 @@ pub struct LoopxIntakePreview {
 pub enum LoopxEnvironmentFactStatus {
     Checking,
     Available,
+    Disabled,
     Degraded,
     Unavailable,
     #[default]
     #[serde(other)]
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopxEnvironmentRemediationAction {
+    InstallLoopx,
+    InstallOpenViking,
+    #[default]
+    #[serde(other)]
+    None,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,6 +215,7 @@ pub struct LoopxEnvironmentFact {
     pub version: Option<String>,
     pub detail: Option<String>,
     pub remediation: Option<String>,
+    pub remediation_action: LoopxEnvironmentRemediationAction,
     pub checked_at: Option<i64>,
 }
 
@@ -217,6 +232,7 @@ pub struct LoopxCoreEnvironmentFacts {
 pub struct LoopxOptionalEnvironmentFacts {
     pub python_fallback: LoopxEnvironmentFact,
     pub open_viking: LoopxEnvironmentFact,
+    pub feedback_memory: LoopxEnvironmentFact,
     pub github_auth: LoopxEnvironmentFact,
 }
 
@@ -324,6 +340,13 @@ pub struct LoopxTaskIdentity {
     /// Bounded plain-text excerpt of the issue/PR description captured at
     /// task creation. Empty for legacy records.
     pub description: String,
+    /// Remote item state observed at task creation. `Unknown` for legacy
+    /// records; the LoopX plan packet must never be built from a fabricated
+    /// open state when the adapter actually resolved a terminal state.
+    pub state: LoopxRemoteItemState,
+    /// Bounded label names observed at task creation. Empty for legacy
+    /// records; LoopX intake classification uses these as routing hints.
+    pub labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -381,6 +404,24 @@ pub struct LoopxTaskSnapshot {
     /// baseline was established. Legacy records default to zero, so existing
     /// long-running Goals are evaluated from their authoritative history.
     pub autonomy_review_baseline_receipts: u32,
+    /// Consecutive settled autonomous turns whose worktree showed no changes
+    /// outside LoopX bookkeeping paths at settlement time. The host uses it
+    /// with the turn budget to trigger an owner review early when turns only
+    /// perform workflow ceremony. Legacy records default to zero.
+    pub stagnant_settlements_since_review: u32,
+    /// Consecutive settled turns whose durable writeback advanced the same
+    /// todo as the previous settled turn. LoopX never forces a todo to be
+    /// completed, so without this counter one open todo can absorb turn after
+    /// turn of ceremony while every settlement looks successful. Legacy
+    /// records default to zero.
+    pub settlements_on_current_todo: u32,
+    /// The todo id the latest settled turn advanced, when known.
+    pub current_settlement_todo_id: Option<String>,
+    /// Worktree-relative path of the persisted intake workflow-plan packet,
+    /// when the host captured one at goal creation. Injected into the host
+    /// goal-facts block so every turn can reach the exact issue-fix command
+    /// forms. Empty for legacy tasks and when persistence was skipped.
+    pub intake_plan_path: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -599,6 +640,8 @@ pub enum LoopxActionKind {
     Reject,
     Archive,
     Restore,
+    InstallLoopx,
+    InstallOpenViking,
     RetryEnvironment,
 }
 
@@ -742,6 +785,7 @@ mod tests {
         assert_eq!(task.last_agent_summary_at, None);
         assert_eq!(task.autonomous_turns_since_review, 0);
         assert_eq!(task.autonomy_review_baseline_receipts, 0);
+        assert_eq!(task.stagnant_settlements_since_review, 0);
         assert_eq!(task.pending_gate_id, None);
         assert_eq!(task.pending_gate_message, None);
         assert_eq!(task.pending_gate_action_kind, None);

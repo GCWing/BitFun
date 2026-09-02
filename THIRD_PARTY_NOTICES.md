@@ -57,36 +57,35 @@ SOFTWARE.
 
 - Project: loopx
 - Source: https://github.com/huangruiteng/loopx
-- License: MIT
-- Copyright: Copyright (c) 2026 LoopX contributors
+- License: Apache-2.0
+- Copyright: Copyright 2026 LoopX contributors
 
 BitFun bundles a compiled, self-contained build of the loopx CLI as a desktop
 sidecar resource (`resources/loopx/`). It powers the built-in bitfun-loopx
 MiniApp's issue-fixing loop and is built at packaging time by
 `scripts/build-loopx.mjs` from the pinned upstream release recorded in
 `resources/loopx/manifest.json` (version, commit, content hash, and build
-toolchain). The upstream license text and trademark policy ship alongside the
-binary as `resources/loopx/LICENSE` and `resources/loopx/TRADEMARKS.md` in
-binary release packages. The `loopx` name is used descriptively to refer to
-the upstream project; bitfun-loopx is a third-party integration and is not a
-LoopX project release.
+toolchain). The upstream Apache-2.0 license, NOTICE, historical MIT license, and
+trademark policy ship alongside the binary as `resources/loopx/LICENSE`,
+`resources/loopx/NOTICE`, `resources/loopx/LICENSE-MIT`, and
+`resources/loopx/TRADEMARKS.md` in binary release packages. When the bundled
+sidecar is unavailable, the local Desktop may download the pinned source tag
+into BitFun-managed storage; that checkout retains the same upstream compliance
+files. The `loopx` name is used descriptively to refer to the upstream project;
+bitfun-loopx is a third-party integration and is not a LoopX project release.
 
-MIT License
+## OpenViking CLI
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+- Project: OpenViking
+- Component: `crates/ov_cli`
+- Source: https://github.com/volcengine/OpenViking
+- Version: 0.4.9
+- License: Apache-2.0
+- Copyright: Copyright 2026 Beijing Volcano Engine Technology Co., Ltd.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+The built-in bitfun-loopx MiniApp can build the pinned `ov` CLI revision from
+the official GitHub source into BitFun-managed local storage. The CLI connects
+LoopX to a user-configured local or remote OpenViking service; BitFun does not
+silently deploy that service or copy model credentials into it. The upstream
+Apache-2.0 license for the Rust crates is available at `crates/LICENSE` in the
+pinned source repository.

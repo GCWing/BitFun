@@ -58,6 +58,18 @@
           </summary>
           <div class="environment-body">
             <div id="environment-checked" class="environment-checked"></div>
+            <div id="environment-remediation" class="environment-remediation" role="status" aria-live="polite" hidden>
+              <span class="environment-remediation__indicator" aria-hidden="true"></span>
+              <div class="environment-remediation__copy">
+                <strong id="environment-remediation-title"></strong>
+                <p id="environment-remediation-detail"></p>
+                <span id="environment-remediation-progress" class="environment-remediation__progress" hidden></span>
+              </div>
+              <button id="install-loopx" class="primary-button environment-remediation__action" type="button">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14a2 2 0 0 0 2-2v-4"/><path d="M3 15v4a2 2 0 0 0 2 2"/></svg>
+                <span id="install-loopx-label" data-i18n="installLoopx">安装兼容版本</span>
+              </button>
+            </div>
             <section aria-labelledby="core-env-title">
               <div class="section-heading">
                 <h2 id="core-env-title" data-i18n="coreEnvironment">核心环境</h2>
@@ -98,8 +110,7 @@
         <p id="approval-alert-message"></p>
       </button>
       <div class="approval-alert__actions">
-        <button id="approval-alert-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
-        <button id="approval-alert-approve" class="primary-button" type="button" data-i18n="approve">批准</button>
+        <button id="approval-alert-open-action" class="primary-button" type="button" data-i18n="reviewDecision">去处理</button>
       </div>
     </section>
 
@@ -130,130 +141,116 @@
 
       <div id="rail-splitter" class="rail-splitter" role="separator" aria-orientation="vertical" aria-label="调整任务栏宽度" title="调整任务栏宽度" data-i18n-title="resizeTasks" tabindex="0"></div>
 
-      <main class="log-workspace" aria-labelledby="activity-log-title">
-        <header class="log-header log-header--activity">
-          <div class="log-title-block">
-            <h1 id="activity-log-title" data-i18n="liveOutput">模型实时输出</h1>
-            <p data-i18n="allTaskEvents">所有 Issue 的模型输出会按时间保留在这里</p>
-          </div>
-        </header>
-        <div id="log-scroll" class="log-scroll">
-          <div id="log-empty" class="log-empty">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h12M4 18h8"/></svg>
-            <p data-i18n="noLogs">暂无运行事件</p>
-          </div>
-          <ol id="log-list" class="log-list" role="log" aria-live="off" aria-relevant="additions"></ol>
+      <main id="log-workspace" class="issue-workspace" aria-labelledby="issue-title" tabindex="-1">
+        <div id="follow-banner" class="follow-banner" role="status" hidden>
+          <span class="follow-banner__dot" aria-hidden="true"></span>
+          <span id="follow-banner-text"></span>
         </div>
-        <button id="new-events" class="new-events" type="button" hidden title="滚动到最新输出" data-i18n-title="newEvents">
-          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-          <span class="sr-only" data-i18n="newEvents">滚动到最新输出</span>
-        </button>
 
+        <div id="issue-empty" class="issue-empty" hidden>
+          <span aria-hidden="true">◎</span>
+          <p id="issue-empty-title" data-i18n="emptyNoTask">暂无任务</p>
+          <p id="issue-empty-hint" data-i18n="emptyNoTaskHint">在上方粘贴 GitHub Issue 或 Pull Request 链接创建修复任务；运行过程会实时展示在这里。</p>
+        </div>
+
+        <section id="issue-view" class="issue-view" hidden>
+          <header class="issue-header">
+            <div class="issue-header__titles">
+              <h1 id="issue-title"></h1>
+              <div class="issue-header__meta">
+                <span id="issue-state-pill" class="state-pill" hidden></span>
+                <a id="issue-link" class="issue-link" hidden target="_blank" rel="noopener noreferrer"></a>
+                <span id="issue-updated" class="issue-header__updated"></span>
+              </div>
+            </div>
+            <div class="issue-header__side">
+              <div id="task-actions" class="task-actions"></div>
+              <button id="unselect-task" class="text-button" type="button" hidden data-i18n="backToFollow">恢复自动跟随</button>
+            </div>
+          </header>
+
+          <div class="issue-columns">
+            <section id="issue-detail" class="issue-detail" aria-label="任务详情与进展">
+              <section id="issue-approval-panel" class="issue-approval-panel" aria-labelledby="issue-approval-title" hidden>
+                <div class="issue-approval-header">
+                  <span class="issue-approval-signal" aria-hidden="true">!</span>
+                  <div>
+                    <span class="eyebrow"><span data-i18n="decisionRequired">需要你的决定</span> · <span id="issue-approval-kind"></span></span>
+                    <h2 id="issue-approval-title"></h2>
+                    <p id="issue-approval-message"></p>
+                  </div>
+                </div>
+                <div class="issue-approval-effects">
+                  <section data-tone="approve" aria-labelledby="issue-approval-approve-label">
+                    <strong id="issue-approval-approve-label" data-i18n="afterApprove">批准后</strong>
+                    <p id="issue-approval-approve-effect"></p>
+                  </section>
+                  <section data-tone="reject" aria-labelledby="issue-approval-reject-label">
+                    <strong id="issue-approval-reject-label" data-i18n="afterReject">拒绝后</strong>
+                    <p id="issue-approval-reject-effect"></p>
+                  </section>
+                </div>
+                <p id="issue-approval-recommendation" class="issue-approval-recommendation"></p>
+                <label class="note-field issue-approval-note" for="issue-approval-note">
+                  <span data-i18n="approvalNote">审批备注</span>
+                  <textarea id="issue-approval-note" rows="2" maxlength="1000" data-i18n-placeholder="approvalNotePlaceholder"></textarea>
+                </label>
+                <div class="issue-approval-actions">
+                  <button id="issue-approval-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
+                  <button id="issue-approval-approve" class="primary-button" type="button" data-i18n="approve">批准</button>
+                </div>
+              </section>
+
+              <div id="issue-progress-panel" class="issue-progress-panel">
+                <p id="issue-progress-summary" class="issue-progress-summary"></p>
+                <div class="issue-status-row">
+                  <span class="issue-status-row__label" data-i18n="currentWork">当前</span>
+                  <strong id="issue-current-heading"></strong>
+                  <span id="issue-current-detail" class="issue-status-row__detail"></span>
+                </div>
+              </div>
+
+              <section id="issue-brief" class="issue-brief" aria-labelledby="issue-brief-title">
+                <div class="issue-brief__head">
+                  <h2 id="issue-brief-title" data-i18n="summaryTitle">最新进展</h2>
+                  <span id="issue-summary-meta" class="issue-brief__meta"></span>
+                </div>
+                <div id="issue-summary" class="issue-summary markdown-body"></div>
+                <ul id="issue-facts" class="issue-facts"></ul>
+                <p id="issue-error" class="issue-error" role="alert" hidden></p>
+              </section>
+
+              <details id="issue-description-panel" class="issue-description-panel">
+                <summary>
+                  <h2 data-i18n="issueDescription">Issue 描述</h2>
+                  <span id="issue-number" class="issue-number"></span>
+                </summary>
+                <div id="issue-description" class="issue-description markdown-body"></div>
+              </details>
+            </section>
+
+            <section id="issue-timeline" class="issue-timeline" aria-labelledby="timeline-title">
+              <header class="timeline-header">
+                <h2 id="timeline-title" data-i18n="timelineTitle">运行时间线</h2>
+                <span id="timeline-scope" class="timeline-scope"></span>
+              </header>
+              <div id="log-scroll" class="log-scroll">
+                <div id="log-empty" class="log-empty">
+                  <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h12M4 18h8"/></svg>
+                  <p id="log-empty-text" data-i18n="noLogs">暂无运行事件</p>
+                </div>
+                <ol id="log-list" class="log-list" role="log" aria-live="off" aria-relevant="additions"></ol>
+              </div>
+              <button id="new-events" class="new-events" type="button" hidden title="滚动到最新输出" data-i18n-title="newEvents">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                <span class="sr-only" data-i18n="newEvents">滚动到最新输出</span>
+              </button>
+            </section>
+          </div>
+        </section>
       </main>
     </div>
   </div>
-
-  <dialog id="issue-detail-dialog" class="issue-detail-dialog" aria-labelledby="log-title">
-    <article class="issue-detail-sheet">
-      <header class="log-header issue-detail-header">
-        <button id="show-all-events" class="icon-button issue-detail-close" type="button" title="关闭详情" data-i18n-title="close">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-          <span class="sr-only" data-i18n="close">关闭</span>
-        </button>
-        <div class="log-title-block">
-          <div class="log-title-row">
-            <h1 id="log-title"></h1>
-            <span id="selected-state" class="state-pill" hidden></span>
-            <div id="task-actions" class="task-actions"></div>
-          </div>
-          <p id="selected-summary" hidden></p>
-          <a id="issue-link" class="issue-link" hidden target="_blank" rel="noopener noreferrer"></a>
-        </div>
-      </header>
-
-      <div class="issue-detail-scroll">
-        <section id="issue-approval-panel" class="issue-approval-panel" aria-labelledby="issue-approval-title" hidden>
-          <div class="issue-approval-header">
-            <span class="issue-approval-signal" aria-hidden="true">!</span>
-            <div>
-              <span class="eyebrow" data-i18n="decisionRequired">需要你的决定</span>
-              <h2 id="issue-approval-title"></h2>
-              <p id="issue-approval-summary"></p>
-            </div>
-          </div>
-          <div class="issue-approval-context">
-            <section aria-labelledby="issue-approval-background-label">
-              <h3 id="issue-approval-background-label" data-i18n="problemBackground">遇到的问题</h3>
-              <p id="issue-approval-background"></p>
-            </section>
-            <section aria-labelledby="issue-approval-impact-label">
-              <h3 id="issue-approval-impact-label" data-i18n="problemImpact">造成的影响</h3>
-              <p id="issue-approval-impact"></p>
-            </section>
-          </div>
-          <div class="issue-approval-effects">
-            <section data-tone="approve" aria-labelledby="issue-approval-approve-label">
-              <strong id="issue-approval-approve-label" data-i18n="afterApprove">批准后</strong>
-              <p id="issue-approval-approve-effect"></p>
-            </section>
-            <section data-tone="reject" aria-labelledby="issue-approval-reject-label">
-              <strong id="issue-approval-reject-label" data-i18n="afterReject">拒绝后</strong>
-              <p id="issue-approval-reject-effect"></p>
-            </section>
-          </div>
-          <p id="issue-approval-recommendation" class="issue-approval-recommendation"></p>
-          <label class="note-field issue-approval-note" for="issue-approval-note">
-            <span data-i18n="approvalNote">审批备注</span>
-            <textarea id="issue-approval-note" rows="2" maxlength="1000" data-i18n-placeholder="approvalNotePlaceholder"></textarea>
-          </label>
-          <div class="issue-approval-actions">
-            <button id="issue-approval-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
-            <button id="issue-approval-approve" class="primary-button" type="button" data-i18n="approve">批准</button>
-          </div>
-        </section>
-
-        <section id="issue-description-panel" class="issue-description-panel" aria-labelledby="issue-description-title" hidden>
-          <div class="issue-description-heading">
-            <h2 id="issue-description-title" data-i18n="issueDescription">Issue 描述</h2>
-            <span id="issue-number" class="issue-number"></span>
-          </div>
-          <div id="issue-description" class="issue-description markdown-body"></div>
-        </section>
-
-        <section id="issue-progress-panel" class="issue-progress-panel" aria-labelledby="issue-progress-title" hidden>
-          <div class="issue-progress-heading">
-            <h2 id="issue-progress-title" data-i18n="issueProgress">处理进度</h2>
-            <span id="issue-progress-meta"></span>
-          </div>
-          <div id="issue-stage-track" class="issue-stage-track">
-            <ol id="issue-stage-list" class="issue-stage-list"></ol>
-          </div>
-          <div class="issue-progress-grid">
-            <section aria-labelledby="issue-current-title">
-              <h3 id="issue-current-title" data-i18n="currentWork">当前</h3>
-              <strong id="issue-current-heading"></strong>
-              <p id="issue-current-detail"></p>
-            </section>
-            <section aria-labelledby="issue-evidence-title">
-              <h3 id="issue-evidence-title" data-i18n="evidenceAndOutputs">已完成的工作</h3>
-              <ul id="issue-evidence-list"></ul>
-            </section>
-            <section aria-labelledby="issue-next-title">
-              <h3 id="issue-next-title" data-i18n="nextAction">下一步</h3>
-              <p id="issue-next-action"></p>
-            </section>
-          </div>
-          <section id="issue-outcome-panel" class="issue-outcome-panel" aria-labelledby="issue-outcome-title" hidden>
-            <div class="issue-outcome-heading">
-              <h3 id="issue-outcome-title" data-i18n="latestOutcome">最近进展</h3>
-              <span id="issue-outcome-meta"></span>
-            </div>
-            <p id="issue-outcome" class="issue-outcome"></p>
-          </section>
-        </section>
-      </div>
-    </article>
-  </dialog>
 
   <dialog id="intake-dialog" class="dialog dialog--wide" aria-labelledby="intake-dialog-title">
     <form id="intake-confirm-form" method="dialog">

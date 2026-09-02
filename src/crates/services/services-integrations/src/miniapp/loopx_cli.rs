@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use bitfun_product_domains::miniapp::loopx as loopx_contract;
 use bitfun_services_core::process_tree::ProcessTreeChild;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -25,6 +25,12 @@ use tokio_util::sync::CancellationToken;
 pub const LOOPX_PINNED_VERSION: &str = "0.5.1";
 pub const LOOPX_PINNED_VERSION_TAG: &str = "v0.5.1";
 pub const LOOPX_PINNED_VERSION_OUTPUT: &str = "loopx 0.5.1";
+pub const LOOPX_SOURCE_REPOSITORY: &str = "https://github.com/huangruiteng/loopx.git";
+pub const LOOPX_PINNED_SOURCE_COMMIT: &str = "1bb42f4cb3e329dcb71c64654228f951098cead1";
+pub const OPEN_VIKING_PINNED_VERSION: &str = "0.4.9";
+pub const OPEN_VIKING_PINNED_VERSION_TAG: &str = "v0.4.9";
+pub const OPEN_VIKING_SOURCE_REPOSITORY: &str = "https://github.com/volcengine/OpenViking.git";
+pub const OPEN_VIKING_PINNED_SOURCE_COMMIT: &str = "4f0bd86f32c5a98ed78e7ba04adb5708c0bdb89a";
 pub const LOOPX_BUNDLE_MANIFEST_SCHEMA: u32 = 1;
 pub const LOOPX_COMMAND_REFERENCE_SCHEMA: &str = "loopx_command_reference_v0";
 
@@ -33,7 +39,19 @@ const MAX_STDERR_TAIL_BYTES: usize = 32 * 1024;
 const MAX_PROGRESS_LINE_BYTES: usize = 4 * 1024;
 const PIPE_DRAIN_DEADLINE: Duration = Duration::from_millis(250);
 const SETTLEMENT_HISTORY_LIMIT: &str = "100";
-const AGENT_CLI_USAGE_RULES: &str = "LoopX CLI syntax contract:\n- Put the global `--format json` option immediately after the exact executable and before the subcommand. Do not append it after a subcommand unless that subcommand's help explicitly lists a local format option.\n- Use `--agent-id` only on subcommands whose `--help` output lists it. Do not move that option between a parent command and its child action.\n- When a command rejects an argument, inspect that exact subcommand's `--help` once and retry with the documented form; do not repeat the rejected form.";
+/// Bound for the open-agent-todo projection injected into turn prompts.
+const MAX_OPEN_AGENT_TODO_SUMMARIES: usize = 8;
+/// Upper bound for the raw workflow-plan packet persisted into the worktree.
+/// LoopX intake packets are compact; the cap only guards against a pathological
+/// provider payload ballooning the worktree file.
+const MAX_INTAKE_PLAN_PACKET_BYTES: usize = 512 * 1024;
+const MANAGED_SOURCE_MANIFEST: &str = ".bitfun-managed-source.json";
+const MANAGED_SOURCE_MANIFEST_SCHEMA: u32 = 1;
+const MANAGED_OPEN_VIKING_MANIFEST: &str = ".bitfun-managed-openviking.json";
+const MANAGED_OPEN_VIKING_MANIFEST_SCHEMA: u32 = 1;
+const OPEN_VIKING_EXTENSION_ID: &str = "openviking-semantic-preference";
+const PYTHON_LOOPX_ENTRYPOINT: &str = "import os,sys; sys.path.insert(0, os.environ['BITFUN_LOOPX_SOURCE']); from loopx.entrypoint import main; raise SystemExit(main())";
+const AGENT_CLI_USAGE_RULES: &str = "LoopX CLI syntax contract:\n- Put the global `--format json` option immediately after the exact executable and before the subcommand. Do not append it after a subcommand unless that subcommand's help explicitly lists a local format option.\n- Use `--agent-id` only on subcommands whose `--help` output lists it. Do not move that option between a parent command and its child action.\n- Do not run `--help`, `commands`, or re-read loopx source code preemptively to discover syntax. The exact executable and registry prefix is bound above; the typed command forms below are verified for this pinned LoopX version and are the first resort. Only inspect a subcommand's `--help` when the CLI rejected a specific argument, and do so at most once per subcommand; do not repeat the rejected form.\n- Verified typed command forms (replace <placeholders> with the values bound above):\n  - `quota should-run --goal-id <goal> --todo-id <todo> --agent-id <agent> --runtime-profile outer_controller --turn-instance-id \"<turn>\"` (the BitFun host normally executes this guard before the agent starts, with the same todo and turn binding; only re-run it exactly as printed in the task body preflight when a settlement command reports a missing or mismatched heartbeat receipt, and never with a different turn id)\n  - `todo list --goal-id <goal>`\n  - `todo claim --goal-id <goal> --todo-id <todo> --claimed-by <agent> --agent-id <agent>`\n  - `todo add --goal-id <goal> --role agent --task-class <advancement_task|continuous_monitor|blocker> --text \"<text>\" --claimed-by <agent> --task-repository git:<host>/<owner>/<repo>` (keep the text under 200 characters: the todo list rides inside LoopX's turn-envelope compaction budget; put details in files or the active state, not in todo text); a `continuous_monitor` additionally requires `--cadence <cadence>` plus exactly one terminal condition: `--expires-at <ts>`, `--resume-when <condition>`, or `--watch-only`\n  - `todo add --goal-id <goal> --role user --task-class user_gate --text \"<message>\" --action-kind <kind> --agent-id <agent> --blocks-agent <agent>`\n  - `todo complete --goal-id <goal> --todo-id <todo> --turn-instance-id \"<turn>\"` plus exactly one closing path: `--next-agent-todo \"<text>\"` to wire the runnable successor atomically, or `--no-follow-up` when the completed todo intentionally ends this work path; any other completion flags must be copied verbatim from the task body\n  - `refresh-state --goal-id <goal> --agent-id <agent>`; a turn-scoped accountable writeback additionally requires `--todo-id <todo> --turn-instance-id \"<turn>\" --delivery-outcome <outcome_progress|primary_goal_outcome> --delivery-batch-scale <scale>`; optional `--classification`, `--progress-*`, `--recommended-action`, and `--vision-*` flags must be copied verbatim from the task body or goal vision instructions, never invented\n  - `history --goal-id <goal> --limit 100`\n  - `issue-fix pr-lifecycle --url <github-pr-url> --goal-id <goal> --claimed-by <agent> --execute-transition` — run it once after the fix PR exists, and again when CI, review, or merge state materially changes; LoopX projects the grouped lifecycle monitor, material transitions, and terminal no-follow-up closeout itself, so do not hand-create per-PR monitor todos\n  - issue-fix subcommands (`workflow-plan`, `feasibility`, `pr-lifecycle`): run the exact command printed by the task body, by a previous workflow-plan output, or by the persisted intake plan packet; do not guess additional flags.\n- `goal-lifecycle` and all `quota spend`/`void` commands are host-owned; do not run them.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopxSystemFallbackPolicy {
@@ -44,9 +62,12 @@ pub enum LoopxSystemFallbackPolicy {
 #[derive(Debug, Clone)]
 pub struct LoopxCliAdapterConfig {
     pub resource_dir: PathBuf,
+    pub managed_source_dir: Option<PathBuf>,
+    pub managed_open_viking_dir: Option<PathBuf>,
     pub system_fallback: LoopxSystemFallbackPolicy,
     pub startup_deadline: Duration,
     pub command_deadline: Duration,
+    pub install_deadline: Duration,
     pub terminate_grace: Duration,
 }
 
@@ -54,23 +75,42 @@ impl LoopxCliAdapterConfig {
     pub fn packaged(resource_dir: impl Into<PathBuf>) -> Self {
         Self {
             resource_dir: resource_dir.into(),
+            managed_source_dir: None,
+            managed_open_viking_dir: None,
             system_fallback: LoopxSystemFallbackPolicy::Disabled,
             startup_deadline: Duration::from_secs(60),
             command_deadline: Duration::from_secs(180),
+            install_deadline: Duration::from_secs(10 * 60),
             terminate_grace: Duration::from_secs(2),
         }
+    }
+
+    pub fn with_managed_source_dir(mut self, managed_source_dir: impl Into<PathBuf>) -> Self {
+        self.managed_source_dir = Some(managed_source_dir.into());
+        self
+    }
+
+    pub fn with_managed_open_viking_dir(
+        mut self,
+        managed_open_viking_dir: impl Into<PathBuf>,
+    ) -> Self {
+        self.managed_open_viking_dir = Some(managed_open_viking_dir.into());
+        self
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopxCommandSource {
     PackagedBundle,
+    ManagedSource,
     FixedSystemCommand,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedLoopxCommand {
     pub executable: PathBuf,
+    pub prefix_args: Vec<OsString>,
+    pub environment: BTreeMap<OsString, OsString>,
     pub source: LoopxCommandSource,
     pub version: String,
     pub bundle_manifest_schema: Option<u32>,
@@ -93,16 +133,20 @@ impl LoopxCommandPlan {
     fn handshake(
         operation_id: impl Into<String>,
         executable: PathBuf,
+        prefix_args: &[OsString],
+        environment: &BTreeMap<OsString, OsString>,
         args: impl IntoIterator<Item = impl Into<OsString>>,
         deadline: Duration,
         terminate_grace: Duration,
     ) -> Self {
+        let mut command_args = prefix_args.to_vec();
+        command_args.extend(args.into_iter().map(Into::into));
         Self {
             operation_id: operation_id.into(),
             executable,
-            args: args.into_iter().map(Into::into).collect(),
+            args: command_args,
             current_dir: None,
-            environment: BTreeMap::new(),
+            environment: environment.clone(),
             deadline,
             terminate_grace,
         }
@@ -331,6 +375,10 @@ pub trait LoopxFixedCommandLocator: Send + Sync {
     fn locate(&self) -> Result<Option<PathBuf>, String>;
 }
 
+pub trait LoopxPythonLocator: Send + Sync {
+    fn locate(&self) -> Result<Option<PathBuf>, String>;
+}
+
 #[async_trait]
 pub trait LoopxIntakeMetadataProvider: Send + Sync {
     async fn resolve(
@@ -390,9 +438,30 @@ impl LoopxFixedCommandLocator for SystemLoopxFixedCommandLocator {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct SystemLoopxPythonLocator;
+
+impl LoopxPythonLocator for SystemLoopxPythonLocator {
+    fn locate(&self) -> Result<Option<PathBuf>, String> {
+        let candidates = if cfg!(windows) {
+            ["python", "python3"]
+        } else {
+            ["python3", "python"]
+        };
+        for candidate in candidates {
+            match which::which(candidate) {
+                Ok(path) => return Ok(Some(path)),
+                Err(which::Error::CannotFindBinaryPath) => continue,
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Ok(None)
+    }
+}
+
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum LoopxCliAdapterError {
-    #[error("packaged LoopX bundle is not available")]
+    #[error("compatible LoopX runtime is not available")]
     Unavailable,
     #[error("invalid packaged LoopX manifest: {message}")]
     Manifest { message: String },
@@ -419,9 +488,11 @@ pub struct LoopxCliProcessAdapter {
     config: LoopxCliAdapterConfig,
     runner: Arc<dyn LoopxProcessRunner>,
     locator: Arc<dyn LoopxFixedCommandLocator>,
+    python_locator: Arc<dyn LoopxPythonLocator>,
     observer: Arc<dyn LoopxProcessObserver>,
     intake_metadata: Arc<dyn LoopxIntakeMetadataProvider>,
     intake_metadata_configured: bool,
+    install_lock: Mutex<()>,
     verified: Mutex<Option<VerifiedLoopxCommand>>,
     running: Arc<StdMutex<HashMap<String, CancellationToken>>>,
 }
@@ -441,6 +512,7 @@ impl LoopxCliProcessAdapter {
             config,
             Arc::new(SystemLoopxProcessRunner),
             Arc::new(SystemLoopxFixedCommandLocator),
+            Arc::new(SystemLoopxPythonLocator),
             Arc::new(NoopLoopxProcessObserver),
         )
     }
@@ -449,15 +521,18 @@ impl LoopxCliProcessAdapter {
         config: LoopxCliAdapterConfig,
         runner: Arc<dyn LoopxProcessRunner>,
         locator: Arc<dyn LoopxFixedCommandLocator>,
+        python_locator: Arc<dyn LoopxPythonLocator>,
         observer: Arc<dyn LoopxProcessObserver>,
     ) -> Self {
         Self {
             config,
             runner,
             locator,
+            python_locator,
             observer,
             intake_metadata: Arc::new(UnsupportedLoopxIntakeMetadataProvider),
             intake_metadata_configured: false,
+            install_lock: Mutex::new(()),
             verified: Mutex::new(None),
             running: Arc::new(StdMutex::new(HashMap::new())),
         }
@@ -517,12 +592,13 @@ impl LoopxCliProcessAdapter {
                 observer,
             )
             .await?;
-        let mut args = vec![
+        let mut args = verified.prefix_args.clone();
+        args.extend([
             OsString::from("--format"),
             OsString::from("json"),
             OsString::from("--registry"),
             registry_path.as_os_str().to_owned(),
-        ];
+        ]);
         args.extend(command_args);
         let output = self
             .runner
@@ -532,7 +608,7 @@ impl LoopxCliProcessAdapter {
                     executable: verified.executable,
                     args,
                     current_dir: current_dir.map(Path::to_path_buf),
-                    environment: BTreeMap::new(),
+                    environment: verified.environment,
                     deadline,
                     terminate_grace: self.config.terminate_grace,
                 },
@@ -568,7 +644,8 @@ impl LoopxCliProcessAdapter {
                 observer,
             )
             .await?;
-        let mut args = vec![OsString::from("--format"), OsString::from("json")];
+        let mut args = verified.prefix_args.clone();
+        args.extend([OsString::from("--format"), OsString::from("json")]);
         args.extend(command_args);
         let output = self
             .runner
@@ -578,7 +655,7 @@ impl LoopxCliProcessAdapter {
                     executable: verified.executable,
                     args,
                     current_dir: None,
-                    environment: BTreeMap::new(),
+                    environment: verified.environment,
                     deadline,
                     terminate_grace: self.config.terminate_grace,
                 },
@@ -610,13 +687,54 @@ impl LoopxCliProcessAdapter {
             return Ok(verified.clone());
         }
 
-        let candidate = self.select_candidate().await?;
+        let mut candidate = self.select_candidate().await?;
+        if let Err(error) = self
+            .append_managed_open_viking_path(&mut candidate.environment)
+            .await
+        {
+            log::warn!("Managed OpenViking PATH injection skipped: {error}");
+        }
+        if let Some(source_dir) = candidate.managed_source_dir.as_ref() {
+            let git = which::which("git").map_err(|error| LoopxCliAdapterError::Manifest {
+                message: format!("Git is required to verify managed LoopX source: {error}"),
+            })?;
+            let status = self
+                .runner
+                .run(
+                    LoopxCommandPlan {
+                        operation_id: operation_id.to_string(),
+                        executable: git,
+                        args: vec![
+                            OsString::from("-C"),
+                            source_dir.as_os_str().to_owned(),
+                            OsString::from("status"),
+                            OsString::from("--porcelain"),
+                            OsString::from("--untracked-files=all"),
+                        ],
+                        current_dir: None,
+                        environment: BTreeMap::new(),
+                        deadline: startup_deadline,
+                        terminate_grace: self.config.terminate_grace,
+                    },
+                    cancellation.clone(),
+                    observer,
+                )
+                .await?;
+            if !status.stdout.trim().is_empty() {
+                return Err(LoopxCliAdapterError::Manifest {
+                    message: "managed LoopX source was modified; reinstall it from GitHub"
+                        .to_string(),
+                });
+            }
+        }
         let version_output = self
             .runner
             .run(
                 LoopxCommandPlan::handshake(
                     operation_id,
                     candidate.executable.clone(),
+                    &candidate.prefix_args,
+                    &candidate.environment,
                     ["--version"],
                     startup_deadline,
                     self.config.terminate_grace,
@@ -639,6 +757,8 @@ impl LoopxCliProcessAdapter {
                 LoopxCommandPlan::handshake(
                     operation_id,
                     candidate.executable.clone(),
+                    &candidate.prefix_args,
+                    &candidate.environment,
                     ["--format", "json", "commands"],
                     startup_deadline,
                     self.config.terminate_grace,
@@ -668,6 +788,8 @@ impl LoopxCliProcessAdapter {
 
         let verified = VerifiedLoopxCommand {
             executable: candidate.executable,
+            prefix_args: candidate.prefix_args,
+            environment: candidate.environment,
             source: candidate.source,
             version: LOOPX_PINNED_VERSION.to_string(),
             bundle_manifest_schema: candidate.bundle_manifest_schema,
@@ -722,10 +844,17 @@ impl LoopxCliProcessAdapter {
             }
             return Ok(LoopxCandidate {
                 executable,
+                prefix_args: Vec::new(),
+                environment: BTreeMap::new(),
+                managed_source_dir: None,
                 source: LoopxCommandSource::PackagedBundle,
                 bundle_manifest_schema: Some(manifest.schema_version),
                 sha256: Some(digest),
             });
+        }
+
+        if let Some(candidate) = self.managed_source_candidate().await? {
+            return Ok(candidate);
         }
 
         if self.config.system_fallback == LoopxSystemFallbackPolicy::ExactPinned {
@@ -736,6 +865,9 @@ impl LoopxCliProcessAdapter {
             if let Some(executable) = located {
                 return Ok(LoopxCandidate {
                     executable,
+                    prefix_args: Vec::new(),
+                    environment: BTreeMap::new(),
+                    managed_source_dir: None,
                     source: LoopxCommandSource::FixedSystemCommand,
                     bundle_manifest_schema: None,
                     sha256: None,
@@ -743,6 +875,761 @@ impl LoopxCliProcessAdapter {
             }
         }
         Err(LoopxCliAdapterError::Unavailable)
+    }
+
+    async fn managed_source_candidate(
+        &self,
+    ) -> Result<Option<LoopxCandidate>, LoopxCliAdapterError> {
+        let Some(source_dir) = self.config.managed_source_dir.as_ref() else {
+            return Ok(None);
+        };
+        let manifest_path = source_dir.join(".git").join(MANAGED_SOURCE_MANIFEST);
+        if !tokio::fs::try_exists(&manifest_path)
+            .await
+            .map_err(|error| LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            })?
+        {
+            return Ok(None);
+        }
+        let raw = tokio::fs::read(&manifest_path).await.map_err(|error| {
+            LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            }
+        })?;
+        let manifest: ManagedLoopxSourceManifest =
+            serde_json::from_slice(&raw).map_err(|error| LoopxCliAdapterError::Manifest {
+                message: format!("invalid managed LoopX source manifest: {error}"),
+            })?;
+        verify_managed_source_manifest(&manifest)?;
+        let head = tokio::fs::read_to_string(source_dir.join(".git").join("HEAD"))
+            .await
+            .map_err(|error| LoopxCliAdapterError::Manifest {
+                message: format!("failed to read managed LoopX source revision: {error}"),
+            })?;
+        if head.trim() != LOOPX_PINNED_SOURCE_COMMIT {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: format!(
+                    "managed LoopX source revision mismatch: expected {LOOPX_PINNED_SOURCE_COMMIT}, got {}",
+                    head.trim()
+                ),
+            });
+        }
+        for required in ["pyproject.toml", "loopx/entrypoint.py"] {
+            if !tokio::fs::try_exists(source_dir.join(required))
+                .await
+                .map_err(|error| LoopxCliAdapterError::Manifest {
+                    message: error.to_string(),
+                })?
+            {
+                return Err(LoopxCliAdapterError::Manifest {
+                    message: format!("managed LoopX source is missing {required}"),
+                });
+            }
+        }
+        let python = self
+            .python_locator
+            .locate()
+            .map_err(|message| LoopxCliAdapterError::Manifest { message })?
+            .ok_or_else(|| LoopxCliAdapterError::Manifest {
+                message: "Python 3.11 or newer is required to run managed LoopX source".to_string(),
+            })?;
+        let mut environment = BTreeMap::new();
+        environment.insert(
+            OsString::from("BITFUN_LOOPX_SOURCE"),
+            source_dir.as_os_str().to_owned(),
+        );
+        Ok(Some(LoopxCandidate {
+            executable: python,
+            prefix_args: vec![
+                OsString::from("-I"),
+                OsString::from("-c"),
+                OsString::from(PYTHON_LOOPX_ENTRYPOINT),
+            ],
+            environment,
+            managed_source_dir: Some(source_dir.clone()),
+            source: LoopxCommandSource::ManagedSource,
+            bundle_manifest_schema: None,
+            sha256: None,
+        }))
+    }
+
+    async fn install_managed_source_checkout(
+        &self,
+        operation_id: &str,
+        staging_dir: &Path,
+        cancellation: CancellationToken,
+        progress: &dyn loopx_contract::LoopxCliProgressSink,
+    ) -> Result<(), LoopxCliAdapterError> {
+        let python = self
+            .python_locator
+            .locate()
+            .map_err(|message| LoopxCliAdapterError::Manifest { message })?
+            .ok_or_else(|| LoopxCliAdapterError::Manifest {
+                message: "Python 3.11 or newer is required to install LoopX from source"
+                    .to_string(),
+            })?;
+        report_port_progress(
+            progress,
+            operation_id,
+            None,
+            loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+            "Checking the Python runtime for managed LoopX source",
+        );
+        let python_version = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: python,
+                    args: vec![OsString::from("--version")],
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.startup_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation.clone(),
+                self.observer.as_ref(),
+            )
+            .await?;
+        log::info!(
+            "LoopX install Python check completed: operation_id={operation_id}, duration_ms={}",
+            python_version.elapsed.as_millis()
+        );
+        let version_text = if python_version.stdout.trim().is_empty() {
+            python_version.stderr_tail.join(" ")
+        } else {
+            python_version.stdout
+        };
+        if !python_version_supported(&version_text) {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: format!(
+                    "Python 3.11 or newer is required to install LoopX from source; found {}",
+                    version_text.trim()
+                ),
+            });
+        }
+        let git = which::which("git").map_err(|error| LoopxCliAdapterError::Manifest {
+            message: format!("Git is required to download LoopX source: {error}"),
+        })?;
+
+        report_port_progress(
+            progress,
+            operation_id,
+            None,
+            loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+            "Downloading LoopX v0.5.1 source from GitHub",
+        );
+        let clone_output = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: git.clone(),
+                    args: [
+                        "clone",
+                        "--depth",
+                        "1",
+                        "--filter=blob:none",
+                        "--sparse",
+                        "--branch",
+                        LOOPX_PINNED_VERSION_TAG,
+                        "--single-branch",
+                        LOOPX_SOURCE_REPOSITORY,
+                    ]
+                    .into_iter()
+                    .map(OsString::from)
+                    .chain(std::iter::once(staging_dir.as_os_str().to_owned()))
+                    .collect(),
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.install_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation.clone(),
+                self.observer.as_ref(),
+            )
+            .await?;
+        log::info!(
+            "LoopX install GitHub clone completed: operation_id={operation_id}, duration_ms={}",
+            clone_output.elapsed.as_millis()
+        );
+
+        report_port_progress(
+            progress,
+            operation_id,
+            None,
+            loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+            "Preparing only the LoopX runtime source files",
+        );
+        let sparse_output = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: git.clone(),
+                    args: [
+                        OsString::from("-C"),
+                        staging_dir.as_os_str().to_owned(),
+                        OsString::from("sparse-checkout"),
+                        OsString::from("set"),
+                        OsString::from("--no-cone"),
+                        OsString::from("/loopx/"),
+                        OsString::from("/pyproject.toml"),
+                        OsString::from("/LICENSE"),
+                        OsString::from("/NOTICE"),
+                        OsString::from("/LICENSE-MIT"),
+                        OsString::from("/TRADEMARKS.md"),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.install_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation.clone(),
+                self.observer.as_ref(),
+            )
+            .await?;
+        log::info!(
+            "LoopX install sparse checkout completed: operation_id={operation_id}, duration_ms={}",
+            sparse_output.elapsed.as_millis()
+        );
+
+        report_port_progress(
+            progress,
+            operation_id,
+            None,
+            loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+            "Verifying the pinned LoopX source revision",
+        );
+        let revision = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: git,
+                    args: vec![
+                        OsString::from("-C"),
+                        staging_dir.as_os_str().to_owned(),
+                        OsString::from("rev-parse"),
+                        OsString::from("HEAD"),
+                    ],
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.startup_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation,
+                self.observer.as_ref(),
+            )
+            .await?;
+        log::info!(
+            "LoopX install revision check completed: operation_id={operation_id}, duration_ms={}",
+            revision.elapsed.as_millis()
+        );
+        if revision.stdout.trim() != LOOPX_PINNED_SOURCE_COMMIT {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: format!(
+                    "downloaded LoopX source revision mismatch: expected {LOOPX_PINNED_SOURCE_COMMIT}, got {}",
+                    revision.stdout.trim()
+                ),
+            });
+        }
+        for required in [
+            "pyproject.toml",
+            "loopx/entrypoint.py",
+            "LICENSE",
+            "NOTICE",
+            "LICENSE-MIT",
+            "TRADEMARKS.md",
+        ] {
+            if !tokio::fs::try_exists(staging_dir.join(required))
+                .await
+                .map_err(|error| LoopxCliAdapterError::Manifest {
+                    message: error.to_string(),
+                })?
+            {
+                return Err(LoopxCliAdapterError::Manifest {
+                    message: format!("downloaded LoopX source is missing {required}"),
+                });
+            }
+        }
+        let manifest = ManagedLoopxSourceManifest {
+            schema_version: MANAGED_SOURCE_MANIFEST_SCHEMA,
+            source_repository: LOOPX_SOURCE_REPOSITORY.to_string(),
+            source_tag: LOOPX_PINNED_VERSION_TAG.to_string(),
+            source_commit: LOOPX_PINNED_SOURCE_COMMIT.to_string(),
+            loopx_version: LOOPX_PINNED_VERSION.to_string(),
+        };
+        let raw = serde_json::to_vec_pretty(&manifest).map_err(|error| {
+            LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            }
+        })?;
+        tokio::fs::write(staging_dir.join(".git").join(MANAGED_SOURCE_MANIFEST), raw)
+            .await
+            .map_err(|error| LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            })?;
+        Ok(())
+    }
+
+    async fn managed_open_viking_command(
+        &self,
+    ) -> Result<Option<OpenVikingCommand>, LoopxCliAdapterError> {
+        let Some(root) = self.config.managed_open_viking_dir.as_ref() else {
+            return Ok(None);
+        };
+        let manifest_path = root.join(MANAGED_OPEN_VIKING_MANIFEST);
+        if !tokio::fs::try_exists(&manifest_path)
+            .await
+            .map_err(|error| LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            })?
+        {
+            return Ok(None);
+        }
+        let raw = tokio::fs::read(&manifest_path).await.map_err(|error| {
+            LoopxCliAdapterError::Manifest {
+                message: format!("failed to read managed OpenViking manifest: {error}"),
+            }
+        })?;
+        let manifest: ManagedOpenVikingManifest =
+            serde_json::from_slice(&raw).map_err(|error| LoopxCliAdapterError::Manifest {
+                message: format!("invalid managed OpenViking manifest: {error}"),
+            })?;
+        verify_managed_open_viking_manifest(&manifest)?;
+        let executable = open_viking_binary(root);
+        if !tokio::fs::try_exists(&executable).await.map_err(|error| {
+            LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            }
+        })? {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: "managed OpenViking CLI binary is missing".to_string(),
+            });
+        }
+        if !tokio::fs::try_exists(loopx_extension_entrypoint(root))
+            .await
+            .map_err(|error| LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            })?
+        {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: "managed LoopX OpenViking extension entrypoint is missing".to_string(),
+            });
+        }
+        let digest = sha256_file(&executable).await?;
+        if digest != manifest.binary_sha256 {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: "managed OpenViking CLI checksum does not match its manifest".to_string(),
+            });
+        }
+        Ok(Some(OpenVikingCommand {
+            executable,
+            version: Some(manifest.open_viking_version),
+            managed: true,
+        }))
+    }
+
+    async fn select_open_viking_command(
+        &self,
+    ) -> Result<Option<OpenVikingCommand>, LoopxCliAdapterError> {
+        if let Some(command) = self.managed_open_viking_command().await? {
+            return Ok(Some(command));
+        }
+        match which::which("ov") {
+            Ok(executable) => Ok(Some(OpenVikingCommand {
+                executable,
+                version: None,
+                managed: false,
+            })),
+            Err(which::Error::CannotFindBinaryPath) => Ok(None),
+            Err(error) => Err(LoopxCliAdapterError::Manifest {
+                message: format!("failed to locate OpenViking CLI: {error}"),
+            }),
+        }
+    }
+
+    async fn append_managed_open_viking_path(
+        &self,
+        environment: &mut BTreeMap<OsString, OsString>,
+    ) -> Result<(), LoopxCliAdapterError> {
+        let Some(command) = self.managed_open_viking_command().await? else {
+            return Ok(());
+        };
+        let root = self
+            .config
+            .managed_open_viking_dir
+            .as_ref()
+            .expect("managed OpenViking root exists for a managed command");
+        let mut paths = vec![loopx_extension_bin_dir(root)];
+        if let Some(bin_dir) = command.executable.parent() {
+            paths.push(bin_dir.to_path_buf());
+        }
+        if let Some(existing) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&existing));
+        }
+        let joined =
+            std::env::join_paths(paths).map_err(|error| LoopxCliAdapterError::Manifest {
+                message: format!("failed to prepare managed OpenViking PATH: {error}"),
+            })?;
+        environment.insert(OsString::from("PATH"), joined);
+        Ok(())
+    }
+
+    async fn install_open_viking_cli(
+        &self,
+        operation_id: &str,
+        staging_dir: &Path,
+        cancellation: CancellationToken,
+        progress: &dyn loopx_contract::LoopxCliProgressSink,
+    ) -> Result<(), LoopxCliAdapterError> {
+        let cargo = which::which("cargo").map_err(|error| LoopxCliAdapterError::Manifest {
+            message: format!("Cargo is required to build OpenViking from GitHub source: {error}"),
+        })?;
+        report_port_progress(
+            progress,
+            operation_id,
+            None,
+            loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+            "Building OpenViking CLI v0.4.9 from the official GitHub source",
+        );
+        let mut environment = BTreeMap::new();
+        environment.insert(
+            OsString::from("OPENVIKING_VERSION"),
+            OsString::from(OPEN_VIKING_PINNED_VERSION),
+        );
+        if let Some(parent) = staging_dir.parent() {
+            environment.insert(
+                OsString::from("CARGO_TARGET_DIR"),
+                parent
+                    .join(format!(
+                        "openviking-cargo-target-{OPEN_VIKING_PINNED_VERSION}"
+                    ))
+                    .into_os_string(),
+            );
+        }
+        let build = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: cargo,
+                    args: [
+                        "install",
+                        "--git",
+                        OPEN_VIKING_SOURCE_REPOSITORY,
+                        "--rev",
+                        OPEN_VIKING_PINNED_SOURCE_COMMIT,
+                        "--locked",
+                        "--root",
+                    ]
+                    .into_iter()
+                    .map(OsString::from)
+                    .chain(std::iter::once(staging_dir.as_os_str().to_owned()))
+                    .chain(["--bin", "ov", "ov_cli"].into_iter().map(OsString::from))
+                    .collect(),
+                    current_dir: None,
+                    environment,
+                    deadline: self.config.install_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation.clone(),
+                self.observer.as_ref(),
+            )
+            .await?;
+        log::info!(
+            "OpenViking GitHub source build completed: operation_id={operation_id}, duration_ms={}",
+            build.elapsed.as_millis()
+        );
+        let executable = open_viking_binary(staging_dir);
+        if !tokio::fs::try_exists(&executable).await.map_err(|error| {
+            LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            }
+        })? {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: "OpenViking source build did not produce the ov CLI".to_string(),
+            });
+        }
+        let version_plan = || LoopxCommandPlan {
+            operation_id: operation_id.to_string(),
+            executable: executable.clone(),
+            args: vec![OsString::from("--version")],
+            current_dir: None,
+            environment: BTreeMap::new(),
+            deadline: self.config.startup_deadline,
+            terminate_grace: self.config.terminate_grace,
+        };
+        let version = match self
+            .runner
+            .run(version_plan(), cancellation.clone(), self.observer.as_ref())
+            .await
+        {
+            Ok(output) => output,
+            Err(error) if open_viking_requires_display_language(&error) => {
+                report_port_progress(
+                    progress,
+                    operation_id,
+                    None,
+                    loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+                    "Initializing the OpenViking CLI display language",
+                );
+                self.runner
+                    .run(
+                        LoopxCommandPlan {
+                            operation_id: operation_id.to_string(),
+                            executable: executable.clone(),
+                            args: ["language", "en"].into_iter().map(OsString::from).collect(),
+                            current_dir: None,
+                            environment: BTreeMap::new(),
+                            deadline: self.config.startup_deadline,
+                            terminate_grace: self.config.terminate_grace,
+                        },
+                        cancellation.clone(),
+                        self.observer.as_ref(),
+                    )
+                    .await?;
+                self.runner
+                    .run(version_plan(), cancellation, self.observer.as_ref())
+                    .await?
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let actual = parse_open_viking_version(&version.stdout).ok_or_else(|| {
+            LoopxCliAdapterError::VersionMismatch {
+                expected: OPEN_VIKING_PINNED_VERSION.to_string(),
+                actual: version.stdout.trim().to_string(),
+            }
+        })?;
+        if actual != OPEN_VIKING_PINNED_VERSION {
+            return Err(LoopxCliAdapterError::VersionMismatch {
+                expected: OPEN_VIKING_PINNED_VERSION.to_string(),
+                actual,
+            });
+        }
+        Ok(())
+    }
+
+    async fn install_open_viking_extension_entrypoint(
+        &self,
+        operation_id: &str,
+        root: &Path,
+        cancellation: CancellationToken,
+        progress: &dyn loopx_contract::LoopxCliProgressSink,
+    ) -> Result<(), LoopxCliAdapterError> {
+        let python = self
+            .python_locator
+            .locate()
+            .map_err(|message| LoopxCliAdapterError::Manifest { message })?
+            .ok_or_else(|| LoopxCliAdapterError::Manifest {
+                message:
+                    "Python 3.11 or newer is required to install the LoopX OpenViking extension"
+                        .to_string(),
+            })?;
+        let venv = loopx_extension_venv(root);
+        report_port_progress(
+            progress,
+            operation_id,
+            None,
+            loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+            "Preparing the LoopX OpenViking extension entrypoint",
+        );
+        let python_version = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: python.clone(),
+                    args: vec![OsString::from("--version")],
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.startup_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation.clone(),
+                self.observer.as_ref(),
+            )
+            .await?;
+        let version_text = if python_version.stdout.trim().is_empty() {
+            python_version.stderr_tail.join(" ")
+        } else {
+            python_version.stdout
+        };
+        if !python_version_supported(&version_text) {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: format!(
+                    "Python 3.11 or newer is required for the LoopX OpenViking extension; found {}",
+                    version_text.trim()
+                ),
+            });
+        }
+        self.runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: python,
+                    args: vec![
+                        OsString::from("-m"),
+                        OsString::from("venv"),
+                        venv.as_os_str().to_owned(),
+                    ],
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.command_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation.clone(),
+                self.observer.as_ref(),
+            )
+            .await?;
+        let source = OsString::from(format!(
+            "git+{}@{}#egg=loopx",
+            LOOPX_SOURCE_REPOSITORY, LOOPX_PINNED_SOURCE_COMMIT
+        ));
+        let entrypoint_install = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: loopx_extension_python(root),
+                    args: vec![
+                        OsString::from("-m"),
+                        OsString::from("pip"),
+                        OsString::from("install"),
+                        OsString::from("--disable-pip-version-check"),
+                        OsString::from("--no-input"),
+                        OsString::from("--no-deps"),
+                        OsString::from("--editable"),
+                        source,
+                    ],
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.install_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation,
+                self.observer.as_ref(),
+            )
+            .await;
+        if let Err(error) = entrypoint_install {
+            log::warn!(
+                "LoopX OpenViking extension entrypoint install failed: operation_id={operation_id}, error={error}"
+            );
+            return Err(LoopxCliAdapterError::Manifest {
+                message: "failed to prepare the LoopX OpenViking extension entrypoint".to_string(),
+            });
+        }
+        let entrypoint = loopx_extension_entrypoint(root);
+        if !tokio::fs::try_exists(&entrypoint).await.map_err(|error| {
+            LoopxCliAdapterError::Manifest {
+                message: error.to_string(),
+            }
+        })? {
+            return Err(LoopxCliAdapterError::Manifest {
+                message: "LoopX OpenViking extension entrypoint is missing".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    async fn open_viking_service_ready(
+        &self,
+        operation_id: &str,
+        command: &OpenVikingCommand,
+    ) -> Result<bool, LoopxCliAdapterError> {
+        let (cancellation, _registration) = self.register_operation(operation_id)?;
+        let output = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: command.executable.clone(),
+                    args: ["status", "-o", "json"]
+                        .into_iter()
+                        .map(OsString::from)
+                        .collect(),
+                    current_dir: None,
+                    environment: BTreeMap::new(),
+                    deadline: self.config.startup_deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation,
+                self.observer.as_ref(),
+            )
+            .await;
+        let Ok(output) = output else {
+            return Ok(false);
+        };
+        let payload: Value = match serde_json::from_str(&output.stdout) {
+            Ok(payload) => payload,
+            Err(_) => return Ok(false),
+        };
+        Ok(payload.get("ok").and_then(Value::as_bool) == Some(true))
+    }
+
+    async fn ensure_open_viking_extension(
+        &self,
+        operation_id: &str,
+    ) -> Result<bool, LoopxCliAdapterError> {
+        let listed = self
+            .run_global_json_command(
+                &format!("{operation_id}-list"),
+                ["extension", "list"]
+                    .into_iter()
+                    .map(OsString::from)
+                    .collect(),
+                self.config.command_deadline,
+                self.observer.as_ref(),
+            )
+            .await?;
+        let extension = listed
+            .payload
+            .get("extensions")
+            .and_then(Value::as_array)
+            .and_then(|extensions| {
+                extensions.iter().find(|extension| {
+                    extension.get("id").and_then(Value::as_str) == Some(OPEN_VIKING_EXTENSION_ID)
+                })
+            });
+        if extension
+            .and_then(|item| item.get("enabled"))
+            .and_then(Value::as_bool)
+            == Some(true)
+        {
+            return Ok(true);
+        }
+        let args = if extension.is_some() {
+            vec![
+                OsString::from("extension"),
+                OsString::from("enable"),
+                OsString::from(OPEN_VIKING_EXTENSION_ID),
+                OsString::from("--execute"),
+            ]
+        } else {
+            vec![
+                OsString::from("extension"),
+                OsString::from("install"),
+                OsString::from("--bundled"),
+                OsString::from(OPEN_VIKING_EXTENSION_ID),
+                OsString::from("--execute"),
+            ]
+        };
+        let result = self
+            .run_global_json_command(
+                &format!("{operation_id}-activate"),
+                args,
+                self.config.command_deadline,
+                self.observer.as_ref(),
+            )
+            .await?;
+        Ok(
+            result.payload.get("ok").and_then(Value::as_bool) == Some(true)
+                && result.payload.get("enabled").and_then(Value::as_bool) == Some(true),
+        )
     }
 
     fn register_operation(
@@ -791,6 +1678,465 @@ impl LoopxProcessObserver for PortProcessObserver<'_> {
 }
 
 impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
+    fn install_managed_source<'a>(
+        &'a self,
+        request: loopx_contract::LoopxCliInstallManagedSourceRequest,
+        progress: &'a dyn loopx_contract::LoopxCliProgressSink,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxCliInstallManagedSourceResult>
+    {
+        Box::pin(async move {
+            let operation_id = &request.call.operation_id;
+            let received_at = Instant::now();
+            log::info!("LoopX managed source install received: operation_id={operation_id}");
+            validate_operation_id(operation_id)?;
+            let lock_started_at = Instant::now();
+            let _install = self.install_lock.lock().await;
+            log::info!(
+                "LoopX managed source install lock acquired: operation_id={operation_id}, wait_ms={}",
+                lock_started_at.elapsed().as_millis()
+            );
+            let target_dir = self.config.managed_source_dir.clone().ok_or_else(|| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::Backend,
+                    operation_id,
+                    "managed LoopX source installation is not configured",
+                    false,
+                )
+            })?;
+            let parent = target_dir.parent().ok_or_else(|| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::InvalidInput,
+                    operation_id,
+                    "managed LoopX source path has no parent directory",
+                    false,
+                )
+            })?;
+            tokio::fs::create_dir_all(parent).await.map_err(|error| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::Io,
+                    operation_id,
+                    format!("failed to create managed LoopX directory: {error}"),
+                    true,
+                )
+            })?;
+            let suffix = format!("{}-{}", std::process::id(), now_unix_ms());
+            let staging_dir = parent.join(format!(".loopx-source-install-{suffix}"));
+            let backup_dir = parent.join(format!(".loopx-source-backup-{suffix}"));
+            let (cancellation, _registration) = self
+                .register_operation(operation_id)
+                .map_err(|error| map_port_error(error, operation_id))?;
+
+            if let Err(error) = self
+                .install_managed_source_checkout(
+                    operation_id,
+                    &staging_dir,
+                    cancellation.clone(),
+                    progress,
+                )
+                .await
+            {
+                let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+                return Err(map_port_error(error, operation_id));
+            }
+
+            report_port_progress(
+                progress,
+                operation_id,
+                None,
+                loopx_contract::LoopxCliProgressStage::InstallingRuntime,
+                "Activating the verified LoopX source",
+            );
+            let had_previous = tokio::fs::try_exists(&target_dir).await.map_err(|error| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::Io,
+                    operation_id,
+                    error.to_string(),
+                    true,
+                )
+            })?;
+            if had_previous {
+                tokio::fs::rename(&target_dir, &backup_dir)
+                    .await
+                    .map_err(|error| {
+                        port_error(
+                            loopx_contract::LoopxCliErrorKind::Io,
+                            operation_id,
+                            format!("failed to stage the previous LoopX source: {error}"),
+                            true,
+                        )
+                    })?;
+            }
+            if let Err(error) = tokio::fs::rename(&staging_dir, &target_dir).await {
+                if had_previous {
+                    let _ = tokio::fs::rename(&backup_dir, &target_dir).await;
+                }
+                let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+                return Err(port_error(
+                    loopx_contract::LoopxCliErrorKind::Io,
+                    operation_id,
+                    format!("failed to activate managed LoopX source: {error}"),
+                    true,
+                ));
+            }
+
+            self.verified.lock().await.take();
+            if let Err(error) = self
+                .ensure_verified(
+                    operation_id,
+                    cancellation,
+                    self.config.startup_deadline,
+                    self.observer.as_ref(),
+                )
+                .await
+            {
+                self.verified.lock().await.take();
+                let _ = tokio::fs::remove_dir_all(&target_dir).await;
+                if had_previous {
+                    let _ = tokio::fs::rename(&backup_dir, &target_dir).await;
+                }
+                return Err(map_port_error(error, operation_id));
+            }
+            if had_previous {
+                let _ = tokio::fs::remove_dir_all(&backup_dir).await;
+            }
+            log::info!(
+                "LoopX managed source install activated: operation_id={operation_id}, duration_ms={}",
+                received_at.elapsed().as_millis()
+            );
+            Ok(loopx_contract::LoopxCliInstallManagedSourceResult {
+                source_repository: LOOPX_SOURCE_REPOSITORY.to_string(),
+                source_tag: LOOPX_PINNED_VERSION_TAG.to_string(),
+                source_commit: LOOPX_PINNED_SOURCE_COMMIT.to_string(),
+                install_path: target_dir.to_string_lossy().into_owned(),
+                loopx_version: LOOPX_PINNED_VERSION.to_string(),
+            })
+        })
+    }
+
+    fn install_open_viking<'a>(
+        &'a self,
+        request: loopx_contract::LoopxCliInstallOpenVikingRequest,
+        progress: &'a dyn loopx_contract::LoopxCliProgressSink,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxCliInstallOpenVikingResult> {
+        Box::pin(async move {
+            let operation_id = &request.call.operation_id;
+            let received_at = Instant::now();
+            log::info!("OpenViking managed install received: operation_id={operation_id}");
+            validate_operation_id(operation_id)?;
+            let lock_started_at = Instant::now();
+            let _install = self.install_lock.lock().await;
+            log::info!(
+                "OpenViking managed install lock acquired: operation_id={operation_id}, wait_ms={}",
+                lock_started_at.elapsed().as_millis()
+            );
+            let target_dir = self.config.managed_open_viking_dir.clone().ok_or_else(|| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::Backend,
+                    operation_id,
+                    "managed OpenViking installation is not configured",
+                    false,
+                )
+            })?;
+            let parent = target_dir.parent().ok_or_else(|| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::InvalidInput,
+                    operation_id,
+                    "managed OpenViking path has no parent directory",
+                    false,
+                )
+            })?;
+            tokio::fs::create_dir_all(parent).await.map_err(|error| {
+                port_error(
+                    loopx_contract::LoopxCliErrorKind::Io,
+                    operation_id,
+                    format!("failed to create managed OpenViking directory: {error}"),
+                    true,
+                )
+            })?;
+            let (cancellation, _registration) = self
+                .register_operation(operation_id)
+                .map_err(|error| map_port_error(error, operation_id))?;
+
+            let already_installed = matches!(self.managed_open_viking_command().await, Ok(Some(_)));
+            if !already_installed {
+                let suffix = format!("{}-{}", std::process::id(), now_unix_ms());
+                let staging_dir = parent.join(format!(".openviking-install-{suffix}"));
+                let backup_dir = parent.join(format!(".openviking-backup-{suffix}"));
+                if let Err(error) = self
+                    .install_open_viking_cli(
+                        operation_id,
+                        &staging_dir,
+                        cancellation.clone(),
+                        progress,
+                    )
+                    .await
+                {
+                    let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+                    return Err(map_port_error(error, operation_id));
+                }
+                let had_previous = tokio::fs::try_exists(&target_dir).await.map_err(|error| {
+                    port_error(
+                        loopx_contract::LoopxCliErrorKind::Io,
+                        operation_id,
+                        error.to_string(),
+                        true,
+                    )
+                })?;
+                if had_previous {
+                    tokio::fs::rename(&target_dir, &backup_dir)
+                        .await
+                        .map_err(|error| {
+                            port_error(
+                                loopx_contract::LoopxCliErrorKind::Io,
+                                operation_id,
+                                format!("failed to stage the previous OpenViking CLI: {error}"),
+                                true,
+                            )
+                        })?;
+                }
+                if let Err(error) = tokio::fs::rename(&staging_dir, &target_dir).await {
+                    if had_previous {
+                        let _ = tokio::fs::rename(&backup_dir, &target_dir).await;
+                    }
+                    let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+                    return Err(port_error(
+                        loopx_contract::LoopxCliErrorKind::Io,
+                        operation_id,
+                        format!("failed to activate managed OpenViking CLI: {error}"),
+                        true,
+                    ));
+                }
+                if let Err(error) = self
+                    .install_open_viking_extension_entrypoint(
+                        operation_id,
+                        &target_dir,
+                        cancellation.clone(),
+                        progress,
+                    )
+                    .await
+                {
+                    let _ = tokio::fs::remove_dir_all(&target_dir).await;
+                    if had_previous {
+                        let _ = tokio::fs::rename(&backup_dir, &target_dir).await;
+                    }
+                    return Err(map_port_error(error, operation_id));
+                }
+                let binary_sha256 = sha256_file(&open_viking_binary(&target_dir))
+                    .await
+                    .map_err(|error| map_port_error(error, operation_id))?;
+                let manifest = ManagedOpenVikingManifest {
+                    schema_version: MANAGED_OPEN_VIKING_MANIFEST_SCHEMA,
+                    source_repository: OPEN_VIKING_SOURCE_REPOSITORY.to_string(),
+                    source_tag: OPEN_VIKING_PINNED_VERSION_TAG.to_string(),
+                    source_commit: OPEN_VIKING_PINNED_SOURCE_COMMIT.to_string(),
+                    open_viking_version: OPEN_VIKING_PINNED_VERSION.to_string(),
+                    loopx_provider_commit: LOOPX_PINNED_SOURCE_COMMIT.to_string(),
+                    binary_sha256,
+                };
+                let raw = serde_json::to_vec_pretty(&manifest).map_err(|error| {
+                    port_error(
+                        loopx_contract::LoopxCliErrorKind::Backend,
+                        operation_id,
+                        error.to_string(),
+                        false,
+                    )
+                })?;
+                if let Err(error) =
+                    tokio::fs::write(target_dir.join(MANAGED_OPEN_VIKING_MANIFEST), raw).await
+                {
+                    let _ = tokio::fs::remove_dir_all(&target_dir).await;
+                    if had_previous {
+                        let _ = tokio::fs::rename(&backup_dir, &target_dir).await;
+                    }
+                    return Err(port_error(
+                        loopx_contract::LoopxCliErrorKind::Io,
+                        operation_id,
+                        format!("failed to write managed OpenViking manifest: {error}"),
+                        true,
+                    ));
+                }
+                if had_previous {
+                    let _ = tokio::fs::remove_dir_all(&backup_dir).await;
+                }
+            }
+
+            self.verified.lock().await.take();
+            let command = self
+                .managed_open_viking_command()
+                .await
+                .map_err(|error| map_port_error(error, operation_id))?
+                .ok_or_else(|| {
+                    port_error(
+                        loopx_contract::LoopxCliErrorKind::NotFound,
+                        operation_id,
+                        "managed OpenViking CLI is unavailable after installation",
+                        true,
+                    )
+                })?;
+            let service_ready = self
+                .open_viking_service_ready(&format!("{operation_id}-status"), &command)
+                .await
+                .unwrap_or(false);
+            let extension_enabled = if service_ready {
+                match self.ensure_open_viking_extension(operation_id).await {
+                    Ok(enabled) => enabled,
+                    Err(error) => {
+                        log::warn!(
+                            "OpenViking extension activation deferred: operation_id={operation_id}, error={error}"
+                        );
+                        false
+                    }
+                }
+            } else {
+                false
+            };
+            log::info!(
+                "OpenViking managed install completed: operation_id={operation_id}, service_ready={service_ready}, extension_enabled={extension_enabled}, duration_ms={}",
+                received_at.elapsed().as_millis()
+            );
+            Ok(loopx_contract::LoopxCliInstallOpenVikingResult {
+                source_repository: OPEN_VIKING_SOURCE_REPOSITORY.to_string(),
+                source_tag: OPEN_VIKING_PINNED_VERSION_TAG.to_string(),
+                source_commit: OPEN_VIKING_PINNED_SOURCE_COMMIT.to_string(),
+                install_path: target_dir.to_string_lossy().into_owned(),
+                open_viking_version: OPEN_VIKING_PINNED_VERSION.to_string(),
+                extension_enabled,
+            })
+        })
+    }
+
+    fn probe_open_viking<'a>(
+        &'a self,
+        request: loopx_contract::LoopxOpenVikingProbeRequest,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxOpenVikingProbe> {
+        Box::pin(async move {
+            let operation_id = &request.call.operation_id;
+            validate_operation_id(operation_id)?;
+            let command = match self.select_open_viking_command().await {
+                Ok(Some(command)) => command,
+                Ok(None) => {
+                    return Ok(loopx_contract::LoopxOpenVikingProbe {
+                        state: loopx_contract::LoopxOpenVikingState::NotInstalled,
+                        detail: Some(
+                            "OpenViking CLI is not installed in BitFun-managed storage or PATH"
+                                .to_string(),
+                        ),
+                        ..loopx_contract::LoopxOpenVikingProbe::default()
+                    })
+                }
+                Err(error) => {
+                    return Ok(loopx_contract::LoopxOpenVikingProbe {
+                        state: loopx_contract::LoopxOpenVikingState::Unhealthy,
+                        detail: Some(error.to_string()),
+                        ..loopx_contract::LoopxOpenVikingProbe::default()
+                    })
+                }
+            };
+            let (cancellation, _registration) = self
+                .register_operation(operation_id)
+                .map_err(|error| map_port_error(error, operation_id))?;
+            let version_output = self
+                .runner
+                .run(
+                    LoopxCommandPlan {
+                        operation_id: operation_id.to_string(),
+                        executable: command.executable.clone(),
+                        args: vec![OsString::from("--version")],
+                        current_dir: None,
+                        environment: BTreeMap::new(),
+                        deadline: self.config.startup_deadline,
+                        terminate_grace: self.config.terminate_grace,
+                    },
+                    cancellation,
+                    self.observer.as_ref(),
+                )
+                .await;
+            let version = match version_output {
+                Ok(output) => parse_open_viking_version(&output.stdout).or(command.version.clone()),
+                Err(error) => {
+                    return Ok(loopx_contract::LoopxOpenVikingProbe {
+                        state: loopx_contract::LoopxOpenVikingState::Unhealthy,
+                        version: command.version,
+                        detail: Some(format!("OpenViking CLI version probe failed: {error}")),
+                    })
+                }
+            };
+            let Some(version) = version else {
+                return Ok(loopx_contract::LoopxOpenVikingProbe {
+                    state: loopx_contract::LoopxOpenVikingState::Unhealthy,
+                    detail: Some("OpenViking CLI returned an unreadable version".to_string()),
+                    ..loopx_contract::LoopxOpenVikingProbe::default()
+                });
+            };
+            if !open_viking_version_supported(&version) {
+                return Ok(loopx_contract::LoopxOpenVikingProbe {
+                    state: loopx_contract::LoopxOpenVikingState::Unhealthy,
+                    version: Some(version),
+                    detail: Some(format!(
+                        "OpenViking {OPEN_VIKING_PINNED_VERSION} or newer is required"
+                    )),
+                });
+            }
+            if !self
+                .open_viking_service_ready(&format!("{operation_id}-status"), &command)
+                .await
+                .unwrap_or(false)
+            {
+                return Ok(loopx_contract::LoopxOpenVikingProbe {
+                    state: loopx_contract::LoopxOpenVikingState::NotConfigured,
+                    version: Some(version),
+                    detail: Some(
+                        "OpenViking CLI is installed; configure and start an OpenViking service"
+                            .to_string(),
+                    ),
+                });
+            }
+            let listed = self
+                .run_global_json_command(
+                    &format!("{operation_id}-extensions"),
+                    ["extension", "list"]
+                        .into_iter()
+                        .map(OsString::from)
+                        .collect(),
+                    self.config.command_deadline,
+                    self.observer.as_ref(),
+                )
+                .await;
+            let enabled = listed
+                .ok()
+                .and_then(|output| output.payload.get("extensions").cloned())
+                .and_then(|extensions| extensions.as_array().cloned())
+                .and_then(|extensions| {
+                    extensions.into_iter().find(|extension| {
+                        extension.get("id").and_then(Value::as_str)
+                            == Some(OPEN_VIKING_EXTENSION_ID)
+                    })
+                })
+                .and_then(|extension| extension.get("enabled").and_then(Value::as_bool))
+                .unwrap_or(false);
+            Ok(loopx_contract::LoopxOpenVikingProbe {
+                state: if enabled {
+                    loopx_contract::LoopxOpenVikingState::Ready
+                } else {
+                    loopx_contract::LoopxOpenVikingState::Disabled
+                },
+                version: Some(version),
+                detail: Some(if enabled {
+                    if command.managed {
+                        "Managed OpenViking CLI and LoopX semantic-preference extension are ready"
+                            .to_string()
+                    } else {
+                        "System OpenViking CLI and LoopX semantic-preference extension are ready"
+                            .to_string()
+                    }
+                } else {
+                    "OpenViking service is reachable; enable the LoopX semantic-preference extension"
+                        .to_string()
+                }),
+            })
+        })
+    }
+
     fn handshake<'a>(
         &'a self,
         request: loopx_contract::LoopxCliHandshakeRequest,
@@ -871,6 +2217,9 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                         LoopxCommandSource::PackagedBundle => {
                             loopx_contract::LoopxCliSource::Bundled
                         }
+                        LoopxCommandSource::ManagedSource => {
+                            loopx_contract::LoopxCliSource::PythonFallback
+                        }
                         LoopxCommandSource::FixedSystemCommand => {
                             loopx_contract::LoopxCliSource::System
                         }
@@ -878,6 +2227,9 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     identity: match verified.source {
                         LoopxCommandSource::PackagedBundle => {
                             "bitfun-bundled-loopx-v0.5.1".to_string()
+                        }
+                        LoopxCommandSource::ManagedSource => {
+                            "bitfun-managed-github-source-loopx-v0.5.1".to_string()
                         }
                         LoopxCommandSource::FixedSystemCommand => {
                             "fixed-system-loopx-v0.5.1".to_string()
@@ -989,16 +2341,34 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             for preview in previews {
                 let role = required_json_string(preview, "role", operation_id)?;
                 let task_class = required_json_string(preview, "task_class", operation_id)?;
-                let text = required_json_string(preview, "text", operation_id)?;
+                // The full text stays reachable via the persisted intake plan
+                // packet; the registry copy must stay short because the whole
+                // todo list rides inside LoopX's turn envelope compaction
+                // budget (observed: long successor texts pushed the envelope
+                // past 8 KiB and LoopX rejected planning for the Goal).
+                let text =
+                    truncate_todo_text(&required_json_string(preview, "text", operation_id)?);
                 let action_kind = preview
                     .get("action_kind")
                     .and_then(Value::as_str)
+                    .map(str::to_string);
+                let next_command_preview = preview
+                    .get("next_command_preview")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string);
+                let target_key = preview
+                    .get("target_key")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
                     .map(str::to_string);
                 todos.push(loopx_contract::LoopxCliTodoPlan {
                     role,
                     task_class,
                     action_kind,
                     text,
+                    next_command_preview,
+                    target_key,
                 });
             }
             if todos.is_empty() {
@@ -1009,22 +2379,23 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     true,
                 ));
             }
-            let objective = output
-                .payload
-                .get("objective")
-                .and_then(Value::as_str)
-                .or_else(|| {
-                    output
-                        .payload
-                        .pointer("/issue_signal/title")
-                        .and_then(Value::as_str)
-                })
-                .map(str::to_string)
-                .unwrap_or_else(|| format!("Fix {}", request.item.canonical_url()));
+            // LoopX's issue-fix workflow contract pins the goal objective to
+            // the host-resolved issue title; the packet itself carries no
+            // objective field.
+            let objective = compact_objective(&request.item, &request.title);
+            // The full packet is persisted into the worktree by the controller
+            // (via the workspace port) so every turn can read the exact
+            // issue-fix command forms. It stays public-safe by LoopX design;
+            // the byte cap only guards against pathological payloads.
+            let raw_packet_json = match serde_json::to_string(&output.payload) {
+                Ok(json) if json.len() <= MAX_INTAKE_PLAN_PACKET_BYTES => json,
+                _ => String::new(),
+            };
             Ok(loopx_contract::LoopxCliIntakePlan {
                 item: request.item,
                 objective,
                 todos,
+                raw_packet_json,
             })
         })
     }
@@ -1134,6 +2505,22 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 require_payload_ok(&result.payload, operation_id)?;
             }
 
+            // Source-backed candidate admission must be persisted before any
+            // feasibility decision ("only admitted proceed may start a new
+            // implementation"). Running it here — instead of leaving the
+            // agent to substitute the goal id into the packet's template
+            // command — guarantees the preflight receipt lands in the
+            // goal-scoped domain ledger and lets the returned packet carry
+            // the real admission state.
+            // Best-effort by design: a missing `gh` binary, GraphQL rate
+            // limiting, or a PR-kind item (the collector reads the issue
+            // timeline) must never fail goal creation; the agent's own
+            // collect-evidence successor from the plan packet stays the
+            // fallback path.
+            let evidence_packet_json =
+                collect_candidate_evidence_best_effort(self, &request, operation_id, &observer)
+                    .await;
+
             let inspection = run_port_command(
                 self,
                 &request.context,
@@ -1147,6 +2534,7 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 goal_id: request.goal_id,
                 created,
                 durable_revision,
+                raw_packet_json: evidence_packet_json,
             })
         })
     }
@@ -1247,6 +2635,22 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 .await?;
                 snapshot.pending_user_gate =
                     Some(project_pending_user_gate(&todos.payload, operation_id)?);
+            } else if snapshot.run_decision == loopx_contract::LoopxCliRunDecision::RunNow {
+                // The host injects the bounded todo projection into the next
+                // turn prompt, so the Agent does not re-derive todo state from
+                // the registry on every heartbeat. Failure to list todos must
+                // not block the turn; the task body remains the authority.
+                if let Ok(todos) = run_port_command(
+                    self,
+                    &request.context,
+                    list_todos_args(&request.goal_id),
+                    &observer,
+                )
+                .await
+                {
+                    snapshot.open_agent_todos =
+                        project_open_agent_todos(&todos.payload, operation_id);
+                }
             }
             Ok(snapshot)
         })
@@ -1300,6 +2704,37 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &turn_id,
                 operation_id,
             )?;
+            // The host executes the turn guard itself so the heartbeat receipt
+            // is committed and bound to the settlement todo before the agent
+            // starts. LoopX rejects turn-scoped `refresh-state` writebacks
+            // whose todo does not match the original guard receipt, so an
+            // unbound guard silently poisons the whole settlement chain.
+            let guard_output = run_port_command(
+                self,
+                &request.context,
+                turn_guard_args(
+                    &request.goal_id,
+                    &request.agent_id,
+                    settlement_binding.as_ref(),
+                    &turn_id,
+                ),
+                &observer,
+            )
+            .await?;
+            require_payload_ok(&guard_output.payload, operation_id)?;
+            if guard_output
+                .payload
+                .get("should_run")
+                .and_then(Value::as_bool)
+                != Some(true)
+            {
+                return Err(port_error(
+                    loopx_contract::LoopxCliErrorKind::Conflict,
+                    operation_id,
+                    "LoopX turn guard declined to run after the plan selected RunNow",
+                    true,
+                ));
+            }
             let prompt_output = run_port_command(
                 self,
                 &request.context,
@@ -1329,7 +2764,7 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     true,
                 )
             })?;
-            let command = agent_shell_command(&verified.executable);
+            let command = agent_shell_command(&verified);
             let registry = agent_shell_value(&request.context.registry_path);
             let cli_prefix = format!("{command} --format json --registry {registry}");
             let adapted_prompt = raw_prompt
@@ -1339,6 +2774,22 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     &format!("{cli_prefix} "),
                 )
                 .replace("loopx ", &format!("{cli_prefix} "));
+            // The pinned compact body embeds the upstream Codex-CLI heartbeat
+            // preflight (PATH setup, `loopx doctor`, install-local fallback,
+            // unbound guard). Those steps are host-owned or wrong for the
+            // BitFun external host, so the fence is rewritten to the exact
+            // bound guard command instead.
+            let adapted_prompt = replace_embedded_preflight_fence(
+                &adapted_prompt,
+                &turn_guard_prompt_command(
+                    &cli_prefix,
+                    &request.goal_id,
+                    &request.agent_id,
+                    settlement_binding.as_ref(),
+                    &turn_id,
+                ),
+            );
+            let adapted_prompt = replace_host_conflicting_lines(&adapted_prompt);
             let settlement_override = settlement_prompt_override(
                 &cli_prefix,
                 &request.goal_id,
@@ -1346,12 +2797,20 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &turn_id,
                 settlement_binding.as_ref(),
             );
+            let guard_summary = match settlement_binding.as_ref() {
+                Some(SettlementBinding::Todo { todo_id }) => format!("todo {todo_id}"),
+                Some(SettlementBinding::AutonomousReplan { obligation_id }) => {
+                    format!("autonomous replan obligation {obligation_id}")
+                }
+                None => "no settlement binding".to_string(),
+            };
             let prompt = format!(
-                "LoopX host binding for this bounded turn:\n- Repository: {}\n- Registry: {}\n- Exact CLI prefix: {}\n- Turn id: {}\nUse this immutable binding for every LoopX command. Do not probe PATH, switch registries, invent a Turn id, infer state from prose, or substitute host-specific policy. Query the exact CLI prefix when fresh LoopX state is required; the generated task body below remains the authority for work selection.\n{}\n\n{}\n\n{}",
+                "LoopX host binding for this bounded turn:\n- Repository: {}\n- Registry: {}\n- Exact CLI prefix: {}\n- Turn id: {}\n- Turn guard: the BitFun host already executed `quota should-run` for this turn (should_run=true) with settlement binding {}; the heartbeat receipt is committed. Do not run `quota should-run` again to decide whether to work; only re-run the exact command printed in the preflight block when a LoopX settlement command reports a missing or mismatched heartbeat receipt, and always with this turn id.\nUse this immutable binding for every LoopX command. Do not probe PATH, switch registries, invent a Turn id, infer state from prose, or substitute host-specific policy. Query the exact CLI prefix when fresh LoopX state is required; the generated task body below remains the authority for work selection.\n{}\n\n{}\n\n{}",
                 request.context.worktree_path,
                 request.context.registry_path,
                 cli_prefix,
                 turn_id,
+                guard_summary,
                 AGENT_CLI_USAGE_RULES,
                 adapted_prompt,
                 settlement_override,
@@ -1461,7 +2920,6 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             {
                 return project_legacy_settlement(&request, &snapshot, receipt, operation_id);
             }
-
             let mut history = run_port_command(
                 self,
                 &request.context,
@@ -1614,6 +3072,157 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 after_revision: snapshot.durable_revision,
                 validation_succeeded: true,
                 scheduler_hint_ms: snapshot.scheduler_hint_ms,
+                binding_todo_id: evidence.binding.todo_id().map(str::to_string),
+            })
+        })
+    }
+
+    fn stop_goal<'a>(
+        &'a self,
+        request: loopx_contract::LoopxCliStopGoalRequest,
+        progress: &'a dyn loopx_contract::LoopxCliProgressSink,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxCliStopGoalResult> {
+        Box::pin(async move {
+            validate_goal_context(&request.context)?;
+            validate_nonempty(
+                "goal_id",
+                &request.goal_id,
+                &request.context.call.operation_id,
+            )?;
+            let operation_id = &request.context.call.operation_id;
+            let observer = PortProcessObserver {
+                progress,
+                fallback: self.observer.as_ref(),
+                task_id: Some(request.context.task_id.clone()),
+                stage: loopx_contract::LoopxCliProgressStage::Cancelling,
+            };
+            report_port_progress(
+                progress,
+                operation_id,
+                Some(request.context.task_id.clone()),
+                loopx_contract::LoopxCliProgressStage::Cancelling,
+                "Stopping LoopX automatic advancement for the finished Goal",
+            );
+            let output = run_port_command(
+                self,
+                &request.context,
+                goal_stop_args(&request.goal_id, &request.reason),
+                &observer,
+            )
+            .await?;
+            require_payload_ok(&output.payload, operation_id)?;
+            let stopped =
+                output.payload.get("after_state").and_then(Value::as_str) == Some("stopped");
+            Ok(loopx_contract::LoopxCliStopGoalResult {
+                goal_id: request.goal_id,
+                stopped,
+                already_stopped: output.payload.get("changed").and_then(Value::as_bool)
+                    != Some(true),
+            })
+        })
+    }
+
+    /// Shortens over-long open todo texts so the todo list fits LoopX's
+    /// turn-envelope compaction budget. LoopX keys some idempotency on
+    /// deterministic todo text (e.g. maintainer-correction retries), so the
+    /// shrink only ever trims display text — never action_kind, target keys,
+    /// or todo identity — and the full original text stays reachable in the
+    /// persisted intake plan packet.
+    fn shrink_todo_texts<'a>(
+        &'a self,
+        request: loopx_contract::LoopxCliShrinkTodoTextsRequest,
+        progress: &'a dyn loopx_contract::LoopxCliProgressSink,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxCliShrinkTodoTextsResult> {
+        Box::pin(async move {
+            validate_goal_context(&request.context)?;
+            validate_nonempty(
+                "goal_id",
+                &request.goal_id,
+                &request.context.call.operation_id,
+            )?;
+            let operation_id = &request.context.call.operation_id;
+            let observer = PortProcessObserver {
+                progress,
+                fallback: self.observer.as_ref(),
+                task_id: Some(request.context.task_id.clone()),
+                stage: loopx_contract::LoopxCliProgressStage::InspectingGoal,
+            };
+            report_port_progress(
+                progress,
+                operation_id,
+                Some(request.context.task_id.clone()),
+                loopx_contract::LoopxCliProgressStage::InspectingGoal,
+                "Shortening over-long todo texts for the turn envelope budget",
+            );
+            let max_chars = request.max_chars.clamp(80, 400) as usize;
+            let todos = run_port_command(
+                self,
+                &request.context,
+                list_todos_args(&request.goal_id),
+                &observer,
+            )
+            .await?;
+            require_payload_ok(&todos.payload, operation_id)?;
+            let mut examined = 0_u32;
+            let mut shortened = 0_u32;
+            for todo in todos
+                .payload
+                .get("todos")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+            {
+                let todo_id = todo
+                    .get("todo_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if todo_id.trim().is_empty() {
+                    continue;
+                }
+                let role = todo.get("role").and_then(Value::as_str).unwrap_or_default();
+                let status = todo
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                let done = todo.get("done").and_then(Value::as_bool) == Some(true);
+                if role != "agent"
+                    || done
+                    || matches!(
+                        status,
+                        "completed" | "closed" | "done" | "archived" | "cancelled"
+                    )
+                {
+                    continue;
+                }
+                examined += 1;
+                let text = todo.get("text").and_then(Value::as_str).unwrap_or_default();
+                if text.chars().count() <= max_chars {
+                    continue;
+                }
+                let mut bounded: String = text.chars().take(max_chars).collect();
+                bounded.push_str("...");
+                let update = run_port_command(
+                    self,
+                    &request.context,
+                    update_todo_text_args(&request.goal_id, todo_id, &bounded, &request.agent_id),
+                    &observer,
+                )
+                .await;
+                if update.is_ok() {
+                    shortened += 1;
+                } else {
+                    log::warn!(
+                        "LoopX todo text shrink failed: goal={}, todo={}, error={:?}",
+                        request.goal_id,
+                        todo_id,
+                        update.err()
+                    );
+                }
+            }
+            Ok(loopx_contract::LoopxCliShrinkTodoTextsResult {
+                goal_id: request.goal_id,
+                examined,
+                shortened,
             })
         })
     }
@@ -1842,6 +3451,13 @@ enum SettlementBinding {
 }
 
 impl SettlementBinding {
+    fn todo_id(&self) -> Option<&str> {
+        match self {
+            Self::Todo { todo_id } => Some(todo_id.as_str()),
+            Self::AutonomousReplan { .. } => None,
+        }
+    }
+
     fn effect_id(&self, goal_id: &str, agent_id: &str, turn_id: &str) -> String {
         match self {
             Self::Todo { todo_id } => settlement_effect_id(goal_id, agent_id, todo_id, turn_id),
@@ -1850,6 +3466,132 @@ impl SettlementBinding {
             }
         }
     }
+}
+
+/// Host-side `quota should-run` arguments for one bounded turn. The todo
+/// binding must match the planned settlement binding exactly: LoopX rejects
+/// turn-scoped `refresh-state` writebacks whose todo differs from the guard
+/// receipt. Replan obligations cannot ride on the guard (the pinned CLI only
+/// accepts `--replan-obligation-id` on `spend-slot`), so those guards run
+/// unbound, matching the legacy behavior.
+fn turn_guard_args(
+    goal_id: &str,
+    agent_id: &str,
+    binding: Option<&SettlementBinding>,
+    turn_id: &str,
+) -> Vec<OsString> {
+    let mut args = vec![
+        "quota".to_string(),
+        "should-run".to_string(),
+        "--goal-id".to_string(),
+        goal_id.to_string(),
+    ];
+    if let Some(todo_id) = binding.and_then(SettlementBinding::todo_id) {
+        args.extend(["--todo-id".to_string(), todo_id.to_string()]);
+    }
+    args.extend([
+        "--agent-id".to_string(),
+        agent_id.to_string(),
+        "--runtime-profile".to_string(),
+        "outer_controller".to_string(),
+        "--turn-instance-id".to_string(),
+        turn_id.to_string(),
+    ]);
+    args.into_iter().map(OsString::from).collect()
+}
+
+/// The exact already-prefixed guard command injected into the task body's
+/// preflight fence. It is the only sanctioned re-run path when a settlement
+/// command reports a missing or mismatched heartbeat receipt.
+fn turn_guard_prompt_command(
+    cli_prefix: &str,
+    goal_id: &str,
+    agent_id: &str,
+    binding: Option<&SettlementBinding>,
+    turn_id: &str,
+) -> String {
+    let todo_flag = match binding.and_then(SettlementBinding::todo_id) {
+        Some(todo_id) => format!("--todo-id {todo_id} "),
+        None => String::new(),
+    };
+    format!(
+        "{cli_prefix} quota should-run --goal-id {goal_id} {todo_flag}--agent-id {agent_id} --runtime-profile outer_controller --turn-instance-id {turn_id}"
+    )
+}
+
+/// Replaces the pinned compact heartbeat body's Codex-CLI preflight bash
+/// fence (PATH setup, `loopx doctor`, install-local fallback, unbound guard)
+/// with the host-owned bound guard command. The pinned v0.5.1 compact body
+/// renders exactly one fence containing the install-local fallback and the
+/// guard command; replacement is structural and fails soft when the body
+/// shape drifts, in which case the binding block and settlement override
+/// still carry the contract.
+fn replace_embedded_preflight_fence(adapted_prompt: &str, guard_command: &str) -> String {
+    let lines: Vec<&str> = adapted_prompt.lines().collect();
+    let mut result: Vec<String> = Vec::with_capacity(lines.len() + 2);
+    let mut index = 0;
+    let mut replaced_any = false;
+    while index < lines.len() {
+        let line = lines[index];
+        if line.trim() == "```bash" {
+            if let Some(offset) = lines[index + 1..]
+                .iter()
+                .position(|candidate| candidate.trim() == "```")
+            {
+                let close = index + 1 + offset;
+                let block = &lines[index + 1..close];
+                let is_codex_install_block = block
+                    .iter()
+                    .any(|candidate| candidate.contains("install-local.sh"))
+                    && block
+                        .iter()
+                        .any(|candidate| candidate.contains("quota should-run"));
+                if is_codex_install_block {
+                    result.push("```bash".to_string());
+                    result.push(guard_command.to_string());
+                    result.push("```".to_string());
+                    replaced_any = true;
+                    index = close + 1;
+                    continue;
+                }
+            }
+        }
+        result.push(line.to_string());
+        index += 1;
+    }
+    if !replaced_any {
+        return adapted_prompt.to_string();
+    }
+    let mut joined = result.join("\n");
+    if adapted_prompt.ends_with('\n') && !joined.ends_with('\n') {
+        joined.push('\n');
+    }
+    joined
+}
+
+/// Neutralizes the pinned compact body's lines that contradict the BitFun
+/// external-host contract: the upstream quota spend example (the host owns
+/// accounting) and the Codex-specific pre-trusted-session note (BitFun turns
+/// request owner decisions through typed user gates). Line-scoped and
+/// fail-soft for the pinned body shape.
+fn replace_host_conflicting_lines(adapted_prompt: &str) -> String {
+    let lines = adapted_prompt
+        .lines()
+        .map(|line| {
+            if line.contains("quota spend-slot") {
+                return "# quota spend-slot is executed by the BitFun host after settlement verification; do not run it.".to_string();
+            }
+            if line.contains("Codex session is already trusted") {
+                return "The BitFun session is not pre-trusted: request owner decisions by writing a `user_gate` todo through the LoopX CLI, then end the turn.".to_string();
+            }
+            line.to_string()
+        })
+        .collect::<Vec<_>>();
+    let mut joined = lines.join("\n");
+    if adapted_prompt.ends_with('\n') && !joined.ends_with('\n') {
+        joined.push('\n');
+    }
+    joined
 }
 
 fn settlement_prompt_override(
@@ -1869,7 +3611,7 @@ fn settlement_prompt_override(
         None => format!("--turn-instance-id {turn_id} --agent-id {agent_id}"),
     };
     format!(
-        "BitFun external-host settlement boundary (this final block overrides generic spend examples above):\n- The host owns quota accounting. Do not run `quota spend-slot`; do not retry or repair quota yourself.\n- Before ending a materially productive turn, validate the real result and append one accountable `refresh-state` using the exact CLI prefix and these mandatory binding flags: `{binding_flags}`.\n- Choose truthful classification, delivery scale, delivery outcome, and typed progress fields from the work actually completed; never invent progress.\n- On Windows, keep LoopX control-plane text arguments in English ASCII so command-line writeback remains lossless. Product files and user-visible source content are not restricted by this rule.\n- Required command shape: `{cli_prefix} refresh-state --goal-id {goal_id} <truthful outcome fields> {binding_flags}`.\n- After that durable writeback succeeds, end the turn. The host will verify it and append/read back the exact idempotent quota receipt."
+        "BitFun external-host settlement boundary (this final block overrides generic spend examples above):\n- The host owns quota accounting. Do not run `quota spend-slot`; do not retry or repair quota yourself.\n- The turn guard was already executed and bound by the host before the agent started. If `refresh-state` rejects the writeback because the heartbeat receipt is missing or mismatched, re-run the exact guard command printed in the task body preflight once with this turn id, then retry the identical `refresh-state` once.\n- Before ending a materially productive turn, validate the real result and append one accountable `refresh-state` using the exact CLI prefix and these mandatory binding flags: `{binding_flags}`.\n- Choose truthful classification, delivery scale, delivery outcome, and typed progress fields from the work actually completed; never invent progress.\n- On Windows, keep LoopX control-plane text arguments in English ASCII so command-line writeback remains lossless. Product files and user-visible source content are not restricted by this rule.\n- Required command shape: `{cli_prefix} refresh-state --goal-id {goal_id} <truthful outcome fields> {binding_flags}`.\n- After that durable writeback succeeds, end the turn. The host will verify it and append/read back the exact idempotent quota receipt."
     )
 }
 
@@ -2109,15 +3851,59 @@ fn project_legacy_settlement(
         after_revision: snapshot.durable_revision.clone(),
         validation_succeeded,
         scheduler_hint_ms: snapshot.scheduler_hint_ms,
+        binding_todo_id: None,
     })
 }
 
-fn agent_shell_command(path: &Path) -> String {
-    let display = path.to_string_lossy().replace('"', "\\\"");
+fn agent_shell_command(command: &VerifiedLoopxCommand) -> String {
+    let display = command.executable.to_string_lossy().replace('"', "\\\"");
+    let arguments = command
+        .prefix_args
+        .iter()
+        .map(|argument| agent_shell_value(&argument.to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(" ");
     if cfg!(windows) {
-        format!("& \"{display}\"")
+        let environment = command
+            .environment
+            .iter()
+            .map(|(key, value)| {
+                format!(
+                    "$env:{}={}; ",
+                    key.to_string_lossy(),
+                    agent_shell_value(&value.to_string_lossy())
+                )
+            })
+            .collect::<String>();
+        format!(
+            "{environment}& \"{display}\"{}",
+            if arguments.is_empty() {
+                String::new()
+            } else {
+                format!(" {arguments}")
+            }
+        )
     } else {
-        format!("'{}'", display.replace('\'', "'\\''"))
+        let environment = command
+            .environment
+            .iter()
+            .map(|(key, value)| {
+                format!(
+                    "{}={} ",
+                    key.to_string_lossy(),
+                    agent_shell_value(&value.to_string_lossy())
+                )
+            })
+            .collect::<String>();
+        format!(
+            "{environment}'{}'{}",
+            display.replace('\'', "'\\''"),
+            if arguments.is_empty() {
+                String::new()
+            } else {
+                format!(" {arguments}")
+            }
+        )
     }
 }
 
@@ -2126,6 +3912,66 @@ fn agent_shell_value(value: &str) -> String {
         format!("\"{}\"", value.replace('"', "\\\""))
     } else {
         format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+/// Runs `issue-fix workflow-plan --fetch-candidate-evidence --goal-id`
+/// for issue-kind items and returns the newer workflow-plan packet JSON.
+/// Returns an empty string (with a warning) on any failure instead of
+/// propagating the error.
+async fn collect_candidate_evidence_best_effort(
+    adapter: &LoopxCliProcessAdapter,
+    request: &loopx_contract::LoopxCliCreateGoalRequest,
+    operation_id: &str,
+    observer: &PortProcessObserver<'_>,
+) -> String {
+    if !matches!(
+        request.intake.item.kind,
+        loopx_contract::LoopxItemKind::Issue
+    ) {
+        return String::new();
+    }
+    let result = run_port_command(
+        adapter,
+        &request.context,
+        candidate_evidence_args(&request.goal_id, &request.intake.item.canonical_url()),
+        observer,
+    )
+    .await;
+    let output = match result {
+        Ok(output) => output,
+        Err(error) => {
+            log::warn!(
+                "LoopX candidate evidence collection skipped: operation_id={operation_id}, goal_id={}, error={}",
+                request.goal_id,
+                error
+            );
+            return String::new();
+        }
+    };
+    if let Err(error) = require_payload_ok(&output.payload, operation_id) {
+        log::warn!(
+            "LoopX candidate evidence collection returned a non-ok payload: operation_id={operation_id}, goal_id={}, error={}",
+            request.goal_id,
+            error
+        );
+        return String::new();
+    }
+    if let Err(error) = require_schema(
+        &output.payload,
+        "issue_fix_workflow_plan_packet_v0",
+        operation_id,
+    ) {
+        log::warn!(
+            "LoopX candidate evidence packet failed the schema check: operation_id={operation_id}, goal_id={}, error={}",
+            request.goal_id,
+            error
+        );
+        return String::new();
+    }
+    match serde_json::to_string(&output.payload) {
+        Ok(json) if json.len() <= MAX_INTAKE_PLAN_PACKET_BYTES => json,
+        _ => String::new(),
     }
 }
 
@@ -2191,16 +4037,48 @@ fn process_error_json(error: &LoopxCliAdapterError) -> Option<Value> {
     serde_json::from_str(&stdout_tail.join("\n")).ok()
 }
 
+/// Maps the host-resolved remote state onto the state vocabulary LoopX's
+/// metadata projection accepts (`open` | `closed` | `unknown`). LoopX has no
+/// `merged` metadata state; a merged PR is already terminal, so `closed` is
+/// the truthful projection.
+fn metadata_state(state: loopx_contract::LoopxRemoteItemState) -> &'static str {
+    use loopx_contract::LoopxRemoteItemState;
+    match state {
+        LoopxRemoteItemState::Open => "open",
+        LoopxRemoteItemState::Closed | LoopxRemoteItemState::Merged => "closed",
+        LoopxRemoteItemState::Unknown => "unknown",
+    }
+}
+
+/// Builds the goal objective from the host-resolved title. The workflow-plan
+/// packet carries no objective field, and the issue title is more meaningful
+/// for goal surfaces than the bare canonical URL.
+fn compact_objective(item: &loopx_contract::LoopxIssueKey, title: &str) -> String {
+    const MAX_TITLE_CHARS: usize = 120;
+    let title = title.trim();
+    if title.is_empty() {
+        return format!("Fix {}", item.canonical_url());
+    }
+    let mut bounded: String = title.chars().take(MAX_TITLE_CHARS).collect();
+    if title.chars().count() > MAX_TITLE_CHARS {
+        bounded.push_str("...");
+    }
+    format!("Fix #{}: {}", item.number, bounded)
+}
+
 fn plan_item_args(request: &loopx_contract::LoopxCliPlanItemRequest) -> Vec<OsString> {
     let kind = match request.item.kind {
         loopx_contract::LoopxItemKind::Issue => "issue",
         loopx_contract::LoopxItemKind::PullRequest => "pull_request",
     };
+    // The intake adapter already resolved this metadata from the GitHub API;
+    // never fabricate an open state or drop labels here, because the plan
+    // packet feeds candidate admission, intake classification, and dedup.
     let metadata = serde_json::json!({
         "number": request.item.number,
-        "state": "open",
+        "state": metadata_state(request.state),
         "title": request.title,
-        "labels": [],
+        "labels": request.labels,
         "kind": kind,
     })
     .to_string();
@@ -2213,6 +4091,24 @@ fn plan_item_args(request: &loopx_contract::LoopxCliPlanItemRequest) -> Vec<OsSt
         request.context.worktree_path.clone(),
         "--metadata-json".to_string(),
         metadata,
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
+}
+
+/// Source-backed candidate evidence collection for the freshly bound goal.
+/// LoopX's admission contract requires this receipt before feasibility, and
+/// `--goal-id` persists it into the goal-scoped candidate-preflight ledger.
+fn candidate_evidence_args(goal_id: &str, canonical_url: &str) -> Vec<OsString> {
+    [
+        "issue-fix",
+        "workflow-plan",
+        "--url",
+        canonical_url,
+        "--fetch-candidate-evidence",
+        "--goal-id",
+        goal_id,
     ]
     .into_iter()
     .map(OsString::from)
@@ -2264,6 +4160,29 @@ fn list_todos_args(goal_id: &str) -> Vec<OsString> {
         .into_iter()
         .map(OsString::from)
         .collect()
+}
+
+fn update_todo_text_args(
+    goal_id: &str,
+    todo_id: &str,
+    text: &str,
+    agent_id: &str,
+) -> Vec<OsString> {
+    [
+        "todo",
+        "update",
+        "--goal-id",
+        goal_id,
+        "--todo-id",
+        todo_id,
+        "--text",
+        text,
+        "--agent-id",
+        agent_id,
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
 }
 
 fn todo_matches(existing: &Value, planned: &loopx_contract::LoopxCliTodoPlan) -> bool {
@@ -2439,6 +4358,26 @@ fn settlement_history_args(goal_id: &str) -> Vec<OsString> {
     .collect()
 }
 
+/// Typed `goal-lifecycle stop` arguments for the pinned LoopX version. The
+/// host calls this when a Goal has no runnable work left, so the registry
+/// stops emitting heartbeat turns that would otherwise run forever.
+fn goal_stop_args(goal_id: &str, reason: &str) -> Vec<OsString> {
+    let bounded_reason: String = reason.chars().take(200).collect();
+    [
+        "goal-lifecycle".to_string(),
+        "--goal-id".to_string(),
+        goal_id.to_string(),
+        "--operation".to_string(),
+        "stop".to_string(),
+        "--reason".to_string(),
+        bounded_reason,
+        "--execute".to_string(),
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
+}
+
 fn quota_spend_args(
     goal_id: &str,
     agent_id: &str,
@@ -2507,17 +4446,238 @@ fn archive_runtime_args(goal_id: &str) -> Vec<OsString> {
 #[cfg(test)]
 mod prompt_contract_tests {
     use super::{
-        add_user_gate_args, loopx_contract, matching_durable_progress, planned_settlement_token,
-        project_goal_snapshot, quota_spend_args, settlement_prompt_override, SettlementBinding,
-        AGENT_CLI_USAGE_RULES,
+        add_user_gate_args, candidate_evidence_args, compact_objective, loopx_contract,
+        matching_durable_progress, metadata_state, open_viking_requires_display_language,
+        open_viking_version_supported, parse_open_viking_version, plan_item_args,
+        planned_settlement_token, project_goal_snapshot, quota_spend_args,
+        replace_embedded_preflight_fence, replace_host_conflicting_lines,
+        settlement_prompt_override, truncate_todo_text, turn_guard_args, LoopxProcessError,
+        SettlementBinding, AGENT_CLI_USAGE_RULES,
+    };
+    use bitfun_product_domains::miniapp::loopx::{
+        LoopxCliPlanItemRequest, LoopxIssueKey, LoopxItemKind, LoopxRemoteItemState,
+        LoopxRepositoryKey,
     };
     use serde_json::json;
+    use std::ffi::OsString;
+
+    fn issue_key(number: u64) -> LoopxIssueKey {
+        LoopxIssueKey {
+            repository: LoopxRepositoryKey {
+                host: "github.com".to_string(),
+                owner: "owner".to_string(),
+                repository: "repo".to_string(),
+            },
+            kind: LoopxItemKind::Issue,
+            number,
+        }
+    }
+
+    #[test]
+    fn plan_item_args_pass_resolved_state_and_labels() {
+        let request = LoopxCliPlanItemRequest {
+            item: issue_key(42),
+            title: "Search returns stale results".to_string(),
+            state: LoopxRemoteItemState::Closed,
+            labels: vec!["bug".to_string(), "needs-repro".to_string()],
+            ..Default::default()
+        };
+        let metadata = plan_item_args(&request)
+            .windows(2)
+            .find(|pair| pair[0] == OsString::from("--metadata-json"))
+            .map(|pair| pair[1].to_string_lossy().into_owned())
+            .expect("metadata json argument");
+        let payload: serde_json::Value = serde_json::from_str(&metadata).unwrap();
+        assert_eq!(payload["state"], "closed");
+        assert_eq!(payload["labels"], json!(["bug", "needs-repro"]));
+        assert_eq!(payload["number"], 42);
+        assert_eq!(payload["kind"], "issue");
+    }
+
+    #[test]
+    fn metadata_state_maps_merged_and_unknown_truthfully() {
+        assert_eq!(metadata_state(LoopxRemoteItemState::Open), "open");
+        assert_eq!(metadata_state(LoopxRemoteItemState::Closed), "closed");
+        // LoopX has no merged metadata state; merged is already terminal.
+        assert_eq!(metadata_state(LoopxRemoteItemState::Merged), "closed");
+        assert_eq!(metadata_state(LoopxRemoteItemState::Unknown), "unknown");
+    }
+
+    #[test]
+    fn compact_objective_uses_the_resolved_title_and_bounds_length() {
+        let item = issue_key(42);
+        assert_eq!(
+            compact_objective(&item, "  Crash on empty input  "),
+            "Fix #42: Crash on empty input"
+        );
+        assert_eq!(
+            compact_objective(&item, ""),
+            format!("Fix {}", item.canonical_url())
+        );
+        let long = format!("{}-tail", "x".repeat(200));
+        let objective = compact_objective(&item, &long);
+        assert!(objective.starts_with("Fix #42: "));
+        assert!(objective.chars().count() <= "Fix #42: ".len() + 123);
+        assert!(objective.ends_with("..."));
+    }
+
+    #[test]
+    fn candidate_evidence_args_bind_goal_and_evidence_fetch() {
+        let args = candidate_evidence_args("goal-42", "https://github.com/owner/repo/issues/42");
+        let joined = args
+            .iter()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(
+            joined,
+            "issue-fix workflow-plan --url https://github.com/owner/repo/issues/42 \
+             --fetch-candidate-evidence --goal-id goal-42"
+        );
+        // The global --format flag is owned by run_json_command, never here.
+        assert!(!joined.contains("--format"));
+    }
+
+    #[test]
+    fn agent_cli_contract_names_only_real_issue_fix_subcommands_and_lifecycle_forms() {
+        // LoopX v0.5.1 has no `issue-fix candidate-preflight` subcommand;
+        // evidence collection runs through `workflow-plan --fetch-candidate-evidence`.
+        assert!(!AGENT_CLI_USAGE_RULES.contains("`candidate-preflight`"));
+        assert!(AGENT_CLI_USAGE_RULES.contains(
+            "`issue-fix pr-lifecycle --url <github-pr-url> --goal-id <goal> --claimed-by <agent> --execute-transition`"
+        ));
+        assert!(AGENT_CLI_USAGE_RULES.contains("do not hand-create per-PR monitor todos"));
+        assert!(AGENT_CLI_USAGE_RULES.contains(
+            "a `continuous_monitor` additionally requires `--cadence <cadence>` plus exactly one terminal condition"
+        ));
+        assert!(AGENT_CLI_USAGE_RULES.contains("--resume-when <condition>"));
+    }
 
     #[test]
     fn agent_cli_contract_pins_global_format_and_scoped_agent_options() {
         assert!(AGENT_CLI_USAGE_RULES.contains("before the subcommand"));
         assert!(AGENT_CLI_USAGE_RULES.contains("whose `--help` output lists it"));
         assert!(AGENT_CLI_USAGE_RULES.contains("do not repeat the rejected form"));
+    }
+
+    #[test]
+    fn agent_cli_contract_teaches_the_settlement_binding_chain() {
+        // The guard form carries the todo binding that LoopX compares against
+        // the turn-scoped `refresh-state` writeback.
+        assert!(AGENT_CLI_USAGE_RULES.contains(
+            "`quota should-run --goal-id <goal> --todo-id <todo> --agent-id <agent> --runtime-profile outer_controller --turn-instance-id \"<turn>\"`"
+        ));
+        assert!(AGENT_CLI_USAGE_RULES.contains("--todo-id <todo> --turn-instance-id \"<turn>\" --delivery-outcome <outcome_progress|primary_goal_outcome>"));
+        assert!(AGENT_CLI_USAGE_RULES.contains("--no-follow-up"));
+        assert!(AGENT_CLI_USAGE_RULES.contains("--next-agent-todo"));
+        assert!(AGENT_CLI_USAGE_RULES
+            .contains("`goal-lifecycle` and all `quota spend`/`void` commands are host-owned"));
+    }
+
+    #[test]
+    fn todo_text_is_bounded_for_the_turn_envelope_budget() {
+        let long = format!(
+            "[P0] {} detailed acceptance criteria and file paths",
+            "x".repeat(400)
+        );
+        let bounded = truncate_todo_text(&long);
+        assert!(bounded.chars().count() <= 203);
+        assert!(bounded.ends_with("..."));
+        assert_eq!(truncate_todo_text("short text"), "short text");
+    }
+
+    #[test]
+    fn turn_guard_args_bind_the_settlement_todo() {
+        let bound = turn_guard_args(
+            "goal-1",
+            "agent-1",
+            Some(&SettlementBinding::Todo {
+                todo_id: "todo-1".to_string(),
+            }),
+            "turn-1",
+        );
+        let bound_text = bound
+            .iter()
+            .map(|argument| argument.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(
+            bound_text,
+            "quota should-run --goal-id goal-1 --todo-id todo-1 --agent-id agent-1 --runtime-profile outer_controller --turn-instance-id turn-1"
+        );
+
+        let unbound = turn_guard_args("goal-1", "agent-1", None, "turn-1");
+        let unbound_text = unbound
+            .iter()
+            .map(|argument| argument.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!unbound_text.contains("--todo-id"));
+    }
+
+    #[test]
+    fn embedded_codex_preflight_fence_is_replaced_with_the_bound_guard() {
+        let body = "Preflight/guard; `LOOPX_TURN=<current_time_iso>`; reuse:\n\n```bash\nexport PATH=\"$HOME/.local/bin:$PATH\"\ninstall_script=\"$HOME/loopx/scripts/install-local.sh\"\nif ! command -v loopx >/dev/null 2>&1; then\n  echo \"loopx is not on PATH\" >&2\n  exit 1\nfi\nloopx doctor >/dev/null\nloopx --format json --registry \"$HOME/.codex/loopx/registry.global.json\" quota should-run --goal-id goal-1 --agent-id agent-1 --runtime-profile outer_controller --turn-instance-id \"${LOOPX_TURN:?}\"\n```\n\nPreflight fail: quiet; no work/spend.\n";
+        let replaced =
+            replace_embedded_preflight_fence(body, "PREFIX quota should-run --todo-id todo-1");
+        assert!(replaced.contains("PREFIX quota should-run --todo-id todo-1"));
+        assert!(!replaced.contains("install-local.sh"));
+        assert!(!replaced.contains("loopx doctor"));
+        assert!(replaced.contains("Preflight fail: quiet; no work/spend."));
+        assert_eq!(replaced.matches("```bash").count(), 1);
+
+        // Later bash fences (progress refresh examples) must survive.
+        assert!(replace_embedded_preflight_fence(
+            "intro\n```bash\nloopx refresh-state --goal-id goal-1\n```\ntail",
+            "PREFIX guard"
+        )
+        .contains("loopx refresh-state --goal-id goal-1"));
+        // A body without the Codex fence is returned unchanged.
+        assert_eq!(
+            replace_embedded_preflight_fence("no fence here", "PREFIX guard"),
+            "no fence here"
+        );
+    }
+
+    #[test]
+    fn host_conflicting_body_lines_are_neutralized() {
+        let body = "9. Refresh; spend once:\n\n```bash\nloopx refresh-state --goal-id goal-1\nloopx quota spend-slot --goal-id goal-1 --slots 1 --execute\n```\n\nDo not ask for permissions when the current Codex session is already trusted.\n";
+        let replaced = replace_host_conflicting_lines(body);
+        assert!(replaced.contains("# quota spend-slot is executed by the BitFun host"));
+        assert!(!replaced.contains("spend-slot --goal-id"));
+        assert!(replaced.contains("The BitFun session is not pre-trusted"));
+        assert!(!replaced.contains("Codex session is already trusted"));
+        assert!(replaced.contains("loopx refresh-state --goal-id goal-1"));
+    }
+
+    #[test]
+    fn open_viking_version_probe_accepts_the_pinned_compatibility_floor() {
+        assert_eq!(
+            parse_open_viking_version("openviking 0.4.9\n"),
+            Some("0.4.9".to_string())
+        );
+        assert!(open_viking_version_supported("0.4.9"));
+        assert!(open_viking_version_supported("0.4.17"));
+        assert!(!open_viking_version_supported("0.4.8"));
+    }
+
+    #[test]
+    fn open_viking_language_bootstrap_only_matches_the_explicit_first_run_gate() {
+        let missing_language = LoopxProcessError::Exited {
+            code: Some(2),
+            stdout_tail: Vec::new(),
+            stderr_tail: vec![
+                "OpenViking needs a display language before running commands.".to_string(),
+            ],
+        };
+        assert!(open_viking_requires_display_language(&missing_language));
+
+        let service_failure = LoopxProcessError::Exited {
+            code: Some(2),
+            stdout_tail: Vec::new(),
+            stderr_tail: vec!["OpenViking service is unavailable".to_string()],
+        };
+        assert!(!open_viking_requires_display_language(&service_failure));
     }
 
     #[test]
@@ -2547,9 +4707,9 @@ mod prompt_contract_tests {
         assert!(args
             .windows(2)
             .any(|pair| pair[0] == "--blocks-agent" && pair[1] == "agent-1"));
-        assert!(args.windows(2).any(|pair| {
-            pair[0] == "--action-kind" && pair[1] == "autonomous_budget_review"
-        }));
+        assert!(args
+            .windows(2)
+            .any(|pair| { pair[0] == "--action-kind" && pair[1] == "autonomous_budget_review" }));
     }
 
     #[test]
@@ -2788,6 +4948,7 @@ mod prompt_contract_tests {
         assert!(prompt.contains("--todo-id todo-1 --turn-instance-id turn-1"));
         assert!(prompt.contains("The host owns quota accounting"));
         assert!(prompt.contains("Do not run `quota spend-slot`"));
+        assert!(prompt.contains("The turn guard was already executed and bound by the host"));
         assert!(prompt.contains("English ASCII"));
     }
 
@@ -3066,7 +5227,58 @@ fn project_goal_snapshot(
                     .collect()
             })
             .unwrap_or_default(),
+        open_agent_todos: Vec::new(),
+        envelope_over_budget: envelope
+            .pointer("/compaction/within_budget")
+            .and_then(Value::as_bool)
+            == Some(false),
     })
+}
+
+/// Projects a bounded list of open agent todos from a `todo list` payload.
+/// Lenient by design: an unexpected item shape is skipped, and an empty or
+/// missing `todos` array yields an empty projection. Text is truncated so the
+/// host prompt injection stays bounded regardless of registry contents.
+fn project_open_agent_todos(
+    payload: &Value,
+    operation_id: &str,
+) -> Vec<loopx_contract::LoopxCliTodoSummary> {
+    let Some(todos) = payload.get("todos").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let _ = operation_id;
+    todos
+        .iter()
+        .filter(|todo| {
+            let status = todo
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            todo.get("role").and_then(Value::as_str) == Some("agent")
+                && todo.get("done").and_then(Value::as_bool) != Some(true)
+                && !matches!(
+                    status,
+                    "completed" | "closed" | "done" | "archived" | "cancelled"
+                )
+        })
+        .take(MAX_OPEN_AGENT_TODO_SUMMARIES)
+        .filter_map(|todo| {
+            let todo_id = todo.get("todo_id").and_then(Value::as_str)?;
+            let text = todo.get("text").and_then(Value::as_str).unwrap_or_default();
+            if todo_id.trim().is_empty() {
+                return None;
+            }
+            Some(loopx_contract::LoopxCliTodoSummary {
+                todo_id: todo_id.to_string(),
+                status: todo
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                text: truncate_message(text),
+            })
+        })
+        .collect()
 }
 
 fn project_pending_user_gate(
@@ -3394,8 +5606,42 @@ fn now_unix_ms() -> i64 {
         .unwrap_or(i64::MAX)
 }
 
+/// Registry todo texts are bounded: the complete LoopX turn envelope — which
+/// embeds the selected todo text and action portfolio — must fit LoopX's fixed
+/// compaction budget, and long workflow-planner texts have been observed
+/// pushing a Goal past it (route contract_error, unplannable until shrunk).
+fn truncate_todo_text(text: &str) -> String {
+    const MAX_TODO_TEXT_CHARS: usize = 200;
+    let trimmed = text.trim();
+    if trimmed.chars().count() <= MAX_TODO_TEXT_CHARS {
+        return trimmed.to_string();
+    }
+    let mut bounded: String = trimmed.chars().take(MAX_TODO_TEXT_CHARS).collect();
+    bounded.push_str("...");
+    bounded
+}
+
 fn truncate_message(message: &str) -> String {
     message.chars().take(500).collect()
+}
+
+fn python_version_supported(output: &str) -> bool {
+    let Some(version) = output.split_whitespace().find(|part| {
+        part.chars()
+            .next()
+            .map(|character| character.is_ascii_digit())
+            .unwrap_or(false)
+    }) else {
+        return false;
+    };
+    let mut components = version.split('.');
+    let major = components
+        .next()
+        .and_then(|value| value.parse::<u32>().ok());
+    let minor = components
+        .next()
+        .and_then(|value| value.parse::<u32>().ok());
+    matches!((major, minor), (Some(major), Some(minor)) if major > 3 || (major == 3 && minor >= 11))
 }
 
 fn output_tail(bytes: &[u8]) -> Vec<String> {
@@ -3418,6 +5664,21 @@ fn process_error_detail(lines: &[String]) -> String {
     truncate_message(&detail)
 }
 
+fn open_viking_requires_display_language(error: &LoopxProcessError) -> bool {
+    let LoopxProcessError::Exited {
+        stdout_tail,
+        stderr_tail,
+        ..
+    } = error
+    else {
+        return false;
+    };
+    stdout_tail
+        .iter()
+        .chain(stderr_tail)
+        .any(|line| line.contains("needs a display language before running commands"))
+}
+
 fn is_public_token(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
@@ -3429,9 +5690,142 @@ fn is_public_token(value: &str) -> bool {
 #[derive(Debug)]
 struct LoopxCandidate {
     executable: PathBuf,
+    prefix_args: Vec<OsString>,
+    environment: BTreeMap<OsString, OsString>,
+    managed_source_dir: Option<PathBuf>,
     source: LoopxCommandSource,
     bundle_manifest_schema: Option<u32>,
     sha256: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ManagedLoopxSourceManifest {
+    schema_version: u32,
+    source_repository: String,
+    source_tag: String,
+    source_commit: String,
+    loopx_version: String,
+}
+
+#[derive(Debug, Clone)]
+struct OpenVikingCommand {
+    executable: PathBuf,
+    version: Option<String>,
+    managed: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ManagedOpenVikingManifest {
+    schema_version: u32,
+    source_repository: String,
+    source_tag: String,
+    source_commit: String,
+    open_viking_version: String,
+    loopx_provider_commit: String,
+    binary_sha256: String,
+}
+
+fn open_viking_binary(root: &Path) -> PathBuf {
+    root.join("bin")
+        .join(if cfg!(windows) { "ov.exe" } else { "ov" })
+}
+
+fn loopx_extension_venv(root: &Path) -> PathBuf {
+    root.join("loopx-extension")
+}
+
+fn loopx_extension_bin_dir(root: &Path) -> PathBuf {
+    loopx_extension_venv(root).join(if cfg!(windows) { "Scripts" } else { "bin" })
+}
+
+fn loopx_extension_python(root: &Path) -> PathBuf {
+    loopx_extension_bin_dir(root).join(if cfg!(windows) {
+        "python.exe"
+    } else {
+        "python"
+    })
+}
+
+fn loopx_extension_entrypoint(root: &Path) -> PathBuf {
+    loopx_extension_bin_dir(root).join(if cfg!(windows) {
+        "loopx-openviking-semantic-preference.exe"
+    } else {
+        "loopx-openviking-semantic-preference"
+    })
+}
+
+fn parse_open_viking_version(output: &str) -> Option<String> {
+    output.split_whitespace().find_map(|token| {
+        let candidate = token
+            .trim_matches(|character: char| !character.is_ascii_alphanumeric() && character != '.');
+        let candidate = candidate.strip_prefix('v').unwrap_or(candidate);
+        let components = candidate.split('.').collect::<Vec<_>>();
+        if components.len() >= 3
+            && components
+                .iter()
+                .take(3)
+                .all(|component| component.parse::<u32>().is_ok())
+        {
+            Some(components[..3].join("."))
+        } else {
+            None
+        }
+    })
+}
+
+fn open_viking_version_supported(version: &str) -> bool {
+    fn tuple(version: &str) -> Option<(u32, u32, u32)> {
+        let mut components = version.split('.');
+        Some((
+            components.next()?.parse().ok()?,
+            components.next()?.parse().ok()?,
+            components.next()?.parse().ok()?,
+        ))
+    }
+    matches!(
+        (tuple(version), tuple(OPEN_VIKING_PINNED_VERSION)),
+        (Some(actual), Some(minimum)) if actual >= minimum
+    )
+}
+
+fn verify_managed_open_viking_manifest(
+    manifest: &ManagedOpenVikingManifest,
+) -> Result<(), LoopxCliAdapterError> {
+    let digest_valid = manifest.binary_sha256.len() == 64
+        && manifest
+            .binary_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit());
+    if manifest.schema_version != MANAGED_OPEN_VIKING_MANIFEST_SCHEMA
+        || manifest.source_repository != OPEN_VIKING_SOURCE_REPOSITORY
+        || manifest.source_tag != OPEN_VIKING_PINNED_VERSION_TAG
+        || manifest.source_commit != OPEN_VIKING_PINNED_SOURCE_COMMIT
+        || manifest.open_viking_version != OPEN_VIKING_PINNED_VERSION
+        || manifest.loopx_provider_commit != LOOPX_PINNED_SOURCE_COMMIT
+        || !digest_valid
+    {
+        return Err(LoopxCliAdapterError::Manifest {
+            message: "managed OpenViking manifest does not match the pinned source release"
+                .to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn verify_managed_source_manifest(
+    manifest: &ManagedLoopxSourceManifest,
+) -> Result<(), LoopxCliAdapterError> {
+    if manifest.schema_version != MANAGED_SOURCE_MANIFEST_SCHEMA
+        || manifest.source_repository != LOOPX_SOURCE_REPOSITORY
+        || manifest.source_tag != LOOPX_PINNED_VERSION_TAG
+        || manifest.source_commit != LOOPX_PINNED_SOURCE_COMMIT
+        || manifest.loopx_version != LOOPX_PINNED_VERSION
+    {
+        return Err(LoopxCliAdapterError::Manifest {
+            message: "managed LoopX source manifest does not match the pinned release".to_string(),
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]

@@ -347,6 +347,27 @@ fn action_and_create_requests_use_idempotency_and_revision_fields() {
     assert_eq!(reset.action, LoopxActionKind::ResetAll);
     assert_eq!(reset.task_id, None);
 
+    let install: LoopxActionRequest = serde_json::from_value(serde_json::json!({
+        "action": "install_loopx",
+        "clientRequestId": "request-install",
+        "expectedRevision": 19
+    }))
+    .unwrap();
+    assert_eq!(install.action, LoopxActionKind::InstallLoopx);
+    assert_eq!(install.task_id, None);
+
+    let install_open_viking: LoopxActionRequest = serde_json::from_value(serde_json::json!({
+        "action": "install_open_viking",
+        "clientRequestId": "request-install-open-viking",
+        "expectedRevision": 20
+    }))
+    .unwrap();
+    assert_eq!(
+        install_open_viking.action,
+        LoopxActionKind::InstallOpenViking
+    );
+    assert_eq!(install_open_viking.task_id, None);
+
     let create: LoopxCreateTaskRequest = serde_json::from_value(serde_json::json!({
         "clientRequestId": "request-2",
         "previewFingerprint": "sha256:abc",
@@ -502,6 +523,22 @@ fn optional_environment_failures_degrade_without_blocking_core_readiness() {
     assert_eq!(
         derive_environment_status(&core, &optional),
         LoopxEnvironmentStatus::Degraded
+    );
+
+    let disabled_optional = LoopxOptionalEnvironmentFacts {
+        open_viking: LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Disabled,
+            ..LoopxEnvironmentFact::default()
+        },
+        feedback_memory: LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Disabled,
+            ..LoopxEnvironmentFact::default()
+        },
+        ..LoopxOptionalEnvironmentFacts::default()
+    };
+    assert_eq!(
+        derive_environment_status(&core, &disabled_optional),
+        LoopxEnvironmentStatus::Ready
     );
 
     let mut blocked_core = core;

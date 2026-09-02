@@ -143,6 +143,40 @@
    `cargo build -p bitfun-desktop --bin bitfun-desktop`。运行中新发现的纯 Web UI 问题
    走 Vite HMR 修复，不再触发第二次 Rust build。
 
+9. **2026-09-02 “全部已中止”复盘（跨版本数据根冲突 + 注意力契约）**：LoopX 任务
+   集体进入 recovery，错误为 `Agent coordination database schema 2 is newer than
+   supported schema 1`。根因不是 LoopX 工作流，而是**数据根跨构建共享**：
+   `coordination.sqlite` 位于 `BITFUN_USER_ROOT`（默认 `%APPDATA%/bitfun/`），
+   安装版 / worktree 构建 / dev 构建全部写同一个库；带 swarm 表的新构建把它升到
+   schema 2，只认 schema 1 的 dev 构建按设计拒绝打开，于是每个 LoopX 回合创建
+   Agent 会话都失败。修复必须做在结构上而不是 case 上：
+   - dev 启动（`scripts/dev.cjs`）已设置独立 `BITFUN_USER_ROOT`
+     （`%APPDATA%/com.bitfun.desktop.dev/bitfun`），跨构建 schema 冲突从此结构性
+     不可能；diagnose “已中止/恢复”类问题第一步永远是
+     `PRAGMA user_version` + 任务快照的 `task.error`。
+   - `apply_goal_projection` 在权威 Goal 投影恢复健康（非 recovery/failed）时清除
+     陈旧 `task.error`，避免旧环境错误挂在已恢复任务上误导排查。
+   - **注意力契约**：人类注意力是稀缺资源。无头 agent 会话（sessionKind
+     'miniapp'）的每轮完成永不发系统通知（`dialogCompletionNotifyPolicy` 显式
+     排除）；OS 通知只在 owner 决策点发出（user gate 出现时经
+     `notifications.system`）。不要用命令黑名单去拦 Agent 的弹窗能力，也不要在
+     宿主侧发明停滞/回合数启发式门禁——钻牛角尖防护复用 LoopX 自有机制
+     （stall observation → autonomous replan obligation → 持续卡住 pause；
+     agent 主动 user_gate），外部写入（创建 PR）保持天然 owner 审批。
+
+10. **2026-09-02 envelope 超预算复盘（升级 loopx 版本不解决）**：turn plan 返回
+   `route=contract_error`（`turn_envelope.compaction.within_budget=false`）时，
+   Goal 无法被计划，且 **v0.5.1 / v0.5.2 / v0.5.3 / main 行为完全一致**——实测
+   同一 goal 在全部版本下 envelope 均超 8192 字节预算（8279/8192，仅超 87 字节，
+   源 46KB）。压缩增强（#2190 text_ref 去重）已在 pin 内仍不够；
+   `todo archive-completed` 不影响 envelope。宿主正确姿势是**响亮降级**：
+   `LoopxCliGoalSnapshot.envelope_over_budget` → Queued + 诊断事件 + 退避重试，
+   绝不 fail 进 recovery 死循环。立即解套手段：`todo update --text` 精简超长
+   todo 文本（实测 8279→7762，回到预算内）。根治需上游：提高 envelope 预算、
+   渐进截断 recommended_action/suggested_actions 长文本、或提供 goal compact
+   自愈命令（loopx 仓库议题）。
+
+
 ## 禁止事项
 
 - 不要主动编译：用户没有明确要求时，不执行 `cargo check`、`cargo build`、

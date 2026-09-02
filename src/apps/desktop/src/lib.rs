@@ -809,6 +809,14 @@ pub async fn run() {
     let path_manager = get_path_manager_arc();
 
     let loopx_resource_dir = api::app_state::resolve_bundled_loopx_dir();
+    let managed_loopx_source_dir = path_manager
+        .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
+        .join("runtime")
+        .join("loopx-source-v0.5.1");
+    let managed_open_viking_dir = path_manager
+        .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
+        .join("runtime")
+        .join("openviking-cli-v0.4.9");
     let mut loopx_cli_config =
         bitfun_services_integrations::miniapp::loopx_cli::LoopxCliAdapterConfig::packaged(
             loopx_resource_dir.clone().unwrap_or_else(|| {
@@ -816,7 +824,9 @@ pub async fn run() {
                     .miniapp_dir(bitfun_product_domains::miniapp::loopx::LOOPX_BUILTIN_APP_ID)
                     .join("missing-bundled-loopx")
             }),
-        );
+        )
+        .with_managed_source_dir(managed_loopx_source_dir)
+        .with_managed_open_viking_dir(managed_open_viking_dir);
     if loopx_resource_dir.is_none() {
         loopx_cli_config.system_fallback =
             bitfun_services_integrations::miniapp::loopx_cli::LoopxSystemFallbackPolicy::ExactPinned;

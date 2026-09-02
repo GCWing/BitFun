@@ -119,6 +119,9 @@ vi.mock('@/app/stores/sceneStore', () => ({
 
 vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   }),

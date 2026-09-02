@@ -70,6 +70,8 @@ const ACTION_KINDS = new Set<LoopxActionKind>([
   'reject',
   'archive',
   'restore',
+  'install_loopx',
+  'install_open_viking',
   'retry_environment',
 ]);
 

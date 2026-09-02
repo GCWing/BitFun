@@ -1,5 +1,6 @@
 use super::tool_activity::ToolActivityProjection;
 use super::{LoopxPersistedState, LoopxStateStore, LoopxTaskRuntimeRecord};
+use crate::util::elapsed_ms_u64;
 use bitfun_product_domains::miniapp::loopx::*;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,8 +18,11 @@ const GOAL_RECONCILE_DEADLINE_MS: i64 = 30_000;
 /// Budget is counted at verified durable settlements, never at tool-call or
 /// prompt-pattern level. A natural LoopX gate or Goal terminal state wins
 /// before this policy is considered.
-const AUTONOMOUS_TURN_BUDGET: u32 = 4;
 const AUTONOMY_REVIEW_ACTION_KIND: &str = "autonomous_budget_review";
+/// Bounds for the host goal-facts block injected into each turn prompt.
+const MAX_HOST_FACT_TODOS: usize = 8;
+const MAX_HOST_FACT_TODO_CHARS: usize = 160;
+const MAX_HOST_FACT_SUMMARY_CHARS: usize = 2_000;
 /// loopx 0.5.1's turn plan exposes only cadence labels, never a numeric
 /// scheduler hint, so the host owns the heartbeat cadence for waiting goals.
 const WAIT_RESCHEDULE_FALLBACK_MS: u64 = 60_000;
@@ -27,9 +31,9 @@ struct ScheduledTask {
     task_id: String,
 }
 
-struct ResetInProgressGuard<'a>(&'a AtomicBool);
+struct InProgressGuard<'a>(&'a AtomicBool);
 
-impl Drop for ResetInProgressGuard<'_> {
+impl Drop for InProgressGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
     }
@@ -72,6 +76,7 @@ pub struct LoopxController {
     event_sender: broadcast::Sender<LoopxEvent>,
     task_sender: mpsc::UnboundedSender<ScheduledTask>,
     load_error: RwLock<Option<String>>,
+    install_in_progress: AtomicBool,
     reset_in_progress: AtomicBool,
 }
 
@@ -105,6 +110,7 @@ impl LoopxController {
             event_sender,
             task_sender,
             load_error: RwLock::new(load_error),
+            install_in_progress: AtomicBool::new(false),
             reset_in_progress: AtomicBool::new(false),
         });
         if restart_changed {
@@ -443,11 +449,17 @@ impl LoopxController {
             operation_id: format!("environment-agent-{probe_id}"),
             model_id: Some("auto".to_string()),
         });
+        let open_viking = self.cli.probe_open_viking(LoopxOpenVikingProbeRequest {
+            call: LoopxCliCallContext {
+                operation_id: format!("environment-openviking-{probe_id}"),
+                deadline_at: None,
+            },
+        });
         let github_auth = self.probe_github_auth();
-        let (handshake, workspace, agent, github_auth) =
-            tokio::join!(handshake, workspace, agent, github_auth);
+        let (handshake, workspace, agent, open_viking, github_auth) =
+            tokio::join!(handshake, workspace, agent, open_viking, github_auth);
         self.record_progress(progress.take()).await?;
-        self.commit_environment(handshake, workspace, agent, github_auth)
+        self.commit_environment(handshake, workspace, agent, open_viking, github_auth)
             .await?;
         self.reconcile_goal_projections(true).await;
         Ok(())
@@ -719,6 +731,8 @@ impl LoopxController {
                             attempt,
                             title: candidate.title.clone(),
                             description: candidate.description.clone(),
+                            state: candidate.state,
+                            labels: candidate.labels.clone(),
                         },
                         generation: 1,
                         revision: 1,
@@ -792,6 +806,12 @@ impl LoopxController {
                 ..LoopxActionResponse::default()
             });
         }
+        if request.action == LoopxActionKind::InstallLoopx {
+            return self.start_loopx_install(&request).await;
+        }
+        if request.action == LoopxActionKind::InstallOpenViking {
+            return self.start_open_viking_install(&request).await;
+        }
         if request.action == LoopxActionKind::ResumeRepository {
             return self.resume_repository(&request).await;
         }
@@ -862,7 +882,10 @@ impl LoopxController {
                     .await
             }
             LoopxActionKind::Resume => self.resume_task(&task, &request.client_request_id).await,
-            LoopxActionKind::ResumeRepository | LoopxActionKind::ResetAll => unreachable!(),
+            LoopxActionKind::ResumeRepository
+            | LoopxActionKind::ResetAll
+            | LoopxActionKind::InstallLoopx
+            | LoopxActionKind::InstallOpenViking => unreachable!(),
             LoopxActionKind::Approve | LoopxActionKind::Reject => {
                 self.answer_gate(&task, &runtime, &request).await
             }
@@ -893,6 +916,354 @@ impl LoopxController {
             }
             LoopxActionKind::RetryEnvironment => unreachable!(),
         }
+    }
+
+    async fn start_loopx_install(
+        self: &Arc<Self>,
+        request: &LoopxActionRequest,
+    ) -> Result<LoopxActionResponse, String> {
+        let started_at = Instant::now();
+        if request.client_request_id.trim().is_empty() {
+            return Err("clientRequestId is required".to_string());
+        }
+        {
+            let state = self.state.read().await;
+            if state.has_processed_request(&request.client_request_id) {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::Duplicate,
+                    current_revision: state.revision,
+                    message: Some("LoopX installation request was already applied".to_string()),
+                    ..LoopxActionResponse::default()
+                });
+            }
+            if state.environment.core.sidecar.status == LoopxEnvironmentFactStatus::Available {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::Duplicate,
+                    current_revision: state.revision,
+                    message: Some("A compatible LoopX runtime is already available".to_string()),
+                    ..LoopxActionResponse::default()
+                });
+            }
+        }
+        if self
+            .install_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Ok(LoopxActionResponse {
+                status: LoopxActionStatus::Duplicate,
+                current_revision: self.state.read().await.revision,
+                message: Some("LoopX installation is already running".to_string()),
+                ..LoopxActionResponse::default()
+            });
+        }
+        let current_revision = match self.mark_loopx_installing(&request.client_request_id).await {
+            Ok(revision) => revision,
+            Err(error) => {
+                self.install_in_progress.store(false, Ordering::Release);
+                return Err(error);
+            }
+        };
+        log::info!(
+            "LoopX installation state persisted: request_id={}, revision={}, duration_ms={}",
+            request.client_request_id,
+            current_revision,
+            elapsed_ms_u64(started_at)
+        );
+        let request_id = request.client_request_id.clone();
+        let controller = Arc::clone(self);
+        tokio::spawn(async move {
+            let _install_guard = InProgressGuard(&controller.install_in_progress);
+            log::info!("LoopX installation background task started: request_id={request_id}");
+            if let Err(error) = controller.run_loopx_install(&request_id).await {
+                log::error!(
+                    "LoopX managed source installation failed: request_id={request_id}, error={error}"
+                );
+                let _ = controller.mark_loopx_install_failed(&error).await;
+            }
+        });
+        Ok(LoopxActionResponse {
+            status: LoopxActionStatus::Applied,
+            current_revision,
+            message: Some("LoopX installation started".to_string()),
+            ..LoopxActionResponse::default()
+        })
+    }
+
+    async fn run_loopx_install(self: &Arc<Self>, request_id: &str) -> Result<(), String> {
+        let progress = BufferedProgress::default();
+        let operation_id = format!("install-loopx-{}", uuid::Uuid::new_v4());
+        let started_at = Instant::now();
+        log::info!(
+            "LoopX installation service call started: request_id={request_id}, operation_id={operation_id}"
+        );
+        let result = self
+            .cli
+            .install_managed_source(
+                LoopxCliInstallManagedSourceRequest {
+                    call: LoopxCliCallContext {
+                        operation_id: operation_id.clone(),
+                        deadline_at: None,
+                    },
+                },
+                &progress,
+            )
+            .await;
+        self.record_progress(progress.take()).await?;
+        let installed = result.map_err(|error| error.to_string())?;
+        log::info!(
+            "LoopX installation service call completed: request_id={request_id}, operation_id={operation_id}, version={}, source={}, commit={}, duration_ms={}",
+            installed.loopx_version,
+            installed.source_repository,
+            installed.source_commit,
+            elapsed_ms_u64(started_at)
+        );
+        self.refresh_environment().await?;
+        Ok(())
+    }
+
+    async fn mark_loopx_installing(&self, request_id: &str) -> Result<u64, String> {
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        let checked_at = Some(now_ms());
+        state.environment.revision = state.environment.revision.saturating_add(1);
+        state.environment.status = LoopxEnvironmentStatus::Checking;
+        state.environment.checked_at = checked_at;
+        state.environment.core.sidecar = LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Checking,
+            version: Some(LOOPX_PINNED_VERSION.to_string()),
+            detail: Some("Downloading runtime files from the official GitHub source".to_string()),
+            checked_at,
+            ..LoopxEnvironmentFact::default()
+        };
+        state.record_processed_request(request_id.to_string());
+        state.revision = state.revision.saturating_add(1);
+        let current_revision = state.revision;
+        let start_cursor = state.cursor;
+        state.append_event(LoopxEvent {
+            kind: LoopxEventKind::EnvironmentChanged,
+            source: LoopxEventSource::System,
+            message: "LoopX managed source installation started".to_string(),
+            occurred_at: now_ms(),
+            ..LoopxEvent::default()
+        });
+        let persisted = state.clone();
+        drop(state);
+        self.store.save(&persisted).await?;
+        self.broadcast_new_events(&persisted, start_cursor);
+        Ok(current_revision)
+    }
+
+    async fn mark_loopx_install_failed(&self, error: &str) -> Result<(), String> {
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        let checked_at = Some(now_ms());
+        state.environment.revision = state.environment.revision.saturating_add(1);
+        state.environment.status = LoopxEnvironmentStatus::Blocked;
+        state.environment.checked_at = checked_at;
+        state.environment.core.sidecar = unavailable_loopx_environment_fact(error, checked_at);
+        state.revision = state.revision.saturating_add(1);
+        let start_cursor = state.cursor;
+        state.append_event(LoopxEvent {
+            kind: LoopxEventKind::EnvironmentChanged,
+            level: LoopxEventLevel::Error,
+            source: LoopxEventSource::System,
+            message: format!("LoopX managed source installation failed: {error}"),
+            important: true,
+            occurred_at: now_ms(),
+            ..LoopxEvent::default()
+        });
+        let persisted = state.clone();
+        drop(state);
+        self.store.save(&persisted).await?;
+        self.broadcast_new_events(&persisted, start_cursor);
+        Ok(())
+    }
+
+    async fn start_open_viking_install(
+        self: &Arc<Self>,
+        request: &LoopxActionRequest,
+    ) -> Result<LoopxActionResponse, String> {
+        let started_at = Instant::now();
+        if request.client_request_id.trim().is_empty() {
+            return Err("clientRequestId is required".to_string());
+        }
+        {
+            let state = self.state.read().await;
+            if state.has_processed_request(&request.client_request_id) {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::Duplicate,
+                    current_revision: state.revision,
+                    message: Some(
+                        "OpenViking installation request was already applied".to_string(),
+                    ),
+                    ..LoopxActionResponse::default()
+                });
+            }
+            if state.environment.optional.open_viking.status
+                == LoopxEnvironmentFactStatus::Available
+            {
+                return Ok(LoopxActionResponse {
+                    status: LoopxActionStatus::Duplicate,
+                    current_revision: state.revision,
+                    message: Some("OpenViking is already available".to_string()),
+                    ..LoopxActionResponse::default()
+                });
+            }
+        }
+        if self
+            .install_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Ok(LoopxActionResponse {
+                status: LoopxActionStatus::Duplicate,
+                current_revision: self.state.read().await.revision,
+                message: Some("An environment installation is already running".to_string()),
+                ..LoopxActionResponse::default()
+            });
+        }
+        let current_revision = match self
+            .mark_open_viking_installing(&request.client_request_id)
+            .await
+        {
+            Ok(revision) => revision,
+            Err(error) => {
+                self.install_in_progress.store(false, Ordering::Release);
+                return Err(error);
+            }
+        };
+        log::info!(
+            "OpenViking installation state persisted: request_id={}, revision={}, duration_ms={}",
+            request.client_request_id,
+            current_revision,
+            elapsed_ms_u64(started_at)
+        );
+        let request_id = request.client_request_id.clone();
+        let controller = Arc::clone(self);
+        tokio::spawn(async move {
+            let _install_guard = InProgressGuard(&controller.install_in_progress);
+            log::info!("OpenViking installation background task started: request_id={request_id}");
+            if let Err(error) = controller.run_open_viking_install(&request_id).await {
+                log::error!(
+                    "OpenViking managed installation failed: request_id={request_id}, error={error}"
+                );
+                let _ = controller.mark_open_viking_install_failed(&error).await;
+            }
+        });
+        Ok(LoopxActionResponse {
+            status: LoopxActionStatus::Applied,
+            current_revision,
+            message: Some("OpenViking installation started".to_string()),
+            ..LoopxActionResponse::default()
+        })
+    }
+
+    async fn run_open_viking_install(self: &Arc<Self>, request_id: &str) -> Result<(), String> {
+        let progress = BufferedProgress::default();
+        let operation_id = format!("install-openviking-{}", uuid::Uuid::new_v4());
+        let started_at = Instant::now();
+        log::info!(
+            "OpenViking installation service call started: request_id={request_id}, operation_id={operation_id}"
+        );
+        let result = self
+            .cli
+            .install_open_viking(
+                LoopxCliInstallOpenVikingRequest {
+                    call: LoopxCliCallContext {
+                        operation_id: operation_id.clone(),
+                        deadline_at: None,
+                    },
+                },
+                &progress,
+            )
+            .await;
+        self.record_progress(progress.take()).await?;
+        let installed = result.map_err(|error| error.to_string())?;
+        log::info!(
+            "OpenViking installation service call completed: request_id={request_id}, operation_id={operation_id}, version={}, source={}, commit={}, extension_enabled={}, duration_ms={}",
+            installed.open_viking_version,
+            installed.source_repository,
+            installed.source_commit,
+            installed.extension_enabled,
+            elapsed_ms_u64(started_at)
+        );
+        self.refresh_environment().await?;
+        Ok(())
+    }
+
+    async fn mark_open_viking_installing(&self, request_id: &str) -> Result<u64, String> {
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        let checked_at = Some(now_ms());
+        state.environment.revision = state.environment.revision.saturating_add(1);
+        state.environment.checked_at = checked_at;
+        state.environment.optional.open_viking = LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Checking,
+            version: Some("0.4.9".to_string()),
+            detail: Some(
+                "Building the pinned OpenViking CLI from the official GitHub source".to_string(),
+            ),
+            checked_at,
+            ..LoopxEnvironmentFact::default()
+        };
+        state.environment.optional.feedback_memory = LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Checking,
+            detail: Some("Waiting for the OpenViking runtime check".to_string()),
+            checked_at,
+            ..LoopxEnvironmentFact::default()
+        };
+        state.environment.status =
+            derive_environment_status(&state.environment.core, &state.environment.optional);
+        state.record_processed_request(request_id.to_string());
+        state.revision = state.revision.saturating_add(1);
+        let current_revision = state.revision;
+        let start_cursor = state.cursor;
+        state.append_event(LoopxEvent {
+            kind: LoopxEventKind::EnvironmentChanged,
+            source: LoopxEventSource::System,
+            message: "OpenViking managed installation started".to_string(),
+            occurred_at: now_ms(),
+            ..LoopxEvent::default()
+        });
+        let persisted = state.clone();
+        drop(state);
+        self.store.save(&persisted).await?;
+        self.broadcast_new_events(&persisted, start_cursor);
+        Ok(current_revision)
+    }
+
+    async fn mark_open_viking_install_failed(&self, error: &str) -> Result<(), String> {
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        let checked_at = Some(now_ms());
+        state.environment.revision = state.environment.revision.saturating_add(1);
+        state.environment.checked_at = checked_at;
+        state.environment.optional.open_viking =
+            unavailable_open_viking_environment_fact(error, checked_at);
+        state.environment.optional.feedback_memory = LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Unavailable,
+            detail: Some("Feedback memory requires a working OpenViking runtime".to_string()),
+            checked_at,
+            ..LoopxEnvironmentFact::default()
+        };
+        state.environment.status =
+            derive_environment_status(&state.environment.core, &state.environment.optional);
+        state.revision = state.revision.saturating_add(1);
+        let start_cursor = state.cursor;
+        state.append_event(LoopxEvent {
+            kind: LoopxEventKind::EnvironmentChanged,
+            level: LoopxEventLevel::Error,
+            source: LoopxEventSource::System,
+            message: format!("OpenViking managed installation failed: {error}"),
+            occurred_at: now_ms(),
+            ..LoopxEvent::default()
+        });
+        let persisted = state.clone();
+        drop(state);
+        self.store.save(&persisted).await?;
+        self.broadcast_new_events(&persisted, start_cursor);
+        Ok(())
     }
 
     pub async fn handle_agent_terminal(
@@ -1168,6 +1539,8 @@ impl LoopxController {
                     context: goal_context(&task, &runtime),
                     item: task.identity.item.clone(),
                     title: task.identity.title.clone(),
+                    state: task.identity.state,
+                    labels: task.identity.labels.clone(),
                 },
                 &progress,
             )
@@ -1175,6 +1548,7 @@ impl LoopxController {
             .map_err(|error| error.to_string())?;
         self.record_progress(progress.take()).await?;
         let goal_id = goal_id_for(&task.identity);
+        let raw_packet_json = intake.raw_packet_json.clone();
         let progress = BufferedProgress::default();
         let created = self
             .cli
@@ -1194,15 +1568,126 @@ impl LoopxController {
             .await
             .map_err(|error| error.to_string())?;
         self.record_progress(progress.take()).await?;
+        // The evidence-collection step inside goal creation persists the
+        // source-qualified candidate admission receipt and returns a newer
+        // workflow-plan packet; it supersedes the unconfigured plan packet.
+        let raw_packet_json = if created.raw_packet_json.trim().is_empty() {
+            raw_packet_json
+        } else {
+            created.raw_packet_json.clone()
+        };
         self.bind_goal(&task_id, task.generation, created).await?;
+        // Persist the raw workflow-plan packet into the worktree so every
+        // turn can reach the exact issue-fix command forms; the LoopX `todo
+        // add` surface cannot carry next-command previews, and without a
+        // reachable copy the Agent never enters the issue-fix pipeline.
+        if let Some(path) = self.persist_intake_plan(&task, &raw_packet_json).await {
+            self.mutate_task(&task_id, None, |current, _| {
+                if current.generation != task.generation {
+                    return;
+                }
+                current.intake_plan_path = Some(path.clone());
+                current.revision = current.revision.saturating_add(1);
+            })
+            .await?;
+        }
         self.drive_turn(task_id).await
+    }
+
+    async fn persist_intake_plan(
+        &self,
+        task: &LoopxTaskSnapshot,
+        raw_packet_json: &str,
+    ) -> Option<String> {
+        if raw_packet_json.trim().is_empty() {
+            return None;
+        }
+        let worktree = task.workspace_path.as_deref()?;
+        let request = LoopxWorkspaceIntakePlanRequest {
+            operation_id: format!("intake-plan-{}-{}", task.task_id, uuid::Uuid::new_v4()),
+            worktree_path: worktree.to_string(),
+            packet_json: raw_packet_json.to_string(),
+        };
+        match self.workspace.persist_intake_plan(request).await {
+            Ok(result) if result.wrote && !result.path.is_empty() => Some(result.path),
+            Ok(_) => None,
+            Err(error) => {
+                log::warn!(
+                    "LoopX intake plan persistence skipped for task {}: {}",
+                    task.task_id,
+                    error
+                );
+                None
+            }
+        }
+    }
+
+    /// Completes the host task for a Goal that has no runnable work left and
+    /// stops the Goal's automatic advancement through the LoopX-owned
+    /// lifecycle transition. LoopX never reaches `terminal_no_followup` on
+    /// this integration path by itself, so without this the scheduler would
+    /// keep requeueing the task after the last todo closed. The stop is
+    /// best-effort: a failure is logged and the host task still completes,
+    /// because the LoopX registry of a finished task is inert once the host
+    /// job is terminal and the worktree is disposed.
+    async fn complete_finished_goal(
+        self: &Arc<Self>,
+        task: &LoopxTaskSnapshot,
+        runtime: &LoopxTaskRuntimeRecord,
+        message: &str,
+    ) -> Result<(), String> {
+        let goal_id = task.goal_id.clone().unwrap_or_default();
+        if !goal_id.is_empty() {
+            let progress = BufferedProgress::default();
+            let stop_request = LoopxCliStopGoalRequest {
+                context: goal_context(task, runtime),
+                goal_id,
+                reason: message.to_string(),
+            };
+            match self.cli.stop_goal(stop_request, &progress).await {
+                Ok(result) => {
+                    self.record_progress(progress.take()).await?;
+                    log::info!(
+                        "LoopX Goal stopped after finish: task_id={}, goal_id={}, stopped={}, already_stopped={}",
+                        task.task_id,
+                        result.goal_id,
+                        result.stopped,
+                        result.already_stopped
+                    );
+                }
+                Err(error) => {
+                    let _ = progress.take();
+                    log::warn!(
+                        "LoopX Goal stop failed (host task still completes): task_id={}, error={}",
+                        task.task_id,
+                        error
+                    );
+                }
+            }
+        }
+        self.release_repository(task).await;
+        let updated = self
+            .transition_task(
+                &task.task_id,
+                task.generation,
+                LoopxTaskState::Completed,
+                LoopxPhase::Finished,
+                message,
+            )
+            .await?;
+        self.schedule_next_for_repository(
+            &updated.identity.item.repository.canonical_id(),
+            Some(&updated.task_id),
+        )
+        .await;
+        Ok(())
     }
 
     async fn drive_turn(self: &Arc<Self>, task_id: String) -> Result<(), String> {
         let task = self.task(&task_id).await?;
         let runtime = self.runtime(&task_id).await;
         let progress = BufferedProgress::default();
-        let inspected = self
+        let mut inspected = self
             .cli
             .inspect_goal(
                 LoopxCliInspectGoalRequest {
@@ -1221,6 +1706,11 @@ impl LoopxController {
         self.record_goal_state(&task, inspected.state).await?;
         match inspected.run_decision {
             LoopxCliRunDecision::Wait => {
+                if inspected.state == LoopxCliGoalState::Archived {
+                    return self
+                        .complete_finished_goal(&task, &runtime, "LoopX Goal was archived")
+                        .await;
+                }
                 self.release_repository(&task).await;
                 self.transition_task(
                     &task_id,
@@ -1267,8 +1757,7 @@ impl LoopxController {
                         current.pending_gate_message = Some(message.clone());
                         current.pending_gate_action_kind = action_kind.clone();
                         current.revision = current.revision.saturating_add(1);
-                        current_runtime.expected_durable_revision =
-                            Some(durable_revision.clone());
+                        current_runtime.expected_durable_revision = Some(durable_revision.clone());
                     })
                     .await?;
                 let mut details = BTreeMap::new();
@@ -1292,21 +1781,9 @@ impl LoopxController {
                 Ok(())
             }
             LoopxCliRunDecision::Complete => {
-                self.release_repository(&task).await;
-                self.transition_task(
-                    &task_id,
-                    task.generation,
-                    LoopxTaskState::Completed,
-                    LoopxPhase::Finished,
-                    "LoopX goal completed",
-                )
-                .await?;
-                self.schedule_next_for_repository(
-                    &task.identity.item.repository.canonical_id(),
-                    Some(&task_id),
-                )
-                .await;
-                Ok(())
+                return self
+                    .complete_finished_goal(&task, &runtime, "LoopX goal completed")
+                    .await;
             }
             LoopxCliRunDecision::Failed => {
                 self.release_repository(&task).await;
@@ -1314,15 +1791,128 @@ impl LoopxController {
                     .await
             }
             LoopxCliRunDecision::RunNow => {
-                let autonomous_turns = autonomous_turns_since_review(
-                    &task,
-                    inspected.settlement_receipt_ids.len() as u32,
-                );
-                if autonomy_review_required(autonomous_turns) {
+                if inspected.open_todo_count == 0
+                    && inspected.waiting_user_todo_count == 0
+                    && inspected.open_agent_todos.is_empty()
+                {
+                    // LoopX keeps a Goal eligible forever even when nothing is
+                    // runnable: it re-selects unclaimed candidate todos and
+                    // never reaches `terminal_no_followup` on this integration
+                    // path. With no open todos there is nothing to run, so
+                    // finish the host task and stop the Goal's heartbeat
+                    // instead of requeueing it forever.
                     return self
-                        .require_autonomy_review(&task, &runtime, autonomous_turns)
+                        .complete_finished_goal(
+                            &task,
+                            &runtime,
+                            "LoopX Goal has no open todos left; BitFun completed the task",
+                        )
                         .await;
                 }
+                if inspected.envelope_over_budget {
+                    // LoopX rejected its own turn envelope (compaction budget):
+                    // the Goal cannot be planned until its durable state
+                    // shrinks. Degrade to a loud queued backoff instead of
+                    // failing the task into recovery, which would loop forever
+                    // (every rebuild hits the same rejection) and would forge
+                    // an agent failure that never happened. Bounded self-heal:
+                    // shorten over-long open todo texts back to the documented
+                    // bound first; that has been observed bringing an
+                    // over-budget envelope back inside it.
+                    let shrink_progress = BufferedProgress::default();
+                    let shrink = self
+                        .cli
+                        .shrink_todo_texts(
+                            LoopxCliShrinkTodoTextsRequest {
+                                context: goal_context(&task, &runtime),
+                                goal_id: task.goal_id.clone().unwrap_or_default(),
+                                agent_id: task
+                                    .agent_id
+                                    .clone()
+                                    .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string()),
+                                max_chars: MAX_HOST_FACT_TODO_CHARS as u32,
+                            },
+                            &shrink_progress,
+                        )
+                        .await;
+                    match &shrink {
+                        Ok(result) => {
+                            self.record_progress(shrink_progress.take()).await?;
+                            log::info!(
+                                "LoopX todo text shrink applied: task_id={}, examined={}, shortened={}",
+                                task.task_id,
+                                result.examined,
+                                result.shortened
+                            );
+                        }
+                        Err(error) => {
+                            let _ = shrink_progress.take();
+                            log::warn!(
+                                "LoopX todo text shrink skipped for task {}: {}",
+                                task.task_id,
+                                error
+                            );
+                        }
+                    }
+                    let re_inspected = self
+                        .cli
+                        .inspect_goal(
+                            LoopxCliInspectGoalRequest {
+                                context: goal_context(&task, &runtime),
+                                goal_id: task.goal_id.clone().unwrap_or_default(),
+                                agent_id: task
+                                    .agent_id
+                                    .clone()
+                                    .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string()),
+                            },
+                            &BufferedProgress::default(),
+                        )
+                        .await;
+                    if let Ok(retry) = re_inspected {
+                        if !retry.envelope_over_budget {
+                            log::info!(
+                                "LoopX turn envelope back within budget after todo shrink: task_id={}",
+                                task.task_id
+                            );
+                            inspected = retry;
+                            return Ok(());
+                        }
+                        log::warn!(
+                            "LoopX turn envelope still over budget after todo shrink: task_id={}",
+                            task.task_id
+                        );
+                    }
+                    self.release_repository(&task).await;
+                    let message = "LoopX turn envelope exceeded its compaction budget (route contract_error); the Goal durable state for this Issue must shrink before work can resume. BitFun keeps the task queued and retries with backoff.";
+                    let updated = self
+                        .transition_task(
+                            &task_id,
+                            task.generation,
+                            LoopxTaskState::Queued,
+                            LoopxPhase::Queued,
+                            message,
+                        )
+                        .await?;
+                    self.append_task_event(&updated, LoopxEventKind::StateChanged, message, true)
+                        .await?;
+                    self.schedule_next_for_repository(
+                        &updated.identity.item.repository.canonical_id(),
+                        Some(&updated.task_id),
+                    )
+                    .await;
+                    self.enqueue_task(task_id, Duration::from_millis(WAIT_RESCHEDULE_FALLBACK_MS))?;
+                    return Ok(());
+                }
+                if task.state == LoopxTaskState::RecoveryRequired {
+                    // Restart-interrupted runs land here; the owner decides
+                    // via the explicit recovery action in the UI (nothing
+                    // silent, nothing forged, worktree and evidence kept).
+                    self.release_repository(&task).await;
+                    return Ok(());
+                }
+                let playbook_path = self.ensure_playbook_path(&task).await;
+                let goal_facts =
+                    host_turn_context_block(&task, &inspected, playbook_path.as_deref());
                 let progress = BufferedProgress::default();
                 let turn = self
                     .cli
@@ -1349,7 +1939,7 @@ impl LoopxController {
                         task_id: task.task_id.clone(),
                         generation: task.generation,
                         worktree_path: task.workspace_path.clone().unwrap_or_default(),
-                        prompt: turn.prompt,
+                        prompt: goal_facts + turn.prompt.as_str(),
                         model_id: task.model_id.clone().unwrap_or_else(|| "auto".to_string()),
                         metadata: LoopxAgentTurnMetadata {
                             goal_id: task.goal_id.clone().unwrap_or_default(),
@@ -1669,7 +2259,7 @@ impl LoopxController {
                 ..LoopxActionResponse::default()
             });
         }
-        let _reset_guard = ResetInProgressGuard(&self.reset_in_progress);
+        let _reset_guard = InProgressGuard(&self.reset_in_progress);
         let (tasks, runtimes, previous_stream_id, environment) = {
             let _mutation = self.mutation_lock.lock().await;
             let mut state = self.state.write().await;
@@ -1836,9 +2426,7 @@ impl LoopxController {
             .gate_id
             .clone()
             .ok_or_else(|| "gateId is required".to_string())?;
-        let is_autonomy_review = self
-            .is_autonomy_review_gate(&task.task_id, &gate_id)
-            .await;
+        let is_autonomy_review = self.is_autonomy_review_gate(&task.task_id, &gate_id).await;
         let progress = BufferedProgress::default();
         let result = self
             .cli
@@ -1878,13 +2466,13 @@ impl LoopxController {
                 return;
             }
             current.autonomous_turns_since_review = 0;
+            current.stagnant_settlements_since_review = 0;
             current.autonomy_review_baseline_receipts = result.settlement_receipt_count;
             current.revision = current.revision.saturating_add(1);
             current_runtime.expected_durable_revision = Some(result.durable_revision.clone());
         })
         .await?;
-        let stop_after_reject = is_autonomy_review
-            && request.action == LoopxActionKind::Reject;
+        let stop_after_reject = is_autonomy_review && request.action == LoopxActionKind::Reject;
         let response = self
             .transition_action(
                 &task.task_id,
@@ -1923,89 +2511,29 @@ impl LoopxController {
         Ok(response)
     }
 
-    async fn require_autonomy_review(
-        self: &Arc<Self>,
-        task: &LoopxTaskSnapshot,
-        runtime: &LoopxTaskRuntimeRecord,
-        autonomous_turns: u32,
-    ) -> Result<(), String> {
-        let agent_id = task
-            .agent_id
-            .clone()
-            .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string());
-        let message = format!(
-            "LoopX autonomy review checkpoint {}: completed {} autonomous turns without completing this Issue. Approve another bounded investigation segment, optionally authorize a preventive fix in the approval note, or reject to stop while preserving the worktree and evidence.",
-            task.revision,
-            autonomous_turns,
-        );
-        let mut context = goal_context(task, runtime);
-        context.call.operation_id = format!(
-            "autonomy-review-{}-{}",
-            task.task_id,
-            uuid::Uuid::new_v4()
-        );
-        let progress = BufferedProgress::default();
-        let gate = self
-            .cli
-            .create_user_gate(
-                LoopxCliCreateUserGateRequest {
-                    context,
-                    goal_id: task.goal_id.clone().unwrap_or_default(),
-                    agent_id,
-                    message: message.clone(),
-                    action_kind: AUTONOMY_REVIEW_ACTION_KIND.to_string(),
-                },
-                &progress,
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-        self.record_progress(progress.take()).await?;
-        let updated = self
-            .mutate_task(&task.task_id, None, |current, current_runtime| {
-                if current.generation != task.generation {
-                    return;
-                }
-                current.state = LoopxTaskState::WaitingForUser;
-                current.phase = LoopxPhase::WaitingForApproval;
-                current.goal_state = Some(LoopxCliGoalState::WaitingForUser);
-                current.pending_gate_id = Some(gate.gate_id.clone());
-                current.pending_gate_message = Some(message.clone());
-                current.pending_gate_action_kind =
-                    Some(AUTONOMY_REVIEW_ACTION_KIND.to_string());
-                current.current_turn_id = None;
-                current.current_tool = None;
-                current.deadline_at = None;
-                current.autonomous_turns_since_review = 0;
-                current.autonomy_review_baseline_receipts = gate.settlement_receipt_count;
-                current.revision = current.revision.saturating_add(1);
-                current_runtime.expected_durable_revision = Some(gate.durable_revision.clone());
-            })
-            .await?;
-        let mut details = BTreeMap::new();
-        details.insert("gateId".to_string(), gate.gate_id);
-        details.insert(
-            "actionKind".to_string(),
-            AUTONOMY_REVIEW_ACTION_KIND.to_string(),
-        );
-        details.insert(
-            "autonomousTurns".to_string(),
-            autonomous_turns.to_string(),
-        );
-        self.append_task_event_with_details(
-            &updated,
-            LoopxEventKind::ApprovalRequired,
-            &message,
-            true,
-            details,
-        )
-        .await?;
-        self.release_repository(task).await;
-        self.schedule_next_for_repository(
-            &task.identity.item.repository.canonical_id(),
-            Some(&task.task_id),
-        )
-        .await;
-        Ok(())
+    /// Best-effort repository playbook path for the task's turn prompt. A
+    /// failure must never block the turn; the heartbeat task body remains the
+    /// authority for work selection.
+    async fn ensure_playbook_path(&self, task: &LoopxTaskSnapshot) -> Option<String> {
+        let Some(worktree) = task.workspace_path.as_deref() else {
+            return None;
+        };
+        let request = LoopxWorkspacePlaybookRequest {
+            operation_id: format!("playbook-{}-{}", task.task_id, uuid::Uuid::new_v4()),
+            worktree_path: worktree.to_string(),
+        };
+        match self.workspace.ensure_playbook(request).await {
+            Ok(result) if !result.playbook_path.is_empty() => Some(result.playbook_path),
+            Ok(_) => None,
+            Err(error) => {
+                log::warn!(
+                    "LoopX repository playbook unavailable for task {}: {}",
+                    task.task_id,
+                    error
+                );
+                None
+            }
+        }
     }
 
     async fn is_autonomy_review_gate(&self, task_id: &str, gate_id: &str) -> bool {
@@ -2045,6 +2573,33 @@ impl LoopxController {
         } else {
             LoopxPhase::Queued
         };
+        // Output-dimension evidence for the convergence gate. The probe is
+        // read-only and best-effort: a probe failure must not fail the
+        // settlement, and treats the turn as non-stagnant (unchanged counter
+        // would unfairly punish the next turn, so it resets to keep the gate
+        // conservative).
+        let mut non_bookkeeping_changes: Option<bool> = None;
+        if final_state == LoopxTaskState::Queued
+            && agent_status != LoopxAgentTurnStatus::Failed
+            && settlement.status == LoopxCliSettlementStatus::Settled
+        {
+            let request = LoopxWorkspaceMutationsRequest {
+                operation_id: format!("mutations-{}-{}", task.task_id, uuid::Uuid::new_v4()),
+                worktree_path: task.workspace_path.clone().unwrap_or_default(),
+            };
+            if !request.worktree_path.trim().is_empty() {
+                match self.workspace.probe_mutations(request).await {
+                    Ok(result) => non_bookkeeping_changes = Some(result.has_changes),
+                    Err(error) => {
+                        log::warn!(
+                            "LoopX worktree mutation probe skipped for task {}: {}",
+                            task.task_id,
+                            error
+                        );
+                    }
+                }
+            }
+        }
         let updated = self
             .mutate_task(&task.task_id, None, |task, runtime| {
                 task.state = final_state;
@@ -2068,11 +2623,36 @@ impl LoopxController {
                     settled_at: Some(now_ms()),
                 };
                 if final_state == LoopxTaskState::Queued {
-                    task.autonomous_turns_since_review = task
-                        .autonomous_turns_since_review
-                        .saturating_add(1);
+                    task.autonomous_turns_since_review =
+                        task.autonomous_turns_since_review.saturating_add(1);
+                    match non_bookkeeping_changes {
+                        Some(true) | None => task.stagnant_settlements_since_review = 0,
+                        Some(false) => {
+                            task.stagnant_settlements_since_review =
+                                task.stagnant_settlements_since_review.saturating_add(1);
+                        }
+                    }
+                    match settlement.binding_todo_id.as_deref() {
+                        Some(todo_id)
+                            if Some(todo_id) == task.current_settlement_todo_id.as_deref() =>
+                        {
+                            task.settlements_on_current_todo =
+                                task.settlements_on_current_todo.saturating_add(1);
+                        }
+                        Some(todo_id) => {
+                            task.settlements_on_current_todo = 1;
+                            task.current_settlement_todo_id = Some(todo_id.to_string());
+                        }
+                        None => {
+                            task.settlements_on_current_todo = 0;
+                            task.current_settlement_todo_id = None;
+                        }
+                    }
                 } else if final_state == LoopxTaskState::Completed {
                     task.autonomous_turns_since_review = 0;
+                    task.stagnant_settlements_since_review = 0;
+                    task.settlements_on_current_todo = 0;
+                    task.current_settlement_todo_id = None;
                 }
                 runtime.session_id = None;
                 runtime.agent_turn_id = None;
@@ -2237,6 +2817,8 @@ impl LoopxController {
         state.environment.core.sidecar = checking_environment_fact(checked_at);
         state.environment.core.git_worktree = checking_environment_fact(checked_at);
         state.environment.core.agent_model = checking_environment_fact(checked_at);
+        state.environment.optional.open_viking = checking_environment_fact(checked_at);
+        state.environment.optional.feedback_memory = checking_environment_fact(checked_at);
         state.environment.optional.github_auth = checking_environment_fact(checked_at);
         state.revision = state.revision.saturating_add(1);
         state.append_event(LoopxEvent {
@@ -2261,20 +2843,59 @@ impl LoopxController {
         handshake: LoopxCliResult<LoopxCliManifest>,
         workspace: LoopxHostResult<LoopxWorkspaceProbeResult>,
         agent: LoopxHostResult<LoopxAgentProbeResult>,
+        open_viking: LoopxCliResult<LoopxOpenVikingProbe>,
         github_auth: LoopxGithubAuthProbe,
     ) -> Result<(), String> {
         let _mutation = self.mutation_lock.lock().await;
         let mut state = self.state.write().await;
         let checked_at = Some(now_ms());
-        let sidecar = match handshake {
-            Ok(manifest) => LoopxEnvironmentFact {
-                status: LoopxEnvironmentFactStatus::Available,
-                version: Some(manifest.loopx_version),
-                detail: Some(manifest.executable.identity),
-                checked_at,
-                ..LoopxEnvironmentFact::default()
-            },
-            Err(error) => unavailable_environment_fact(error.to_string(), checked_at),
+        let (sidecar, python_fallback) = match handshake {
+            Ok(manifest) => {
+                let python_fallback =
+                    if manifest.executable.source == LoopxCliSource::PythonFallback {
+                        LoopxEnvironmentFact {
+                            status: LoopxEnvironmentFactStatus::Available,
+                            version: Some("Python 3.11+".to_string()),
+                            detail: Some(
+                                "Managed LoopX source runs in isolated Python mode".to_string(),
+                            ),
+                            checked_at,
+                            ..LoopxEnvironmentFact::default()
+                        }
+                    } else {
+                        LoopxEnvironmentFact {
+                            status: LoopxEnvironmentFactStatus::Unknown,
+                            detail: Some("Not required by the selected LoopX runtime".to_string()),
+                            checked_at,
+                            ..LoopxEnvironmentFact::default()
+                        }
+                    };
+                (
+                    LoopxEnvironmentFact {
+                        status: LoopxEnvironmentFactStatus::Available,
+                        version: Some(manifest.loopx_version),
+                        detail: Some(manifest.executable.identity),
+                        checked_at,
+                        ..LoopxEnvironmentFact::default()
+                    },
+                    python_fallback,
+                )
+            }
+            Err(error)
+                if matches!(
+                    error.kind,
+                    LoopxCliErrorKind::NotFound | LoopxCliErrorKind::VersionMismatch
+                ) =>
+            {
+                (
+                    unavailable_loopx_environment_fact(error.to_string(), checked_at),
+                    LoopxEnvironmentFact::default(),
+                )
+            }
+            Err(error) => (
+                unavailable_environment_fact(error.to_string(), checked_at),
+                LoopxEnvironmentFact::default(),
+            ),
         };
         let git_worktree = match workspace {
             Ok(probe) => LoopxEnvironmentFact {
@@ -2302,12 +2923,17 @@ impl LoopxController {
             checked_at,
             ..LoopxEnvironmentFact::default()
         };
+        let open_viking = open_viking_environment_fact(open_viking, checked_at);
+        let feedback_memory = feedback_memory_environment_fact(&open_viking, checked_at);
 
         state.environment.revision = state.environment.revision.saturating_add(1);
         state.environment.checked_at = checked_at;
         state.environment.core.sidecar = sidecar;
         state.environment.core.git_worktree = git_worktree;
         state.environment.core.agent_model = agent_model;
+        state.environment.optional.python_fallback = python_fallback;
+        state.environment.optional.open_viking = open_viking;
+        state.environment.optional.feedback_memory = feedback_memory;
         state.environment.optional.github_auth = github_auth;
         state.environment.status =
             derive_environment_status(&state.environment.core, &state.environment.optional);
@@ -2471,6 +3097,16 @@ impl LoopxController {
                 task.goal_state = Some(goal.state);
                 task.state = current.state;
                 task.phase = current.phase;
+                // The authoritative Goal projection is healthy again: a stale
+                // environment-level error (for example a coordination store
+                // schema rejection from a cross-build data home) must not keep
+                // resurfacing on a task that is demonstrably running.
+                if !matches!(
+                    current.state,
+                    LoopxTaskState::RecoveryRequired | LoopxTaskState::Failed
+                ) {
+                    task.error = None;
+                }
                 if !preserve_pending_gate {
                     task.pending_gate_id = goal
                         .pending_user_gate
@@ -2609,6 +3245,9 @@ impl LoopxController {
                 }
                 if state == LoopxTaskState::Queued {
                     task.autonomous_turns_since_review = 0;
+                    task.stagnant_settlements_since_review = 0;
+                    task.settlements_on_current_todo = 0;
+                    task.current_settlement_todo_id = None;
                 }
                 task.revision = task.revision.saturating_add(1);
             })
@@ -3048,6 +3687,78 @@ fn github_auth_fact_status(probe: &LoopxGithubAuthProbe) -> LoopxEnvironmentFact
     }
 }
 
+fn open_viking_environment_fact(
+    probe: LoopxCliResult<LoopxOpenVikingProbe>,
+    checked_at: Option<i64>,
+) -> LoopxEnvironmentFact {
+    match probe {
+        Ok(probe) => {
+            let base = LoopxEnvironmentFact {
+                version: probe.version,
+                detail: probe.detail,
+                checked_at,
+                ..LoopxEnvironmentFact::default()
+            };
+            match probe.state {
+                LoopxOpenVikingState::NotInstalled | LoopxOpenVikingState::Unhealthy => {
+                    unavailable_open_viking_environment_fact(
+                        base.detail
+                            .unwrap_or_else(|| "OpenViking runtime is unavailable".to_string()),
+                        checked_at,
+                    )
+                }
+                LoopxOpenVikingState::NotConfigured => LoopxEnvironmentFact {
+                    status: LoopxEnvironmentFactStatus::Degraded,
+                    remediation: Some(
+                        "Configure and start an OpenViking service, then retry the environment check"
+                            .to_string(),
+                    ),
+                    ..base
+                },
+                LoopxOpenVikingState::Disabled => LoopxEnvironmentFact {
+                    status: LoopxEnvironmentFactStatus::Disabled,
+                    remediation: Some(
+                        "Enable the LoopX semantic-preference extension".to_string(),
+                    ),
+                    remediation_action: LoopxEnvironmentRemediationAction::InstallOpenViking,
+                    ..base
+                },
+                LoopxOpenVikingState::Ready => LoopxEnvironmentFact {
+                    status: LoopxEnvironmentFactStatus::Available,
+                    ..base
+                },
+                LoopxOpenVikingState::Unknown => base,
+            }
+        }
+        Err(error) => unavailable_open_viking_environment_fact(error.to_string(), checked_at),
+    }
+}
+
+fn feedback_memory_environment_fact(
+    open_viking: &LoopxEnvironmentFact,
+    checked_at: Option<i64>,
+) -> LoopxEnvironmentFact {
+    match open_viking.status {
+        LoopxEnvironmentFactStatus::Checking => checking_environment_fact(checked_at),
+        LoopxEnvironmentFactStatus::Unavailable => LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Unavailable,
+            detail: Some("Feedback memory requires a working OpenViking runtime".to_string()),
+            checked_at,
+            ..LoopxEnvironmentFact::default()
+        },
+        LoopxEnvironmentFactStatus::Unknown => LoopxEnvironmentFact::default(),
+        _ => LoopxEnvironmentFact {
+            status: LoopxEnvironmentFactStatus::Disabled,
+            detail: Some(
+                "Human feedback ingestion and recall are explicit per-goal opt-ins and are not enabled automatically"
+                    .to_string(),
+            ),
+            checked_at,
+            ..LoopxEnvironmentFact::default()
+        },
+    }
+}
+
 fn checking_environment_fact(checked_at: Option<i64>) -> LoopxEnvironmentFact {
     LoopxEnvironmentFact {
         status: LoopxEnvironmentFactStatus::Checking,
@@ -3068,34 +3779,132 @@ fn unavailable_environment_fact(
     }
 }
 
-fn autonomous_turns_since_review(
-    task: &LoopxTaskSnapshot,
-    settlement_receipt_count: u32,
-) -> u32 {
-    task.autonomous_turns_since_review.max(
-        settlement_receipt_count.saturating_sub(task.autonomy_review_baseline_receipts),
-    )
+fn unavailable_loopx_environment_fact(
+    detail: impl Into<String>,
+    checked_at: Option<i64>,
+) -> LoopxEnvironmentFact {
+    LoopxEnvironmentFact {
+        status: LoopxEnvironmentFactStatus::Unavailable,
+        detail: Some(detail.into()),
+        remediation: Some(
+            "Download the pinned LoopX source from GitHub into BitFun-managed storage".to_string(),
+        ),
+        remediation_action: LoopxEnvironmentRemediationAction::InstallLoopx,
+        checked_at,
+        ..LoopxEnvironmentFact::default()
+    }
 }
 
-fn autonomy_review_required(autonomous_turns: u32) -> bool {
-    autonomous_turns >= AUTONOMOUS_TURN_BUDGET
+fn unavailable_open_viking_environment_fact(
+    detail: impl Into<String>,
+    checked_at: Option<i64>,
+) -> LoopxEnvironmentFact {
+    LoopxEnvironmentFact {
+        status: LoopxEnvironmentFactStatus::Unavailable,
+        detail: Some(detail.into()),
+        remediation: Some(
+            "Build the pinned OpenViking CLI from its official GitHub source".to_string(),
+        ),
+        remediation_action: LoopxEnvironmentRemediationAction::InstallOpenViking,
+        checked_at,
+        ..LoopxEnvironmentFact::default()
+    }
+}
+
+/// Builds the bounded host goal-facts block prepended to every LoopX turn
+/// prompt. It restates authoritative durable facts the host already observed
+/// (goal state, receipts, todo projection), points at the repository playbook
+/// and the persisted intake plan packet, and carries the previous turn's
+/// bounded agent summary as an explicitly non-authoritative recap. This is not
+/// progress inference: LoopX durable writeback remains the only settlement
+/// evidence.
+fn host_turn_context_block(
+    task: &LoopxTaskSnapshot,
+    inspected: &LoopxCliGoalSnapshot,
+    playbook_path: Option<&str>,
+) -> String {
+    let mut block = String::from("<bitfun_host_goal_facts>\n");
+    block.push_str(
+        "Host-verified facts from LoopX durable state at turn build time (authoritative):\n",
+    );
+    block.push_str(&format!(
+        "- Goal: {} | state: {:?} | durable revision: {}\n",
+        task.goal_id.as_deref().unwrap_or("unknown"),
+        inspected.state,
+        inspected.durable_revision,
+    ));
+    block.push_str(&format!(
+        "- Durable settlement receipts so far: {}\n",
+        inspected.settlement_receipt_ids.len(),
+    ));
+    if let Some(latest_receipt) = inspected.settlement_receipt_ids.last() {
+        block.push_str(&format!("- Latest receipt: {latest_receipt}\n"));
+    }
+    block.push_str(&format!(
+        "- Open todos: {} total (waiting for user: {})\n",
+        inspected.open_todo_count, inspected.waiting_user_todo_count,
+    ));
+    if !inspected.open_agent_todos.is_empty() {
+        block.push_str("- Current open agent todos:\n");
+        for todo in inspected.open_agent_todos.iter().take(MAX_HOST_FACT_TODOS) {
+            block.push_str(&format!(
+                "  - [{}] {} {}\n",
+                todo.todo_id,
+                todo.status,
+                bounded_text(&todo.text, MAX_HOST_FACT_TODO_CHARS),
+            ));
+        }
+    }
+    block.push_str(
+        "- The BitFun host already executed this turn's quota guard before the agent started, with the settlement todo bound, and the exact guard command is printed in the task body preflight. Do not re-run preflight to decide whether to work; only re-run the exact printed guard command when a LoopX settlement command reports a missing or mismatched heartbeat receipt.\n",
+    );
+    if let Some(path) = task
+        .intake_plan_path
+        .as_deref()
+        .filter(|path| !path.trim().is_empty())
+    {
+        block.push_str(&format!(
+            "- Initial issue-fix workflow plan packet (exact next commands, successor targets, and dependencies): {path}. Read it before running issue-fix subcommands; newer packets printed by later workflow-plan runs supersede it.\n"
+        ));
+    }
+    if let Some(playbook_path) = playbook_path {
+        block.push_str(&format!(
+            "- Repository playbook (workflow map, anti-patterns, lessons from earlier issues): {playbook_path}. Read it before running LoopX commands; do not run `--help`, `commands`, or read loopx source code to rediscover syntax.\n"
+        ));
+    }
+    if let Some(summary) = task
+        .last_agent_summary
+        .as_deref()
+        .filter(|summary| !summary.trim().is_empty())
+    {
+        block.push_str(
+            "Non-authoritative recap of the previous settled turn (verify against durable state before acting; may be partial):\n",
+        );
+        block.push_str(&bounded_text(summary, MAX_HOST_FACT_SUMMARY_CHARS));
+        block.push('\n');
+    }
+    block.push_str("</bitfun_host_goal_facts>\n\n");
+    block
+}
+
+fn bounded_text(text: &str, max_chars: usize) -> String {
+    let mut bounded: String = text.chars().take(max_chars).collect();
+    if text.chars().count() > max_chars {
+        bounded.push_str("...[truncated]");
+    }
+    bounded
 }
 
 /// Reconciliation may replace a local gate with a durable gate projection, but
 /// it must never infer approval from an active Goal. Only an explicit gate
 /// answer transitions the host task away from WaitingForUser.
-fn preserve_unanswered_local_gate(
-    task: &LoopxTaskSnapshot,
-    goal: &LoopxCliGoalSnapshot,
-) -> bool {
+fn preserve_unanswered_local_gate(task: &LoopxTaskSnapshot, goal: &LoopxCliGoalSnapshot) -> bool {
     task.state == LoopxTaskState::WaitingForUser
         && task.pending_gate_id.is_some()
         && goal.pending_user_gate.is_none()
         && !matches!(
             goal.state,
-            LoopxCliGoalState::Completed
-                | LoopxCliGoalState::Failed
-                | LoopxCliGoalState::Archived
+            LoopxCliGoalState::Completed | LoopxCliGoalState::Failed | LoopxCliGoalState::Archived
         )
 }
 
@@ -3182,33 +3991,6 @@ mod tests {
     }
 
     #[test]
-    fn autonomous_turn_budget_requires_an_owner_review_at_the_boundary() {
-        let below = LoopxTaskSnapshot {
-            autonomous_turns_since_review: AUTONOMOUS_TURN_BUDGET - 1,
-            ..LoopxTaskSnapshot::default()
-        };
-        let reached = LoopxTaskSnapshot {
-            autonomous_turns_since_review: AUTONOMOUS_TURN_BUDGET,
-            ..LoopxTaskSnapshot::default()
-        };
-
-        assert!(!autonomy_review_required(autonomous_turns_since_review(
-            &below,
-            AUTONOMOUS_TURN_BUDGET - 1,
-        )));
-        assert!(autonomy_review_required(autonomous_turns_since_review(
-            &reached,
-            AUTONOMOUS_TURN_BUDGET,
-        )));
-
-        let legacy = LoopxTaskSnapshot::default();
-        assert_eq!(
-            autonomous_turns_since_review(&legacy, AUTONOMOUS_TURN_BUDGET + 2),
-            AUTONOMOUS_TURN_BUDGET + 2,
-        );
-    }
-
-    #[test]
     fn successful_process_lifecycle_messages_are_not_persisted_as_task_events() {
         assert!(is_normal_process_lifecycle_message(
             "Starting LoopX process"
@@ -3265,5 +4047,64 @@ mod tests {
             ..active_goal
         };
         assert!(!preserve_unanswered_local_gate(&task, &completed_goal));
+    }
+
+    #[test]
+    fn host_goal_facts_block_restates_durable_facts_and_playbook() {
+        let task = LoopxTaskSnapshot {
+            goal_id: Some("bfx-owner-repo-issue-42".to_string()),
+            last_agent_summary: Some("Previous turn summary text.".to_string()),
+            ..LoopxTaskSnapshot::default()
+        };
+        let inspected = LoopxCliGoalSnapshot {
+            goal_id: "bfx-owner-repo-issue-42".to_string(),
+            state: LoopxCliGoalState::Active,
+            durable_revision: "rev-9".to_string(),
+            run_decision: LoopxCliRunDecision::RunNow,
+            open_todo_count: 3,
+            waiting_user_todo_count: 1,
+            settlement_receipt_ids: vec!["receipt-1".to_string(), "receipt-2".to_string()],
+            open_agent_todos: vec![LoopxCliTodoSummary {
+                todo_id: "todo-1".to_string(),
+                status: "claimed".to_string(),
+                text: "Collect candidate evidence".to_string(),
+            }],
+            ..LoopxCliGoalSnapshot::default()
+        };
+
+        let block =
+            host_turn_context_block(&task, &inspected, Some("repo/LOOPX_AGENT_PLAYBOOK.md"));
+
+        assert!(block.starts_with("<bitfun_host_goal_facts>"));
+        assert!(block
+            .contains("- Goal: bfx-owner-repo-issue-42 | state: Active | durable revision: rev-9"));
+        assert!(block.contains("Durable settlement receipts so far: 2"));
+        assert!(block.contains("Latest receipt: receipt-2"));
+        assert!(block.contains("Open todos: 3 total (waiting for user: 1)"));
+        assert!(block.contains("[todo-1] claimed Collect candidate evidence"));
+        assert!(block.contains("Repository playbook (workflow map, anti-patterns, lessons from earlier issues): repo/LOOPX_AGENT_PLAYBOOK.md"));
+        assert!(block.contains("Non-authoritative recap of the previous settled turn"));
+        assert!(block.contains("Previous turn summary text."));
+        assert!(block.ends_with("</bitfun_host_goal_facts>\n\n"));
+    }
+
+    #[test]
+    fn host_goal_facts_block_omits_empty_recap_and_playbook() {
+        let task = LoopxTaskSnapshot::default();
+        let inspected = LoopxCliGoalSnapshot::default();
+
+        let block = host_turn_context_block(&task, &inspected, None);
+
+        assert!(!block.contains("Repository playbook"));
+        assert!(!block.contains("Non-authoritative recap"));
+        assert!(block.contains("Durable settlement receipts so far: 0"));
+    }
+
+    #[test]
+    fn bounded_text_truncates_on_char_boundaries() {
+        let text = "界".repeat(MAX_HOST_FACT_SUMMARY_CHARS + 1);
+        let bounded = bounded_text(&text, MAX_HOST_FACT_SUMMARY_CHARS);
+        assert!(bounded.chars().count() <= MAX_HOST_FACT_SUMMARY_CHARS + "...[truncated]".len());
+        assert!(bounded.ends_with("...[truncated]"));
     }
 }

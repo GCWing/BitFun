@@ -40,7 +40,6 @@ const COPY = {
     skipToLogs: '跳到日志',
     connecting: '正在连接宿主',
     connected: '已连接',
-    reconnecting: '正在重新同步',
     connectionFailed: '连接失败',
     intakeLabel: 'GitHub Issue、Pull Request 或仓库链接',
     intakePlaceholder: '粘贴 GitHub Issue、PR、仓库或 Issues 列表链接',
@@ -54,9 +53,7 @@ const COPY = {
     modelPrimaryTag: '主模型',
     resolve: '分析链接',
     resolving: '正在实时复核链接',
-    refresh: '刷新状态',
     resetLoopx: '重置 LoopX',
-    resettingLoopx: '正在重置 LoopX…',
     resettingLoopxBackground: '正在后台清理任务与工作进展；窗口可以继续使用，完成后会自动刷新。',
     destructiveAction: '危险操作',
     resetLoopxTitle: '清空并重新开始',
@@ -72,32 +69,55 @@ const COPY = {
     required: '必需',
     optional: '可选',
     retryEnvironment: '重新检查环境',
+    installLoopx: '安装兼容版本',
+    installOpenViking: '安装',
+    enableOpenViking: '启用',
+    installingOpenViking: '正在安装…',
+    openVikingInstallStarted: '正在从官方 GitHub 源仓库构建 OpenViking CLI v0.4.9…',
+    openVikingInstallQueued: 'OpenViking 安装已在后台开始，可以继续使用当前窗口。',
+    openVikingInstallComplete: 'OpenViking CLI 与 LoopX 扩展已就绪。',
+    openVikingInstallNeedsConfig: 'OpenViking CLI 已安装，请配置并启动 OpenViking 服务。',
+    openVikingInstallNeedsEnable: 'OpenViking 服务可用，但 LoopX 扩展仍需启用。',
+    openVikingInstallFailed: 'OpenViking 安装失败：{message}',
+    loopxInstallStarted: '正在从官方 GitHub 源仓库下载并校验 LoopX v0.5.1…',
+    loopxInstallQueued: '安装已在后台开始，可以继续使用当前窗口。',
+    loopxInstallComplete: 'LoopX v0.5.1 已安装，环境检查已更新。',
+    loopxInstallFailed: 'LoopX 安装失败：{message}',
+    loopxRepairTitle: 'LoopX 版本需要修复',
+    loopxRepairDetail: '当前 {current}，此功能需要 0.5.1。安装到 BitFun 管理目录，不会修改系统版本。',
+    loopxInstallingTitle: '正在准备 LoopX 0.5.1',
+    loopxInstallingDetail: '仅下载运行所需源码并校验版本，完成后会自动重新检查环境。',
     tasks: '任务',
     collapseTasks: '收起任务栏',
     resizeTasks: '调整任务栏宽度',
     expandTasks: '展开任务栏',
-    allActivity: '全部活动',
     noTasks: '暂无任务',
-    activity: '模型实时输出',
-    allTaskEvents: '所有 Issue 的模型输出会按时间保留在这里',
-    selectedTaskEvents: '当前任务的事件与运行状态',
-    mainProgress: '进行中 {active} · 排队 {queued}',
-    mainProgressOnlyQueued: '排队 {queued} · 等待调度',
-    mainProgressIdle: '暂无进行中的任务',
-    mainProgressCurrent: '当前：{item}',
-    mainProgressPhase: '阶段：{phase}',
+    emptyNoTask: '暂无任务',
+    emptyNoTaskHint: '在上方粘贴 GitHub Issue 或 Pull Request 链接创建修复任务；运行过程会实时展示在这里。',
+    followBanner: '自动跟随：{item} · {state}',
+    followBannerHint: '正在展示运行中的任务；点击左侧任务可固定查看该 Issue',
+    backToFollow: '恢复自动跟随',
+    timelineTitle: '运行时间线',
+    timelineLiveScope: '实时 · {item}',
+    timelineIdleScope: '已固定 · {item}',
     worktreeQuiet: '正在准备 Worktree：{item}。首次克隆可能需要几分钟；Git 静默时不会产生子进程输出。',
-    mainProgressWaiting: '正在同步任务状态；阶段变化和宿主输出会继续出现在这里。',
-    keyEvents: '关键事件',
-    fullLog: '完整日志',
-    liveOutput: '模型实时输出',
-    searchLogs: '搜索日志',
-    errorsOnly: '仅错误',
-    exportLogs: '导出日志',
     noLogs: '暂无运行事件',
     noLiveOutput: '暂无实时模型输出',
+    awaitingFirstOutput: '模型已启动，正在等待首段输出…',
+    preparingElapsed: '已等待 {duration}',
+    reviewDecision: '去处理',
+    summaryTitle: '最新进展',
+    summaryEmpty: 'Agent 完成本轮回合后，结论会保存在这里。',
+    factsWorkspace: '工作区',
+    factsTurn: '回合',
+    factsReceipt: '结算回执',
+    factsModel: '模型',
+    factsArtifacts: '产出物',
+    factsArtifactNone: '本轮暂无文件变更',
+    errorTitle: '错误',
+    gateKindPublish: '发布审批',
+    gateKindDecision: '决策请求',
     outputUnavailable: '实时输出暂不可用',
-    outputNotRunning: '当前任务没有正在运行的 Agent turn',
     outputThinking: '思考',
     outputTool: '工具',
     outputModel: '模型',
@@ -135,16 +155,6 @@ const COPY = {
     toolStateCompleted: '已完成',
     toolStateFailed: '失败',
     toolStateCancelled: '已取消',
-    detailDurationMs: '耗时（毫秒）',
-    detailExitCode: '退出码',
-    detailMatchCount: '匹配数',
-    detailFileCount: '文件数',
-    detailEntryCount: '条目数',
-    detailLineCount: '读取行数',
-    detailContentLength: '内容长度',
-    detailTitle: '标题',
-    detailQueuePosition: '队列位置',
-    detailDependencies: '等待项',
     newEvents: '滚动到最新输出',
     confirmTask: '确认任务',
     repository: '仓库',
@@ -166,6 +176,7 @@ const COPY = {
     terminalExists: '已有终态任务',
     confirmNewAttempt: '确认新尝试',
     decisionRequired: '需要你的决定',
+    systemNotificationTitle: 'BitFun LoopX 需要你的决定 · {label}',
     afterApprove: '批准后',
     afterReject: '拒绝后',
     approvalNote: '审批备注',
@@ -174,7 +185,6 @@ const COPY = {
     approve: '批准',
     pause: '暂停',
     resume: '恢复',
-    continueRun: '仅继续此任务',
     resumeRepository: '恢复仓库任务（{value}）',
     resumingRepository: '正在恢复异常任务…',
     repositorySerial: '同仓库串行执行',
@@ -184,38 +194,11 @@ const COPY = {
     resumeRepositoryMessage: '将恢复 {repository} 中 {value} 个已暂停、中止或失败的任务。同一时间只运行 1 个，其余任务进入队列。',
     resumeRepositoryApplied: '已将 {value} 个仓库任务加入队列。',
     repositoryPausedByModel: '模型请求失败，仓库队列已暂停',
-    fixModelBeforeContinue: '修复模型并重新检查环境后继续',
-    groupDecision: '待你决定',
-    groupError: '运行异常',
-    groupActive: '正在运行',
-    groupQueued: '排队中',
-    groupPaused: '已暂停',
-    groupCompleted: '已完成',
-    groupArchived: '已归档',
-    expandGroup: '展开',
-    collapseGroup: '收起',
-    expandGroupTitle: '展开 {label}（{count}）',
-    collapseGroupTitle: '收起 {label}（{count}）',
-    runningNow: '运行中',
-    decisionCountTitle: '待你决定的任务',
-    viewError: '查看错误',
     archive: '归档并清理工作区',
     restore: '还原',
-    retry: '重试',
-    details: '详情',
-    currentTool: '工具',
-    turn: '阶段',
-    goal: '目标',
-    deadline: '截止',
-    noRecentOutput: '已 {duration} 没有新输出',
-    lastOutput: '最后输出 {duration} 前',
     updated: '更新于 {duration} 前',
     openInGithub: '在 GitHub 中打开',
-    issueProgress: '处理进度',
     currentWork: '当前',
-    evidenceAndOutputs: '已完成的工作',
-    nextAction: '下一步',
-    latestOutcome: '最近进展',
     outcomeUpdated: '{duration}前更新',
     stageWorkspace: '工作区',
     stageAnalysis: '分析与方案',
@@ -226,7 +209,7 @@ const COPY = {
     stageActive: '进行中',
     stageComplete: '已完成',
     stageBlocked: '已阻塞',
-    progressMeta: '{done}/{total} 个阶段已完成',
+    progressSummaryLine: '修复分五步：准备工作区 → 分析与方案 → 实施修改 → 结果核验 → 结算收束。当前：{stage}。',
     progressPreparing: '正在准备独立 Worktree',
     progressQueued: '等待同仓库前序 Issue',
     progressAnalyzing: '正在分析原因并形成可执行方案',
@@ -239,47 +222,9 @@ const COPY = {
     progressResolvedUpstream: '上游已处理该问题',
     progressResolvedUpstreamDetail: '已确认当前上游代码移除了原始故障路径，不需要再提交额外修复。',
     progressIdle: '等待任务推进',
-    evidenceWorkspace: '独立工作区已准备完成',
-    evidenceProgressSaved: '当前工作进展已保存，中断后可以继续',
-    evidenceAnalysisReady: '已完成问题分析并形成修复方向',
-    evidenceCodeChanges: '已完成代码修改（涉及 {value} 个文件）',
-    evidenceCodeChangesUnknown: '已完成代码修改',
-    evidenceValidationPassed: '已运行项目验证，当前未发现失败',
-    evidenceValidationNeedsAttention: '部分验证未通过，仍需继续处理',
-    evidenceResolvedUpstream: '已核对当前上游代码，原始故障路径已被移除',
-    evidenceNoPatchRequired: '当前没有需要提交的修复补丁',
-    evidenceNone: '任务尚未产生可展示的工作结果',
-    nextPrepare: '完成 Worktree 后开始分析 Issue。',
-    nextQueued: '等待仓库执行槽释放后自动开始。',
-    nextAnalyze: '完成原因定位并形成可执行方案。',
-    nextImplement: '继续实现并保留可核验的修改证据。',
-    nextValidate: '核验当前产出并保存进展。',
-    nextSettle: '保存进展后继续下一阶段或完成任务。',
-    nextRecover: '处理执行异常后继续任务。',
-    nextApproval: '查看审批内容并决定是否继续。',
-    nextCompleted: '检查最终结论和产出。',
-    nextResolvedUpstream: '无需继续修复，可以保留记录或归档任务。',
     issueDescription: 'Issue 描述',
     loadingIssueDescription: '正在加载 Issue 描述…',
     issueDescriptionUnavailable: '暂时无法加载 Issue 描述。',
-    problemBackground: '遇到的问题',
-    problemImpact: '造成的影响',
-    issueApiProxyTitle: '升级后第三方插件无法启动',
-    issueApiProxyBackground: '从 2.0.2 升级到 2.0.4 后，第三方任务看板仍依赖已被新版本移除的 apiProxy 服务，因此插件无法完成启动。',
-    issueApiProxyImpact: '一个插件启动失败会使整个插件树加载失败，导致桌面端无法正常使用已安装的第三方插件。',
-    issueApiProxyProgress: '已经定位原因并确定修复方案：为旧插件补充兼容能力，同时避免单个第三方插件拖垮整个启动流程。实际代码修改尚未开始。',
-    issueInputModalityTitle: '手动添加的多模态模型无法发送图片',
-    issueInputModalityBackground: '模型设置保存的图片能力字段与运行引擎读取的字段不一致，导致手动添加的模型丢失图片输入能力。',
-    issueInputModalityImpact: '模型虽然支持图片，但聊天界面会按纯文本模型处理，用户无法发送图片。',
-    issueInputModalityProgress: '已经核对最新上游代码，原有错误写入路径已被移除，目前不需要再提交修复补丁。',
-    issueMacFocusTitle: 'macOS 最小化后窗口意外抢占焦点',
-    issueMacFocusBackground: '应用最小化后仍会被系统激活事件重新带到前台，打断用户正在进行的其他操作。',
-    issueMacFocusImpact: '窗口会突然出现并抢走键盘焦点，影响正常工作流程。',
-    issueMacFocusProgress: '已经完成原因定位、代码修改和现有验证，等待决定是否发布为 Pull Request。',
-    issueGenericBackground: '该 Issue 描述了以下问题：{title}',
-    issueGenericImpact: '问题会影响相关功能的正常使用，需要确认下一步处理方式。',
-    issueGenericProgressAnalyzed: '已经完成初步分析并找到继续处理的方向，但修复和验证尚未完成。',
-    issueGenericProgressImplemented: '已经产生修复修改，但仍需继续验证并确认最终结果。',
     publishApprovalTitle: '是否发布修复并创建 Pull Request？',
     publishApprovalSummary: '修复已在分支 {branch} 的提交 {commit} 中准备完成，目标仓库为 {repository}。现在需要你决定是否发布。',
     publishApprovalSummaryGeneric: '修复和发布材料已经准备完成，目标仓库为 {repository}。现在需要你决定是否发布为 Pull Request。',
@@ -289,40 +234,15 @@ const COPY = {
     publishApprovalRecommendationReview: '建议先确认修改和验证结果；批准只会发布 Pull Request，不会自动合并。',
     publishApprovalApprove: '批准并创建 PR',
     publishApprovalReject: '暂不发布',
-    autonomyApprovalTitle: '修复尚未完成，是否继续处理？',
-    autonomyApprovalSummaryAnalyzed: '已经完成问题分析并找到继续处理的方向，但修复和验证尚未完成。',
-    autonomyApprovalSummaryImplemented: '已经产生修复修改，但还需要继续验证并确认最终结果。',
-    autonomyApprovalApproveEffect: '继续修复和验证，完成后汇报结果。不会发布或合并代码。',
-    autonomyApprovalRejectEffect: '暂停处理并保留当前工作区、修改和调查结果。',
-    autonomyApprovalRecommendation: '建议继续：当前已经形成明确方向，下一步主要是实施和验证。',
-    continueRepair: '继续处理',
-    pauseProcessing: '暂不继续',
-    implementationApprovalTitle: '是否允许开始修改代码？',
-    implementationApprovalApproveEffect: '允许在独立工作区修改代码并运行测试。完成后会再次汇报结果；不会自动推送、创建 Pull Request 或合并代码。',
-    implementationApprovalRejectEffect: '本次不修改代码，也不会继续执行后续修复步骤。现有调查结果和工作区会保留，之后仍可手动恢复。',
-    implementationApprovalRecommendation: '建议允许：问题原因和修复方向已经明确，下一步是实施并验证修复。',
-    implementationApprovalApprove: '允许开始修复',
-    implementationApprovalReject: '暂不修改',
     genericApprovalTitle: '是否继续处理这个 Issue？',
     genericApprovalApproveEffect: '执行当前操作，然后继续后续处理；完成后会再次汇报结果。',
     genericApprovalRejectEffect: '本次不执行该操作，任务不会继续进入后续步骤。现有修改、调查结果和工作区都会保留。',
     genericApprovalRecommendation: '建议：确认下面的操作符合预期后再继续；不确定时可以暂不执行，并在备注中说明需要补充的信息。',
-    outcomeWaiting: '代码修改和已有验证结果已保存，任务正在等待你决定是否执行下一步。',
-    outcomeRecovery: '任务执行过程中断。已有调查结果和修改仍然保留，恢复后可以从当前进度继续。',
-    outcomeCompleted: '修复流程已经完成，可以检查最终产出和验证结果。',
-    outcomeResolvedUpstream: '已确认当前上游代码已经移除导致问题的旧路径，本任务无需再提交修复。',
-    outcomeValidated: '修复修改已经完成，并已进入结果核验或等待后续操作。',
-    outcomeImplemented: '已经产生代码修改，当前正在补充验证并收敛最终结果。',
-    outcomeAnalyzed: '已经完成问题分析，正在形成或实施修复方案。',
-    outcomeQueued: '任务已经创建，正在等待工作区或仓库执行槽就绪。',
-    outcomeStarted: '任务已经开始，当前进展会持续更新。',
     justNow: '刚刚',
     seconds: '{value} 秒',
     minutes: '{value} 分钟',
     hours: '{value} 小时',
     days: '{value} 天',
-    deadlinePassed: '已超过截止时间 {duration}',
-    deadlineRemaining: '剩余 {duration}',
     intakeUnavailable: '当前执行位置不支持创建任务。',
     bridgeUnavailable: '宿主没有提供受信任的 LoopX 运行接口。请更新 BitFun 后重试。',
     selectAtLeastOne: '至少选择一个仍开放的 Issue 或 PR。',
@@ -351,12 +271,8 @@ const COPY = {
     actionDuplicate: '该操作已经应用，无需重复执行。',
     revisionConflict: '任务状态已经变化，已刷新到最新版本。',
     actionRejected: '宿主拒绝了该操作。',
-    environmentRetryQueued: '环境检查已重新启动。',
-    logsExported: '日志已导出。',
     noGate: '没有找到可回答的审批门禁，请刷新任务状态。',
     approvalNeeded: '任务正在等待远程可回答的审批。',
-    continueInvestigation: '继续调查',
-    stopTask: '停止任务',
     activityInstallingDependencies: '正在准备项目依赖',
     activityBuildingInstaller: '正在构建 Windows 安装包',
     activityTestingUpgrade: '正在验证安装器升级链路',
@@ -364,8 +280,6 @@ const COPY = {
     activitySyncingProgress: '正在同步工作进展',
     activityCheckingRepository: '正在检查仓库状态',
     activityRunningCommand: '正在执行项目命令',
-    coreBlocked: '核心环境未就绪，任务不会静默启动。',
-    optionalDegraded: '增强能力不可用，核心修复流程仍可继续。',
     truncatedCandidates: '候选项已截断，请缩小仓库范围后重新分析。',
     imageWarning: '所选内容包含图片，但当前模型不支持图片输入。',
     modelUnavailable: '当前模型不可用，请返回并选择其他模型。',
@@ -373,19 +287,18 @@ const COPY = {
     resolvedItem: '已处理',
     openItem: '开放',
     fromRepository: '仓库候选',
-    attempt: '尝试 {value}',
     taskNumber: '任务 {value}',
-    eventCount: '{value} 条事件',
-    allSources: '全部来源',
     sidecar: 'LoopX 引擎',
     gitWorktree: 'Git / Worktree',
     agentModel: 'Agent 模型',
     pythonFallback: 'Python 备用',
     openViking: 'OpenViking',
+    feedbackMemory: '反馈记忆',
     githubAuth: 'GitHub 登录',
     status_unknown: '未知',
     status_checking: '检查中',
     status_available: '可用',
+    status_disabled: '未启用',
     status_degraded: '已降级',
     status_unavailable: '不可用',
     status_ready: '就绪',
@@ -436,7 +349,6 @@ const COPY = {
     skipToLogs: 'Skip to logs',
     connecting: 'Connecting to host',
     connected: 'Connected',
-    reconnecting: 'Resynchronizing',
     connectionFailed: 'Connection failed',
     intakeLabel: 'GitHub issue, pull request, or repository URL',
     intakePlaceholder: 'Paste a GitHub issue, PR, repository, or issues-list URL',
@@ -450,9 +362,7 @@ const COPY = {
     modelPrimaryTag: 'Primary',
     resolve: 'Analyze URL',
     resolving: 'Verifying URL against the live source',
-    refresh: 'Refresh status',
     resetLoopx: 'Reset LoopX',
-    resettingLoopx: 'Resetting LoopX...',
     resettingLoopxBackground: 'Cleaning tasks and saved progress in the background. You can keep using this window; it refreshes when cleanup finishes.',
     destructiveAction: 'Destructive action',
     resetLoopxTitle: 'Clear and start over',
@@ -468,32 +378,55 @@ const COPY = {
     required: 'Required',
     optional: 'Optional',
     retryEnvironment: 'Check environment again',
+    installLoopx: 'Install compatible version',
+    installOpenViking: 'Install',
+    enableOpenViking: 'Enable',
+    installingOpenViking: 'Installing...',
+    openVikingInstallStarted: 'Building OpenViking CLI v0.4.9 from the official GitHub source repository...',
+    openVikingInstallQueued: 'OpenViking installation started in the background. You can keep using this window.',
+    openVikingInstallComplete: 'The OpenViking CLI and LoopX extension are ready.',
+    openVikingInstallNeedsConfig: 'The OpenViking CLI is installed. Configure and start an OpenViking service.',
+    openVikingInstallNeedsEnable: 'The OpenViking service is reachable, but the LoopX extension still needs to be enabled.',
+    openVikingInstallFailed: 'OpenViking installation failed: {message}',
+    loopxInstallStarted: 'Downloading and verifying LoopX v0.5.1 from the official GitHub source repository...',
+    loopxInstallQueued: 'Installation started in the background. You can keep using this window.',
+    loopxInstallComplete: 'LoopX v0.5.1 is installed and the environment check is up to date.',
+    loopxInstallFailed: 'LoopX installation failed: {message}',
+    loopxRepairTitle: 'LoopX needs a compatible version',
+    loopxRepairDetail: 'Current: {current}. This feature requires 0.5.1. Installation stays inside BitFun and does not change the system version.',
+    loopxInstallingTitle: 'Preparing LoopX 0.5.1',
+    loopxInstallingDetail: 'Downloading only the runtime source and verifying it. The environment will be checked automatically when finished.',
     tasks: 'Tasks',
     collapseTasks: 'Collapse task rail',
     resizeTasks: 'Resize task rail',
     expandTasks: 'Expand task rail',
-    allActivity: 'All activity',
     noTasks: 'No tasks yet',
-    activity: 'Live model output',
-    allTaskEvents: 'Model output for every issue is retained here in time order',
-    selectedTaskEvents: 'Events and liveness for the selected task',
-    mainProgress: '{active} active · {queued} queued',
-    mainProgressOnlyQueued: '{queued} queued · waiting for the scheduler',
-    mainProgressIdle: 'No tasks are currently active',
-    mainProgressCurrent: 'Current: {item}',
-    mainProgressPhase: 'Phase: {phase}',
+    emptyNoTask: 'No tasks yet',
+    emptyNoTaskHint: 'Paste a GitHub issue or pull request URL above to start a repair task; its progress streams here in real time.',
+    followBanner: 'Auto-following: {item} · {state}',
+    followBannerHint: 'Showing the running task; select a task on the left to pin it',
+    backToFollow: 'Resume auto-follow',
+    timelineTitle: 'Run timeline',
+    timelineLiveScope: 'Live · {item}',
+    timelineIdleScope: 'Pinned view',
     worktreeQuiet: 'Preparing worktree: {item}. The first clone can take a few minutes; Git may not emit output while it is working.',
-    mainProgressWaiting: 'Syncing task state; phase changes and host output will continue to appear here.',
-    keyEvents: 'Key events',
-    fullLog: 'Full log',
-    liveOutput: 'Live model output',
-    searchLogs: 'Search logs',
-    errorsOnly: 'Errors only',
-    exportLogs: 'Export logs',
     noLogs: 'No run events yet',
     noLiveOutput: 'No live model output yet',
+    awaitingFirstOutput: 'The model has started; waiting for its first output…',
+    preparingElapsed: 'Waiting for {duration}',
+    reviewDecision: 'Review',
+    summaryTitle: 'Latest progress',
+    summaryEmpty: 'Once the Agent finishes this turn, its conclusions are saved here.',
+    factsWorkspace: 'Workspace',
+    factsTurn: 'Turn',
+    factsReceipt: 'Settlement receipt',
+    factsModel: 'Model',
+    factsArtifacts: 'Artifacts',
+    factsArtifactNone: 'No file changes in this turn yet',
+    errorTitle: 'Error',
+    gateKindPublish: 'Publish approval',
+    gateKindDecision: 'Decision request',
     outputUnavailable: 'Live output is unavailable',
-    outputNotRunning: 'This task has no running Agent turn',
     outputThinking: 'Thinking',
     outputTool: 'Tool',
     outputModel: 'Model',
@@ -531,16 +464,6 @@ const COPY = {
     toolStateCompleted: 'Completed',
     toolStateFailed: 'Failed',
     toolStateCancelled: 'Cancelled',
-    detailDurationMs: 'Duration (ms)',
-    detailExitCode: 'Exit code',
-    detailMatchCount: 'Matches',
-    detailFileCount: 'Files',
-    detailEntryCount: 'Entries',
-    detailLineCount: 'Lines read',
-    detailContentLength: 'Content length',
-    detailTitle: 'Title',
-    detailQueuePosition: 'Queue position',
-    detailDependencies: 'Waiting for',
     newEvents: 'Scroll to latest output',
     confirmTask: 'Confirm task',
     repository: 'Repository',
@@ -562,6 +485,7 @@ const COPY = {
     terminalExists: 'A terminal task already exists',
     confirmNewAttempt: 'Confirm new attempt',
     decisionRequired: 'Your decision is required',
+    systemNotificationTitle: 'BitFun LoopX needs your decision · {label}',
     afterApprove: 'If approved',
     afterReject: 'If rejected',
     approvalNote: 'Approval note',
@@ -570,7 +494,6 @@ const COPY = {
     approve: 'Approve',
     pause: 'Pause',
     resume: 'Resume',
-    continueRun: 'Continue only this task',
     resumeRepository: 'Recover repository tasks ({value})',
     resumingRepository: 'Recovering failed tasks...',
     repositorySerial: 'Runs serially per repository',
@@ -580,38 +503,11 @@ const COPY = {
     resumeRepositoryMessage: 'Recover {value} paused, interrupted, or failed tasks in {repository}. One task runs at a time; the rest remain queued.',
     resumeRepositoryApplied: 'Queued {value} repository tasks.',
     repositoryPausedByModel: 'Model request failed; repository queue paused',
-    fixModelBeforeContinue: 'Fix the model and recheck the environment',
-    groupDecision: 'Waiting for you',
-    groupError: 'Run failures',
-    groupActive: 'Running',
-    groupQueued: 'Queued',
-    groupPaused: 'Paused',
-    groupCompleted: 'Completed',
-    groupArchived: 'Archived',
-    expandGroup: 'Expand',
-    collapseGroup: 'Collapse',
-    expandGroupTitle: 'Expand {label} ({count})',
-    collapseGroupTitle: 'Collapse {label} ({count})',
-    runningNow: 'Running',
-    decisionCountTitle: 'Tasks waiting for your decision',
-    viewError: 'View error',
     archive: 'Archive & clean workspace',
     restore: 'Restore',
-    retry: 'Retry',
-    details: 'Details',
-    currentTool: 'tool',
-    turn: 'Stage',
-    goal: 'Objective',
-    deadline: 'deadline',
-    noRecentOutput: 'No new output for {duration}',
-    lastOutput: 'Last output {duration} ago',
     updated: 'Updated {duration} ago',
     openInGithub: 'Open in GitHub',
-    issueProgress: 'Issue progress',
     currentWork: 'Current',
-    evidenceAndOutputs: 'Work completed',
-    nextAction: 'Next',
-    latestOutcome: 'Recent progress',
     outcomeUpdated: 'Updated {duration} ago',
     stageWorkspace: 'Worktree',
     stageAnalysis: 'Analysis and plan',
@@ -622,7 +518,7 @@ const COPY = {
     stageActive: 'Active',
     stageComplete: 'Complete',
     stageBlocked: 'Blocked',
-    progressMeta: '{done}/{total} stages complete',
+    progressSummaryLine: 'The repair runs five stages: worktree → analysis and plan → implementation → validation → settlement. Current: {stage}.',
     progressPreparing: 'Preparing an isolated worktree',
     progressQueued: 'Waiting for the previous repository issue',
     progressAnalyzing: 'Analyzing the cause and forming an actionable plan',
@@ -635,47 +531,9 @@ const COPY = {
     progressResolvedUpstream: 'Resolved upstream',
     progressResolvedUpstreamDetail: 'The current upstream code has removed the original failure path, so no additional patch is required.',
     progressIdle: 'Waiting for task progress',
-    evidenceWorkspace: 'The isolated workspace is ready',
-    evidenceProgressSaved: 'Current progress is saved and can resume after an interruption',
-    evidenceAnalysisReady: 'Issue analysis is complete and a repair direction is ready',
-    evidenceCodeChanges: 'Code changes are ready across {value} files',
-    evidenceCodeChangesUnknown: 'Code changes are ready',
-    evidenceValidationPassed: 'Project validation has run without a reported failure',
-    evidenceValidationNeedsAttention: 'Some validation did not pass and still needs attention',
-    evidenceResolvedUpstream: 'Current upstream code no longer contains the original failure path',
-    evidenceNoPatchRequired: 'No repair patch needs to be submitted',
-    evidenceNone: 'No user-facing work result is available yet',
-    nextPrepare: 'Finish the worktree, then analyze the issue.',
-    nextQueued: 'Start automatically when the repository slot is free.',
-    nextAnalyze: 'Finish root-cause analysis and form an actionable plan.',
-    nextImplement: 'Continue implementation and retain verifiable change evidence.',
-    nextValidate: 'Validate the current output and save progress.',
-    nextSettle: 'Save progress, then continue to the next stage or finish.',
-    nextRecover: 'Resolve the execution failure, then continue the task.',
-    nextApproval: 'Review the approval request and decide whether to continue.',
-    nextCompleted: 'Review the final outcome and outputs.',
-    nextResolvedUpstream: 'No further repair is required. Keep the record or archive this task.',
     issueDescription: 'Issue description',
     loadingIssueDescription: 'Loading issue description...',
     issueDescriptionUnavailable: 'Issue description is temporarily unavailable.',
-    problemBackground: 'Problem',
-    problemImpact: 'Impact',
-    issueApiProxyTitle: 'Third-party plugins fail to start after upgrading',
-    issueApiProxyBackground: 'After upgrading from 2.0.2 to 2.0.4, the third-party task board still depends on the apiProxy service removed by the new version, so the plugin cannot start.',
-    issueApiProxyImpact: 'One failed plugin prevents the entire plugin tree from loading, blocking normal use of installed third-party plugins.',
-    issueApiProxyProgress: 'The cause and repair direction are clear: add compatibility for older plugins and prevent one third-party plugin from breaking the whole startup flow. Code changes have not started.',
-    issueInputModalityTitle: 'Manually added multimodal models cannot send images',
-    issueInputModalityBackground: 'The model settings save image capability under a different field from the one read by the runtime, so manually added models lose image input support.',
-    issueInputModalityImpact: 'The chat UI treats an image-capable model as text-only and prevents users from sending images.',
-    issueInputModalityProgress: 'The latest upstream code no longer contains the incorrect writer, so no additional repair patch is currently required.',
-    issueMacFocusTitle: 'The macOS window steals focus after minimization',
-    issueMacFocusBackground: 'After minimization, an activation event brings the app back to the foreground and interrupts other work.',
-    issueMacFocusImpact: 'The window appears unexpectedly and takes keyboard focus from the active application.',
-    issueMacFocusProgress: 'Root cause analysis, code changes, and existing validation are complete. Publishing the pull request still requires a decision.',
-    issueGenericBackground: 'This Issue reports the following problem: {title}',
-    issueGenericImpact: 'The problem affects normal use of the related feature and requires a decision on the next step.',
-    issueGenericProgressAnalyzed: 'Initial analysis is complete and a direction is available, but repair and validation are not finished.',
-    issueGenericProgressImplemented: 'Repair changes are available, but validation and final confirmation are not complete.',
     publishApprovalTitle: 'Publish the fix and create a pull request?',
     publishApprovalSummary: 'The fix is prepared on branch {branch} at commit {commit} for {repository}. Your approval is required before publishing it.',
     publishApprovalSummaryGeneric: 'The fix and publishing materials are ready for {repository}. Your approval is required before creating the pull request.',
@@ -685,40 +543,15 @@ const COPY = {
     publishApprovalRecommendationReview: 'Review the change and validation results first. Approval publishes a pull request but does not merge it automatically.',
     publishApprovalApprove: 'Approve and create PR',
     publishApprovalReject: 'Keep local only',
-    autonomyApprovalTitle: 'The repair is not finished. Continue?',
-    autonomyApprovalSummaryAnalyzed: 'The issue has been analyzed and a clear direction is available, but implementation and validation are not complete.',
-    autonomyApprovalSummaryImplemented: 'Repair changes are available, but validation and final confirmation are not complete.',
-    autonomyApprovalApproveEffect: 'Continue repairing and validating, then report the result. This will not publish or merge code.',
-    autonomyApprovalRejectEffect: 'Pause work and preserve the current workspace, changes, and investigation results.',
-    autonomyApprovalRecommendation: 'Recommendation: continue. The direction is clear and the remaining work is implementation and validation.',
-    continueRepair: 'Continue repair',
-    pauseProcessing: 'Pause for now',
-    implementationApprovalTitle: 'Allow code changes to begin?',
-    implementationApprovalApproveEffect: 'Allow code changes and tests in the isolated workspace. Results will be reported again; code will not be pushed, published as a pull request, or merged automatically.',
-    implementationApprovalRejectEffect: 'Do not modify code or continue to later repair steps. Keep the investigation results and workspace so the task can be resumed manually.',
-    implementationApprovalRecommendation: 'Recommendation: allow it. The cause and repair direction are clear; implementation and validation remain.',
-    implementationApprovalApprove: 'Allow repair to begin',
-    implementationApprovalReject: 'Do not modify yet',
     genericApprovalTitle: 'Continue handling this Issue?',
     genericApprovalApproveEffect: 'Perform the current operation and continue processing. Results will be reported again afterward.',
     genericApprovalRejectEffect: 'Do not perform this operation or continue to later steps. Keep existing changes, investigation results, and the workspace.',
     genericApprovalRecommendation: 'Recommendation: continue only when the operation below matches your expectation. Otherwise pause and note what information is missing.',
-    outcomeWaiting: 'Code changes and available validation results are saved. The task is waiting for your decision before taking the next step.',
-    outcomeRecovery: 'Execution was interrupted. Existing investigation results and changes are preserved and can resume from the current progress.',
-    outcomeCompleted: 'The repair workflow is complete. Review the final outputs and validation results.',
-    outcomeResolvedUpstream: 'Current upstream code has removed the old failure path, so this task does not need another repair patch.',
-    outcomeValidated: 'The repair changes are ready and have reached validation or a follow-up operation.',
-    outcomeImplemented: 'Code changes are ready. Validation and final outcome work are still in progress.',
-    outcomeAnalyzed: 'Issue analysis is complete. The repair approach is being finalized or implemented.',
-    outcomeQueued: 'The task is created and waiting for its workspace or repository execution slot.',
-    outcomeStarted: 'The task has started. Progress will continue to update here.',
     justNow: 'just now',
     seconds: '{value}s',
     minutes: '{value}m',
     hours: '{value}h',
     days: '{value}d',
-    deadlinePassed: 'Deadline passed by {duration}',
-    deadlineRemaining: '{duration} remaining',
     intakeUnavailable: 'Tasks cannot be created from this execution location.',
     bridgeUnavailable: 'The host did not expose the trusted LoopX runtime interface. Update BitFun and try again.',
     selectAtLeastOne: 'Select at least one open issue or pull request.',
@@ -747,12 +580,8 @@ const COPY = {
     actionDuplicate: 'This action was already applied.',
     revisionConflict: 'Task state changed. The latest snapshot has been loaded.',
     actionRejected: 'The host rejected this action.',
-    environmentRetryQueued: 'Environment verification restarted.',
-    logsExported: 'Logs exported.',
     noGate: 'No answerable approval gate was found. Refresh the task state.',
     approvalNeeded: 'The task is waiting at an approval gate that can be answered remotely.',
-    continueInvestigation: 'Continue investigation',
-    stopTask: 'Stop task',
     activityInstallingDependencies: 'Preparing project dependencies',
     activityBuildingInstaller: 'Building the Windows installer',
     activityTestingUpgrade: 'Validating the installer upgrade path',
@@ -760,8 +589,6 @@ const COPY = {
     activitySyncingProgress: 'Synchronizing durable progress',
     activityCheckingRepository: 'Checking repository state',
     activityRunningCommand: 'Running a project command',
-    coreBlocked: 'The core environment is not ready, so execution will not start silently.',
-    optionalDegraded: 'Optional capabilities are unavailable; the core fix flow can continue.',
     truncatedCandidates: 'The candidate list was truncated. Narrow the repository scope and analyze again.',
     imageWarning: 'Selected content contains images, but the current model does not support image input.',
     modelUnavailable: 'The selected model is unavailable. Go back and choose another model.',
@@ -769,19 +596,18 @@ const COPY = {
     resolvedItem: 'Resolved',
     openItem: 'Open',
     fromRepository: 'Repository candidate',
-    attempt: 'Attempt {value}',
     taskNumber: 'Task {value}',
-    eventCount: '{value} events',
-    allSources: 'All sources',
     sidecar: 'LoopX engine',
     gitWorktree: 'Git / Worktree',
     agentModel: 'Agent model',
     pythonFallback: 'Python fallback',
     openViking: 'OpenViking',
+    feedbackMemory: 'Feedback memory',
     githubAuth: 'GitHub sign-in',
     status_unknown: 'Unknown',
     status_checking: 'Checking',
     status_available: 'Available',
+    status_disabled: 'Disabled',
     status_degraded: 'Degraded',
     status_unavailable: 'Unavailable',
     status_ready: 'Ready',
@@ -846,12 +672,17 @@ const view = {
   approvalAlertTitle: byId('approval-alert-title'),
   approvalAlertMessage: byId('approval-alert-message'),
   approvalAlertOpen: byId('approval-alert-open'),
-  approvalAlertReject: byId('approval-alert-reject'),
-  approvalAlertApprove: byId('approval-alert-approve'),
+  approvalAlertOpenAction: byId('approval-alert-open-action'),
   environmentPanel: byId('environment-panel'),
   environmentDot: byId('environment-dot'),
   environmentStatus: byId('environment-status'),
   environmentChecked: byId('environment-checked'),
+  environmentRemediation: byId('environment-remediation'),
+  environmentRemediationTitle: byId('environment-remediation-title'),
+  environmentRemediationDetail: byId('environment-remediation-detail'),
+  environmentRemediationProgress: byId('environment-remediation-progress'),
+  installLoopx: byId('install-loopx'),
+  installLoopxLabel: byId('install-loopx-label'),
   coreEnvironmentList: byId('core-environment-list'),
   optionalEnvironmentList: byId('optional-environment-list'),
   retryEnvironment: byId('retry-environment'),
@@ -864,17 +695,21 @@ const view = {
   repositoryActionsMeta: byId('repository-actions-meta'),
   taskItems: byId('task-items'),
   taskEmpty: byId('task-empty'),
-  showAllEvents: byId('show-all-events'),
-  logTitle: byId('log-title'),
-  selectedState: byId('selected-state'),
-  selectedSummary: byId('selected-summary'),
+  issueWorkspace: byId('log-workspace'),
+  followBanner: byId('follow-banner'),
+  followBannerText: byId('follow-banner-text'),
+  issueEmpty: byId('issue-empty'),
+  issueView: byId('issue-view'),
+  issueTitle: byId('issue-title'),
+  issueStatePill: byId('issue-state-pill'),
   issueLink: byId('issue-link'),
-  issueNumber: byId('issue-number'),
+  issueUpdated: byId('issue-updated'),
+  unselectTask: byId('unselect-task'),
+  issueDetail: byId('issue-detail'),
   issueApprovalPanel: byId('issue-approval-panel'),
+  issueApprovalKind: byId('issue-approval-kind'),
   issueApprovalTitle: byId('issue-approval-title'),
-  issueApprovalSummary: byId('issue-approval-summary'),
-  issueApprovalBackground: byId('issue-approval-background'),
-  issueApprovalImpact: byId('issue-approval-impact'),
+  issueApprovalMessage: byId('issue-approval-message'),
   issueApprovalApproveEffect: byId('issue-approval-approve-effect'),
   issueApprovalRejectEffect: byId('issue-approval-reject-effect'),
   issueApprovalRecommendation: byId('issue-approval-recommendation'),
@@ -882,23 +717,23 @@ const view = {
   issueApprovalReject: byId('issue-approval-reject'),
   issueApprovalApprove: byId('issue-approval-approve'),
   issueProgressPanel: byId('issue-progress-panel'),
-  issueProgressMeta: byId('issue-progress-meta'),
-  issueStageList: byId('issue-stage-list'),
+  issueProgressSummary: byId('issue-progress-summary'),
   issueCurrentHeading: byId('issue-current-heading'),
   issueCurrentDetail: byId('issue-current-detail'),
-  issueEvidenceList: byId('issue-evidence-list'),
-  issueNextAction: byId('issue-next-action'),
-  issueOutcomePanel: byId('issue-outcome-panel'),
-  issueOutcomeMeta: byId('issue-outcome-meta'),
-  issueOutcome: byId('issue-outcome'),
+  issueSummaryMeta: byId('issue-summary-meta'),
+  issueSummary: byId('issue-summary'),
+  issueFacts: byId('issue-facts'),
+  issueError: byId('issue-error'),
   issueDescriptionPanel: byId('issue-description-panel'),
   issueDescription: byId('issue-description'),
+  issueNumber: byId('issue-number'),
+  timelineScope: byId('timeline-scope'),
   taskActions: byId('task-actions'),
   logScroll: byId('log-scroll'),
   logEmpty: byId('log-empty'),
+  logEmptyText: byId('log-empty-text'),
   logList: byId('log-list'),
   newEvents: byId('new-events'),
-  issueDetailDialog: byId('issue-detail-dialog'),
   intakeDialog: byId('intake-dialog'),
   intakeConfirmForm: byId('intake-confirm-form'),
   intakeDialogTitle: byId('intake-dialog-title'),
@@ -964,11 +799,18 @@ const state = {
   },
   itemMetadata: new Map(),
   metadataRequests: new Set(),
+  tornDown: false,
   repositoryResumeTarget: null,
   repositoryResumePending: false,
   taskActionPending: new Map(),
   modelCatalogLoading: false,
   modelCatalogLoaded: false,
+  environmentInstallPending: false,
+  environmentInstallObserved: false,
+  environmentInstallRequestId: null,
+  openVikingInstallPending: false,
+  openVikingInstallObserved: false,
+  openVikingInstallRequestId: null,
   resetPending: false,
 };
 
@@ -1108,6 +950,14 @@ function showNotice(message, tone = 'neutral') {
   view.notice.hidden = false;
 }
 
+/// Async completions (hydrate, reattach, actions) may settle after the host
+/// surface went away; every DOM render must be a no-op then.
+function canRender() {
+  return !state.tornDown
+    && typeof document !== 'undefined'
+    && Boolean(document.createDocumentFragment);
+}
+
 function errorMessage(error) {
   if (error instanceof Error) return error.message;
   return String(error || 'Unknown error');
@@ -1199,6 +1049,44 @@ function requestId() {
   return `loopx-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Surfaces one owner decision through a host system notification. The host
+// owns OS-level toasts: the Agent is forbidden from raising them (see the
+// host execution context), so this is the only sanctioned notification path.
+async function notifyGateSystemDecision(task, gate) {
+  if (!app || !app.notifications || typeof app.notifications.system !== 'function') return;
+  if (app.permissions && app.permissions.notifications && app.permissions.notifications.system !== true) return;
+  const item = task && task.identity && task.identity.item;
+  const label = issueDisplayTitle(task) || itemLabel(item);
+  try {
+    await app.notifications.system(
+      text('systemNotificationTitle', { label }),
+      String((gate.event && gate.event.message) || '').slice(0, 140),
+    );
+  } catch (error) {
+    console.info('[bitfun-loopx] system notification skipped', error);
+  }
+}
+
+function emitInstallDiagnostic(
+  phase,
+  request = state.environmentInstallRequestId,
+  action = 'install_loopx',
+) {
+  const requestIdValue = request || 'unassigned';
+  console.info('[bitfun-loopx] Install interaction phase', {
+    phase,
+    action,
+    requestId: requestIdValue,
+  });
+  window.parent.postMessage({
+    type: 'bitfun:diagnostic',
+    scope: 'loopx-install',
+    phase,
+    action,
+    requestId: requestIdValue,
+  }, '*');
+}
+
 function repositoryLabel(repository) {
   if (!repository) return '--';
   return `${repository.owner || '?'}/${repository.repository || '?'}`;
@@ -1250,43 +1138,7 @@ function issueContext(task) {
   const item = task && task.identity && task.identity.item;
   const fallback = item ? compactItemLabel(item) : '--';
   const rawTitle = identityTitleOf(task);
-  const evidence = taskProgressEvidence(task);
-  const source = `${rawTitle}\n${String(task && task.lastAgentSummary || '')}`;
-
-  if (/plugin tree failed to load|waiting for service:\s*apiProxy/i.test(source)) {
-    return {
-      title: text('issueApiProxyTitle'),
-      background: text('issueApiProxyBackground'),
-      impact: text('issueApiProxyImpact'),
-      progress: text('issueApiProxyProgress'),
-    };
-  }
-  if (/inputModalities.{0,80}\binput\b|多模态模型无法发送图片/is.test(source)) {
-    return {
-      title: text('issueInputModalityTitle'),
-      background: text('issueInputModalityBackground'),
-      impact: text('issueInputModalityImpact'),
-      progress: text('issueInputModalityProgress'),
-    };
-  }
-  if (/macOS.{0,80}(?:焦点|focus)|最小化后.{0,80}(?:前台|焦点)/is.test(source)) {
-    return {
-      title: text('issueMacFocusTitle'),
-      background: text('issueMacFocusBackground'),
-      impact: text('issueMacFocusImpact'),
-      progress: text('issueMacFocusProgress'),
-    };
-  }
-
-  const title = compactHumanTitle(rawTitle, fallback);
-  return {
-    title,
-    background: text('issueGenericBackground', { title }),
-    impact: text('issueGenericImpact'),
-    progress: text(evidence.changes > 0
-      ? 'issueGenericProgressImplemented'
-      : 'issueGenericProgressAnalyzed'),
-  };
+  return { title: compactHumanTitle(rawTitle, fallback) };
 }
 
 function issueDisplayTitle(task) {
@@ -1324,6 +1176,23 @@ function runningOutputTask() {
   return tasks.find((task) => task.state === 'running' && task.phase === 'agent_running') || null;
 }
 
+/// The task whose context fills the issue workspace. An explicit selection
+/// always wins; without one the view follows the currently running task, then
+/// the most recently updated non-archived task, so the pane is never blank
+/// while any task exists.
+function displayedTask() {
+  const selected = selectedTask();
+  if (selected) return selected;
+  return runningOutputTask() || sortedTaskList(
+    ((state.snapshot && state.snapshot.tasks) || [])
+      .filter((task) => task.state !== 'archived'),
+  )[0] || sortedTaskList((state.snapshot && state.snapshot.tasks) || [])[0] || null;
+}
+
+function isFollowingRunningTask() {
+  return !state.selectedTaskId && Boolean(runningOutputTask());
+}
+
 function resetTurnOutput(task) {
   state.turnOutput.taskId = task ? task.taskId : null;
   state.turnOutput.turnId = task ? (task.currentTurnId || null) : null;
@@ -1352,6 +1221,7 @@ function clearTurnOutputTimer() {
 }
 
 function scheduleTurnOutputPoll(delay = 1200) {
+  if (state.tornDown) return;
   clearTurnOutputTimer();
   const task = runningOutputTask();
   if (!task || !app || !app.loopx || typeof app.loopx.turnOutputSince !== 'function') return;
@@ -1412,7 +1282,6 @@ function clearRunUiState() {
   state.outputCharacters = 0;
   clearTurnOutputTimer();
   resetTurnOutput(null);
-  if (view.issueDetailDialog.open) view.issueDetailDialog.close();
 }
 
 async function replayEvents(streamId, afterCursor, historical = false) {
@@ -1535,6 +1404,11 @@ function applySnapshot(snapshot) {
     throw new Error('The host returned an invalid LoopX snapshot.');
   }
   const previousStreamId = state.snapshot && state.snapshot.streamId;
+  const previousSidecarStatus = state.snapshot
+    && state.snapshot.environment
+    && state.snapshot.environment.core
+    && state.snapshot.environment.core.sidecar
+    && state.snapshot.environment.core.sidecar.status;
   const streamChanged = previousStreamId && previousStreamId !== snapshot.streamId;
   state.snapshot = snapshot;
   if (streamChanged) {
@@ -1544,13 +1418,79 @@ function applySnapshot(snapshot) {
   }
   if (state.selectedTaskId && !taskForId(state.selectedTaskId)) {
     state.selectedTaskId = null;
-    if (view.issueDetailDialog.open) view.issueDetailDialog.close();
   }
   state.connected = true;
   state.lastHostSignalAt = Date.now();
   view.connectionLabel.textContent = text('connected');
   view.root.setAttribute('aria-busy', 'false');
   renderAll();
+  if (state.environmentInstallObserved) {
+    const sidecar = snapshot.environment
+      && snapshot.environment.core
+      && snapshot.environment.core.sidecar;
+    if (sidecar && sidecar.status === 'available') {
+      emitInstallDiagnostic('environment_available');
+      state.environmentInstallObserved = false;
+      state.environmentInstallRequestId = null;
+      showNotice(text('loopxInstallComplete'), 'success');
+    } else if (
+      previousSidecarStatus === 'checking'
+      && sidecar
+      && sidecar.status === 'unavailable'
+    ) {
+      emitInstallDiagnostic('environment_unavailable');
+      state.environmentInstallObserved = false;
+      state.environmentInstallRequestId = null;
+      showNotice(text('loopxInstallFailed', {
+        message: sidecar.detail || statusLabel('unavailable'),
+      }), 'error');
+    }
+  }
+  if (state.openVikingInstallObserved) {
+    const openViking = snapshot.environment
+      && snapshot.environment.optional
+      && snapshot.environment.optional.openViking;
+    if (openViking && openViking.status === 'available') {
+      emitInstallDiagnostic(
+        'environment_available',
+        state.openVikingInstallRequestId,
+        'install_open_viking',
+      );
+      state.openVikingInstallObserved = false;
+      state.openVikingInstallRequestId = null;
+      showNotice(text('openVikingInstallComplete'), 'success');
+    } else if (
+      openViking
+      && (openViking.status === 'degraded' || openViking.status === 'disabled')
+    ) {
+      emitInstallDiagnostic(
+        'environment_requires_configuration',
+        state.openVikingInstallRequestId,
+        'install_open_viking',
+      );
+      state.openVikingInstallObserved = false;
+      state.openVikingInstallRequestId = null;
+      showNotice(text(
+        openViking.status === 'disabled'
+          ? 'openVikingInstallNeedsEnable'
+          : 'openVikingInstallNeedsConfig',
+      ));
+    } else if (
+      openViking
+      && openViking.status === 'unavailable'
+    ) {
+      emitInstallDiagnostic(
+        'environment_unavailable',
+        state.openVikingInstallRequestId,
+        'install_open_viking',
+      );
+      state.openVikingInstallObserved = false;
+      state.openVikingInstallRequestId = null;
+      showNotice(text('openVikingInstallFailed', {
+        message: openViking.detail || statusLabel('unavailable'),
+      }), 'error');
+    }
+  }
   if (state.pendingApprovalPrompt) {
     syncApprovalAttention(true);
     if (currentApprovalAttention()) state.pendingApprovalPrompt = false;
@@ -1687,7 +1627,10 @@ function renderExecutionSupport() {
     view.unsupportedReason.textContent = snapshot.unsupportedReason || text('unsupportedDefault');
   }
   view.resolveButton.disabled = !supported || environmentBusyOrBlocked || state.resetPending;
-  view.retryEnvironment.disabled = !supported;
+  view.retryEnvironment.disabled = !supported
+    || environmentStatus === 'checking'
+    || state.environmentInstallPending
+    || state.openVikingInstallPending;
 }
 
 function environmentFact(name, label, fact) {
@@ -1701,16 +1644,76 @@ function environmentFact(name, label, fact) {
   const strong = document.createElement('strong');
   strong.textContent = label;
   const value = document.createElement('span');
-  value.textContent = fact && fact.version ? fact.version : statusLabel(status);
-  title.append(strong, value);
+  value.textContent = statusLabel(status);
+  const statusActions = document.createElement('div');
+  statusActions.className = 'environment-fact__status-actions';
+  statusActions.append(value);
+  if (fact && fact.remediationAction === 'install_open_viking') {
+    const action = document.createElement('button');
+    const pending = state.openVikingInstallPending;
+    action.type = 'button';
+    action.className = 'text-button environment-fact__action';
+    action.disabled = pending;
+    action.textContent = text(
+      pending
+        ? 'installingOpenViking'
+        : (status === 'disabled' ? 'enableOpenViking' : 'installOpenViking'),
+    );
+    action.title = fact.remediation || action.textContent;
+    action.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || pending) return;
+      state.openVikingInstallRequestId = state.openVikingInstallRequestId || requestId();
+      emitInstallDiagnostic(
+        'pointer_down',
+        state.openVikingInstallRequestId,
+        'install_open_viking',
+      );
+    });
+    action.addEventListener('click', () => {
+      void installOpenVikingFromGithub();
+    });
+    statusActions.append(action);
+  }
+  title.append(strong, statusActions);
   element.append(title);
 
   const detail = document.createElement('p');
-  detail.textContent = (fact && (fact.detail || fact.remediation)) || statusLabel(status);
+  const version = fact && fact.version ? fact.version : '';
+  const description = (fact && (fact.detail || fact.remediation)) || '';
+  detail.textContent = [version, description].filter(Boolean).join(' · ') || statusLabel(status);
   detail.title = detail.textContent;
   element.append(detail);
   element.dataset.fact = name;
   return element;
+}
+
+function renderEnvironmentRemediation(sidecar) {
+  const installChecking = Boolean(
+    sidecar
+    && sidecar.status === 'checking'
+    && sidecar.version === '0.5.1'
+  );
+  const installAvailable = Boolean(
+    sidecar
+    && sidecar.remediationAction === 'install_loopx'
+  );
+  const installing = state.environmentInstallPending || installChecking;
+  view.environmentRemediation.hidden = !installAvailable && !installing;
+  if (view.environmentRemediation.hidden) return;
+
+  view.environmentRemediation.dataset.state = installing ? 'installing' : 'blocked';
+  view.environmentRemediationTitle.textContent = text(
+    installing ? 'loopxInstallingTitle' : 'loopxRepairTitle',
+  );
+  const detail = String(sidecar && sidecar.detail || '');
+  const currentVersion = (detail.match(/got loopx\s+([^\s]+)/i) || [])[1] || statusLabel('unavailable');
+  view.environmentRemediationDetail.textContent = installing
+    ? text('loopxInstallingDetail')
+    : text('loopxRepairDetail', { current: currentVersion });
+  view.environmentRemediationProgress.hidden = !installing;
+  view.installLoopx.hidden = installing;
+  view.installLoopx.disabled = installing;
+  view.installLoopxLabel.textContent = text('installLoopx');
 }
 
 function renderEnvironment() {
@@ -1724,6 +1727,7 @@ function renderEnvironment() {
 
   const core = environment && environment.core ? environment.core : {};
   const optional = environment && environment.optional ? environment.optional : {};
+  renderEnvironmentRemediation(core.sidecar);
   view.coreEnvironmentList.replaceChildren(
     environmentFact('sidecar', text('sidecar'), core.sidecar),
     environmentFact('gitWorktree', text('gitWorktree'), core.gitWorktree),
@@ -1732,19 +1736,13 @@ function renderEnvironment() {
   view.optionalEnvironmentList.replaceChildren(
     environmentFact('pythonFallback', text('pythonFallback'), optional.pythonFallback),
     environmentFact('openViking', text('openViking'), optional.openViking),
+    environmentFact('feedbackMemory', text('feedbackMemory'), optional.feedbackMemory),
     environmentFact('githubAuth', text('githubAuth'), optional.githubAuth),
   );
 }
 
 const ERROR_TASK_STATES = new Set(['recovery_required', 'failed']);
 const RECOVERABLE_TASK_STATES = new Set(['stopped', ...ERROR_TASK_STATES]);
-const ACTIVE_TASK_STATES = new Set([
-  'running',
-  'preparing',
-  'cancelling',
-]);
-const QUEUED_TASK_STATES = new Set(['queued', 'retry_wait']);
-const GLOBAL_PROGRESS_TASK_STATES = new Set([...ACTIVE_TASK_STATES, ...QUEUED_TASK_STATES]);
 
 function repositoryKey(repository) {
   return repository
@@ -1774,40 +1772,9 @@ function sortedTaskList(tasks) {
     || Number(right.updatedAt || 0) - Number(left.updatedAt || 0));
 }
 
-function primaryProgressTask(tasks) {
-  return sortedTaskList(tasks).find((task) => GLOBAL_PROGRESS_TASK_STATES.has(task.state)) || null;
-}
-
-function progressCounts(tasks) {
-  return {
-    active: tasks.filter((task) => ACTIVE_TASK_STATES.has(task.state)).length,
-    queued: tasks.filter((task) => QUEUED_TASK_STATES.has(task.state)).length,
-  };
-}
-
-function progressSummary(counts) {
-  if (counts.active > 0) {
-    return text('mainProgress', counts);
-  }
-  if (counts.queued > 0) {
-    return text('mainProgressOnlyQueued', counts);
-  }
-  return text('mainProgressIdle');
-}
-
 function progressItemLabel(task) {
   const item = task && task.identity && task.identity.item;
   return issueDisplayTitle(task) || compactItemLabel(item);
-}
-
-function activeWorkEmptyMessage() {
-  const tasks = state.snapshot && Array.isArray(state.snapshot.tasks) ? state.snapshot.tasks : [];
-  const task = primaryProgressTask(tasks);
-  if (!task) return text('noLogs');
-  if (task.phase === 'preparing_workspace') {
-    return text('worktreeQuiet', { item: progressItemLabel(task) });
-  }
-  return text('mainProgressWaiting');
 }
 
 function recoverableTasksForRepository(tasks, repository) {
@@ -1904,6 +1871,7 @@ function taskButton(task) {
 }
 
 function renderTasks() {
+  if (!canRender()) return;
   const tasks = state.snapshot && Array.isArray(state.snapshot.tasks) ? state.snapshot.tasks : [];
   const fragment = document.createDocumentFragment();
   sortedTaskList(tasks).forEach((task) => fragment.append(taskButton(task)));
@@ -1926,7 +1894,6 @@ function latestGate(taskId) {
         details: {
           gateId: task.pendingGateId,
           actionKind,
-          autonomousTurns: String(task.autonomousTurnsSinceReview || 4),
         },
       },
     };
@@ -1963,32 +1930,6 @@ function gateRawMessage(gate) {
 function approvalPresentation(task, gate) {
   const rawMessage = gateRawMessage(gate);
   const actionKind = String(gate && gate.actionKind || '').toLowerCase();
-  const context = issueContext(task);
-  if (actionKind === 'autonomous_budget_review') {
-    return {
-      title: text('autonomyApprovalTitle'),
-      summary: context.progress,
-      approveEffect: text('autonomyApprovalApproveEffect'),
-      rejectEffect: text('autonomyApprovalRejectEffect'),
-      recommendation: text('autonomyApprovalRecommendation'),
-      approveLabel: text('continueRepair'),
-      rejectLabel: text('pauseProcessing'),
-    };
-  }
-
-  const gateSource = `${rawMessage}\n${String(task && task.lastAgentSummary || '')}`;
-  const implementationApproval = /仓库写入|repo(?:sitory)?[- ]write|write scope|实施仍未开始|parent approval for repo write/i.test(gateSource);
-  if (implementationApproval) {
-    return {
-      title: text('implementationApprovalTitle'),
-      summary: context.progress,
-      approveEffect: text('implementationApprovalApproveEffect'),
-      rejectEffect: text('implementationApprovalRejectEffect'),
-      recommendation: text('implementationApprovalRecommendation'),
-      approveLabel: text('implementationApprovalApprove'),
-      rejectLabel: text('implementationApprovalReject'),
-    };
-  }
 
   const publishPullRequest = actionKind.includes('publish')
     || actionKind.includes('pull_request')
@@ -2002,10 +1943,12 @@ function approvalPresentation(task, gate) {
     const evidence = taskProgressEvidence(task);
     const validated = evidence.validated || evidence.settled || /\b(?:validated|verified)\b/i.test(rawMessage);
     return {
+      kind: 'publish',
       title: text('publishApprovalTitle'),
       summary: branch && commit
         ? text('publishApprovalSummary', { branch, commit, repository })
         : text('publishApprovalSummaryGeneric', { repository }),
+      message: rawMessage,
       approveEffect: text('publishApprovalApproveEffect'),
       rejectEffect: text('publishApprovalRejectEffect'),
       recommendation: text(validated ? 'publishApprovalRecommendationReady' : 'publishApprovalRecommendationReview'),
@@ -2015,8 +1958,10 @@ function approvalPresentation(task, gate) {
   }
 
   return {
+    kind: 'generic',
     title: text('genericApprovalTitle'),
-    summary: context.progress,
+    summary: rawMessage,
+    message: rawMessage,
     approveEffect: text('genericApprovalApproveEffect'),
     rejectEffect: text('genericApprovalRejectEffect'),
     recommendation: text('genericApprovalRecommendation'),
@@ -2037,14 +1982,7 @@ function syncApprovalAttention(autoOpen = false) {
   view.approvalAlertTitle.textContent = `${issueDisplayTitle(task) || itemLabel(item)} · ${text('decisionRequired')}`;
   view.approvalAlertOpen.title = presentation.summary;
   view.approvalAlertOpen.setAttribute('aria-label', `${presentation.title} ${presentation.summary}`);
-  const pending = Boolean(pendingActionFor(task));
-  view.approvalAlertMessage.textContent = pending
-    ? text('approvalSubmitting')
-    : `${presentation.title} ${presentation.summary}`;
-  view.approvalAlertReject.textContent = presentation.rejectLabel;
-  view.approvalAlertApprove.textContent = pending ? text('approvalSubmittingShort') : presentation.approveLabel;
-  view.approvalAlertReject.disabled = pending || !gate;
-  view.approvalAlertApprove.disabled = pending || !gate;
+  view.approvalAlertMessage.textContent = presentation.message || presentation.summary;
 
   if (
     autoOpen
@@ -2052,9 +1990,9 @@ function syncApprovalAttention(autoOpen = false) {
     && !state.promptedGateIds.has(gate.gateId)
   ) {
     state.promptedGateIds.add(gate.gateId);
-    const anotherDialogOpen = [...document.querySelectorAll('dialog[open]')]
-      .some((dialog) => dialog !== view.issueDetailDialog);
-    if (!anotherDialogOpen) selectTask(task.taskId);
+    void notifyGateSystemDecision(task, gate);
+    const selected = selectedTask();
+    if (!selected || selected.state !== 'waiting_for_user') selectTask(task.taskId);
   }
 }
 
@@ -2095,6 +2033,9 @@ function renderTaskActions(task) {
   }
   if (['preparing', 'queued', 'running', 'retry_wait'].includes(task.state)) {
     fragment.append(makeActionButton(text('pause'), 'pause', task));
+  }
+  if (['recovery_required', 'failed', 'stopped'].includes(task.state)) {
+    fragment.append(makeActionButton(text('resume'), 'resume', task));
   }
   if (['stopped', 'completed', 'failed'].includes(task.state)) {
     fragment.append(makeActionButton(text('archive'), 'archive', task));
@@ -2342,9 +2283,11 @@ function currentProgressDetail(task, events) {
     const summary = activity && activity.details && activity.details.summary;
     return activitySummary(task.currentTool, summary);
   }
-  if (task.state === 'recovery_required' || task.state === 'failed') return text('nextRecover');
+  if (task.state === 'recovery_required' || task.state === 'failed') {
+    return task.error ? String(task.error) : taskPhaseLabel(task);
+  }
   if (task.workspacePath && task.phase === 'creating_goal') {
-    return `${text('evidenceWorkspace')} · ${compactArtifactPath(task.workspacePath)}`;
+    return compactArtifactPath(task.workspacePath);
   }
   return taskPhaseLabel(task);
 }
@@ -2374,29 +2317,22 @@ function activitySummary(toolName, rawSummary) {
   return text('activityRunningCommand');
 }
 
-function nextProgressAction(task, evidence) {
-  if (isResolvedUpstream(task)) return text('nextResolvedUpstream');
-  if (task.state === 'completed') return text('nextCompleted');
-  if (task.state === 'waiting_for_user') return text('nextApproval');
-  if (task.state === 'recovery_required' || task.state === 'failed') return text('nextRecover');
-  if (task.phase === 'preparing_workspace') return text('nextPrepare');
-  if (task.state === 'queued' || task.phase === 'queued') return text('nextQueued');
-  if (task.phase === 'validating_progress') return text('nextValidate');
-  if (task.phase === 'settling_turn') return text('nextSettle');
-  if (task.phase === 'agent_running') return text(evidence.changes > 0 ? 'nextImplement' : 'nextAnalyze');
-  return text('nextAnalyze');
-}
-
 function renderIssueApproval(task) {
   const gate = task && task.state === 'waiting_for_user' ? latestGate(task.taskId) : null;
+  const gateJustArrived = gate && view.issueApprovalPanel.hidden;
   view.issueApprovalPanel.hidden = !gate;
+  if (gateJustArrived && view.issueDetail) {
+    // 新到的 owner 决策自己钉在详情列顶部：把滚动位置带回顶部，
+    // 保证审批卡片完整可见（sticky 定位已保证后续滚动时不被淹没）。
+    view.issueDetail.scrollTop = 0;
+  }
   if (!gate) return;
   const presentation = approvalPresentation(task, gate);
-  const context = issueContext(task);
+  view.issueApprovalKind.textContent = presentation.kind === 'publish'
+    ? text('gateKindPublish')
+    : text('gateKindDecision');
   view.issueApprovalTitle.textContent = presentation.title;
-  view.issueApprovalSummary.textContent = presentation.summary;
-  view.issueApprovalBackground.textContent = context.background;
-  view.issueApprovalImpact.textContent = context.impact;
+  view.issueApprovalMessage.textContent = presentation.message || presentation.summary;
   view.issueApprovalApproveEffect.textContent = presentation.approveEffect;
   view.issueApprovalRejectEffect.textContent = presentation.rejectEffect;
   view.issueApprovalRecommendation.textContent = presentation.recommendation;
@@ -2408,98 +2344,96 @@ function renderIssueApproval(task) {
   view.issueApprovalNote.disabled = pending;
 }
 
-function issueOutcomeSummary(task, evidence) {
-  if (isResolvedUpstream(task)) return text('outcomeResolvedUpstream');
-  if (task.state === 'waiting_for_user') return issueContext(task).progress;
-  if (task.state === 'recovery_required' || task.state === 'failed') return text('outcomeRecovery');
-  if (task.state === 'completed') return text('outcomeCompleted');
-  if (evidence.validated || evidence.settled) return text('outcomeValidated');
-  if (evidence.changes > 0) return text('outcomeImplemented');
-  if (evidence.analysisCount > 0 || String(task.lastAgentSummary || '').trim()) {
-    return text('outcomeAnalyzed');
-  }
-  if (task.state === 'queued' || task.state === 'preparing') return text('outcomeQueued');
-  return text('outcomeStarted');
-}
-
-function renderIssueProgress(task) {
+function renderIssueStatus(task) {
   const evidence = taskProgressEvidence(task);
   const stages = progressStageStatus(task, evidence);
-  const stageFragment = document.createDocumentFragment();
-  stages.forEach(([labelKey, status]) => {
-    const item = document.createElement('li');
-    item.dataset.status = status;
-    const label = document.createElement('strong');
-    label.textContent = text(labelKey);
-    const statusLabelElement = document.createElement('span');
-    statusLabelElement.textContent = text(`stage${status[0].toUpperCase()}${status.slice(1)}`);
-    item.append(label, statusLabelElement);
-    stageFragment.append(item);
-  });
-  view.issueStageList.replaceChildren(stageFragment);
-  view.issueProgressMeta.textContent = text('progressMeta', {
-    done: stages.filter(([, status]) => status === 'complete').length,
-    total: stages.length,
-  });
+  const current = stages.find(([, status]) => status !== 'complete');
+  const currentStage = current
+    ? `${text(current[0])}（${text(`stage${current[1][0].toUpperCase()}${current[1].slice(1)}`)}）`
+    : text('progressCompleted');
+  view.issueProgressSummary.textContent = text('progressSummaryLine', { stage: currentStage });
 
   const taskEvents = progressTaskEvents(task);
   view.issueCurrentHeading.textContent = currentProgressHeading(task, evidence);
   view.issueCurrentDetail.textContent = currentProgressDetail(task, taskEvents);
-  view.issueNextAction.textContent = nextProgressAction(task, evidence);
-
-  const facts = isResolvedUpstream(task)
-    ? [text('evidenceResolvedUpstream'), text('evidenceNoPatchRequired')]
-    : [];
-  if (!isResolvedUpstream(task)) {
-    if (evidence.validated || evidence.settled) facts.push(text('evidenceProgressSaved'));
-    if (task.workspacePath) facts.push(text('evidenceWorkspace'));
-    if (evidence.analysisCount > 0) facts.push(text('evidenceAnalysisReady'));
-    if (evidence.changes > 0) {
-      facts.push(text(
-        evidence.artifacts.length > 0 ? 'evidenceCodeChanges' : 'evidenceCodeChangesUnknown',
-        { value: evidence.artifacts.length },
-      ));
-    }
-    if (evidence.commands > 0) {
-      facts.push(text(evidence.failures > 0 ? 'evidenceValidationNeedsAttention' : 'evidenceValidationPassed'));
-    }
-  }
-  if (facts.length === 0) facts.push(text('evidenceNone'));
-  const factFragment = document.createDocumentFragment();
-  facts.slice(0, 5).forEach((fact) => {
-    const item = document.createElement('li');
-    item.textContent = fact;
-    factFragment.append(item);
-  });
-  view.issueEvidenceList.replaceChildren(factFragment);
-
-  const outcome = issueOutcomeSummary(task, evidence);
-  view.issueOutcomePanel.hidden = false;
-  view.issueOutcomeMeta.textContent = task.lastAgentSummaryAt
-    ? text('outcomeUpdated', { duration: relativeLabel(task.lastAgentSummaryAt) })
-    : '';
-  view.issueOutcome.textContent = outcome;
 }
 
-function renderLiveness() {
-  const task = selectedTask();
-  view.selectedState.hidden = !task;
-  view.showAllEvents.hidden = !task;
+function renderIssueBrief(task) {
+  const summary = String(task.lastAgentSummary || '').trim();
+  if (summary) {
+    renderMarkdown(view.issueSummary, summary, itemUrl(task.identity && task.identity.item));
+    view.issueSummaryMeta.textContent = task.lastAgentSummaryAt
+      ? text('outcomeUpdated', { duration: relativeLabel(task.lastAgentSummaryAt) })
+      : '';
+  } else {
+    view.issueSummary.replaceChildren();
+    view.issueSummary.append(text('summaryEmpty'));
+    view.issueSummaryMeta.textContent = '';
+  }
+
+  const evidence = taskProgressEvidence(task);
+  const facts = [];
+  if (task.workspacePath) {
+    facts.push({ label: text('factsWorkspace'), value: compactArtifactPath(task.workspacePath) });
+  }
+  if (task.goalId) {
+    facts.push({ label: text('factsTurn'), value: shortId(task.goalId) });
+  }
+  if (task.settlement && task.settlement.receiptId) {
+    facts.push({ label: text('factsReceipt'), value: shortId(task.settlement.receiptId) });
+  }
+  if (task.modelId && task.modelId !== 'auto') {
+    facts.push({ label: text('factsModel'), value: task.modelId });
+  }
+  if (evidence.artifacts.length > 0) {
+    facts.push({
+      label: text('factsArtifacts'),
+      value: evidence.artifacts.join(' · '),
+    });
+  }
+  if (facts.length === 0) {
+    facts.push({ label: text('factsArtifacts'), value: text('factsArtifactNone') });
+  }
+  const factFragment = document.createDocumentFragment();
+  facts.slice(0, 6).forEach((fact) => {
+    const chip = document.createElement('li');
+    chip.className = 'issue-facts__chip';
+    const label = document.createElement('span');
+    label.className = 'issue-facts__label';
+    label.textContent = fact.label;
+    const value = document.createElement('strong');
+    value.textContent = fact.value;
+    value.title = fact.value;
+    chip.append(label, value);
+    factFragment.append(chip);
+  });
+  view.issueFacts.replaceChildren(factFragment);
+
+  const error = String(task.error || '').trim();
+  view.issueError.hidden = !error;
+  view.issueError.textContent = error ? `${text('errorTitle')}：${error}` : '';
+}
+
+function renderFollowBanner(task) {
+  const following = isFollowingRunningTask();
+  view.followBanner.hidden = !following || !task;
+  if (!following || !task) return;
+  const item = task.identity && task.identity.item;
+  view.followBannerText.textContent = text('followBanner', {
+    item: compactItemLabel(item),
+    state: taskStateDisplayLabel(task),
+  });
+  view.followBanner.title = text('followBannerHint');
+}
+
+function renderIssueView() {
+  if (!canRender()) return;
+  const task = displayedTask();
+  view.issueView.hidden = !task;
+  view.issueEmpty.hidden = Boolean(task);
+  view.unselectTask.hidden = !state.selectedTaskId;
+  renderFollowBanner(task);
   if (!task) {
-    view.logTitle.textContent = text('liveOutput');
-    view.selectedSummary.hidden = false;
-    view.selectedSummary.textContent = text('allTaskEvents');
-    view.issueLink.hidden = true;
-    view.issueLink.removeAttribute('href');
-    view.issueNumber.textContent = '';
-    view.issueApprovalPanel.hidden = true;
-    view.issueProgressPanel.hidden = true;
-    view.issueStageList.replaceChildren();
-    view.issueEvidenceList.replaceChildren();
-    view.issueOutcomePanel.hidden = true;
-    view.issueOutcome.replaceChildren();
-    view.issueDescriptionPanel.hidden = true;
-    view.issueDescription.replaceChildren();
     renderTaskActions(null);
     return;
   }
@@ -2508,11 +2442,10 @@ function renderLiveness() {
   const item = task.identity && task.identity.item;
   const url = itemUrl(item);
   const itemLabelText = itemLabel(item);
-  view.logTitle.textContent = issueDisplayTitle(task) || itemLabelText;
-  view.selectedSummary.hidden = true;
-  view.selectedState.hidden = false;
-  view.selectedState.dataset.state = visualState;
-  view.selectedState.textContent = taskStateDisplayLabel(task);
+  view.issueTitle.textContent = issueDisplayTitle(task) || itemLabelText;
+  view.issueStatePill.hidden = false;
+  view.issueStatePill.dataset.state = visualState;
+  view.issueStatePill.textContent = taskStateDisplayLabel(task);
   view.issueLink.hidden = !url;
   view.issueLink.textContent = itemLabelText;
   if (url) {
@@ -2522,12 +2455,16 @@ function renderLiveness() {
     view.issueLink.removeAttribute('href');
     view.issueLink.removeAttribute('aria-label');
   }
+  view.issueUpdated.textContent = task.updatedAt
+    ? text('updated', { duration: relativeLabel(task.updatedAt) })
+    : '';
   view.issueNumber.textContent = item && item.number
     ? `${item.kind === 'pr' ? 'PR' : 'Issue'} #${item.number}`
     : '';
   renderIssueApproval(task);
   view.issueProgressPanel.hidden = false;
-  renderIssueProgress(task);
+  renderIssueStatus(task);
+  renderIssueBrief(task);
 
   const description = identityDescriptionOf(task);
   const metadataKey = itemKey(item);
@@ -2604,142 +2541,6 @@ function eventMessage(event) {
   return event.message || event.kind || 'event';
 }
 
-function eventDetailLabel(key) {
-  const keys = {
-    durationMs: 'detailDurationMs',
-    exitCode: 'detailExitCode',
-    matchCount: 'detailMatchCount',
-    fileCount: 'detailFileCount',
-    entryCount: 'detailEntryCount',
-    lineCount: 'detailLineCount',
-    contentLength: 'detailContentLength',
-    title: 'detailTitle',
-    queuePosition: 'detailQueuePosition',
-    dependencies: 'detailDependencies',
-  };
-  return keys[key] ? text(keys[key]) : key;
-}
-
-function eventRow(event) {
-  const row = document.createElement('li');
-  row.className = 'log-row';
-  row.dataset.level = event.level || 'info';
-  row.dataset.cursor = String(event.cursor);
-
-  const time = document.createElement('time');
-  time.className = 'log-time';
-  time.dateTime = new Date(normalizeTimestamp(event.occurredAt)).toISOString();
-  time.textContent = clockLabel(event.occurredAt);
-
-  const level = document.createElement('span');
-  level.className = 'event-level';
-  level.dataset.level = event.level || 'info';
-  level.textContent = String(event.level || 'info').toUpperCase();
-
-  const source = document.createElement('span');
-  source.className = 'log-source';
-  source.textContent = eventSourceLabel(event.source);
-
-  const content = document.createElement('div');
-  content.className = 'log-content';
-  const message = document.createElement('div');
-  message.className = 'log-message';
-  message.textContent = eventMessage(event);
-  content.append(message);
-
-  const toolSummary = event.details && event.details.summary;
-  if (toolSummary) {
-    const summary = document.createElement('div');
-    summary.className = 'log-tool-summary';
-    summary.textContent = String(toolSummary);
-    content.append(summary);
-  }
-
-  const metaValues = [];
-  if (!state.selectedTaskId && event.taskId) {
-    const task = taskForId(event.taskId);
-    const item = task && task.identity && task.identity.item;
-    metaValues.push(item ? compactItemLabel(item) : event.taskId);
-  }
-  if (event.phase) metaValues.push(phaseLabel(event.phase));
-  if (event.toolName) metaValues.push(`${text('currentTool')}: ${toolLabel(event.toolName)}`);
-  if (event.deadlineAt) metaValues.push(`${text('deadline')}: ${clockLabel(event.deadlineAt)}`);
-  if (metaValues.length) {
-    const meta = document.createElement('div');
-    meta.className = 'log-meta';
-    metaValues.forEach((value) => {
-      const span = document.createElement('span');
-      span.textContent = value;
-      meta.append(span);
-    });
-    content.append(meta);
-  }
-
-  const detailEntries = Object.entries(event.details || {})
-    .filter(([key]) => !['activity', 'toolName', 'summary'].includes(key));
-  if (detailEntries.length) {
-    const details = document.createElement('details');
-    details.className = 'log-details';
-    const summary = document.createElement('summary');
-    summary.textContent = text('details');
-    const list = document.createElement('dl');
-    detailEntries.forEach(([key, value]) => {
-      const term = document.createElement('dt');
-      term.textContent = eventDetailLabel(key);
-      const description = document.createElement('dd');
-      description.textContent = String(value);
-      list.append(term, description);
-    });
-    details.append(summary, list);
-    content.append(details);
-  }
-
-  row.append(time, level, source, content);
-  return row;
-}
-
-function liveProgressRow(task, counts) {
-  const row = document.createElement('li');
-  row.className = 'log-row log-row--live';
-  row.dataset.level = 'info';
-
-  const time = document.createElement('span');
-  time.className = 'log-time';
-  time.textContent = 'LIVE';
-
-  const level = document.createElement('span');
-  level.className = 'event-level';
-  level.dataset.level = 'info';
-  level.textContent = 'NOW';
-
-  const source = document.createElement('span');
-  source.className = 'log-source';
-  source.textContent = eventSourceLabel('controller');
-
-  const content = document.createElement('div');
-  content.className = 'log-content';
-  const message = document.createElement('div');
-  message.className = 'log-message';
-  message.textContent = task.phase === 'preparing_workspace'
-    ? text('worktreeQuiet', { item: progressItemLabel(task) })
-    : `${taskPhaseLabel(task)} · ${progressItemLabel(task)}`;
-  content.append(message);
-
-  const meta = document.createElement('div');
-  meta.className = 'log-meta';
-  [
-    progressSummary(counts),
-    taskStateLabel(task),
-    relativeLabel(task.lastOutputAt || task.updatedAt),
-  ].forEach((value) => {
-    const span = document.createElement('span');
-    span.textContent = value;
-    meta.append(span);
-  });
-  content.append(meta);
-  row.append(time, level, source, content);
-  return row;
-}
 
 function outputKindLabel(kind) {
   if (kind === 'thinking') return text('outputThinking');
@@ -2889,22 +2690,160 @@ function turnOutputBlockRow(block) {
   return row;
 }
 
-function renderTurnOutput() {
-  const task = runningOutputTask();
-  if (task) ensureTurnOutputTarget(task);
-  const blocks = compactTurnOutputBlocks(state.outputHistory);
-  const visible = blocks.slice(-MAX_RENDERED_OUTPUT_BLOCKS);
-  const existing = new Map(
+const TIMELINE_EVENT_KINDS = new Set([
+  'task_created',
+  'state_changed',
+  'progress',
+  'approval_required',
+  'settlement_recorded',
+  'operation_cancelled',
+]);
+
+function timelineMilestoneRow(event) {
+  const row = document.createElement('li');
+  row.className = 'log-row log-row--milestone';
+  row.dataset.level = event.level || 'info';
+  row.dataset.important = String(Boolean(event.important));
+  row.dataset.eventKey = String(event.cursor);
+
+  const time = document.createElement('time');
+  time.className = 'log-time';
+  time.dateTime = new Date(normalizeTimestamp(event.occurredAt)).toISOString();
+  time.textContent = clockLabel(event.occurredAt);
+
+  const source = document.createElement('span');
+  source.className = 'log-source';
+  source.textContent = eventSourceLabel(event.source);
+
+  const content = document.createElement('div');
+  content.className = 'milestone-row__message';
+  content.textContent = eventMessage(event);
+
+  row.append(time, source, content);
+  return row;
+}
+
+function timelineStageCard(task) {
+  const item = task && task.identity && task.identity.item;
+  const card = document.createElement('div');
+  card.className = 'timeline-stage-card';
+  if (!task) {
+    const message = document.createElement('p');
+    message.textContent = text('noLogs');
+    card.append(message);
+    return card;
+  }
+  const heading = document.createElement('strong');
+  heading.textContent = taskPhaseLabel(task);
+  card.append(heading);
+  const detail = document.createElement('p');
+  const taskEvents = progressTaskEvents(task);
+  if (task.state === 'queued') {
+    detail.textContent = latestTaskWaitReason(task);
+  } else if (task.phase === 'preparing_workspace') {
+    const elapsed = task.updatedAt ? relativeLabel(task.updatedAt) : '';
+    detail.textContent = elapsed
+      ? `${text('preparingElapsed', { duration: elapsed })} · ${text('worktreeQuiet', { item: compactItemLabel(item) })}`
+      : text('worktreeQuiet', { item: compactItemLabel(item) });
+  } else if (task.state === 'running' && task.phase === 'agent_running') {
+    detail.textContent = text('awaitingFirstOutput');
+  } else {
+    detail.textContent = currentProgressDetail(task, taskEvents);
+  }
+  card.append(detail);
+  return card;
+}
+
+function renderTimeline() {
+  if (!canRender()) return;
+  const running = runningOutputTask();
+  if (running) ensureTurnOutputTarget(running);
+  const task = displayedTask();
+
+  view.timelineScope.textContent = task
+    ? text(state.selectedTaskId ? 'timelineIdleScope' : 'timelineLiveScope', {
+      item: compactItemLabel(task.identity && task.identity.item),
+    })
+    : '';
+
+  // Model-output blocks are keyed per turn; task events are keyed by the
+  // durable event-stream cursor. A turn's blocks are anchored right after its
+  // "Agent turn started" milestone so the merged timeline stays in order.
+  const taskBlocks = task
+    ? compactTurnOutputBlocks(state.outputHistory.filter((event) => event.taskId === task.taskId))
+    : [];
+  const visibleBlocks = taskBlocks.slice(-MAX_RENDERED_OUTPUT_BLOCKS);
+  const blockGroups = [];
+  visibleBlocks.forEach((block) => {
+    const last = blockGroups[blockGroups.length - 1];
+    if (last && last.turnId === block.turnId) last.blocks.push(block);
+    else blockGroups.push({ turnId: block.turnId, blocks: [block] });
+  });
+
+  const milestoneEvents = task
+    ? state.events.filter((event) => (
+      event.taskId === task.taskId
+      && TIMELINE_EVENT_KINDS.has(event.kind)
+      && (event.generation == null || Number(event.generation) === Number(task.generation))
+    ))
+    : [];
+  const toolEvents = task
+    ? state.events.filter((event) => (
+      event.taskId === task.taskId
+      && event.kind === 'log'
+      && (event.generation == null || Number(event.generation) === Number(task.generation))
+    ))
+    : [];
+  // Tool activity already appears inside model-output blocks; fall back to the
+  // durable tool-activity log only when no output stream was captured.
+  const includeToolRows = visibleBlocks.length === 0;
+
+  const rows = [];
+  if (includeToolRows) {
+    // No model-output stream was captured for this task: rebuild the timeline
+    // from the durable event stream only (milestones + tool activity), ordered
+    // by event time.
+    const allEvents = [...milestoneEvents, ...toolEvents]
+      .sort((left, right) => (
+        (Number(left.occurredAt) || 0) - (Number(right.occurredAt) || 0)
+        || (Number(left.cursor) || 0) - (Number(right.cursor) || 0)
+      ));
+    allEvents.forEach((event) => {
+      rows.push({ key: `e:${event.cursor}`, kind: 'milestone', event });
+    });
+  } else {
+    milestoneEvents.forEach((event) => {
+      rows.push({ key: `e:${event.cursor}`, kind: 'milestone', event });
+      if (/agent turn started/i.test(String(event.message || '')) && blockGroups.length) {
+        const group = blockGroups.shift();
+        group.blocks.forEach((block) => rows.push({ key: `b:${outputBlockDomKey(block)}`, kind: 'block', block }));
+      }
+    });
+    blockGroups.forEach((group) => {
+      group.blocks.forEach((block) => rows.push({ key: `b:${outputBlockDomKey(block)}`, kind: 'block', block }));
+    });
+  }
+  const visibleRows = rows.slice(-MAX_RENDERED_OUTPUT_BLOCKS);
+
+  const existingBlocks = new Map(
     [...view.logList.children]
       .filter((node) => node.dataset && node.dataset.blockKey)
       .map((node) => [node.dataset.blockKey, node]),
   );
-  const desired = visible.map((block) => {
-    const key = outputBlockDomKey(block);
-    const node = existing.get(key);
-    return node && node.dataset.blockVersion === outputBlockDomVersion(block)
-      ? node
-      : turnOutputBlockRow(block);
+  const existingEvents = new Map(
+    [...view.logList.children]
+      .filter((node) => node.dataset && node.dataset.eventKey)
+      .map((node) => [node.dataset.eventKey, node]),
+  );
+  const desired = visibleRows.map((row) => {
+    if (row.kind === 'block') {
+      const node = existingBlocks.get(row.key);
+      return node && node.dataset.blockVersion === outputBlockDomVersion(row.block)
+        ? node
+        : turnOutputBlockRow(row.block);
+    }
+    const node = existingEvents.get(row.key);
+    return node || timelineMilestoneRow(row.event);
   });
   desired.forEach((node, index) => {
     const current = view.logList.children[index];
@@ -2914,34 +2853,40 @@ function renderTurnOutput() {
   [...view.logList.children].forEach((node) => {
     if (!desiredNodes.has(node)) node.remove();
   });
-  const hasOutput = visible.length !== 0;
-  view.logEmpty.hidden = hasOutput;
-  if (!hasOutput) {
-    const message = state.turnOutput.message || text('noLiveOutput');
-    view.logEmpty.querySelector('p').textContent = message;
+
+  const hasRows = visibleRows.length !== 0;
+  view.logEmpty.hidden = hasRows;
+  if (!hasRows) {
+    view.logEmptyText.textContent = state.turnOutput.message || text('noLiveOutput');
+    const stageCard = timelineStageCard(task);
+    view.logEmpty.querySelector('svg').hidden = Boolean(task);
+    const previousCard = view.logEmpty.querySelector('.timeline-stage-card');
+    if (previousCard) previousCard.remove();
+    if (task) view.logEmpty.append(stageCard);
   }
   if (state.followLogs) {
     requestAnimationFrame(() => {
       view.logScroll.scrollTop = view.logScroll.scrollHeight;
       view.newEvents.hidden = true;
     });
-  } else if (visible.length) {
+  } else if (visibleRows.length) {
     view.newEvents.hidden = false;
   }
-  if (task && !state.turnOutput.inFlight && !state.turnOutput.timer) {
+  if (running && !state.turnOutput.inFlight && !state.turnOutput.timer) {
     scheduleTurnOutputPoll(state.turnOutput.events.length ? 1200 : 0);
   }
 }
 
 function renderLogs() {
-  renderTurnOutput();
+  renderTimeline();
 }
 
 function renderAll() {
+  if (!canRender()) return;
   renderExecutionSupport();
   renderEnvironment();
   renderTasks();
-  renderLiveness();
+  renderIssueView();
   renderLogs();
 }
 
@@ -2952,7 +2897,7 @@ async function hydrateTaskMetadata(taskId) {
   const metadataKey = itemKey(item);
   if (state.metadataRequests.has(metadataKey)) return;
   state.metadataRequests.add(metadataKey);
-  renderLiveness();
+  renderIssueView();
   try {
     const response = await app.loopx.resolveIntake({
       input: itemUrl(item),
@@ -2972,7 +2917,7 @@ async function hydrateTaskMetadata(taskId) {
   } finally {
     state.metadataRequests.delete(metadataKey);
     renderTasks();
-    renderLiveness();
+    renderIssueView();
   }
 }
 
@@ -2981,14 +2926,23 @@ function selectTask(taskId) {
   state.selectedTaskId = taskId || null;
   if (changed) view.issueApprovalNote.value = '';
   renderTasks();
-  renderLiveness();
-  renderLogs();
-  if (taskId) {
-    if (!view.issueDetailDialog.open) view.issueDetailDialog.showModal();
-    void hydrateTaskMetadata(taskId);
-  } else if (view.issueDetailDialog.open) {
-    view.issueDetailDialog.close();
-  }
+  renderIssueView();
+  renderTimeline();
+  if (taskId) void hydrateTaskMetadata(taskId);
+}
+
+function unselectTask() {
+  selectTask(null);
+}
+
+function focusTaskLogs(taskId) {
+  state.followLogs = true;
+  selectTask(taskId || null);
+  if (!taskId) return;
+  window.requestAnimationFrame(() => {
+    view.issueWorkspace.focus({ preventScroll: true });
+    view.logScroll.scrollTop = view.logScroll.scrollHeight;
+  });
 }
 
 function factValue(value, fallback = '--') {
@@ -3329,11 +3283,14 @@ async function createTasks(retryTerminal) {
     state.preview = null;
     state.pendingRetry = null;
     await attachSnapshot(false);
-    const focusedTaskId = outcomes
-      .find((outcome) => outcome.taskId && ['created', 'opened_existing'].includes(outcome.kind))
-      ?.taskId;
-    state.followLogs = true;
-    selectTask(focusedTaskId || null);
+    const outcomeTaskIds = outcomes
+      .filter((outcome) => outcome.taskId && ['created', 'opened_existing'].includes(outcome.kind))
+      .map((outcome) => outcome.taskId);
+    const focusedTaskId = sortedTaskList(
+      ((state.snapshot && state.snapshot.tasks) || [])
+        .filter((task) => outcomeTaskIds.includes(task.taskId)),
+    )[0]?.taskId || outcomeTaskIds[0];
+    focusTaskLogs(focusedTaskId || null);
   } catch (error) {
     showNotice(errorMessage(error), 'error');
   } finally {
@@ -3498,7 +3455,7 @@ async function performAction(action, task, extra = {}) {
     : Number((state.snapshot && state.snapshot.revision) || 0);
   const request = {
     action,
-    clientRequestId: requestId(),
+    clientRequestId: extra.clientRequestId || requestId(),
     expectedRevision,
     ...(task ? { taskId: task.taskId } : {}),
     ...(extra.gateId ? { gateId: extra.gateId } : {}),
@@ -3507,7 +3464,7 @@ async function performAction(action, task, extra = {}) {
   if (task && task.taskId) {
     state.taskActionPending.set(task.taskId, action);
     renderTasks();
-    renderLiveness();
+    renderIssueView();
   }
   try {
     let response = await sendActionRequest(request);
@@ -3535,9 +3492,22 @@ async function performAction(action, task, extra = {}) {
       showNotice(response.message || text('actionRejected'), 'error');
       return false;
     } else if (status === 'duplicate') {
-      showNotice(response.message || text('actionDuplicate'));
+      showNotice(
+        action === 'install_loopx'
+          ? text('loopxInstallQueued')
+          : (action === 'install_open_viking'
+            ? text('openVikingInstallQueued')
+            : (response.message || text('actionDuplicate'))),
+      );
     } else {
-      showNotice(response && response.message ? response.message : text('actionApplied'), 'success');
+      showNotice(
+        action === 'install_loopx'
+          ? text('loopxInstallQueued')
+          : (action === 'install_open_viking'
+            ? text('openVikingInstallQueued')
+            : (response && response.message ? response.message : text('actionApplied'))),
+        'success',
+      );
       await attachSnapshot(false);
     }
     return true;
@@ -3549,8 +3519,100 @@ async function performAction(action, task, extra = {}) {
     if (task && task.taskId && state.taskActionPending.get(task.taskId) === action) {
       state.taskActionPending.delete(task.taskId);
       renderTasks();
-      renderLiveness();
+      renderIssueView();
     }
+  }
+}
+
+function installLoopxFromGithub() {
+  if (state.environmentInstallPending) return;
+  state.environmentInstallRequestId = state.environmentInstallRequestId || requestId();
+  emitInstallDiagnostic('click_handler_entered');
+  state.environmentInstallPending = true;
+  state.environmentInstallObserved = true;
+  renderExecutionSupport();
+  renderEnvironment();
+  showNotice(text('loopxInstallStarted'));
+  emitInstallDiagnostic('ui_pending_rendered');
+  window.setTimeout(() => {
+    emitInstallDiagnostic('request_task_started');
+    void submitLoopxInstallation();
+  }, 50);
+}
+
+async function submitLoopxInstallation() {
+  try {
+    emitInstallDiagnostic('bridge_call_started');
+    const started = await performAction('install_loopx', null, {
+      clientRequestId: state.environmentInstallRequestId,
+    });
+    emitInstallDiagnostic(started ? 'bridge_call_completed' : 'bridge_call_rejected');
+    if (started) {
+      await attachSnapshot(false);
+    } else {
+      state.environmentInstallObserved = false;
+      state.environmentInstallRequestId = null;
+    }
+  } finally {
+    state.environmentInstallPending = false;
+    renderExecutionSupport();
+    renderEnvironment();
+  }
+}
+
+function installOpenVikingFromGithub() {
+  if (state.openVikingInstallPending) return;
+  state.openVikingInstallRequestId = state.openVikingInstallRequestId || requestId();
+  emitInstallDiagnostic(
+    'click_handler_entered',
+    state.openVikingInstallRequestId,
+    'install_open_viking',
+  );
+  state.openVikingInstallPending = true;
+  state.openVikingInstallObserved = true;
+  renderExecutionSupport();
+  renderEnvironment();
+  showNotice(text('openVikingInstallStarted'));
+  emitInstallDiagnostic(
+    'ui_pending_rendered',
+    state.openVikingInstallRequestId,
+    'install_open_viking',
+  );
+  window.setTimeout(() => {
+    emitInstallDiagnostic(
+      'request_task_started',
+      state.openVikingInstallRequestId,
+      'install_open_viking',
+    );
+    void submitOpenVikingInstallation();
+  }, 50);
+}
+
+async function submitOpenVikingInstallation() {
+  try {
+    emitInstallDiagnostic(
+      'bridge_call_started',
+      state.openVikingInstallRequestId,
+      'install_open_viking',
+    );
+    const started = await performAction('install_open_viking', null, {
+      clientRequestId: state.openVikingInstallRequestId,
+    });
+    emitInstallDiagnostic(
+      started ? 'bridge_call_completed' : 'bridge_call_rejected',
+      state.openVikingInstallRequestId,
+      'install_open_viking',
+    );
+    if (started) {
+      await attachSnapshot(false);
+    } else {
+      state.openVikingInstallObserved = false;
+      state.openVikingInstallRequestId = null;
+    }
+  } finally {
+    state.openVikingInstallPending = false;
+    renderExecutionSupport();
+    renderEnvironment();
   }
 }
 
@@ -3578,12 +3640,6 @@ function approvalAlertGate() {
 function openApprovalAlertGate() {
   const attention = approvalAlertGate();
   if (attention) selectTask(attention.task.taskId);
-}
-
-function answerApprovalAlertGate(action) {
-  const attention = approvalAlertGate();
-  if (!attention) return;
-  void answerTaskGate(attention.task, action);
 }
 
 function answerSelectedTaskGate(action) {
@@ -3735,13 +3791,20 @@ function bindEvents() {
     event.preventDefault();
     void resetLoopx();
   });
+  view.installLoopx.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || state.environmentInstallPending) return;
+    state.environmentInstallRequestId = state.environmentInstallRequestId || requestId();
+    emitInstallDiagnostic('pointer_down');
+  });
+  view.installLoopx.addEventListener('click', () => {
+    void installLoopxFromGithub();
+  });
   view.retryEnvironment.addEventListener('click', async () => {
     await performAction('retry_environment', null);
   });
   view.resumeRepository.addEventListener('click', openRepositoryResumeDialog);
   view.approvalAlertOpen.addEventListener('click', openApprovalAlertGate);
-  view.approvalAlertApprove.addEventListener('click', () => answerApprovalAlertGate('approve'));
-  view.approvalAlertReject.addEventListener('click', () => answerApprovalAlertGate('reject'));
+  view.approvalAlertOpenAction.addEventListener('click', openApprovalAlertGate);
   view.issueApprovalApprove.addEventListener('click', () => answerSelectedTaskGate('approve'));
   view.issueApprovalReject.addEventListener('click', () => answerSelectedTaskGate('reject'));
   view.repositoryResumeCancel.addEventListener('click', () => {
@@ -3754,10 +3817,8 @@ function bindEvents() {
   view.collapseTasks.addEventListener('click', () => {
     setRailCollapsed(!state.railCollapsed);
   });
-  view.showAllEvents.addEventListener('click', () => selectTask(null));
-  view.issueDetailDialog.addEventListener('cancel', (event) => {
-    event.preventDefault();
-    selectTask(null);
+  view.unselectTask.addEventListener('click', () => {
+    unselectTask();
   });
   view.logScroll.addEventListener('scroll', () => {
     const remaining = view.logScroll.scrollHeight - view.logScroll.scrollTop - view.logScroll.clientHeight;
@@ -3786,7 +3847,7 @@ function bindEvents() {
 }
 
 function updateLivenessClock() {
-  renderLiveness();
+  renderIssueView();
   renderTasks();
   const resumed = sampleHostClock();
   if (resumed) {
@@ -3840,6 +3901,7 @@ async function start() {
   window.addEventListener('pageshow', handleHostSurfaceReturn);
   window.addEventListener('online', handleHostSurfaceReturn);
   window.addEventListener('beforeunload', () => {
+    state.tornDown = true;
     clearTurnOutputTimer();
     document.removeEventListener('visibilitychange', handleHostSurfaceReturn);
     window.removeEventListener('focus', handleHostSurfaceReturn);

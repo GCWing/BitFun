@@ -14,6 +14,7 @@ use bitfun_product_domains::miniapp::loopx::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::State;
 
 pub const LOOPX_UNSUPPORTED_EXECUTION_DOMAIN: &str = "unsupported_execution_domain";
@@ -227,11 +228,29 @@ pub async fn miniapp_loopx_action(
     controller: State<'_, LoopxControllerState>,
     request: MiniAppLoopxActionRequest,
 ) -> Result<LoopxActionResponse, String> {
-    authorize_builtin(&app_state, &request.app_id).await?;
-    if is_remote_workspace(&app_state).await {
-        return Err(unsupported_error());
+    let started_at = Instant::now();
+    let action = request.input.action;
+    let request_id = request.input.client_request_id.clone();
+    log::info!("LoopX action command received: action={action:?}, request_id={request_id}");
+    let result = async {
+        authorize_builtin(&app_state, &request.app_id).await?;
+        if is_remote_workspace(&app_state).await {
+            return Err(unsupported_error());
+        }
+        controller.controller.action(request.input).await
     }
-    controller.controller.action(request.input).await
+    .await;
+    let duration_ms = bitfun_core::util::elapsed_ms_u64(started_at);
+    match &result {
+        Ok(response) => log::info!(
+            "LoopX action command completed: action={action:?}, request_id={request_id}, status={:?}, duration_ms={duration_ms}",
+            response.status
+        ),
+        Err(error) => log::warn!(
+            "LoopX action command failed: action={action:?}, request_id={request_id}, duration_ms={duration_ms}, error={error}"
+        ),
+    }
+    result
 }
 
 #[tauri::command]

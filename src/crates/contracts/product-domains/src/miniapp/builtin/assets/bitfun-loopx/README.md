@@ -181,8 +181,18 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
 
 ## 平台支持
 
-- Desktop 安装包携带固定版本的 LoopX sidecar；开发态缺少资源时只允许使用版本完全
-  匹配的系统 `loopx`，不从 MiniApp 内下载运行时或修改用户 Python 环境。
+- Desktop 安装包携带固定版本的 LoopX sidecar；资源缺失或系统版本不匹配时，用户可从
+  环境卡片显式触发安装：宿主从官方 GitHub 仓库 clone 固定 `v0.5.1`/commit 到
+  BitFun 管理目录并用 Python 3.11+ 直接运行源码。不会覆盖系统 `loopx`，也不会修改
+  用户的全局 Python 环境；没有 Python/Git 时返回明确前置条件错误。安装 action 只负责
+  持久化进行中状态并立即返回，下载在宿主后台执行；clone 使用 blobless sparse checkout，
+  只检出 `loopx/` 与必要元数据/许可证，完成或失败都通过环境事件回推 UI。
+- OpenViking 是可选的外部记忆服务，不是 LoopX 核心任务的启动条件。环境卡片分别展示
+  `ov` CLI、服务连通性、LoopX 语义偏好扩展和反馈记忆启用状态；缺少 CLI 时，用户可显式
+  从官方 GitHub 仓库的固定 `v0.4.9` commit 构建到 BitFun 管理目录。BitFun 不会静默部署
+  OpenViking 服务、复制模型凭据或自动采集聊天内容；人类反馈的摄取与召回仍需按 goal 和
+  surface 显式启用。首次非交互探测若发现 CLI 尚未选择显示语言，宿主只会初始化一次英文
+  CLI 输出；已有的 `en` 或 `zh-CN` 用户偏好不会被覆盖。
 - Git workspace、GitHub intake、进程树与 sidecar 探测由 Rust service owner 实现，
   不进入 UI 或 Worker。
 - 当前只支持本地 Desktop workspace。Remote Workspace、Peer Device、Remote Control
@@ -198,10 +208,7 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
 - 普通 UI attach 不重复 inspect `WaitingForUser`、终态或显式恢复态 Goal；这些状态由
   宿主审批/恢复动作直接推进，仅在真实待机恢复的 force reconciliation 中重新向 CLI
   对账。这样等待审批不会每 30 秒生成一个可能超时的 sidecar 进程。
-- Issue 列表与实时日志是一级工作区；点击 Issue 打开全尺寸二级详情层，集中展示阶段、
-  当前动作、有效产出、最新回合结论和原始 Issue 描述。审批门禁同时投影为持久顶部提示，
-  新门禁首次出现时自动打开批准/拒绝对话框；提交决定后 UI 立即收起对话框，并以任务
-  pending 状态等待宿主确认，不把 CLI 往返延迟表现成按钮卡死。
+- Issue 列表与 issue 视图是一级工作区：右侧 issue 视图永远对应当前选中任务，未选中时自动跟随正在运行的任务并显示跟随横幅；点击左侧任务即固定查看该 Issue，右侧内容与左侧选中严格一一对应。issue 视图自上而下集中展示：任务头（标题、状态、操作、GitHub 链接）、审批面板、当前阶段（五阶段总结 + 当前动作）、最新进展（durable 的最后回合总结 + 事实 chips：工作区路径、回合、结算回执、产出物、错误）、原始 Issue 描述（可折叠）和合并时间线（宿主事件与模型实时输出按轮次交错，准备期/排队期不再空白）。审批门禁同时投影为持久顶部提示，但只负责提醒与跳转；批准/拒绝只在 issue 视图内提交，提交后以任务 pending 状态等待宿主确认，不把 CLI 往返延迟表现成按钮卡死。
 - `pending_gate_id/message/action_kind` 属于任务快照的持久投影，审批按钮不依赖可能被
   截断的历史事件回放。升级前的 `WaitingForUser` 记录若缺少该投影，普通 attach 只做
   一次 CLI reconciliation 补齐，之后重新进入等待态免轮询路径。
@@ -227,6 +234,46 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
   一个 goal 下。依据：loopx v0.5.x 的 goal 是「单一 objective 的持续 turn 载体」，
   quota/心跳/审批/结算都以 goal 为域，registry 本身支持多 goal 列表——
   多 issue 的"批量管理"由本应用 task/batch 层聚合，不压平到 loopx goal。
+- **回合上下文注入（防失忆打转）**：每个 turn 仍是全新临时 session，但宿主在
+  心跳 task body 之前追加有界的 `<bitfun_host_goal_facts>` 块（controller
+  `host_turn_context_block`）：复述权威 durable 事实（goal 状态、durable
+  revision、settlement receipt 数、`todo list` 投影出的 open agent todos）、
+  指向 repo playbook 与本任务 worktree 的初始 workflow-plan packet
+  （`.bitfun/loopx/intake-plan.json`，由 `LoopxWorkspacePort::persist_intake_plan`
+  在建 goal 时落盘——LoopX `todo add` 无法携带 next-command preview，
+  没有这份可读副本 Agent 无法回到 issue-fix 流水线），并附带上一回合有界
+  agent 总结（显式标注为非权威 UX 投影）。这只是复述宿主已观察到的权威事实，
+  不参与 settlement 判定；durable writeback 仍是唯一进展证据。
+- **宿主执行 turn guard（结算绑定链）**：LoopX 要求 turn-scoped
+  `refresh-state` writeback 的 todo 与原 guard receipt 完全一致，而上游心跳
+  body 里的 guard 命令不带 `--todo-id`，Agent 自行执行时 receipt 永远缺 todo，
+  结算链必死。因此 `build_turn` 由宿主自己执行
+  `quota should-run --todo-id <selected todo> --turn-instance-id <turn>`
+  （`LoopxCliPort::build_turn` 内部，guard 拒绝即视为冲突），并把已执行的
+  事实、绑定与唯一例外（结算命令报 receipt 缺失时按 body 原样重跑一次）写进
+  host binding 与 host facts；任务 body 里上游的 Codex 专用 preflight bash
+  （PATH/install-local/doctor 与 quota spend 示例、"Codex session 已信任"提示）
+  被 `replace_embedded_preflight_fence` / `replace_host_conflicting_lines`
+  替换为宿主契约文案。`AGENT_CLI_USAGE_RULES` 同步给出绑定后的 should-run、
+  必带绑定 flags 的 refresh-state、以及 `todo complete` 的两种合法收束形态
+  （`--next-agent-todo` 接续 or `--no-follow-up` 终结）。
+- **repo 级 playbook**：`LoopxWorkspacePort::ensure_playbook` 幂等确保
+  `<root>/<repo-hash>/LOOPX_AGENT_PLAYBOOK.md` 存在，内容为宿主编写的
+  issue-fix 工作流映射、反模式清单和 append-only lessons 段。同一仓库的
+  串行 task 共享该文件，CLI 精确参数仍以每轮心跳里的 host binding 为准，
+  playbook 不复制 flag 形态以避免两处漂移。
+- **CLI 语法契约（禁 --help 探索）**：adapter 注入的 `AGENT_CLI_USAGE_RULES`
+  列出针对 pin 版本实测验证过的 typed 命令形态（quota should-run / todo
+  list/claim/add/complete / refresh-state / history / issue-fix 子命令），
+  明确禁止预emptive `--help`、`commands` 或重读 loopx 源码；仅在 CLI 明确
+  拒绝某参数时才允许对那一 subcommand 查一次 `--help`。
+- **Goal 终局（零开放 todo 收束）**：LoopX 在本集成路径上不会自行到达
+  `terminal_no_followup`——所有 todo 关闭后 `turn plan` 仍返回
+  `ready_for_host`。宿主在 `RunNow` 且 open todos 与 user todos 均为零、
+  或 Goal 已被上游 archived 时，通过 `LoopxCliPort::stop_goal`
+  （`goal-lifecycle --operation stop --execute`）停止心跳并以 Completed
+  收束 host task；stop 失败仅告警，不影响收束（host job 终态后 registry
+  随 worktree 处置而惰化）。
 - **心跳调度**：本应用维护一个统一的 task 调度循环（非每 issue 一个独立
   定时器）；每轮 inspect_goal 由 loopx 返回 `scheduler_hint_ms`（含指数退避），
   宿主据此把该 goal 重新排队；同一仓库的多个 goal 串行推进（
@@ -252,13 +299,28 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
   活动 root，并搬回经过目录边界验证的 `bare.git` 对象缓存；旧 task Worktree
   在后台递归回收。这样不会复用脏工作树或失去 owner 的未结算修改，但下一次同仓库
   任务不必重新下载完整 Git 历史。要继续已有修改应使用仓库级恢复，不应先重置。
-- **自主回合收敛门禁**：宿主只在 LoopX 已返回 `RunNow`、没有自然 user gate、Goal
-  也未终结时计算预算；每 4 个成功 durable settlement 必须通过 typed CLI port 创建
-  一个 agent-scoped `user_gate`。批准后重新获得 4 个有界回合，拒绝则停止 BitFun host
-  task 并保留 worktree/证据，后续仍可用仓库级恢复继续。预算按结算回执计算，不按工具
-  字符串、命令次数或模型文本猜测；升级后的旧任务也会用 LoopX authoritative receipt
-  history 补算未审阅回合，因此不会把通用 Agent loop 变成硬编码工作流。
-- 模型成本仍由用户在 BitFun 侧管理；自主回合门禁是收敛/控制权边界，不是费用估算器。
+- **收敛防护复用 LoopX 自有机制（宿主不造轮子）**：宿主不合成任何停滞/
+  同-todo/回合数启发式门禁。历史版本曾按 settlement 计数在宿主侧强制 owner
+  review，现已移除 raise 逻辑；任务快照上的
+  `autonomous_turns_since_review` / `stagnant_settlements_since_review` /
+  `settlements_on_current_todo` 计数字段仅为兼容旧持久化记录而保留，不参与
+  任何决策。LoopX 自有的防护链已经覆盖：heartbeat 的 stall observation 会让
+  LoopX 向 agent 下达 autonomous replan obligation（连续卡住时强制重规划，
+  持续不可修复则 pause 该 Goal 的心跳），agent 自己在需要 owner 决策时通过
+  typed `user_gate` 上抛（例如外部写入前的 PR 审批门禁）。宿主只在 Goal 无开
+  放 todo 时收束（见上）与 settlement 完全缺失时进入显式 recovery。审批文案
+  遵循“注意力税”原则：只有在真正需要人类决策（无法自行解决、或对外发布）时
+  才请求审批，且必须携带背景、已做工作、卡住原因与需要的决定；审批面板只展
+  示 gate 原始消息与分类后的后果说明，不伪造 issue 背景/影响描述。
+- **通知契约（宿主独占）**：OS 级 toast/通知由宿主统一管理——Agent 的执行
+  上下文明确禁止其发送任何系统通知（Windows Toast/Balloon/msg 等）；MiniApp
+  无头 agent 会话（sessionKind 'miniapp'）的每轮完成被
+  `dialogCompletionNotifyPolicy` 显式排除，不产生“任务完成”toast——注意力
+  只在 owner 决策点被请求：新 user gate 首次出现时由 MiniApp UI 通过
+  `notifications.system` 桥发系统通知（meta.json 需
+  `notifications.system: true`）。workspace 准备等过渡性事件不产生系统级
+  提醒。
+- 模型成本仍由用户在 BitFun 侧管理；收敛门禁是控制权边界，不是费用估算器。
 
 ## loopx 依赖与合规
 
@@ -267,26 +329,29 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
   构建期拉取 pin `v0.5.1` 的 loopx 源码并用 PyInstaller 编译单文件二进制，随
   tauri `bundle.resources` 作为 sidecar 分发（`resources/loopx/`）。桌面宿主把
   资源目录由 Desktop 启动 wiring 传给 `LoopxCliProcessAdapter`，探测时内置二进制
-  优先，用户机器零依赖。开发态资源缺失时只接受版本完全匹配的系统命令。
+  优先，用户机器零依赖。资源缺失时依次使用经 commit 校验的 BitFun 托管源码、版本
+  完全匹配的系统命令；托管源码安装只由用户点击触发，不在启动时静默下载。
   生成的 `resources/loopx/` 目录在 `.gitignore` 中，二进制不进仓库；`manifest.json`
   记录版本、commit、内容哈希与构建工具链。
-- **MIT 再分发义务**：loopx 为 MIT（Copyright (c) 2026 LoopX contributors），
-  允许以二进制形式再分发，义务为保留许可证与版权声明——`resources/loopx/` 随包
-  携带上游 `LICENSE` 与 `TRADEMARKS.md`，`THIRD_PARTY_NOTICES.md` 已收录 loopx
-  条目。名称按 loopx [TRADEMARKS.md](https://github.com/huangruiteng/loopx/blob/main/TRADEMARKS.md)
-  描述性使用，本应用是第三方集成，非 LoopX 官方出品。
-- **运行期兜底**：内置二进制缺失时，开发态可回退版本完全匹配的系统 `loopx`；
-  版本不一致直接拒绝。升级必须伴随 CLI JSON 契约的显式适配。
+- **Apache-2.0 再分发义务**：loopx v0.5.1 为 Apache-2.0（Copyright 2026 LoopX
+  contributors）。`resources/loopx/` 随包携带上游 `LICENSE`、`NOTICE`、历史
+  `LICENSE-MIT` 与 `TRADEMARKS.md`；运行时托管源码保留完整 checkout。
+  `THIRD_PARTY_NOTICES.md` 已收录对应条目。名称按 loopx
+  [TRADEMARKS.md](https://github.com/huangruiteng/loopx/blob/main/TRADEMARKS.md) 描述性使用，
+  本应用是第三方集成，非 LoopX 官方出品。
+- **运行期兜底**：内置二进制缺失时，优先使用 BitFun 管理的固定 GitHub 源码；未安装
+  托管源码时才检查版本完全匹配的系统 `loopx`。任何版本或 schema 不一致都直接拒绝。
 - 本应用自身的 GitHub 凭据只存于本机应用存储（gh CLI 或粘贴的 PAT），不写入 git config。
 
 ## loopx 依赖升级
 
-loopx 不随包分发源码，只 pin 一个经过验证的版本。**不要自动追新**：只有在确实
-需要新版能力/修复时才升级。
+loopx 的随包二进制与按需托管源码都 pin 同一个经过验证的版本。**不要自动追新**：
+只有在确实需要新版能力/修复时才升级。
 
 1. **读 release notes / CHANGELOG**，重点确认 CLI 的 `--format json` 输出契约
    （`turn plan` / `heartbeat-prompt` / `history` / `todo` / `bootstrap`）没有破坏性变更；
-2. **改 pin**：同步修改 `scripts/build-loopx.mjs` 与 `loopx_cli.rs` 的版本常量；
+2. **改 pin**：同步修改 `scripts/build-loopx.mjs` 与 `loopx_cli.rs` 的版本、tag 和源码
+   commit 常量；
 3. **本机冒烟**：重建 sidecar 后跑一个 issue 全流程（intake → turn → todo 审批 →
    receipt 观察）验证 JSON 契约；
 4. **回滚**：恢复上述两个 pin 并重建 sidecar；已持久化 host job 和 LoopX registry

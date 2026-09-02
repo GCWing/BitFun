@@ -4,12 +4,13 @@
 // Runs at BUILD time only (CI / packaging), never on user machines: fetches the
 // pinned loopx source, compiles a self-contained onefile binary with
 // PyInstaller, and stages it under src/apps/desktop/resources/loopx/ together
-// with the compliance artifacts (MIT LICENSE, TRADEMARKS.md, provenance
+// with the compliance artifacts (Apache-2.0 LICENSE/NOTICE, historical
+// LICENSE-MIT, TRADEMARKS.md, provenance
 // manifest). The desktop bundles that directory as a sidecar resource and the
 // bitfun-loopx MiniApp worker prefers the bundled binary at runtime, so end
 // users need neither Python nor git nor network access to use loopx.
 //
-// loopx is MIT (Copyright (c) 2026 LoopX contributors), pure-stdlib Python
+// loopx v0.5.1 is Apache-2.0 (Copyright 2026 LoopX contributors), pure-stdlib Python
 // >= 3.11; PyInstaller's bootloader exception permits the bundled binary.
 
 import { execFileSync } from 'node:child_process';
@@ -31,8 +32,9 @@ import { fileURLToPath } from 'node:url';
 // Keep in sync with LOOPX_VENDOR_REF in the bitfun-loopx MiniApp worker.js:
 // loopx's CLI JSON contract is the app's interface surface, so the bundled
 // binary and the runtime vendor fallback must pin the same version.
-export const LOOPX_VERSION = process.env.LOOPX_VERSION || 'v0.5.1';
+export const LOOPX_VERSION = 'v0.5.1';
 const LOOPX_REPO = 'https://github.com/huangruiteng/loopx.git';
+const LOOPX_COMMIT = '1bb42f4cb3e329dcb71c64654228f951098cead1';
 const OUT_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -98,12 +100,20 @@ export async function buildLoopx({
     console.log(`build-loopx: cloning ${LOOPX_REPO} @ ${version}`);
     sh('git', ['clone', '--depth', '1', '--branch', version, LOOPX_REPO, src]);
     const commit = shOut('git', ['-C', src, 'rev-parse', 'HEAD']);
+    if (commit !== LOOPX_COMMIT) {
+      throw new Error(`pinned commit mismatch: expected ${LOOPX_COMMIT}, checkout is ${commit}`);
+    }
     const described = shOut('git', ['-C', src, 'describe', '--tags', '--exact-match']);
     if (described !== version) {
       throw new Error(`pinned tag mismatch: expected ${version}, checkout is ${described}`);
     }
-    if (!existsSync(path.join(src, 'LICENSE')) || !existsSync(path.join(src, 'loopx', 'cli.py'))) {
-      throw new Error('checkout is missing LICENSE or loopx/cli.py');
+    if (
+      !existsSync(path.join(src, 'LICENSE'))
+      || !existsSync(path.join(src, 'NOTICE'))
+      || !existsSync(path.join(src, 'LICENSE-MIT'))
+      || !existsSync(path.join(src, 'loopx', 'entrypoint.py'))
+    ) {
+      throw new Error('checkout is missing compliance files or loopx/entrypoint.py');
     }
 
     console.log('build-loopx: creating build venv and installing PyInstaller');
@@ -117,7 +127,7 @@ export async function buildLoopx({
     sh(pip, ['install', '--disable-pip-version-check', '--quiet', 'pyinstaller']);
 
     const entry = path.join(src, '_loopx_bundle_entry.py');
-    writeFileSync(entry, 'from loopx.cli import main\nraise SystemExit(main())\n', 'utf8');
+    writeFileSync(entry, 'from loopx.entrypoint import main\nraise SystemExit(main())\n', 'utf8');
 
     console.log('build-loopx: compiling onefile binary (PyInstaller)');
     sh(pyinstaller, [
@@ -138,6 +148,8 @@ export async function buildLoopx({
     mkdirSync(outDir, { recursive: true });
     copyFileSync(binary, path.join(outDir, path.basename(binary)));
     copyFileSync(path.join(src, 'LICENSE'), path.join(outDir, 'LICENSE'));
+    copyFileSync(path.join(src, 'NOTICE'), path.join(outDir, 'NOTICE'));
+    copyFileSync(path.join(src, 'LICENSE-MIT'), path.join(outDir, 'LICENSE-MIT'));
     copyFileSync(path.join(src, 'TRADEMARKS.md'), path.join(outDir, 'TRADEMARKS.md'));
 
     const pyinstallerVersion = shOut(pyinstaller, ['--version']);
@@ -147,8 +159,8 @@ export async function buildLoopx({
       version,
       source: LOOPX_REPO.replace(/\.git$/, ''),
       commit,
-      license: 'MIT',
-      copyright: 'Copyright (c) 2026 LoopX contributors',
+      license: 'Apache-2.0',
+      copyright: 'Copyright 2026 LoopX contributors',
       sha256: `sha256:${sha256Of(path.join(outDir, path.basename(binary)))}`,
       built_with: {
         python: python.version,

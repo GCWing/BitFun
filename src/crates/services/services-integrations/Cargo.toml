@@ -211,6 +211,7 @@ miniapp-loopx = [
     "tokio/time",
     "tokio-util",
     "url",
+    "uuid",
     "which",
 ]
 miniapp-market = [

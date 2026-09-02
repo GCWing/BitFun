@@ -813,6 +813,34 @@ impl LoopxIntakeMetadataProvider for GithubLoopxIntakeMetadataProvider {
     }
 }
 
+fn candidate_labels(value: &Value) -> Vec<String> {
+    // LoopX's own metadata projection caps labels at 12 entries; mirror that
+    // bound so the inline metadata stays within the workflow-plan budget.
+    const LABEL_CAP: usize = 12;
+    value
+        .get("labels")
+        .and_then(Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| {
+                    let name = match entry {
+                        Value::String(text) => Some(text.clone()),
+                        Value::Object(_) => entry
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .map(str::to_string),
+                        _ => None,
+                    }?;
+                    let name = name.trim().to_string();
+                    (!name.is_empty()).then_some(name)
+                })
+                .take(LABEL_CAP)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn candidate_from_value(
     key: loopx_contract::LoopxIssueKey,
     value: &Value,
@@ -845,6 +873,7 @@ fn candidate_from_value(
             .get("state_reason")
             .and_then(Value::as_str)
             .map(str::to_string),
+        labels: candidate_labels(value),
         from_repository,
         has_images: body.contains("![") || body.to_ascii_lowercase().contains("<img"),
         default_selected: !from_repository,

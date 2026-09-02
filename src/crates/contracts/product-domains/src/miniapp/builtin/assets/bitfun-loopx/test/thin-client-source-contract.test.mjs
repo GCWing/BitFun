@@ -68,6 +68,21 @@ test('LoopX UI is a thin client of the host-owned controller', async () => {
       `ui.js uses unsupported app.loopx method: ${method}`,
     );
   }
+  assert.match(ui, /remediationAction\s*===\s*['"]install_loopx['"]/);
+  assert.match(ui, /performAction\(['"]install_loopx['"]/);
+  assert.match(ui, /remediationAction\s*===\s*['"]install_open_viking['"]/);
+  assert.match(ui, /performAction\(['"]install_open_viking['"]/);
+  assert.match(ui, /window\.setTimeout\(\(\)\s*=>\s*\{[\s\S]*submitLoopxInstallation\(\)[\s\S]*\},\s*50\)/);
+  for (const phase of [
+    'pointer_down',
+    'click_handler_entered',
+    'ui_pending_rendered',
+    'request_task_started',
+    'bridge_call_started',
+  ]) {
+    assert.match(ui, new RegExp(`emitInstallDiagnostic\\(['"]${phase}['"]`));
+  }
+  assert.doesNotMatch(ui, /\bupdateControls\s*\(/);
 
   const forbiddenSurfaces = [
     [/\bapp\.agent\b/, 'MiniApp-owned Agent lifecycle'],
@@ -76,7 +91,7 @@ test('LoopX UI is a thin client of the host-owned controller', async () => {
     [/\bapp\.(?:fs|shell)\b/, 'direct filesystem or shell APIs'],
     [/\b(?:argvPrefix|projectDirs?|srcDir)\b/, 'iframe-controlled CLI or checkout paths'],
     [/--registry\b|registry\.json|\bregistry(?:Path|Args)\b/i, 'direct registry CLI access'],
-    [/heartbeat/i, 'iframe-owned heartbeat scheduling'],
+    [/\bheartbeat(?!-prompt)/i, 'iframe-owned heartbeat scheduling'],
   ];
   for (const [pattern, description] of forbiddenSurfaces) {
     assert.ok(!pattern.test(ui), `ui.js must not contain ${description}`);
@@ -138,6 +153,8 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
   assert.ok(hasAccessibleName(taskRail), 'the task rail needs an accessible name');
   assert.ok(logLandmark, 'missing main log landmark');
   assert.match(logLandmark, /\baria-labelledby\s*=\s*(['"])[^'"]+\1/i);
+  assert.match(logLandmark, /\bid\s*=\s*(['"])log-workspace\1/i);
+  assert.match(logLandmark, /\btabindex\s*=\s*(['"])-1\1/i);
   assert.match(logList, /\brole\s*=\s*(['"])log\1/i);
   assert.match(logList, /\baria-live\s*=\s*(['"])off\1/i);
 
@@ -160,19 +177,26 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
   assert.match(html, /\blist\s*=\s*(['"])intake-history\1/i);
   assert.match(html, /\bid\s*=\s*(['"])resume-repository\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-progress-panel\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-stage-list\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-detail-dialog\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-progress-summary\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-view\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-title\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-state-pill\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])follow-banner\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-approval-message\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-summary\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])timeline-title\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])log-empty-text\1/i);
   assert.match(html, /\bid\s*=\s*(['"])approval-alert\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])environment-remediation\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])install-loopx\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-panel\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-approval-background\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-approval-impact\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-approve\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-reject\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-description-panel\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-outcome\1/i);
   assert.ok(
-    html.indexOf('id="issue-description-panel"') < html.indexOf('id="issue-progress-panel"'),
-    'the visible Issue description must appear before detailed progress',
+    html.indexOf('id="issue-approval-panel"') < html.indexOf('id="issue-progress-panel"')
+      && html.indexOf('id="issue-progress-panel"') < html.indexOf('id="issue-timeline"'),
+    'the approval request, current status, and timeline must stack in priority order',
   );
   for (const removedId of [
     'sync-button',
@@ -186,6 +210,14 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
     'approval-alert-review',
     'issue-stage-walker',
     'gate-dialog',
+    'issue-detail-dialog',
+    'show-all-events',
+    'log-title',
+    'issue-approval-background',
+    'issue-approval-impact',
+    'issue-outcome',
+    'issue-evidence-list',
+    'issue-next-action',
   ]) {
     assert.doesNotMatch(html, new RegExp(`\\bid\\s*=\\s*(['"])${removedId}\\1`, 'i'));
   }
@@ -198,12 +230,13 @@ test('LoopX keeps intake history and renders one flat repository task list', asy
   assert.match(ui, /app\.storage\.set\s*\(INTAKE_HISTORY_STORAGE_KEY/);
   assert.match(ui, /sortedTaskList\(tasks\)\.forEach\(\(task\)\s*=>\s*fragment\.append\(taskButton\(task\)\)\)/);
   assert.doesNotMatch(ui, /group\.className\s*=\s*['"]task-group['"]/);
-  assert.doesNotMatch(ui, /makeActionButton\([^)]*['"]resume['"]/s);
+  assert.match(ui, /makeActionButton\(text\('resume'\),\s*'resume',\s*task\)/);
   assert.match(ui, /task\.lastAgentSummary/);
   assert.match(ui, /function isResolvedUpstream\(task\)/);
   assert.match(ui, /function issueContext\(task\)/);
-  assert.match(ui, /autonomyApprovalSummaryAnalyzed/);
-  assert.doesNotMatch(ui, /Several investigation stages have completed/);
+  assert.match(ui, /function renderTimeline\(\)/);
+  assert.match(ui, /function displayedTask\(\)/);
+  assert.doesNotMatch(ui, /issueApiProxy|issueInputModality|issueMacFocus/);
   assert.match(ui, /resumeDetected:\s*true/);
   assert.match(ui, /outputBlockDomKey/);
   assert.match(ui, /syncApprovalAttention/);
@@ -212,5 +245,7 @@ test('LoopX keeps intake history and renders one flat repository task list', asy
   assert.match(ui, /pageshow/);
   assert.match(ui, /STALE_ACTIVE_REATTACH_MS/);
   assert.match(ui, /focusedTaskId/);
+  assert.match(ui, /focusTaskLogs\(focusedTaskId\s*\|\|\s*null\)/);
+  assert.match(ui, /selectTask\(taskId\s*\|\|\s*null\)/);
   assert.match(ui, /resetLoopxDialog\.close\(\)[\s\S]*resettingLoopxBackground/);
 });

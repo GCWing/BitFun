@@ -1,17 +1,19 @@
 use async_trait::async_trait;
 use bitfun_product_domains::miniapp::loopx::{
     LoopxCliCallContext, LoopxCliCreateGoalRequest, LoopxCliErrorKind, LoopxCliGoalContext,
-    LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest, LoopxCliIntakePlan,
-    LoopxCliPlanItemRequest, LoopxCliPort, LoopxCliProgress, LoopxCliProgressSink,
-    LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey, LoopxItemKind,
-    LoopxPermissionScope, LoopxRepositoryKey, LoopxWorkspaceDisposeRequest, LoopxWorkspacePort,
-    LoopxWorkspacePrepareRequest, LoopxWorkspaceProbeRequest, LoopxWorkspaceResetRequest,
+    LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest, LoopxCliInstallManagedSourceRequest,
+    LoopxCliIntakePlan, LoopxCliPlanItemRequest, LoopxCliPort, LoopxCliProgress,
+    LoopxCliProgressSink, LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey,
+    LoopxItemKind, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
+    LoopxWorkspaceDisposeRequest, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
+    LoopxWorkspaceProbeRequest, LoopxWorkspaceResetRequest,
 };
 use bitfun_services_integrations::miniapp::loopx_cli::{
     LoopxCliAdapterConfig, LoopxCliProcessAdapter, LoopxCommandPlan, LoopxCommandSource,
     LoopxFixedCommandLocator, LoopxProcessError, LoopxProcessObserver, LoopxProcessOutput,
-    LoopxProcessProgress, LoopxProcessRunner, LoopxProgressStage, LoopxSystemFallbackPolicy,
-    NoopLoopxProcessObserver, SystemLoopxProcessRunner, LOOPX_COMMAND_REFERENCE_SCHEMA,
+    LoopxProcessProgress, LoopxProcessRunner, LoopxProgressStage, LoopxPythonLocator,
+    LoopxSystemFallbackPolicy, NoopLoopxProcessObserver, SystemLoopxProcessRunner,
+    LOOPX_COMMAND_REFERENCE_SCHEMA, LOOPX_PINNED_SOURCE_COMMIT, LOOPX_SOURCE_REPOSITORY,
 };
 use bitfun_services_integrations::miniapp::loopx_workspace::{
     canonical_github_remote, plan_git_clone_command, plan_workspace_layout, LoopxWorkspaceService,
@@ -80,6 +82,60 @@ impl LoopxProcessRunner for FakeRunner {
             .unwrap()
             .pop_front()
             .expect("fake process result")
+    }
+}
+
+#[derive(Default)]
+struct ManagedInstallFakeRunner {
+    plans: Mutex<Vec<LoopxCommandPlan>>,
+}
+
+#[async_trait]
+impl LoopxProcessRunner for ManagedInstallFakeRunner {
+    async fn run(
+        &self,
+        plan: LoopxCommandPlan,
+        _cancellation: CancellationToken,
+        _observer: &dyn LoopxProcessObserver,
+    ) -> Result<LoopxProcessOutput, LoopxProcessError> {
+        let is_git = plan.executable.file_stem().and_then(|value| value.to_str()) == Some("git");
+        let stdout = if is_git && plan.args.first() == Some(&OsString::from("clone")) {
+            let target = PathBuf::from(plan.args.last().expect("clone target"));
+            std::fs::create_dir_all(target.join(".git")).unwrap();
+            std::fs::create_dir_all(target.join("loopx")).unwrap();
+            std::fs::write(target.join(".git").join("HEAD"), LOOPX_PINNED_SOURCE_COMMIT).unwrap();
+            for file in [
+                "pyproject.toml",
+                "LICENSE",
+                "NOTICE",
+                "LICENSE-MIT",
+                "TRADEMARKS.md",
+            ] {
+                std::fs::write(target.join(file), "fixture\n").unwrap();
+            }
+            std::fs::write(
+                target.join("loopx").join("entrypoint.py"),
+                "def main(): pass\n",
+            )
+            .unwrap();
+            String::new()
+        } else if is_git && plan.args.last() == Some(&OsString::from("HEAD")) {
+            format!("{LOOPX_PINNED_SOURCE_COMMIT}\n")
+        } else if plan.args == [OsString::from("--version")] {
+            "Python 3.12.8\n".to_string()
+        } else if plan.args.last() == Some(&OsString::from("--version")) {
+            "loopx 0.5.1\n".to_string()
+        } else if plan.args.last() == Some(&OsString::from("commands")) {
+            json!({"ok": true, "schema_version": LOOPX_COMMAND_REFERENCE_SCHEMA}).to_string()
+        } else {
+            String::new()
+        };
+        self.plans.lock().unwrap().push(plan);
+        Ok(LoopxProcessOutput {
+            stdout,
+            stderr_tail: Vec::new(),
+            elapsed: Duration::from_millis(1),
+        })
     }
 }
 
@@ -218,6 +274,14 @@ impl LoopxFixedCommandLocator for FakeLocator {
     }
 }
 
+struct FakePythonLocator(PathBuf);
+
+impl LoopxPythonLocator for FakePythonLocator {
+    fn locate(&self) -> Result<Option<PathBuf>, String> {
+        Ok(Some(self.0.clone()))
+    }
+}
+
 fn output(stdout: impl Into<String>) -> Result<LoopxProcessOutput, LoopxProcessError> {
     Ok(LoopxProcessOutput {
         stdout: stdout.into(),
@@ -247,6 +311,36 @@ fn stage_bundle(root: &Path, version: &str, schema: u32) -> PathBuf {
     executable
 }
 
+fn stage_managed_source(root: &Path) -> PathBuf {
+    let source = root.join("managed-source");
+    std::fs::create_dir_all(source.join(".git")).unwrap();
+    std::fs::create_dir_all(source.join("loopx")).unwrap();
+    std::fs::write(source.join(".git").join("HEAD"), LOOPX_PINNED_SOURCE_COMMIT).unwrap();
+    std::fs::write(
+        source.join("pyproject.toml"),
+        "[project]\nversion = \"0.5.1\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        source.join("loopx").join("entrypoint.py"),
+        "def main(): pass\n",
+    )
+    .unwrap();
+    std::fs::write(
+        source.join(".git").join(".bitfun-managed-source.json"),
+        serde_json::to_vec_pretty(&json!({
+            "schema_version": 1,
+            "source_repository": LOOPX_SOURCE_REPOSITORY,
+            "source_tag": "v0.5.1",
+            "source_commit": LOOPX_PINNED_SOURCE_COMMIT,
+            "loopx_version": "0.5.1"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    source
+}
+
 fn handshake_results(
     version: &str,
     schema: &str,
@@ -270,6 +364,7 @@ fn adapter_with_runner(
         config,
         runner,
         locator,
+        Arc::new(FakePythonLocator(PathBuf::from("python"))),
         Arc::new(NoopLoopxProcessObserver),
     )
 }
@@ -338,6 +433,122 @@ async fn packaged_bundle_is_preferred_and_exactly_handshaken() {
 }
 
 #[tokio::test]
+async fn managed_github_source_is_preferred_before_the_system_fallback() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = stage_managed_source(temporary.path());
+    // The managed-source candidate runs the pristine-source probe (`git
+    // status --porcelain`) before the version handshake, so the first result
+    // is the probe's clean empty stdout.
+    let runner = Arc::new(FakeRunner::with_results([output("")].into_iter().chain(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA),
+    )));
+    let system_locator = Arc::new(FakeLocator::new(Some(PathBuf::from("old-system-loopx"))));
+    let mut config = LoopxCliAdapterConfig::packaged(temporary.path().join("missing-resources"))
+        .with_managed_source_dir(&source);
+    config.system_fallback = LoopxSystemFallbackPolicy::ExactPinned;
+    let adapter = LoopxCliProcessAdapter::with_dependencies(
+        config,
+        runner.clone(),
+        system_locator.clone(),
+        Arc::new(FakePythonLocator(PathBuf::from("python"))),
+        Arc::new(NoopLoopxProcessObserver),
+    );
+
+    let manifest = adapter
+        .handshake(
+            handshake_request("handshake-managed-source"),
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(manifest.executable.source, LoopxCliSource::PythonFallback);
+    assert_eq!(system_locator.calls.load(Ordering::SeqCst), 0);
+    let plans = runner.plans();
+    let version = plans
+        .iter()
+        .find(|plan| {
+            plan.executable == PathBuf::from("python")
+                && plan.args.last() == Some(&OsString::from("--version"))
+        })
+        .expect("managed source version handshake");
+    assert_eq!(version.args[0], OsString::from("-I"));
+    assert_eq!(version.args[1], OsString::from("-c"));
+    assert_eq!(version.args[3], OsString::from("--version"));
+    assert_eq!(
+        version
+            .environment
+            .get(&OsString::from("BITFUN_LOOPX_SOURCE")),
+        Some(&source.as_os_str().to_owned())
+    );
+}
+
+#[tokio::test]
+async fn managed_source_install_clones_the_pinned_github_revision_and_activates_it() {
+    let temporary = tempfile::tempdir().unwrap();
+    let target = temporary.path().join("runtime").join("loopx-source-v0.5.1");
+    let runner = Arc::new(ManagedInstallFakeRunner::default());
+    let config = LoopxCliAdapterConfig::packaged(temporary.path().join("missing-resources"))
+        .with_managed_source_dir(&target);
+    let adapter = LoopxCliProcessAdapter::with_dependencies(
+        config,
+        runner.clone(),
+        Arc::new(FakeLocator::new(None)),
+        Arc::new(FakePythonLocator(PathBuf::from("python"))),
+        Arc::new(NoopLoopxProcessObserver),
+    );
+
+    let installed = adapter
+        .install_managed_source(
+            LoopxCliInstallManagedSourceRequest {
+                call: LoopxCliCallContext {
+                    operation_id: "install-managed-source".to_string(),
+                    deadline_at: None,
+                },
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(installed.source_repository, LOOPX_SOURCE_REPOSITORY);
+    assert_eq!(installed.source_commit, LOOPX_PINNED_SOURCE_COMMIT);
+    assert_eq!(installed.install_path, target.to_string_lossy().as_ref());
+    assert!(target
+        .join(".git")
+        .join(".bitfun-managed-source.json")
+        .is_file());
+    let plans = runner.plans.lock().unwrap();
+    let clone = plans
+        .iter()
+        .find(|plan| {
+            plan.executable.file_stem().and_then(|value| value.to_str()) == Some("git")
+                && plan.args[0] == OsString::from("clone")
+        })
+        .expect("git clone plan");
+    assert!(clone
+        .args
+        .contains(&OsString::from(LOOPX_SOURCE_REPOSITORY)));
+    assert!(clone.args.contains(&OsString::from("v0.5.1")));
+    assert!(clone.args.contains(&OsString::from("--filter=blob:none")));
+    assert!(clone.args.contains(&OsString::from("--sparse")));
+    assert!(plans.iter().any(|plan| {
+        plan.args.windows(3).any(|args| {
+            args == [
+                OsString::from("sparse-checkout"),
+                OsString::from("set"),
+                OsString::from("--no-cone"),
+            ]
+        })
+    }));
+    assert!(plans.iter().any(|plan| {
+        plan.args.contains(&OsString::from("/loopx/"))
+            && plan.args.contains(&OsString::from("/pyproject.toml"))
+            && plan.args.contains(&OsString::from("/LICENSE"))
+    }));
+}
+
+#[tokio::test]
 async fn runtime_version_mismatch_is_a_non_retryable_typed_error() {
     let temporary = tempfile::tempdir().unwrap();
     stage_bundle(temporary.path(), "v0.5.1", 1);
@@ -387,7 +598,6 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
     let workflow = json!({
         "ok": true,
         "schema_version": "issue_fix_workflow_plan_packet_v0",
-        "objective": "Fix issue 42",
         "ordered_loopx_todo_writeback_preview": [{
             "role": "agent",
             "task_class": "advancement_task",
@@ -427,6 +637,8 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
         },
         item,
         title: "Issue with “UTF-8” title".to_string(),
+        state: LoopxRemoteItemState::Open,
+        labels: vec!["bug".to_string()],
     };
 
     let plan = adapter
@@ -434,7 +646,9 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
         .await
         .unwrap();
 
-    assert_eq!(plan.objective, "Fix issue 42");
+    // The goal objective now comes from the host-resolved title; the packet
+    // itself carries no objective field.
+    assert_eq!(plan.objective, "Fix #42: Issue with “UTF-8” title");
     assert_eq!(plan.todos.len(), 1);
     let command = runner.plans().pop().unwrap();
     assert_eq!(command.current_dir.as_deref(), Some(worktree.as_path()));
@@ -459,7 +673,7 @@ async fn item_plan_uses_structured_registry_and_worktree_arguments() {
                     "number": 42,
                     "state": "open",
                     "title": "Issue with “UTF-8” title",
-                    "labels": [],
+                    "labels": ["bug"],
                     "kind": "issue",
                 })
                 .to_string(),
@@ -511,6 +725,8 @@ async fn item_plan_process_failure_preserves_the_stderr_cause() {
                     number: 42,
                 },
                 title: "Issue with UTF-8 title".to_string(),
+                state: LoopxRemoteItemState::Unknown,
+                labels: Vec::new(),
             },
             &RecordingProgressSink::default(),
         )
@@ -681,6 +897,8 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
         task_class: "advancement_task".to_string(),
         action_kind: Some("fix_issue".to_string()),
         text: "[P1] Fix issue #42".to_string(),
+        next_command_preview: None,
+        target_key: None,
     };
     let results = handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
         .into_iter()
@@ -696,6 +914,18 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
                         "action_kind": planned_todo.action_kind.clone(),
                         "text": planned_todo.text.clone(),
                     }]
+                })
+                .to_string(),
+            ),
+            // Source-backed candidate evidence collection now runs between
+            // the todo reconciliation and the durable-revision inspection.
+            output(
+                json!({
+                    "ok": true,
+                    "schema_version": "issue_fix_workflow_plan_packet_v0",
+                    "candidate_preflight": {
+                        "decision": {"route": "proceed"}
+                    }
                 })
                 .to_string(),
             ),
@@ -743,6 +973,7 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
             item,
             objective: "Fix issue 42".to_string(),
             todos: vec![planned_todo],
+            raw_packet_json: String::new(),
         },
         granted_scopes: vec![LoopxPermissionScope::WorkspaceWrite],
     };
@@ -754,13 +985,28 @@ async fn create_goal_recovery_does_not_duplicate_an_existing_planned_todo() {
 
     assert!(!result.created);
     assert_eq!(result.durable_revision, "sha256:durable-revision");
+    // The evidence packet supersedes the original plan packet for persistence.
+    assert!(result
+        .raw_packet_json
+        .contains("issue_fix_workflow_plan_packet_v0"));
     let commands = runner
         .plans()
         .into_iter()
         .skip(2)
         .map(|plan| plan.args)
         .collect::<Vec<_>>();
-    assert_eq!(commands.len(), 4);
+    assert_eq!(commands.len(), 5);
+    // Order: bootstrap, register-agent, todo list, evidence collection, inspection.
+    let evidence_command = commands[3]
+        .iter()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(evidence_command.contains("--fetch-candidate-evidence"));
+    assert!(evidence_command.contains("--goal-id goal-42"));
+    // The collection command carries no local --format flag of its own; the
+    // global --format json is prepended by the adapter for every command.
+    assert_eq!(evidence_command.matches("--format").count(), 1);
     assert!(!commands.iter().any(|args| {
         args.windows(2)
             .any(|pair| pair[0] == OsString::from("todo") && pair[1] == OsString::from("add"))
@@ -1225,9 +1471,13 @@ async fn stderr_is_streamed_as_progress_before_success() {
 }
 
 #[test]
-fn packaged_source_enum_stays_distinct_from_system_fallback() {
+fn command_sources_keep_packaged_managed_and_system_paths_distinct() {
     assert_ne!(
         LoopxCommandSource::PackagedBundle,
+        LoopxCommandSource::ManagedSource
+    );
+    assert_ne!(
+        LoopxCommandSource::ManagedSource,
         LoopxCommandSource::FixedSystemCommand
     );
 }

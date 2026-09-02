@@ -19,7 +19,147 @@ use url::Url;
 
 const WORKSPACE_MARKER_SCHEMA: u32 = 1;
 const WORKSPACE_MARKER_NAME: &str = "bitfun-loopx-workspace.json";
+/// Repository-level playbook shared by every task worktree of one repository.
+const LOOPX_AGENT_PLAYBOOK_FILE_NAME: &str = "LOOPX_AGENT_PLAYBOOK.md";
+const LOOPX_INTAKE_PLAN_FILE_NAME: &str = "intake-plan.json";
+/// Bound for the changed-path sample returned by the mutation probe.
+const MAX_MUTATION_SAMPLE_PATHS: usize = 20;
+/// Paths the LoopX writeback protocol and goal state live under. Mutations
+/// confined to these directories are bookkeeping, not worktree progress.
+const BOOKKEEPING_PATH_PREFIXES: [&str; 3] = [".loopx/", ".codex/", ".bitfun/"];
 static WORKSPACE_PROBE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Host-authored, repo-scoped playbook written once per repository and reused
+/// by every task worktree. It deliberately does not duplicate the exact CLI
+/// flags embedded in each heartbeat prompt (the adapter owns those); it maps
+/// workflow stages to subcommands and records the anti-patterns and lessons
+/// that previously caused entire turns to be spent on re-orientation.
+const AGENT_PLAYBOOK_TEMPLATE: &str = r#"# LoopX Agent Playbook (host-authored, repo-scoped)
+
+This file is maintained by the BitFun host and shared by every task worktree of
+this repository. Read it once at the start of a turn instead of re-deriving
+LoopX usage from `--help`, `commands`, or loopx source code. Do not delete or
+rename this file.
+
+## Command forms
+
+The exact executable, registry prefix, and verified typed command forms are
+embedded in every heartbeat prompt (the host binding and CLI syntax contract
+sections). Those are authoritative; do not rediscover them.
+
+## Issue-fix workflow map (LoopX v0.5.1)
+
+1. Turn guard: the BitFun host executes `quota should-run` with the
+   settlement todo bound before the agent starts, and the exact guard
+   command is printed in the task body preflight. Do not re-run it to
+   decide whether to work; only re-run the exact printed guard command
+   once when a LoopX settlement command reports a missing or mismatched
+   heartbeat receipt, always with the same turn id.
+2. Durable state: `refresh-state` records classification, progress, and
+   vision facts. A turn-scoped accountable writeback additionally binds
+   `--todo-id`, `--turn-instance-id`, `--delivery-outcome`, and
+   `--delivery-batch-scale`; copy optional flags verbatim from the task
+   body or goal vision instructions; never invent flag values.
+3. Issue-fix pipeline: candidate preflight -> evidence collection ->
+   candidate admission -> feasibility -> `issue-fix workflow-plan`. Run
+   the exact command forms printed by the task body, by a previous
+   workflow-plan output, or by the worktree's initial plan packet at
+   `.bitfun/loopx/intake-plan.json`. Re-running the printed
+   `workflow-plan` form (for example with `--fetch-candidate-evidence`)
+   is how admission advances; do not skip it because the todo text alone
+   does not restate the flags.
+4. Implementation: edit product code inside this worktree only. Keep the
+   change bounded to the issue scope and verify with the repository's own
+   focused checks before claiming progress.
+5. Writeback and closure: claim the current todo (`todo claim`), advance
+   it (`refresh-state`), and complete it (`todo complete`). Wire the
+   successor atomically (`--next-agent-todo "<text>"`) or close the work
+   path with `--no-follow-up` when the todo intentionally ends; the host
+   stops the Goal itself when no todos remain. One bounded outcome per
+   turn is enough; do not re-plan the whole goal on every heartbeat.
+
+## Anti-patterns (these consumed an entire hour in a real run)
+
+- Do not re-read goal state files end-to-end every turn; the host goal-facts
+  block in the heartbeat already summarizes durable state.
+- Do not re-learn CLI syntax via `--help` or `commands`, and do not read loopx
+  source code to reconstruct the workflow contract; this playbook plus the task
+  body are the contract.
+- Do not re-fetch the GitHub issue or PR when the task body already embeds its
+  state; fetch only when the body lacks it.
+- Do not run ceremony-only turns: a settled turn whose only durable writeback
+  is a progress observation on the same todo consumes the host's convergence
+  budget and triggers an owner review after three of them. Advance, complete,
+  or consciously re-scope the todo instead.
+- Do not rewrite the todo list wholesale; claim, advance, and complete existing
+  todos instead.
+- Every wait needs a bounded deadline; when it expires, record the evidence and
+  choose a narrower next action instead of sleeping again.
+
+## Lessons (append-only, verified entries only)
+
+Agents may append one line per verified, reproducible lesson, formatted as
+`- [<owner>/<repo>#<issue>] <lesson>`. Read the existing lines before starting;
+they encode what already went wrong on this repository. Never delete, reorder,
+or edit existing entries, and never record speculation.
+"#;
+
+fn is_bookkeeping_path(path: &str) -> bool {
+    BOOKKEEPING_PATH_PREFIXES
+        .iter()
+        .any(|prefix| path.starts_with(prefix))
+}
+
+/// Validates the shared request shape of the playbook and mutation probes and
+/// returns the worktree path when it exists on disk.
+async fn validate_worktree_request(
+    operation_id: &str,
+    worktree_path: &str,
+) -> loopx_contract::LoopxHostResult<PathBuf> {
+    if operation_id.trim().is_empty() {
+        return Err(host_error(
+            loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+            operation_id,
+            "operation_id is required",
+            false,
+        ));
+    }
+    let trimmed = worktree_path.trim();
+    if trimmed.is_empty() {
+        return Err(host_error(
+            loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+            operation_id,
+            "worktree_path is required",
+            false,
+        ));
+    }
+    let path = PathBuf::from(trimmed);
+    let exists = tokio::fs::try_exists(&path).await.unwrap_or(false);
+    if !exists {
+        return Err(host_error(
+            loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+            operation_id,
+            "worktree_path does not exist",
+            false,
+        ));
+    }
+    Ok(path)
+}
+
+/// Parses `git status --porcelain=v1 -z` entries into changed paths. Rename
+/// source entries carry no XY prefix and are skipped; the destination entry is
+/// already present.
+fn parse_porcelain_changed_paths(output: &str) -> Vec<String> {
+    output
+        .split('\0')
+        .filter(|entry| !entry.is_empty())
+        .filter_map(|entry| {
+            let bytes = entry.as_bytes();
+            (bytes.len() > 3 && bytes[2] == b' ').then(|| entry[3..].to_string())
+        })
+        .filter(|path| !path.is_empty())
+        .collect()
+}
 
 fn git_compatible_path(path: &Path) -> PathBuf {
     dunce::simplified(path).to_path_buf()
@@ -664,6 +804,154 @@ impl LoopxWorkspaceService {
             .map_err(|error| map_process_error(error, operation_id))
     }
 
+    async fn ensure_playbook_inner(
+        &self,
+        request: &loopx_contract::LoopxWorkspacePlaybookRequest,
+    ) -> loopx_contract::LoopxHostResult<loopx_contract::LoopxWorkspacePlaybookResult> {
+        let worktree_path =
+            validate_worktree_request(&request.operation_id, &request.worktree_path).await?;
+        let repository_dir = worktree_path.parent().ok_or_else(|| {
+            host_error(
+                loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+                &request.operation_id,
+                "worktree path has no repository directory",
+                false,
+            )
+        })?;
+        let playbook_path = repository_dir.join(LOOPX_AGENT_PLAYBOOK_FILE_NAME);
+        match tokio::fs::try_exists(&playbook_path).await {
+            Ok(true) => Ok(loopx_contract::LoopxWorkspacePlaybookResult {
+                playbook_path: git_compatible_path(&playbook_path)
+                    .to_string_lossy()
+                    .into_owned(),
+                created: false,
+            }),
+            Ok(false) => {
+                tokio::fs::write(&playbook_path, AGENT_PLAYBOOK_TEMPLATE)
+                    .await
+                    .map_err(|error| {
+                        host_error(
+                            loopx_contract::LoopxHostPortErrorKind::Io,
+                            &request.operation_id,
+                            format!("failed to write repository agent playbook: {error}"),
+                            true,
+                        )
+                    })?;
+                Ok(loopx_contract::LoopxWorkspacePlaybookResult {
+                    playbook_path: git_compatible_path(&playbook_path)
+                        .to_string_lossy()
+                        .into_owned(),
+                    created: true,
+                })
+            }
+            Err(error) => Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::Io,
+                &request.operation_id,
+                format!("failed to probe repository agent playbook: {error}"),
+                true,
+            )),
+        }
+    }
+
+    async fn persist_intake_plan_inner(
+        &self,
+        request: &loopx_contract::LoopxWorkspaceIntakePlanRequest,
+    ) -> loopx_contract::LoopxHostResult<loopx_contract::LoopxWorkspaceIntakePlanResult> {
+        if request.packet_json.trim().is_empty() {
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::InvalidInput,
+                &request.operation_id,
+                "intake plan packet JSON is empty",
+                false,
+            ));
+        }
+        let worktree_path =
+            validate_worktree_request(&request.operation_id, &request.worktree_path).await?;
+        // Lives under the `.bitfun/` bookkeeping prefix: the mutation probe
+        // excludes it from stagnation evidence, and Git treats it as regular
+        // untracked content the agent must not commit.
+        let plan_dir = worktree_path.join(".bitfun").join("loopx");
+        tokio::fs::create_dir_all(&plan_dir)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to create the intake plan directory: {error}"),
+                    true,
+                )
+            })?;
+        let plan_path = plan_dir.join(LOOPX_INTAKE_PLAN_FILE_NAME);
+        tokio::fs::write(&plan_path, &request.packet_json)
+            .await
+            .map_err(|error| {
+                host_error(
+                    loopx_contract::LoopxHostPortErrorKind::Io,
+                    &request.operation_id,
+                    format!("failed to write the intake plan packet: {error}"),
+                    true,
+                )
+            })?;
+        Ok(loopx_contract::LoopxWorkspaceIntakePlanResult {
+            path: git_compatible_path(&plan_path)
+                .to_string_lossy()
+                .into_owned(),
+            wrote: true,
+        })
+    }
+
+    async fn probe_mutations_inner(
+        &self,
+        request: &loopx_contract::LoopxWorkspaceMutationsRequest,
+        cancellation: CancellationToken,
+    ) -> loopx_contract::LoopxHostResult<loopx_contract::LoopxWorkspaceMutationsResult> {
+        let worktree_path =
+            validate_worktree_request(&request.operation_id, &request.worktree_path).await?;
+        let status = self
+            .run_git(
+                &request.operation_id,
+                git_status_porcelain_plan(&self.config.git_executable, &worktree_path),
+                self.config.command_deadline,
+                cancellation.clone(),
+            )
+            .await?;
+        let changed_paths = parse_porcelain_changed_paths(&status.stdout);
+        let work_paths: Vec<String> = changed_paths
+            .iter()
+            .filter(|path| !is_bookkeeping_path(path))
+            .take(MAX_MUTATION_SAMPLE_PATHS + 1)
+            .cloned()
+            .collect();
+        let truncated = work_paths.len() > MAX_MUTATION_SAMPLE_PATHS;
+        let mut sample = work_paths;
+        sample.truncate(MAX_MUTATION_SAMPLE_PATHS);
+        let mut has_changes = !sample.is_empty();
+        if !has_changes {
+            // Uncommitted work is invisible to porcelain when the Agent
+            // commits; count commits unreachable from any remote ref so a
+            // committed real change is never reported as stagnation.
+            let commits = self
+                .run_git(
+                    &request.operation_id,
+                    git_unpushed_commit_count_plan(&self.config.git_executable, &worktree_path),
+                    self.config.command_deadline,
+                    cancellation,
+                )
+                .await?;
+            has_changes = commits
+                .stdout
+                .trim()
+                .parse::<u32>()
+                .map(|count| count > 0)
+                .unwrap_or(false);
+        }
+        Ok(loopx_contract::LoopxWorkspaceMutationsResult {
+            has_changes,
+            changed_paths: sample,
+            truncated,
+        })
+    }
+
     fn register_operation(
         &self,
         operation_id: &str,
@@ -1095,6 +1383,36 @@ impl loopx_contract::LoopxWorkspacePort for LoopxWorkspaceService {
             self.reset_inner(&request).await
         })
     }
+
+    fn ensure_playbook(
+        &self,
+        request: loopx_contract::LoopxWorkspacePlaybookRequest,
+    ) -> loopx_contract::LoopxHostFuture<'_, loopx_contract::LoopxWorkspacePlaybookResult> {
+        Box::pin(async move {
+            let _registration = self.register_operation(&request.operation_id)?;
+            self.ensure_playbook_inner(&request).await
+        })
+    }
+
+    fn probe_mutations(
+        &self,
+        request: loopx_contract::LoopxWorkspaceMutationsRequest,
+    ) -> loopx_contract::LoopxHostFuture<'_, loopx_contract::LoopxWorkspaceMutationsResult> {
+        Box::pin(async move {
+            let (cancellation, _registration) = self.register_operation(&request.operation_id)?;
+            self.probe_mutations_inner(&request, cancellation).await
+        })
+    }
+
+    fn persist_intake_plan(
+        &self,
+        request: loopx_contract::LoopxWorkspaceIntakePlanRequest,
+    ) -> loopx_contract::LoopxHostFuture<'_, loopx_contract::LoopxWorkspaceIntakePlanResult> {
+        Box::pin(async move {
+            let _registration = self.register_operation(&request.operation_id)?;
+            self.persist_intake_plan_inner(&request).await
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1149,6 +1467,35 @@ fn git_worktree_prune_plan(git: &Path, bare_repo_path: &Path) -> LoopxGitCommand
         ],
         environment: git_noninteractive_environment(),
         current_dir: None,
+    }
+}
+
+fn git_status_porcelain_plan(git: &Path, worktree_path: &Path) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git.to_path_buf(),
+        args: vec![
+            OsString::from("status"),
+            OsString::from("--porcelain=v1"),
+            OsString::from("-z"),
+            OsString::from("--untracked-files=normal"),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: Some(worktree_path.to_path_buf()),
+    }
+}
+
+fn git_unpushed_commit_count_plan(git: &Path, worktree_path: &Path) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git.to_path_buf(),
+        args: vec![
+            OsString::from("rev-list"),
+            OsString::from("--count"),
+            OsString::from("--not"),
+            OsString::from("--remotes"),
+            OsString::from("HEAD"),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: Some(worktree_path.to_path_buf()),
     }
 }
 
@@ -1550,5 +1897,38 @@ fn host_error(
         message: message.into(),
         operation_id: Some(operation_id.to_string()),
         retryable,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn porcelain_parse_extracts_changed_paths_and_skips_rename_sources() {
+        // `XY path\0` entries; rename pairs emit `XY to\0from\0`, and the
+        // source entry carries no XY prefix, so it is skipped.
+        let output = " M src/lib.rs\0?? docs/notes.md\0R  src/renamed.rs\0src/old_name.rs\0\0";
+        assert_eq!(
+            parse_porcelain_changed_paths(output),
+            vec![
+                "src/lib.rs".to_string(),
+                "docs/notes.md".to_string(),
+                "src/renamed.rs".to_string(),
+            ]
+        );
+        assert!(parse_porcelain_changed_paths("").is_empty());
+    }
+
+    #[test]
+    fn bookkeeping_paths_cover_loopx_writeback_and_goal_state_roots() {
+        assert!(is_bookkeeping_path(".loopx/registry.json"));
+        assert!(is_bookkeeping_path(
+            ".codex/goals/goal-1/ACTIVE_GOAL_STATE.md"
+        ));
+        assert!(is_bookkeeping_path(".bitfun/cache.bin"));
+        assert!(!is_bookkeeping_path("loopx/state_refresh.py"));
+        assert!(!is_bookkeeping_path("src/lib.rs"));
+        assert!(!is_bookkeeping_path(".loopx-meta.txt"));
     }
 }

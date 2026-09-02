@@ -34,6 +34,7 @@ import { shouldOpenMiniAppAgentRunInMainScene } from './miniAppAgentVisibility';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { createLogger } from '@/shared/utils/logger';
+import { logElapsed, measureAsyncAndLog, nowMs } from '@/shared/utils/timing';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
   isLoopxBridgeMethod,
@@ -46,6 +47,14 @@ interface JSONRPC {
   id: number | string;
   method: string;
   params?: Record<string, unknown>;
+}
+
+interface MiniAppDiagnosticMessage {
+  type?: string;
+  scope?: string;
+  phase?: string;
+  action?: string;
+  requestId?: string;
 }
 
 interface AiStreamPayload {
@@ -166,10 +175,36 @@ export function useMiniAppBridge(
   useLayoutEffect(() => {
     const handler = async (event: MessageEvent) => {
       if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
-      const msg = event.data as JSONRPC & { method?: string };
+      const rawMessage = event.data as MiniAppDiagnosticMessage & JSONRPC & { method?: string };
+      if (rawMessage?.type === 'bitfun:diagnostic' && rawMessage.scope === 'loopx-install') {
+        log.info('LoopX install MiniApp phase', {
+          action: String(rawMessage.action || 'install_loopx').slice(0, 64),
+          phase: String(rawMessage.phase || 'unknown').slice(0, 64),
+          requestId: String(rawMessage.requestId || 'unassigned').slice(0, 128),
+        });
+        return;
+      }
+      const msg = rawMessage;
       if (!msg?.method) return;
 
       const { id, method, params = {} } = msg;
+      const installAction = method === 'loopx.action'
+        && (params.action === 'install_loopx' || params.action === 'install_open_viking')
+        ? String(params.action)
+        : null;
+      const installTrace = installAction
+        ? {
+            action: installAction,
+            requestId: String(params.clientRequestId || id).slice(0, 128),
+            receivedAt: nowMs(),
+          }
+        : null;
+      if (installTrace) {
+        log.info('LoopX install bridge request received', {
+          action: installTrace.action,
+          requestId: installTrace.requestId,
+        });
+      }
       const scope = runScopeRef.current;
       const appId = scope.appId;
       const reply = (result: unknown) =>
@@ -255,6 +290,12 @@ export function useMiniAppBridge(
             };
           }
           await loopxAccessCheckRef.current.check;
+          if (installTrace) {
+            logElapsed(log, 'LoopX install access check completed', installTrace.receivedAt, {
+              level: 'info',
+              data: { requestId: installTrace.requestId },
+            });
+          }
 
           const call = parseLoopxBridgeCall(method, params);
           if (call.kind === 'attach') {
@@ -274,7 +315,23 @@ export function useMiniAppBridge(
             return;
           }
           if (call.kind === 'action') {
-            reply(await loopxAPI.action(appId, call.request));
+            if (installTrace) {
+              const measured = await measureAsyncAndLog(
+                log,
+                'LoopX install Tauri action completed',
+                () => loopxAPI.action(appId, call.request),
+                {
+                  level: 'info',
+                  data: {
+                    action: installTrace.action,
+                    requestId: installTrace.requestId,
+                  },
+                },
+              );
+              reply(measured.value);
+            } else {
+              reply(await loopxAPI.action(appId, call.request));
+            }
             return;
           }
           if (call.kind === 'eventsSince') {
@@ -760,6 +817,13 @@ export function useMiniAppBridge(
 
         replyError(`Unknown method: ${method}`);
       } catch (error) {
+        if (installTrace) {
+          log.error('LoopX install bridge request failed', {
+            action: installTrace.action,
+            requestId: installTrace.requestId,
+            error,
+          });
+        }
         replyError(typeof error === 'string' ? error : String(error));
       }
     };

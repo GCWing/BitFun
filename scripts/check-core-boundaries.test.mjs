@@ -765,6 +765,11 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
       requiredFeatures: ['miniapp'],
     },
     {
+      name: 'loopx_contracts',
+      path: 'tests/loopx_contracts.rs',
+      requiredFeatures: ['miniapp'],
+    },
+    {
       name: 'plugin_source_contracts',
       path: 'tests/plugin_source_contracts.rs',
       requiredFeatures: ['plugin-source'],

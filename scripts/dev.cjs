@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const net = require('net');
+const os = require('os');
 const { execSync, spawn } = require('child_process');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -539,8 +540,20 @@ async function startDesktopPreview() {
 
   printInfo(`Launching debug desktop binary: ${desktopBinary}`);
 
+  // Dev builds must never share the user data home with an installed (or any
+  // other) BitFun build: durable stores like the agent coordination SQLite
+  // carry schema versions, and a newer build upgrading the shared database
+  // hard-rejects older builds (observed as every LoopX task entering
+  // recovery). `BITFUN_USER_ROOT` is the documented data-root override; point
+  // it at the dedicated dev data home so cross-build schema collisions are
+  // structurally impossible. E2E runs use their own guarded roots and are
+  // unaffected.
+  const devUserRoot = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'com.bitfun.desktop.dev', 'bitfun');
+  printInfo(`Dev data root (BITFUN_USER_ROOT): ${devUserRoot}`);
+
   appProcess = spawnBackgroundCommand(desktopBinary, [], ROOT_DIR, {
     ...process.env,
+    BITFUN_USER_ROOT: process.env.BITFUN_USER_ROOT || devUserRoot,
   });
 
   appProcess.on('error', (error) => {

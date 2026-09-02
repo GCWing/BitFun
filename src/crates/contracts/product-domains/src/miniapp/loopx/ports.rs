@@ -2,7 +2,7 @@
 
 use super::types::{
     LoopxCliGoalState, LoopxEventCursor, LoopxIntakeCandidate, LoopxIntakeTarget, LoopxIssueKey,
-    LoopxPermissionScope, LoopxRepositoryKey, LoopxTurnOutputEvent,
+    LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey, LoopxTurnOutputEvent,
 };
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -96,6 +96,7 @@ pub struct LoopxCliGoalContext {
 pub enum LoopxCliProgressStage {
     #[default]
     StartingSidecar,
+    InstallingRuntime,
     Handshake,
     ResolvingIntake,
     PlanningItem,
@@ -175,11 +176,82 @@ pub struct LoopxCliManifest {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliInstallManagedSourceRequest {
+    #[serde(flatten)]
+    pub call: LoopxCliCallContext,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliInstallManagedSourceResult {
+    pub source_repository: String,
+    pub source_tag: String,
+    pub source_commit: String,
+    pub install_path: String,
+    pub loopx_version: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopxOpenVikingState {
+    NotInstalled,
+    NotConfigured,
+    Disabled,
+    Ready,
+    Unhealthy,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxOpenVikingProbeRequest {
+    #[serde(flatten)]
+    pub call: LoopxCliCallContext,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxOpenVikingProbe {
+    pub state: LoopxOpenVikingState,
+    pub version: Option<String>,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliInstallOpenVikingRequest {
+    #[serde(flatten)]
+    pub call: LoopxCliCallContext,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliInstallOpenVikingResult {
+    pub source_repository: String,
+    pub source_tag: String,
+    pub source_commit: String,
+    pub install_path: String,
+    pub open_viking_version: String,
+    pub extension_enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliTodoPlan {
     pub role: String,
     pub task_class: String,
     pub action_kind: Option<String>,
     pub text: String,
+    /// Exact next CLI command the workflow plan printed for this todo, when
+    /// the pinned LoopX version provides one. The host persists the full plan
+    /// packet into the worktree because the LoopX `todo add` surface cannot
+    /// carry it; without this pointer the Agent has no reachable path back
+    /// into the issue-fix pipeline.
+    pub next_command_preview: Option<String>,
+    /// Stable workflow target key for this todo, when provided.
+    pub target_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -230,6 +302,14 @@ pub struct LoopxCliPlanItemRequest {
     /// Public title already resolved by the host intake adapter. The LoopX
     /// process receives this as inline metadata and must not refetch it.
     pub title: String,
+    /// Remote item state observed by the host intake adapter. LoopX treats
+    /// GitHub as the source of truth, so the workflow plan must receive the
+    /// state the adapter actually resolved instead of a fabricated default.
+    pub state: LoopxRemoteItemState,
+    /// Bounded label names observed by the host intake adapter (capped to
+    /// match LoopX's own metadata projection). LoopX intake classification
+    /// and code-context routing use these as routing hints.
+    pub labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -238,6 +318,11 @@ pub struct LoopxCliIntakePlan {
     pub item: LoopxIssueKey,
     pub objective: String,
     pub todos: Vec<LoopxCliTodoPlan>,
+    /// Raw `issue-fix workflow-plan` packet JSON. Empty when the adapter did
+    /// not capture one or the packet exceeded the bounded size limit. The
+    /// host persists it into the task worktree (`.bitfun/loopx/`) so every
+    /// turn can read the exact issue-fix command forms instead of guessing.
+    pub raw_packet_json: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -257,6 +342,11 @@ pub struct LoopxCliCreateGoalResult {
     pub goal_id: String,
     pub created: bool,
     pub durable_revision: String,
+    /// Newer `issue-fix workflow-plan` packet captured after the source-backed
+    /// candidate evidence collection persisted its admission receipt for this
+    /// goal. Empty when collection was skipped (PR-kind items) or failed
+    /// best-effort; the caller then persists the original plan packet instead.
+    pub raw_packet_json: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -321,6 +411,24 @@ pub struct LoopxCliGoalSnapshot {
     pub pending_user_gate: Option<LoopxCliUserGate>,
     pub last_turn_id: Option<String>,
     pub settlement_receipt_ids: Vec<String>,
+    /// Bounded projection of open agent todos observed at inspect time. The
+    /// host injects it into the next turn prompt so the Agent does not have to
+    /// re-derive todo state from the registry on every heartbeat. Empty for
+    /// legacy snapshots and non-run decisions.
+    pub open_agent_todos: Vec<LoopxCliTodoSummary>,
+    /// LoopX returned the turn envelope over its compaction budget
+    /// (`compaction.within_budget == false`, route `contract_error`): the goal
+    /// cannot be planned until its durable state shrinks. The host must not
+    /// fail the task for this; it degrades to a loud backoff-and-retry wait.
+    pub envelope_over_budget: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliTodoSummary {
+    pub todo_id: String,
+    pub status: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -423,6 +531,10 @@ pub struct LoopxCliSettleTurnResult {
     pub after_revision: String,
     pub validation_succeeded: bool,
     pub scheduler_hint_ms: Option<u64>,
+    /// The todo bound to the matched settlement evidence, when the turn
+    /// advanced a todo. The controller uses it to detect one todo absorbing
+    /// turn after turn without ever being completed.
+    pub binding_todo_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -451,6 +563,45 @@ pub struct LoopxCliResetGoalsRequest {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliShrinkTodoTextsRequest {
+    #[serde(flatten)]
+    pub context: LoopxCliGoalContext,
+    pub goal_id: String,
+    pub agent_id: String,
+    /// Maximum characters kept per open agent todo text.
+    pub max_chars: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliShrinkTodoTextsResult {
+    pub goal_id: String,
+    /// Open agent todos found and examined.
+    pub examined: u32,
+    /// Todos whose text was truncated.
+    pub shortened: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliStopGoalRequest {
+    #[serde(flatten)]
+    pub context: LoopxCliGoalContext,
+    pub goal_id: String,
+    /// Bounded owner-visible reason recorded with the transition.
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliStopGoalResult {
+    pub goal_id: String,
+    pub stopped: bool,
+    pub already_stopped: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliResetGoalsResult {
     pub requested_goal_ids: Vec<String>,
     pub retired_goal_ids: Vec<String>,
@@ -463,6 +614,23 @@ pub struct LoopxCliResetGoalsResult {
 
 /// Typed LoopX operations. No caller can pass raw CLI arguments through this port.
 pub trait LoopxCliPort: Send + Sync {
+    fn install_managed_source<'a>(
+        &'a self,
+        request: LoopxCliInstallManagedSourceRequest,
+        progress: &'a dyn LoopxCliProgressSink,
+    ) -> LoopxCliFuture<'a, LoopxCliInstallManagedSourceResult>;
+
+    fn install_open_viking<'a>(
+        &'a self,
+        request: LoopxCliInstallOpenVikingRequest,
+        progress: &'a dyn LoopxCliProgressSink,
+    ) -> LoopxCliFuture<'a, LoopxCliInstallOpenVikingResult>;
+
+    fn probe_open_viking<'a>(
+        &'a self,
+        request: LoopxOpenVikingProbeRequest,
+    ) -> LoopxCliFuture<'a, LoopxOpenVikingProbe>;
+
     fn handshake<'a>(
         &'a self,
         request: LoopxCliHandshakeRequest,
@@ -535,6 +703,30 @@ pub trait LoopxCliPort: Send + Sync {
         request: LoopxCliResetGoalsRequest,
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliResetGoalsResult>;
+
+    /// Shortens over-long open agent todo texts of one Goal back to the
+    /// documented bound. LoopX's turn envelope embeds the todo list and must
+    /// fit a fixed compaction budget; long successor texts authored by agents
+    /// have been observed pushing a Goal past it (route contract_error,
+    /// unplannable). Truncation preserves semantics — the full text remains in
+    /// the active state file and rollout history.
+    fn shrink_todo_texts<'a>(
+        &'a self,
+        request: LoopxCliShrinkTodoTextsRequest,
+        progress: &'a dyn LoopxCliProgressSink,
+    ) -> LoopxCliFuture<'a, LoopxCliShrinkTodoTextsResult>;
+
+    /// Stops automatic advancement for one Goal through the LoopX-owned
+    /// lifecycle transition. The host calls this when a Goal has no runnable
+    /// work left (no open todos, or LoopX reported the Goal terminal), so the
+    /// registry stops emitting heartbeat turns that would otherwise run
+    /// forever. Implementations translate this to the pinned version's typed
+    /// lifecycle command; callers cannot inject raw arguments.
+    fn stop_goal<'a>(
+        &'a self,
+        request: LoopxCliStopGoalRequest,
+        progress: &'a dyn LoopxCliProgressSink,
+    ) -> LoopxCliFuture<'a, LoopxCliStopGoalResult>;
 
     fn cancel<'a>(
         &'a self,
@@ -720,6 +912,84 @@ pub trait LoopxWorkspacePort: Send + Sync {
         &self,
         request: LoopxWorkspaceResetRequest,
     ) -> LoopxHostFuture<'_, LoopxWorkspaceResetResult>;
+
+    /// Idempotently ensures the repository-level agent playbook exists in the
+    /// shared repository directory. The playbook carries host-authored CLI
+    /// command forms, the LoopX issue-fix workflow map, and verified lessons
+    /// from earlier tasks so each turn does not have to re-derive them.
+    fn ensure_playbook(
+        &self,
+        request: LoopxWorkspacePlaybookRequest,
+    ) -> LoopxHostFuture<'_, LoopxWorkspacePlaybookResult>;
+
+    /// Read-only worktree mutation probe used by the host convergence gate.
+    /// Reports whether the worktree holds changes outside LoopX bookkeeping
+    /// paths, so stagnation can be measured from durable evidence instead of
+    /// model text. Implementations must never mutate the worktree.
+    fn probe_mutations(
+        &self,
+        request: LoopxWorkspaceMutationsRequest,
+    ) -> LoopxHostFuture<'_, LoopxWorkspaceMutationsResult>;
+
+    /// Persists the raw `issue-fix workflow-plan` packet of one task into the
+    /// task worktree under LoopX bookkeeping paths so every turn can read the
+    /// exact issue-fix command forms. Overwrites the previous packet of the
+    /// same worktree; failures are reported to the caller, which treats the
+    /// pointer as best-effort context.
+    fn persist_intake_plan(
+        &self,
+        request: LoopxWorkspaceIntakePlanRequest,
+    ) -> LoopxHostFuture<'_, LoopxWorkspaceIntakePlanResult>;
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspacePlaybookRequest {
+    pub operation_id: String,
+    pub worktree_path: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspacePlaybookResult {
+    pub playbook_path: String,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceMutationsRequest {
+    pub operation_id: String,
+    pub worktree_path: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceMutationsResult {
+    /// True when the worktree holds changes outside LoopX bookkeeping paths,
+    /// or holds commits that are not reachable from any remote ref.
+    pub has_changes: bool,
+    /// Bounded sample of non-bookkeeping changed paths (porcelain status).
+    pub changed_paths: Vec<String>,
+    /// True when `changed_paths` was truncated at the adapter bound.
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceIntakePlanRequest {
+    pub operation_id: String,
+    pub worktree_path: String,
+    /// Raw workflow-plan packet JSON captured by the CLI adapter.
+    pub packet_json: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxWorkspaceIntakePlanResult {
+    /// Worktree-relative pointer injected into the host goal-facts block.
+    pub path: String,
+    pub wrote: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

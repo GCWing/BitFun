@@ -14,6 +14,9 @@ const SKIPPED_DIRECTORIES = new Set([
   '.git',
   '.targets',
   '.worktrees',
+  // Local-only worktree roots (git-ignored); their manifests are historical
+  // snapshots and must not participate in boundary checks.
+  'BitFun-worktrees',
   'node_modules',
   'target',
 ]);
@@ -138,6 +141,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['file-watch', ['rt', 'sync']],
   ['function-agents', ['fs', 'io-util', 'macros', 'rt', 'time']],
   ['mcp', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['miniapp-loopx', ['fs', 'io-util', 'macros', 'process', 'rt', 'sync', 'time']],
   ['miniapp-runtime', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
   ['miniapp-market', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
   ['plugin-source', ['fs', 'rt', 'sync', 'time']],
@@ -959,6 +963,7 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
     ['browser-control', ['reqwest/json']],
     ['debug-log', ['reqwest/json']],
     ['mcp', ['reqwest/json', 'reqwest/stream']],
+    ['miniapp-loopx', ['reqwest/json']],
     ['miniapp-market', ['reqwest/json', 'reqwest/query', 'reqwest/stream']],
     ['miniapp-runtime', ['reqwest/stream']],
     ['models-dev', ['reqwest/system-proxy']],

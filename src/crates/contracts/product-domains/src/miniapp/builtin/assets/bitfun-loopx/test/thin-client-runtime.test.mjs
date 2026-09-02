@@ -330,7 +330,7 @@ test('thin client boots from host state and completes the confirmed intake flow'
 
   try {
     window.eval(ui);
-    await waitFor(() => window.document.querySelectorAll('#log-list .log-row').length === 2, 'initial rendering');
+    await waitFor(() => window.document.querySelectorAll('#log-list .log-row').length === 3, 'initial rendering');
 
     assert.deepEqual(callOrder.slice(0, 2), ['onEvent', 'attach']);
     assert.deepEqual(plain(attachRequests[0]), {});
@@ -462,7 +462,9 @@ test('thin client boots from host state and completes the confirmed intake flow'
       window.document.querySelector('[data-task-id="task-2382-1"]').getAttribute('aria-pressed'),
       'true',
     );
-    assert.equal(window.document.querySelector('#issue-detail-dialog').open, true);
+    // The creation flow focuses the task logs in the issue workspace; the
+    // progress panel still renders for the selected task.
+    assert.equal(window.document.querySelector('#issue-view').hidden, false);
     assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
     assert.deepEqual(forbiddenAccesses, []);
     assert.deepEqual(jsdomErrors, []);
@@ -599,7 +601,8 @@ test('task rail is flat and exposes one repository recovery action', async () =>
       'flat task list',
     );
     await waitFor(
-      () => window.document.querySelector('#issue-detail-dialog').open,
+      () => !window.document.querySelector('#approval-alert').hidden
+        && window.document.querySelector('[data-task-id="task-waiting"]').getAttribute('aria-pressed') === 'true',
       'automatic approval focus',
     );
 
@@ -612,7 +615,7 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     assert.match(window.document.querySelector('#resume-repository').textContent, /repository tasks \(1\)/i);
     assert.match(
       window.document.querySelector('[data-task-id="task-waiting"]').textContent,
-      /Waiting for approval/,
+      /Awaiting approval/,
     );
     assert.equal(window.document.querySelector('#approval-alert').hidden, false);
     assert.match(
@@ -627,37 +630,41 @@ test('task rail is flat and exposes one repository recovery action', async () =>
 
     window.document.querySelector('[data-task-id="task-waiting"]').click();
     assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
-    assert.equal(window.document.querySelectorAll('#issue-stage-list > li').length, 5);
-    assert.match(window.document.querySelector('#issue-outcome').textContent, /code changes have not started/i);
+    assert.match(
+      window.document.querySelector('#issue-progress-summary').textContent,
+      /five stages/i,
+    );
     assert.equal(window.document.querySelector('#issue-description-panel').hidden, false);
     await waitFor(
       () => /temporarily unavailable/.test(window.document.querySelector('#issue-description').textContent),
       'selected task metadata refresh',
     );
+    assert.match(window.document.querySelector('#issue-summary').textContent, /Implementation has not started because repository write requires parent approval/i);
     assert.equal(window.document.querySelector('#task-actions button'), null);
     assert.equal(window.document.querySelector('#issue-approval-panel').hidden, false);
-    assert.match(window.document.querySelector('#log-title').textContent, /third-party plugins fail to start after upgrading/i);
+    assert.match(window.document.querySelector('#issue-title').textContent, /plugin tree failed to load/i);
     assert.match(
       window.document.querySelector('#issue-approval-title').textContent,
-      /allow code changes to begin/i,
+      /continue handling this issue/i,
     );
-    assert.match(window.document.querySelector('#issue-approval-background').textContent, /2\.0\.4.*apiProxy/i);
-    assert.match(window.document.querySelector('#issue-approval-impact').textContent, /entire plugin tree/i);
-    assert.match(window.document.querySelector('#issue-approval-approve-effect').textContent, /will not be pushed.*pull request.*merged/i);
-    assert.match(window.document.querySelector('#issue-approval-reject-effect').textContent, /do not modify code or continue/i);
-    assert.doesNotMatch(window.document.querySelector('#issue-detail-dialog').textContent, /Root cause|todo_|settlement_result|durable_writeback|bounded stage/i);
+    assert.match(
+      window.document.querySelector('#issue-approval-message').textContent,
+      /Approve repository write scope for the issue repair/,
+    );
+    assert.match(window.document.querySelector('#issue-approval-approve-effect').textContent, /perform the current operation and continue processing/i);
+    assert.match(window.document.querySelector('#issue-approval-reject-effect').textContent, /do not perform this operation or continue to later steps/i);
+    assert.doesNotMatch(window.document.querySelector('#issue-view').textContent, /Root cause|todo_|settlement_result|durable_writeback|bounded stage/i);
 
     const resolvedButton = window.document.querySelector('[data-task-id="task-resolved-upstream"]');
     assert.match(resolvedButton.textContent, /Resolved upstream/);
     assert.equal(resolvedButton.dataset.state, 'completed');
     resolvedButton.click();
-    assert.equal(window.document.querySelector('#selected-state').textContent, 'Resolved upstream');
-    assert.equal(
-      [...window.document.querySelectorAll('#issue-stage-list > li')]
-        .every((stage) => stage.dataset.status === 'complete'),
-      true,
+    assert.equal(window.document.querySelector('#issue-state-pill').textContent, 'Resolved upstream');
+    assert.match(
+      window.document.querySelector('#issue-progress-summary').textContent,
+      /The repair workflow is complete/i,
     );
-    assert.match(window.document.querySelector('#issue-outcome').textContent, /does not need another repair patch/i);
+    assert.match(window.document.querySelector('#issue-summary').textContent, /covered-upstream no-follow-up/i);
     assert.equal(window.document.querySelector('#task-actions button'), null);
     assert.deepEqual(jsdomErrors, []);
   } finally {

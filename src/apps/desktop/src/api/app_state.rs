@@ -197,8 +197,9 @@ impl AppState {
         };
         // The bitfun-loopx MiniApp prefers a bundled, compiled loopx CLI
         // sidecar (scripts/build-loopx.mjs, shipped via bundle.resources).
-        // Export its resource directory to the JS workers when present; the
-        // MiniApp falls back to vendor/pip acquisition when absent (e.g. dev).
+        // Export its resource directory to JS workers when present. The native
+        // LoopX controller separately owns managed GitHub source installation
+        // and the exact-version system fallback used in development.
         let loopx_resource_dir = match resolve_bundled_loopx_dir() {
             Some(dir) => {
                 log::info!("Resolved bundled loopx CLI resource dir: {}", dir.display());
@@ -206,7 +207,7 @@ impl AppState {
             }
             None => {
                 log::info!(
-                    "Bundled loopx CLI not found; bitfun-loopx will use vendor/pip acquisition"
+                    "Bundled LoopX CLI not found; the native controller will use managed source or the exact-version system fallback"
                 );
                 None
             }

@@ -234,6 +234,7 @@ export type LoopxEnvironmentFactStatus =
   | 'unknown'
   | 'checking'
   | 'available'
+  | 'disabled'
   | 'degraded'
   | 'unavailable';
 
@@ -242,6 +243,7 @@ export interface LoopxEnvironmentFact {
   version: string | null;
   detail: string | null;
   remediation: string | null;
+  remediationAction: 'none' | 'install_loopx' | 'install_open_viking';
   checkedAt: number | null;
 }
 
@@ -254,6 +256,7 @@ export interface LoopxCoreEnvironmentFacts {
 export interface LoopxOptionalEnvironmentFacts {
   pythonFallback: LoopxEnvironmentFact;
   openViking: LoopxEnvironmentFact;
+  feedbackMemory: LoopxEnvironmentFact;
   githubAuth: LoopxEnvironmentFact;
 }
 
@@ -467,6 +470,8 @@ export type LoopxActionKind =
   | 'reject'
   | 'archive'
   | 'restore'
+  | 'install_loopx'
+  | 'install_open_viking'
   | 'retry_environment';
 
 export interface LoopxActionRequest {

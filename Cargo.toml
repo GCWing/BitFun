@@ -50,6 +50,8 @@ members = [
 
 exclude = [
     "BitFun-Installer/src-tauri",
+    # Local-only worktrees (git-ignored); cargo metadata must not crawl them.
+    "BitFun-worktrees",
 ]
 
 resolver = "2"
