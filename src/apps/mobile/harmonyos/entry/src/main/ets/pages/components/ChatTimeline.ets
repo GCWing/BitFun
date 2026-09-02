@@ -26,9 +26,9 @@ import { RemoteLogger } from '../../services/RemoteLogger';
 
 /**
  * Repeat retains this adapter by row identity while the observed row mutates.
- * Mapping the protocol message inside a normal component build keeps the
- * presentation leaf independent from transport DTOs without snapshotting a
- * temporary mapped object in Repeat's item builder.
+ * Keep one observable presentation message for the whole reusable lifetime:
+ * aboutToAppear covers a new instance, aboutToReuse covers an instance thawed
+ * from Repeat's pool, and the monitor covers an already-visible row update.
  */
 @ReusableV2
 @ComponentV2
@@ -56,41 +56,49 @@ struct ChatAssistantTimelineRow {
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
+  @Event onBuildPlan: (path: string, name: string) => void = (_path: string, _name: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
 
   aboutToAppear(): void {
     this.synchronizeMessage();
   }
 
-  @Monitor('row.message', 'renderRevision')
+  aboutToReuse(): void {
+    this.synchronizeMessage();
+  }
+
+  @Monitor('row.id', 'row.message', 'renderRevision')
   private onMessageChanged(): void {
     this.synchronizeMessage();
   }
 
   build() {
-    if (this.row.message) {
-      ChatMessageBubble({
-        item: this.uiMessage,
-        renderRevision: this.renderRevision,
-        isStreaming: this.row.isStreaming,
-        isFinalizing: this.row.isFinalizing,
-        showRetryAction: this.row.showRetryAction,
-        isBusy: this.isBusy,
-        downloadingFilePath: this.downloadingFilePath,
-        downloadedFilePath: this.downloadedFilePath,
-        fileDownloadStatus: this.fileDownloadStatus,
-        activeFilePreviewPath: this.activeFilePreviewPath,
-        activeFilePreviewLoading: this.activeFilePreviewLoading,
-        onApproveTool: this.onApproveTool,
-        onRejectTool: this.onRejectTool,
-        onCancelTool: this.onCancelTool,
-        onAnswerQuestion: this.onAnswerQuestion,
-        onCopyMessage: this.onCopyMessage,
-        onRetryMessage: this.onRetryMessage,
-        onOpenFilePreview: this.onOpenFilePreview,
-        onDownloadFile: this.onDownloadFile
-      })
-    }
+    // The parent only creates this row for a renderable message. Do not put a
+    // second structural condition around the reusable subtree: a V2 component
+    // can be thawed before its retained @Local state has been synchronized,
+    // and omitting the child at that point leaves a permanently hollow row.
+    ChatMessageBubble({
+      item: this.uiMessage,
+      renderRevision: this.renderRevision,
+      isStreaming: this.row.isStreaming,
+      isFinalizing: this.row.isFinalizing,
+      showRetryAction: this.row.showRetryAction,
+      isBusy: this.isBusy,
+      downloadingFilePath: this.downloadingFilePath,
+      downloadedFilePath: this.downloadedFilePath,
+      fileDownloadStatus: this.fileDownloadStatus,
+      activeFilePreviewPath: this.activeFilePreviewPath,
+      activeFilePreviewLoading: this.activeFilePreviewLoading,
+      onApproveTool: this.onApproveTool,
+      onRejectTool: this.onRejectTool,
+      onCancelTool: this.onCancelTool,
+      onAnswerQuestion: this.onAnswerQuestion,
+      onCopyMessage: this.onCopyMessage,
+      onRetryMessage: this.onRetryMessage,
+      onOpenFilePreview: this.onOpenFilePreview,
+      onBuildPlan: this.onBuildPlan,
+      onDownloadFile: this.onDownloadFile
+    })
   }
 
   private synchronizeMessage(): void {
@@ -134,6 +142,7 @@ export struct ChatTimeline {
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
+  @Event onBuildPlan: (path: string, name: string) => void = (_path: string, _name: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
 
   // Says whether an open reuses this subtree or rebuilds it. A rebuild means
@@ -210,6 +219,7 @@ export struct ChatTimeline {
                 } else {
                   ChatAssistantTimelineRow({
                     row: repeatItem.item,
+                    renderRevision: this.timelineRevision,
                     isBusy: this.isBusy,
                     downloadingFilePath: this.downloadingFilePath,
                     downloadedFilePath: this.downloadedFilePath,
@@ -236,6 +246,9 @@ export struct ChatTimeline {
                     },
                     onOpenFilePreview: (path: string, label: string) => {
                       this.onOpenFilePreview(path, label);
+                    },
+                    onBuildPlan: (path: string, name: string) => {
+                      this.onBuildPlan(path, name);
                     },
                     onDownloadFile: (path: string) => {
                       this.onDownloadFile(path);
@@ -274,6 +287,7 @@ export struct ChatTimeline {
                 onCopyMessage: this.onCopyMessage,
                 onRetryMessage: this.onRetryMessage,
                 onOpenFilePreview: this.onOpenFilePreview,
+                onBuildPlan: this.onBuildPlan,
                 onDownloadFile: this.onDownloadFile
               })
             }

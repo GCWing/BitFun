@@ -2,6 +2,7 @@ import {
   ChatMessage,
   RemoteImageContext,
   SelectedImageAttachment,
+  SteerTurnResult,
   SessionMessagesResult,
   SessionSummary
 } from '../model/RemoteModels';
@@ -20,6 +21,14 @@ export interface RemoteChatCommandClient {
     agentType: string,
     imageContexts: RemoteImageContext[]
   ): Promise<string>;
+  steerTurn(
+    sessionId: string,
+    turnId: string,
+    text: string,
+    displayContent: string,
+    imageContexts: RemoteImageContext[]
+  ): Promise<SteerTurnResult>;
+  buildPlan(sessionId: string, planFilePath: string, planName: string, agentType: string): Promise<string>;
   cancelTask(sessionId: string, turnId?: string): Promise<void>;
   renameSession(sessionId: string, title: string): Promise<void>;
 }
@@ -32,6 +41,12 @@ export interface RemoteChatCommandCallbacks {
   // outlive the messages it is standing in for.
   onTimelineReady: () => void;
   onSendSucceeded: (turnId: string, pendingActiveId: string) => void;
+  onSteerSucceeded?: (
+    steeringId: string,
+    turnId: string,
+    displayText: string,
+    images: SelectedImageAttachment[]
+  ) => void;
   onSendFailed: (
     rawText: string,
     images: SelectedImageAttachment[],
@@ -321,6 +336,73 @@ export class RemoteChatCommandController {
     } catch (err) {
       this.callbacks.onSendFailed(rawText, images, localMessageId, pendingActiveId);
       this.callbacks.onStatusText(ConnectionErrorPolicy.errorText(err));
+    } finally {
+      this.callbacks.onBusy(false);
+    }
+  }
+
+  async steerPreparedMessage(
+    sessionId: string,
+    turnId: string,
+    text: string,
+    displayText: string,
+    images: SelectedImageAttachment[],
+    imageContexts: RemoteImageContext[],
+    isBusy: boolean,
+    remoteAvailable: boolean
+  ): Promise<void> {
+    if ((text.length === 0 && images.length === 0) || sessionId.length === 0 || turnId.length === 0 ||
+      isBusy || !remoteAvailable) {
+      return;
+    }
+    try {
+      this.callbacks.onBusy(true);
+      const result = await this.client.steerTurn(
+        sessionId,
+        turnId,
+        text,
+        displayText,
+        imageContexts
+      );
+      if (this.callbacks.onSteerSucceeded) {
+        this.callbacks.onSteerSucceeded(result.steeringId, result.turnId, displayText, images);
+      }
+      this.callbacks.onStatusText(RemoteI18n.t('status.sentWaiting'));
+      this.callbacks.onPollRequested();
+    } catch (err) {
+      this.callbacks.onSendFailed(displayText, images, '', '');
+      const errorText = ConnectionErrorPolicy.errorText(err);
+      this.callbacks.onStatusText(errorText);
+      this.callbacks.onToast(errorText);
+    } finally {
+      this.callbacks.onBusy(false);
+    }
+  }
+
+  async buildPlan(
+    sessionId: string,
+    planFilePath: string,
+    planName: string,
+    agentType: string,
+    localMessageId: string,
+    pendingActiveId: string,
+    isBusy: boolean,
+    remoteAvailable: boolean
+  ): Promise<void> {
+    if (sessionId.length === 0 || planFilePath.length === 0 || isBusy || !remoteAvailable) {
+      return;
+    }
+    try {
+      this.callbacks.onBusy(true);
+      const turnId = await this.client.buildPlan(sessionId, planFilePath, planName, agentType);
+      this.callbacks.onSendSucceeded(turnId, pendingActiveId);
+      this.callbacks.onStatusText(RemoteI18n.t('status.sentWaiting'));
+      this.callbacks.onPollRequested();
+    } catch (err) {
+      this.callbacks.onSendFailed('', [], localMessageId, pendingActiveId);
+      const errorText = ConnectionErrorPolicy.errorText(err);
+      this.callbacks.onStatusText(errorText);
+      this.callbacks.onToast(errorText);
     } finally {
       this.callbacks.onBusy(false);
     }

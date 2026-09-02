@@ -524,6 +524,16 @@ export abstract class AppRootRuntimeComposition {
           });
           this.remoteChatPollingLifecycleController.nudge();
         },
+        onSteerSucceeded: (
+          steeringId: string,
+          turnId: string,
+          displayText: string,
+          images: SelectedImageAttachment[]
+        ) => {
+          this.chatTimelineStore.appendSteeringItem(turnId, steeringId, displayText, images);
+          this.conversationController.syncRemoteTimeline();
+          this.remoteChatPollingLifecycleController.nudge();
+        },
         onSendFailed: (
           rawText: string,
           images: SelectedImageAttachment[],
@@ -896,6 +906,9 @@ export abstract class AppRootRuntimeComposition {
       openFilePreview: (route: AppRoute, request: FilePreviewRequest): void =>
         this.filePreviewController.open(route, request),
       downloadFile: (path: string): void => this.conversationController.downloadVisibleFile(path),
+      buildPlan: async (path: string, name: string): Promise<void> => {
+        await this.conversationController.buildRemotePlan(path, name);
+      },
       send: async (): Promise<void> => { await this.conversationController.sendVisibleMessage(); },
       voiceInput: async (): Promise<void> => { await this.toggleVoiceInput(); },
       inputChanged: (route: AppRoute, value: string): void =>

@@ -2170,6 +2170,51 @@ export default function remoteControllersUnitTest() {
       expect(busyEvents[3]).assertFalse();
     });
 
+    it('steers the active turn and projects the accepted steering identity', 0, async () => {
+      const client = new FakeRemoteChatCommandClient();
+      const accepted: string[] = [];
+      const controller = new RemoteChatCommandController(client, {
+        onMessagesLoaded: (_messages: ChatMessage[], _hasMoreMessages: boolean) => {},
+        onMessageCountKnown: (_pollVersion: number, _knownMessageCount: number) => {},
+        onTimelineReady: () => {},
+        onSendSucceeded: (_turnId: string, _pendingActiveId: string) => {},
+        onSteerSucceeded: (
+          steeringId: string,
+          turnId: string,
+          displayText: string,
+          images: SelectedImageAttachment[]
+        ) => accepted.push(`${steeringId}:${turnId}:${displayText}:${images.length}`),
+        onSendFailed: (
+          _rawText: string,
+          _images: SelectedImageAttachment[],
+          _localMessageId: string,
+          _pendingActiveId: string
+        ) => {},
+        onActiveSession: (_session: SessionSummary) => {},
+        onSessionTitleChanged: (_sessionId: string, _title: string) => {},
+        onStatusText: (_statusText: string) => {},
+        onToast: (_message: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onPollRequested: () => {}
+      }, inertRemoteChatCache());
+
+      await controller.steerPreparedMessage(
+        'session-1',
+        'turn-1',
+        'Continue with this',
+        'Continue with this',
+        [selectedImage('image-1')],
+        [{ id: 'image-1', data_url: 'data:image/png;base64,AA==', mime_type: 'image/png' }],
+        false,
+        true
+      );
+
+      expect(client.steerRequests[0])
+        .assertEqual('session-1:turn-1:Continue with this:Continue with this:1');
+      expect(accepted[0]).assertEqual('steering-1:turn-1:Continue with this:1');
+      expect(client.sendRequests.length).assertEqual(0);
+    });
+
     it('stops active tasks and reports guard states', 0, async () => {
       const client = new FakeRemoteChatCommandClient();
       const statuses: string[] = [];

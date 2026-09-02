@@ -13,6 +13,12 @@ import {
   RemoteToolStatusResponse
 } from '../../model/RemoteModels';
 
+export interface ConversationUiPlanTool {
+  file_path: string;
+  name: string;
+  overview?: string;
+}
+
 export interface ConversationUiSession {
   sessionId: string;
   title: string;
@@ -60,14 +66,18 @@ export interface ConversationUiToolStatus {
   result_preview?: string;
   error_preview?: string;
   exit_code?: number;
+  plan?: ConversationUiPlanTool;
 }
 
 export interface ConversationUiMessageItem {
   type?: string;
+  steering_id?: string;
+  round_index?: number;
   content?: string;
   tool?: ConversationUiToolStatus;
   is_subagent?: boolean;
   subItems?: ConversationUiMessageItem[];
+  images?: ConversationUiImage[];
 }
 
 export interface ConversationUiImage {
@@ -207,17 +217,25 @@ export function toConversationUiToolStatus(source: RemoteToolStatusResponse): Co
     tool_output: source.tool_output,
     result_preview: source.result_preview,
     error_preview: source.error_preview,
-    exit_code: source.exit_code
+    exit_code: source.exit_code,
+    plan: source.plan ? {
+      file_path: source.plan.file_path,
+      name: source.plan.name,
+      overview: source.plan.overview
+    } : undefined
   };
 }
 
 export function toConversationUiMessageItem(source: ChatMessageItemResponse): ConversationUiMessageItem {
   return {
     type: source.type,
+    steering_id: source.steering_id,
+    round_index: source.round_index,
     content: source.content,
     tool: source.tool ? toConversationUiToolStatus(source.tool) : undefined,
     is_subagent: source.is_subagent,
-    subItems: source.subItems ? source.subItems.map((item: ChatMessageItemResponse) => toConversationUiMessageItem(item)) : undefined
+    subItems: source.subItems ? source.subItems.map((item: ChatMessageItemResponse) => toConversationUiMessageItem(item)) : undefined,
+    images: source.images ? source.images.map((image: ImageAttachment) => toConversationUiImage(image)) : undefined
   };
 }
 

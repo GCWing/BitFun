@@ -1,4 +1,6 @@
 import {
+  REMOTE_CAPABILITY_DIALOG_STEER_V1,
+  REMOTE_CAPABILITY_PLAN_BUILD_V1,
   RemoteImageContext,
   RemoteQuestionAnswerPayload
 } from '../../model/RemoteModels';
@@ -98,11 +100,33 @@ export class RemoteTranscriptController {
       !runtime.connection.ensureAvailable()) {
       return;
     }
-    // Sending into a turn that is still running is allowed, but the desktop
-    // queues it rather than interrupting, so say so once — otherwise the
-    // message just sits in the transcript with nothing appearing to happen.
     const queuedBehindRunningTurn = this.hasRunningRemoteTurn();
+    const activeTurnId = this.remoteActiveTurnId();
+    const canSteerRunningTurn = queuedBehindRunningTurn && activeTurnId.length > 0 &&
+      this.remote.supportsHostCapability(REMOTE_CAPABILITY_DIALOG_STEER_V1);
     this.remote.clearComposer();
+    const imageContexts: RemoteImageContext[] = images.length > 0 ?
+      runtime.imagePicker.toRemoteContexts(images) : [];
+    if (canSteerRunningTurn) {
+      RemoteLogger.info(
+        `chat steer requested session=${shortSessionId(sessionId)} turn=${shortSessionId(activeTurnId)}`
+      );
+      this.startRemotePolling();
+      runtime.polling.nudge();
+      await runtime.chat.steerPreparedMessage(
+        sessionId,
+        activeTurnId,
+        text,
+        rawText,
+        images,
+        imageContexts,
+        this.remote.isBusy,
+        true
+      );
+      return;
+    }
+    // Older desktop hosts do not advertise steering. Keep their established
+    // queue behavior so mixed-version Remote Connect sessions remain usable.
     const localMessage = RemoteUiState.localUserMessage(text, images);
     runtime.timeline.appendOptimisticMessage(localMessage);
     const pendingActiveId = runtime.timeline.setPendingActiveTurn(localMessage.id);
@@ -113,8 +137,6 @@ export class RemoteTranscriptController {
     }
     this.startRemotePolling();
     runtime.polling.nudge();
-    const imageContexts: RemoteImageContext[] = images.length > 0 ?
-      runtime.imagePicker.toRemoteContexts(images) : [];
     await runtime.chat.sendPreparedMessage(
       sessionId,
       text,
@@ -122,6 +144,40 @@ export class RemoteTranscriptController {
       rawText,
       images,
       imageContexts,
+      localMessage.id,
+      pendingActiveId,
+      this.remote.isBusy,
+      true
+    );
+  }
+
+  async buildRemotePlan(planFilePath: string, planName: string): Promise<void> {
+    const runtime = requireRemoteRuntime(this.remoteRuntime);
+    const sessionId = this.remote.activeSession.sessionId || '';
+    if (!this.remote.supportsHostCapability(REMOTE_CAPABILITY_PLAN_BUILD_V1)) {
+      this.notify(RemoteI18n.t('chat.planBuildUnavailable'));
+      return;
+    }
+    if (this.hasRunningRemoteTurn()) {
+      this.notify(RemoteI18n.t('chat.planBuildWaitForTurn'));
+      return;
+    }
+    if (planFilePath.trim().length === 0 || sessionId.length === 0 || this.remote.isBusy ||
+      !runtime.connection.ensureAvailable()) {
+      return;
+    }
+    const displayName = planName.trim().length > 0 ? planName.trim() : 'Plan';
+    const localMessage = RemoteUiState.localUserMessage(`Build Plan: ${displayName}`);
+    runtime.timeline.appendOptimisticMessage(localMessage);
+    const pendingActiveId = runtime.timeline.setPendingActiveTurn(localMessage.id);
+    this.syncRemoteTimeline();
+    this.startRemotePolling();
+    runtime.polling.nudge();
+    await runtime.chat.buildPlan(
+      sessionId,
+      planFilePath.trim(),
+      displayName,
+      this.remote.activeSession.agentType,
       localMessage.id,
       pendingActiveId,
       this.remote.isBusy,

@@ -72,6 +72,7 @@ export struct ChatMessageBubble {
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
+  @Event onBuildPlan: (path: string, name: string) => void = (_path: string, _name: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
   private readonly fileReferenceCache: MessageFileReferenceProjectionCache =
     new MessageFileReferenceProjectionCache();
@@ -302,7 +303,12 @@ export struct ChatMessageBubble {
     if (this.isSubagentEntry(entry)) {
       this.SubagentGroup(entry, path, childActiveScope)
     } else {
-      if (this.isThinkingEntry(entry)) {
+      if (this.isUserSteeringEntry(entry)) {
+        ChatUserMessageBubble({
+          item: this.steeringMessage(entry, path),
+          showRetryAction: false
+        })
+      } else if (this.isThinkingEntry(entry)) {
         this.Thinking(
           entry.content || '',
           statusOverride || this.item.status,
@@ -339,7 +345,8 @@ export struct ChatMessageBubble {
       onRejectTool: this.onRejectTool,
       onCancelTool: this.onCancelTool,
       onAnswerQuestion: this.onAnswerQuestion,
-      onOpenFilePreview: this.onOpenFilePreview
+      onOpenFilePreview: this.onOpenFilePreview,
+      onBuildPlan: this.onBuildPlan
     })
   }
 
@@ -387,6 +394,9 @@ export struct ChatMessageBubble {
       },
       onOpenFilePreview: (path: string, label: string) => {
         this.onOpenFilePreview(path, label);
+      },
+      onBuildPlan: (path: string, name: string) => {
+        this.onBuildPlan(path, name);
       }
     })
   }
@@ -655,6 +665,21 @@ export struct ChatMessageBubble {
 
   private isThinkingEntry(entry: ConversationUiMessageItem): boolean {
     return ChatMessageStructurePolicy.isThinkingEntry(entry);
+  }
+
+  private isUserSteeringEntry(entry: ConversationUiMessageItem): boolean {
+    return ChatMessageStructurePolicy.isUserSteeringEntry(entry);
+  }
+
+  private steeringMessage(entry: ConversationUiMessageItem, path: string): ConversationUiMessage {
+    return {
+      id: entry.steering_id || `${this.item.id}-${path}-steering`,
+      role: 'user',
+      text: entry.content || '',
+      status: 'sent',
+      detail: '',
+      images: entry.images
+    };
   }
 
   private isTextEntry(entry: ConversationUiMessageItem): boolean {

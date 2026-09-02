@@ -32,6 +32,7 @@ export interface ConversationIntentDispatcherHooks {
   readonly removeImage: (id: string) => void;
   readonly openFilePreview: (route: AppRoute, request: FilePreviewRequest) => void;
   readonly downloadFile: (path: string) => void;
+  readonly buildPlan: (path: string, name: string) => Promise<void>;
   readonly send: () => Promise<void>;
   readonly voiceInput: () => Promise<void>;
   readonly inputChanged: (route: AppRoute, value: string) => void;
@@ -81,6 +82,11 @@ export class ConversationIntentDispatcher {
       case ConversationIntentType.OpenFilePreview:
         if (intent.filePreviewRequest) this.hooks.openFilePreview(route, intent.filePreviewRequest); return;
       case ConversationIntentType.DownloadFile: this.hooks.downloadFile(intent.value); return;
+      case ConversationIntentType.BuildPlan:
+        if (route === AppRoute.RemoteChat && intent.planBuildRequest) {
+          void this.hooks.buildPlan(intent.planBuildRequest.path, intent.planBuildRequest.name);
+        }
+        return;
       case ConversationIntentType.Send: void this.hooks.send(); return;
       case ConversationIntentType.VoiceInput: void this.hooks.voiceInput(); return;
       case ConversationIntentType.ChatInputChanged: this.hooks.inputChanged(route, intent.value); return;

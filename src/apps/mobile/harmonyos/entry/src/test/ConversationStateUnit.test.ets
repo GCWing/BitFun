@@ -327,6 +327,37 @@ export default function conversationStateUnitTest() {
   });
 
   describe('ChatTimelineStore', () => {
+    it('keeps accepted steering inline when the active turn becomes persisted', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-steering');
+      const active = activeChatMessage('turn-steering', 'Before steering');
+      active.items = [{ type: 'text', content: 'Before steering' }];
+      store.setActiveTurn(active);
+
+      const appended = store.appendSteeringItem(
+        'turn-steering',
+        'steering-1',
+        'Use the second approach',
+        [{ name: 'reference.png', data_url: 'data:image/png;base64,AA==', mime_type: 'image/png' }]
+      );
+      expect(appended).assertTrue();
+      expect(store.snapshot().activeTurn!.items![1].type || '').assertEqual('user-steering');
+
+      const finalMessage = chatMessage('assistant-final', 'assistant', 'After steering');
+      finalMessage.turnId = 'turn-steering';
+      finalMessage.items = [
+        { type: 'text', content: 'Before steering' },
+        { type: 'user-steering', steering_id: 'steering-1', content: 'Use the second approach' },
+        { type: 'text', content: 'After steering' }
+      ];
+      store.mergePersistedMessages([finalMessage]);
+
+      const state = store.snapshot();
+      expect(state.activeTurn === undefined).assertTrue();
+      expect(state.persistedMessages[0].items![1].steering_id || '').assertEqual('steering-1');
+      expect((state.persistedMessages[0].items![1].images || []).length).assertEqual(1);
+    });
+
     it('keeps persisted messages with different ids even when their text matches', 0, () => {
       const merged = RemoteUiState.mergeMessages([
         chatMessage('msg-historical-1', 'user', '你是谁')

@@ -23,9 +23,20 @@ export enum ConversationIntentType {
   RemoveImage = 'remove_image',
   OpenFilePreview = 'open_file_preview',
   DownloadFile = 'download_file',
+  BuildPlan = 'build_plan',
   Send = 'send',
   VoiceInput = 'voice_input',
   ChatInputChanged = 'chat_input_changed'
+}
+
+export class PlanBuildRequest {
+  readonly path: string;
+  readonly name: string;
+
+  constructor(path: string, name: string) {
+    this.path = path;
+    this.name = name;
+  }
 }
 
 export class ConversationIntent {
@@ -35,6 +46,7 @@ export class ConversationIntent {
   readonly updatedInput?: Object;
   readonly answers?: ConversationUiQuestionAnswer;
   readonly filePreviewRequest?: FilePreviewRequest;
+  readonly planBuildRequest?: PlanBuildRequest;
 
   constructor(
     type: ConversationIntentType,
@@ -42,7 +54,8 @@ export class ConversationIntent {
     toolId: string = '',
     updatedInput?: Object,
     answers?: ConversationUiQuestionAnswer,
-    filePreviewRequest?: FilePreviewRequest
+    filePreviewRequest?: FilePreviewRequest,
+    planBuildRequest?: PlanBuildRequest
   ) {
     this.type = type;
     this.value = value;
@@ -50,6 +63,7 @@ export class ConversationIntent {
     this.updatedInput = updatedInput;
     this.answers = answers;
     this.filePreviewRequest = filePreviewRequest;
+    this.planBuildRequest = planBuildRequest;
   }
 }
 
@@ -82,6 +96,18 @@ export class ConversationIntents {
       undefined,
       undefined,
       new FilePreviewRequest(reference, label)
+    );
+  }
+
+  static buildPlan(path: string, name: string): ConversationIntent {
+    return new ConversationIntent(
+      ConversationIntentType.BuildPlan,
+      '',
+      '',
+      undefined,
+      undefined,
+      undefined,
+      new PlanBuildRequest(path, name)
     );
   }
 }

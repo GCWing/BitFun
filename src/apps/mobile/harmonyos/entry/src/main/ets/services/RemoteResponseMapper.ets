@@ -216,7 +216,8 @@ export class RemoteResponseMapper {
     if ((item.content || '').trim().length === 0 || item.tool || item.is_subagent === true) {
       return false;
     }
-    if (type === 'thinking' || type === 'tool' || type === 'subagent' || type === 'agent') {
+    if (type === 'thinking' || type === 'user-steering' || type === 'tool' ||
+      type === 'subagent' || type === 'agent') {
       return false;
     }
     return type === 'text' || type === 'message' || type.length === 0;
