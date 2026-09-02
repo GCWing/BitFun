@@ -10,6 +10,7 @@ describe('isSessionNavRowActive', () => {
         activeSessionId: 'session-2',
         activeChildSessionId: 'child-1',
         activeChildParentSessionId: 'session-1',
+        activeChildHasVisibleRow: true,
       }),
     ).toBe(false);
 
@@ -20,6 +21,7 @@ describe('isSessionNavRowActive', () => {
         activeSessionId: 'session-2',
         activeChildSessionId: 'child-1',
         activeChildParentSessionId: 'session-1',
+        activeChildHasVisibleRow: true,
       }),
     ).toBe(true);
   });
@@ -32,6 +34,7 @@ describe('isSessionNavRowActive', () => {
         activeSessionId: 'session-1',
         activeChildSessionId: 'child-1',
         activeChildParentSessionId: 'session-1',
+        activeChildHasVisibleRow: true,
       }),
     ).toBe(true);
 
@@ -42,6 +45,31 @@ describe('isSessionNavRowActive', () => {
         activeSessionId: 'session-1',
         activeChildSessionId: 'child-1',
         activeChildParentSessionId: 'session-1',
+        activeChildHasVisibleRow: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the parent highlighted when the active child has no visible nav row', () => {
+    expect(
+      isSessionNavRowActive({
+        rowSessionId: 'session-1',
+        activeTabId: 'session',
+        activeSessionId: 'session-1',
+        activeChildSessionId: 'child-1',
+        activeChildParentSessionId: 'session-1',
+        activeChildHasVisibleRow: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      isSessionNavRowActive({
+        rowSessionId: 'child-1',
+        activeTabId: 'session',
+        activeSessionId: 'session-1',
+        activeChildSessionId: 'child-1',
+        activeChildParentSessionId: 'session-1',
+        activeChildHasVisibleRow: false,
       }),
     ).toBe(false);
   });
