@@ -4,27 +4,4 @@
     flex-direction: column;
     gap: var(--bf-space-6);
   }
-
-  &__actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--bf-space-2);
-    width: 100%;
-  }
-
-  &__saving {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-secondary);
-    white-space: nowrap;
-  }
-}
-
-@container config-panel (max-width: 520px) {
-  .bitfun-editor-config {
-    &__actions {
-      justify-content: flex-start;
-      flex-wrap: wrap;
-    }
-  }
 }

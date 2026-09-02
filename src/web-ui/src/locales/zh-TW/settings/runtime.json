@@ -1,15 +1,9 @@
 {
   "features": {
     "pet": {
-      "title": "寵物顯示",
-      "subtitle": "控制 BitFun 寵物的顯示位置和角色。",
+      "title": "桌面寵物",
+      "subtitle": "控制 BitFun 桌面寵物是否顯示以及使用的形象。",
       "enable": "顯示寵物",
-      "displayModeLabel": "顯示位置",
-      "displayModeDescription": "選擇寵物顯示在輸入框內，還是作為軟體外的懸浮桌面寵物。",
-      "displayInput": "輸入框內",
-      "displayInputDesc": "在會話輸入框收起時顯示。",
-      "displayDesktop": "懸浮桌面寵物",
-      "displayDesktopDesc": "在軟體外顯示為置頂的無邊框小視窗，可拖動。",
       "petLabel": "寵物形象",
       "petDescription": "選擇預置形象，或匯入從 petdex.dev 下載的 Petdex zip。",
       "petPlaceholder": "選擇寵物形象",

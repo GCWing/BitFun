@@ -229,8 +229,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
 
   const openSettings = useCallback(() => {
     useSettingsStore.getState().openDestination({
-      pageId: 'application.input',
-      viewId: 'voice',
+      pageId: 'application.voice',
     });
     useSceneStore.getState().openScene('settings');
   }, []);

@@ -9,27 +9,7 @@ function readSource(relativePath: string): string {
   );
 }
 
-describe('InputSettingsPage structure', () => {
-  it('keeps voice input and shortcuts in one continuous page without tabs', () => {
-    const source = readSource('./InputSettingsPage.tsx');
-    const voiceIndex = source.indexOf('<VoiceInputConfig />');
-    const shortcutsIndex = source.indexOf('<KeyboardShortcutsTab />');
-
-    expect(voiceIndex).toBeGreaterThan(-1);
-    expect(shortcutsIndex).toBeGreaterThan(voiceIndex);
-    expect(source).not.toContain('SettingsViewPage');
-    expect(source).not.toContain('<Tabs');
-    expect(source).not.toContain('<TabPane');
-  });
-
-  it('uses whitespace instead of a divider between voice input and shortcuts', () => {
-    const styles = readSource('./InputSettingsPage.scss');
-    const shortcutsRule = styles.match(/&--shortcuts\s*{([^}]*)}/)?.[1] ?? '';
-
-    expect(shortcutsRule).toContain('margin-top');
-    expect(shortcutsRule).not.toContain('border');
-  });
-
+describe('Voice settings page structure', () => {
   it('opens compact local model management from the voice status instead of inline', () => {
     const voiceSource = readSource(
       '../../../../infrastructure/config/components/VoiceInputConfig.tsx',

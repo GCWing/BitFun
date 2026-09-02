@@ -56,8 +56,17 @@ describe('interactiveCapabilitySearchProvider', () => {
     expect(mcp?.group).toBe('settings');
   });
 
+  it('discovers the dedicated terminal settings page', async () => {
+    const result = await interactiveCapabilitySearchProvider.search(
+      request('default shell settings'),
+      new AbortController().signal,
+    );
+    expect(result.items.some((item) => item.target.kind === 'capability'
+      && item.target.capabilityId === 'setting.application.terminal')).toBe(true);
+  });
+
   it.each([
-    ['快捷键', 'setting.application.input', 'shortcut-browser'],
+    ['快捷键', 'setting.application.shortcuts', 'shortcut-browser'],
     ['editor font', 'setting.application.development', 'editor-appearance'],
     ['Hooks 设置', 'setting.tools.automation', 'hooks-enabled'],
   ])('routes %s to the matching settings subview', async (query, capabilityId, itemId) => {

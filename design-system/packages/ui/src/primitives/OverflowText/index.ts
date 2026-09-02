@@ -1,1 +1,5 @@
-export { OverflowText, type OverflowTextProps } from "./OverflowText";
+export {
+  OverflowText,
+  type OverflowTextBehavior,
+  type OverflowTextProps,
+} from "./OverflowText";

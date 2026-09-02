@@ -38,7 +38,7 @@ type TerminalShellOption = ComboboxOption & {
 const formatShellLabel = (shell: ShellInfo): string =>
   `${shell.name}${shell.version ? ` (${shell.version})` : ''}`;
 
-function LaunchAtLoginSection() {
+function LaunchAtLoginSetting() {
   const { t } = useTranslation('settings/application');
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [enabled, setEnabled] = useState(false);
@@ -112,33 +112,28 @@ function LaunchAtLoginSection() {
   }
 
   return (
-    <div className="bitfun-launch-at-login-config" data-bf-component="application-settings" data-bf-part="launchAtLogin">
-      <div className="bitfun-launch-at-login-config__content">
-        <ConfigMessage message={message} />
-        <ConfigPageSection
-          title={t('launchAtLogin.sections.title')}
-          description={t('launchAtLogin.sections.hint')}
-        >
-          <ConfigPageRow
-            label={t('launchAtLogin.toggleLabel')}
-            description={t('launchAtLogin.toggleDescription')}
-            align="center"
-          >
-            <Switch
-              checked={enabled}
-              onChange={(e) => {
-                void handleToggle(e.target.checked);
-              }}
-              disabled={saving}
-            />
-          </ConfigPageRow>
-        </ConfigPageSection>
-      </div>
-    </div>
+    <>
+      <ConfigMessage message={message} />
+      <ConfigPageRow
+        label={t('launchAtLogin.toggleLabel')}
+        description={t('launchAtLogin.toggleDescription')}
+        align="center"
+      >
+        <div data-bf-component="application-settings" data-bf-part="launchAtLogin">
+          <Switch
+            checked={enabled}
+            onChange={(e) => {
+              void handleToggle(e.target.checked);
+            }}
+            disabled={saving}
+          />
+        </div>
+      </ConfigPageRow>
+    </>
   );
 }
 
-function AutoUpdateSection() {
+function AutoUpdateSetting() {
   const { t } = useTranslation('settings/application');
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [enabled, setEnabled] = useState(true);
@@ -214,33 +209,28 @@ function AutoUpdateSection() {
   }
 
   return (
-    <div className="bitfun-auto-update-config" data-bf-component="application-settings" data-bf-part="autoUpdate">
-      <div className="bitfun-auto-update-config__content">
-        <ConfigMessage message={message} />
-        <ConfigPageSection
-          title={t('autoUpdate.sections.title')}
-          description={t('autoUpdate.sections.hint')}
-        >
-          <ConfigPageRow
-            label={t('autoUpdate.toggleLabel')}
-            description={t('autoUpdate.toggleDescription')}
-            align="center"
-          >
-            <Switch
-              checked={enabled}
-              onChange={(e) => {
-                void handleToggle(e.target.checked);
-              }}
-              disabled={saving}
-            />
-          </ConfigPageRow>
-        </ConfigPageSection>
-      </div>
-    </div>
+    <>
+      <ConfigMessage message={message} />
+      <ConfigPageRow
+        label={t('autoUpdate.toggleLabel')}
+        description={t('autoUpdate.toggleDescription')}
+        align="center"
+      >
+        <div data-bf-component="application-settings" data-bf-part="autoUpdate">
+          <Switch
+            checked={enabled}
+            onChange={(e) => {
+              void handleToggle(e.target.checked);
+            }}
+            disabled={saving}
+          />
+        </div>
+      </ConfigPageRow>
+    </>
   );
 }
 
-function PreventSleepSection() {
+function PreventSleepSetting() {
   const { t } = useTranslation('settings/application');
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [enabled, setEnabled] = useState(false);
@@ -314,25 +304,24 @@ function PreventSleepSection() {
   }
 
   return (
-    <ConfigPageSection
-      title={t('preventSleep.sections.title')}
-      description={t('preventSleep.sections.hint')}
-    >
+    <>
       <ConfigMessage message={message} />
       <ConfigPageRow
         label={t('preventSleep.toggleLabel')}
         description={t('preventSleep.toggleDescription')}
         align="center"
       >
-        <Switch
-          checked={enabled}
-          onChange={(event) => {
-            void handleToggle(event.target.checked);
-          }}
-          disabled={saving}
-        />
+        <div data-bf-component="application-settings" data-bf-part="preventSleep">
+          <Switch
+            checked={enabled}
+            onChange={(event) => {
+              void handleToggle(event.target.checked);
+            }}
+            disabled={saving}
+          />
+        </div>
       </ConfigPageRow>
-    </ConfigPageSection>
+    </>
   );
 }
 
@@ -779,7 +768,7 @@ function TerminalSection() {
   );
 }
 
-function WindowBehaviorSection() {
+function WindowBehaviorSetting() {
   const { t } = useTranslation('settings/application');
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [behavior, setBehavior] = useState<CloseBehavior>('quit');
@@ -863,32 +852,27 @@ function WindowBehaviorSection() {
   }
 
   return (
-    <div className="bitfun-window-behavior-config" data-bf-component="application-settings" data-bf-part="windowBehavior">
-      <div className="bitfun-window-behavior-config__content">
-        <ConfigMessage message={message} />
-        <ConfigPageSection
-          title={t('windowBehavior.sections.title')}
-          description={t('windowBehavior.sections.hint')}
-        >
-          <ConfigPageRow
-            label={t('windowBehavior.closeButtonLabel')}
-            description={t('windowBehavior.closeButtonDescription')}
-            align="center"
-          >
-            <Select
-              value={behavior}
-              onValueChange={(v) => { void handleChange(v as string); }}
-              options={behaviorOptions}
-              disabled={saving}
-            />
-          </ConfigPageRow>
-        </ConfigPageSection>
-      </div>
-    </div>
+    <>
+      <ConfigMessage message={message} />
+      <ConfigPageRow
+        label={t('windowBehavior.closeButtonLabel')}
+        description={t('windowBehavior.closeButtonDescription')}
+        align="center"
+      >
+        <div data-bf-component="application-settings" data-bf-part="windowBehavior">
+          <Select
+            value={behavior}
+            onValueChange={(v) => { void handleChange(v as string); }}
+            options={behaviorOptions}
+            disabled={saving}
+          />
+        </div>
+      </ConfigPageRow>
+    </>
   );
 }
 
-function NotificationsSection() {
+function NotificationSettings() {
   const { t } = useTranslation('settings/application');
   const [dialogNotify, setDialogNotify] = useState(true);
   const [permissionRequestNotify, setPermissionRequestNotify] = useState(true);
@@ -976,23 +960,20 @@ function NotificationsSection() {
   }
 
   return (
-    <ConfigPageSection
-      title={t('notifications.title')}
-      description={t('notifications.hint')}
-      data-bf-component="application-settings"
-      data-bf-part="notifications"
-    >
+    <>
       <ConfigMessage message={message} />
       <ConfigPageRow
         label={t('notifications.dialogCompletion.label')}
         description={t('notifications.dialogCompletion.description')}
         align="center"
       >
-        <Switch
-          checked={dialogNotify}
-          onChange={(e) => { void handleDialogNotifyToggle(e.target.checked); }}
-          disabled={saving}
-        />
+        <div data-bf-component="application-settings" data-bf-part="notifications">
+          <Switch
+            checked={dialogNotify}
+            onChange={(e) => { void handleDialogNotifyToggle(e.target.checked); }}
+            disabled={saving}
+          />
+        </div>
       </ConfigPageRow>
       <ConfigPageRow
         label={t('notifications.permissionRequest.label')}
@@ -1016,7 +997,7 @@ function NotificationsSection() {
           disabled={saving}
         />
       </ConfigPageRow>
-    </ConfigPageSection>
+    </>
   );
 }
 
@@ -1026,6 +1007,8 @@ interface ApplicationSettingsPageProps {
 
 const ApplicationSettingsPage: React.FC<ApplicationSettingsPageProps> = ({ page }) => {
   const { t } = useTranslation('settings');
+  const { t: tApplication } = useTranslation('settings/application');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
   const title = t(`navigation.pages.${page}.label`);
   const subtitle = t(`navigation.pages.${page}.description`);
@@ -1045,11 +1028,23 @@ const ApplicationSettingsPage: React.FC<ApplicationSettingsPageProps> = ({ page 
       >
         {page === 'general' ? (
           <>
-            <LaunchAtLoginSection />
-            <PreventSleepSection />
-            <AutoUpdateSection />
-            <WindowBehaviorSection />
-            <NotificationsSection />
+            {isTauri && (
+              <ConfigPageSection
+                title={tApplication('applicationGroups.startupAndUpdates.title')}
+                description={tApplication('applicationGroups.startupAndUpdates.description')}
+              >
+                <LaunchAtLoginSetting />
+                <PreventSleepSetting />
+                <AutoUpdateSetting />
+              </ConfigPageSection>
+            )}
+            <ConfigPageSection
+              title={tApplication('applicationGroups.windowAndNotifications.title')}
+              description={tApplication('applicationGroups.windowAndNotifications.description')}
+            >
+              <WindowBehaviorSetting />
+              <NotificationSettings />
+            </ConfigPageSection>
           </>
         ) : null}
         {page === 'terminal' ? <TerminalSection /> : null}

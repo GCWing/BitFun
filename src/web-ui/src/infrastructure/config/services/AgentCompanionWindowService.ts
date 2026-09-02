@@ -20,14 +20,12 @@ export async function syncAgentCompanionDesktopWindow(
   const run = async (): Promise<void> => {
     const startedAt = performance.now();
     const command = settings.enable_agent_companion
-      && settings.agent_companion_display_mode === 'desktop'
       ? 'show_agent_companion_desktop_pet'
       : 'hide_agent_companion_desktop_pet';
 
     if (requestId !== companionDesktopWindowSyncRequestId) {
       log.debug('Skipped stale Agent companion desktop window sync', {
         command,
-        displayMode: settings.agent_companion_display_mode,
       });
       return;
     }
@@ -35,7 +33,6 @@ export async function syncAgentCompanionDesktopWindow(
     try {
       log.debug('Agent companion desktop window sync started', {
         command,
-        displayMode: settings.agent_companion_display_mode,
       });
       await api.invoke(command);
       if (requestId !== companionDesktopWindowSyncRequestId) {

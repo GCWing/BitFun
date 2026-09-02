@@ -298,7 +298,11 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
   }, [capacityQueueState, childSessionId, t]);
 
   const handleOpenReviewSettings = useCallback(() => {
-    openSettingsPage('tools.execution');
+    useSettingsStore.getState().openDestination({
+      pageId: 'tools.execution',
+      viewId: 'advanced',
+    });
+    useSceneStore.getState().openScene('settings');
   }, []);
 
   // ---- progress tracking ----

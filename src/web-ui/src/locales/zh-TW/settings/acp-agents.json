@@ -1,6 +1,11 @@
 {
   "title": "ACP Agent",
   "subtitle": "管理透過 ACP 連線的外部 Agent。",
+  "views": {
+    "local": "本機",
+    "ssh": "SSH",
+    "json": "進階 JSON"
+  },
   "actions": {
     "add": "新增",
     "addConfig": "新增設定",
@@ -12,8 +17,6 @@
     "save": "儲存",
     "refresh": "重新檢測",
     "learnMore": "ACP 文件",
-    "editJson": "編輯 JSON",
-    "closeJson": "關閉 JSON",
     "saveJson": "儲存 JSON",
     "revert": "還原",
     "install": "安裝",
@@ -22,8 +25,11 @@
     "retry": "重新載入"
   },
   "json": {
-    "title": "JSON 設定",
-    "description": "直接編輯 acpClients 設定。"
+    "title": "進階 JSON 設定",
+    "description": "直接編輯目前執行主機上的 acpClients 設定。僅在列表無法表達所需參數時使用。",
+    "discardTitle": "放棄未儲存的 JSON 修改？",
+    "discardMessage": "離開進階 JSON 後，這些未儲存的修改將遺失。",
+    "discardConfirm": "放棄修改"
   },
   "security": {
     "secretWarning": "ACP JSON 和環境變數可能包含 API 金鑰或存取權杖。BitFun 會把它們儲存到目前執行主機的設定中；請勿貼到線上 JSON 驗證工具、聊天或工單中。"

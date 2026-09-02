@@ -9,19 +9,28 @@ function readSource(relativePath: string): string {
   );
 }
 
-describe('RuntimeSettingsPages combined execution page', () => {
-  it('renders execution before device control in one page without tabs', () => {
+describe('Runtime settings information architecture', () => {
+  it('keeps execution views and device controls in separate owners', () => {
     const source = readSource('./RuntimeSettingsPages.tsx');
     const appearance = readSource('./RuntimeSettingsPages.appearance.ts');
-    const executionIndex = source.indexOf("{page === 'execution' || page === 'execution-control' ? (");
-    const deviceControlIndex = source.indexOf("{page === 'device-control' || page === 'execution-control' ? (");
+    const wrapper = readSource('../../../app/scenes/settings/pages/ExecutionSettingsPage.tsx');
 
-    expect(executionIndex).toBeGreaterThan(-1);
-    expect(deviceControlIndex).toBeGreaterThan(executionIndex);
-    expect(source).toContain('export function ExecutionControlSettingsPage()');
-    expect(source).not.toContain('<Tabs');
-    expect(source).not.toContain('<TabPane');
-    expect(appearance).toContain("'execution-control'");
+    expect(wrapper).toContain('<SettingsViewPage');
+    expect(wrapper).toContain("id: 'common' as const");
+    expect(wrapper).toContain("id: 'advanced' as const");
+    expect(source).toContain("{page === 'desktop-control' ? (");
+    expect(source).toContain("{page === 'browser-control' ? (");
+    expect(source).toContain('export function DesktopControlSettingsPage()');
+    expect(source).toContain('export function BrowserControlSettingsPage()');
+    expect(source).not.toContain("page === 'execution-control'");
+    expect(source).not.toContain("page === 'device-control'");
+    expect(source).not.toContain('refreshDesktopStatus');
+    expect(source).toContain("if (page === 'desktop-control') {");
+    expect(source).toContain("} else if (page === 'browser-control') {");
+    expect(appearance).toContain("'execution-common'");
+    expect(appearance).toContain("'execution-advanced'");
+    expect(appearance).toContain("'desktop-control'");
+    expect(appearance).toContain("'browser-control'");
   });
 
   it('keeps pet picker cards compact without description rows', () => {

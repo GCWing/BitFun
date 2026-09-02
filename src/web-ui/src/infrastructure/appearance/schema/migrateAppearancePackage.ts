@@ -267,7 +267,20 @@ function migrateLegacyRendererDefinitions(value: unknown): Record<string, unknow
 
 const LEGACY_RUNTIME_VIEW_IDS: Readonly<Record<string, readonly string[]>> = {
   personalization: ['pet', 'session-workspace'],
-  permissions: ['execution', 'device-control'],
+  execution: ['execution-common', 'execution-advanced'],
+  'device-control': ['desktop-control', 'browser-control'],
+  'execution-control': [
+    'execution-common',
+    'execution-advanced',
+    'desktop-control',
+    'browser-control',
+  ],
+  permissions: [
+    'execution-common',
+    'execution-advanced',
+    'desktop-control',
+    'browser-control',
+  ],
 };
 
 const RETIRED_APPEARANCE_SETTINGS_PARTS = new Set([
@@ -289,6 +302,7 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'context-list': new Set(['clear']),
   'copy-output-button': new Set(['action', 'icon', 'text']),
   'create-agent-page': new Set(['back']),
+  'editor-config': new Set(['saving']),
   'font-preference': new Set(['resetButton', 'levelGroup', 'levelButton']),
   'git-diff-view': new Set(['typeSwitcher', 'typeOption']),
   'git-nav': new Set(['sections']),
@@ -321,6 +335,7 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
 const RETIRED_COMPONENT_STATES: Readonly<Record<string, ReadonlySet<string>>> = {
   'branch-quick-switch': new Set(['selected', 'current']),
   'context-menu': new Set(['disabled', 'submenuActive']),
+  'editor-config': new Set(['saving']),
   'editor-breadcrumb': new Set(['selected']),
   'file-mention-picker': new Set(['selected']),
   'status-bar-popover': new Set(['selected']),

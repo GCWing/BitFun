@@ -4920,12 +4920,12 @@
         }
       ],
       "stepsZh": [
-        "打开输入设置的“语音”页",
+        "打开独立的语音设置页",
         "启用语音并准备模型",
         "在聊天输入框点击麦克风开始录音"
       ],
       "stepsEn": [
-        "Open the Voice input settings view",
+        "Open the standalone Voice settings page",
         "Enable voice and prepare a model",
         "Use the microphone button in the chat composer"
       ],
@@ -4939,8 +4939,7 @@
       ],
       "destination": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       },
       "operations": []
     },
@@ -4950,8 +4949,8 @@
       "categoryId": "application",
       "titleZh": "Agent 桌面伙伴",
       "titleEn": "Agent desktop companion",
-      "summaryZh": "在输入框或桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。",
-      "summaryEn": "Show an agent companion in the composer or on the desktop, and choose, import, or manage Petdex character packs.",
+      "summaryZh": "在桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。",
+      "summaryEn": "Show an agent companion on the desktop, and choose, import, or manage Petdex character packs.",
       "keywordsZh": [
         "桌面宠物",
         "Agent 伙伴",
@@ -4967,12 +4966,12 @@
         "character pack"
       ],
       "highlightsZh": [
-        "在桌面或输入框显示伙伴",
+        "显示或隐藏桌面伙伴",
         "选择预设角色",
         "导入和删除 Petdex 包"
       ],
       "highlightsEn": [
-        "Show the companion on desktop or in the composer",
+        "Show or hide the desktop companion",
         "Choose a preset character",
         "Import and remove Petdex packs"
       ],
@@ -4986,17 +4985,6 @@
           },
           "evidence": [
             "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#features.pet.enable"
-          ]
-        },
-        {
-          "id": "display-modes",
-          "titleZh": "选择在聊天输入框或独立桌面窗口显示",
-          "titleEn": "Show the companion in the chat composer or a desktop window",
-          "control": {
-            "kind": "delegate"
-          },
-          "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#features.pet.displayModeLabel"
           ]
         },
         {
@@ -5052,24 +5040,24 @@
       ],
       "stepsZh": [
         "打开桌面伙伴设置",
-        "启用伙伴并选择显示位置",
+        "启用或停用桌面伙伴",
         "选择预设或导入 Petdex 包"
       ],
       "stepsEn": [
         "Open Companion settings",
-        "Enable it and choose where it appears",
+        "Enable or disable the desktop companion",
         "Choose a preset or import a Petdex pack"
       ],
       "agentControl": {
         "tool": "BitFunControl",
         "workflowZh": [
           "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-          "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+          "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
           "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
         ],
         "workflowEn": [
           "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-          "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+          "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
           "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
         ]
       },
@@ -5557,14 +5545,13 @@
       "categoryId": "application",
       "titleZh": "桌面伙伴设置",
       "titleEn": "Companion settings",
-      "summaryZh": "启用 Agent 伙伴、选择显示位置，并管理当前角色。",
-      "summaryEn": "Enable the agent companion, choose where it appears, and manage the active character.",
+      "summaryZh": "启用桌面 Agent 伙伴并管理当前角色。",
+      "summaryEn": "Enable the desktop agent companion and manage the active character.",
       "keywordsZh": [
         "桌面伙伴设置",
         "桌面宠物",
         "萌宠",
         "吉祥物",
-        "显示位置",
         "Petdex"
       ],
       "keywordsEn": [
@@ -5572,17 +5559,14 @@
         "desktop pet",
         "pet",
         "mascot",
-        "display location",
         "Petdex"
       ],
       "highlightsZh": [
         "启用或停用伙伴",
-        "桌面与输入框显示模式",
         "角色选择与 Petdex 导入"
       ],
       "highlightsEn": [
         "Enable or disable the companion",
-        "Desktop and composer display modes",
         "Character selection and Petdex import"
       ],
       "items": [
@@ -5601,42 +5585,6 @@
           },
           "evidence": [
             "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#features.pet.enable"
-          ]
-        },
-        {
-          "id": "composer-display",
-          "titleZh": "控制伙伴是否显示在聊天输入框旁",
-          "titleEn": "Choose whether the companion appears beside the chat composer",
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "display-mode",
-                "value": "input"
-              }
-            ]
-          },
-          "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#features.pet.displayInput"
-          ]
-        },
-        {
-          "id": "desktop-display",
-          "titleZh": "控制伙伴是否显示为独立桌面窗口",
-          "titleEn": "Choose whether the companion appears as a standalone desktop window",
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "display-mode",
-                "value": "desktop"
-              }
-            ]
-          },
-          "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#features.pet.displayDesktop"
           ]
         },
         {
@@ -5692,12 +5640,12 @@
       "stepsZh": [
         "打开设置",
         "进入“应用 > 桌面伙伴”",
-        "选择开关、位置和角色"
+        "选择开关和角色"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Application > Companion",
-        "Choose its state, location, and character"
+        "Choose its state and character"
       ],
       "agentExamplesZh": [
         "关闭桌面伙伴",
@@ -5741,13 +5689,6 @@
           "titleEn": "Enable companion",
           "descriptionZh": "显示或隐藏 Agent 伙伴。",
           "descriptionEn": "Show or hide the agent companion."
-        },
-        {
-          "id": "display-mode",
-          "titleZh": "显示位置",
-          "titleEn": "Display location",
-          "descriptionZh": "在桌面或聊天输入框中显示。",
-          "descriptionEn": "Show on the desktop or in the chat composer."
         }
       ]
     },
@@ -5755,35 +5696,33 @@
       "id": "setting.application.input",
       "kind": "setting",
       "categoryId": "application",
-      "titleZh": "输入与快捷键",
-      "titleEn": "Input & shortcuts",
-      "summaryZh": "配置语音输入、麦克风、识别语言以及键盘快捷键。",
-      "summaryEn": "Configure voice input, microphone, recognition language, and keyboard shortcuts.",
+      "titleZh": "语音",
+      "titleEn": "Voice",
+      "summaryZh": "配置语音输入、麦克风、识别语言、本地模型与实时语音通话。",
+      "summaryEn": "Configure voice input, microphones, recognition language, local models, and realtime voice calls.",
       "keywordsZh": [
-        "输入设置",
+        "语音设置",
         "语音",
         "麦克风",
-        "快捷键",
-        "热键",
-        "键位"
+        "听写",
+        "语音识别"
       ],
       "keywordsEn": [
-        "input settings",
+        "voice settings",
         "voice",
         "microphone",
-        "shortcut",
-        "hotkey",
-        "keybinding"
+        "dictation",
+        "speech recognition"
       ],
       "highlightsZh": [
         "语音输入与本地模型",
         "识别语言和最长录音时间",
-        "应用与编辑器快捷键"
+        "实时语音通话"
       ],
       "highlightsEn": [
         "Voice input and local models",
         "Recognition language and maximum recording time",
-        "App and editor shortcuts"
+        "Realtime voice calls"
       ],
       "items": [
         {
@@ -5792,8 +5731,7 @@
           "titleEn": "Enable or disable voice input in the chat composer",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "direct",
@@ -5814,8 +5752,7 @@
           "titleEn": "Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "direct",
@@ -5836,8 +5773,7 @@
           "titleEn": "Choose a microphone and run a speech-recognition test",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "open",
@@ -5856,8 +5792,7 @@
           "titleEn": "Download, select, verify, repair, or delete local speech models",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "open",
@@ -5878,8 +5813,7 @@
           "titleEn": "Set the maximum duration of one voice-input recording",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "direct",
@@ -5893,68 +5827,27 @@
           "evidence": [
             "source:src/web-ui/src/infrastructure/config/types/index.ts#max_recording_seconds"
           ]
-        },
-        {
-          "id": "shortcut-browser",
-          "titleZh": "搜索和查看全部应用、场景、编辑器与终端快捷键",
-          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "shortcuts"
-          },
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“搜索和查看全部应用、场景、编辑器与终端快捷键”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Search and browse all app, scene, editor, and terminal shortcuts” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          },
-          "evidence": [
-            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#lists every known shortcut"
-          ]
-        },
-        {
-          "id": "shortcut-remap",
-          "titleZh": "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
-          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "shortcuts"
-          },
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“录制新快捷键、检测冲突、恢复单项或重置全部自定义键位”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          },
-          "evidence": [
-            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildFinalConflictMap",
-            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildStoredKeybindings({})"
-          ]
         }
       ],
       "stepsZh": [
         "打开设置",
-        "进入“应用 > 输入”",
-        "切换“语音”或“快捷键”视图"
+        "进入“应用与界面 > 语音”"
       ],
       "stepsEn": [
         "Open Settings",
-        "Go to Application > Input",
-        "Switch between Voice and Shortcuts"
+        "Go to App & Interface > Voice"
       ],
       "agentExamplesZh": [
-        "打开快捷键设置",
+        "打开语音输入设置",
         "把语音输入的默认语言设为中文"
       ],
       "agentExamplesEn": [
-        "Open keyboard-shortcut settings",
+        "Open voice-input settings",
         "Set the voice-input language to Chinese"
       ],
       "destination": {
         "kind": "settings",
-        "pageId": "application.input"
+        "pageId": "application.voice"
       },
       "operations": [],
       "options": [
@@ -5982,16 +5875,105 @@
       ]
     },
     {
+      "id": "setting.application.shortcuts",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "快捷键",
+      "titleEn": "Keyboard shortcuts",
+      "summaryZh": "搜索、查看、自定义与重置应用、场景、编辑器和终端快捷键。",
+      "summaryEn": "Search, browse, customize, and reset app, scene, editor, and terminal shortcuts.",
+      "keywordsZh": [
+        "快捷键",
+        "热键",
+        "键位",
+        "键盘"
+      ],
+      "keywordsEn": [
+        "keyboard shortcuts",
+        "shortcut",
+        "hotkey",
+        "keybinding"
+      ],
+      "highlightsZh": [
+        "全部快捷键浏览与搜索",
+        "键位录制与冲突检测",
+        "单项恢复与全部重置"
+      ],
+      "highlightsEn": [
+        "Browse and search every shortcut",
+        "Key recording and conflict detection",
+        "Individual revert and full reset"
+      ],
+      "items": [
+        {
+          "id": "shortcut-browser",
+          "titleZh": "搜索和查看全部应用、场景、编辑器与终端快捷键",
+          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.shortcuts"
+          },
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“搜索和查看全部应用、场景、编辑器与终端快捷键”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Search and browse all app, scene, editor, and terminal shortcuts” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+          },
+          "evidence": [
+            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#lists every known shortcut"
+          ]
+        },
+        {
+          "id": "shortcut-remap",
+          "titleZh": "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
+          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.shortcuts"
+          },
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“录制新快捷键、检测冲突、恢复单项或重置全部自定义键位”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+          },
+          "evidence": [
+            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildFinalConflictMap",
+            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildStoredKeybindings({})"
+          ]
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用与界面 > 快捷键”"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to App & Interface > Keyboard Shortcuts"
+      ],
+      "agentExamplesZh": [
+        "打开快捷键设置"
+      ],
+      "agentExamplesEn": [
+        "Open keyboard-shortcut settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.shortcuts"
+      },
+      "operations": [],
+      "options": []
+    },
+    {
       "id": "setting.application.development",
       "kind": "setting",
       "categoryId": "application",
-      "titleZh": "终端与编辑器设置",
-      "titleEn": "Terminal & editor settings",
-      "summaryZh": "选择默认 Shell，并调整代码编辑器的字体、缩进、换行、格式化与 Minimap。",
-      "summaryEn": "Choose the default shell and tune editor font, indentation, wrapping, formatting, and minimap behavior.",
+      "titleZh": "编辑器",
+      "titleEn": "Editor",
+      "summaryZh": "调整代码编辑器的字体、缩进、换行、格式化与 Minimap。",
+      "summaryEn": "Tune code editor font, indentation, wrapping, formatting, and minimap behavior.",
       "keywordsZh": [
         "开发设置",
-        "默认 Shell",
         "编辑器",
         "字体大小",
         "缩进",
@@ -6000,7 +5982,6 @@
       ],
       "keywordsEn": [
         "development settings",
-        "default shell",
         "editor",
         "font size",
         "indentation",
@@ -6008,69 +5989,23 @@
         "minimap"
       ],
       "highlightsZh": [
-        "默认终端 Shell",
+        "编辑器外观与光标",
         "编辑器字号与缩进",
         "自动换行、格式化和 Minimap"
       ],
       "highlightsEn": [
-        "Default terminal shell",
+        "Editor appearance and cursor",
         "Editor font size and indentation",
         "Word wrapping, formatting, and minimap"
       ],
       "items": [
-        {
-          "id": "default-shell",
-          "titleZh": "自动检测或指定默认终端 Shell",
-          "titleEn": "Auto-detect or choose the default terminal shell",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "terminal"
-          },
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "terminal-default-shell"
-              }
-            ]
-          },
-          "evidence": [
-            "command:terminal_get_shells",
-            "source:src/web-ui/src/locales/zh-CN/settings/application.json#terminal.sections.defaultTerminal"
-          ]
-        },
-        {
-          "id": "terminal-position",
-          "titleZh": "把终端面板放在右侧或底部",
-          "titleEn": "Place the terminal panel on the right or at the bottom",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "terminal"
-          },
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "terminal-panel-position"
-              }
-            ]
-          },
-          "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/application.json#terminal.panelPosition.label"
-          ]
-        },
         {
           "id": "editor-appearance",
           "titleZh": "设置编辑器字体、字重、字号、行高与光标样式",
           "titleEn": "Configure editor font, weight, size, line height, and cursor behavior",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -6107,8 +6042,7 @@
           "titleEn": "Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -6142,8 +6076,7 @@
           "titleEn": "Control the minimap, whitespace rendering, current-line highlight, and scroll bounds",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -6180,8 +6113,7 @@
           "titleEn": "Control autosave, semantic highlighting, bracket colors, formatting, and whitespace trimming",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -6218,42 +6150,24 @@
       ],
       "stepsZh": [
         "打开设置",
-        "进入“应用 > 开发”",
-        "切换“终端”或“编辑器”视图"
+        "进入“应用与界面 > 编辑器”"
       ],
       "stepsEn": [
         "Open Settings",
-        "Go to Application > Development",
-        "Switch between Terminal and Editor"
+        "Go to App & Interface > Editor"
       ],
       "agentExamplesZh": [
-        "把编辑器字号改成 15",
-        "打开终端设置"
+        "把编辑器字号改成 15"
       ],
       "agentExamplesEn": [
-        "Set the editor font size to 15",
-        "Open terminal settings"
+        "Set the editor font size to 15"
       ],
       "destination": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       },
       "operations": [],
       "options": [
-        {
-          "id": "terminal-default-shell",
-          "titleZh": "默认终端 Shell",
-          "titleEn": "Default terminal shell",
-          "descriptionZh": "设置 Shell 路径；空字符串表示自动检测。",
-          "descriptionEn": "Set the shell path; an empty string enables automatic detection."
-        },
-        {
-          "id": "terminal-panel-position",
-          "titleZh": "终端面板位置",
-          "titleEn": "Terminal panel position",
-          "descriptionZh": "把终端面板放在右侧或底部。",
-          "descriptionEn": "Place the terminal panel on the right or at the bottom."
-        },
         {
           "id": "editor-font-family",
           "titleZh": "编辑器字体",
@@ -7408,6 +7322,11 @@
           "id": "permission-mode",
           "titleZh": "选择询问、自动批准或完全访问权限模式，并确认高风险警告",
           "titleEn": "Choose Ask, Auto-approve, or Full Access permission mode and acknowledge high-risk warnings",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -7423,6 +7342,11 @@
           "id": "permission-selector",
           "titleZh": "控制权限模式选择器是否显示在聊天输入框下方",
           "titleEn": "Choose whether the permission-mode selector appears below the chat composer",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -7440,6 +7364,11 @@
           "id": "global-project-rules",
           "titleZh": "创建、排序和保存全局或项目级 Allow、Ask、Deny 规则",
           "titleEn": "Create, reorder, and save global or project-level Allow, Ask, and Deny rules",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -7456,6 +7385,11 @@
           "id": "remembered-grants",
           "titleZh": "查看、撤销或清空项目中记住的权限授权与审计记录",
           "titleEn": "Review, revoke, or clear remembered project permission grants and audit records",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -7473,6 +7407,11 @@
           "id": "deferred-tools",
           "titleZh": "按需延迟加载工具定义以减少 Agent 初始上下文",
           "titleEn": "Deferred tool loading on demand to reduce initial agent context",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -7490,6 +7429,11 @@
           "id": "parallelism",
           "titleZh": "设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略",
           "titleEn": "Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -7514,6 +7458,11 @@
           "id": "timeouts",
           "titleZh": "设置或取消单次工具调用超时",
           "titleEn": "Set or disable the per-tool execution timeout",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -7531,6 +7480,11 @@
           "id": "review-capacity",
           "titleZh": "设置 Deep Review 最大并行评审者和队列等待时间",
           "titleEn": "Set the maximum parallel Deep Review workers and queue wait time",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -7610,6 +7564,11 @@
           "id": "json-repair",
           "titleZh": "控制是否在安全边界内修复模型生成的非法工具参数 JSON",
           "titleEn": "Choose whether malformed model-generated tool-argument JSON may be repaired within safety boundaries",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -7714,6 +7673,268 @@
           "descriptionEn": "Allow minor model-generated JSON formatting errors to be repaired within the safety boundary."
         }
       ]
+    },
+    {
+      "id": "setting.application.terminal",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "终端",
+      "titleEn": "Terminal",
+      "summaryZh": "选择默认终端 Shell，并设置新终端面板在会话中的打开位置。",
+      "summaryEn": "Choose the default terminal shell and where new terminal panels open in a session.",
+      "keywordsZh": [
+        "终端设置",
+        "终端",
+        "默认 Shell",
+        "PowerShell",
+        "终端面板",
+        "面板位置"
+      ],
+      "keywordsEn": [
+        "terminal settings",
+        "terminal",
+        "default shell",
+        "PowerShell",
+        "terminal panel",
+        "panel position"
+      ],
+      "highlightsZh": [
+        "自动检测或选择默认 Shell",
+        "右侧或底部终端面板",
+        "Agent 与本地工作区共用 Shell 偏好"
+      ],
+      "highlightsEn": [
+        "Auto-detect or choose a default shell",
+        "Right-side or bottom terminal panel",
+        "Shared shell preference for agents and local workspaces"
+      ],
+      "items": [
+        {
+          "id": "default-shell",
+          "titleZh": "自动检测或指定默认终端 Shell",
+          "titleEn": "Auto-detect or choose the default terminal shell",
+          "control": {
+            "kind": "direct",
+            "operations": [],
+            "options": [
+              {
+                "id": "terminal-default-shell"
+              }
+            ]
+          },
+          "evidence": [
+            "command:terminal_get_shells",
+            "source:src/web-ui/src/locales/zh-CN/settings/application.json#terminal.sections.defaultTerminal"
+          ]
+        },
+        {
+          "id": "terminal-position",
+          "titleZh": "把终端面板放在右侧或底部",
+          "titleEn": "Place the terminal panel on the right or at the bottom",
+          "control": {
+            "kind": "direct",
+            "operations": [],
+            "options": [
+              {
+                "id": "terminal-panel-position"
+              }
+            ]
+          },
+          "evidence": [
+            "source:src/web-ui/src/locales/zh-CN/settings/application.json#terminal.panelPosition.label"
+          ]
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用与界面 > 终端”"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to App & Interface > Terminal"
+      ],
+      "agentExamplesZh": [
+        "打开终端设置",
+        "把终端面板放到底部"
+      ],
+      "agentExamplesEn": [
+        "Open terminal settings",
+        "Move the terminal panel to the bottom"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.terminal"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "terminal-default-shell",
+          "titleZh": "默认终端 Shell",
+          "titleEn": "Default terminal shell",
+          "descriptionZh": "设置 Shell 路径；空字符串表示自动检测。",
+          "descriptionEn": "Set the shell path; an empty string enables automatic detection."
+        },
+        {
+          "id": "terminal-panel-position",
+          "titleZh": "终端面板位置",
+          "titleEn": "Terminal panel position",
+          "descriptionZh": "把终端面板放在右侧或底部。",
+          "descriptionEn": "Place the terminal panel on the right or at the bottom."
+        }
+      ]
+    },
+    {
+      "id": "setting.tools.desktop-control",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "桌面控制",
+      "titleEn": "Desktop control",
+      "summaryZh": "管理 Computer Use 开关，并检查辅助功能与屏幕录制授权。",
+      "summaryEn": "Manage Computer Use and inspect accessibility and screen-recording permissions.",
+      "keywordsZh": [
+        "桌面控制",
+        "Computer Use",
+        "辅助功能",
+        "屏幕录制",
+        "系统授权"
+      ],
+      "keywordsEn": [
+        "desktop control",
+        "computer use",
+        "accessibility",
+        "screen recording",
+        "system permissions"
+      ],
+      "highlightsZh": [
+        "单独控制桌面操作能力",
+        "查看当前系统授权状态",
+        "前往系统设置完成必要授权"
+      ],
+      "highlightsEn": [
+        "Control desktop interaction separately",
+        "Inspect current operating-system grants",
+        "Open system settings for required permissions"
+      ],
+      "items": [
+        {
+          "id": "permissions",
+          "titleZh": "查看 Computer Use、辅助功能与屏幕录制状态并完成系统授权",
+          "titleEn": "Inspect Computer Use, accessibility, and screen-recording status and complete system authorization",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "操作系统权限必须由用户在系统界面中确认；Agent 会打开独立的桌面控制页，并保留系统授权步骤给用户完成。",
+            "reasonEn": "Operating-system permissions require confirmation in system UI; the Agent opens the dedicated Desktop Control page and leaves authorization visible to the user."
+          },
+          "evidence": [
+            "command:computer_use_get_status",
+            "command:computer_use_request_permissions",
+            "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#computerUse.sectionTitle"
+          ]
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 桌面控制”",
+        "检查开关和系统授权状态"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Desktop Control",
+        "Inspect the toggle and operating-system grants"
+      ],
+      "agentExamplesZh": [
+        "打开桌面控制设置",
+        "检查 Computer Use 权限"
+      ],
+      "agentExamplesEn": [
+        "Open Desktop Control settings",
+        "Check Computer Use permissions"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.desktop-control"
+      },
+      "operations": [],
+      "options": []
+    },
+    {
+      "id": "setting.tools.browser-control",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "浏览器控制",
+      "titleEn": "Browser control",
+      "summaryZh": "选择浏览器，检查连接状态，并配置 CDP 与启动连接行为。",
+      "summaryEn": "Choose a browser, inspect connection status, and configure CDP and startup connection behavior.",
+      "keywordsZh": [
+        "浏览器控制",
+        "浏览器连接",
+        "CDP",
+        "Chrome",
+        "Edge",
+        "远程调试"
+      ],
+      "keywordsEn": [
+        "browser control",
+        "browser connection",
+        "CDP",
+        "Chrome",
+        "Edge",
+        "remote debugging"
+      ],
+      "highlightsZh": [
+        "选择受支持的浏览器",
+        "查看连接与页面状态",
+        "配置现有浏览器和启动连接"
+      ],
+      "highlightsEn": [
+        "Choose a supported browser",
+        "Inspect connection and page status",
+        "Configure existing-browser and startup connection behavior"
+      ],
+      "items": [
+        {
+          "id": "connection",
+          "titleZh": "选择浏览器并查看、建立或断开 CDP 连接",
+          "titleEn": "Choose a browser and inspect, establish, or disconnect its CDP connection",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "浏览器与 CDP 状态来自当前执行主机，并可能需要浏览器确认或重启；Agent 会打开独立的浏览器控制页供用户完成。",
+            "reasonEn": "Browser and CDP state comes from the current execution host and may require browser confirmation or restart; the Agent opens the dedicated Browser Control page for completion."
+          },
+          "evidence": [
+            "command:browser_control_get_status",
+            "command:browser_control_list_browsers",
+            "command:browser_control_enable_default_cdp",
+            "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#browserControl.sectionTitle"
+          ]
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 浏览器控制”",
+        "选择浏览器并检查连接状态"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Browser Control",
+        "Choose a browser and inspect its connection status"
+      ],
+      "agentExamplesZh": [
+        "打开浏览器控制设置",
+        "检查浏览器连接"
+      ],
+      "agentExamplesEn": [
+        "Open Browser Control settings",
+        "Check the browser connection"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.browser-control"
+      },
+      "operations": [],
+      "options": []
     },
     {
       "id": "setting.tools.automation",
@@ -8364,6 +8585,11 @@
           "id": "presets",
           "titleZh": "使用 OpenCode、dsh、OMP、Claude Code 和 Codex 等预设",
           "titleEn": "Use presets for OpenCode, dsh, OMP, Claude Code, Codex, and others",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "local"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -8378,6 +8604,11 @@
           "id": "json-config",
           "titleZh": "通过 JSON 查看、添加和保存 ACP Agent 配置",
           "titleEn": "View, add, and save ACP agent configuration through JSON",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "json"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -8393,6 +8624,11 @@
           "id": "probe",
           "titleZh": "探测 CLI、适配器、路径、版本、连接与权限要求",
           "titleEn": "Probe CLI, adapter, path, version, connection, and permission requirements",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "local"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -8410,6 +8646,11 @@
           "id": "install",
           "titleZh": "安装外部 Agent CLI 并预下载 ACP 客户端适配器",
           "titleEn": "Install external-agent CLIs and predownload ACP client adapters",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "local"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -8425,6 +8666,11 @@
           "id": "remote-detection",
           "titleZh": "在 SSH 远程工作区探测可用外部 Agent 并显示不支持原因",
           "titleEn": "Detect available external agents in SSH workspaces and show explicit unsupported reasons",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "ssh"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -8997,7 +9243,7 @@
     "surface.todos.open": "feature.tasks-automation",
     "surface.insights.open": "feature.insights",
     "settings.open": "setting.application.general",
-    "settings.shortcuts.open": "setting.application.input"
+    "settings.shortcuts.open": "setting.application.shortcuts"
   },
   "sceneOwners": {
     "session": "feature.ai-assistant",

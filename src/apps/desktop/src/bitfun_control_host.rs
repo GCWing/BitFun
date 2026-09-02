@@ -188,7 +188,6 @@ async fn companion_state(state: &AppState) -> Result<Value, String> {
     Ok(json!({
         "activePet": experience.agent_companion_pet,
         "enabled": experience.enable_agent_companion,
-        "displayMode": experience.agent_companion_display_mode,
         "importedPets": imported.pets,
     }))
 }

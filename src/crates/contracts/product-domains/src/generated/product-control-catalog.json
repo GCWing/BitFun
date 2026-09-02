@@ -4,8 +4,8 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "e6de7c47ef80d430801ba783d5adb016c7e6367a147a6eb54cdb9f70a746a61d",
-  "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
+  "digest": "bf23a4123f01486935eb491f77cd73cddc5fb54a82f9b53798ab2181b8ffe483",
+  "ownerDigest": "2ced30785fbed3c5a80085cb8d04cc1ba2604650ae45619134a350e5e4ed7914",
   "searchAcceptance": [
     {
       "id": "companion-pet-mixed",
@@ -136,13 +136,13 @@
   ],
   "counts": {
     "features": 22,
-    "settings": 17,
-    "userFacing": 39,
-    "documentedItems": 321,
+    "settings": 21,
+    "userFacing": 43,
+    "documentedItems": 320,
     "controlCoverage": {
-      "direct": 49,
-      "delegated": 62,
-      "interactive": 210,
+      "direct": 47,
+      "delegated": 61,
+      "interactive": 212,
       "unsupported": 0
     }
   },
@@ -9606,8 +9606,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9653,8 +9652,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9700,8 +9698,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9747,8 +9744,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9794,8 +9790,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9841,8 +9836,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9888,8 +9882,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9935,8 +9928,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -9982,8 +9974,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -10029,8 +10020,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -10038,7 +10028,6 @@
       "capabilityId": "feature.desktop-pet",
       "itemIds": [
         "enable",
-        "display-modes",
         "presets",
         "petdex-import",
         "petdex-delete",
@@ -10088,51 +10077,6 @@
       "capabilityId": "feature.desktop-pet",
       "itemIds": [
         "enable"
-      ],
-      "kind": "delegate",
-      "risk": "execute",
-      "executionHost": "workspaceHost",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": true
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": true
-        }
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "delegateTools": [
-        "BitFunControl"
-      ],
-      "presentationTarget": {
-        "kind": "settings",
-        "pageId": "application.pet"
-      }
-    },
-    {
-      "id": "feature.desktop-pet:delegate:display-modes",
-      "capabilityId": "feature.desktop-pet",
-      "itemIds": [
-        "display-modes"
       ],
       "kind": "delegate",
       "risk": "execute",
@@ -11255,8 +11199,6 @@
       "capabilityId": "setting.application.pet",
       "itemIds": [
         "enabled",
-        "composer-display",
-        "desktop-display",
         "preset-selection",
         "import",
         "delete-refresh"
@@ -11331,55 +11273,6 @@
       },
       "inputSchema": {
         "type": "boolean"
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "valueSource": {
-        "kind": "static"
-      },
-      "presentationTarget": {
-        "kind": "settings",
-        "pageId": "application.pet"
-      }
-    },
-    {
-      "id": "setting.application.pet:option:display-mode",
-      "capabilityId": "setting.application.pet",
-      "itemIds": [
-        "composer-display",
-        "desktop-display"
-      ],
-      "kind": "option",
-      "risk": "write",
-      "executionHost": "productHost",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": true
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": true
-        }
-      },
-      "inputSchema": {
-        "type": "string",
-        "enum": [
-          "desktop",
-          "input"
-        ]
       },
       "outputSchema": {
         "type": "object",
@@ -11598,9 +11491,7 @@
         "language",
         "microphone-test",
         "local-models",
-        "recording-limit",
-        "shortcut-browser",
-        "shortcut-remap"
+        "recording-limit"
       ],
       "kind": "query",
       "risk": "read",
@@ -11638,7 +11529,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input"
+        "pageId": "application.voice"
       }
     },
     {
@@ -11682,7 +11573,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input"
+        "pageId": "application.voice"
       }
     },
     {
@@ -11733,7 +11624,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input"
+        "pageId": "application.voice"
       }
     },
     {
@@ -11779,7 +11670,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input"
+        "pageId": "application.voice"
       }
     },
     {
@@ -11825,8 +11716,7 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
@@ -11872,13 +11762,58 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       }
     },
     {
-      "id": "setting.application.input:open:shortcut-browser",
-      "capabilityId": "setting.application.input",
+      "id": "setting.application.shortcuts:query",
+      "capabilityId": "setting.application.shortcuts",
+      "itemIds": [
+        "shortcut-browser",
+        "shortcut-remap"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.shortcuts"
+      }
+    },
+    {
+      "id": "setting.application.shortcuts:open:shortcut-browser",
+      "capabilityId": "setting.application.shortcuts",
       "itemIds": [
         "shortcut-browser"
       ],
@@ -11919,13 +11854,12 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "shortcuts"
+        "pageId": "application.shortcuts"
       }
     },
     {
-      "id": "setting.application.input:open:shortcut-remap",
-      "capabilityId": "setting.application.input",
+      "id": "setting.application.shortcuts:open:shortcut-remap",
+      "capabilityId": "setting.application.shortcuts",
       "itemIds": [
         "shortcut-remap"
       ],
@@ -11966,16 +11900,13 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "shortcuts"
+        "pageId": "application.shortcuts"
       }
     },
     {
       "id": "setting.application.development:query",
       "capabilityId": "setting.application.development",
       "itemIds": [
-        "default-shell",
-        "terminal-position",
         "editor-appearance",
         "indent-wrap",
         "editor-display",
@@ -12017,99 +11948,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
-      }
-    },
-    {
-      "id": "setting.application.development:option:terminal-default-shell",
-      "capabilityId": "setting.application.development",
-      "itemIds": [
-        "default-shell"
-      ],
-      "kind": "option",
-      "risk": "write",
-      "executionHost": "productHost",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": true
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": true
-        }
-      },
-      "inputSchema": {
-        "type": "string"
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "valueSource": {
-        "kind": "static"
-      },
-      "presentationTarget": {
-        "kind": "settings",
-        "pageId": "application.development"
-      }
-    },
-    {
-      "id": "setting.application.development:option:terminal-panel-position",
-      "capabilityId": "setting.application.development",
-      "itemIds": [
-        "terminal-position"
-      ],
-      "kind": "option",
-      "risk": "write",
-      "executionHost": "productHost",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": true
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": true
-        }
-      },
-      "inputSchema": {
-        "type": "string",
-        "enum": [
-          "right",
-          "bottom"
-        ]
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "valueSource": {
-        "kind": "static"
-      },
-      "presentationTarget": {
-        "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12153,7 +11992,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12201,7 +12040,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12247,7 +12086,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12293,7 +12132,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12345,7 +12184,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12396,7 +12235,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12442,7 +12281,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12486,7 +12325,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12536,7 +12375,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12586,7 +12425,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12630,7 +12469,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12674,7 +12513,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12722,7 +12561,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12771,7 +12610,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12822,7 +12661,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12872,7 +12711,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12916,7 +12755,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -12966,7 +12805,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -13012,7 +12851,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -13056,7 +12895,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -13100,7 +12939,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -13144,7 +12983,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -13188,7 +13027,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -13232,7 +13071,7 @@
       },
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       }
     },
     {
@@ -15690,7 +15529,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.execution"
+        "pageId": "tools.execution",
+        "viewId": "common"
       }
     },
     {
@@ -15736,7 +15576,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.execution"
+        "pageId": "tools.execution",
+        "viewId": "common"
       }
     },
     {
@@ -15782,7 +15623,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.execution"
+        "pageId": "tools.execution",
+        "viewId": "common"
       }
     },
     {
@@ -15828,7 +15670,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.execution"
+        "pageId": "tools.execution",
+        "viewId": "advanced"
       }
     },
     {
@@ -15921,6 +15764,326 @@
       "presentationTarget": {
         "kind": "settings",
         "pageId": "tools.execution"
+      }
+    },
+    {
+      "id": "setting.application.terminal:query",
+      "capabilityId": "setting.application.terminal",
+      "itemIds": [
+        "default-shell",
+        "terminal-position"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.terminal"
+      }
+    },
+    {
+      "id": "setting.application.terminal:option:terminal-default-shell",
+      "capabilityId": "setting.application.terminal",
+      "itemIds": [
+        "default-shell"
+      ],
+      "kind": "option",
+      "risk": "write",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "string"
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.terminal"
+      }
+    },
+    {
+      "id": "setting.application.terminal:option:terminal-panel-position",
+      "capabilityId": "setting.application.terminal",
+      "itemIds": [
+        "terminal-position"
+      ],
+      "kind": "option",
+      "risk": "write",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "string",
+        "enum": [
+          "right",
+          "bottom"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.terminal"
+      }
+    },
+    {
+      "id": "setting.tools.desktop-control:query",
+      "capabilityId": "setting.tools.desktop-control",
+      "itemIds": [
+        "permissions"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.desktop-control"
+      }
+    },
+    {
+      "id": "setting.tools.desktop-control:open:permissions",
+      "capabilityId": "setting.tools.desktop-control",
+      "itemIds": [
+        "permissions"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "visualSelection",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.desktop-control"
+      }
+    },
+    {
+      "id": "setting.tools.browser-control:query",
+      "capabilityId": "setting.tools.browser-control",
+      "itemIds": [
+        "connection"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.browser-control"
+      }
+    },
+    {
+      "id": "setting.tools.browser-control:open:connection",
+      "capabilityId": "setting.tools.browser-control",
+      "itemIds": [
+        "connection"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "visualSelection",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "tools.browser-control"
       }
     },
     {
@@ -17187,7 +17350,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.acp"
+        "pageId": "tools.acp",
+        "viewId": "local"
       }
     },
     {
@@ -17233,7 +17397,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.acp"
+        "pageId": "tools.acp",
+        "viewId": "json"
       }
     },
     {
@@ -17279,7 +17444,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.acp"
+        "pageId": "tools.acp",
+        "viewId": "local"
       }
     },
     {
@@ -17325,7 +17491,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.acp"
+        "pageId": "tools.acp",
+        "viewId": "local"
       }
     },
     {
@@ -17371,7 +17538,8 @@
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.acp"
+        "pageId": "tools.acp",
+        "viewId": "ssh"
       }
     },
     {
@@ -23613,12 +23781,12 @@
         }
       ],
       "stepsZh": [
-        "打开输入设置的“语音”页",
+        "打开独立的语音设置页",
         "启用语音并准备模型",
         "在聊天输入框点击麦克风开始录音"
       ],
       "stepsEn": [
-        "Open the Voice input settings view",
+        "Open the standalone Voice settings page",
         "Enable voice and prepare a model",
         "Use the microphone button in the chat composer"
       ],
@@ -23632,8 +23800,7 @@
       ],
       "destination": {
         "kind": "settings",
-        "pageId": "application.input",
-        "viewId": "voice"
+        "pageId": "application.voice"
       },
       "operations": [],
       "options": [],
@@ -23698,8 +23865,8 @@
       "categoryId": "application",
       "titleZh": "Agent 桌面伙伴",
       "titleEn": "Agent desktop companion",
-      "summaryZh": "在输入框或桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。",
-      "summaryEn": "Show an agent companion in the composer or on the desktop, and choose, import, or manage Petdex character packs.",
+      "summaryZh": "在桌面上显示 Agent 伙伴，并选择、导入或管理 Petdex 角色包。",
+      "summaryEn": "Show an agent companion on the desktop, and choose, import, or manage Petdex character packs.",
       "keywordsZh": [
         "桌面宠物",
         "Agent 伙伴",
@@ -23715,12 +23882,12 @@
         "character pack"
       ],
       "highlightsZh": [
-        "在桌面或输入框显示伙伴",
+        "显示或隐藏桌面伙伴",
         "选择预设角色",
         "导入和删除 Petdex 包"
       ],
       "highlightsEn": [
-        "Show the companion on desktop or in the composer",
+        "Show or hide the desktop companion",
         "Choose a preset character",
         "Import and remove Petdex packs"
       ],
@@ -23736,33 +23903,12 @@
             ],
             "workflowZh": [
               "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-              "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+              "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
               "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
             ],
             "workflowEn": [
               "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-              "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
-              "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
-            ]
-          }
-        },
-        {
-          "id": "display-modes",
-          "titleZh": "选择在聊天输入框或独立桌面窗口显示",
-          "titleEn": "Show the companion in the chat composer or a desktop window",
-          "control": {
-            "kind": "delegate",
-            "tools": [
-              "BitFunControl"
-            ],
-            "workflowZh": [
-              "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-              "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
-              "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
-            ],
-            "workflowEn": [
-              "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-              "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+              "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
               "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
             ]
           }
@@ -23778,12 +23924,12 @@
             ],
             "workflowZh": [
               "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-              "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+              "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
               "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
             ],
             "workflowEn": [
               "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-              "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+              "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
               "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
             ]
           }
@@ -23799,12 +23945,12 @@
             ],
             "workflowZh": [
               "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-              "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+              "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
               "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
             ],
             "workflowEn": [
               "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-              "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+              "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
               "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
             ]
           }
@@ -23820,12 +23966,12 @@
             ],
             "workflowZh": [
               "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-              "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+              "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
               "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
             ],
             "workflowEn": [
               "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-              "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+              "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
               "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
             ]
           }
@@ -23844,24 +23990,24 @@
       ],
       "stepsZh": [
         "打开桌面伙伴设置",
-        "启用伙伴并选择显示位置",
+        "启用或停用桌面伙伴",
         "选择预设或导入 Petdex 包"
       ],
       "stepsEn": [
         "Open Companion settings",
-        "Enable it and choose where it appears",
+        "Enable or disable the desktop companion",
         "Choose a preset or import a Petdex pack"
       ],
       "agentControl": {
         "tool": "BitFunControl",
         "workflowZh": [
           "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-          "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+          "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
           "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功"
         ],
         "workflowEn": [
           "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-          "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+          "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
           "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit"
         ]
       },
@@ -23894,16 +24040,14 @@
         "agent companion",
         "pixel pet",
         "character pack",
-        "在桌面或输入框显示伙伴",
+        "显示或隐藏桌面伙伴",
         "选择预设角色",
         "导入和删除 Petdex 包",
-        "Show the companion on desktop or in the composer",
+        "Show or hide the desktop companion",
         "Choose a preset character",
         "Import and remove Petdex packs",
         "整体启用或停用 Agent 桌面伙伴",
         "Enable or disable the agent desktop companion globally",
-        "选择在聊天输入框或独立桌面窗口显示",
-        "Show the companion in the chat composer or a desktop window",
         "查看并切换内置或已导入的 Petdex 角色",
         "Browse and switch among built-in or imported Petdex characters",
         "从本地 Petdex 包导入并使用新的角色与动画",
@@ -23917,10 +24061,10 @@
         "Open desktop-pet settings",
         "Take me to agent-companion setup",
         "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
-        "用 configure 修改 `enabled` 或 `display-mode`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
+        "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
         "执行后再次 get 或 list-pets 回读真实状态；本地包路径不可用于远程工作区，失败时明确返回而不是伪成功",
         "Search for desktop pet, Petdex, or companion first, then get `setting.application.pet` for current options and supported operations",
-        "Use configure for `enabled` or `display-mode`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
+        "Use configure for `enabled`, and execute `list-pets`, `use-pet`, or `delete-pet` to inspect, import/select, or remove a character",
         "Read back the real state with get or list-pets; local package paths are unavailable to remote workspaces and failures must be explicit",
         "BitFunControl"
       ],
@@ -24510,14 +24654,13 @@
       "categoryId": "application",
       "titleZh": "桌面伙伴设置",
       "titleEn": "Companion settings",
-      "summaryZh": "启用 Agent 伙伴、选择显示位置，并管理当前角色。",
-      "summaryEn": "Enable the agent companion, choose where it appears, and manage the active character.",
+      "summaryZh": "启用桌面 Agent 伙伴并管理当前角色。",
+      "summaryEn": "Enable the desktop agent companion and manage the active character.",
       "keywordsZh": [
         "桌面伙伴设置",
         "桌面宠物",
         "萌宠",
         "吉祥物",
-        "显示位置",
         "Petdex"
       ],
       "keywordsEn": [
@@ -24525,17 +24668,14 @@
         "desktop pet",
         "pet",
         "mascot",
-        "display location",
         "Petdex"
       ],
       "highlightsZh": [
         "启用或停用伙伴",
-        "桌面与输入框显示模式",
         "角色选择与 Petdex 导入"
       ],
       "highlightsEn": [
         "Enable or disable the companion",
-        "Desktop and composer display modes",
         "Character selection and Petdex import"
       ],
       "items": [
@@ -24549,36 +24689,6 @@
             "options": [
               {
                 "id": "enabled"
-              }
-            ]
-          }
-        },
-        {
-          "id": "composer-display",
-          "titleZh": "控制伙伴是否显示在聊天输入框旁",
-          "titleEn": "Choose whether the companion appears beside the chat composer",
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "display-mode",
-                "value": "input"
-              }
-            ]
-          }
-        },
-        {
-          "id": "desktop-display",
-          "titleZh": "控制伙伴是否显示为独立桌面窗口",
-          "titleEn": "Choose whether the companion appears as a standalone desktop window",
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "display-mode",
-                "value": "desktop"
               }
             ]
           }
@@ -24625,12 +24735,12 @@
       "stepsZh": [
         "打开设置",
         "进入“应用 > 桌面伙伴”",
-        "选择开关、位置和角色"
+        "选择开关和角色"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Application > Companion",
-        "Choose its state, location, and character"
+        "Choose its state and character"
       ],
       "agentExamplesZh": [
         "关闭桌面伙伴",
@@ -24768,27 +24878,6 @@
               "enable_agent_companion"
             ]
           }
-        },
-        {
-          "id": "display-mode",
-          "titleZh": "显示位置",
-          "titleEn": "Display location",
-          "descriptionZh": "在桌面或聊天输入框中显示。",
-          "descriptionEn": "Show on the desktop or in the chat composer.",
-          "valueSchema": {
-            "type": "string",
-            "enum": [
-              "desktop",
-              "input"
-            ]
-          },
-          "handler": {
-            "kind": "mergeConfig",
-            "path": "app.ai_experience",
-            "fields": [
-              "agent_companion_display_mode"
-            ]
-          }
         }
       ],
       "searchTerms": [
@@ -24800,25 +24889,17 @@
         "桌面宠物",
         "萌宠",
         "吉祥物",
-        "显示位置",
         "Petdex",
         "companion settings",
         "desktop pet",
         "pet",
         "mascot",
-        "display location",
         "启用或停用伙伴",
-        "桌面与输入框显示模式",
         "角色选择与 Petdex 导入",
         "Enable or disable the companion",
-        "Desktop and composer display modes",
         "Character selection and Petdex import",
         "整体启用或停用 Agent 伙伴",
         "Enable or disable the agent companion",
-        "控制伙伴是否显示在聊天输入框旁",
-        "Choose whether the companion appears beside the chat composer",
-        "控制伙伴是否显示为独立桌面窗口",
-        "Choose whether the companion appears as a standalone desktop window",
         "从内置与已导入角色中选择当前伙伴",
         "Choose the active companion from built-in and imported characters",
         "导入本地 Petdex 角色包",
@@ -24836,35 +24917,33 @@
       "id": "setting.application.input",
       "kind": "setting",
       "categoryId": "application",
-      "titleZh": "输入与快捷键",
-      "titleEn": "Input & shortcuts",
-      "summaryZh": "配置语音输入、麦克风、识别语言以及键盘快捷键。",
-      "summaryEn": "Configure voice input, microphone, recognition language, and keyboard shortcuts.",
+      "titleZh": "语音",
+      "titleEn": "Voice",
+      "summaryZh": "配置语音输入、麦克风、识别语言、本地模型与实时语音通话。",
+      "summaryEn": "Configure voice input, microphones, recognition language, local models, and realtime voice calls.",
       "keywordsZh": [
-        "输入设置",
+        "语音设置",
         "语音",
         "麦克风",
-        "快捷键",
-        "热键",
-        "键位"
+        "听写",
+        "语音识别"
       ],
       "keywordsEn": [
-        "input settings",
+        "voice settings",
         "voice",
         "microphone",
-        "shortcut",
-        "hotkey",
-        "keybinding"
+        "dictation",
+        "speech recognition"
       ],
       "highlightsZh": [
         "语音输入与本地模型",
         "识别语言和最长录音时间",
-        "应用与编辑器快捷键"
+        "实时语音通话"
       ],
       "highlightsEn": [
         "Voice input and local models",
         "Recognition language and maximum recording time",
-        "App and editor shortcuts"
+        "Realtime voice calls"
       ],
       "items": [
         {
@@ -24873,8 +24952,7 @@
           "titleEn": "Enable or disable voice input in the chat composer",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "direct",
@@ -24892,8 +24970,7 @@
           "titleEn": "Choose automatic detection or Chinese, Cantonese, English, Japanese, and other recognition languages",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "direct",
@@ -24911,8 +24988,7 @@
           "titleEn": "Choose a microphone and run a speech-recognition test",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "open",
@@ -24927,8 +25003,7 @@
           "titleEn": "Download, select, verify, repair, or delete local speech models",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "open",
@@ -24943,8 +25018,7 @@
           "titleEn": "Set the maximum duration of one voice-input recording",
           "destination": {
             "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "voice"
+            "pageId": "application.voice"
           },
           "control": {
             "kind": "direct",
@@ -24955,61 +25029,27 @@
               }
             ]
           }
-        },
-        {
-          "id": "shortcut-browser",
-          "titleZh": "搜索和查看全部应用、场景、编辑器与终端快捷键",
-          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "shortcuts"
-          },
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“搜索和查看全部应用、场景、编辑器与终端快捷键”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Search and browse all app, scene, editor, and terminal shortcuts” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          }
-        },
-        {
-          "id": "shortcut-remap",
-          "titleZh": "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
-          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.input",
-            "viewId": "shortcuts"
-          },
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“录制新快捷键、检测冲突、恢复单项或重置全部自定义键位”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          }
         }
       ],
       "stepsZh": [
         "打开设置",
-        "进入“应用 > 输入”",
-        "切换“语音”或“快捷键”视图"
+        "进入“应用与界面 > 语音”"
       ],
       "stepsEn": [
         "Open Settings",
-        "Go to Application > Input",
-        "Switch between Voice and Shortcuts"
+        "Go to App & Interface > Voice"
       ],
       "agentExamplesZh": [
-        "打开快捷键设置",
+        "打开语音输入设置",
         "把语音输入的默认语言设为中文"
       ],
       "agentExamplesEn": [
-        "Open keyboard-shortcut settings",
+        "Open voice-input settings",
         "Set the voice-input language to Chinese"
       ],
       "destination": {
         "kind": "settings",
-        "pageId": "application.input"
+        "pageId": "application.voice"
       },
       "operations": [],
       "options": [
@@ -25076,28 +25116,25 @@
       ],
       "searchTerms": [
         "setting.application.input",
-        "输入与快捷键",
-        "Input & shortcuts",
+        "语音",
+        "Voice",
         "应用设置",
         "Application settings",
-        "输入设置",
-        "语音",
+        "语音设置",
         "麦克风",
-        "快捷键",
-        "热键",
-        "键位",
-        "input settings",
+        "听写",
+        "语音识别",
+        "voice settings",
         "voice",
         "microphone",
-        "shortcut",
-        "hotkey",
-        "keybinding",
+        "dictation",
+        "speech recognition",
         "语音输入与本地模型",
         "识别语言和最长录音时间",
-        "应用与编辑器快捷键",
+        "实时语音通话",
         "Voice input and local models",
         "Recognition language and maximum recording time",
-        "App and editor shortcuts",
+        "Realtime voice calls",
         "在聊天输入框启用或停用语音输入",
         "Enable or disable voice input in the chat composer",
         "选择自动检测或中文、粤语、英文、日文等识别语言",
@@ -25108,28 +25145,133 @@
         "Download, select, verify, repair, or delete local speech models",
         "设置单次语音输入的最长录音时间",
         "Set the maximum duration of one voice-input recording",
-        "搜索和查看全部应用、场景、编辑器与终端快捷键",
-        "Search and browse all app, scene, editor, and terminal shortcuts",
-        "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
-        "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
-        "打开快捷键设置",
+        "打开语音输入设置",
         "把语音输入的默认语言设为中文",
-        "Open keyboard-shortcut settings",
+        "Open voice-input settings",
         "Set the voice-input language to Chinese"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.input/"
     },
     {
+      "id": "setting.application.shortcuts",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "快捷键",
+      "titleEn": "Keyboard shortcuts",
+      "summaryZh": "搜索、查看、自定义与重置应用、场景、编辑器和终端快捷键。",
+      "summaryEn": "Search, browse, customize, and reset app, scene, editor, and terminal shortcuts.",
+      "keywordsZh": [
+        "快捷键",
+        "热键",
+        "键位",
+        "键盘"
+      ],
+      "keywordsEn": [
+        "keyboard shortcuts",
+        "shortcut",
+        "hotkey",
+        "keybinding"
+      ],
+      "highlightsZh": [
+        "全部快捷键浏览与搜索",
+        "键位录制与冲突检测",
+        "单项恢复与全部重置"
+      ],
+      "highlightsEn": [
+        "Browse and search every shortcut",
+        "Key recording and conflict detection",
+        "Individual revert and full reset"
+      ],
+      "items": [
+        {
+          "id": "shortcut-browser",
+          "titleZh": "搜索和查看全部应用、场景、编辑器与终端快捷键",
+          "titleEn": "Search and browse all app, scene, editor, and terminal shortcuts",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.shortcuts"
+          },
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“搜索和查看全部应用、场景、编辑器与终端快捷键”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Search and browse all app, scene, editor, and terminal shortcuts” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+          }
+        },
+        {
+          "id": "shortcut-remap",
+          "titleZh": "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
+          "titleEn": "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
+          "destination": {
+            "kind": "settings",
+            "pageId": "application.shortcuts"
+          },
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“录制新快捷键、检测冲突、恢复单项或重置全部自定义键位”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+          }
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用与界面 > 快捷键”"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to App & Interface > Keyboard Shortcuts"
+      ],
+      "agentExamplesZh": [
+        "打开快捷键设置"
+      ],
+      "agentExamplesEn": [
+        "Open keyboard-shortcut settings"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.shortcuts"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.application.shortcuts",
+        "快捷键",
+        "Keyboard shortcuts",
+        "应用设置",
+        "Application settings",
+        "热键",
+        "键位",
+        "键盘",
+        "keyboard shortcuts",
+        "shortcut",
+        "hotkey",
+        "keybinding",
+        "全部快捷键浏览与搜索",
+        "键位录制与冲突检测",
+        "单项恢复与全部重置",
+        "Browse and search every shortcut",
+        "Key recording and conflict detection",
+        "Individual revert and full reset",
+        "搜索和查看全部应用、场景、编辑器与终端快捷键",
+        "Search and browse all app, scene, editor, and terminal shortcuts",
+        "录制新快捷键、检测冲突、恢复单项或重置全部自定义键位",
+        "Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings",
+        "打开快捷键设置",
+        "Open keyboard-shortcut settings"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.shortcuts/"
+    },
+    {
       "id": "setting.application.development",
       "kind": "setting",
       "categoryId": "application",
-      "titleZh": "终端与编辑器设置",
-      "titleEn": "Terminal & editor settings",
-      "summaryZh": "选择默认 Shell，并调整代码编辑器的字体、缩进、换行、格式化与 Minimap。",
-      "summaryEn": "Choose the default shell and tune editor font, indentation, wrapping, formatting, and minimap behavior.",
+      "titleZh": "编辑器",
+      "titleEn": "Editor",
+      "summaryZh": "调整代码编辑器的字体、缩进、换行、格式化与 Minimap。",
+      "summaryEn": "Tune code editor font, indentation, wrapping, formatting, and minimap behavior.",
       "keywordsZh": [
         "开发设置",
-        "默认 Shell",
         "编辑器",
         "字体大小",
         "缩进",
@@ -25138,7 +25280,6 @@
       ],
       "keywordsEn": [
         "development settings",
-        "default shell",
         "editor",
         "font size",
         "indentation",
@@ -25146,62 +25287,23 @@
         "minimap"
       ],
       "highlightsZh": [
-        "默认终端 Shell",
+        "编辑器外观与光标",
         "编辑器字号与缩进",
         "自动换行、格式化和 Minimap"
       ],
       "highlightsEn": [
-        "Default terminal shell",
+        "Editor appearance and cursor",
         "Editor font size and indentation",
         "Word wrapping, formatting, and minimap"
       ],
       "items": [
-        {
-          "id": "default-shell",
-          "titleZh": "自动检测或指定默认终端 Shell",
-          "titleEn": "Auto-detect or choose the default terminal shell",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "terminal"
-          },
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "terminal-default-shell"
-              }
-            ]
-          }
-        },
-        {
-          "id": "terminal-position",
-          "titleZh": "把终端面板放在右侧或底部",
-          "titleEn": "Place the terminal panel on the right or at the bottom",
-          "destination": {
-            "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "terminal"
-          },
-          "control": {
-            "kind": "direct",
-            "operations": [],
-            "options": [
-              {
-                "id": "terminal-panel-position"
-              }
-            ]
-          }
-        },
         {
           "id": "editor-appearance",
           "titleZh": "设置编辑器字体、字重、字号、行高与光标样式",
           "titleEn": "Configure editor font, weight, size, line height, and cursor behavior",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -25234,8 +25336,7 @@
           "titleEn": "Configure tab size, space indentation, word wrapping, line numbers, and smooth scrolling",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -25265,8 +25366,7 @@
           "titleEn": "Control the minimap, whitespace rendering, current-line highlight, and scroll bounds",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -25299,8 +25399,7 @@
           "titleEn": "Control autosave, semantic highlighting, bracket colors, formatting, and whitespace trimming",
           "destination": {
             "kind": "settings",
-            "pageId": "application.development",
-            "viewId": "editor"
+            "pageId": "application.editor"
           },
           "control": {
             "kind": "direct",
@@ -25333,60 +25432,24 @@
       ],
       "stepsZh": [
         "打开设置",
-        "进入“应用 > 开发”",
-        "切换“终端”或“编辑器”视图"
+        "进入“应用与界面 > 编辑器”"
       ],
       "stepsEn": [
         "Open Settings",
-        "Go to Application > Development",
-        "Switch between Terminal and Editor"
+        "Go to App & Interface > Editor"
       ],
       "agentExamplesZh": [
-        "把编辑器字号改成 15",
-        "打开终端设置"
+        "把编辑器字号改成 15"
       ],
       "agentExamplesEn": [
-        "Set the editor font size to 15",
-        "Open terminal settings"
+        "Set the editor font size to 15"
       ],
       "destination": {
         "kind": "settings",
-        "pageId": "application.development"
+        "pageId": "application.editor"
       },
       "operations": [],
       "options": [
-        {
-          "id": "terminal-default-shell",
-          "titleZh": "默认终端 Shell",
-          "titleEn": "Default terminal shell",
-          "descriptionZh": "设置 Shell 路径；空字符串表示自动检测。",
-          "descriptionEn": "Set the shell path; an empty string enables automatic detection.",
-          "valueSchema": {
-            "type": "string"
-          },
-          "handler": {
-            "kind": "config",
-            "path": "terminal.default_shell"
-          }
-        },
-        {
-          "id": "terminal-panel-position",
-          "titleZh": "终端面板位置",
-          "titleEn": "Terminal panel position",
-          "descriptionZh": "把终端面板放在右侧或底部。",
-          "descriptionEn": "Place the terminal panel on the right or at the bottom.",
-          "valueSchema": {
-            "type": "string",
-            "enum": [
-              "right",
-              "bottom"
-            ]
-          },
-          "handler": {
-            "kind": "config",
-            "path": "terminal.terminal_panel_position"
-          }
-        },
         {
           "id": "editor-font-family",
           "titleZh": "编辑器字体",
@@ -25793,34 +25856,27 @@
       ],
       "searchTerms": [
         "setting.application.development",
-        "终端与编辑器设置",
-        "Terminal & editor settings",
+        "编辑器",
+        "Editor",
         "应用设置",
         "Application settings",
         "开发设置",
-        "默认 Shell",
-        "编辑器",
         "字体大小",
         "缩进",
         "自动换行",
         "Minimap",
         "development settings",
-        "default shell",
         "editor",
         "font size",
         "indentation",
         "word wrap",
         "minimap",
-        "默认终端 Shell",
+        "编辑器外观与光标",
         "编辑器字号与缩进",
         "自动换行、格式化和 Minimap",
-        "Default terminal shell",
+        "Editor appearance and cursor",
         "Editor font size and indentation",
         "Word wrapping, formatting, and minimap",
-        "自动检测或指定默认终端 Shell",
-        "Auto-detect or choose the default terminal shell",
-        "把终端面板放在右侧或底部",
-        "Place the terminal panel on the right or at the bottom",
         "设置编辑器字体、字重、字号、行高与光标样式",
         "Configure editor font, weight, size, line height, and cursor behavior",
         "设置 Tab 宽度、空格缩进、自动换行、行号与平滑滚动",
@@ -25830,9 +25886,7 @@
         "控制自动保存、语义高亮、括号配色、格式化和空白清理",
         "Control autosave, semantic highlighting, bracket colors, formatting, and whitespace trimming",
         "把编辑器字号改成 15",
-        "打开终端设置",
-        "Set the editor font size to 15",
-        "Open terminal settings"
+        "Set the editor font size to 15"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.development/"
     },
@@ -27085,6 +27139,11 @@
           "id": "permission-mode",
           "titleZh": "选择询问、自动批准或完全访问权限模式，并确认高风险警告",
           "titleEn": "Choose Ask, Auto-approve, or Full Access permission mode and acknowledge high-risk warnings",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -27096,6 +27155,11 @@
           "id": "permission-selector",
           "titleZh": "控制权限模式选择器是否显示在聊天输入框下方",
           "titleEn": "Choose whether the permission-mode selector appears below the chat composer",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -27110,6 +27174,11 @@
           "id": "global-project-rules",
           "titleZh": "创建、排序和保存全局或项目级 Allow、Ask、Deny 规则",
           "titleEn": "Create, reorder, and save global or project-level Allow, Ask, and Deny rules",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -27121,6 +27190,11 @@
           "id": "remembered-grants",
           "titleZh": "查看、撤销或清空项目中记住的权限授权与审计记录",
           "titleEn": "Review, revoke, or clear remembered project permission grants and audit records",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "common"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -27132,6 +27206,11 @@
           "id": "deferred-tools",
           "titleZh": "按需延迟加载工具定义以减少 Agent 初始上下文",
           "titleEn": "Deferred tool loading on demand to reduce initial agent context",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -27146,6 +27225,11 @@
           "id": "parallelism",
           "titleZh": "设置子 Agent 与 Swarm 最大并发及安全、强制并行或串行策略",
           "titleEn": "Set subagent and swarm concurrency plus safe-only, forced-parallel, or serial policy",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -27166,6 +27250,11 @@
           "id": "timeouts",
           "titleZh": "设置或取消单次工具调用超时",
           "titleEn": "Set or disable the per-tool execution timeout",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -27180,6 +27269,11 @@
           "id": "review-capacity",
           "titleZh": "设置 Deep Review 最大并行评审者和队列等待时间",
           "titleEn": "Set the maximum parallel Deep Review workers and queue wait time",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -27241,6 +27335,11 @@
           "id": "json-repair",
           "titleZh": "控制是否在安全边界内修复模型生成的非法工具参数 JSON",
           "titleEn": "Choose whether malformed model-generated tool-argument JSON may be repaired within safety boundaries",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.execution",
+            "viewId": "advanced"
+          },
           "control": {
             "kind": "direct",
             "operations": [],
@@ -27481,6 +27580,357 @@
         "Open permission settings"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.execution/"
+    },
+    {
+      "id": "setting.application.terminal",
+      "kind": "setting",
+      "categoryId": "application",
+      "titleZh": "终端",
+      "titleEn": "Terminal",
+      "summaryZh": "选择默认终端 Shell，并设置新终端面板在会话中的打开位置。",
+      "summaryEn": "Choose the default terminal shell and where new terminal panels open in a session.",
+      "keywordsZh": [
+        "终端设置",
+        "终端",
+        "默认 Shell",
+        "PowerShell",
+        "终端面板",
+        "面板位置"
+      ],
+      "keywordsEn": [
+        "terminal settings",
+        "terminal",
+        "default shell",
+        "PowerShell",
+        "terminal panel",
+        "panel position"
+      ],
+      "highlightsZh": [
+        "自动检测或选择默认 Shell",
+        "右侧或底部终端面板",
+        "Agent 与本地工作区共用 Shell 偏好"
+      ],
+      "highlightsEn": [
+        "Auto-detect or choose a default shell",
+        "Right-side or bottom terminal panel",
+        "Shared shell preference for agents and local workspaces"
+      ],
+      "items": [
+        {
+          "id": "default-shell",
+          "titleZh": "自动检测或指定默认终端 Shell",
+          "titleEn": "Auto-detect or choose the default terminal shell",
+          "control": {
+            "kind": "direct",
+            "operations": [],
+            "options": [
+              {
+                "id": "terminal-default-shell"
+              }
+            ]
+          }
+        },
+        {
+          "id": "terminal-position",
+          "titleZh": "把终端面板放在右侧或底部",
+          "titleEn": "Place the terminal panel on the right or at the bottom",
+          "control": {
+            "kind": "direct",
+            "operations": [],
+            "options": [
+              {
+                "id": "terminal-panel-position"
+              }
+            ]
+          }
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“应用与界面 > 终端”"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to App & Interface > Terminal"
+      ],
+      "agentExamplesZh": [
+        "打开终端设置",
+        "把终端面板放到底部"
+      ],
+      "agentExamplesEn": [
+        "Open terminal settings",
+        "Move the terminal panel to the bottom"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "application.terminal"
+      },
+      "operations": [],
+      "options": [
+        {
+          "id": "terminal-default-shell",
+          "titleZh": "默认终端 Shell",
+          "titleEn": "Default terminal shell",
+          "descriptionZh": "设置 Shell 路径；空字符串表示自动检测。",
+          "descriptionEn": "Set the shell path; an empty string enables automatic detection.",
+          "valueSchema": {
+            "type": "string"
+          },
+          "handler": {
+            "kind": "config",
+            "path": "terminal.default_shell"
+          }
+        },
+        {
+          "id": "terminal-panel-position",
+          "titleZh": "终端面板位置",
+          "titleEn": "Terminal panel position",
+          "descriptionZh": "把终端面板放在右侧或底部。",
+          "descriptionEn": "Place the terminal panel on the right or at the bottom.",
+          "valueSchema": {
+            "type": "string",
+            "enum": [
+              "right",
+              "bottom"
+            ]
+          },
+          "handler": {
+            "kind": "config",
+            "path": "terminal.terminal_panel_position"
+          }
+        }
+      ],
+      "searchTerms": [
+        "setting.application.terminal",
+        "终端",
+        "Terminal",
+        "应用设置",
+        "Application settings",
+        "终端设置",
+        "默认 Shell",
+        "PowerShell",
+        "终端面板",
+        "面板位置",
+        "terminal settings",
+        "terminal",
+        "default shell",
+        "terminal panel",
+        "panel position",
+        "自动检测或选择默认 Shell",
+        "右侧或底部终端面板",
+        "Agent 与本地工作区共用 Shell 偏好",
+        "Auto-detect or choose a default shell",
+        "Right-side or bottom terminal panel",
+        "Shared shell preference for agents and local workspaces",
+        "自动检测或指定默认终端 Shell",
+        "Auto-detect or choose the default terminal shell",
+        "把终端面板放在右侧或底部",
+        "Place the terminal panel on the right or at the bottom",
+        "打开终端设置",
+        "把终端面板放到底部",
+        "Open terminal settings",
+        "Move the terminal panel to the bottom"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.application.terminal/"
+    },
+    {
+      "id": "setting.tools.desktop-control",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "桌面控制",
+      "titleEn": "Desktop control",
+      "summaryZh": "管理 Computer Use 开关，并检查辅助功能与屏幕录制授权。",
+      "summaryEn": "Manage Computer Use and inspect accessibility and screen-recording permissions.",
+      "keywordsZh": [
+        "桌面控制",
+        "Computer Use",
+        "辅助功能",
+        "屏幕录制",
+        "系统授权"
+      ],
+      "keywordsEn": [
+        "desktop control",
+        "computer use",
+        "accessibility",
+        "screen recording",
+        "system permissions"
+      ],
+      "highlightsZh": [
+        "单独控制桌面操作能力",
+        "查看当前系统授权状态",
+        "前往系统设置完成必要授权"
+      ],
+      "highlightsEn": [
+        "Control desktop interaction separately",
+        "Inspect current operating-system grants",
+        "Open system settings for required permissions"
+      ],
+      "items": [
+        {
+          "id": "permissions",
+          "titleZh": "查看 Computer Use、辅助功能与屏幕录制状态并完成系统授权",
+          "titleEn": "Inspect Computer Use, accessibility, and screen-recording status and complete system authorization",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "操作系统权限必须由用户在系统界面中确认；Agent 会打开独立的桌面控制页，并保留系统授权步骤给用户完成。",
+            "reasonEn": "Operating-system permissions require confirmation in system UI; the Agent opens the dedicated Desktop Control page and leaves authorization visible to the user."
+          }
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 桌面控制”",
+        "检查开关和系统授权状态"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Desktop Control",
+        "Inspect the toggle and operating-system grants"
+      ],
+      "agentExamplesZh": [
+        "打开桌面控制设置",
+        "检查 Computer Use 权限"
+      ],
+      "agentExamplesEn": [
+        "Open Desktop Control settings",
+        "Check Computer Use permissions"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.desktop-control"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.tools.desktop-control",
+        "桌面控制",
+        "Desktop control",
+        "AI 与协作",
+        "AI & collaboration",
+        "Computer Use",
+        "辅助功能",
+        "屏幕录制",
+        "系统授权",
+        "desktop control",
+        "computer use",
+        "accessibility",
+        "screen recording",
+        "system permissions",
+        "单独控制桌面操作能力",
+        "查看当前系统授权状态",
+        "前往系统设置完成必要授权",
+        "Control desktop interaction separately",
+        "Inspect current operating-system grants",
+        "Open system settings for required permissions",
+        "查看 Computer Use、辅助功能与屏幕录制状态并完成系统授权",
+        "Inspect Computer Use, accessibility, and screen-recording status and complete system authorization",
+        "打开桌面控制设置",
+        "检查 Computer Use 权限",
+        "Open Desktop Control settings",
+        "Check Computer Use permissions"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.desktop-control/"
+    },
+    {
+      "id": "setting.tools.browser-control",
+      "kind": "setting",
+      "categoryId": "assistant",
+      "titleZh": "浏览器控制",
+      "titleEn": "Browser control",
+      "summaryZh": "选择浏览器，检查连接状态，并配置 CDP 与启动连接行为。",
+      "summaryEn": "Choose a browser, inspect connection status, and configure CDP and startup connection behavior.",
+      "keywordsZh": [
+        "浏览器控制",
+        "浏览器连接",
+        "CDP",
+        "Chrome",
+        "Edge",
+        "远程调试"
+      ],
+      "keywordsEn": [
+        "browser control",
+        "browser connection",
+        "CDP",
+        "Chrome",
+        "Edge",
+        "remote debugging"
+      ],
+      "highlightsZh": [
+        "选择受支持的浏览器",
+        "查看连接与页面状态",
+        "配置现有浏览器和启动连接"
+      ],
+      "highlightsEn": [
+        "Choose a supported browser",
+        "Inspect connection and page status",
+        "Configure existing-browser and startup connection behavior"
+      ],
+      "items": [
+        {
+          "id": "connection",
+          "titleZh": "选择浏览器并查看、建立或断开 CDP 连接",
+          "titleEn": "Choose a browser and inspect, establish, or disconnect its CDP connection",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "浏览器与 CDP 状态来自当前执行主机，并可能需要浏览器确认或重启；Agent 会打开独立的浏览器控制页供用户完成。",
+            "reasonEn": "Browser and CDP state comes from the current execution host and may require browser confirmation or restart; the Agent opens the dedicated Browser Control page for completion."
+          }
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“工具 > 浏览器控制”",
+        "选择浏览器并检查连接状态"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Tools > Browser Control",
+        "Choose a browser and inspect its connection status"
+      ],
+      "agentExamplesZh": [
+        "打开浏览器控制设置",
+        "检查浏览器连接"
+      ],
+      "agentExamplesEn": [
+        "Open Browser Control settings",
+        "Check the browser connection"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "tools.browser-control"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.tools.browser-control",
+        "浏览器控制",
+        "Browser control",
+        "AI 与协作",
+        "AI & collaboration",
+        "浏览器连接",
+        "CDP",
+        "Chrome",
+        "Edge",
+        "远程调试",
+        "browser control",
+        "browser connection",
+        "remote debugging",
+        "选择受支持的浏览器",
+        "查看连接与页面状态",
+        "配置现有浏览器和启动连接",
+        "Choose a supported browser",
+        "Inspect connection and page status",
+        "Configure existing-browser and startup connection behavior",
+        "选择浏览器并查看、建立或断开 CDP 连接",
+        "Choose a browser and inspect, establish, or disconnect its CDP connection",
+        "打开浏览器控制设置",
+        "检查浏览器连接",
+        "Open Browser Control settings",
+        "Check the browser connection"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.tools.browser-control/"
     },
     {
       "id": "setting.tools.automation",
@@ -28207,6 +28657,11 @@
           "id": "presets",
           "titleZh": "使用 OpenCode、dsh、OMP、Claude Code 和 Codex 等预设",
           "titleEn": "Use presets for OpenCode, dsh, OMP, Claude Code, Codex, and others",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "local"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -28218,6 +28673,11 @@
           "id": "json-config",
           "titleZh": "通过 JSON 查看、添加和保存 ACP Agent 配置",
           "titleEn": "View, add, and save ACP agent configuration through JSON",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "json"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -28229,6 +28689,11 @@
           "id": "probe",
           "titleZh": "探测 CLI、适配器、路径、版本、连接与权限要求",
           "titleEn": "Probe CLI, adapter, path, version, connection, and permission requirements",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "local"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -28240,6 +28705,11 @@
           "id": "install",
           "titleZh": "安装外部 Agent CLI 并预下载 ACP 客户端适配器",
           "titleEn": "Install external-agent CLIs and predownload ACP client adapters",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "local"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
@@ -28251,6 +28721,11 @@
           "id": "remote-detection",
           "titleZh": "在 SSH 远程工作区探测可用外部 Agent 并显示不支持原因",
           "titleEn": "Detect available external agents in SSH workspaces and show explicit unsupported reasons",
+          "destination": {
+            "kind": "settings",
+            "pageId": "tools.acp",
+            "viewId": "ssh"
+          },
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",

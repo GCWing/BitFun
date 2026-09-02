@@ -24,4 +24,15 @@ describe('Memory settings presentation', () => {
     expect(advancedSection).toContain('aria-expanded={advancedOpen}');
     expect(advancedSection).toContain('{advancedOpen && (');
   });
+
+  it('groups header actions in a labelled menu and keeps clearing memory destructive', () => {
+    const source = readSource();
+
+    expect(source).toContain('<MenuPopover');
+    expect(source).toContain("{t('actions.menu')}");
+    expect(source).toContain("id: 'open-directory'");
+    expect(source).toContain("id: 'reset-settings'");
+    expect(source).toContain("id: 'clear-memory'");
+    expect(source).toContain("tone: 'danger'");
+  });
 });

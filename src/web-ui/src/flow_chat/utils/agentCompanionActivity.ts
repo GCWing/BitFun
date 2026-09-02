@@ -1,7 +1,7 @@
 import { FlowChatStore } from '../store/FlowChatStore';
 import { stateMachineManager } from '../state-machine/SessionStateMachineManager';
 import { ProcessingPhase, type SessionStateMachine } from '../state-machine/types';
-import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMood';
+import { deriveAgentCompanionMood, type AgentCompanionMood } from './agentCompanionMood';
 import type { DialogTurn, FlowToolItem, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
 import { resolveSessionRelationship } from './sessionMetadata';
 import { toWellFormedText } from '@/shared/utils/wellFormedText';
@@ -22,7 +22,7 @@ export type AgentCompanionTaskState =
 export interface AgentCompanionTaskStatus {
   sessionId: string;
   title: string;
-  mood: ChatInputPetMood;
+  mood: AgentCompanionMood;
   state: AgentCompanionTaskState;
   labelKey: string;
   defaultLabel: string;
@@ -38,7 +38,7 @@ export interface AgentCompanionTaskStatus {
 }
 
 export interface AgentCompanionActivityPayload {
-  mood: ChatInputPetMood;
+  mood: AgentCompanionMood;
   tasks: AgentCompanionTaskStatus[];
   sequence?: number;
   emittedAt?: number;
@@ -303,7 +303,7 @@ function completionTask(session: Session): AgentCompanionTaskStatus | null {
   const base = {
     sessionId: session.sessionId,
     title: sessionTitle(session),
-    mood: 'rest' as ChatInputPetMood,
+    mood: 'rest' as AgentCompanionMood,
     latestOutput: latestAssistantSnippet(session.dialogTurns[session.dialogTurns.length - 1]),
     startedAt: session.lastFinishedAt || session.updatedAt || session.lastActiveAt || session.createdAt,
     updatedAt: session.lastFinishedAt || session.updatedAt || session.lastActiveAt || session.createdAt,
@@ -339,7 +339,7 @@ function taskStableOrder(task: AgentCompanionTaskStatus): number {
   return ensureTaskOrder(task.sessionId);
 }
 
-function aggregateMood(tasks: AgentCompanionTaskStatus[]): ChatInputPetMood {
+function aggregateMood(tasks: AgentCompanionTaskStatus[]): AgentCompanionMood {
   if (tasks.some(task => task.mood === 'waiting')) {
     return 'waiting';
   }
@@ -368,7 +368,7 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
   sessions.forEach(session => {
     const snapshot = stateMachineManager.getSnapshot(session.sessionId);
     const mood = hasActiveTrackedTurn(session, snapshot)
-      ? deriveChatInputPetMood(snapshot)
+      ? deriveAgentCompanionMood(snapshot)
       : 'rest';
     const canReply = resolveSessionRelationship(session).kind === 'normal';
 

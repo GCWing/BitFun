@@ -106,16 +106,13 @@
     "trimAutoWhitespaceDesc": "Remove trailing whitespace on save"
   },
   "actions": {
-    "reset": "Reset to Default",
-    "save": "Save Settings",
-    "saveDesc": "Reset editor config to default values"
+    "reset": "Restore defaults"
   },
   "messages": {
     "loading": "Loading...",
     "loadFailed": "Failed to load configuration",
     "loadFailedLocked": "Editor settings could not be read. This page is locked to avoid overwriting the current configuration with defaults.",
     "retry": "Reload",
-    "saving": "Saving...",
     "saveSuccess": "Config saved, open editors will update",
     "saveFailed": "Failed to save configuration",
     "confirmReset": "Are you sure you want to reset editor config to defaults?",

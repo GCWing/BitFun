@@ -1217,7 +1217,7 @@ mod tests {
             .permission_intents(
                 &json!({
                     "action": "open",
-                    "capability_id": "setting.application.input",
+                    "capability_id": "setting.application.shortcuts",
                     "item_id": "shortcut-browser"
                 }),
                 &context(),
@@ -1225,7 +1225,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             open_intents[0].resources,
-            vec!["open:setting.application.input:shortcut-browser"]
+            vec!["open:setting.application.shortcuts:shortcut-browser"]
         );
 
         let read_operation = json!({

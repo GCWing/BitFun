@@ -448,10 +448,8 @@ pub struct AIExperienceConfig {
     pub enable_welcome_panel_ai_analysis: bool,
     /// Whether to enable visual mode.
     pub enable_visual_mode: bool,
-    /// Whether to show the pixel Agent companion in the collapsed chat input.
+    /// Whether to show the desktop Agent companion.
     pub enable_agent_companion: bool,
-    /// Where to show the Agent companion: "input" or "desktop".
-    pub agent_companion_display_mode: String,
     /// Optional Petdex-compatible companion package selected by the user.
     #[serde(
         default = "default_agent_companion_pet",
@@ -1855,7 +1853,6 @@ impl Default for AIExperienceConfig {
             enable_welcome_panel_ai_analysis: false,
             enable_visual_mode: false,
             enable_agent_companion: true,
-            agent_companion_display_mode: "desktop".to_string(),
             agent_companion_pet: default_agent_companion_pet(),
             enable_workspace_search: false,
             voice_input: VoiceInputConfig::default(),
@@ -2646,7 +2643,6 @@ mod tests {
             "enable_welcome_panel_ai_analysis": false,
             "enable_visual_mode": false,
             "enable_agent_companion": true,
-            "agent_companion_display_mode": "desktop",
             "agent_companion_pet": {
                 "id": "boxcat",
                 "displayName": "Boxcat",
@@ -2666,7 +2662,6 @@ mod tests {
         assert_eq!(pet.id, "boxcat");
         assert_eq!(pet.display_name, "Boxcat");
         assert_eq!(pet.package_path, "/agent-companion-pets/boxcat");
-        assert_eq!(config.agent_companion_display_mode, "desktop");
 
         let serialized = serde_json::to_value(&config).expect("config should serialize");
         assert_eq!(serialized["agent_companion_pet"]["displayName"], "Boxcat");
@@ -2674,6 +2669,19 @@ mod tests {
             serialized["agent_companion_pet"]["spritesheetPath"],
             "/agent-companion-pets/boxcat/spritesheet.webp"
         );
+    }
+
+    #[test]
+    fn ignores_retired_agent_companion_input_mode() {
+        let config: AIExperienceConfig = serde_json::from_value(serde_json::json!({
+            "enable_agent_companion": true,
+            "agent_companion_display_mode": "input"
+        }))
+        .expect("legacy Agent companion config should remain readable");
+
+        assert!(config.enable_agent_companion);
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized.get("agent_companion_display_mode").is_none());
     }
 
     #[test]
@@ -2716,7 +2724,6 @@ mod tests {
                     "enable_welcome_panel_ai_analysis": false,
                     "enable_visual_mode": false,
                     "enable_agent_companion": true,
-                    "agent_companion_display_mode": "desktop",
                     "enable_workspace_search": false,
                     "quick_actions": [
                         {

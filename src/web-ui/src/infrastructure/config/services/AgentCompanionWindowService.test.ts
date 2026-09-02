@@ -40,13 +40,11 @@ function deferred<T>() {
 
 function settings(
   enableAgentCompanion: boolean,
-  displayMode: AIExperienceSettings['agent_companion_display_mode'] = 'desktop',
 ): AIExperienceSettings {
   return {
     enable_session_title_generation: true,
     enable_visual_mode: false,
     enable_agent_companion: enableAgentCompanion,
-    agent_companion_display_mode: displayMode,
     enable_workspace_search: false,
     quick_actions: [],
   };
@@ -86,19 +84,16 @@ describe('syncAgentCompanionDesktopWindow', () => {
       'agent-companion://settings-updated',
       expect.objectContaining({
         enable_agent_companion: true,
-        agent_companion_display_mode: 'desktop',
       }),
     );
   });
 
-  it('hides the desktop pet when the companion is disabled or moved to input mode', async () => {
+  it('hides the desktop pet when the companion is disabled', async () => {
     const { syncAgentCompanionDesktopWindow } = await import('./AgentCompanionWindowService');
 
     await syncAgentCompanionDesktopWindow(settings(false));
-    await syncAgentCompanionDesktopWindow(settings(true, 'input'));
 
     expect(tauriCore.invoke.mock.calls.map(call => call[0])).toEqual([
-      'hide_agent_companion_desktop_pet',
       'hide_agent_companion_desktop_pet',
     ]);
     expect(tauriEvent.emit).not.toHaveBeenCalled();

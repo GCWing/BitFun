@@ -77,8 +77,7 @@ export async function activateProductAction(
       return;
     case 'settings.shortcuts.open':
       useSettingsStore.getState().openDestination({
-        pageId: 'application.input',
-        viewId: 'shortcuts',
+        pageId: 'application.shortcuts',
       });
       sceneStore.openScene('settings');
       return;

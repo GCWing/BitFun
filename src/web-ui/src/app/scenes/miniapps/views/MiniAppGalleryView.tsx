@@ -424,7 +424,11 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
   };
 
   return (
-    <GalleryLayout data-bf-component="miniapp-gallery-view" data-bf-part="root" className="miniapp-gallery">
+    <GalleryLayout
+      data-bf-component="miniapp-gallery-view"
+      data-bf-part="root"
+      className="miniapp-gallery-pane miniapp-gallery"
+    >
       <GalleryPageHeader
         title={t('title')}
         subtitle={t('subtitle')}

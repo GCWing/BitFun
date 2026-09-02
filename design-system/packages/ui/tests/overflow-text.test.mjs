@@ -18,20 +18,43 @@ test("OverflowText preserves the complete accessible text while exposing overflo
   assert.match(markup, /class="[^" ]+ model-name"/);
   assert.match(markup, /aria-label="Complete model name"/);
   assert.match(markup, /data-overflow="false"/);
-  assert.match(markup, />deepseek-v4-pro-with-a-long-suffix<\/span>/);
+  assert.match(markup, /data-overflow-behavior="fade"/);
+  assert.match(markup, />deepseek-v4-pro-with-a-long-suffix<\/span><\/span>/);
 });
 
-test("OverflowText applies an inline-end mask only after real clipping is measured", async () => {
+test("OverflowText exposes the reusable marquee behavior without changing its accessible text", () => {
+  const markup = renderToStaticMarkup(createElement(
+    OverflowText,
+    {
+      behavior: "marquee",
+      "aria-label": "Complete workspace directory",
+    },
+    "a-very-long-remote-workspace-directory",
+  ));
+
+  assert.match(markup, /data-overflow-behavior="marquee"/);
+  assert.match(markup, /--_overflow-text-marquee-distance:0px/);
+  assert.match(markup, /aria-label="Complete workspace directory"/);
+  assert.match(markup, />a-very-long-remote-workspace-directory<\/span><\/span>/);
+});
+
+test("OverflowText measures real clipping for fade and marquee treatments", async () => {
   const [source, styles] = await Promise.all([
     readFile(new URL("../src/primitives/OverflowText/OverflowText.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/primitives/OverflowText/OverflowText.module.css", import.meta.url), "utf8"),
   ]);
 
-  assert.match(source, /scrollWidth > element\.clientWidth/);
+  assert.match(source, /content\.scrollWidth - element\.clientWidth/);
   assert.match(source, /new ResizeObserver\(updateOverflow\)/);
+  assert.match(source, /resizeObserver\?\.observe\(contentRef\.current\)/);
+  assert.match(source, /--_overflow-text-marquee-distance/);
+  assert.match(source, /--_overflow-text-marquee-duration/);
   assert.match(styles, /text-overflow:\s*clip/);
-  assert.match(styles, /\.root\[data-overflow="true"\]/);
+  assert.match(styles, /data-overflow-behavior="fade"/);
+  assert.match(styles, /data-overflow-behavior="marquee"/);
   assert.match(styles, /--bf-layout-overflow-text-fade-extent/);
-  assert.match(styles, /\.root:dir\(rtl\)\[data-overflow="true"\]/);
+  assert.match(styles, /bf-overflow-text-marquee/);
+  assert.match(styles, /prefers-reduced-motion:\s*reduce/);
+  assert.match(styles, /\.root:dir\(rtl\)/);
   assert.doesNotMatch(styles, /text-overflow:\s*ellipsis/);
 });

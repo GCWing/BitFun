@@ -1,4 +1,8 @@
 .bitfun-acp-agents {
+  &__tabs {
+    align-self: flex-start;
+  }
+
   &__toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

@@ -41,6 +41,32 @@ describe('Mini App card presentation', () => {
     expect(submissions).toContain('<IconButton');
     expect(submissions).not.toContain('miniapp-submissions__advanced-toggle');
   });
+
+  it('keeps every gallery pane on the same compact content rail', () => {
+    const sceneStyles = readRelative('../MiniAppGalleryScene.scss');
+    const gallery = readRelative('../views/MiniAppGalleryView.tsx');
+    const market = readRelative('../views/MiniAppMarketView.tsx');
+    const submissions = readRelative('../views/MiniAppSubmissionsView.tsx');
+    const submissionStyles = readRelative('../views/MiniAppSubmissionsView.scss');
+
+    expect(gallery).toContain('className="miniapp-gallery-pane miniapp-gallery"');
+    expect(market).toContain('className="miniapp-gallery-pane miniapp-market-native"');
+    expect(submissions.match(/className="miniapp-gallery-pane miniapp-submissions"/g)).toHaveLength(3);
+    expect(submissions.match(/<GalleryPageHeader/g)).toHaveLength(3);
+    expect(sceneStyles).toContain(
+      '$miniapp-gallery-content-inline-size: min(calc(100% - var(--bf-space-6)), 680px);',
+    );
+    expect(sceneStyles).toMatch(
+      /\.miniapp-gallery-pane \{[\s\S]*?\.gallery-page-header \{[\s\S]*?width: \$miniapp-gallery-content-inline-size;/,
+    );
+    expect(sceneStyles).toMatch(
+      /\.miniapp-gallery-pane \{[\s\S]*?\.gallery-zones \{[\s\S]*?width: \$miniapp-gallery-content-inline-size;/,
+    );
+    expect(sceneStyles).toContain('scrollbar-gutter: stable;');
+    expect(submissionStyles).not.toContain('1360px');
+    expect(submissionStyles).toMatch(/&__workspace \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
+  });
+
   it('uses the compact vertical catalog-card geometry', () => {
     const stylesheet = readRelative('./MiniAppCard.scss');
     const rootStart = stylesheet.indexOf('.miniapp-card {');
@@ -58,6 +84,7 @@ describe('Mini App card presentation', () => {
   it('packs cards densely and keeps skeleton geometry aligned', () => {
     const source = readRelative('../views/MiniAppGalleryView.tsx');
     const stylesheet = readRelative('../views/MiniAppGalleryView.scss');
+    const sceneStyles = readRelative('../MiniAppGalleryScene.scss');
 
     expect(source).toContain('const MINIAPP_CARD_MIN_WIDTH = 280;');
     expect(source.match(/minCardWidth=\{MINIAPP_CARD_MIN_WIDTH\}/g)).toHaveLength(3);
@@ -65,10 +92,13 @@ describe('Mini App card presentation', () => {
     expect(stylesheet).toMatch(
       /&__card-grid\.gallery-grid--skeleton \.gallery-skeleton-card \{[\s\S]*?height: 193px;/,
     );
-    expect(stylesheet).toMatch(/@media \(max-width: 720px\) \{[\s\S]*?grid-template-columns: 1fr;/);
-    expect(stylesheet).toContain('container-type: inline-size;');
-    expect(stylesheet).toMatch(/@container \(max-width: 760px\) \{[\s\S]*?\.gallery-page-header \{[\s\S]*?flex-direction: column;/);
-    expect(stylesheet).toMatch(/@container \(max-width: 760px\) \{[\s\S]*?grid-template-columns: 1fr;/);
+    expect(sceneStyles).toContain('container-name: miniapp-gallery-scene;');
+    expect(sceneStyles).toMatch(
+      /@container miniapp-gallery-scene \(max-width: 760px\) \{[\s\S]*?\.gallery-page-header \{[\s\S]*?flex-direction: column;/,
+    );
+    expect(stylesheet).toMatch(
+      /@container miniapp-gallery-scene \(max-width: 760px\) \{[\s\S]*?grid-template-columns: 1fr;/,
+    );
     expect(stylesheet).not.toContain('aspect-ratio: 12 / 5;');
   });
 

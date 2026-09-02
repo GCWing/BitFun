@@ -9,6 +9,13 @@ function readStylesheet(): string {
   ).replace(/\r\n/g, '\n');
 }
 
+function readSource(relativePath: string): string {
+  return readFileSync(
+    fileURLToPath(new URL(relativePath, import.meta.url)),
+    'utf8',
+  ).replace(/\r\n/g, '\n');
+}
+
 function readBlock(stylesheet: string, start: string, end: string): string {
   const startIndex = stylesheet.indexOf(start);
   const endIndex = stylesheet.indexOf(end, startIndex);
@@ -20,6 +27,20 @@ function readBlock(stylesheet: string, start: string, end: string): string {
 }
 
 describe('ACP Agent settings presentation', () => {
+  it('separates local, SSH, and advanced JSON views with guarded JSON changes', () => {
+    const source = readSource('./AcpAgentsConfig.tsx');
+    const appearance = readSource('./AcpAgentsConfig.appearance.ts');
+
+    expect(source).toContain('<TabGroup');
+    expect(source).toContain("activeView === 'local'");
+    expect(source).toContain("activeView === 'ssh'");
+    expect(source).toContain("activeView === 'json'");
+    expect(source).toContain("activeView !== 'ssh'");
+    expect(source).toContain('jsonDirty');
+    expect(source).toContain('discardJsonChanges');
+    expect(appearance).toContain("values: ['local', 'ssh', 'json']");
+  });
+
   it('keeps saved SSH servers inside the shared section surface', () => {
     const stylesheet = readStylesheet();
     const remoteList = readBlock(

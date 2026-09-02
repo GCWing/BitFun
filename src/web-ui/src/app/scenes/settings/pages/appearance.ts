@@ -8,21 +8,3 @@ export const automationSettingsPageAppearanceDescriptor: AppearanceSurfaceDescri
     { id: 'hooks', visualRole: 'content' },
   ],
 };
-
-export const developmentSettingsPageAppearanceDescriptor: AppearanceSurfaceDescriptor = {
-  id: 'development-settings-page',
-  parts: [
-    { id: 'root', propertyProfile: 'layout', visualRole: 'content' },
-    { id: 'terminal', visualRole: 'content' },
-    { id: 'editor', visualRole: 'content' },
-  ],
-};
-
-export const inputSettingsPageAppearanceDescriptor: AppearanceSurfaceDescriptor = {
-  id: 'input-settings-page',
-  parts: [
-    { id: 'root', propertyProfile: 'layout', visualRole: 'content' },
-    { id: 'voice', visualRole: 'content' },
-    { id: 'shortcuts', visualRole: 'content' },
-  ],
-};

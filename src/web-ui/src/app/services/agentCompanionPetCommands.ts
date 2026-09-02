@@ -29,8 +29,6 @@ export type AgentCompanionPetCommand =
  *
  * Persisting it is what makes the close stick: the settings change listener in
  * `App` runs `syncAgentCompanionDesktopWindow`, which destroys the pet window.
- * The display mode is left alone so re-enabling the setting brings the pet back
- * where the user had it.
  */
 async function closeAgentCompanionDesktopPet(): Promise<void> {
   const settings = await aiExperienceConfigService.getSettingsAsync();

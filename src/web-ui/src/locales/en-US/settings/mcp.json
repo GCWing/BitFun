@@ -157,7 +157,7 @@
     "cancelAdd": "Cancel Add",
     "close": "Close",
     "backToList": "Back to List",
-    "jsonConfig": "JSON Config",
+    "jsonConfig": "Advanced JSON config",
     "remoteAuth": "Remote Auth",
     "startRemoteOAuth": "Connect with OAuth",
     "restartRemoteOAuth": "Restart OAuth",
@@ -194,7 +194,7 @@
     "remoteAuthPlaceholder": "Bearer eyJ... or eyJ..."
   },
   "jsonEditor": {
-    "title": "MCP JSON Config",
+    "title": "Advanced JSON config",
     "loadFailed": "MCP configuration could not be loaded.",
     "hint1": "Use standard Cursor format for MCP configuration. Config will be saved to app.json in user directory.",
     "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as sse (remote service). You can also set type=\"stdio\"/\"sse\" explicitly for compatibility.",

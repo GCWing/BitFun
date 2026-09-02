@@ -22,7 +22,14 @@ export const runtimeSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     {
       id: 'view',
       attribute: 'data-bf-view',
-      values: ['pet', 'session-workspace', 'execution', 'execution-control', 'device-control'],
+      values: [
+        'pet',
+        'session-workspace',
+        'execution-common',
+        'execution-advanced',
+        'desktop-control',
+        'browser-control',
+      ],
     },
   ],
   states: [

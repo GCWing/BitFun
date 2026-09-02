@@ -14,15 +14,6 @@
     animation: bitfun-collection-slide-down 0.18s var(--bf-motion-easing-standard);
   }
 
-  &__json-editor-header {
-    h3 {
-      margin: 0 0 var(--bf-space-1);
-      font-size: var(--bf-type-label-md-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
-    }
-  }
-
   &__json-hint {
     margin: 0;
     font-size: var(--bf-type-label-sm-font-size);

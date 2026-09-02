@@ -5,7 +5,7 @@
  *   - Panda body color is FIXED black-on-white in both light & dark themes
  *     (a panda is a panda; inverting the fur looked uncanny).
  *   - In dark theme we add a soft outer halo (CSS drop-shadow) so the
- *     panda still pops on a dark chat input background.
+ *     panda still pops on dark companion surfaces.
  *   - DECORATIVE overlays (ZZZ, think pips, wait pips, sweat) DO invert
  *     between themes so they remain readable.
  *
@@ -18,13 +18,13 @@
 
 /* ---------- Slot ---------- */
 
-.bitfun-chat-input-pixel-pet {
+.bitfun-agent-companion-pet {
   /* FIXED panda body palette — never inverted. */
   --bitfun-pet-color: var(--bf-color-content-on-light);
   --bitfun-pet-cream: var(--bf-color-content-on-dark);
 
   /* Decorative palette — inverts between light/dark themes so overlays
-     stay readable on either chat background. */
+     stay readable on either companion surface. */
   --bitfun-pet-decor: var(--bitfun-pet-color);
   --bitfun-pet-decor-soft: color-mix(in srgb, var(--bitfun-pet-color) 55%, transparent);
   --bitfun-petdex-width: 42px;
@@ -103,8 +103,8 @@
    SVG outline filter (defined inline in the markup) so the silhouette is
    surrounded by a single continuous light contour rather than per-shape
    outlines on every internal element. */
-:root[data-bf-appearance-mode='dark'] .bitfun-chat-input-pixel-pet,
-[data-bf-appearance-mode='dark'] .bitfun-chat-input-pixel-pet {
+:root[data-bf-appearance-mode='dark'] .bitfun-agent-companion-pet,
+[data-bf-appearance-mode='dark'] .bitfun-agent-companion-pet {
   --bitfun-pet-decor: var(--bitfun-pet-cream);
   --bitfun-pet-decor-soft: color-mix(in srgb, var(--bitfun-pet-cream) 60%, transparent);
 
@@ -312,43 +312,43 @@
 
 /* ---------- Mood transition micro-bump ---------- */
 
-.bitfun-chat-input-pixel-pet__stage--transition {
+.bitfun-agent-companion-pet__stage--transition {
   animation: bitfun-stage-bump 0.64s cubic-bezier(0.2, 1.4, 0.5, 1);
 }
 
 /* ---------- Idle micro-actions (rest only, all in-place) ---------- */
 
-.bitfun-chat-input-pixel-pet__stage--idle-ear-twitch-left .bitfun-panda-head__ear--left {
+.bitfun-agent-companion-pet__stage--idle-ear-twitch-left .bitfun-panda-head__ear--left {
   animation: bitfun-ear-twitch-once 1.4s ease-in-out;
   transform-origin: 50% 100%;
   transform-box: fill-box;
 }
 
-.bitfun-chat-input-pixel-pet__stage--idle-ear-twitch-right .bitfun-panda-head__ear--right {
+.bitfun-agent-companion-pet__stage--idle-ear-twitch-right .bitfun-panda-head__ear--right {
   animation: bitfun-ear-twitch-once 1.4s ease-in-out;
   transform-origin: 50% 100%;
   transform-box: fill-box;
 }
 
-.bitfun-chat-input-pixel-pet__stage--idle-yawn .bitfun-panda-head__muzzle {
+.bitfun-agent-companion-pet__stage--idle-yawn .bitfun-panda-head__muzzle {
   animation: bitfun-yawn 2.6s ease-in-out;
   transform-origin: 50% 30%;
   transform-box: fill-box;
 }
 
-.bitfun-chat-input-pixel-pet__stage--idle-deep-breath .bitfun-panda-head__body--front {
+.bitfun-agent-companion-pet__stage--idle-deep-breath .bitfun-panda-head__body--front {
   animation: bitfun-deep-breath 1.8s ease-in-out;
   transform-origin: 50% 95%;
   transform-box: fill-box;
 }
 
-.bitfun-chat-input-pixel-pet__stage--idle-body-roll .bitfun-panda-head {
+.bitfun-agent-companion-pet__stage--idle-body-roll .bitfun-panda-head {
   animation:
     bitfun-head-breathe 6.8s ease-in-out infinite,
     bitfun-body-roll 3.0s ease-in-out;
 }
 
-.bitfun-chat-input-pixel-pet__stage--idle-paw-wiggle .bitfun-panda-head__paw--front {
+.bitfun-agent-companion-pet__stage--idle-paw-wiggle .bitfun-panda-head__paw--front {
   animation: bitfun-paw-wiggle 1.8s ease-in-out;
   transform-origin: 70% 60%;
   transform-box: fill-box;
@@ -768,20 +768,20 @@
    restoring infinite motion over the user's accessibility preference. */
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-chat-input-pixel-pet,
-  .bitfun-chat-input-pixel-pet * {
+  .bitfun-agent-companion-pet,
+  .bitfun-agent-companion-pet * {
     animation: none !important;
   }
 
-  .bitfun-chat-input-pixel-pet__stage,
-  .bitfun-chat-input-pixel-pet__petdex,
+  .bitfun-agent-companion-pet__stage,
+  .bitfun-agent-companion-pet__petdex,
   .bitfun-panda-head,
   .bitfun-panda-head__ear,
   .bitfun-panda-head__paw {
     transform: none !important;
   }
 
-  .bitfun-chat-input-pixel-pet__petdex {
+  .bitfun-agent-companion-pet__petdex {
     background-position-x: 0;
   }
 }

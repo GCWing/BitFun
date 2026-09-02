@@ -281,12 +281,6 @@ pub fn owner_definitions() -> Vec<ProductControlOwnerDefinition> {
             boolean(),
             merge_config("app.ai_experience", &["enable_agent_companion"]),
         ),
-        option(
-            "setting.application.pet",
-            "display-mode",
-            string_enum(&["desktop", "input"]),
-            merge_config("app.ai_experience", &["agent_companion_display_mode"]),
-        ),
         operation(
             "setting.application.pet",
             "list-pets",
@@ -346,13 +340,13 @@ pub fn owner_definitions() -> Vec<ProductControlOwnerDefinition> {
             merge_config("app.ai_experience", &["voice_input.max_recording_seconds"]),
         ),
         option(
-            "setting.application.development",
+            "setting.application.terminal",
             "terminal-default-shell",
             string(),
             config("terminal.default_shell"),
         ),
         option(
-            "setting.application.development",
+            "setting.application.terminal",
             "terminal-panel-position",
             string_enum(&["right", "bottom"]),
             config("terminal.terminal_panel_position"),

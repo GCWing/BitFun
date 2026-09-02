@@ -266,7 +266,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
   ], [t]);
 
   return (
-    <GalleryLayout className="miniapp-market-native">
+    <GalleryLayout className="miniapp-gallery-pane miniapp-market-native">
       <GalleryPageHeader
         title={t('market.title')}
         subtitle={t('market.subtitle')}

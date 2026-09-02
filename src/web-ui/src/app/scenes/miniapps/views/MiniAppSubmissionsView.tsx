@@ -244,7 +244,11 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
   if (!authResolved || loading) {
     return (
-      <GalleryLayout className="miniapp-submissions">
+      <GalleryLayout className="miniapp-gallery-pane miniapp-submissions">
+        <GalleryPageHeader
+          title={t('market.submissions.title')}
+          subtitle={t('market.submissions.subtitle')}
+        />
         {tabs}
         <div className="miniapp-submissions__loading"><Loader2 className="gallery-spinning" /></div>
       </GalleryLayout>
@@ -253,7 +257,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
   if (!me) {
     return (
-      <GalleryLayout className="miniapp-submissions">
+      <GalleryLayout className="miniapp-gallery-pane miniapp-submissions">
         <GalleryPageHeader
           title={t('market.submissions.title')}
           subtitle={t('market.submissions.subtitle')}
@@ -269,7 +273,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
   }
 
   return (
-    <GalleryLayout className="miniapp-submissions">
+    <GalleryLayout className="miniapp-gallery-pane miniapp-submissions">
       <GalleryPageHeader
         title={t('market.submissions.title')}
         subtitle={t('market.submissions.subtitle')}

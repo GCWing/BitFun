@@ -119,7 +119,7 @@
 
 ### 9. `main.tsx` 静态引入桌宠组件【低收益/低风险】
 
-**证据**:`src/web-ui/src/main.tsx:3` `import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/..."`,该组件仅在 `bitfunWindow === 'agent-companion'` 的独立小窗使用(`main.tsx:346-369`),却随入口 chunk 被主窗口一并加载(连带 `ChatInputPixelPet`、其 SCSS 与配置服务)。
+**证据**:`src/web-ui/src/main.tsx:3` `import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/..."`,该组件仅在 `bitfunWindow === 'agent-companion'` 的独立小窗使用(`main.tsx:346-369`),却随入口 chunk 被主窗口一并加载(连带 `AgentCompanionPet`、其 SCSS 与配置服务)。
 
 **方案**:改为 `lazy(() => import(...))` + Suspense(pet 窗口本就有预载动画兜底),主窗口首包相应减小;主 `App` 分支保持静态。
 

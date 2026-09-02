@@ -3,17 +3,17 @@
 id: setting.application.input
 kind: setting
 category: application
-title_zh: "输入与快捷键"
-title_en: "Input & shortcuts"
+title_zh: "语音"
+title_en: "Voice"
 ---
 
-# 输入与快捷键 / Input & shortcuts
+# 语音 / Voice
 
 > 设置 / Setting
 
-配置语音输入、麦克风、识别语言以及键盘快捷键。
+配置语音输入、麦克风、识别语言、本地模型与实时语音通话。
 
-Configure voice input, microphone, recognition language, and keyboard shortcuts.
+Configure voice input, microphones, recognition language, local models, and realtime voice calls.
 
 ## 完整功能清单 / Everything included
 
@@ -27,19 +27,13 @@ Configure voice input, microphone, recognition language, and keyboard shortcuts.
   - Download, select, verify, repair, or delete local speech models
 - **Agent 可直接控制 / Direct Agent control** · 设置单次语音输入的最长录音时间
   - Set the maximum duration of one voice-input recording
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 搜索和查看全部应用、场景、编辑器与终端快捷键
-  - Search and browse all app, scene, editor, and terminal shortcuts
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 录制新快捷键、检测冲突、恢复单项或重置全部自定义键位
-  - Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings
 
 ## 怎么用 / How to use it
 
 1. 打开设置
    Open Settings
-2. 进入“应用 > 输入”
-   Go to Application > Input
-3. 切换“语音”或“快捷键”视图
-   Switch between Voice and Shortcuts
+2. 进入“应用与界面 > 语音”
+   Go to App & Interface > Voice
 
 入口 / Entry: BitFun 设置
 
@@ -59,8 +53,8 @@ Configure voice input, microphone, recognition language, and keyboard shortcuts.
 
 ## 可以直接对 Agent 说 / Try saying
 
-- “打开快捷键设置”
-  - “Open keyboard-shortcut settings”
+- “打开语音输入设置”
+  - “Open voice-input settings”
 - “把语音输入的默认语言设为中文”
   - “Set the voice-input language to Chinese”
 

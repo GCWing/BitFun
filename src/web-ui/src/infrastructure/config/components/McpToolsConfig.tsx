@@ -1211,17 +1211,18 @@ const McpToolsConfig: React.FC = () => {
           </Tooltip>
         </>
       ) : null}
-      <Tooltip content={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}>
-        <IconButton
-          size="sm"
-          onClick={() => {
-            if (showJsonEditor) requestCloseJsonEditor();
-            else setShowJsonEditor(true);
-          }}
-          aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
-          icon={showJsonEditor ? <Icon name="xmark" size="md" /> : <FileJson size={16} />}
-        />
-      </Tooltip>
+      <Button
+        variant="outline"
+        size="sm"
+        leadingIcon={showJsonEditor ? <Icon name="arrow-left" size="sm" /> : <FileJson size={15} />}
+        aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
+        onClick={() => {
+          if (showJsonEditor) requestCloseJsonEditor();
+          else setShowJsonEditor(true);
+        }}
+      >
+        {showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
+      </Button>
     </>
   );
 
@@ -1430,7 +1431,7 @@ const McpToolsConfig: React.FC = () => {
 
       <ConfigPageContent data-bf-component="mcp-tools-config" data-bf-part="content">
         <ConfigPageSection
-          title={tMcp('section.serverList.title')}
+          title={showJsonEditor ? tMcp('jsonEditor.title') : tMcp('section.serverList.title')}
           extra={desktopConfigAvailable ? mcpSectionExtra : undefined}
         >
           {!desktopConfigAvailable && (
@@ -1464,7 +1465,6 @@ const McpToolsConfig: React.FC = () => {
           {desktopConfigAvailable && showJsonEditor && !jsonLoading && !jsonLoadFailed && (
             <div className="bitfun-mcp-tools__json-editor" data-bf-component="mcp-tools-config" data-bf-part="jsonEditor">
               <div className="bitfun-mcp-tools__json-editor-header" data-bf-component="mcp-tools-config" data-bf-part="jsonHeader">
-                <h3>{tMcp('jsonEditor.title')}</h3>
                 <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.hint1')}</p>
                 <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.hint2')}</p>
                 <p className="bitfun-mcp-tools__json-hint" role="note" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.secretWarning')}</p>
@@ -1562,7 +1562,7 @@ const McpToolsConfig: React.FC = () => {
             ))}
         </ConfigPageSection>
 
-        <ExternalMcpOverview />
+        {!showJsonEditor && <ExternalMcpOverview />}
       </ConfigPageContent>
       <Dialog
         open={desktopConfigAvailable && !!authDialogServer}

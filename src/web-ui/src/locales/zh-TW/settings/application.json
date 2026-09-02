@@ -4,6 +4,16 @@
   "common": {
     "retry": "重試"
   },
+  "applicationGroups": {
+    "startupAndUpdates": {
+      "title": "啟動與更新",
+      "description": "管理登入啟動、執行期間保持喚醒及版本檢查。"
+    },
+    "windowAndNotifications": {
+      "title": "視窗與通知",
+      "description": "管理關閉視窗時的行為，以及需要提醒你的事件。"
+    }
+  },
   "appearance": {
     "title": "外觀",
     "hint": "界面語言、目前外觀、動態效果與外觀包管理",

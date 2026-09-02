@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ForwardedRef,
   type HTMLAttributes,
 } from "react";
@@ -20,12 +21,36 @@ function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
   else if (ref) ref.current = value;
 }
 
-export type OverflowTextProps = HTMLAttributes<HTMLSpanElement>;
+const MARQUEE_MIN_DURATION_MS = 2400;
+const MARQUEE_PIXELS_PER_SECOND = 36;
+const MARQUEE_EDGE_HOLD_MS = 1200;
+
+export type OverflowTextBehavior = "fade" | "marquee";
+
+export interface OverflowTextProps extends HTMLAttributes<HTMLSpanElement> {
+  /** Visual treatment used only after the rendered content is actually clipped. */
+  behavior?: OverflowTextBehavior;
+}
+
+interface OverflowMeasurement {
+  distance: number;
+  isOverflowing: boolean;
+}
 
 export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
-  function OverflowText({ className, ...props }, forwardedRef) {
+  function OverflowText({
+    behavior = "fade",
+    children,
+    className,
+    style,
+    ...props
+  }, forwardedRef) {
     const elementRef = useRef<HTMLSpanElement | null>(null);
-    const [isOverflowing, setIsOverflowing] = useState(false);
+    const contentRef = useRef<HTMLSpanElement | null>(null);
+    const [measurement, setMeasurement] = useState<OverflowMeasurement>({
+      distance: 0,
+      isOverflowing: false,
+    });
 
     const setElementRef = useCallback((element: HTMLSpanElement | null) => {
       elementRef.current = element;
@@ -34,11 +59,15 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
 
     const updateOverflow = useCallback(() => {
       const element = elementRef.current;
-      if (!element) return;
+      const content = contentRef.current;
+      if (!element || !content) return;
 
-      const nextIsOverflowing = element.scrollWidth > element.clientWidth;
-      setIsOverflowing((current) => (
-        current === nextIsOverflowing ? current : nextIsOverflowing
+      const distance = Math.max(0, content.scrollWidth - element.clientWidth);
+      const isOverflowing = distance > 0;
+      setMeasurement((current) => (
+        current.distance === distance && current.isOverflowing === isOverflowing
+          ? current
+          : { distance, isOverflowing }
       ));
     }, []);
 
@@ -54,6 +83,7 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
         ? null
         : new ResizeObserver(updateOverflow);
       resizeObserver?.observe(element);
+      if (contentRef.current) resizeObserver?.observe(contentRef.current);
 
       const fontSet = element.ownerDocument.fonts;
       fontSet?.addEventListener("loadingdone", updateOverflow);
@@ -71,13 +101,34 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
       };
     }, [updateOverflow]);
 
+    const marqueeDuration = Math.max(
+      MARQUEE_MIN_DURATION_MS,
+      Math.round(
+        (measurement.distance / MARQUEE_PIXELS_PER_SECOND) * 1000
+        + MARQUEE_EDGE_HOLD_MS,
+      ),
+    );
+    const resolvedStyle = behavior === "marquee"
+      ? ({
+          ...style,
+          "--_overflow-text-marquee-distance": `${measurement.distance}px`,
+          "--_overflow-text-marquee-duration": `${marqueeDuration}ms`,
+        } as CSSProperties)
+      : style;
+
     return (
       <span
         {...props}
         className={classNames(styles.root, className)}
-        data-overflow={isOverflowing ? "true" : "false"}
+        data-overflow={measurement.isOverflowing ? "true" : "false"}
+        data-overflow-behavior={behavior}
         ref={setElementRef}
-      />
+        style={resolvedStyle}
+      >
+        <span className={styles.content} data-bf-part="content" ref={contentRef}>
+          {children}
+        </span>
+      </span>
     );
   },
 );

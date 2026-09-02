@@ -95,6 +95,7 @@
     "skipSession": "Skip the session"
   },
   "actions": {
+    "menu": "Memory actions",
     "expandAdvanced": "Expand advanced settings",
     "collapseAdvanced": "Collapse advanced settings",
     "resetSettings": "Reset Memory Settings",
@@ -102,9 +103,9 @@
     "resetSettingsConfirm": "This restores the memory switches, models, and advanced parameters on the current execution host to their defaults. Existing memory data is not deleted.",
     "resetSettingsConfirmAction": "Restore defaults",
     "openDirectory": "Open Memory Folder",
-    "resetMemory": "Reset Memory",
-    "resetMemoryConfirm": "Clear all memory data and memory workspace files? This cannot be undone.",
-    "resetMemoryConfirmAction": "Reset"
+    "resetMemory": "Permanently clear memory",
+    "resetMemoryConfirm": "This permanently deletes all memory data and memory workspace files on the current execution host. This cannot be undone.",
+    "resetMemoryConfirmAction": "Permanently clear"
   },
   "units": {
     "hours": "h",
@@ -121,7 +122,7 @@
     "settingsReset": "Memory settings reset",
     "settingsResetFailed": "Failed to reset memory settings",
     "openDirectoryFailed": "Failed to open memory folder",
-    "memoryReset": "Memory reset",
-    "memoryResetFailed": "Failed to reset memory"
+    "memoryReset": "Memory permanently cleared",
+    "memoryResetFailed": "Failed to permanently clear memory"
   }
 }
