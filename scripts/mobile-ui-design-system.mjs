@@ -63,7 +63,7 @@ const outputs = new Map([
 let changed = 0;
 for (const [path, content] of outputs) {
   const current = existsSync(path) ? readFileSync(path, 'utf8') : null;
-  if (current === content) continue;
+  if (current !== null && normalizeLineEndings(current) === normalizeLineEndings(content)) continue;
   changed += 1;
   const relativePath = path.slice(ROOT.length + 1);
   if (CHECK) {
@@ -82,6 +82,10 @@ if (CHECK && changed > 0) {
 
 if (changed === 0) {
   console.log(`[mobile-ui] ${CHECK ? 'Contract and generated files are in sync' : 'Generated files are already current'}.`);
+}
+
+function normalizeLineEndings(content) {
+  return content.replace(/\r\n?/g, '\n');
 }
 
 function readJson(path) {

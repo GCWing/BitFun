@@ -7,7 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { getMobileWebRebuildPlan } = require('./mobile-web-build.cjs');
+const { cleanStaleMobileWebResources, getMobileWebRebuildPlan } = require('./mobile-web-build.cjs');
 
 function write(root, relativePath, contents = '') {
   const target = path.join(root, relativePath);
@@ -83,3 +83,29 @@ test('reuses mobile-web output when only generated design-system output is newer
     reason: 'mobile-web dist is up to date; skipping clean/install/build (use --force or BITFUN_MOBILE_WEB_FORCE_BUILD=1 to rebuild)',
   });
 });
+
+test('cleans stale mobile-web resources from native and explicit target profiles', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-mobile-web-clean-'));
+  const native = write(root, 'target/release/mobile-web/dist/index.html', 'native');
+  const targeted = write(
+    root,
+    'target/x86_64-pc-windows-msvc/release/mobile-web/dist/index.html',
+    'targeted',
+  );
+  const unrelated = write(root, 'target/release/frontend/dist/index.html', 'frontend');
+
+  assert.equal(cleanStaleMobileWebResources(() => {}, root), 2);
+  assert.equal(fileExists(native), false);
+  assert.equal(fileExists(targeted), false);
+  assert.equal(fileExists(unrelated), true);
+});
+
+function fileExists(filePath) {
+  try {
+    readFileSync(filePath);
+    return true;
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}

@@ -191,17 +191,29 @@ function writeMobileWebBuildMarker(mobileWebDir) {
   fs.writeFileSync(markerPath, `${new Date().toISOString()}\n`);
 }
 
-function cleanStaleMobileWebResources(logInfo = printInfo) {
+function cleanStaleMobileWebResources(logInfo = printInfo, rootDir = ROOT_DIR) {
   const fs = require('fs');
-  const targetDir = path.join(ROOT_DIR, 'target');
+  const targetDir = path.join(rootDir, 'target');
   if (!fs.existsSync(targetDir)) return 0;
 
   let cleaned = 0;
-  for (const profile of fs.readdirSync(targetDir)) {
-    const mobileWebDir = path.join(targetDir, profile, 'mobile-web');
-    if (fs.existsSync(mobileWebDir) && fs.statSync(mobileWebDir).isDirectory()) {
-      fs.rmSync(mobileWebDir, { recursive: true, force: true });
-      cleaned++;
+  const cleanIfPresent = (candidate) => {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      fs.rmSync(candidate, { recursive: true, force: true });
+      cleaned += 1;
+    }
+  };
+
+  for (const firstLevelEntry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+    if (!firstLevelEntry.isDirectory()) continue;
+    const firstLevelDir = path.join(targetDir, firstLevelEntry.name);
+    cleanIfPresent(path.join(firstLevelDir, 'mobile-web'));
+
+    // Explicit Cargo targets stage resources under
+    // target/<target-triple>/<profile>/mobile-web.
+    for (const secondLevelEntry of fs.readdirSync(firstLevelDir, { withFileTypes: true })) {
+      if (!secondLevelEntry.isDirectory()) continue;
+      cleanIfPresent(path.join(firstLevelDir, secondLevelEntry.name, 'mobile-web'));
     }
   }
 

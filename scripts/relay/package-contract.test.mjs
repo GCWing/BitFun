@@ -20,11 +20,17 @@ test('relay archive contains the runtime and admin binaries plus static assets',
 test('formal and nightly releases gate publication on Linux binaries', () => {
   const desktop = read('.github/workflows/desktop-package.yml');
   const nightly = read('.github/workflows/nightly.yml');
+  const nightlyArtifacts = read('.github/workflows/nightly-artifacts.yml');
   const reusable = read('.github/workflows/linux-binaries.yml');
 
-  for (const workflow of [desktop, nightly]) {
+  for (const workflow of [desktop, nightlyArtifacts]) {
     assert.match(workflow, /uses:\s+\.\/\.github\/workflows\/linux-binaries\.yml/);
-    assert.match(workflow, /needs:\s*\[[^\]]*linux-binaries[^\]]*\]/);
+  }
+  assert.match(nightly, /uses:\s+\.\/\.github\/workflows\/nightly-artifacts\.yml/);
+  assert.match(desktop, /needs:\s*\[[^\]]*linux-binaries[^\]]*\]/);
+  assert.match(nightly, /needs:\s*\[[^\]]*build-artifacts[^\]]*\]/);
+
+  for (const workflow of [desktop, nightly]) {
     assert.match(workflow, /bitfun-relay-server-\*\.tar\.gz/);
     assert.match(workflow, /bitfun-cli-\*\.tar\.gz/);
     assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sig/);
@@ -50,7 +56,10 @@ test('formal and nightly releases publish signed anonymous multi-platform Relay 
     assert.match(workflow, /packages:\s*write/);
     assert.match(workflow, /docker\/build-push-action@v7/);
     assert.match(workflow, /platforms:\s*linux\/amd64,linux\/arm64/);
-    assert.match(workflow, /ghcr\.io\/gcwing\/bitfun-relay-server/);
+    assert.match(
+      workflow,
+      /ghcr\.io\/(?:gcwing|\$\{GITHUB_REPOSITORY_OWNER,,\})\/bitfun-relay-server/i,
+    );
     assert.match(workflow, /relay-image\.json/);
     assert.match(workflow, /scripts\/sign-release-assets\.sh relay-image\.json/);
     assert.match(workflow, /scripts\/relay\/smoke-image\.sh/);
@@ -102,12 +111,13 @@ test('release asset names carry no SemVer build metadata', () => {
 });
 
 test('nightly publishes signed macOS CLI archives for SSH dispatch', () => {
+  const nightlyArtifacts = read('.github/workflows/nightly-artifacts.yml');
   const nightly = read('.github/workflows/nightly.yml');
 
-  assert.match(nightly, /Package macOS CLI for SSH dispatch/);
-  assert.match(nightly, /scripts\/cli\/package-unix\.sh "\$ASSET_VERSION" "\$TARGET"/);
-  assert.match(nightly, /steps\.macos-cli\.outputs\.archive/);
-  assert.match(nightly, /bitfun-cli-\*-apple-darwin\.tar\.gz\.sha256\.sig/);
+  assert.match(nightlyArtifacts, /Package macOS CLI for SSH dispatch/);
+  assert.match(nightlyArtifacts, /scripts\/cli\/package-unix\.sh "\$ASSET_VERSION" "\$TARGET"/);
+  assert.match(nightlyArtifacts, /steps\.macos-cli\.outputs\.archive/);
+  assert.match(nightlyArtifacts, /bitfun-cli-\*-apple-darwin\.tar\.gz\.sha256\.sig/);
   assert.match(nightly, /for target in aarch64-apple-darwin x86_64-apple-darwin/);
   assert.match(nightly, /\$\{archive\}\.sha256\.sig/);
 });

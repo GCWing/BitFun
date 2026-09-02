@@ -1379,6 +1379,45 @@ impl Drop for CancelSearchOnDrop {
     }
 }
 
+#[derive(Default)]
+struct WorkspaceSearchWorkers {
+    active: std::sync::atomic::AtomicUsize,
+    idle: tokio::sync::Notify,
+}
+
+impl WorkspaceSearchWorkers {
+    fn start(self: &Arc<Self>) -> WorkspaceSearchWorkerGuard {
+        self.active
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        WorkspaceSearchWorkerGuard(self.clone())
+    }
+
+    async fn wait_until_idle(&self) {
+        loop {
+            let idle = self.idle.notified();
+            if self.active.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                return;
+            }
+            idle.await;
+        }
+    }
+}
+
+struct WorkspaceSearchWorkerGuard(Arc<WorkspaceSearchWorkers>);
+
+impl Drop for WorkspaceSearchWorkerGuard {
+    fn drop(&mut self) {
+        if self
+            .0
+            .active
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst)
+            == 1
+        {
+            self.0.idle.notify_one();
+        }
+    }
+}
+
 struct CancellableWorkspaceReader {
     reader: bitfun_runtime_ports::WorkspaceReader,
     cancelled: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
@@ -1420,16 +1459,20 @@ pub async fn grep_search_workspace(
     };
     options.cancellation = Some(cancellation.clone());
     let _cancel_on_drop = CancelSearchOnDrop(cancellation.clone());
+    let workers = Arc::new(WorkspaceSearchWorkers::default());
     tokio::select! {
         biased;
-        _ = cancellation.token.cancelled() => Ok(WorkspaceGrepResult {
-            result: reduce_grep_results(&options, Vec::new(), true)?,
-            used_rg_candidates: false,
-            used_grep_candidates: false,
-            scanned_file_count: 0,
-            scanned_bytes: 0,
-        }),
-        result = grep_search_workspace_inner(options.clone(), fs, shell) => result,
+        _ = cancellation.token.cancelled() => {
+            workers.wait_until_idle().await;
+            Ok(WorkspaceGrepResult {
+                result: reduce_grep_results(&options, Vec::new(), true)?,
+                used_rg_candidates: false,
+                used_grep_candidates: false,
+                scanned_file_count: 0,
+                scanned_bytes: 0,
+            })
+        },
+        result = grep_search_workspace_inner(options.clone(), fs, shell, workers.clone()) => result,
     }
 }
 
@@ -1440,6 +1483,7 @@ struct WorkspaceGrepCollector<'a> {
     file_results: GrepResultCollector,
     scanned_file_count: usize,
     bytes_read: Arc<std::sync::atomic::AtomicU64>,
+    workers: Arc<WorkspaceSearchWorkers>,
 }
 
 impl WorkspaceGrepCollector<'_> {
@@ -1520,7 +1564,9 @@ impl WorkspaceGrepCollector<'_> {
             let worker_sink = sink.clone();
             let worker_matcher = self.matcher.clone();
             let multiline = self.options.multiline;
+            let worker_guard = self.workers.start();
             tokio::task::spawn_blocking(move || {
+                let _worker_guard = worker_guard;
                 build_grep_searcher(before, after, multiline).search_reader(
                     &worker_matcher,
                     reader,
@@ -1557,6 +1603,7 @@ async fn grep_search_workspace_inner(
     options: GrepOptions,
     fs: &dyn WorkspaceFileSystem,
     shell: Option<&dyn WorkspaceShell>,
+    workers: Arc<WorkspaceSearchWorkers>,
 ) -> Result<WorkspaceGrepResult, String> {
     let matcher = build_grep_matcher(&options)?;
     let globs = build_grep_globs(&options.globs)?;
@@ -1701,6 +1748,7 @@ async fn grep_search_workspace_inner(
         file_results: GrepResultCollector::new(&options),
         scanned_file_count: 0,
         bytes_read: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        workers,
     };
     let mut pending = Vec::new();
     let command_overhead = grep_prefilter

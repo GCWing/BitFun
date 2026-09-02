@@ -1,14 +1,16 @@
 //! Tauri commands exposed to the frontend installer UI.
 
-use super::MAIN_APP_EXE;
 use super::extract::{self, ESTIMATED_INSTALL_SIZE};
 use super::generated_locale_contract::INSTALLER_GENERATED_LOCALES;
 use super::types::{
     ConnectionTestResult, DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig,
     RemoteModelInfo,
 };
+use super::MAIN_APP_EXE;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -26,6 +28,14 @@ struct WindowsInstallState {
 
 const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
 const PAYLOAD_MANIFEST_FILE: &str = "payload-manifest.json";
+const REQUIRED_PAYLOAD_FILES: [&str; 6] = [
+    MAIN_APP_EXE,
+    "frontend/dist/index.html",
+    "mobile-web/dist/index.html",
+    "resources/ext-host/extension-host.js",
+    "resources/worker_host.js",
+    "flashgrep/flashgrep-x86_64-pc-windows-msvc.exe",
+];
 const INSTALLER_STATE_FILE: &str = "installer-state.json";
 const DEFAULT_MODEL_CONTEXT_WINDOW: u64 = 200_000;
 const EMBEDDED_PAYLOAD_ZIP: &[u8] =
@@ -66,6 +76,8 @@ struct PayloadManifest {
 #[derive(Debug, Clone, Deserialize)]
 struct PayloadManifestFile {
     path: String,
+    size: u64,
+    sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -285,7 +297,7 @@ fn launch_windows_registered_uninstaller(
 
 #[cfg(target_os = "windows")]
 fn parse_windows_command_line(command_line: &str) -> Result<Vec<String>, String> {
-    use std::ffi::{OsStr, OsString, c_void};
+    use std::ffi::{c_void, OsStr, OsString};
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
 
     #[link(name = "shell32")]
@@ -350,9 +362,9 @@ pub(crate) fn get_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
                 .to_str()
                 .unwrap_or(fallback_windows_root.as_str()),
         )
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
 
         let mut free_bytes_available: u64 = 0;
         let mut total_bytes: u64 = 0;
@@ -402,7 +414,9 @@ unsafe fn windows_sys_get_disk_free_space(
             lpTotalNumberOfFreeBytes: *mut u64,
         ) -> i32;
     }
-    GetDiskFreeSpaceExW(path, free_bytes_available, total_bytes, total_free_bytes)
+    // SAFETY: the caller supplies the same pointers accepted by this wrapper,
+    // and the Windows API writes only to the three documented output pointers.
+    unsafe { GetDiskFreeSpaceExW(path, free_bytes_available, total_bytes, total_free_bytes) }
 }
 
 #[tauri::command]
@@ -468,13 +482,16 @@ pub(crate) async fn start_installation(
 
         let mut extracted = false;
         let mut used_debug_placeholder = false;
+        let mut installed_manifest: Option<PayloadManifest> = None;
         let mut checked_locations: Vec<String> = Vec::new();
 
         if embedded_payload_available() {
             checked_locations.push("embedded payload zip".to_string());
             preflight_validate_payload_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?;
-            let _ =
-                read_payload_manifest_from_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?;
+            installed_manifest = Some(read_payload_manifest_from_zip_bytes(
+                EMBEDDED_PAYLOAD_ZIP,
+                "embedded payload zip",
+            )?);
             extract::extract_zip_bytes_with_filter(
                 EMBEDDED_PAYLOAD_ZIP,
                 &install_path,
@@ -500,7 +517,10 @@ pub(crate) async fn start_installation(
                         continue;
                     }
                     preflight_validate_payload_zip_file(&candidate.path, &candidate.label)?;
-                    let _ = read_payload_manifest_from_zip_file(&candidate.path, &candidate.label)?;
+                    installed_manifest = Some(read_payload_manifest_from_zip_file(
+                        &candidate.path,
+                        &candidate.label,
+                    )?);
                     extract::extract_zip_with_filter(
                         &candidate.path,
                         &install_path,
@@ -517,7 +537,10 @@ pub(crate) async fn start_installation(
                     continue;
                 }
                 preflight_validate_payload_dir(&candidate.path, &candidate.label)?;
-                let _ = read_payload_manifest_from_dir(&candidate.path, &candidate.label)?;
+                installed_manifest = Some(read_payload_manifest_from_dir(
+                    &candidate.path,
+                    &candidate.label,
+                )?);
                 extract::copy_directory_with_filter(
                     &candidate.path,
                     &install_path,
@@ -549,7 +572,10 @@ pub(crate) async fn start_installation(
         }
 
         if !used_debug_placeholder {
-            verify_installed_payload(&install_path)?;
+            let manifest = installed_manifest.as_ref().ok_or_else(|| {
+                "Installer payload manifest was not retained after extraction".to_string()
+            })?;
+            verify_installed_payload(&install_path, manifest)?;
         }
 
         emit_progress(&window, "extract", 50, "Files extracted successfully");
@@ -1506,6 +1532,7 @@ fn preflight_validate_payload_zip_archive<R: std::io::Read + std::io::Seek>(
     source_label: &str,
 ) -> Result<(), String> {
     let mut exe_size: Option<u64> = None;
+    let mut archive_paths = HashSet::new();
     for i in 0..archive.len() {
         let file = archive
             .by_index(i)
@@ -1513,10 +1540,10 @@ fn preflight_validate_payload_zip_archive<R: std::io::Read + std::io::Seek>(
         if file.name().ends_with('/') {
             continue;
         }
+        archive_paths.insert(normalize_payload_path(file.name()));
         let file_name = zip_entry_file_name(file.name());
         if file_name.eq_ignore_ascii_case(MAIN_APP_EXE) {
             exe_size = Some(file.size());
-            break;
         }
     }
 
@@ -1526,7 +1553,8 @@ fn preflight_validate_payload_zip_archive<R: std::io::Read + std::io::Seek>(
             MAIN_APP_EXE
         )
     })?;
-    validate_payload_exe_size(size, source_label)
+    validate_payload_exe_size(size, source_label)?;
+    validate_required_payload_paths(&archive_paths, source_label)
 }
 
 fn preflight_validate_payload_dir(path: &Path, source_label: &str) -> Result<(), String> {
@@ -1537,7 +1565,14 @@ fn preflight_validate_payload_dir(path: &Path, source_label: &str) -> Result<(),
             app_exe.display()
         )
     })?;
-    validate_payload_exe_size(meta.len(), source_label)
+    validate_payload_exe_size(meta.len(), source_label)?;
+
+    let available = REQUIRED_PAYLOAD_FILES
+        .iter()
+        .filter(|relative| path.join(relative).is_file())
+        .map(|relative| (*relative).to_string())
+        .collect::<HashSet<_>>();
+    validate_required_payload_paths(&available, source_label)
 }
 
 fn validate_payload_exe_size(size: u64, source_label: &str) -> Result<(), String> {
@@ -1611,8 +1646,58 @@ fn read_payload_manifest_from_dir(
 }
 
 fn parse_payload_manifest(raw: &str, source_label: &str) -> Result<PayloadManifest, String> {
-    serde_json::from_str(raw)
-        .map_err(|e| format!("Invalid payload manifest from {source_label}: {}", e))
+    let manifest: PayloadManifest = serde_json::from_str(raw)
+        .map_err(|e| format!("Invalid payload manifest from {source_label}: {}", e))?;
+    validate_payload_manifest(&manifest, source_label)?;
+    Ok(manifest)
+}
+
+fn normalize_payload_path(raw: &str) -> String {
+    raw.replace('\\', "/").trim_start_matches("./").to_string()
+}
+
+fn validate_required_payload_paths(
+    available: &HashSet<String>,
+    source_label: &str,
+) -> Result<(), String> {
+    let missing = REQUIRED_PAYLOAD_FILES
+        .iter()
+        .filter(|required| !available.contains(**required))
+        .copied()
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Payload from {source_label} is incomplete; missing required files: {}",
+        missing.join(", ")
+    ))
+}
+
+fn validate_payload_manifest(manifest: &PayloadManifest, source_label: &str) -> Result<(), String> {
+    let mut paths = HashSet::new();
+    for entry in &manifest.files {
+        let relative = sanitize_manifest_relative_path(&entry.path)?;
+        if relative.as_os_str().is_empty() {
+            return Err(format!(
+                "Payload manifest from {source_label} has an empty path"
+            ));
+        }
+        let normalized = normalize_payload_path(&entry.path);
+        if !paths.insert(normalized.clone()) {
+            return Err(format!(
+                "Payload manifest from {source_label} contains duplicate path: {normalized}"
+            ));
+        }
+        if entry.sha256.len() != 64 || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Payload manifest from {source_label} has an invalid SHA-256 for: {normalized}"
+            ));
+        }
+    }
+
+    validate_required_payload_paths(&paths, source_label)
 }
 
 fn zip_entry_file_name(entry_name: &str) -> &str {
@@ -1636,13 +1721,14 @@ fn should_install_payload_path(relative_path: &Path) -> bool {
 
 fn collect_payload_relative_paths_for_uninstall() -> Result<Vec<String>, String> {
     if embedded_payload_available() {
-        return Ok(
-            read_payload_manifest_from_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?
-                .files
-                .into_iter()
-                .map(|entry| entry.path)
-                .collect(),
-        );
+        return Ok(read_payload_manifest_from_zip_bytes(
+            EMBEDDED_PAYLOAD_ZIP,
+            "embedded payload zip",
+        )?
+        .files
+        .into_iter()
+        .map(|entry| entry.path)
+        .collect());
     }
 
     Ok(vec![MAIN_APP_EXE.to_string()])
@@ -1737,14 +1823,10 @@ fn sanitize_manifest_relative_path(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn verify_installed_payload(install_path: &Path) -> Result<(), String> {
+fn verify_installed_payload(install_path: &Path, manifest: &PayloadManifest) -> Result<(), String> {
     let app_exe = install_path.join(MAIN_APP_EXE);
-    let app_meta = std::fs::metadata(&app_exe).map_err(|_| {
-        format!(
-            "Installed {} is missing after extraction",
-            MAIN_APP_EXE
-        )
-    })?;
+    let app_meta = std::fs::metadata(&app_exe)
+        .map_err(|_| format!("Installed {} is missing after extraction", MAIN_APP_EXE))?;
     if app_meta.len() < MIN_WINDOWS_APP_EXE_BYTES {
         return Err(format!(
             "Installed {} is too small ({} bytes). Payload is likely invalid.",
@@ -1753,7 +1835,51 @@ fn verify_installed_payload(install_path: &Path) -> Result<(), String> {
         ));
     }
 
+    for entry in &manifest.files {
+        let relative_path = sanitize_manifest_relative_path(&entry.path)?;
+        let installed_path = install_path.join(&relative_path);
+        let metadata = std::fs::metadata(&installed_path).map_err(|_| {
+            format!(
+                "Installed payload file is missing after extraction: {}",
+                relative_path.display()
+            )
+        })?;
+        if !metadata.is_file() || metadata.len() != entry.size {
+            return Err(format!(
+                "Installed payload file has the wrong size: {} (expected {}, found {})",
+                relative_path.display(),
+                entry.size,
+                metadata.len()
+            ));
+        }
+
+        let actual_sha256 = sha256_file(&installed_path)?;
+        if !actual_sha256.eq_ignore_ascii_case(&entry.sha256) {
+            return Err(format!(
+                "Installed payload file failed SHA-256 validation: {}",
+                relative_path.display()
+            ));
+        }
+    }
+
     Ok(())
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let mut file = File::open(path)
+        .map_err(|error| format!("Failed to open {} for hashing: {error}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|error| format!("Failed to hash {}: {error}", path.display()))?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn paths_equal_for_platform(a: &Path, b: &Path) -> bool {
@@ -1807,7 +1933,13 @@ fn rollback_installation(install_path: &Path, install_dir_was_absent: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_app_language, INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY};
+    use super::{
+        normalize_app_language, preflight_validate_payload_zip_archive,
+        INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY, MAIN_APP_EXE, MIN_WINDOWS_APP_EXE_BYTES,
+        REQUIRED_PAYLOAD_FILES,
+    };
+    use std::io::{Cursor, Write};
+    use zip::write::FileOptions;
 
     #[test]
     fn language_alias_priority_is_descending_and_stable_for_equal_lengths() {
@@ -1819,7 +1951,12 @@ mod tests {
 
         let expected_equal_length_order = super::INSTALLER_GENERATED_LOCALES
             .iter()
-            .flat_map(|locale| locale.aliases.iter().map(move |alias| (locale.code, *alias)))
+            .flat_map(|locale| {
+                locale
+                    .aliases
+                    .iter()
+                    .map(move |alias| (locale.code, *alias))
+            })
             .filter(|(_, alias)| alias.len() == 2)
             .collect::<Vec<_>>();
         let actual_equal_length_order = aliases
@@ -1848,5 +1985,34 @@ mod tests {
     fn normalize_app_language_rejects_unknown_language_codes() {
         assert_eq!(normalize_app_language("fr-FR"), None);
         assert_eq!(normalize_app_language(""), None);
+    }
+
+    #[test]
+    fn payload_zip_preflight_scans_entries_after_main_executable() {
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut bytes);
+            let options = FileOptions::default();
+
+            // The production payload is sorted, so the executable appears before
+            // the required nested directories. Preflight must still scan the rest.
+            writer.start_file(MAIN_APP_EXE, options).unwrap();
+            writer
+                .write_all(&vec![0_u8; MIN_WINDOWS_APP_EXE_BYTES as usize])
+                .unwrap();
+            for required in REQUIRED_PAYLOAD_FILES
+                .iter()
+                .copied()
+                .filter(|path| *path != MAIN_APP_EXE)
+            {
+                writer.start_file(required, options).unwrap();
+                writer.write_all(b"payload").unwrap();
+            }
+            writer.finish().unwrap();
+        }
+
+        bytes.set_position(0);
+        let mut archive = zip::ZipArchive::new(bytes).unwrap();
+        assert!(preflight_validate_payload_zip_archive(&mut archive, "test payload").is_ok());
     }
 }
