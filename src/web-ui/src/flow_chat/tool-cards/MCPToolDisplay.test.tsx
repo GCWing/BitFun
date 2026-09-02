@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 
 import { MCPToolDisplay } from './MCPToolDisplay';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -42,6 +43,21 @@ vi.mock('@/shared/utils/logger', () => ({
     warn: vi.fn(),
     info: vi.fn(),
   }),
+}));
+
+vi.mock('@/shared/utils/textSelection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/utils/textSelection')>();
+  return {
+    ...actual,
+    copyTextToClipboard: vi.fn(async () => true),
+  };
+});
+
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 const config: ToolCardConfig = {
@@ -89,6 +105,7 @@ describe('MCPToolDisplay', () => {
     mcpMocks.getMCPToolUiUri.mockReset().mockImplementation(() => new Promise(() => {}));
     mcpMocks.fetchMCPAppResource.mockReset();
     mcpMocks.sendMCPAppMessage.mockReset();
+    vi.mocked(copyTextToClipboard).mockClear();
 
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
@@ -181,6 +198,49 @@ describe('MCPToolDisplay', () => {
     });
 
     expect(container.querySelector('.mcp-input-code')?.textContent).toContain('"query": "input only"');
+  });
+
+  it('copies the displayed input parameters and each text result', async () => {
+    act(() => {
+      root.render(<MCPToolDisplay toolItem={toolItem()} config={config} />);
+    });
+
+    act(() => {
+      container.querySelector('[data-testid="mcp-tool-card-toggle"]')?.dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true })
+      );
+    });
+
+    const resultCopyButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Copy text result"]',
+    );
+    expect(resultCopyButton).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Copy input parameters"]')).toBeNull();
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('.mcp-input-disclosure button[aria-expanded]')?.dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true })
+      );
+    });
+
+    const inputCopyButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Copy input parameters"]',
+    );
+    expect(inputCopyButton).not.toBeNull();
+
+    await act(async () => {
+      inputCopyButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(copyTextToClipboard).toHaveBeenLastCalledWith(
+      '{\n  "query": "BitFun",\n  "limit": 5\n}',
+    );
+
+    await act(async () => {
+      resultCopyButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(copyTextToClipboard).toHaveBeenLastCalledWith('Search result');
   });
 
   it('keeps failed calls collapsed until the user expands their parameters', () => {

@@ -53,11 +53,24 @@
       flex-direction: column;
     }
 
+    .mcp-copyable-content {
+      position: relative;
+      min-width: 0;
+    }
+
+    .mcp-copy-action {
+      position: absolute;
+      z-index: 1;
+      top: var(--bf-space-1);
+      right: var(--bf-space-1);
+    }
+
     .mcp-input-code {
       max-height: 240px;
       margin: 0;
       overflow: auto;
       padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
+      padding-inline-end: calc(var(--bf-control-flow-chat-card-expanded-padding-inline) + var(--bf-space-8));
       border: 1px solid var(--bf-color-border-subtle);
       border-radius: var(--bf-radius-sm);
       background: var(--bf-color-action-neutral-surface);
@@ -71,8 +84,11 @@
 
     .text-content {
       pre {
+        max-height: 240px;
         margin: 0;
+        overflow: auto;
         padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
+        padding-inline-end: calc(var(--bf-control-flow-chat-card-expanded-padding-inline) + var(--bf-space-8));
         background: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
         border-radius: 4px;
         font-size: var(--bf-type-flow-control-font-size);
