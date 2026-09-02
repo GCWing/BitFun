@@ -1034,6 +1034,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return out;
   }, [sessionDisplayLimit, topLevelSessions, visibleChildrenByParent]);
 
+  const visibleSessionIds = useMemo(
+    () => new Set(visibleItems.map(item => item.session.sessionId)),
+    [visibleItems],
+  );
+
   const visibleRowSignature = useMemo(
     () => visibleItems.map(item => item.session.sessionId).join('|'),
     [visibleItems],
@@ -1670,6 +1675,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             activeSessionId,
             activeChildSessionId: activeBtwSessionData?.childSessionId,
             activeChildParentSessionId: activeBtwSessionData?.parentSessionId,
+            activeChildHasVisibleRow: activeBtwSessionData?.childSessionId
+              ? visibleSessionIds.has(activeBtwSessionData.childSessionId)
+              : false,
           });
           // Determine the notification state for this session row.
           // Priority: needsUserAttention > hasUnreadCompletion.
