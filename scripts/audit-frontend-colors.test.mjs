@@ -61,6 +61,37 @@ test('MiniApp audit accepts a narrow data-viz owner and rejects ordinary raw col
   assert.match(report.failures.join('\n'), /fallback to public host variable --bitfun-bg/);
 });
 
+test('MiniApp generated bundle checks ignore checkout-only line ending differences', (t) => {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-miniapp-generated-eol-'));
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+  writeText(path.join(fixtureRoot, 'app/source/ui/part.js'), 'const ready = true;\r\n');
+  writeText(
+    path.join(fixtureRoot, 'app/source/ui.js'),
+    '/* ui/part.js */\nconst ready = true;\n\n',
+  );
+  const surface = {
+    id: 'fixture-generated-eol',
+    root: 'app',
+    audit: {
+      engine: 'miniapp',
+      generatedBundles: [{
+        output: 'source/ui.js',
+        inputs: ['source/ui/part.js'],
+      }],
+    },
+  };
+
+  const report = auditMiniappSurface(surface, { variables: [] }, { repositoryRoot: fixtureRoot });
+  assert.deepEqual(report.failures, []);
+
+  writeText(
+    path.join(fixtureRoot, 'app/source/ui.js'),
+    '/* ui/part.js */\nconst ready = false;\n\n',
+  );
+  const staleReport = auditMiniappSurface(surface, { variables: [] }, { repositoryRoot: fixtureRoot });
+  assert.match(staleReport.failures.join('\n'), /generated bundle source\/ui\.js is stale/);
+});
+
 test('native source audit rejects raw platform colors while ignoring generated projections', (t) => {
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-native-colors-'));
   t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));

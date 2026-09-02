@@ -387,6 +387,10 @@ function ownerMatchesFinding(owner, finding, content) {
   return true;
 }
 
+function normalizeLineEndings(content) {
+  return content.replace(/\r\n?/g, '\n');
+}
+
 function checkGeneratedBundles(surface, repositoryRoot) {
   const failures = [];
   for (const bundle of surface.audit.generatedBundles ?? []) {
@@ -399,7 +403,7 @@ function checkGeneratedBundles(surface, repositoryRoot) {
       return `/* ${label} */\n${content}\n`;
     }).join('');
     const actual = fs.readFileSync(path.join(repositoryRoot, surface.root, outputRelative), 'utf8');
-    if (actual !== expected) {
+    if (normalizeLineEndings(actual) !== normalizeLineEndings(expected)) {
       failures.push(`${surface.id} generated bundle ${bundle.output} is stale; run its source/build.js.`);
     }
   }
