@@ -42,13 +42,20 @@ function getOrCreateInstallId(): string {
   return created;
 }
 
+function currentPairingRouteKey(): string {
+  return `${window.location.pathname}${window.location.hash}`;
+}
+
 function resolvePairingTarget(): {
   room: string | null;
   pk: string | null;
   httpBaseUrl: string;
   accountAuth: boolean;
   accountUsername: string | null;
+  targetDeviceId: string | null;
+  targetDeviceName: string | null;
   directAccountLogin: boolean;
+  hasPairingDescriptor: boolean;
 } {
   const hash = window.location.hash;
   const params = new URLSearchParams(hash.replace(/^#\/pair\?/, ''));
@@ -63,16 +70,22 @@ function resolvePairingTarget(): {
   // also opt in explicitly with `auth=legacy`.
   const accountAuth = authMode === 'account' || (!isPairingRoute && authMode !== 'legacy');
   const accountUsername = params.get('user')?.trim() || null;
+  const targetDeviceId = params.get('did')?.trim() || null;
+  const targetDeviceName = params.get('dn')?.trim() || null;
   const directAccountLogin = accountAuth && !isPairingRoute;
 
   if (relayParam) {
+    const httpBaseUrl = normalizeRelayUrl(relayParam) ?? '';
     return {
       room,
       pk,
-      httpBaseUrl: normalizeRelayUrl(relayParam) ?? '',
+      httpBaseUrl,
       accountAuth,
       accountUsername,
+      targetDeviceId,
+      targetDeviceName,
       directAccountLogin,
+      hasPairingDescriptor: validPairingSecret(room, pk) && !!httpBaseUrl,
     };
   }
 
@@ -80,17 +93,21 @@ function resolvePairingTarget(): {
   const pathname = window.location.pathname
     .replace(/\/[^/]*$/, '')
     .replace(/\/r\/[^/]*$/, '');
+  const httpBaseUrl = directAccountLogin ? `${origin}/relay` : origin + pathname;
   return {
     room,
     pk,
-    httpBaseUrl: directAccountLogin ? `${origin}/relay` : origin + pathname,
+    httpBaseUrl,
     accountAuth,
     accountUsername,
+    targetDeviceId,
+    targetDeviceName,
     directAccountLogin,
+    hasPairingDescriptor: validPairingSecret(room, pk) && !!normalizeRelayUrl(httpBaseUrl),
   };
 }
 
-const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
+const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const { t } = useI18n();
   const {
     connectionStatus,
@@ -215,7 +232,12 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     const client = new RelayHttpClient(httpBaseUrl, roomId ?? '');
 
     try {
-      if (pairingTarget.directAccountLogin) {
+      // HarmonyOS treats an account-auth QR as an account-device selection:
+      // once the account proof exists, `did` identifies the exact desktop and
+      // the room is no longer the data plane. Direct account login uses the
+      // same route but falls back to the first available desktop.
+      if (requiresAccountAuth
+        && (pairingTarget.directAccountLogin || !!pairingTarget.targetDeviceId)) {
         const accountSession = await new CloudAccountClient().login(
           httpBaseUrl,
           userIdValue,
@@ -237,9 +259,17 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         const remoteDevices = devices.filter((device) => (
           device.device_id !== client.controllerDeviceId
         ));
-        const targetDevice = remoteDevices.find((device) => device.online) ?? remoteDevices[0];
+        const targetDeviceId = pairingTarget.targetDeviceId?.trim() ?? '';
+        const targetDevice = targetDeviceId
+          ? remoteDevices.find((device) => device.device_id === targetDeviceId)
+          : remoteDevices.find((device) => device.online) ?? remoteDevices[0];
         if (!targetDevice) {
-          throw new Error(t('devices.noDevices'));
+          throw new Error(targetDeviceId
+            ? t('devices.deviceUnavailable')
+            : t('devices.noDevices'));
+        }
+        if (!targetDevice.online) {
+          throw new Error(t('devices.deviceUnavailable'));
         }
         client.setPairedDeviceId(targetDevice.device_id);
 
@@ -248,7 +278,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         store.setAuthenticatedUserLabel(userIdValue);
         store.setControlTarget({
           deviceId: targetDevice.device_id,
-          deviceName: targetDevice.device_name || null,
+          deviceName: targetDevice.device_name || pairingTarget.targetDeviceName || null,
           isHome: false,
         });
         setConnectionStatus('paired');
@@ -405,6 +435,8 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     pairingTarget.directAccountLogin,
     pairingTarget.pk,
     pairingTarget.room,
+    pairingTarget.targetDeviceId,
+    pairingTarget.targetDeviceName,
     relayUrl,
     requiresAccountAuth,
     setAuthenticatedUserId,
@@ -662,18 +694,20 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
                         ? t('pairing.loginAction')
                         : t('pairing.continue')}
                 </button>
-                <button
-                  className="pairing-page__scan-action"
-                  type="button"
-                  onClick={() => setScannerOpen(true)}
-                  disabled={submitting}
-                >
-                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
-                    <path d="M8 8h8v8H8z" />
-                  </svg>
-                  {t('pairing.scanAction')}
-                </button>
+                {!pairingTarget.hasPairingDescriptor && (
+                  <button
+                    className="pairing-page__scan-action"
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    disabled={submitting}
+                  >
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
+                      <path d="M8 8h8v8H8z" />
+                    </svg>
+                    {t('pairing.scanAction')}
+                  </button>
+                )}
               </div>
             </form>
           )}
@@ -694,6 +728,25 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       )}
     </div>
   );
+};
+
+/**
+ * A scanner result commonly changes only the hash on the current Mobile Web
+ * document. Hash navigation does not remount React by itself, but pairing
+ * bootstrap is intentionally mount-scoped so stale attempts cannot cross
+ * targets. Key the content by the complete pairing route to give every
+ * scanned descriptor a fresh, single-owner connection lifecycle.
+ */
+const PairingPage: React.FC<PairingPageProps> = (props) => {
+  const [routeKey, setRouteKey] = useState(currentPairingRouteKey);
+
+  useEffect(() => {
+    const handleHashChange = () => setRouteKey(currentPairingRouteKey());
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  return <PairingPageContent key={routeKey} {...props} />;
 };
 
 export default PairingPage;
