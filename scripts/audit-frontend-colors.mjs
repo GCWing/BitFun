@@ -804,6 +804,10 @@ function formatSurfaceSummary(surfaceReport) {
   return `${surfaceReport.roots.length} owner roots`;
 }
 
+function formatGitHubCommandValue(value) {
+  return value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+}
+
 function main() {
   const options = parseArgs(process.argv.slice(2));
   const registry = loadRegistry(options.registryPath);
@@ -836,7 +840,12 @@ function main() {
     }
     if (report.failures.length > 0) {
       console.error('\nFrontend color governance failures:');
-      for (const failure of report.failures) console.error(`- ${failure}`);
+      for (const failure of report.failures) {
+        console.error(`- ${failure}`);
+        if (process.env.GITHUB_ACTIONS === 'true') {
+          console.error(`::error title=Frontend color governance::${formatGitHubCommandValue(failure)}`);
+        }
+      }
     } else {
       console.log(`[frontend-colors] all ${report.selectedSurfaceIds.length} selected surfaces passed.`);
     }
