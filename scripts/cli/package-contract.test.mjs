@@ -26,7 +26,7 @@ for (const workflow of [
   '.github/workflows/cli-package.yml',
   '.github/workflows/cli-package-manual.yml',
   '.github/workflows/linux-binaries.yml',
-  '.github/workflows/nightly.yml',
+  '.github/workflows/nightly-artifacts.yml',
 ]) {
   const content = read(workflow);
   assert.match(content, /oven-sh\/setup-bun@v2/);

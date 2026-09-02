@@ -57,7 +57,7 @@ pnpm run prepare:dsh-profile   # optional: local DeepSeek Harness sessions
 | Command | When to use |
 |---|---|
 | `pnpm run desktop:build:fast` | Debug build without bundling; fastest compile for manual testing |
-| `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
+| `pnpm run desktop:build:release-fast` | Release-like no-bundle build with reduced LTO; run it in place and never distribute the raw executable alone |
 | `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
 
 Set `CARGO_PROFILE_DEV_DEBUG=2` when full breakpoint debug information is
@@ -68,6 +68,11 @@ required. The default dev profile keeps line tables while reducing PDB size.
 `desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` prune stale `target/<profile>` cache generations. Incremental roots keep the latest crate/session. Cargo fingerprint JSON identifies distinct lib, test, bin, and build-script units; GC keeps the latest generation of each unit plus every generation whose Cargo-managed `invoked.timestamp` was refreshed within the last 24 hours, then removes orphaned `deps` files and `build` directories. Busy detection is scoped to Cargo lock files in the selected profile, so an unrelated worktree build does not suppress GC. Manual: `pnpm run target:gc -- --profile debug`. Disable with `BITFUN_TARGET_GC=0`; dry-run with `BITFUN_TARGET_GC_DRY_RUN=1`; adjust the grace window with `BITFUN_TARGET_GC_MIN_AGE_HOURS`.
 
 `release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
+
+All commands that pass `--no-bundle` emit a staged runtime tree rather than a
+single-file application. The executable depends on the adjacent `frontend`,
+`flashgrep`, `mobile-web`, and `resources` directories. Use
+`pnpm run desktop:build:nsis` for a distributable Windows installer.
 
 ## DevTools feature (model rule)
 

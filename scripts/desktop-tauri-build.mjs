@@ -105,6 +105,12 @@ async function main() {
     console.warn(`[target-gc] skipped: ${error.message || String(error)}`);
   }
 
+  if (r.status === 0 && forward.includes('--no-bundle')) {
+    console.warn(
+      '[tauri-build] No bundle was produced. The raw desktop executable depends on its adjacent frontend, flashgrep, mobile-web, and resources directories and must not be distributed by itself.'
+    );
+  }
+
   process.exit(r.status ?? 1);
 }
 

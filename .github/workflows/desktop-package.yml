@@ -187,6 +187,7 @@ jobs:
               if (-not (Test-Path $desktopExe)) {
                 throw "Desktop executable was not found after NSIS build: $desktopExe"
               }
+              $env:BITFUN_INSTALLER_APP_EXE = $desktopExe
               pnpm run installer:build:only
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

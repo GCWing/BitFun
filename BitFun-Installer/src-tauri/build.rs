@@ -5,6 +5,15 @@ use std::path::{Path, PathBuf};
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
+const REQUIRED_PAYLOAD_FILES: [&str; 6] = [
+    "bitfun-desktop.exe",
+    "frontend/dist/index.html",
+    "mobile-web/dist/index.html",
+    "resources/ext-host/extension-host.js",
+    "resources/worker_host.js",
+    "flashgrep/flashgrep-x86_64-pc-windows-msvc.exe",
+];
+
 fn main() {
     if let Err(err) = build_embedded_payload() {
         panic!("failed to build embedded payload: {err}");
@@ -18,12 +27,20 @@ fn build_embedded_payload() -> Result<(), Box<dyn std::error::Error>> {
     let payload_dir = manifest_dir.join("payload");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
     let out_zip = out_dir.join("embedded_payload.zip");
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
 
     println!("cargo:rerun-if-changed={}", payload_dir.display());
+
+    if profile != "debug" {
+        validate_release_payload(&payload_dir)?;
+    }
 
     let mut file_count = 0usize;
     if payload_dir.exists() && payload_dir.is_dir() {
         file_count = create_payload_zip(&payload_dir, &out_zip)?;
+        if profile != "debug" {
+            validate_release_payload_zip(&out_zip)?;
+        }
         emit_rerun_for_files(&payload_dir)?;
     } else {
         create_empty_zip(&out_zip)?;
@@ -34,6 +51,50 @@ fn build_embedded_payload() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:warning=embedded payload files: {file_count}");
 
     Ok(())
+}
+
+fn validate_release_payload(payload_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let missing = REQUIRED_PAYLOAD_FILES
+        .iter()
+        .filter(|relative| !payload_dir.join(relative).is_file())
+        .copied()
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "release installer payload is incomplete; run installer:build so these files are staged: {}",
+        missing.join(", ")
+    )
+    .into())
+}
+
+fn validate_release_payload_zip(out_zip: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::open(out_zip)?;
+    let mut archive = zip::ZipArchive::new(file)?;
+    let mut available = std::collections::HashSet::new();
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index)?;
+        if !entry.name().ends_with('/') {
+            available.insert(entry.name().replace('\\', "/"));
+        }
+    }
+
+    let missing = REQUIRED_PAYLOAD_FILES
+        .iter()
+        .filter(|relative| !available.contains(**relative))
+        .copied()
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "release installer payload zip is incomplete after archiving; missing entries: {}",
+        missing.join(", ")
+    )
+    .into())
 }
 
 fn emit_rerun_for_files(dir: &Path) -> io::Result<()> {

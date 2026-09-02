@@ -7,7 +7,7 @@
  * 3. Build installer app (Tauri).
  *
  * Usage:
- *   node scripts/build-installer.cjs [--skip-app-build] [--dev] [--mode fast|release]
+ *   node scripts/build-installer.cjs [--skip-app-build] [--dev] [--mode fast|release] [--app-exe path]
  *   node scripts/build-installer.cjs --fast   # same as --mode fast
  */
 
@@ -26,6 +26,14 @@ const isDev = rawArgs.includes("--dev");
 const showHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
 const STRICT_PAYLOAD_VALIDATION = !isDev;
 const MIN_APP_EXE_BYTES = 5 * 1024 * 1024;
+const REQUIRED_PAYLOAD_FILES = [
+  "bitfun-desktop.exe",
+  "frontend/dist/index.html",
+  "mobile-web/dist/index.html",
+  "resources/ext-host/extension-host.js",
+  "resources/worker_host.js",
+  "flashgrep/flashgrep-x86_64-pc-windows-msvc.exe",
+];
 
 function getMode(args) {
   if (args.includes("--fast")) return "fast";
@@ -34,6 +42,16 @@ function getMode(args) {
     return args[modeFlagIndex + 1].trim();
   }
   return "release";
+}
+
+function getArgValue(args, flag) {
+  const flagIndex = args.indexOf(flag);
+  if (flagIndex < 0) return null;
+  const value = args[flagIndex + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`Missing value for ${flag}`);
+  }
+  return value.trim();
 }
 
 const buildMode = getMode(rawArgs);
@@ -68,6 +86,8 @@ Options:
   --mode <fast|release>  Build mode (default: release)
   --fast                 Alias for --mode fast
   --skip-app-build       Skip building main BitFun app
+  --app-exe <path>       Exact desktop executable to package. Required when the
+                         desired build is outside the active Cargo target dir.
   --dev                  Run installer with tauri dev instead of tauri build
                          and allow placeholder payload fallback
   --help, -h             Show this help
@@ -127,7 +147,7 @@ function copyDirRecursiveWithManifest(srcDir, destDir, manifest, payloadRoot) {
 
 function shouldCopySiblingRuntimeFile(fileName, appExeBaseName) {
   if (fileName === appExeBaseName) return false;
-  if (fileName === ".cargo-lock") return false;
+  if (fileName.startsWith(".cargo-")) return false;
 
   const lower = fileName.toLowerCase();
   if (
@@ -143,45 +163,54 @@ function shouldCopySiblingRuntimeFile(fileName, appExeBaseName) {
   return true;
 }
 
-function getCandidateAppExePaths(mode) {
-  const preferredProfiles =
-    mode === "fast"
-      ? ["release-fast", "release", "debug"]
-      : ["release", "release-fast", "debug"];
+function getExpectedAppProfile(mode) {
+  return mode === "fast" ? "release-fast" : "release";
+}
 
-  const candidates = [];
-  for (const profile of preferredProfiles) {
-    candidates.push(
-      path.join(
-        BITFUN_ROOT,
-        "target",
-        "x86_64-pc-windows-msvc",
-        profile,
-        "bitfun-desktop.exe"
-      ),
-      path.join(
-        BITFUN_ROOT,
-        "src",
-        "apps",
-        "desktop",
-        "target",
-        profile,
-        "bitfun-desktop.exe"
-      ),
-      path.join(BITFUN_ROOT, "target", profile, "bitfun-desktop.exe")
-    );
+function resolveCargoTargetDir(env = process.env) {
+  const configured = env.CARGO_TARGET_DIR;
+  if (!configured) return path.join(BITFUN_ROOT, "target");
+  return path.isAbsolute(configured)
+    ? path.normalize(configured)
+    : path.resolve(BITFUN_ROOT, configured);
+}
+
+function resolveAppExePath(mode, args = rawArgs, env = process.env) {
+  const configured = getArgValue(args, "--app-exe") || env.BITFUN_INSTALLER_APP_EXE;
+  if (configured) {
+    return path.isAbsolute(configured)
+      ? path.normalize(configured)
+      : path.resolve(BITFUN_ROOT, configured);
   }
 
-  return candidates;
+  return path.join(
+    resolveCargoTargetDir(env),
+    getExpectedAppProfile(mode),
+    "bitfun-desktop.exe"
+  );
 }
 
-if (showHelp) {
-  printHelpAndExit();
+function validateRequiredPayloadFiles(payloadDir, manifest) {
+  const manifestPaths = new Set(manifest.files.map((entry) => entry.path));
+  const missing = REQUIRED_PAYLOAD_FILES.filter((relativePath) => {
+    const diskPath = path.join(payloadDir, ...relativePath.split("/"));
+    return !manifestPaths.has(relativePath) || !fs.existsSync(diskPath);
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Installer payload is incomplete. Missing required files: ${missing.join(", ")}`
+    );
+  }
 }
 
-if (!validModes.has(buildMode)) {
-  error(`Invalid mode "${buildMode}". Supported: fast, release`);
-}
+function main() {
+  if (showHelp) {
+    printHelpAndExit();
+  }
+
+  if (!validModes.has(buildMode)) {
+    error(`Invalid mode "${buildMode}". Supported: fast, release`);
+  }
 
 log(`Build mode: ${buildMode}`);
 if (isDev) {
@@ -201,20 +230,15 @@ if (!skipAppBuild) {
 // Step 2: Prepare payload.
 log("Step 2: Preparing installer payload...");
 
-const possiblePaths = getCandidateAppExePaths(buildMode);
-let appExePath = null;
-for (const p of possiblePaths) {
-  if (fs.existsSync(p)) {
-    appExePath = p;
-    break;
-  }
-}
+  const expectedAppExePath = resolveAppExePath(buildMode);
+  const appExePath = fs.existsSync(expectedAppExePath) ? expectedAppExePath : null;
 
-if (!appExePath && STRICT_PAYLOAD_VALIDATION) {
-  error(
-    "Could not find built BitFun executable for payload. Build the desktop app first or run with --dev for local debug."
-  );
-}
+  if (!appExePath && STRICT_PAYLOAD_VALIDATION) {
+    error(
+      `Could not find the exact ${getExpectedAppProfile(buildMode)} BitFun executable at ${expectedAppExePath}. ` +
+        "Build that profile first, set BITFUN_INSTALLER_APP_EXE, or pass --app-exe."
+    );
+  }
 
 if (appExePath) {
   ensureCleanDir(PAYLOAD_DIR);
@@ -254,7 +278,14 @@ if (appExePath) {
 
   // Keep installer payload aligned with the desktop app's runtime lookup paths.
   // `mobile-web` may be emitted as a sibling directory in no-bundle builds.
-  const runtimeDirs = ["resources", "locales", "swiftshader", "mobile-web"];
+  const runtimeDirs = [
+    "resources",
+    "locales",
+    "swiftshader",
+    "mobile-web",
+    "frontend",
+    "flashgrep",
+  ];
   for (const dirName of runtimeDirs) {
     const srcDir = path.join(releaseDir, dirName);
     if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
@@ -263,6 +294,14 @@ if (appExePath) {
     const destDir = path.join(PAYLOAD_DIR, dirName);
     copyDirRecursiveWithManifest(srcDir, destDir, manifest, PAYLOAD_DIR);
     log(`Copied runtime directory: ${dirName}`);
+  }
+
+  if (STRICT_PAYLOAD_VALIDATION) {
+    try {
+      validateRequiredPayloadFiles(PAYLOAD_DIR, manifest);
+    } catch (validationError) {
+      error(validationError.message);
+    }
   }
 
   const manifestPath = path.join(PAYLOAD_DIR, "payload-manifest.json");
@@ -307,3 +346,17 @@ if (isDev) {
     )}`
   );
 }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  REQUIRED_PAYLOAD_FILES,
+  getExpectedAppProfile,
+  resolveAppExePath,
+  resolveCargoTargetDir,
+  shouldCopySiblingRuntimeFile,
+  validateRequiredPayloadFiles,
+};

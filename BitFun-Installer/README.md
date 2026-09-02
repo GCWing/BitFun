@@ -43,7 +43,14 @@ Use this as the release entrypoint. `pnpm run tauri:build` does not prepare vali
 pnpm run installer:build:only
 ```
 
-`installer:build:only` requires an existing valid desktop executable in the expected target output path.
+`installer:build:only` requires an existing `target/release/bitfun-desktop.exe`
+and its adjacent runtime directories. It never falls back to `release-fast` or
+`debug`. For an explicit Cargo target, pass the exact executable:
+
+```powershell
+$env:BITFUN_INSTALLER_APP_EXE = "target/x86_64-pc-windows-msvc/release/bitfun-desktop.exe"
+pnpm run installer:build:only
+```
 
 ## Architecture
 
@@ -176,7 +183,9 @@ pnpm run installer:build:fast
 pnpm run installer:build:only
 ```
 
-If payload validation fails, the build exits with an error.
+If any required desktop runtime file is missing, or payload validation fails,
+the build exits with an error. The installer verifies every manifest file's
+size and SHA-256 after extraction before registering the installation.
 
 ### Installer-only fast build
 
