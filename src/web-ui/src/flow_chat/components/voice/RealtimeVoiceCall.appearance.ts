@@ -3,8 +3,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const realtimeVoiceCallAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'realtime-voice-call',
   parts: [
-    { id: 'trigger' },
-    { id: 'root', propertyProfile: 'overlay', visualRole: 'popup' },
+    { id: 'root' },
     { id: 'header' },
     { id: 'avatar' },
     { id: 'heading' },

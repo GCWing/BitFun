@@ -1,7 +1,7 @@
 /**
- * Floating mini chat — circular button in bottom-right that expands to a panel
- * hosting the main window session surface. Used in non-agent scenes only; the
- * agent scene already shows that surface as its own scene.
+ * Hello — the bottom-right entry that expands to the shared session surface.
+ * Text chat is always the default; realtime voice is an explicit mode switch
+ * inside the expanded panel.
  *
  * The panel renders ChatPane verbatim — same conversation view, same full
  * composer as the session scene — so it never lags behind the main chat UI and
@@ -11,6 +11,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Loader2, Mic } from 'lucide-react';
 
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
@@ -40,6 +41,8 @@ import {
   canRenderFloatingMiniChatSession,
   isFloatingMiniChatIsolated,
 } from './floatingMiniChatIsolation';
+import { RealtimeVoiceCallPanel } from '@/flow_chat/components/voice/RealtimeVoiceCallPanel';
+import { useRealtimeVoiceCall } from '@/flow_chat/components/voice/RealtimeVoiceCallContext';
 import './FloatingMiniChat.scss';
 
 /**
@@ -55,6 +58,12 @@ const PANEL_OPEN_SETTLE_MS = 280;
 
 export const FloatingMiniChat: React.FC = () => {
   const { t, i18n } = useTranslation('flow-chat');
+  const { t: tVoice } = useTranslation('settings/voice-input');
+  const {
+    phase: voicePhase,
+    start: startVoiceCall,
+    end: endVoiceCall,
+  } = useRealtimeVoiceCall();
   const activeTabId = useSceneStore((state) => state.activeTabId);
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
   const composerClaims = useMiniAppStore((state) => state.composerClaims);
@@ -73,6 +82,8 @@ export const FloatingMiniChat: React.FC = () => {
   /** True while a press that may legitimately close the panel is in flight. */
   const backdropArmedRef = useRef(false);
   const isOpen = phase !== 'closed';
+  const isVoiceMode = voicePhase !== 'idle';
+  const isVoiceModeTransitioning = voicePhase === 'connecting' || voicePhase === 'ending';
   const panelRef = useRef<HTMLDivElement>(null);
   const previousHostSessionRef = useRef<{
     claimToken: string;
@@ -131,6 +142,7 @@ export const FloatingMiniChat: React.FC = () => {
   const displayedTitle = isMiniAppBubbleIsolated
     ? (bubbleCustomization?.title || activeMiniAppName)
     : sessionTitle;
+  const popupTitle = isVoiceMode ? tVoice('voiceCall.call.title') : displayedTitle;
 
   const isStreaming = useMemo(() => {
     const lastTurn = displayedSession?.dialogTurns.at(-1);
@@ -157,8 +169,9 @@ export const FloatingMiniChat: React.FC = () => {
   }, []);
 
   const handleClose = useCallback(() => {
+    if (isVoiceMode) endVoiceCall();
     setPhase('closed');
-  }, []);
+  }, [endVoiceCall, isVoiceMode]);
 
   const setMiniAppComposerDraft = useCallback((
     text: string,
@@ -335,7 +348,7 @@ export const FloatingMiniChat: React.FC = () => {
   // the bubble is open; if the Agent session has not reached FlowChat yet,
   // wait for that exact id instead of falling back to the latest normal chat.
   useEffect(() => {
-    if (!isOpen || !activeComposerToken || !activeComposerSessionId) return;
+    if (isVoiceMode || !isOpen || !activeComposerToken || !activeComposerSessionId) return;
 
     if (activateMiniAppSession(activeComposerClaim)) return;
     const unsubscribe = flowChatStore.subscribe((state) => {
@@ -350,6 +363,7 @@ export const FloatingMiniChat: React.FC = () => {
     activeComposerSessionId,
     activeComposerToken,
     isOpen,
+    isVoiceMode,
   ]);
 
   // A MiniApp holding the composer can hand it a prepared prompt (PPT Live's
@@ -407,7 +421,7 @@ export const FloatingMiniChat: React.FC = () => {
   // Mount the session surface only once the open transition has been handed to
   // the compositor, so ChatPane's mount cost can no longer stall the animation.
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || isVoiceMode) {
       setSurfaceMounted(false);
       return;
     }
@@ -429,7 +443,7 @@ export const FloatingMiniChat: React.FC = () => {
       cancelAnimationFrame(outerFrame);
       cancelAnimationFrame(innerFrame);
     };
-  }, [isOpen]);
+  }, [isOpen, isVoiceMode]);
 
   // Settle `opening` → `open` once the panel reaches full size.
   useEffect(() => {
@@ -467,15 +481,23 @@ export const FloatingMiniChat: React.FC = () => {
     .join(' ');
 
   return (
-    <div data-bf-component="floating-mini-chat" data-bf-part="root" data-bf-mode={activeComposerClaim ? 'miniapp' : 'chat'} data-bf-state={[
-      isOpen && 'open',
-      isStreaming && 'processing',
-      shouldAvoidMiniAppCustomizer && 'customizing',
-    ].filter(Boolean).join(' ') || undefined} className={[
-      'bitfun-fmc',
-      isOpen && 'bitfun-fmc--open',
-      shouldAvoidMiniAppCustomizer && 'bitfun-fmc--miniapp-customizing',
-    ].filter(Boolean).join(' ')}>
+    <div
+      data-bf-component="floating-mini-chat"
+      data-bf-part="root"
+      data-bf-mode={activeComposerClaim ? 'miniapp' : 'chat'}
+      data-bf-communication-mode={isVoiceMode ? 'voice' : 'chat'}
+      data-bf-state={[
+        isOpen && 'open',
+        isStreaming && 'processing',
+        isVoiceMode && 'voice',
+        shouldAvoidMiniAppCustomizer && 'customizing',
+      ].filter(Boolean).join(' ') || undefined}
+      className={[
+        'bitfun-fmc',
+        isOpen && 'bitfun-fmc--open',
+        shouldAvoidMiniAppCustomizer && 'bitfun-fmc--miniapp-customizing',
+      ].filter(Boolean).join(' ')}
+    >
       {/* Fullscreen backdrop to catch outside clicks. It stays inert until the
           panel has finished scaling up: until then the panel's hit area is
           still smaller than its final rect, so a click aimed at the panel would
@@ -504,7 +526,7 @@ export const FloatingMiniChat: React.FC = () => {
         />
       )}
 
-      {/* Circular trigger — sits above the backdrop and the collapsed panel via
+      {/* Hello trigger — sits above the backdrop and the collapsed panel via
           an explicit z-index, and is taken out of hit testing with
           `visibility` (not just pointer-events) while the panel is open. */}
       <button
@@ -540,7 +562,9 @@ export const FloatingMiniChat: React.FC = () => {
             {renderMiniAppIcon(activeMiniAppIcon, 20)}
           </span>
         ) : (
-          <Icon name="side-chat" size="md" />
+          <span className="bitfun-fmc__button-label">
+            {tVoice('voiceCall.call.launcherLabel')}
+          </span>
         )}
       </button>
 
@@ -557,7 +581,16 @@ export const FloatingMiniChat: React.FC = () => {
             Agentic MiniApp replaces that switcher with app identity, including
             during claim/session bootstrap, so normal chats are never exposed. */}
         <div className="bitfun-fmc__header" data-bf-component="floating-mini-chat" data-bf-part="header">
-          {isMiniAppBubbleIsolated ? (
+          {isVoiceMode ? (
+            <span
+              className="bitfun-fmc__voice-mode-icon"
+              data-bf-component="floating-mini-chat"
+              data-bf-part="voiceModeIcon"
+              aria-hidden="true"
+            >
+              <Mic size={14} />
+            </span>
+          ) : isMiniAppBubbleIsolated ? (
             <div
               className="bitfun-fmc__miniapp-session-icon"
               data-bf-component="floating-mini-chat"
@@ -571,8 +604,8 @@ export const FloatingMiniChat: React.FC = () => {
           )}
 
           <div className="bitfun-fmc__title-wrapper" data-bf-component="floating-mini-chat" data-bf-part="title">
-            <div className="bitfun-fmc__title-display" title={displayedTitle}>
-              <span className="bitfun-fmc__title-text">{displayedTitle}</span>
+            <div className="bitfun-fmc__title-display" title={popupTitle}>
+              <span className="bitfun-fmc__title-text">{popupTitle}</span>
             </div>
           </div>
 
@@ -596,7 +629,8 @@ export const FloatingMiniChat: React.FC = () => {
             panel is open to avoid running a second VirtualMessageList and store
             sync in the background while the agent streams in another scene. */}
         <div className="bitfun-fmc__body" data-bf-component="floating-mini-chat" data-bf-part="body">
-          {surfaceMounted && isMiniAppSessionReady && (
+          {isVoiceMode ? <RealtimeVoiceCallPanel /> : null}
+          {!isVoiceMode && surfaceMounted && isMiniAppSessionReady && (
             <ChatPane
               width={0}
               isFullscreen={false}
@@ -620,7 +654,7 @@ export const FloatingMiniChat: React.FC = () => {
               ) : undefined}
             />
           )}
-          {surfaceMounted && isMiniAppBubbleIsolated && !isMiniAppSessionReady && (
+          {!isVoiceMode && surfaceMounted && isMiniAppBubbleIsolated && !isMiniAppSessionReady && (
             <div className="bitfun-fmc__miniapp-session-pending" data-bf-component="floating-mini-chat" data-bf-part="pending">
               <div
                 className="bitfun-fmc__miniapp-session-pending-icon"
@@ -636,6 +670,36 @@ export const FloatingMiniChat: React.FC = () => {
             </div>
           )}
         </div>
+
+        <footer
+          className="bitfun-fmc__mode-switch"
+          data-bf-component="floating-mini-chat"
+          data-bf-part="modeSwitch"
+        >
+          <button
+            type="button"
+            className={`bitfun-fmc__mode-switch-button${isVoiceMode ? ' is-voice' : ''}`}
+            data-testid="hello-realtime-voice-mode-switch"
+            data-bf-component="floating-mini-chat"
+            data-bf-part="modeSwitchButton"
+            aria-pressed={isVoiceMode}
+            disabled={voicePhase === 'ending'}
+            onClick={isVoiceMode ? endVoiceCall : startVoiceCall}
+          >
+            {isVoiceModeTransitioning ? (
+              <Loader2 className="bitfun-fmc__mode-switch-spinner" size={15} aria-hidden="true" />
+            ) : isVoiceMode ? (
+              <Icon name="side-chat" size="sm" aria-hidden="true" />
+            ) : (
+              <Mic size={15} aria-hidden="true" />
+            )}
+            <span>
+              {tVoice(isVoiceMode
+                ? 'voiceCall.call.switchToChat'
+                : 'voiceCall.call.switchToVoice')}
+            </span>
+          </button>
+        </footer>
       </div>
     </div>
   );

@@ -65,7 +65,7 @@
     },
     "status": {
       "label": "Connection setup",
-      "description": "After saving, the Hello launcher at the bottom-right of the client can start a full-duplex voice conversation."
+      "description": "After saving, open Hello at the bottom-right of the client and switch from text chat to realtime voice."
     },
     "save": "Save realtime voice",
     "messages": {
@@ -77,6 +77,8 @@
       "title": "BitFun realtime call",
       "button": "Start a realtime voice call",
       "launcherLabel": "Hello",
+      "switchToVoice": "Switch to realtime voice",
+      "switchToChat": "Return to text chat",
       "empty": "Just start talking. When you ask for work, I will start a new BitFun session.",
       "mute": "Mute microphone",
       "unmute": "Unmute microphone",

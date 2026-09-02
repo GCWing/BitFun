@@ -128,6 +128,9 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(source).toContain('previousHostSessionRef');
     expect(source).toContain('restorePreviousHostSession(activeComposerToken)');
     expect(source).toContain('restorePreviousHostSession();');
+    expect(source).toContain(
+      'if (isVoiceMode || !isOpen || !activeComposerToken || !activeComposerSessionId) return;'
+    );
   });
 
   it('renders the MiniApp entry model against the topic session workspace', () => {

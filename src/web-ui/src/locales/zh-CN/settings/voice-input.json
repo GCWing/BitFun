@@ -65,7 +65,7 @@
     },
     "status": {
       "label": "连接配置",
-      "description": "保存后，客户端右下角的 Hello 入口即可建立全双工语音通话。"
+      "description": "保存后，打开客户端右下角的 Hello，即可从文字聊天切换到实时语音。"
     },
     "save": "保存实时语音",
     "messages": {
@@ -77,6 +77,8 @@
       "title": "BitFun 实时通话",
       "button": "开始实时语音通话",
       "launcherLabel": "Hello",
+      "switchToVoice": "切换到实时语音",
+      "switchToChat": "返回文字聊天",
       "empty": "直接说话即可。需要做事时，我会启动一个新的 BitFun 会话。",
       "mute": "静音麦克风",
       "unmute": "取消静音",
