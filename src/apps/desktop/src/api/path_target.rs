@@ -351,8 +351,12 @@ pub async fn write_text_file(
     }
 }
 
-pub async fn path_exists(app_state: &AppState, raw_path: &str) -> Result<bool, String> {
-    match resolve_desktop_path_target(app_state, raw_path, None).await? {
+pub async fn path_exists(
+    app_state: &AppState,
+    raw_path: &str,
+    preferred_remote_connection_id: Option<&str>,
+) -> Result<bool, String> {
+    match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local { resolved_path, .. } => Ok(resolved_path.exists()),
         DesktopPathTarget::Remote {
             requested_path,

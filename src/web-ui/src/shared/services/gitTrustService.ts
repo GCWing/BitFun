@@ -49,6 +49,14 @@ const promptQuietUntil = new Map<string, number>();
  */
 const promptKey = repositoryPathKey;
 
+/** Names an ownership rejection with localized, actionable copy. */
+export function describeGitTrustFailure(failure: unknown): string | undefined {
+  const repositoryPath = gitRepositoryUntrustedPath(failure);
+  return repositoryPath
+    ? i18nService.t('panels/git:trust.required', { path: repositoryPath })
+    : undefined;
+}
+
 /** Test seam: forgets in-flight prompts and remembered decisions. */
 export function resetGitTrustDecisions(): void {
   inFlightRequests.clear();

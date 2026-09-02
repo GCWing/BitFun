@@ -4,6 +4,9 @@
 //! and provider-neutral review-platform response semantics. Concrete HTTP
 //! transport lives in `review_platform_http`.
 
+use crate::repository_trust::{
+    is_untrusted_repository_message, normalize_trust_path, untrusted_repository_path_from_message,
+};
 use crate::review_platform_http::{
     send_json as send_review_json, send_json_response as send_review_json_response,
     send_json_response_bounded as send_review_json_response_bounded,
@@ -63,6 +66,11 @@ static TOKEN_STORE_TEMP_NONCE: std::sync::atomic::AtomicU64 = std::sync::atomic:
 pub enum ReviewPlatformError {
     #[error("Invalid repository path: {0}")]
     InvalidRepository(String),
+    #[error("Repository ownership is not trusted: {repository_path}")]
+    RepositoryUntrusted {
+        repository_path: String,
+        detail: String,
+    },
     #[error("Remote not found: {0}")]
     RemoteNotFound(String),
     #[error("Unsupported review platform: {0}")]
@@ -81,6 +89,38 @@ pub enum ReviewPlatformError {
     EvidenceTooLarge { resource: String, limit: usize },
     #[error("Requested Issue {issue_id} is a pull request")]
     TargetIsPullRequest { issue_id: String },
+}
+
+impl ReviewPlatformError {
+    pub fn untrusted_repository_path(&self) -> Option<&str> {
+        match self {
+            Self::RepositoryUntrusted {
+                repository_path, ..
+            } => Some(repository_path),
+            _ => None,
+        }
+    }
+}
+
+/// Stable boundary error for a repository ownership rejection.
+pub fn untrusted_repository_error_message(repository_path: &str) -> String {
+    crate::repository_trust::untrusted_repository_error_message(repository_path)
+}
+
+/// Classifies a failed Git probe without making Review Platform depend on the
+/// full Git capability feature.
+pub fn classify_git_command_failure(repository_path: &str, message: String) -> ReviewPlatformError {
+    if is_untrusted_repository_message(&message) {
+        let repository_path = untrusted_repository_path_from_message(&message)
+            .or_else(|| normalize_trust_path(repository_path))
+            .unwrap_or_else(|| repository_path.to_string());
+        return ReviewPlatformError::RepositoryUntrusted {
+            repository_path,
+            detail: message,
+        };
+    }
+
+    ReviewPlatformError::InvalidRepository(message)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -4371,7 +4411,7 @@ async fn execute_git_command(
     } else {
         String::from_utf8_lossy(&output.stderr).to_string()
     };
-    Err(ReviewPlatformError::InvalidRepository(message))
+    Err(classify_git_command_failure(current_dir, message))
 }
 
 fn review_evidence_error(error: ReviewPlatformError, resource: &str) -> ReviewPlatformError {
@@ -7467,6 +7507,42 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
     use tokio::fs;
+
+    #[test]
+    fn git_ownership_rejection_keeps_a_stable_repository_trust_contract() {
+        let detail = concat!(
+            "fatal: detected dubious ownership in repository at '/srv/shared/repo'\n",
+            "To add an exception for this directory, call:\n",
+            "git config --global --add safe.directory /srv/shared/repo",
+        );
+
+        let error = classify_git_command_failure("/srv/controller/path", detail.to_string());
+
+        assert!(matches!(
+            error,
+            ReviewPlatformError::RepositoryUntrusted {
+                ref repository_path,
+                detail: ref captured_detail,
+            } if repository_path == "/srv/shared/repo" && captured_detail == detail
+        ));
+        assert_eq!(error.untrusted_repository_path(), Some("/srv/shared/repo"));
+        assert_eq!(
+            untrusted_repository_error_message("/srv/shared/repo"),
+            "git_repository_untrusted: /srv/shared/repo"
+        );
+    }
+
+    #[test]
+    fn ordinary_git_failure_remains_an_invalid_repository_error() {
+        let error =
+            classify_git_command_failure("/srv/project", "fatal: not a git repository".to_string());
+
+        assert!(matches!(
+            error,
+            ReviewPlatformError::InvalidRepository(ref detail)
+                if detail == "fatal: not a git repository"
+        ));
+    }
 
     struct AlwaysRemoteWorkspace;
 

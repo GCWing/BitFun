@@ -3,14 +3,14 @@
  */
 
 import { gitAPI } from '@/infrastructure/api';
-import {
-  gitRepositoryUntrustedPath,
-  isGitRepositoryUntrustedError,
-} from '@/infrastructure/api/errors/TauriCommandError';
+import { isGitRepositoryUntrustedError } from '@/infrastructure/api/errors/TauriCommandError';
 import { createLogger } from '@/shared/utils/logger';
 import { measureAsync } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
+import { describeGitTrustFailure } from '@/shared/services/gitTrustService';
 import { gitStateManager } from '../state/GitStateManager';
+
+export { describeGitTrustFailure } from '@/shared/services/gitTrustService';
 
 const log = createLogger('GitService');
 export type { 
@@ -43,24 +43,6 @@ import {
   GitDiffParams,
   GitLogParams
 } from '../types';
-
-/**
- * Names the ownership wall behind a failed Git operation, or `undefined` when
- * that is not what went wrong.
- *
- * The rejection reaches a caller as a stable code from two directions: a local
- * executor throws it, and a remote one returns it in `result.error`. Neither is
- * a sentence. Passing it through puts `git_repository_untrusted:
- * /srv/shared/repo` in the panel next to a commit that did not happen, while
- * the very same wall on a status read names the repository and points at the
- * way out.
- */
-export function describeGitTrustFailure(failure: unknown): string | undefined {
-  const repositoryPath = gitRepositoryUntrustedPath(failure);
-  return repositoryPath
-    ? i18nService.t('panels/git:trust.required', { path: repositoryPath })
-    : undefined;
-}
 
 export class GitService {
   private static instance: GitService;

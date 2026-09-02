@@ -291,6 +291,33 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(container.querySelector('[role="status"]')).toBeTruthy();
   });
 
+  it('localizes the stable dialog-start prefix without translating provider details', async () => {
+    const store = useReviewActionBarStore.getState();
+    store.showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix the provider failure.'],
+      },
+      phase: 'fix_failed',
+    });
+    store.updatePhase(
+      'fix_failed',
+      'Failed to start dialog turn: provider quota exhausted',
+      'child-session',
+    );
+
+    await act(async () => {
+      root.render(<ReviewActionBar childSessionId="child-session" />);
+    });
+
+    expect(container.textContent).toContain(
+      'Unable to start this action: provider quota exhausted',
+    );
+    expect(container.textContent).not.toContain('Failed to start dialog turn:');
+  });
+
   it('keeps remediation in progress after submitting a fix turn', async () => {
     flowChatSessionsMock.set('child-session', {
       sessionId: 'child-session',
