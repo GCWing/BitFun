@@ -1128,7 +1128,8 @@
     border-radius: 6px;
     background: color-mix(in srgb, var(--bf-color-surface-raised) 72%, transparent);
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       color: var(--bf-color-content-secondary);
       flex-shrink: 0;
     }

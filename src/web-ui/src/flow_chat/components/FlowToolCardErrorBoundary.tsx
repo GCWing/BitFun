@@ -1,5 +1,5 @@
-import { Button } from '@bitfun/ui';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Button, Icon } from '@bitfun/ui';
+import { AlertTriangle } from 'lucide-react';
 import { Component, type ReactNode } from 'react';
 import { AmbientToolCard, AmbientToolCardHeader } from '@bitfun/ui/flow-chat';
 import type { FlowToolItem } from '../types/flow-chat';
@@ -101,7 +101,7 @@ function RenderFallback({
                 type="button"
                 variant="outline"
                 size="sm"
-                leadingIcon={<RefreshCw size={12} />}
+                leadingIcon={<Icon name="refresh" size="xs" />}
               >
                 Retry render
               </Button>

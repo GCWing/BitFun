@@ -1,8 +1,8 @@
  
 
 import React, { useCallback } from 'react';
-import { Globe } from 'lucide-react';
-import { ActionItem, Button, Select, Tooltip } from '@bitfun/ui';
+
+import { ActionItem, Button, Select, Tooltip, Icon } from '@bitfun/ui';
 import { useLanguageSelector } from '../hooks/useI18n';
 import type { LocaleId } from '../types';
 import './LanguageSelector.scss';
@@ -53,7 +53,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
               disabled={isChanging}
               leadingIcon={(
                 <span data-bf-component="language-selector" data-bf-part="icon">
-                  <Globe size={16} />
+                  <Icon name="browser" size="md" />
                 </span>
               )}
             >

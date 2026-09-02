@@ -18,11 +18,22 @@
     "revert": "Revert",
     "install": "Install",
     "restorePreset": "Restore preset",
-    "predownloadAcp": "Predownload ACP"
+    "predownloadAcp": "Predownload ACP",
+    "retry": "Reload"
   },
   "json": {
     "title": "JSON config",
     "description": "Edit the acpClients config directly."
+  },
+  "security": {
+    "secretWarning": "ACP JSON and environment variables may contain API keys or access tokens. BitFun saves them in the configuration on the current execution host. Do not paste them into online JSON validators, chats, or support tickets."
+  },
+  "installConfirm": {
+    "title": "Install {{name}} CLI?",
+    "message": "Target host: {{host}}. BitFun will run “{{command}}” to install the npm package globally on that host. This changes the host's global command environment and may require network and write access.",
+    "localHost": "Current execution host",
+    "packageUnknown": "BitFun could not verify the install package for this Agent, so installation was cancelled",
+    "confirm": "Install on target host"
   },
   "presets": {
     "opencode": { "description": "Native ACP support." },
@@ -108,6 +119,7 @@
   },
   "notifications": {
     "loadFailed": "Failed to load ACP config",
+    "loadFailedLocked": "ACP configuration could not be read. This page is locked to avoid replacing the existing Agent configuration with an empty one.",
     "saveSuccess": "ACP config saved",
     "configAdded": "ACP agent config added",
     "configAddedManualCliRequired": "{{name}} config added. Install the {{command}} CLI manually, then refresh detection.",

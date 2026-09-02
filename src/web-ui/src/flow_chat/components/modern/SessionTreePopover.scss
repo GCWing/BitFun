@@ -211,7 +211,8 @@
     text-align: left;
     cursor: pointer;
 
-    > svg {
+    > svg,
+    > [data-bf-component='icon'] {
       flex: 0 0 auto;
       color: var(--bf-color-content-secondary);
     }

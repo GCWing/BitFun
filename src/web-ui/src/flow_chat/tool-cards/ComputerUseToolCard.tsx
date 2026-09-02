@@ -1,23 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import {
-  AppWindow,
-  AlertTriangle,
-  Camera,
-  ChevronsUpDown,
-  Clipboard,
-  Clock,
-  ExternalLink,
-  Info,
-  Keyboard,
-  Monitor,
-  Move,
-  MousePointer2,
-  MousePointerClick,
-  Settings,
-  Terminal,
-} from 'lucide-react';
+import { AlertTriangle, Camera, ChevronsUpDown, Clipboard, Keyboard, Monitor, Move, MousePointer2, MousePointerClick } from 'lucide-react';
 
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -103,7 +87,7 @@ function actionIcon(action: string): React.ReactNode {
   if (action === 'drag') return <Move size={16} />;
   if (action.includes('move') || action === 'locate') return <MousePointer2 size={16} />;
   if (action === 'key_chord' || action === 'type_text' || action === 'paste') return <Keyboard size={16} />;
-  if (action === 'wait') return <Clock size={16} />;
+  if (action === 'wait') return <Icon name="clock" size="md" />;
   if (
     action === 'list_apps'
     || action === 'get_app_state'
@@ -115,12 +99,12 @@ function actionIcon(action: string): React.ReactNode {
     || action.startsWith('build_')
     || action.startsWith('visual_')
   ) {
-    return <AppWindow size={16} />;
+    return <Icon name="floating-window" size="md" />;
   }
-  if (action.startsWith('open_')) return <ExternalLink size={16} />;
+  if (action.startsWith('open_')) return <Icon name="arrow-up-right" size="md" />;
   if (action.startsWith('clipboard_')) return <Clipboard size={16} />;
-  if (action === 'run_script' || action === 'run_apple_script') return <Terminal size={16} />;
-  if (action === 'get_os_info') return <Info size={16} />;
+  if (action === 'run_script' || action === 'run_apple_script') return <Icon name="terminal" size="md" />;
+  if (action === 'get_os_info') return <Icon name="info" size="md" />;
   return <Monitor size={16} />;
 }
 
@@ -183,7 +167,7 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
                 type="button"
                 variant="fill"
                 size="sm"
-                leadingIcon={<Settings size={12} />}
+                leadingIcon={<Icon name="gear" size="xs" />}
                 className="computer-use-tool-card__settings-button"
                 onClick={(event) => void handleOpenSettings(event)}
               >

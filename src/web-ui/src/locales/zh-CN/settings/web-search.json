@@ -1,0 +1,100 @@
+{
+  "title": "网页搜索",
+  "subtitle": "配置 WebSearch 工具运行时使用的搜索服务。",
+  "providers": {
+    "exaMcpFree": "Exa MCP（免费，无需 API Key）",
+    "exaSearchApi": "Exa Search API",
+    "tavily": "Tavily Search API",
+    "bitfunSearchHttp": "BitFun Search HTTP Protocol"
+  },
+  "auth": {
+    "none": "无需认证",
+    "bearer": "Bearer 凭据",
+    "header": "受限 Header 凭据"
+  },
+  "sections": {
+    "provider": {
+      "title": "搜索服务"
+    },
+    "http": {
+      "title": "BitFun Search HTTP Protocol v1",
+      "description": "连接实现固定 BitFun 协议的自建或企业内部端点。"
+    },
+    "protocol": {
+      "title": "协议说明",
+      "description": "实现自定义搜索端点需要遵循的请求与响应格式。"
+    },
+    "credential": {
+      "title": "设备凭据",
+      "description": "Secret 仅在执行 WebSearch 的主机上加密保存，不会同步。"
+    }
+  },
+  "fields": {
+    "endpoint": {
+      "label": "端点",
+      "description": "必须使用 HTTPS；仅 localhost 或回环 IP 可使用明文 HTTP。",
+      "placeholder": "https://search.example.com/search"
+    },
+    "authMode": {
+      "label": "认证方式",
+      "description": "可选无需认证、Bearer 凭据或一个受限自定义 Header。"
+    },
+    "headerName": {
+      "label": "Header 名称",
+      "description": "用于填写 X-API-Key 等自定义凭据 Header；Bearer 认证请选择“Bearer 凭据”。",
+      "placeholder": "X-Search-Key"
+    },
+    "credentialStatus": {
+      "label": "状态",
+      "description": "当前执行主机的凭据状态"
+    },
+    "credential": {
+      "label": "API Key 或 Secret",
+      "description": "保存新值会替换当前设备上的 Secret。",
+      "placeholder": "输入凭据",
+      "replacePlaceholder": "输入新凭据以替换已保存的值"
+    }
+  },
+  "status": {
+    "configured": "已在此设备配置",
+    "missing": "此设备缺少凭据"
+  },
+  "protocol": {
+    "request": {
+      "title": "请求",
+      "description": "端点必须接受以下 POST 请求。query 必须是非空字符串；maxResults 必须是 1–20 的整数。"
+    },
+    "success": {
+      "title": "成功响应",
+      "description": "2xx 响应必须使用 application/json 或 v1 media type。title 和 url 必填；publishedAt 和 author 可省略或为 null。"
+    },
+    "error": {
+      "title": "错误响应",
+      "description": "非 2xx 响应可以返回以下结构；即使没有该结构，BitFun 也会按 HTTP 状态码识别常见错误。",
+      "codes": "支持的 code："
+    },
+    "notes": {
+      "resultHandling": "服务可以返回少于 maxResults 的结果；BitFun 会校验、去重并截断结果，响应根的未知字段会被忽略。",
+      "transportLimits": "BitFun 不跟随重定向，请求超时为 60 秒，读取响应的上限为 1 MiB。"
+    }
+  },
+  "actions": {
+    "saveConfiguration": "保存配置",
+    "saveCredential": "保存",
+    "clearCredential": "清除",
+    "copyProtocol": "复制协议"
+  },
+  "messages": {
+    "loading": "正在加载网页搜索设置…",
+    "loadFailed": "加载网页搜索设置失败。",
+    "saved": "网页搜索配置已保存。",
+    "saveFailed": "保存网页搜索配置失败。",
+    "credentialRequired": "请先输入凭据。",
+    "credentialSaved": "凭据已保存到此设备。",
+    "credentialSaveFailed": "保存设备凭据失败。",
+    "credentialCleared": "已从此设备清除凭据。",
+    "credentialClearFailed": "清除设备凭据失败。",
+    "protocolCopied": "协议已复制。",
+    "protocolCopyFailed": "复制协议失败。"
+  }
+}

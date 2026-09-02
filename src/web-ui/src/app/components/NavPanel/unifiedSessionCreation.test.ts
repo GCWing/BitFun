@@ -23,7 +23,7 @@ describe('unified project session creation', () => {
     expect(newSessionIndex).toBeGreaterThan(utilityRowIndex);
     expect(sectionsIndex).toBeGreaterThan(newSessionIndex);
     expect(sessionsSectionIndex).toBeGreaterThan(newSessionIndex);
-    expect(mainNav).toContain('<Plus size={15} aria-hidden="true" />');
+    expect(mainNav).toContain('<Icon name="plus" size="lg" style={{ width: 15, height: 15 }} aria-hidden="true" />');
     expect(mainNav).toContain("activateProductAction('session.new')");
     expect(mainNav).not.toContain('<RealtimeVoiceCallButton />');
     expect(workspaceBody).not.toContain('<RealtimeVoiceCallButton />');

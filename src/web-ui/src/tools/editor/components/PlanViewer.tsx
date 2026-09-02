@@ -764,7 +764,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
         return <Icon name="xmark" size="sm" className="todo-icon todo-icon--cancelled" />;
       case 'pending':
       default:
-        return <Icon name="circle" size="sm" className="todo-icon todo-icon--pending" />;
+        return <Icon name="unselected" size="sm" className="todo-icon todo-icon--pending" />;
     }
   }
 

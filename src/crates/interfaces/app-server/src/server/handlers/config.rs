@@ -136,6 +136,62 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
+            async move |request: GetWebSearchCredentialStatusMessage, responder, _cx| {
+                let result = bitfun_core::service::web_search::get_web_search_credential_status(
+                    &request.request.provider,
+                )
+                .await
+                .map(|status| {
+                    GetWebSearchCredentialStatusResponse(WebSearchCredentialStatus {
+                        provider: status.provider,
+                        configured: status.configured,
+                    })
+                })
+                .map_err(bitfun_error);
+                responder.respond_with_result(result)
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |request: SaveWebSearchCredentialMessage, responder, _cx| {
+                let result = bitfun_core::service::web_search::save_web_search_credential(
+                    bitfun_core::service::web_search::SaveWebSearchCredentialRequest {
+                        provider: request.request.provider,
+                        secret: request.request.secret,
+                    },
+                )
+                .await
+                .map(|status| {
+                    SaveWebSearchCredentialResponse(WebSearchCredentialStatus {
+                        provider: status.provider,
+                        configured: status.configured,
+                    })
+                })
+                .map_err(bitfun_error);
+                responder.respond_with_result(result)
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |request: ClearWebSearchCredentialMessage, responder, _cx| {
+                let result = bitfun_core::service::web_search::clear_web_search_credential(
+                    bitfun_core::service::web_search::ClearWebSearchCredentialRequest {
+                        provider: request.request.provider,
+                    },
+                )
+                .await
+                .map(|status| {
+                    ClearWebSearchCredentialResponse(WebSearchCredentialStatus {
+                        provider: status.provider,
+                        configured: status.configured,
+                    })
+                })
+                .map_err(bitfun_error);
+                responder.respond_with_result(result)
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
             async move |_: ValidateConfigMessage, responder, _cx| {
                 let result = async {
                     let service = bitfun_core::service::config::get_global_config_service().await?;

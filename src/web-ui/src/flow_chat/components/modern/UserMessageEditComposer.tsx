@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Loader2, X } from 'lucide-react';
-import { Composer, ComposerToolbar, IconButton } from '@bitfun/ui';
+import { Loader2 } from 'lucide-react';
+import { Composer, ComposerToolbar, IconButton, Icon } from '@bitfun/ui';
 import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import type { ContextItem } from '@/shared/types/context';
 import { FileMentionPicker } from '../FileMentionPicker';
@@ -137,7 +137,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
                 data-bf-action="cancel"
                 data-bf-product-component="user-message-edit-composer"
                 data-bf-product-part="action"
-                icon={<X size={14} />}
+                icon={<Icon name="xmark" size="sm" />}
                 onClick={onCancel}
                 size="xs"
                 title={cancelLabel}
@@ -157,7 +157,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
                     data-bf-product-part="spinner"
                     size={14}
                   />
-                ) : <Check size={14} />}
+                ) : <Icon name="check-line" size="sm" />}
                 onClick={handleSubmit}
                 size="xs"
                 title={submitLabel}
@@ -301,7 +301,7 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
                 data-bf-action="cancel"
                 data-bf-product-component="user-message-edit-composer"
                 data-bf-product-part="action"
-                icon={<X size={14} />}
+                icon={<Icon name="xmark" size="sm" />}
                 onClick={onCancel}
                 size="xs"
                 title={cancelLabel}
@@ -321,7 +321,7 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
                     data-bf-product-part="spinner"
                     size={14}
                   />
-                ) : <Check size={14} />}
+                ) : <Icon name="check-line" size="sm" />}
                 onClick={handleSubmit}
                 size="xs"
                 title={submitLabel}

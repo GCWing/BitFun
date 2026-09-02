@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ListFilter, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -358,7 +358,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           onClick={() => setOpen(current => !current)}
           data-testid="nav-session-filter-btn"
         >
-          <ListFilter size={13} />
+          <Icon name="filter" size="lg" style={{ width: 13, height: 13 }} />
         </button>
       </Tooltip>
       {menu}

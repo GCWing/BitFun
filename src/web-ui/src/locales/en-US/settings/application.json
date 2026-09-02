@@ -1,6 +1,9 @@
 {
   "title": "Basics",
   "subtitle": "Power, logging, terminal, notifications, and launch at login",
+  "common": {
+    "retry": "Retry"
+  },
   "appearance": {
     "title": "Appearance",
     "hint": "Interface language, current appearance, effects, and appearance package management",
@@ -126,14 +129,18 @@
     },
     "sensitiveDiagnostics": {
       "label": "Include sensitive diagnostic data",
-      "description": "When enabled, local logs may include prompts, model request and response payloads, tool arguments, file paths, and webview event payloads for troubleshooting. BitFun does not upload these log files automatically."
+      "description": "Off by default. When enabled, local logs may include prompts, model request and response payloads, tool arguments, file paths, and webview event payloads for troubleshooting. BitFun does not upload these log files automatically."
     },
     "path": {
       "description": "Directory where log files for this run are written."
     },
     "diagnostics": {
       "label": "Diagnostics Bundle",
-      "description": "Export recent local logs, crash reports, and runtime metadata as a zip file. BitFun does not upload it automatically."
+      "description": "Export recent local logs, crash reports, and runtime metadata as a zip file. BitFun does not upload it automatically.",
+      "confirmTitle": "Export diagnostics bundle?",
+      "confirmSensitive": "The bundle will include sensitive diagnostic data and may contain prompts, model requests and responses, tool arguments, and file paths. Save it only to a trusted location and review it before sharing.",
+      "confirmStandard": "The bundle may contain local paths, runtime details, and error information. Save it only to a trusted location and review it before sharing.",
+      "confirmAction": "Export"
     },
     "previousCrash": {
       "title": "Previous session ended unexpectedly",
@@ -247,6 +254,8 @@
       "description": "Display a usage tip card each time the app starts to help you discover features"
     },
     "messages": {
+      "loading": "Loading…",
+      "loadFailed": "Failed to read notification settings",
       "saveSuccess": "Notification settings saved",
       "saveFailed": "Failed to save notification settings"
     }

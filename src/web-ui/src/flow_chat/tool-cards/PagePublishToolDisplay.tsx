@@ -2,9 +2,9 @@
  * PagePublish tool card — shows publish slug / version / URLs.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink } from 'lucide-react';
+
 import type { ToolCardProps } from '../types/flow-chat';
 import { PagePublishToolCard } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -112,7 +112,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
                 type="button"
                 variant="fill"
                 size="sm"
-                leadingIcon={<ExternalLink size={12} />}
+                leadingIcon={<Icon name="arrow-up-right" size="xs" />}
                 data-testid="chat-page-publish-open-prod-btn"
                 onClick={() => void openPage(slug, generation).catch(() => {
                   notificationService.error(t('toolCards.pagePublish.openFailed'));
@@ -126,7 +126,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
                 type="button"
                 variant="outline"
                 size="sm"
-                leadingIcon={<ExternalLink size={12} />}
+                leadingIcon={<Icon name="arrow-up-right" size="xs" />}
                 data-testid="chat-page-publish-open-preview-btn"
                 onClick={() => void openPage(slug, generation, versionId).catch(() => {
                   notificationService.error(t('toolCards.pagePublish.openFailed'));

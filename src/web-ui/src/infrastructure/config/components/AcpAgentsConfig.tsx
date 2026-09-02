@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, CircleAlert, EyeOff, FileJson, LoaderCircle, Save, Server } from 'lucide-react';
@@ -8,6 +8,9 @@ import {
   ConfigPageLayout,
   ConfigPageSection,
   ConfigPageSectionStack,
+  ConfigLoadingState,
+  ConfigMessage,
+  ConfigRetryState,
 } from './common';
 import {
   ACPClientAPI,
@@ -83,6 +86,13 @@ const NATIVE_ACP_PRESET_IDS = new Set(['opencode', 'dsh', 'omp']);
 // The UI hides the one-click "Install CLI" action for these.
 const SELF_MANAGED_INSTALL_PRESET_IDS = new Set(['omp']);
 
+const CLI_INSTALL_PACKAGES: Record<string, string> = {
+  opencode: 'opencode-ai',
+  dsh: '@deepseek-ai/dsh',
+  'claude-code': '@anthropic-ai/claude-code',
+  codex: '@openai/codex',
+};
+
 const PRESETS: AcpClientPreset[] = [
   {
     id: 'opencode',
@@ -124,6 +134,13 @@ const PRESET_BY_ID = new Map(PRESETS.map(preset => [preset.id, preset]));
 interface SelfManagedInstallInfo extends Record<string, string> {
   name: string;
   command: string;
+}
+
+interface InstallConfirmation {
+  preset: AcpClientPreset;
+  remoteConnectionId?: string;
+  hostLabel: string;
+  packageName: string;
 }
 
 function selfManagedInstallInfoForPreset(preset?: AcpClientPreset): SelfManagedInstallInfo | null {
@@ -403,6 +420,7 @@ const AcpAgentsConfig: React.FC = () => {
   const [clients, setClients] = useState<AcpClientInfo[]>([]);
   const [savedConnections, setSavedConnections] = useState<SavedConnection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showJsonEditor, setShowJsonEditor] = useState(false);
@@ -418,6 +436,8 @@ const AcpAgentsConfig: React.FC = () => {
   const [installingRemoteClientIds, setInstallingRemoteClientIds] = useState<Set<string>>(() => new Set());
   const [hiddenRemoteConnectionIds, setHiddenRemoteConnectionIds] = useState(loadHiddenRemoteConnectionIds);
   const [showHiddenRemoteConnections, setShowHiddenRemoteConnections] = useState(false);
+  const [savedConfigText, setSavedConfigText] = useState(formatConfig({ acpClients: {} }));
+  const [installConfirmation, setInstallConfirmation] = useState<InstallConfirmation | null>(null);
   const requirementProbeRequestIdRef = useRef(0);
   const savingConfigRef = useRef(false);
   const loadedRemoteProbeIdsRef = useRef<Set<string>>(new Set());
@@ -613,6 +633,7 @@ const AcpAgentsConfig: React.FC = () => {
     try {
       if (showLoading) {
         setLoading(true);
+        setLoadFailed(false);
       }
       const [rawConfig, nextClients] = await Promise.all([
         ACPClientAPI.loadJsonConfig(),
@@ -624,7 +645,9 @@ const AcpAgentsConfig: React.FC = () => {
       });
       const parsed = normalizeConfigValue(JSON.parse(rawConfig || '{}'));
       setConfig(parsed);
-      setJsonConfig(formatConfig(parsed));
+      const formattedConfig = formatConfig(parsed);
+      setJsonConfig(formattedConfig);
+      setSavedConfigText(formattedConfig);
       setEnvDrafts(
         Object.fromEntries(
           Object.entries(parsed.acpClients).map(([clientId, clientConfig]) => [
@@ -641,15 +664,28 @@ const AcpAgentsConfig: React.FC = () => {
       }
     } catch (error) {
       log.error('Failed to load ACP agent config', error);
-      notifyError(error instanceof Error ? error.message : String(error), {
-        title: t('notifications.loadFailed'),
-      });
+      if (showLoading) setLoadFailed(true);
+      else {
+        notifyError(error instanceof Error ? error.message : String(error), {
+          title: t('notifications.loadFailed'),
+        });
+      }
     } finally {
       if (showLoading) {
         setLoading(false);
       }
     }
   }, [notifyError, refreshRequirementProbes, t]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
 
   const hideRemoteConnection = useCallback((connection: SavedConnection) => {
     const connectionName = connection.name || connection.id;
@@ -722,6 +758,23 @@ const AcpAgentsConfig: React.FC = () => {
     setDirty(true);
   };
 
+  const requestInstallPresetClient = (
+    preset: AcpClientPreset,
+    options: { remoteConnectionId?: string; hostLabel?: string } = {},
+  ) => {
+    const packageName = CLI_INSTALL_PACKAGES[preset.id];
+    if (!packageName) {
+      notifyError(t('installConfirm.packageUnknown'));
+      return;
+    }
+    setInstallConfirmation({
+      preset,
+      remoteConnectionId: options.remoteConnectionId,
+      hostLabel: options.hostLabel || t('installConfirm.localHost'),
+      packageName,
+    });
+  };
+
   const installPresetClient = async (
     preset: AcpClientPreset,
     options: { remoteConnectionId?: string } = {}
@@ -754,6 +807,15 @@ const AcpAgentsConfig: React.FC = () => {
         return next;
       });
     }
+  };
+
+  const confirmInstallPresetClient = () => {
+    const request = installConfirmation;
+    if (!request) return;
+    setInstallConfirmation(null);
+    void installPresetClient(request.preset, {
+      remoteConnectionId: request.remoteConnectionId,
+    });
   };
 
   const configurePresetClient = async (preset: AcpClientPreset) => {
@@ -796,28 +858,32 @@ const AcpAgentsConfig: React.FC = () => {
   const saveConfig = async (
     nextConfig = config,
     options: { mergeEnvDrafts?: boolean; successMessage?: string } = {}
-  ) => {
+  ): Promise<boolean> => {
     savingConfigRef.current = true;
     try {
       setSaving(true);
       const configToSave = options.mergeEnvDrafts === false
         ? nextConfig
         : mergeEnvDrafts(nextConfig);
-      await ACPClientAPI.saveJsonConfig(formatConfig(configToSave));
+      const formattedConfig = formatConfig(configToSave);
+      await ACPClientAPI.saveJsonConfig(formattedConfig);
       const nextClients = await ACPClientAPI.getClients();
       setClients(nextClients);
       setConfig(configToSave);
-      setJsonConfig(formatConfig(configToSave));
+      setJsonConfig(formattedConfig);
+      setSavedConfigText(formattedConfig);
       setDirty(false);
       await refreshRequirementProbes({ force: true, notifyOnError: false });
       loadedRemoteProbeIdsRef.current.clear();
       setRemoteProbeRefreshNonce(prev => prev + 1);
       notifySuccess(options.successMessage ?? t('notifications.saveSuccess'));
+      return true;
     } catch (error) {
       log.error('Failed to save ACP agent config', error);
       notifyError(error instanceof Error ? error.message : String(error), {
         title: t('notifications.saveFailed'),
       });
+      return false;
     } finally {
       savingConfigRef.current = false;
       setSaving(false);
@@ -857,7 +923,8 @@ const AcpAgentsConfig: React.FC = () => {
   const saveJsonConfig = async () => {
     try {
       const parsed = normalizeConfigValue(JSON.parse(jsonConfig));
-      await saveConfig(parsed, { mergeEnvDrafts: false });
+      const saved = await saveConfig(parsed, { mergeEnvDrafts: false });
+      if (!saved) return;
       setConfig(parsed);
       setEnvDrafts(
         Object.fromEntries(
@@ -1037,6 +1104,29 @@ const AcpAgentsConfig: React.FC = () => {
     });
   }, [config.acpClients]);
 
+  if (loading || loadFailed) {
+    return (
+      <ConfigPageLayout
+        className="bitfun-acp-agents"
+        data-bf-component="acp-agents-config"
+        data-bf-part="root"
+      >
+        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+        <ConfigPageContent>
+          {loading ? (
+            <ConfigLoadingState label={t('clients.loading')} />
+          ) : (
+            <ConfigRetryState
+              message={t('notifications.loadFailedLocked')}
+              retryLabel={t('actions.retry')}
+              onRetry={() => void loadConfig()}
+            />
+          )}
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
+
   return (
     <ConfigPageLayout
       className="bitfun-acp-agents"
@@ -1060,6 +1150,7 @@ const AcpAgentsConfig: React.FC = () => {
       />
 
       <ConfigPageContent data-bf-component="acp-agents-config" data-bf-part="content">
+        <ConfigMessage message={{ type: 'warning', text: t('security.secretWarning') }} />
         <ConfigPageSectionStack
           className="bitfun-acp-agents__manager"
           data-bf-component="acp-agents-config"
@@ -1120,8 +1211,9 @@ const AcpAgentsConfig: React.FC = () => {
                 data-bf-part="jsonEditor"
                 value={jsonConfig}
                 onChange={(event) => {
-                  setJsonConfig(event.target.value);
-                  setDirty(true);
+                  const nextValue = event.target.value;
+                  setJsonConfig(nextValue);
+                  setDirty(nextValue !== savedConfigText);
                 }}
                 onKeyDown={(event) => {
                   if (event.key !== 'Tab') return;
@@ -1131,7 +1223,7 @@ const AcpAgentsConfig: React.FC = () => {
                   const end = target.selectionEnd ?? 0;
                   const nextValue = jsonConfig.slice(0, start) + '  ' + jsonConfig.slice(end);
                   setJsonConfig(nextValue);
-                  setDirty(true);
+                  setDirty(nextValue !== savedConfigText);
                   requestAnimationFrame(() => {
                     jsonEditorRef.current?.focus();
                     jsonEditorRef.current?.setSelectionRange(start + 2, start + 2);
@@ -1145,7 +1237,11 @@ const AcpAgentsConfig: React.FC = () => {
                 data-bf-component="acp-agents-config"
                 data-bf-part="jsonActions"
               >
-                <Button variant="outline" size="sm" onClick={() => setJsonConfig(formatConfig(config))}>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const restored = formatConfig(config);
+                  setJsonConfig(restored);
+                  setDirty(restored !== savedConfigText);
+                }}>
                   {t('actions.revert')}
                 </Button>
                 <Button variant="fill" size="sm" onClick={() => { void saveJsonConfig(); }} loading={saving}>
@@ -1296,8 +1392,8 @@ const AcpAgentsConfig: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<Icon name="download" size="lg" />}
-                          onClick={() => { void installPresetClient(preset); }}
+                          leadingIcon={<Icon name="arrow-down" size="lg" />}
+                          onClick={() => requestInstallPresetClient(preset)}
                           loading={installing}
                         >
                           {t('actions.installCli')}
@@ -1728,12 +1824,13 @@ const AcpAgentsConfig: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    leadingIcon={<Icon name="download" size="lg" />}
-                                    onClick={() => {
-                                      void installPresetClient(row.preset!, {
-                                        remoteConnectionId: connection.id,
-                                      });
-                                    }}
+                                    leadingIcon={<Icon name="arrow-down" size="lg" />}
+                                    onClick={() => requestInstallPresetClient(row.preset!, {
+                                      remoteConnectionId: connection.id,
+                                      hostLabel: [connection.username, connection.host]
+                                        .filter(Boolean)
+                                        .join('@') || connection.name || connection.id,
+                                    })}
                                     loading={row.installingRemote}
                                   >
                                     {t('actions.installCli')}
@@ -1845,6 +1942,20 @@ const AcpAgentsConfig: React.FC = () => {
           </ConfigPageSection>
         </ConfigPageSectionStack>
       </ConfigPageContent>
+      <ConfirmDialog
+        open={!!installConfirmation}
+        onOpenChange={(open) => { if (!open) setInstallConfirmation(null); }}
+        onConfirm={confirmInstallPresetClient}
+        title={t('installConfirm.title', { name: installConfirmation?.preset.name || '' })}
+        message={t('installConfirm.message', {
+          host: installConfirmation?.hostLabel || '',
+          command: installConfirmation
+            ? `npm install -g ${installConfirmation.packageName}`
+            : '',
+        })}
+        confirmText={t('installConfirm.confirm')}
+        type="warning"
+      />
     </ConfigPageLayout>
   );
 };

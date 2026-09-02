@@ -6,8 +6,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, FolderPlus, ChevronDown, Check, GitBranch } from 'lucide-react';
-import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
+import { FolderOpen, FolderPlus } from 'lucide-react';
+import { Menu, MenuItem, MenuSeparator, Icon } from '@bitfun/ui';
 import { gitAPI } from '../../infrastructure/api';
 import { useApp } from '../../app/hooks/useApp';
 import { createLogger } from '@/shared/utils/logger';
@@ -283,10 +283,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                       >
                         <FolderOpen size={13} className="welcome-panel__inline-icon" />
                         {currentWorkspace?.name || t('shared:features.workspace')}
-                        <ChevronDown
-                          size={11}
-                          className={`welcome-panel__inline-chevron${workspaceDropdownOpen ? ' welcome-panel__inline-chevron--open' : ''}`}
-                        />
+                        <Icon name="chevron-down" size="lg" style={{ width: 11, height: 11 }} className={`welcome-panel__inline-chevron${workspaceDropdownOpen ? ' welcome-panel__inline-chevron--open' : ''}`} />
                       </button>
                       {workspaceDropdownOpen && createPortal(
                         <Menu
@@ -318,7 +315,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                               checked
                               aria-disabled="true"
                               leading={<FolderOpen size={12} />}
-                              metadata={<Check size={11} />}
+                              metadata={<Icon name="check-line" size="lg" style={{ width: 11, height: 11 }} />}
                             >
                               {currentWorkspace.name}
                             </MenuItem>
@@ -354,7 +351,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                           className="welcome-panel__inline-btn"
                           onClick={handleGitClick}
                         >
-                          <GitBranch size={13} className="welcome-panel__inline-icon" />
+                          <Icon name="git" size="lg" style={{ width: 13, height: 13 }} className="welcome-panel__inline-icon" />
                           {gitState.currentBranch}
                         </button>
                       </>

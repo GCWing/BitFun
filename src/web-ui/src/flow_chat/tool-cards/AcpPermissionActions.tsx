@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Button, IconButton, Tooltip } from '@bitfun/ui';
-import { Check, ShieldCheck, ShieldX, X } from 'lucide-react';
+import { Button, IconButton, Tooltip, Icon } from '@bitfun/ui';
+import { ShieldCheck, ShieldX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { FlowToolItem, ToolRejectOptions } from '../types/flow-chat';
@@ -45,14 +45,14 @@ function fallbackLabel(kind: AcpPermissionOption['kind'], t: TFunction<'flow-cha
 function optionIcon(kind: AcpPermissionOption['kind']): React.ReactNode {
   switch (kind) {
     case 'allow_once':
-      return <Check size={12} />;
+      return <Icon name="check-line" size="xs" />;
     case 'allow_always':
       return <ShieldCheck size={12} />;
     case 'reject_always':
       return <ShieldX size={12} />;
     case 'reject_once':
     default:
-      return <X size={12} />;
+      return <Icon name="xmark" size="xs" />;
   }
 }
 

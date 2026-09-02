@@ -1,0 +1,100 @@
+{
+  "title": "Web Search",
+  "subtitle": "Configure the search provider used by the WebSearch tool at runtime.",
+  "providers": {
+    "exaMcpFree": "Exa MCP (free, no API key)",
+    "exaSearchApi": "Exa Search API",
+    "tavily": "Tavily Search API",
+    "bitfunSearchHttp": "BitFun Search HTTP Protocol"
+  },
+  "auth": {
+    "none": "No authentication",
+    "bearer": "Bearer credential",
+    "header": "Restricted header credential"
+  },
+  "sections": {
+    "provider": {
+      "title": "Search provider"
+    },
+    "http": {
+      "title": "BitFun Search HTTP Protocol v1",
+      "description": "Connect a self-hosted or enterprise endpoint that implements the fixed BitFun protocol."
+    },
+    "protocol": {
+      "title": "Protocol specification",
+      "description": "The request and response format required for a custom search endpoint."
+    },
+    "credential": {
+      "title": "Device credential",
+      "description": "The secret is encrypted locally on the host that executes WebSearch and is not synchronized."
+    }
+  },
+  "fields": {
+    "endpoint": {
+      "label": "Endpoint",
+      "description": "HTTPS is required. Plain HTTP is accepted only for localhost or a loopback IP.",
+      "placeholder": "https://search.example.com/search"
+    },
+    "authMode": {
+      "label": "Authentication",
+      "description": "Choose no auth, a Bearer credential, or one restricted custom header."
+    },
+    "headerName": {
+      "label": "Header name",
+      "description": "Use a custom credential header such as X-API-Key. For Bearer authentication, select Bearer credential.",
+      "placeholder": "X-Search-Key"
+    },
+    "credentialStatus": {
+      "label": "Status",
+      "description": "Credential status on the current execution host"
+    },
+    "credential": {
+      "label": "API key or secret",
+      "description": "Saving a new value replaces the current device-local secret.",
+      "placeholder": "Enter credential",
+      "replacePlaceholder": "Enter a new credential to replace the saved value"
+    }
+  },
+  "status": {
+    "configured": "Configured on this device",
+    "missing": "Missing on this device"
+  },
+  "protocol": {
+    "request": {
+      "title": "Request",
+      "description": "The endpoint must accept this POST request. query must be a non-empty string, and maxResults must be an integer from 1 to 20."
+    },
+    "success": {
+      "title": "Success response",
+      "description": "A 2xx response must use application/json or the v1 media type. title and url are required; publishedAt and author may be omitted or null."
+    },
+    "error": {
+      "title": "Error response",
+      "description": "A non-2xx response may use this shape. BitFun also maps common errors from the HTTP status when the envelope is absent.",
+      "codes": "Supported codes:"
+    },
+    "notes": {
+      "resultHandling": "The service may return fewer than maxResults results. BitFun validates, deduplicates, and truncates results, and ignores unknown response-root fields.",
+      "transportLimits": "BitFun does not follow redirects. Requests time out after 60 seconds, and response bodies are limited to 1 MiB."
+    }
+  },
+  "actions": {
+    "saveConfiguration": "Save configuration",
+    "saveCredential": "Save",
+    "clearCredential": "Clear",
+    "copyProtocol": "Copy protocol"
+  },
+  "messages": {
+    "loading": "Loading Web Search settings…",
+    "loadFailed": "Failed to load Web Search settings.",
+    "saved": "Web Search configuration saved.",
+    "saveFailed": "Failed to save Web Search configuration.",
+    "credentialRequired": "Enter a credential before saving.",
+    "credentialSaved": "Credential saved on this device.",
+    "credentialSaveFailed": "Failed to save the device credential.",
+    "credentialCleared": "Credential cleared from this device.",
+    "credentialClearFailed": "Failed to clear the device credential.",
+    "protocolCopied": "Protocol copied.",
+    "protocolCopyFailed": "Failed to copy the protocol."
+  }
+}

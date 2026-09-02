@@ -1,9 +1,9 @@
  
 
-import { Button, NumberInput, Select, Switch } from '@bitfun/ui';
+import { Button, ConfirmDialog, NumberInput, Select, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ConfigLoadingState, ConfigMessage } from '@/infrastructure/config/components/common';
+import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
@@ -212,13 +212,19 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   
   const [config, setConfig] = useState<EditorConfigType>({ ...DEFAULT_EDITOR_CONFIG });
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   
   
   const isInitialLoadRef = useRef(true);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configRef = useRef<EditorConfigType>(config);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingSaveCountRef = useRef(0);
+  const latestSaveRevisionRef = useRef(0);
+  const skipNextAutoSaveRef = useRef(false);
   
   
   useEffect(() => {
@@ -229,6 +235,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   const loadConfig = useCallback(async () => {
     try {
       setIsLoading(true);
+      setLoadFailed(false);
       isInitialLoadRef.current = true;
       const backendConfig = await configManager.getConfig<Record<string, any>>('editor');
       if (backendConfig) {
@@ -241,54 +248,65 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
       }, 100);
     } catch (error) {
       log.error('Failed to load config', error);
-      setStatusMessage({ 
-        type: 'error', 
-        text: t('messages.loadFailed') 
-      });
+      setLoadFailed(true);
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
 
   
-  const doSave = useCallback(async (configToSave: EditorConfigType) => {
-    try {
-      setIsSaving(true);
-      setStatusMessage(null);
+  const doSave = useCallback((
+    configToSave: EditorConfigType,
+    successMessage = t('messages.saveSuccess'),
+  ): Promise<boolean> => {
+    const revision = ++latestSaveRevisionRef.current;
+    pendingSaveCountRef.current += 1;
+    setIsSaving(true);
+    setStatusMessage(null);
 
-      
-      const snakeCaseConfig = convertToSnakeCase(configToSave);
-      await configManager.setConfig('editor', snakeCaseConfig);
-
-      
-      globalEventBus.emit('editor:config:changed', snakeCaseConfig);
-
-      setStatusMessage({ 
-        type: 'success', 
-        text: t('messages.saveSuccess') 
-      });
-
-      
-      setTimeout(() => setStatusMessage(null), 3000);
-    } catch (error) {
-      log.error('Failed to save config', error);
-      setStatusMessage({ 
-        type: 'error', 
-        text: `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    const operation = saveQueueRef.current.then(async () => {
+      try {
+        const snakeCaseConfig = convertToSnakeCase(configToSave);
+        await configManager.setConfig('editor', snakeCaseConfig);
+        globalEventBus.emit('editor:config:changed', snakeCaseConfig);
+        if (revision === latestSaveRevisionRef.current) {
+          setStatusMessage({ type: 'success', text: successMessage });
+          setTimeout(() => setStatusMessage(current => (
+            current?.type === 'success' ? null : current
+          )), 3000);
+        }
+        return true;
+      } catch (error) {
+        log.error('Failed to save config', error);
+        if (revision === latestSaveRevisionRef.current) {
+          setStatusMessage({
+            type: 'error',
+            text: `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error)),
+          });
+        }
+        return false;
+      } finally {
+        pendingSaveCountRef.current -= 1;
+        if (pendingSaveCountRef.current === 0) setIsSaving(false);
+      }
+    });
+    saveQueueRef.current = operation.then(() => undefined, () => undefined);
+    return operation;
   }, [t]);
 
   
   useEffect(() => {
     
     if (isInitialLoadRef.current || isLoading) {
+      return;
+    }
+
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
       return;
     }
 
@@ -311,14 +329,13 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   }, [config, isLoading, doSave]);
 
   const resetConfig = useCallback(async () => {
-    if (await window.confirm(t('messages.confirmReset'))) {
-      setConfig({ ...DEFAULT_EDITOR_CONFIG });
-      setStatusMessage({ 
-        type: 'warning', 
-        text: t('messages.resetDone') 
-      });
-    }
-  }, [t]);
+    setResetConfirmOpen(false);
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const defaults = { ...DEFAULT_EDITOR_CONFIG };
+    skipNextAutoSaveRef.current = true;
+    setConfig(defaults);
+    await doSave(defaults, t('messages.resetDone'));
+  }, [doSave, t]);
 
   const updateConfig = useCallback(<K extends keyof EditorConfigType>(
     key: K,
@@ -340,7 +357,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
     }));
   }, []);
 
-  if (isLoading) {
+  if (isLoading || loadFailed) {
     return (
       <ConfigPageLayout className="bitfun-editor-config" data-bf-component="editor-config" data-bf-part="root" data-bf-state="loading">
         <ConfigPageHeader
@@ -348,7 +365,15 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           subtitle={t('subtitle')}
         />
         <ConfigPageContent>
-          <ConfigLoadingState label={t('messages.loading')} />
+          {isLoading ? (
+            <ConfigLoadingState label={t('messages.loading')} />
+          ) : (
+            <ConfigRetryState
+              message={t('messages.loadFailedLocked')}
+              retryLabel={t('messages.retry')}
+              onRetry={() => void loadConfig()}
+            />
+          )}
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -566,7 +591,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={resetConfig}
+                onClick={() => setResetConfirmOpen(true)}
                 disabled={isSaving}
               >
                 {t('actions.reset')}
@@ -580,6 +605,15 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
 
         <ConfigMessage message={statusMessage} />
       </ConfigPageContent>
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onOpenChange={(open) => { if (!open && !isSaving) setResetConfirmOpen(false); }}
+        onConfirm={() => void resetConfig()}
+        title={t('messages.resetTitle')}
+        message={t('messages.confirmReset')}
+        confirmText={t('messages.resetAction')}
+        type="warning"
+      />
     </ConfigPageLayout>
   );
 };

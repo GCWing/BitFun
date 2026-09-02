@@ -3,13 +3,12 @@ use crate::agentic::tools::framework::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_services_integrations::web_tools::{ExaSearchRequest, WebToolNetworkProvider};
+use bitfun_runtime_ports::{WebSearchRequest, WebSearchResult};
 use log::{error, info};
 use serde_json::{json, Value};
-use tool_runtime::web_search::{parse_exa_text_results, WebSearchResult};
 
-const EXA_RESULTS: u64 = 5;
-const EXA_CONTEXT: u64 = 8_000;
+const DEFAULT_RESULTS: u64 = 10;
+const MAX_RESULTS: u64 = 20;
 
 pub struct WebSearchTool;
 
@@ -23,72 +22,62 @@ impl WebSearchTool {
     pub fn new() -> Self {
         Self
     }
-
-    async fn search(
-        &self,
-        query: &str,
-        num: u64,
-        kind: &str,
-        crawl: &str,
-        ctx: u64,
-    ) -> BitFunResult<String> {
-        WebToolNetworkProvider::search_exa(ExaSearchRequest {
-            query,
-            num_results: num,
-            kind,
-            livecrawl: crawl,
-            context_max_characters: ctx,
-        })
-        .await
-        .map_err(|error| {
-            error!("WebSearch Exa error: {}", error);
-            BitFunError::tool(error.to_string())
-        })
-    }
-
-    pub(crate) fn results(&self, text: &str) -> Vec<Value> {
-        parse_exa_text_results(text)
-            .into_iter()
-            .map(search_result_to_value)
-            .collect()
-    }
 }
 
 fn search_result_to_value(result: WebSearchResult) -> Value {
-    json!({
-        "title": result.title,
-        "url": result.url,
-        "snippet": result.snippet,
-    })
+    let mut value = serde_json::Map::from_iter([
+        ("title".to_string(), Value::String(result.title)),
+        ("url".to_string(), Value::String(result.url)),
+    ]);
+    if let Some(published) = result.published_at {
+        value.insert("published".to_string(), Value::String(published));
+    }
+    if let Some(author) = result.author {
+        value.insert("author".to_string(), Value::String(author));
+    }
+    Value::Object(value)
 }
 
-pub(super) fn build_web_search_tool_result(query: &str, results: Vec<Value>) -> ToolResult {
+pub(super) fn build_web_search_tool_result(
+    query: &str,
+    provider: &str,
+    results: Vec<WebSearchResult>,
+) -> ToolResult {
+    let result_values = results
+        .iter()
+        .cloned()
+        .map(search_result_to_value)
+        .collect::<Vec<_>>();
     let formatted_results = results
         .iter()
         .enumerate()
-        .map(|(i, r)| {
-            format!(
-                "{}. {}\n   URL: {}\n   Snippet: {}\n",
-                i + 1,
-                r["title"].as_str().unwrap_or("Untitled"),
-                r["url"].as_str().unwrap_or(""),
-                r["snippet"].as_str().unwrap_or("")
-            )
+        .map(|(index, result)| {
+            let mut lines = vec![
+                format!("{}. {}", index + 1, result.title),
+                format!("   URL: {}", result.url),
+            ];
+            if let Some(published) = result.published_at.as_deref() {
+                lines.push(format!("   Published: {published}"));
+            }
+            if let Some(author) = result.author.as_deref() {
+                lines.push(format!("   Author: {author}"));
+            }
+            lines.join("\n")
         })
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n\n");
 
     ToolResult::Result {
         data: json!({
             "query": query,
-            "results": results,
-            "result_count": results.len(),
-            "provider": "exa_mcp"
+            "results": result_values,
+            "result_count": result_values.len(),
+            "provider": provider
         }),
         result_for_assistant: Some(format!(
             "Search query: '{}'\nFound {} results:\n\n{}",
             query,
-            results.len(),
+            result_values.len(),
             formatted_results
         )),
         image_attachments: None,
@@ -102,25 +91,7 @@ impl Tool for WebSearchTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(
-            r#"- Allows BitFun to search the web and use the results to inform responses
-- Provides up-to-date information for current events and recent data
-- Returns search result information formatted as search result blocks
-- Use this tool for accessing information beyond BitFun's knowledge cutoff
-
-Usage notes:
-- Use when you need current information not in training data
-- Effective for recent news, current events, product updates, or real-time data
-- Search queries should be specific and well-targeted for best results
-- Results include title, URL, snippet and source information
-
-Advanced features:
-- Choose search depth: auto, fast, or deep
-- Control result count and context size for LLM-friendly output
-- Optionally prefer live crawling for fresher pages
-- Return up to 10 results per query"#
-                .to_string(),
-        )
+        Ok("Search the web for up-to-date information and sources.".to_string())
     }
 
     fn short_description(&self) -> String {
@@ -141,32 +112,14 @@ Advanced features:
                 },
                 "num_results": {
                     "type": "number",
-                    "description": "Number of search results to return (1-10, default: 5)",
-                    "default": EXA_RESULTS,
+                    "description": "Number of search results to return (1-20, default: 10)",
+                    "default": 10,
                     "minimum": 1,
-                    "maximum": 10
-                },
-                "type": {
-                    "type": "string",
-                    "enum": ["auto", "fast", "deep"],
-                    "description": "Search depth. Use 'auto' for balanced results, 'fast' for lower latency, or 'deep' for broader context.",
-                    "default": "auto"
-                },
-                "livecrawl": {
-                    "type": "string",
-                    "enum": ["fallback", "preferred"],
-                    "description": "Live crawl mode. Use 'preferred' to favor fresh crawling, or 'fallback' to use cached data when possible.",
-                    "default": "fallback"
-                },
-                "context_max_characters": {
-                    "type": "number",
-                    "description": "Maximum characters of search context to request (default: 8000)",
-                    "default": EXA_CONTEXT,
-                    "minimum": 1000,
-                    "maximum": 20000
+                    "maximum": 20
                 }
             },
-            "required": ["query"]
+            "required": ["query"],
+            "additionalProperties": false
         })
     }
 
@@ -198,39 +151,50 @@ Advanced features:
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let query = input
             .get("query")
-            .and_then(|v| v.as_str())
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|query| !query.is_empty())
             .ok_or_else(|| BitFunError::tool("query is required".to_string()))?;
-
         let num_results = input
             .get("num_results")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(EXA_RESULTS)
-            .clamp(1, 10);
+            .and_then(Value::as_u64)
+            .unwrap_or(DEFAULT_RESULTS)
+            .clamp(1, MAX_RESULTS);
+        let provider = context
+            .runtime_handles
+            .web_search_provider()
+            .cloned()
+            .ok_or_else(|| {
+                BitFunError::tool("WebSearch provider is unavailable in this runtime".to_string())
+            })?;
 
-        let kind = input.get("type").and_then(|v| v.as_str()).unwrap_or("auto");
-
-        let crawl = input
-            .get("livecrawl")
-            .and_then(|v| v.as_str())
-            .unwrap_or("fallback");
-
-        let ctx = input
-            .get("context_max_characters")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(EXA_CONTEXT)
-            .clamp(1_000, 20_000);
-
+        info!("WebSearch call started: max_results={num_results}");
+        let response = provider
+            .search(WebSearchRequest {
+                query: query.to_string(),
+                max_results: num_results as u32,
+            })
+            .await
+            .map_err(|search_error| {
+                error!(
+                    "WebSearch provider failed: provider={}, kind={:?}, error={}",
+                    search_error.provider, search_error.kind, search_error.message
+                );
+                BitFunError::tool(search_error.to_string())
+            })?;
         info!(
-            "WebSearch Exa call: query='{}', num_results={}, type={}, livecrawl={}, context_max_characters={}",
-            query, num_results, kind, crawl, ctx
+            "WebSearch call completed: provider={}, result_count={}",
+            response.provider,
+            response.results.len()
         );
-
-        let raw = self.search(query, num_results, kind, crawl, ctx).await?;
-        let results = self.results(&raw);
-        Ok(vec![build_web_search_tool_result(query, results)])
+        Ok(vec![build_web_search_tool_result(
+            query,
+            response.provider.as_str(),
+            response.results,
+        )])
     }
 }

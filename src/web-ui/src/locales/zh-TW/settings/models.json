@@ -12,6 +12,8 @@
     "title": "會話標題自動生成",
     "subtitle": "新對話時 AI 自動生成簡潔標題",
     "loadFailed": "載入會話標題設定失敗",
+    "loadFailedLocked": "無法讀取會話標題設定。目前開關和模型選擇已鎖定。",
+    "retry": "重新載入",
     "model": {
       "label": "會話標題生成模型",
       "inherit": "目前會話模型",
@@ -20,6 +22,7 @@
     },
     "models": {
       "empty": "暫無可用模型，請先在「模型」中新增模型。",
+      "unavailable": "{{id}}（已停用或不存在）",
       "updateSuccess": "{{agentName}} 將使用 {{modelName}}"
     },
     "messages": {
@@ -397,7 +400,7 @@
   },
   "proxy": {
     "enable": "啟用代理",
-    "enableHint": "啟用後所有AI請求將通過代理發送（需重啟IDE生效）",
+    "enableHint": "啟用後所有 AI 請求將透過代理傳送（需重新啟動 BitFun 生效）",
     "url": "代理地址",
     "urlPlaceholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
     "urlHint": "支持 HTTP/HTTPS/SOCKS5 代理，格式：協議://地址:端口",
@@ -406,7 +409,7 @@
     "password": "密碼（可選）",
     "passwordPlaceholder": "代理認證密碼",
     "save": "儲存代理設定",
-    "saveSuccess": "代理設定已儲存，重啟IDE後生效"
+    "saveSuccess": "代理設定已儲存，重新啟動 BitFun 後生效"
   },
   "streamIdleTimeout": {
     "title": "流式超時",
@@ -458,6 +461,16 @@
     "addProvider": "新增服務商",
     "createFirst": "建立第一個設定"
   },
+  "deleteConfirm": {
+    "title": "刪除模型設定？",
+    "message": "將刪除模型「{{name}}」。目前有 {{count}} 處設定明確引用此模型；這些引用不會自動改用其他模型，相關功能可能回退或無法使用。",
+    "confirm": "刪除模型"
+  },
+  "discardChanges": {
+    "title": "放棄未儲存的修改？",
+    "message": "模型或服務商設定中的草稿尚未儲存。關閉後這些修改將遺失。",
+    "confirm": "放棄修改"
+  },
   "empty": {
     "noModels": "暫無模型設定",
     "noMatchingModels": "沒有找到匹配的模型"
@@ -466,6 +479,10 @@
     "placeholder": "搜尋模型名稱、提供商..."
   },
   "messages": {
+    "loading": "正在載入模型設定…",
+    "loadFailedLocked": "無法讀取模型設定。為避免覆蓋現有設定，目前頁面已鎖定。",
+    "retry": "重新載入",
+    "unsaved": "未儲存",
     "fillRequired": "請填寫必要字段",
     "fillModelName": "請填寫模型名稱",
     "duplicateModelNameUnderProvider": "該服務商下已有同名模型，請改用其他名稱或編輯已有條目",
@@ -474,6 +491,8 @@
     "invalidReasoningPresets": "請先修正思考預設的 ID、設置、預設項或 JSON。",
     "saveFailed": "儲存失敗",
     "deleteFailed": "刪除設定失敗",
+    "deleteSuccess": "模型設定已刪除",
+    "referenceCheckFailed": "無法確認此模型是否仍被其他設定引用，已取消刪除",
     "loadFailed": "載入AI設定失敗",
     "testSuccess": "測試成功",
     "testFailed": "測試失敗",

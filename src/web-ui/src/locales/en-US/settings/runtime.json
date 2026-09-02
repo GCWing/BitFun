@@ -130,6 +130,8 @@
     "screenCaptureDesc": "Allows BitFun to see the contents of your screen.",
     "granted": "Granted",
     "notGranted": "Not granted",
+    "statusUnavailable": "Status unavailable",
+    "statusLoadFailed": "Desktop control status could not be read. Related settings are locked until you refresh.",
     "openSettings": "System settings",
     "refreshStatus": "Refresh status",
     "desktopOnly": "Desktop control is only available in the BitFun desktop app.",
@@ -153,6 +155,8 @@
     "status": "Connection",
     "statusDesc": "",
     "notConnected": "Not connected",
+    "statusUnavailable": "Status unavailable",
+    "statusLoadFailed": "Browser control status could not be read. Related settings are locked until you refresh.",
     "readyNotConnected": "Ready, connects on use",
     "refreshStatus": "Refresh status",
     "connect": "Connect",
@@ -189,7 +193,9 @@
     "enable": "Enable"
   },
   "loading": {
-    "text": "Loading configuration..."
+    "text": "Loading configuration...",
+    "failed": "Settings could not be read. This page is locked to avoid overwriting the current configuration.",
+    "retry": "Reload"
   },
   "messages": {
     "saveSuccess": "Settings saved",

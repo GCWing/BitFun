@@ -12,8 +12,8 @@
 
 import { Button, Icon, SearchField, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-;
 
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { useI18n } from '@/infrastructure/i18n';
 import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent, ConfigPageSection } from '@/infrastructure/config/components/common';
 import {
@@ -76,9 +76,23 @@ const TAB_SWITCH_ORDER = [
  * Merge live ShortcutManager registrations with the static catalog so the settings UI
  * lists every known shortcut even when no runtime useShortcut has registered yet.
  */
-/** Key cap label: bare space is invisible in UI; other single chars stay upper-case. */
+const SPECIAL_KEY_LABELS: Record<string, string> = {
+  ' ': 'keyboard.keyLabels.space',
+  Enter: 'keyboard.keyLabels.enter',
+  Escape: 'keyboard.keyLabels.escape',
+  Tab: 'keyboard.keyLabels.tab',
+  Delete: 'keyboard.keyLabels.delete',
+  Backspace: 'keyboard.keyLabels.backspace',
+  ArrowUp: 'keyboard.keyLabels.arrowUp',
+  ArrowDown: 'keyboard.keyLabels.arrowDown',
+  ArrowLeft: 'keyboard.keyLabels.arrowLeft',
+  ArrowRight: 'keyboard.keyLabels.arrowRight',
+};
+
+/** Key cap label: named keys are localized; other single chars stay upper-case. */
 function formatShortcutKeyCap(key: string, t: (key: string) => string): string {
-  if (key === ' ') return t('keyboard.keyLabels.space');
+  const labelKey = SPECIAL_KEY_LABELS[key];
+  if (labelKey) return t(labelKey);
   if (key.length === 1) return key.toUpperCase();
   return key;
 }
@@ -195,38 +209,75 @@ function formatMergedRangeLabel(cfg: ShortcutConfig, range: '1–3' | '1–9'): 
   return isMac ? `${prefix}${range}` : `${prefix}+${range}`;
 }
 
-function firstConflictInGroup(
-  ids: readonly string[],
-  registrations: ShortcutRegistration[],
-  pendingChanges: Record<string, PendingChange>
-): ShortcutRegistration | null {
-  for (const id of ids) {
-    const reg = registrations.find((r) => r.id === id);
-    if (!reg) continue;
-    const eff = getEffectiveConfig(reg, pendingChanges[id]);
-    const conflicts = shortcutManager.checkConflicts(
-      {
-        key: eff.key,
-        ctrl: !!eff.ctrl,
-        shift: !!eff.shift,
-        alt: !!eff.alt,
-        meta: eff.meta,
-        scope: eff.scope ?? 'app',
-      },
-      id,
-      [...ids].filter((x) => x !== id)
-    );
-    if (conflicts[0]) return conflicts[0];
-  }
-  return null;
-}
-
 interface PendingChange {
   id: string;
   key: string;
   ctrl: boolean;
   shift: boolean;
   alt: boolean;
+}
+
+function shortcutModifierSignature(config: ShortcutConfig): string {
+  const isMac = typeof navigator !== 'undefined'
+    && navigator.platform.toUpperCase().includes('MAC');
+  const primary = isMac ? Boolean(config.ctrl || config.meta) : Boolean(config.ctrl);
+  const meta = isMac ? false : Boolean(config.meta);
+  return [primary, config.shift, config.alt, meta].map(Boolean).map(Number).join('');
+}
+
+function shortcutConfigsConflict(left: ShortcutConfig, right: ShortcutConfig): boolean {
+  const leftScope = left.scope ?? 'app';
+  const rightScope = right.scope ?? 'app';
+  const scopesOverlap = leftScope === rightScope || leftScope === 'app' || rightScope === 'app';
+  return scopesOverlap
+    && left.key.toLowerCase() === right.key.toLowerCase()
+    && shortcutModifierSignature(left) === shortcutModifierSignature(right);
+}
+
+function buildFinalConflictMap(
+  registrations: ShortcutRegistration[],
+  pendingChanges: Record<string, PendingChange>,
+): Map<string, ShortcutRegistration> {
+  const finalRegistrations = registrations.map(registration => ({
+    registration,
+    config: getEffectiveConfig(registration, pendingChanges[registration.id]),
+  }));
+  const conflicts = new Map<string, ShortcutRegistration>();
+
+  for (let leftIndex = 0; leftIndex < finalRegistrations.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < finalRegistrations.length;
+      rightIndex += 1
+    ) {
+      const left = finalRegistrations[leftIndex];
+      const right = finalRegistrations[rightIndex];
+      if (!pendingChanges[left.registration.id] && !pendingChanges[right.registration.id]) {
+        continue;
+      }
+      if (!shortcutConfigsConflict(left.config, right.config)) {
+        continue;
+      }
+      if (!conflicts.has(left.registration.id)) {
+        conflicts.set(left.registration.id, right.registration);
+      }
+      if (!conflicts.has(right.registration.id)) {
+        conflicts.set(right.registration.id, left.registration);
+      }
+    }
+  }
+  return conflicts;
+}
+
+function firstConflictInGroup(
+  ids: readonly string[],
+  conflicts: Map<string, ShortcutRegistration>,
+): ShortcutRegistration | null {
+  for (const id of ids) {
+    const conflict = conflicts.get(id);
+    if (conflict) return conflict;
+  }
+  return null;
 }
 
 /** Human-readable label for settings list (always via settings namespace + catalog). */
@@ -273,6 +324,11 @@ const KeyboardShortcutsTab: React.FC = () => {
 
   /** Full list for the UI: catalog + live, so every scope shows even before hooks register. */
   const displayRegistrations = useMemo(() => mergeCatalogWithLive(registrations), [registrations]);
+  const finalConflicts = useMemo(
+    () => buildFinalConflictMap(displayRegistrations, pendingChanges),
+    [displayRegistrations, pendingChanges],
+  );
+  const hasBlockingConflicts = finalConflicts.size > 0;
 
   // Key capture during recording mode
   useEffect(() => {
@@ -346,25 +402,11 @@ const KeyboardShortcutsTab: React.FC = () => {
     return () => window.removeEventListener('keydown', handleCapture, true);
   }, [recordingId]);
 
-  // Detect conflicts for a given pending change
-  const detectConflict = useCallback(
-    (
-      change: PendingChange,
-      originalScope: ShortcutScope,
-      excludeIds?: string[]
-    ): ShortcutRegistration | null => {
-      const conflicts = shortcutManager.checkConflicts(
-        { key: change.key, ctrl: change.ctrl, shift: change.shift, alt: change.alt, scope: originalScope },
-        change.id,
-        excludeIds
-      );
-      return conflicts[0] ?? null;
-    },
-    []
-  );
-
   // Apply all pending changes
   const handleApply = useCallback(async () => {
+    if (hasBlockingConflicts) {
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -409,10 +451,17 @@ const KeyboardShortcutsTab: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [pendingChanges, refreshRegistrations, t]);
+  }, [hasBlockingConflicts, pendingChanges, refreshRegistrations, t]);
 
   // Reset all to defaults
   const handleReset = useCallback(async () => {
+    if (saving) return;
+    const confirmed = await confirmWarning(
+      t('keyboard.resetConfirmTitle'),
+      t('keyboard.resetConfirmMessage'),
+    );
+    if (!confirmed) return;
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -426,7 +475,7 @@ const KeyboardShortcutsTab: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [refreshRegistrations, t]);
+  }, [refreshRegistrations, saving, t]);
 
   // Format a key combination from a registration or pending change
   const formatKey = (reg: ShortcutRegistration, pending?: PendingChange): string => {
@@ -511,13 +560,13 @@ const KeyboardShortcutsTab: React.FC = () => {
   }, [displayRegistrations, pendingChanges, t]);
 
   const mergedSceneConflict = useMemo(
-    () => firstConflictInGroup(SCENE_FOCUS_ORDER, displayRegistrations, pendingChanges),
-    [displayRegistrations, pendingChanges]
+    () => firstConflictInGroup(SCENE_FOCUS_ORDER, finalConflicts),
+    [finalConflicts],
   );
 
   const mergedTabConflict = useMemo(
-    () => firstConflictInGroup(TAB_SWITCH_ORDER, displayRegistrations, pendingChanges),
-    [displayRegistrations, pendingChanges]
+    () => firstConflictInGroup(TAB_SWITCH_ORDER, finalConflicts),
+    [finalConflicts],
   );
 
   const mergedScenePending = useMemo(
@@ -576,13 +625,13 @@ const KeyboardShortcutsTab: React.FC = () => {
             {hasPendingChanges && (
               <Button
                 variant="fill"
-              size="sm"
-              onClick={handleApply}
-              disabled={saving}
-            >
-              {saving ? t('keyboard.saving') : t('keyboard.apply')}
-            </Button>
-          )}
+                size="sm"
+                onClick={handleApply}
+                disabled={saving || hasBlockingConflicts}
+              >
+                {saving ? t('keyboard.saving') : t('keyboard.apply')}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -595,7 +644,13 @@ const KeyboardShortcutsTab: React.FC = () => {
         </div>
 
         {saveError && (
-          <div className="kb-shortcuts__error" data-bf-component="keyboard-shortcuts" data-bf-part="error">{saveError}</div>
+          <div role="alert" className="kb-shortcuts__error" data-bf-component="keyboard-shortcuts" data-bf-part="error">{saveError}</div>
+        )}
+
+        {hasBlockingConflicts && (
+          <div role="alert" className="kb-shortcuts__error" data-bf-component="keyboard-shortcuts" data-bf-part="error">
+            {t('keyboard.conflictBlocking')}
+          </div>
         )}
 
         {/* Shortcuts grouped by scope */}
@@ -676,6 +731,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                             className="kb-shortcuts__revert-btn"
                             data-bf-component="keyboard-shortcuts"
                             data-bf-part="revert"
+                            aria-label={t('keyboard.revertChange')}
                             onClick={() => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
@@ -750,6 +806,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                             className="kb-shortcuts__revert-btn"
                             data-bf-component="keyboard-shortcuts"
                             data-bf-part="revert"
+                            aria-label={t('keyboard.revertChange')}
                             onClick={() => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
@@ -769,8 +826,9 @@ const KeyboardShortcutsTab: React.FC = () => {
                   const pending = pendingChanges[reg.id];
                   const isRecording = recordingId === reg.id;
                   const fixed = NON_USER_CUSTOMIZABLE_SHORTCUT_IDS.has(reg.id);
-                  const conflict =
-                    !fixed && pending ? detectConflict(pending, reg.config.scope ?? 'app') : null;
+                  const conflict = finalConflicts.get(reg.id) ?? null;
+                  const displayName = shortcutDisplayName(reg, t);
+                  const formattedKey = formatKey(reg, pending);
 
                   return (
                     <div
@@ -792,7 +850,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                     >
                       <div className="kb-shortcuts__item-label" data-bf-component="keyboard-shortcuts" data-bf-part="label">
                         <span className="kb-shortcuts__item-name">
-                          {shortcutDisplayName(reg, t)}
+                          {displayName}
                         </span>
                         {conflict && (
                           <span className="kb-shortcuts__item-conflict-hint">
@@ -803,14 +861,18 @@ const KeyboardShortcutsTab: React.FC = () => {
                       <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
                         {fixed ? (
                           <Tooltip content={t('keyboard.fixedBinding')} placement="top">
-                            <span
+                            <kbd
                               className={['kb-shortcuts__keybadge', 'kb-shortcuts__keybadge--readonly'].join(' ')}
                               data-bf-component="keyboard-shortcuts"
                               data-bf-part="keyBadge"
                               data-bf-state="readonly"
+                              aria-label={t('keyboard.fixedBindingLabel', {
+                                action: displayName,
+                                shortcut: formattedKey,
+                              })}
                             >
-                              {formatKey(reg)}
-                            </span>
+                              {formattedKey}
+                            </kbd>
                           </Tooltip>
                         ) : (
                           <>
@@ -832,7 +894,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                               >
                                 {isRecording
                                   ? t('keyboard.recording')
-                                  : formatKey(reg, pending)}
+                                  : formattedKey}
                               </button>
                             </Tooltip>
                             {pending && !isRecording && (
@@ -842,6 +904,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                                   className="kb-shortcuts__revert-btn"
                                   data-bf-component="keyboard-shortcuts"
                                   data-bf-part="revert"
+                                  aria-label={t('keyboard.revertChange')}
                                   onClick={() => {
                                     setPendingChanges((prev) => {
                                       const next = { ...prev };

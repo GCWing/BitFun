@@ -11,7 +11,7 @@ import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useR
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
-import { Copy, Check, CircleAlert } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
@@ -186,7 +186,7 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
         onClick={() => void copyValue(value, valueKey)}
         aria-label={t('modelRound.attemptDiagnostics.copy')}
       >
-        {copiedValue === valueKey ? <Check size={13} /> : <Copy size={13} />}
+        {copiedValue === valueKey ? <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="duplicate" size="lg" style={{ width: 13, height: 13 }} />}
       </button>
     </Tooltip>
   );

@@ -425,7 +425,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                 disabled={installDisabled}
                 onClick={() => release && void handleInstall(release)}
               >
-                {updateAvailable ? <Icon name="refresh" size="lg" style={{ width: 15, height: 15 }} /> : <Icon name="download" size="sm" />}
+                {updateAvailable ? <Icon name="refresh" size="lg" style={{ width: 15, height: 15 }} /> : <Icon name="arrow-down" size="sm" />}
                 {installing
                   ? t('package.market.installing')
                   : updateAvailable

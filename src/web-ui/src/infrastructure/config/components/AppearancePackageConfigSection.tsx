@@ -340,7 +340,7 @@ export function AppearancePackageConfigSection() {
                 aria-label={t('package.export')}
                 disabled={busy}
                 onClick={() => void handleExport(selectedAppearance.id)}
-                icon={<Icon name="download" size="sm" />}
+                icon={<Icon name="arrow-down" size="sm" />}
               />
               <IconButton
                 size="sm"

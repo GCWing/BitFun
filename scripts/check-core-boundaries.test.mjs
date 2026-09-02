@@ -414,6 +414,7 @@ test('portable contract crates expose only capability-local feature slices', asy
       'terminal-port',
       'tool-runtime-handles',
       'ts',
+      'web-search-port',
       'workspace-ports',
     ]),
   );
@@ -422,6 +423,7 @@ test('portable contract crates expose only capability-local feature slices', asy
   assert.deepEqual(runtimePortFeatures['plugin-runtime'], []);
   assert.deepEqual(runtimePortFeatures['product-search'], ['dep:bitfun-product-domains']);
   assert.deepEqual(runtimePortFeatures['script-tool-runtime'], []);
+  assert.deepEqual(runtimePortFeatures['web-search-port'], []);
   // Workspace byte readers expose AsyncRead/AsyncSeek without selecting a
   // process, network, scheduler, or full Tokio runtime at the contract layer.
   assert.deepEqual(new Set(runtimePortFeatures['workspace-ports']), new Set(['dep:anyhow', 'dep:tokio-util', 'dep:tokio', 'tokio/io-util']));
@@ -643,6 +645,7 @@ const RUNTIME_PORT_FEATURE_PROFILES = {
     'bitfun-core-types/ts',
     'bitfun-product-domains?/ts',
   ],
+  'web-search-port': [],
   'workspace-ports': ['dep:anyhow', 'dep:tokio-util', 'dep:tokio', 'tokio/io-util'],
 };
 
@@ -1717,6 +1720,7 @@ const APP_SERVER_REVIEWED_CORE_FEATURES = [
   'git',
   'i18n-runtime',
   'remote-connect',
+  'web-tools',
 ];
 
 test('OpenCode Plugin Host keeps retired LSP outside its feature closure', () => {

@@ -1,16 +1,8 @@
-import {
-  Alert,
-  Button,
-  ScrollArea,
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogHeader,
-} from '@bitfun/ui';
+import { Alert, Button, ScrollArea, Dialog, DialogBody, DialogClose, DialogHeader, Icon } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
-import { GitCommitHorizontal, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { dispatchApi } from './dispatchApi';
 import type { DispatchSyncResult } from './types';
 import './DispatchResultDialog.scss';
@@ -169,7 +161,7 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
                 />
                 <section className="dispatch-result-dialog__group">
                   <div className="dispatch-result-dialog__group-header">
-                    <GitCommitHorizontal size={14} />
+                    <Icon name="commit" size="sm" />
                     <strong>{t('dispatch.syncChangedFiles')}</strong>
                     <span>{result.changes.length}</span>
                   </div>

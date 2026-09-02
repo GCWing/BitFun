@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "8014d639f49b04d3364042fa99feceed760568682cea66995ff798862f07977b",
-  "commandCount": 654,
+  "catalogDigest": "e6de7c47ef80d430801ba783d5adb016c7e6367a147a6eb54cdb9f70a746a61d",
+  "commandCount": 657,
   "coverage": {
-    "commandCount": 654,
-    "documentedCommandCount": 627,
+    "commandCount": 657,
+    "documentedCommandCount": 630,
     "implementationCommandCount": 27,
     "implementationDigest": "4d3b2e8145a6a97b622fdb78cf1c25275881328eb7ccbc3c92ae95bf798cb190"
   },
@@ -1343,6 +1343,22 @@
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn clear_session_thread_goal( coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, AppState>, request: ClearSessionThreadGoalRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "clear_web_search_credential",
+      "moduleId": "config",
+      "capabilityId": "setting.tools.web-search",
+      "capabilityIds": [
+        "setting.tools.web-search"
+      ],
+      "documentedItemIds": [
+        "setting.tools.web-search:device-credential"
+      ],
+      "visibility": "documented",
+      "rustPath": "clear_web_search_credential",
+      "sourceFile": "src/apps/desktop/src/api/config_api.rs",
+      "signature": "fn clear_web_search_credential( _state: State<'_, AppState>, request: bitfun_core::service::web_search::ClearWebSearchCredentialRequest, ) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "close_workspace",
@@ -3918,6 +3934,22 @@
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_watched_paths() -> Result<Vec<String>, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "get_web_search_credential_status",
+      "moduleId": "config",
+      "capabilityId": "setting.tools.web-search",
+      "capabilityIds": [
+        "setting.tools.web-search"
+      ],
+      "documentedItemIds": [
+        "setting.tools.web-search:device-credential"
+      ],
+      "visibility": "documented",
+      "rustPath": "get_web_search_credential_status",
+      "sourceFile": "src/apps/desktop/src/api/config_api.rs",
+      "signature": "fn get_web_search_credential_status( _state: State<'_, AppState>, request: GetWebSearchCredentialStatusRequest, ) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "get_workspace_reference_snapshot",
@@ -8194,6 +8226,22 @@
       "sourceFile": "src/apps/desktop/src/api/session_api.rs",
       "signature": "fn save_session_turn( request: SaveSessionTurnRequest, runtime: State<'_, DesktopRuntimeContext>, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "save_web_search_credential",
+      "moduleId": "config",
+      "capabilityId": "setting.tools.web-search",
+      "capabilityIds": [
+        "setting.tools.web-search"
+      ],
+      "documentedItemIds": [
+        "setting.tools.web-search:device-credential"
+      ],
+      "visibility": "documented",
+      "rustPath": "save_web_search_credential",
+      "sourceFile": "src/apps/desktop/src/api/config_api.rs",
+      "signature": "fn save_web_search_credential( _state: State<'_, AppState>, request: bitfun_core::service::web_search::SaveWebSearchCredentialRequest, ) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "scan_workspace_info",

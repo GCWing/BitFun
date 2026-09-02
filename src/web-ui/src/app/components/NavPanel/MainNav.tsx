@@ -28,7 +28,7 @@ import {
 } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Plus, FolderOpen, FolderPlus, History, Users, Network } from 'lucide-react';
+import { FolderOpen, FolderPlus, History, Users, Network } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -414,7 +414,7 @@ const MainNav: React.FC<MainNavProps> = ({
               aria-label={createSessionLabel}
               data-testid="nav-new-session-btn"
             >
-              <Plus size={15} aria-hidden="true" />
+              <Icon name="plus" size="lg" style={{ width: 15, height: 15 }} aria-hidden="true" />
             </button>
           </Tooltip>
         </div>

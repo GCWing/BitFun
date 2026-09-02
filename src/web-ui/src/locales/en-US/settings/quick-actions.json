@@ -29,7 +29,10 @@
     "button": "Edit"
   },
   "delete": {
-    "button": "Delete"
+    "button": "Delete",
+    "confirmTitle": "Delete custom action?",
+    "confirmMessage": "This deletes “{{name}}” and its prompt. It cannot be restored.",
+    "confirmAction": "Delete action"
   },
   "add": {
     "button": "Add action"
@@ -44,10 +47,15 @@
     "promptHint": "This prompt is sent to the AI when you run the action.",
     "cancel": "Cancel",
     "saveEdit": "Save",
-    "confirmAdd": "Add"
+    "confirmAdd": "Add",
+    "discardTitle": "Discard unsaved changes?",
+    "discardMessage": "Closing now will discard the action name and prompt you edited.",
+    "discardConfirm": "Discard changes"
   },
   "messages": {
     "saved": "Saved",
-    "saveFailed": "Failed to save"
+    "saveFailed": "Save failed. Your edits are still open so you can try again.",
+    "loadFailedLocked": "Quick actions could not be read. This page is locked to avoid replacing the existing configuration with an empty list.",
+    "retry": "Reload"
   }
 }

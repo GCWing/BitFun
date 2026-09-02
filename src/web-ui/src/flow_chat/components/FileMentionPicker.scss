@@ -44,7 +44,8 @@
     font-weight: var(--bf-type-label-sm-font-weight);
     letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       opacity: 0.6;
     }
   }

@@ -351,7 +351,8 @@
   font-weight: var(--bf-type-label-sm-font-weight);
   line-height: var(--bf-type-modifier-leading-ui-line-height);
 
-  svg {
+  svg,
+  [data-bf-component='icon'] {
     flex: 0 0 auto;
   }
 }

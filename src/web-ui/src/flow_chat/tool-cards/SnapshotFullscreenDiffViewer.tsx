@@ -6,9 +6,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { X, CheckCircle, XCircle, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { XCircle, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { DiffEditor } from '../../tools/editor';
 import type { SnapshotFile } from '../../tools/snapshot_system/core/SnapshotStateManager';
 import { createLogger } from '@/shared/utils/logger';
@@ -171,7 +171,7 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
                 type="button"
                 variant="fill"
                 size="sm"
-                leadingIcon={<CheckCircle size={16} />}
+                leadingIcon={<Icon name="check-circle" size="md" />}
                 onClick={() => handleBatchAction('accept')}
                 disabled={loading}
               >
@@ -200,7 +200,7 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
                 size="sm"
                 onClick={onClose}
                 aria-label={t('toolCards.snapshot.close')}
-                icon={<X size={16} />}
+                icon={<Icon name="xmark" size="md" />}
               />
             </Tooltip>
           </div>
@@ -215,7 +215,7 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
                 onClick={() => setSelectedFileIndex(prev => prev > 0 ? prev - 1 : files.length - 1)}
                 disabled={loading}
                 aria-label={t('toolCards.snapshot.prevFile')}
-                icon={<ChevronLeft size={16} />}
+                icon={<Icon name="chevron-left" size="md" />}
               />
             </Tooltip>
 
@@ -247,7 +247,7 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
                 onClick={() => setSelectedFileIndex(prev => prev < files.length - 1 ? prev + 1 : 0)}
                 disabled={loading}
                 aria-label={t('toolCards.snapshot.nextFile')}
-                icon={<ChevronRight size={16} />}
+                icon={<Icon name="chevron-right" size="md" />}
               />
             </Tooltip>
           </div>
@@ -273,7 +273,7 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
                 type="button"
                 variant="fill"
                 size="sm"
-                leadingIcon={<CheckCircle size={16} />}
+                leadingIcon={<Icon name="check-circle" size="md" />}
                 onClick={() => handleFileAction('accept')}
                 disabled={loading}
               >

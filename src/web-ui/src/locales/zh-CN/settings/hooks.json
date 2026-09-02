@@ -15,6 +15,12 @@
       "description": "读取并运行工作区内的 .bitfun/config/hooks.json；仅对可信仓库开启。"
     }
   },
+  "projectHooksRisk": {
+    "title": "允许工作区代码运行 Hook？",
+    "message": "启用后，工作区“{{workspace}}”中的 .bitfun/config/hooks.json 可以用你的用户权限运行命令。只应为你信任且已检查 Hook 文件的工作区开启。",
+    "currentWorkspace": "当前工作区",
+    "confirm": "我已检查，继续启用"
+  },
   "locations": {
     "title": "Hook 声明位置",
     "description": "修改 hooks.json 后立即生效，无需重启 BitFun。",
@@ -88,6 +94,8 @@
   "messages": {
     "saved": "Hook 设置已保存",
     "saveFailed": "保存 Hook 设置失败",
-    "loadFailed": "加载 Hook 设置失败"
+    "loadFailed": "加载 Hook 设置失败",
+    "loadFailedLocked": "无法读取 Hook 设置。为避免误启用命令执行，相关开关已锁定。",
+    "retry": "重新加载"
   }
 }

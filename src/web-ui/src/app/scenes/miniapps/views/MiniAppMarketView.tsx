@@ -394,7 +394,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
                           <p>{description}</p>
                           <div className="miniapp-market-card__stats">
                             <span><Icon name="star" size="xs" /> {item.ratingAverage.toFixed(1)}</span>
-                            <span><Icon name="download" size="xs" /> {formatNumber(item.downloadCount)}</span>
+                            <span><Icon name="arrow-down" size="xs" /> {formatNumber(item.downloadCount)}</span>
                             <span><Heart size={12} /> {formatNumber(item.favoriteCount)}</span>
                           </div>
                         </CardBody>
@@ -474,7 +474,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => setInstallPrompt(true)}
               >
-                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <Icon name="refresh" size="sm" /> : <Icon name="download" size="sm" />}
+                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <Icon name="refresh" size="sm" /> : <Icon name="arrow-down" size="sm" />}
                 {installLabel}
               </Button>
             ) : null}

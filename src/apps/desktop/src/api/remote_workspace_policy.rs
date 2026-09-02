@@ -320,6 +320,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "clear_web_search_credential",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "clear_session_thread_goal",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -572,6 +576,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("get_config", RemoteWorkspacePolicy::LegacyUnaudited),
     ("get_configs", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "get_web_search_credential_status",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
     (
         "get_current_workspace",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1546,6 +1554,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("save_canvas_state", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "save_cloud_speech_config",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "save_web_search_credential",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (

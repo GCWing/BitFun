@@ -1,14 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Bot,
-  ChevronDown,
-  ChevronRight,
-  MessageSquare,
-  MoreHorizontal,
-  RefreshCw,
-  Square,
-} from 'lucide-react';
+import { Bot, MessageSquare, Square } from 'lucide-react';
 import { Spinner, Tooltip } from '@bitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
@@ -28,7 +20,7 @@ import {
   SubagentAvatar,
 } from '../../subagent-identity';
 import './SessionTreePopover.scss';
-import { IconButton, Menu, MenuItem } from '@bitfun/ui';
+import { IconButton, Menu, MenuItem, Icon } from '@bitfun/ui';
 
 export interface SessionTreeSelection {
   sessionId: string;
@@ -446,7 +438,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                 ? t('flowChatHeader.agentTreeCollapse')
                 : t('flowChatHeader.agentTreeExpand')}
             >
-              {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              {isExpanded ? <Icon name="chevron-down" size="xs" /> : <Icon name="chevron-right" size="xs" />}
             </button>
           ) : (
             <span className="session-tree-popover__expand-spacer" aria-hidden="true" />
@@ -495,7 +487,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                   aria-haspopup="menu"
                   aria-expanded={openActionSessionId === node.sessionId}
                   disabled={isCancelling}
-                  icon={<MoreHorizontal size={13} aria-hidden="true" />}
+                  icon={<Icon name="more" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />}
                 />
               </Tooltip>
               {openActionSessionId === node.sessionId && actionMenuPosition ? createPortal(
@@ -588,7 +580,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
               size="sm"
               onClick={() => void refreshSnapshot()}
               aria-label={t('flowChatHeader.agentTreeRetry')}
-              icon={<RefreshCw size={13} />}
+              icon={<Icon name="refresh" size="lg" style={{ width: 13, height: 13 }} />}
             />
           </Tooltip>
         </div>

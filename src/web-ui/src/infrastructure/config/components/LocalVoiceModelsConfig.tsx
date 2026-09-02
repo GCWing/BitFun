@@ -396,7 +396,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                     size="sm"
                     onClick={() => handleDownload(model)}
                     disabled={busyAction !== null || anyDownloading}
-                    leadingIcon={<Icon name="download" size="sm" />}
+                    leadingIcon={<Icon name="arrow-down" size="sm" />}
                   >
 
                     {needsRepair ? t('model.repair') : t('model.download')}

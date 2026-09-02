@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Loader2, Sparkles } from 'lucide-react';
-import { Spinner, Tooltip } from '@bitfun/ui';
+import { Loader2 } from 'lucide-react';
+import { Spinner, Tooltip, Icon } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { useTranslation } from 'react-i18next';
@@ -247,7 +247,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
 
   const header = (
     <ProminentToolCardHeader
-      icon={<span className="generative-widget-card__icon"><Sparkles size={16} /></span>}
+      icon={<span className="generative-widget-card__icon"><Icon name="spark" size="md" /></span>}
       action={t('toolCards.generativeUI.action')}
       content={<span data-bf-component="generative-widget-tool-card" data-bf-part="title" className="generative-widget-card__title">{title}</span>}
       extra={(
@@ -276,7 +276,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
             disabled={isExporting}
             aria-label={t('exportImage.exportToImage')}
           >
-            {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
+            {isExporting ? <Loader2 size={14} className="spinning" /> : <Icon name="image" size="sm" />}
           </button>
         </Tooltip>
       )}

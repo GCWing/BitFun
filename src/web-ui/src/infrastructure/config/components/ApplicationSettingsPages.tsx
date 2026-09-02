@@ -1,8 +1,8 @@
-import { Alert, Button, Combobox, Select, Switch, Tooltip, type ComboboxOption } from '@bitfun/ui';
+import { Alert, Button, Combobox, ConfirmDialog, Select, Switch, Tooltip, type ComboboxOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
-import { ConfigLoadingState, ConfigMessage } from '@/infrastructure/config/components/common';
+import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
@@ -43,6 +43,7 @@ function LaunchAtLoginSection() {
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -51,36 +52,28 @@ function LaunchAtLoginSection() {
     setTimeout(() => setMessage(null), 3000);
   }, []);
 
+  const loadData = useCallback(async () => {
+    if (!isTauri) return;
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const value = await systemAPI.getLaunchAtLoginEnabled();
+      setEnabled(value);
+    } catch (error) {
+      log.error('Failed to load launch-at-login state', error);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [isTauri]);
+
   useEffect(() => {
     if (!isTauri) {
       setLoading(false);
       return;
     }
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const v = await systemAPI.getLaunchAtLoginEnabled();
-        if (!cancelled) {
-          setEnabled(v);
-        }
-      } catch (error) {
-        log.error('Failed to load launch-at-login state', error);
-        if (!cancelled) {
-          showMessage('error', t('launchAtLogin.messages.loadFailed'));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isTauri, showMessage, t]);
+    void loadData().catch(() => undefined);
+  }, [isTauri, loadData]);
 
   const handleToggle = useCallback(
     async (next: boolean) => {
@@ -106,6 +99,16 @@ function LaunchAtLoginSection() {
 
   if (loading) {
     return <ConfigLoadingState label={t('launchAtLogin.messages.loading')} />;
+  }
+
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('launchAtLogin.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
   }
 
   return (
@@ -140,6 +143,7 @@ function AutoUpdateSection() {
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [enabled, setEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -148,34 +152,28 @@ function AutoUpdateSection() {
     setTimeout(() => setMessage(null), 3000);
   }, []);
 
+  const loadData = useCallback(async () => {
+    if (!isTauri) return;
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const value = await configManager.getOptionalConfig<boolean>('app.auto_update');
+      setEnabled(value !== false);
+    } catch (error) {
+      log.error('Failed to load app.auto_update', error);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [isTauri]);
+
   useEffect(() => {
     if (!isTauri) {
       setLoading(false);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const v = await configManager.getConfig<boolean>('app.auto_update');
-        if (!cancelled) {
-          setEnabled(v !== false);
-        }
-      } catch (error) {
-        log.error('Failed to load app.auto_update', error);
-        if (!cancelled) {
-          showMessage('error', t('autoUpdate.messages.loadFailed'));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isTauri, showMessage, t]);
+    void loadData();
+  }, [isTauri, loadData]);
 
   const handleToggle = useCallback(
     async (next: boolean) => {
@@ -203,6 +201,16 @@ function AutoUpdateSection() {
 
   if (loading) {
     return <ConfigLoadingState label={t('autoUpdate.messages.loading')} />;
+  }
+
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('autoUpdate.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
   }
 
   return (
@@ -237,6 +245,7 @@ function PreventSleepSection() {
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -245,36 +254,27 @@ function PreventSleepSection() {
     setTimeout(() => setMessage(null), 3000);
   }, []);
 
+  const loadData = useCallback(async () => {
+    if (!isTauri) return;
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      setEnabled(await systemAPI.getPreventSleepEnabled());
+    } catch (error) {
+      log.error('Failed to load prevent-sleep preference', error);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [isTauri]);
+
   useEffect(() => {
     if (!isTauri) {
       setLoading(false);
       return;
     }
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const value = await systemAPI.getPreventSleepEnabled();
-        if (!cancelled) {
-          setEnabled(value);
-        }
-      } catch (error) {
-        log.error('Failed to load prevent-sleep preference', error);
-        if (!cancelled) {
-          showMessage('error', t('preventSleep.messages.loadFailed'));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isTauri, showMessage, t]);
+    void loadData();
+  }, [isTauri, loadData]);
 
   const handleToggle = useCallback(
     async (next: boolean) => {
@@ -303,6 +303,16 @@ function PreventSleepSection() {
     return <ConfigLoadingState label={t('preventSleep.messages.loading')} />;
   }
 
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('preventSleep.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
+  }
+
   return (
     <ConfigPageSection
       title={t('preventSleep.sections.title')}
@@ -329,12 +339,14 @@ function PreventSleepSection() {
 function LoggingSection() {
   const { t } = useTranslation('settings/application');
   const [configLevel, setConfigLevel] = useState<BackendLogLevel>('info');
-  const [includeSensitiveDiagnostics, setIncludeSensitiveDiagnostics] = useState(true);
+  const [includeSensitiveDiagnostics, setIncludeSensitiveDiagnostics] = useState(false);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeLoggingInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openingFolder, setOpeningFolder] = useState(false);
   const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const levelOptions = useMemo(
@@ -357,6 +369,7 @@ function LoggingSection() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadFailed(false);
 
       const [savedLevel, savedIncludeSensitiveDiagnostics, info] = await Promise.all([
         configManager.getConfig<BackendLogLevel>('app.logging.level'),
@@ -365,15 +378,15 @@ function LoggingSection() {
       ]);
 
       setConfigLevel(savedLevel || info.effectiveLevel || 'info');
-      setIncludeSensitiveDiagnostics(savedIncludeSensitiveDiagnostics ?? true);
+      setIncludeSensitiveDiagnostics(savedIncludeSensitiveDiagnostics ?? false);
       setRuntimeInfo(info);
     } catch (error) {
       log.error('Failed to load logging config', error);
-      showMessage('error', t('logging.messages.loadFailed'));
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [showMessage, t]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -444,6 +457,7 @@ function LoggingSection() {
   }, [runtimeInfo?.sessionLogDir, showMessage, t]);
 
   const handleExportDiagnostics = useCallback(async () => {
+    setExportConfirmOpen(false);
     try {
       setExportingDiagnostics(true);
       const result = await configAPI.exportDiagnosticsBundle();
@@ -459,6 +473,16 @@ function LoggingSection() {
 
   if (loading) {
     return <ConfigLoadingState label={t('logging.messages.loading')} />;
+  }
+
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('logging.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
   }
 
   return (
@@ -546,7 +570,7 @@ function LoggingSection() {
               leadingIcon={<Archive />}
               data-testid="diagnostics-export-button"
               onClick={() => {
-                void handleExportDiagnostics();
+                setExportConfirmOpen(true);
               }}
               loading={exportingDiagnostics}
               disabled={exportingDiagnostics}
@@ -555,6 +579,17 @@ function LoggingSection() {
             </Button>
           </ConfigPageRow>
         </ConfigPageSection>
+        <ConfirmDialog
+          open={exportConfirmOpen}
+          onOpenChange={() => setExportConfirmOpen(false)}
+          onConfirm={() => void handleExportDiagnostics()}
+          title={t('logging.diagnostics.confirmTitle')}
+          message={t(includeSensitiveDiagnostics
+            ? 'logging.diagnostics.confirmSensitive'
+            : 'logging.diagnostics.confirmStandard')}
+          confirmText={t('logging.diagnostics.confirmAction')}
+          type={includeSensitiveDiagnostics ? 'warning' : 'info'}
+        />
       </div>
     </div>
   );
@@ -566,6 +601,7 @@ function TerminalSection() {
   const [terminalPanelPosition, setTerminalPanelPositionState] = useState<TerminalPanelPosition>('right');
   const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -577,6 +613,7 @@ function TerminalSection() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadFailed(false);
 
       const [terminalConfig, shells] = await Promise.all([
         configManager.getConfig<TerminalSettings>('terminal'),
@@ -591,11 +628,11 @@ function TerminalSection() {
       setAvailableShells(availableOnly);
     } catch (error) {
       log.error('Failed to load terminal config data', error);
-      showMessage('error', t('terminal.messages.loadFailed'));
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [showMessage, t]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -603,6 +640,7 @@ function TerminalSection() {
 
   const handleShellChange = useCallback(
     async (value: string) => {
+      const previous = defaultShell;
       try {
         setSaving(true);
         setDefaultShell(value);
@@ -613,17 +651,19 @@ function TerminalSection() {
 
         showMessage('success', t('terminal.messages.updated'));
       } catch (error) {
+        setDefaultShell(previous);
         log.error('Failed to save terminal config', { shell: value, error });
         showMessage('error', t('terminal.messages.saveFailed'));
       } finally {
         setSaving(false);
       }
     },
-    [showMessage, t]
+    [defaultShell, showMessage, t]
   );
 
   const handleTerminalPanelPositionChange = useCallback(
     async (value: TerminalPanelPosition) => {
+      const previous = terminalPanelPosition;
       try {
         setSaving(true);
         setTerminalPanelPositionState(value);
@@ -633,13 +673,14 @@ function TerminalSection() {
 
         showMessage('success', t('terminal.messages.panelPositionUpdated'));
       } catch (error) {
+        setTerminalPanelPositionState(previous);
         log.error('Failed to save terminal panel position', { value, error });
         showMessage('error', t('terminal.messages.saveFailed'));
       } finally {
         setSaving(false);
       }
     },
-    [showMessage, t],
+    [showMessage, t, terminalPanelPosition],
   );
 
   const shellOptions = useMemo<TerminalShellOption[]>(
@@ -674,6 +715,16 @@ function TerminalSection() {
 
   if (loading) {
     return <ConfigLoadingState label={t('terminal.messages.loading')} />;
+  }
+
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('terminal.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
   }
 
   return (
@@ -733,6 +784,7 @@ function WindowBehaviorSection() {
   const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
   const [behavior, setBehavior] = useState<CloseBehavior>('quit');
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -750,26 +802,28 @@ function WindowBehaviorSection() {
     [t]
   );
 
+  const loadData = useCallback(async () => {
+    if (!isTauri) return;
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const value = await configManager.getOptionalConfig<CloseBehavior>('app.close_button_behavior');
+      setBehavior(value ?? 'minimize_to_tray');
+    } catch (error) {
+      log.error('Failed to load close behavior', error);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [isTauri]);
+
   useEffect(() => {
     if (!isTauri) {
       setLoading(false);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const v = await configManager.getConfig<CloseBehavior>('app.close_button_behavior');
-        if (!cancelled) setBehavior(v ?? 'minimize_to_tray');
-      } catch {
-        // Key absent on first launch — fall back to default silently.
-        if (!cancelled) setBehavior('minimize_to_tray');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isTauri, showMessage, t]);
+    void loadData();
+  }, [isTauri, loadData]);
 
   const handleChange = useCallback(
     async (value: string) => {
@@ -796,6 +850,16 @@ function WindowBehaviorSection() {
 
   if (loading) {
     return <ConfigLoadingState label={t('windowBehavior.messages.loading')} />;
+  }
+
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('windowBehavior.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
   }
 
   return (
@@ -829,27 +893,34 @@ function NotificationsSection() {
   const [dialogNotify, setDialogNotify] = useState(true);
   const [permissionRequestNotify, setPermissionRequestNotify] = useState(true);
   const [startupTips, setStartupTips] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [notify, permissionNotify, tips] = await Promise.all([
-          configManager.getConfig<boolean>('app.notifications.dialog_completion_notify'),
-          configManager.getConfig<boolean>('app.notifications.permission_request_notify'),
-          configManager.getConfig<boolean>('app.notifications.enable_startup_tips'),
-        ]);
-        setDialogNotify(notify !== false);
-        setPermissionRequestNotify(permissionNotify !== false);
-        setStartupTips(tips !== false);
-      } catch {
-        setDialogNotify(true);
-        setPermissionRequestNotify(true);
-        setStartupTips(true);
-      }
-    })();
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const [notify, permissionNotify, tips] = await Promise.all([
+        configManager.getOptionalConfig<boolean>('app.notifications.dialog_completion_notify'),
+        configManager.getOptionalConfig<boolean>('app.notifications.permission_request_notify'),
+        configManager.getOptionalConfig<boolean>('app.notifications.enable_startup_tips'),
+      ]);
+      setDialogNotify(notify !== false);
+      setPermissionRequestNotify(permissionNotify !== false);
+      setStartupTips(tips !== false);
+    } catch (error) {
+      log.error('Failed to load notification preferences', error);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleDialogNotifyToggle = async (checked: boolean) => {
     setSaving(true);
@@ -889,6 +960,20 @@ function NotificationsSection() {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return <ConfigLoadingState label={t('notifications.messages.loading')} />;
+  }
+
+  if (loadFailed) {
+    return (
+      <ConfigRetryState
+        message={t('notifications.messages.loadFailed')}
+        retryLabel={t('common.retry')}
+        onRetry={() => void loadData()}
+      />
+    );
+  }
 
   return (
     <ConfigPageSection

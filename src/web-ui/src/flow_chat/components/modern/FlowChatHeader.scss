@@ -523,7 +523,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       flex: 0 0 auto;
       color: var(--bf-color-content-secondary);
       opacity: 0.82;

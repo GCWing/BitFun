@@ -1,9 +1,10 @@
 {
   "title": "语音输入",
-  "subtitle": "说话转成可编辑文字，默认在此设备处理。",
+  "subtitle": "本地转写在当前设备处理且不上传音频；实时语音通话使用单独的云端配置。",
   "loading": "正在加载语音输入设置...",
   "sections": {
-    "basic": "语音输入"
+    "basic": "语音输入",
+    "basicDescription": "语音输入在当前设备完成识别，录音和转写音频不会上传。"
   },
   "languages": {
     "auto": "自动",
@@ -50,6 +51,8 @@
   },
   "voiceCall": {
     "title": "实时语音通话",
+    "description": "启用后，麦克风音频会从当前控制端发送到火山引擎实时处理；此功能与本地转写相互独立。",
+    "loading": "正在加载实时语音设置…",
     "enabled": {
       "label": "启用客户端语音助手",
       "description": "从客户端右下角与火山引擎端到端实时语音模型通话，并允许它理解工作区状态和启动 BitFun 任务。"
@@ -65,13 +68,14 @@
     },
     "status": {
       "label": "连接配置",
-      "description": "保存后，打开客户端右下角的 Hello，即可从文字聊天切换到实时语音。"
+      "description": "保存只会写入配置，不会验证 API Key 或连接；随后打开客户端右下角的 Hello，即可从文字聊天切换到实时语音。"
     },
     "save": "保存实时语音",
     "messages": {
       "loadFailed": "加载控制端实时语音设置失败",
       "saved": "实时语音设置已保存",
-      "saveFailed": "保存实时语音设置失败"
+      "saveFailed": "保存实时语音设置失败",
+      "unsaved": "实时语音配置有尚未保存的修改。"
     },
     "call": {
       "title": "BitFun 实时通话",
@@ -221,6 +225,8 @@
   "messages": {
     "unsupported": "语音输入仅在 BitFun 桌面端中可用。",
     "loadFailed": "加载语音输入设置失败",
+    "modelsLoadFailed": "加载本地语音模型状态失败。",
+    "retry": "重试",
     "saveFailed": "保存语音输入设置失败",
     "downloadSuccess": "语音模型已下载",
     "localActivated": "已切换到本地语音输入",

@@ -130,6 +130,8 @@
     "screenCaptureDesc": "允许 BitFun 查看屏幕内容。",
     "granted": "已授权",
     "notGranted": "未授权",
+    "statusUnavailable": "状态未知",
+    "statusLoadFailed": "无法读取桌面控制状态。相关设置已锁定，请刷新后重试。",
     "openSettings": "系统设置",
     "refreshStatus": "刷新状态",
     "desktopOnly": "桌面控制仅在 BitFun 桌面应用中可用。",
@@ -153,6 +155,8 @@
     "status": "连接状态",
     "statusDesc": "",
     "notConnected": "未连接",
+    "statusUnavailable": "状态未知",
+    "statusLoadFailed": "无法读取浏览器控制状态。相关设置已锁定，请刷新后重试。",
     "readyNotConnected": "已就绪，使用时自动连接",
     "refreshStatus": "刷新状态",
     "connect": "连接浏览器",
@@ -189,7 +193,9 @@
     "enable": "启用"
   },
   "loading": {
-    "text": "加载配置中..."
+    "text": "加载配置中...",
+    "failed": "无法读取设置。为避免覆盖现有配置，当前页面已锁定。",
+    "retry": "重新加载"
   },
   "messages": {
     "saveSuccess": "设置已保存",

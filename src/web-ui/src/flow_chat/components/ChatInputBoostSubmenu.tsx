@@ -1,7 +1,7 @@
 import React, { useCallback, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight } from 'lucide-react';
-import { Menu, MenuItem } from '@bitfun/ui';
+
+import { Menu, MenuItem, Icon } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
 
@@ -56,7 +56,7 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
         aria-expanded={open}
         aria-controls={panelId}
         leading={icon}
-        metadata={<ChevronRight size={14} aria-hidden />}
+        metadata={<Icon name="chevron-right" size="sm" aria-hidden />}
         onClick={(event) => {
           event.stopPropagation();
           if (open) setOpen(false);

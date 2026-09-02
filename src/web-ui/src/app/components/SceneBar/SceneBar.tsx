@@ -112,11 +112,14 @@ const SceneBar: React.FC<SceneBarProps> = ({
           )}
         </span>
       ),
+      // Keep the close hit target stationary between pointer down and up;
+      // shrinking it can retarget the click at the button edge (issue #2210).
       endAction: closable ? (
         <button
           type="button"
           aria-label={closeLabel}
           title={closeLabel}
+          data-motion="none"
           data-scene-bar-part="closeTab"
           data-scene-id={tab.id}
           onClick={(event) => {

@@ -16,3 +16,15 @@
   margin-bottom: var(--bf-space-1);
 }
 
+.bitfun-config-retry-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--bf-space-2);
+}
+
+.bitfun-config-retry-state .bitfun-config-message {
+  align-self: stretch;
+  margin-bottom: 0;
+}
+

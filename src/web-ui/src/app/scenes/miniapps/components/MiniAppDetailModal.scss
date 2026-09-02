@@ -272,7 +272,8 @@
     line-height: var(--bf-type-body-sm-line-height);
     letter-spacing: var(--bf-type-body-sm-letter-spacing);
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       flex-shrink: 0;
     }
   }
@@ -334,7 +335,8 @@
     }
 
     &__icon {
-      svg {
+      svg,
+      [data-bf-component='icon'] {
         width: 48px;
         height: 48px;
       }

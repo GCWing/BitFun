@@ -6,13 +6,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  ChevronRight,
-  Keyboard,
-  MoreHorizontal,
-  Square,
-  Terminal,
-} from 'lucide-react';
+import { Keyboard, Square } from 'lucide-react';
 import { Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import {
   SceneChromeContribution,
@@ -475,7 +469,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             aria-label={t('flowChatHeader.backgroundCommandActions')}
             aria-haspopup="menu"
             aria-expanded={openBackgroundCommandMenuId === command.execSessionKey}
-            icon={<MoreHorizontal size={13} aria-hidden="true" />}
+            icon={<Icon name="more" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />}
           />
         </Tooltip>
         {openBackgroundCommandMenuId === command.execSessionKey && backgroundCommandMenuPosition ? createPortal(
@@ -801,7 +795,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                             disabled={displayBackgroundCommands.every(command => (
                               command.status !== 'running' || command.isStopping === true
                             ))}
-                            icon={<MoreHorizontal size={13} aria-hidden="true" />}
+                            icon={<Icon name="more" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />}
                           />
                         </Tooltip>
                       ) : null}
@@ -847,7 +841,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                             onClick={() => handleCommandSelect(command)}
                           >
                             <span className="flowchat-header__background-command-list-title">
-                              <Terminal size={12} aria-hidden="true" />
+                              <Icon name="terminal" size="xs" aria-hidden="true" />
                               <span>{command.title}</span>
                             </span>
                             <span className="flowchat-header__background-command-list-meta">
@@ -953,7 +947,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           data-testid="flowchat-header-pull-request-item"
                         >
                           <span>#{pullRequest.number} {pullRequest.title}</span>
-                          <ChevronRight size={13} aria-hidden="true" />
+                          <Icon name="chevron-right" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />
                         </button>
                       ))}
                     </div>

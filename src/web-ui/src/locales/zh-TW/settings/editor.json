@@ -112,11 +112,15 @@
   },
   "messages": {
     "loading": "載入中...",
-    "loadFailed": "載入設定失敗，使用默認設定",
+    "loadFailed": "載入設定失敗",
+    "loadFailedLocked": "無法讀取編輯器設定。為避免用預設值覆蓋現有設定，目前頁面已鎖定。",
+    "retry": "重新載入",
     "saving": "儲存中...",
     "saveSuccess": "設定已儲存，已開啟的編輯器會自動更新",
     "saveFailed": "儲存設定失敗",
     "confirmReset": "確定要重設編輯器設定為默認值嗎？",
-    "resetDone": "已重設為默認值"
+    "resetTitle": "重設編輯器設定？",
+    "resetAction": "恢復預設值",
+    "resetDone": "預設值已儲存，已開啟的編輯器會自動更新"
   }
 }

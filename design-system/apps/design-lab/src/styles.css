@@ -177,10 +177,28 @@ body,
   text-transform: capitalize;
 }
 
+.lab-nav-group-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lab-nav-group-chevron {
+  transition: transform 150ms ease;
+}
+
+.lab-nav-group-chevron[data-expanded] {
+  transform: rotate(90deg);
+}
+
 .lab-component-links {
   display: grid;
   gap: 2px;
   padding: 2px 0 2px 19px;
+}
+
+.lab-component-links[hidden] {
+  display: none;
 }
 
 .lab-component-links a {
@@ -2401,7 +2419,8 @@ input.lab-force-focus {
 
   .lab-sidebar,
   .lab-sidebar-backdrop,
-  .component-card {
+  .component-card,
+  .lab-nav-group-chevron {
     transition: none;
   }
 }

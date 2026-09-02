@@ -1,0 +1,81 @@
+.web-search-settings__provider-select {
+  inline-size: 240px;
+  max-inline-size: 100%;
+}
+
+.web-search-settings__credential-status,
+.web-search-settings__credential-field {
+  inline-size: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--bf-space-2);
+}
+
+.web-search-settings__credential-status {
+  justify-content: space-between;
+}
+
+.web-search-settings__credential-field {
+  flex-wrap: wrap;
+}
+
+.web-search-settings__credential-field [data-bf-component='input'] {
+  flex: 1 1 200px;
+  inline-size: auto;
+  min-inline-size: 0;
+}
+
+#web-search-bitfun-protocol {
+  display: grid;
+  gap: var(--bf-space-5);
+  padding: var(--bf-space-5);
+
+  > section {
+    display: grid;
+    gap: var(--bf-space-2);
+    min-inline-size: 0;
+
+    h4,
+    p {
+      margin: 0;
+    }
+
+    h4 {
+      color: var(--bf-color-content-primary);
+      font-size: var(--bf-type-label-selected-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-modifier-leading-dense-line-height);
+    }
+
+    p {
+      color: var(--bf-color-content-secondary);
+      font-size: var(--bf-type-meta-font-size);
+      line-height: var(--bf-type-modifier-leading-snug-line-height);
+    }
+
+    pre {
+      max-inline-size: 100%;
+      margin: 0;
+      padding: var(--bf-space-3);
+      overflow-x: auto;
+      border: 1px solid var(--bf-color-border-subtle);
+      border-radius: var(--bf-radius-sm);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
+      font-family: var(--bf-type-code-sm-font-family);
+      font-size: var(--bf-type-code-sm-font-size);
+      line-height: var(--bf-type-code-sm-line-height);
+      white-space: pre-wrap;
+    }
+  }
+
+  > ul {
+    display: grid;
+    gap: var(--bf-space-1);
+    margin: 0;
+    padding-inline-start: var(--bf-space-5);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
+  }
+}

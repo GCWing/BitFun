@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus } from 'lucide-react';
+
 import { flowChatStore } from '../store/FlowChatStore';
 import { FlowChatState, Session } from '../types/flow-chat';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '../utils/sessionTitle';
 import './CurrentSessionTitle.scss';
@@ -62,7 +62,7 @@ const CurrentSessionTitle: React.FC<CurrentSessionTitleProps> = ({ onCreateSessi
           onClick={handleCreateSession}
           aria-label={newSessionLabel}
         >
-          <Plus size={16} />
+          <Icon name="plus" size="md" />
         </button>
       </Tooltip>
     </div>

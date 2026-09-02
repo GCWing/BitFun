@@ -221,7 +221,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                   aria-label={t('editor.imageViewer.download')}
                   size="sm"
                   variant="quiet"
-                  icon={<Icon name="download" size="sm" />}
+                  icon={<Icon name="arrow-down" size="sm" />}
                   onClick={handleDownload}
                 />
               </Tooltip>

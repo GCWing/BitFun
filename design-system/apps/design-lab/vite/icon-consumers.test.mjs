@@ -19,3 +19,20 @@ test("Lab navigation, theme resources and export actions consume the shared icon
   assert.match(workbench, /<Icon name="arrow-down" size="sm"/);
   assert.doesNotMatch(workbench, /\bDownload\b/);
 });
+
+test("Icon is a standalone navigation item and component groups are collapsible", async () => {
+  const source = relative => readFile(new URL(`../src/${relative}`, import.meta.url), "utf8");
+  const [app, styles] = await Promise.all([
+    source("App.tsx"),
+    source("styles.css"),
+  ]);
+
+  assert.match(app, /component\.category !== "flow-chat" && component\.name !== "Icon"/);
+  assert.match(app, /href="#component\/icon"/);
+  assert.match(app, /aria-controls="lab-standard-component-links"/);
+  assert.match(app, /aria-controls="lab-flow-chat-component-links"/);
+  assert.match(app, /hidden=\{!expandedComponentGroups\.components\}/);
+  assert.match(app, /hidden=\{!expandedComponentGroups\["flow-chat"\]\}/);
+  assert.match(styles, /\.lab-nav-group-chevron\[data-expanded\]/);
+  assert.match(styles, /\.lab-component-links\[hidden\]/);
+});

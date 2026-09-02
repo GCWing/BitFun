@@ -2012,6 +2012,8 @@
       "interactiveApp": "交互應用",
       "actionLabel": "MCP：",
       "failedLabel": "MCP 失敗",
+      "copyInputParams": "複製輸入參數",
+      "copyTextResult": "複製文字結果",
       "executionFailed": "MCP 執行失敗"
     },
     "acpPermission": {

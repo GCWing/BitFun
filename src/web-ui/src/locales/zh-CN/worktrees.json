@@ -15,11 +15,13 @@
   },
   "settings": {
     "title": "Worktrees",
-    "description": "会话在独立 Git worktree 中执行时使用的默认值。修改根目录只影响之后新建的 worktree。",
+    "description": "会话在独立 Git worktree 中执行时使用的默认值。路径在当前执行主机上解析；修改根目录只影响之后新建的 worktree。",
     "loading": "正在加载 Worktree 设置…",
     "loadFailed": "无法加载 Worktree 设置。",
+    "retry": "重试",
     "saveFailed": "无法保存 Worktree 设置。",
     "saved": "Worktree 设置已保存。",
+    "unsaved": "有尚未保存的 Worktree 设置。",
     "required": "Worktree 根目录和分支前缀不能为空。",
     "save": "保存",
     "reset": "恢复默认值",
@@ -29,7 +31,7 @@
     },
     "rootPath": {
       "label": "Worktree 根目录",
-      "description": "之后新建的 worktree 会存放在此目录下。"
+      "description": "之后新建的 worktree 会存放在当前执行主机的此目录下。"
     },
     "branchPrefix": {
       "label": "分支前缀",
@@ -51,7 +53,7 @@
   },
   "management": {
     "title": "工作区 Worktrees",
-    "description": "仅显示 BitFun Worktree 根目录内的 worktree，并按所属工作区分组。",
+    "description": "仅显示当前执行主机上 BitFun Worktree 根目录内的 worktree，并按所属工作区分组。",
     "loading": "正在扫描 BitFun Worktree…",
     "loadFailed": "无法加载 BitFun Worktree 列表。",
     "refresh": "刷新 Worktree",

@@ -1,6 +1,7 @@
 {
   "title": "記憶",
   "subtitle": "控制自動記憶的生成、使用與整理範圍。",
+  "scopeNotice": "這裡的設定、會話候選和記憶檔案都屬於目前執行 BitFun 的主機。切換到其他裝置或 Peer 主機後，其記憶資料與設定可能不同。",
   "sections": {
     "basic": {
       "title": "基礎",
@@ -85,7 +86,8 @@
     "primary": "主模型",
     "fast": "快速模型",
     "followPrimary": "跟隨主模型",
-    "followExtraction": "跟隨抽取模型"
+    "followExtraction": "跟隨抽取模型",
+    "unavailable": "{{id}}（已停用或不存在）"
   },
   "externalContextPolicy": {
     "clearToolResults": "清空外部工具結果",
@@ -96,6 +98,9 @@
     "expandAdvanced": "展開進階設定",
     "collapseAdvanced": "收合進階設定",
     "resetSettings": "重設記憶設定",
+    "resetSettingsConfirmTitle": "重設記憶設定？",
+    "resetSettingsConfirm": "將把目前執行主機上的記憶開關、模型與進階參數恢復為預設值。現有記憶資料不會被刪除。",
+    "resetSettingsConfirmAction": "恢復預設設定",
     "openDirectory": "開啟記憶目錄",
     "resetMemory": "重設記憶",
     "resetMemoryConfirm": "確定要清空所有記憶資料和記憶工作區檔案嗎？此操作不可撤銷。",
@@ -108,6 +113,8 @@
   "messages": {
     "loading": "載入記憶設定…",
     "loadFailed": "載入記憶設定失敗",
+    "loadFailedLocked": "無法讀取記憶設定。為避免覆蓋目前執行主機上的設定，頁面已鎖定。",
+    "retry": "重新載入",
     "saved": "記憶設定已儲存",
     "saveFailed": "儲存記憶設定失敗",
     "rolloutAgeExceedsRetention": "會話最大年齡不能大於候選保留天數",

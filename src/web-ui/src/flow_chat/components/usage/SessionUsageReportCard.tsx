@@ -1,22 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import {
-  Activity,
-  AlertTriangle,
-  Check,
-  ChevronRight,
-  Copy,
-  Clock3,
-  Database,
-  FileText,
-  GitBranch,
-  Globe2,
-  PencilLine,
-  Search,
-  Terminal,
-  Wrench,
-} from 'lucide-react';
+import { Activity, AlertTriangle, Database, FileText, Wrench, type LucideProps } from 'lucide-react';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { Tooltip } from '@bitfun/ui';
 import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
@@ -49,6 +34,15 @@ import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsageReportCard.scss';
 
 const SUMMARY_LIST_LIMIT = 3;
+
+const UsageClockIcon: React.FC<LucideProps> = ({ className, size = 18, style }) => (
+  <Icon
+    name="clock"
+    size="lg"
+    className={className}
+    style={{ width: size, height: size, ...style }}
+  />
+);
 
 interface SessionUsageReportCardProps {
   report?: SessionUsageReport;
@@ -166,7 +160,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
               size="sm"
               onClick={handleCopy}
               aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-              icon={copied ? <Check size={14} /> : <Copy size={14} />}
+              icon={copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
             />
           </Tooltip>
         </div>
@@ -208,7 +202,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         key: 'wall',
         label: t('usage.metrics.wall'),
         value: formatUsageDuration(report.time.wallTimeMs, t),
-        icon: Clock3,
+        icon: UsageClockIcon,
         help: t('usage.help.wall'),
       },
       {
@@ -265,7 +259,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                 onClick={handleCopy}
                 data-testid="session-usage-copy"
                 aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-                icon={copied ? <Check size={17} /> : <Copy size={17} />}
+                icon={copied ? <Icon name="check-line" size="lg" style={{ width: 17, height: 17 }} /> : <Icon name="duplicate" size="lg" style={{ width: 17, height: 17 }} />}
               />
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
@@ -273,7 +267,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                trailingIcon={<ChevronRight size={15} aria-hidden />}
+                trailingIcon={<Icon name="chevron-right" size="lg" style={{ width: 15, height: 15 }} aria-hidden />}
                 onClick={handleOpenDetails}
                 disabled={!onOpenDetails}
                 data-testid="session-usage-details"
@@ -344,7 +338,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                   type="button"
                   variant="outline"
                   size="sm"
-                  trailingIcon={<ChevronRight size={14} aria-hidden />}
+                  trailingIcon={<Icon name="chevron-right" size="sm" aria-hidden />}
                   onClick={showAllTools.onClick}
                   data-testid="session-usage-tools-details"
                   aria-label={showAllTools.ariaLabel}
@@ -392,7 +386,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
       key: 'wall',
       label: t('usage.metrics.wall'),
       value: formatUsageDuration(report.time.wallTimeMs, t),
-      icon: Clock3,
+      icon: UsageClockIcon,
       help: t('usage.help.wall'),
     },
     {
@@ -473,7 +467,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                 size="sm"
                 onClick={handleCopy}
                 aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-                icon={copied ? <Check size={14} /> : <Copy size={14} />}
+                icon={copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
               />
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
@@ -481,7 +475,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                trailingIcon={<ChevronRight size={13} aria-hidden />}
+                trailingIcon={<Icon name="chevron-right" size="lg" style={{ width: 13, height: 13 }} aria-hidden />}
                 onClick={handleOpenDetails}
                 disabled={!onOpenDetails}
                 aria-label={t('usage.actions.openDetails')}
@@ -594,7 +588,9 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
 function renderCompactToolIcon(toolName: string, category?: string) {
   const normalizedName = toolName.toLowerCase();
-  const iconProps = { size: 17, strokeWidth: 1.8 } as const;
+  const catalogIcon = (name: 'browser' | 'edit' | 'git' | 'search' | 'terminal') => (
+    <Icon name={name} size="lg" style={{ width: 17, height: 17 }} />
+  );
 
   if (
     normalizedName.includes('exec')
@@ -603,36 +599,36 @@ function renderCompactToolIcon(toolName: string, category?: string) {
     || normalizedName.includes('terminal')
     || category === 'shell'
   ) {
-    return <Terminal {...iconProps} />;
+    return catalogIcon('terminal');
   }
   if (
     normalizedName.includes('grep')
     || normalizedName.includes('glob')
     || normalizedName.includes('search')
   ) {
-    return <Search {...iconProps} />;
+    return catalogIcon('search');
   }
   if (
     normalizedName.includes('edit')
     || normalizedName.includes('write')
     || normalizedName.includes('patch')
   ) {
-    return <PencilLine {...iconProps} />;
+    return catalogIcon('edit');
   }
   if (normalizedName.includes('web')) {
-    return <Globe2 {...iconProps} />;
+    return catalogIcon('browser');
   }
   if (normalizedName.includes('git') || category === 'git') {
-    return <GitBranch {...iconProps} />;
+    return catalogIcon('git');
   }
   if (
     normalizedName.includes('read')
     || normalizedName.includes('file')
     || category === 'file'
   ) {
-    return <FileText {...iconProps} />;
+    return <FileText size={17} strokeWidth={1.8} />;
   }
-  return <Wrench {...iconProps} />;
+  return <Wrench size={17} strokeWidth={1.8} />;
 }
 
 function UsageMetricValue({ value, help }: { value: string; help?: string }) {
@@ -766,7 +762,7 @@ function UsageMiniList({ title, showAll, items, emptyLabel, emptyDescription }: 
               type="button"
               variant="outline"
               size="sm"
-              trailingIcon={<ChevronRight size={12} aria-hidden />}
+              trailingIcon={<Icon name="chevron-right" size="xs" aria-hidden />}
               onClick={showAll.onClick}
               aria-label={showAll.ariaLabel}
             >

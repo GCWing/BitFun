@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
+import { RotateCcw, Loader2, CircleUser } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
@@ -26,7 +26,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
@@ -595,7 +595,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 onClick={handleCopy}
                 title={copied ? t('message.copyFailed') : t('message.copy')}
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
               </button>
               {canShowEditAction && (
                 <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
@@ -606,7 +606,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     disabled={!canEdit}
                     title={canEdit ? t('message.edit') : editDisabledReason}
                   >
-                    <Pencil size={14} />
+                    <Icon name="edit" size="sm" />
                   </button>
                 </Tooltip>
               )}
@@ -616,7 +616,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     className="user-message-item__copy-btn"
                     onClick={handleFillToInput}
                   >
-                    <ArrowDownToLine size={14} />
+                    <Icon name="arrow-down" size="sm" />
                   </button>
                 </Tooltip>
               ) : canShowRollbackAction && !steeringStatus ? (
@@ -656,7 +656,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         {lightboxImage && createPortal(
           <div className="user-message-item__lightbox" onClick={() => setLightboxImage(null)} data-bf-component="user-message-item" data-bf-part="lightbox">
             <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
-              <X size={20} />
+              <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
             </button>
             <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
           </div>,

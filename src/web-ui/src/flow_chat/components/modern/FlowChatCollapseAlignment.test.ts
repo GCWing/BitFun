@@ -48,6 +48,19 @@ describe('FlowChat collapse spacing', () => {
     );
   });
 
+  it('uses the thinking-style icon swap for the explore disclosure without a hover surface', () => {
+    const renderer = readSource('./ExploreGroupRenderer.tsx');
+    const exploreStyles = readSource('./ExploreRegion.scss');
+
+    expect(renderer).toContain('aria-expanded={isExpanded}');
+    expect(renderer).toContain('name="search" size="sm" className="explore-region__leading-icon--default"');
+    expect(renderer).toContain('name="chevron-right" size="sm" className="explore-region__leading-icon--collapsed-hover"');
+    expect(renderer).toContain('name="chevron-down" size="sm" className="explore-region__leading-icon--expanded"');
+    expect(exploreStyles).toContain('background: transparent;');
+    expect(exploreStyles).not.toContain('background: var(--bf-color-action-neutral-surface-hover);');
+    expect(exploreStyles).not.toContain('transform: rotate(');
+  });
+
   it('keeps bordered tool and subagent bodies padded on every side', () => {
     const publicToolCardStyles = readSource('../../../../../../design-system/packages/ui/src/flow-chat/tool-cards/FlowChatToolCard.module.css');
     const flowToolCardStyles = readSource('../FlowToolCard.scss');

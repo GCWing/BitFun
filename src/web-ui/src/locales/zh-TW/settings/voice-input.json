@@ -1,9 +1,10 @@
 {
   "title": "語音輸入",
-  "subtitle": "將語音轉成可編輯文字，預設在此裝置處理。",
+  "subtitle": "本機轉寫會在目前裝置處理且不會上傳音訊；即時語音通話使用獨立的雲端設定。",
   "loading": "正在載入語音輸入設定...",
   "sections": {
-    "basic": "語音輸入"
+    "basic": "語音輸入",
+    "basicDescription": "語音輸入會在目前裝置完成辨識，錄音和轉寫音訊不會上傳。"
   },
   "languages": {
     "auto": "自動",
@@ -50,6 +51,8 @@
   },
   "voiceCall": {
     "title": "即時語音通話",
+    "description": "啟用後，麥克風音訊會從目前控制端傳送到火山引擎即時處理；此功能與本機轉寫相互獨立。",
+    "loading": "正在載入即時語音設定…",
     "enabled": {
       "label": "啟用客戶端語音助理",
       "description": "從客戶端右下角與火山引擎端到端即時語音模型通話，並允許它理解工作區狀態和啟動 BitFun 任務。"
@@ -65,13 +68,14 @@
     },
     "status": {
       "label": "連線設定",
-      "description": "儲存後，開啟客戶端右下角的 Hello，即可從文字聊天切換到即時語音。"
+      "description": "儲存只會寫入設定，不會驗證 API Key 或連線；接著開啟客戶端右下角的 Hello，即可從文字聊天切換到即時語音。"
     },
     "save": "儲存即時語音",
     "messages": {
       "loadFailed": "載入控制端即時語音設定失敗",
       "saved": "即時語音設定已儲存",
-      "saveFailed": "儲存即時語音設定失敗"
+      "saveFailed": "儲存即時語音設定失敗",
+      "unsaved": "即時語音設定有尚未儲存的修改。"
     },
     "call": {
       "title": "BitFun 即時通話",
@@ -221,6 +225,8 @@
   "messages": {
     "unsupported": "語音輸入僅在 BitFun 桌面版中可用。",
     "loadFailed": "載入語音輸入設定失敗",
+    "modelsLoadFailed": "載入本機語音模型狀態失敗。",
+    "retry": "重試",
     "saveFailed": "儲存語音輸入設定失敗",
     "downloadSuccess": "語音模型已下載",
     "localActivated": "已切換到本機語音輸入",

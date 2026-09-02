@@ -823,6 +823,10 @@ const UsageStatisticsConfig: React.FC = () => {
 
   const empty = stats !== null && stats.totalRequests === 0;
   const filteredEmpty = empty && filterQuery.length > 0;
+  const selectedTimeRangeLabel = t(
+    TIME_RANGE_OPTIONS.find(option => option.value === timeRange)?.key
+      ?? 'timeRange.last24Hours',
+  );
 
   const summaryCards = useMemo(() => {
     if (!stats) return [];
@@ -855,7 +859,10 @@ const UsageStatisticsConfig: React.FC = () => {
         <ConfigPageSectionStack>
           <ConfigPageSection
             title={t('overview.title')}
-            description={t('overview.description')}
+            description={t('overview.description', {
+              timeRange: selectedTimeRangeLabel,
+              timeZone,
+            })}
             extra={(
               <ConfigRefreshButton
                 tooltip={t('refresh')}

@@ -17,6 +17,7 @@ import { isMcpToolName } from '@/infrastructure/mcp/toolName';
 import { getCachedToolInfo } from '@/infrastructure/mcp/toolInfoCache';
 import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import type { ToolInfo } from '@/shared/types/agent-api';
+import { ToolCardCopyAction } from './ToolCardCopyAction';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './MCPToolDisplay.scss';
 
@@ -739,7 +740,19 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
           summary={t('toolCards.common.inputParams')}
         >
           {formattedToolInput !== null && (
-            <pre className="mcp-input-code">{formattedToolInput}</pre>
+            <div className="mcp-copyable-content">
+              <pre className="mcp-input-code">{formattedToolInput}</pre>
+              <ToolCardCopyAction
+                getText={() => formattedToolInput}
+                tooltip={t('toolCards.common.copy')}
+                copiedTooltip={t('toolCards.common.copied')}
+                successMessage={t('toolCards.common.copied')}
+                failureMessage={t('toolCards.common.copyFailed')}
+                ariaLabel={t('toolCards.mcp.copyInputParams')}
+                className="mcp-copy-action"
+                showSuccessNotification={false}
+              />
+            </div>
           )}
         </Disclosure>
       </div>
@@ -786,7 +799,21 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
             <div data-bf-component="mcp-tool-display" data-bf-part="item" key={index} className={`content-item content-item-${item.type}`}>
               {item.type === 'text' && (
                 <div className="text-content" data-bf-component="mcp-tool-display" data-bf-part="text">
-                  <pre>{item.text}</pre>
+                  <div className="mcp-copyable-content">
+                    <pre>{item.text}</pre>
+                    {typeof item.text === 'string' && item.text.length > 0 && (
+                      <ToolCardCopyAction
+                        getText={() => item.text ?? ''}
+                        tooltip={t('toolCards.common.copy')}
+                        copiedTooltip={t('toolCards.common.copied')}
+                        successMessage={t('toolCards.common.copied')}
+                        failureMessage={t('toolCards.common.copyFailed')}
+                        ariaLabel={t('toolCards.mcp.copyTextResult')}
+                        className="mcp-copy-action"
+                        showSuccessNotification={false}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
               {item.type === 'image' && item.data && (

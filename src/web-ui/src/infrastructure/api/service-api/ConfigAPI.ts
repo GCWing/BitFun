@@ -67,6 +67,11 @@ export interface DeleteSkillParams {
   workspacePath?: string;
 }
 
+export interface WebSearchCredentialStatus {
+  provider: string;
+  configured: boolean;
+}
+
 export interface DownloadSkillMarketParams {
   packageId: string;
   level?: SkillLevel;
@@ -155,6 +160,42 @@ export class ConfigAPI {
         ...request,
         apiKey: request.apiKey ? '[redacted]' : '',
       });
+    }
+  }
+
+  async getWebSearchCredentialStatus(provider: string): Promise<WebSearchCredentialStatus> {
+    try {
+      return await api.invoke('get_web_search_credential_status', {
+        request: { provider },
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_web_search_credential_status', error, { provider });
+    }
+  }
+
+  async saveWebSearchCredential(
+    provider: string,
+    secret: string,
+  ): Promise<WebSearchCredentialStatus> {
+    try {
+      return await api.invoke('save_web_search_credential', {
+        request: { provider, secret },
+      });
+    } catch (error) {
+      throw createTauriCommandError('save_web_search_credential', error, {
+        provider,
+        secret: secret ? '[redacted]' : '',
+      });
+    }
+  }
+
+  async clearWebSearchCredential(provider: string): Promise<WebSearchCredentialStatus> {
+    try {
+      return await api.invoke('clear_web_search_credential', {
+        request: { provider },
+      });
+    } catch (error) {
+      throw createTauriCommandError('clear_web_search_credential', error, { provider });
     }
   }
 

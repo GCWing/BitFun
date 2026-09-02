@@ -8,7 +8,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Bot, Loader2, Archive, FileDown } from 'lucide-react';
+import { Bot, Loader2, Archive } from 'lucide-react';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -1879,7 +1879,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<FileDown size={13} />}
+                            leading={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
                             onClick={e => { void handleExportMarkdown(e, session, 'full'); }}
                             data-testid="nav-session-menu-export-full"
                             data-session-id={session.sessionId}
@@ -1888,7 +1888,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </MenuItem>
                           <MenuItem
                             type="button"
-                            leading={<FileDown size={13} />}
+                            leading={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
                             onClick={e => { void handleExportMarkdown(e, session, 'result'); }}
                             data-testid="nav-session-menu-export-result"
                             data-session-id={session.sessionId}
@@ -1927,7 +1927,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-session-id={session.sessionId}
                             leading={exportingSessionId === session.sessionId
                               ? <Loader2 size={13} className="bitfun-nav-panel__inline-toggle-spinner" />
-                              : <FileDown size={13} />}
+                              : <Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
                           >
                             <span>{t('nav.sessions.exportMarkdown')}</span>
                           </MenuItem>

@@ -8,14 +8,14 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Button, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, Check, AlertCircle } from 'lucide-react';
+import { ClipboardList, Loader2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, AlertCircle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ideControl } from '@/shared/services/ide-control/api';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -513,7 +513,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
                   onClick={handleSavePlanToProject}
                   disabled={!planFilePath || !currentWorkspace || isSavingToProject || hasSavedToProject}
                   aria-label={savePlanTooltip}
-                  icon={hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
+                  icon={hasSavedToProject ? <Icon name="check-line" size="sm" /> : <Save size={14} />}
                 />
               </span>
             </Tooltip>
@@ -562,13 +562,13 @@ Read the plan file before making changes and treat it as the source of truth. Do
                 data-bf-part="todo"
               >
                 {todo.status === 'completed' && (
-                  <CheckCircle2 size={12} className="todo-icon todo-icon--completed" />
+                  <Icon name="check-circle" size="xs" className="todo-icon todo-icon--completed" />
                 )}
                 {todo.status === 'in_progress' && (
                   <PlayCircle size={12} className="todo-icon todo-icon--in-progress" />
                 )}
                 {(!todo.status || todo.status === 'pending') && (
-                  <Circle size={12} className="todo-icon todo-icon--pending" />
+                  <Icon name="unselected" size="xs" className="todo-icon todo-icon--pending" />
                 )}
                 {todo.status === 'cancelled' && (
                   <XCircle size={12} className="todo-icon todo-icon--cancelled" />
@@ -594,7 +594,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
             buildStatus === 'building' || isLoading
               ? <Loader2 size={14} className="animate-spin" />
               : buildStatus === 'built'
-                ? <CheckCircle size={14} />
+                ? <Icon name="check-circle" size="sm" />
                 : undefined
           }
           onClick={handleBuild}

@@ -3,10 +3,10 @@
  * Supports inserting file tags inline and using @ to select files/folders.
  */
 
+import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, Textarea } from '@bitfun/ui';
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Textarea } from '@bitfun/ui';
-import { MessageCircle, Puzzle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ContextItem } from '../../shared/types/context';
 import { getRichTextExternalSyncAction } from './richTextInputSync';
@@ -31,7 +31,7 @@ import {
 import './RichTextInput.scss';
 
 const SKILL_REFERENCE_BADGE_ICON = renderToStaticMarkup(
-  <Puzzle size={12} strokeWidth={2.2} aria-hidden="true" />,
+  <Icon name="extension" size="xs" aria-hidden="true" />,
 );
 const SESSION_REFERENCE_BADGE_ICON = renderToStaticMarkup(
   <MessageCircle size={12} strokeWidth={2.2} aria-hidden="true" />,

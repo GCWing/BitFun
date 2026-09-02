@@ -2012,6 +2012,8 @@
       "interactiveApp": "interactive app",
       "actionLabel": "MCP:",
       "failedLabel": "MCP failed",
+      "copyInputParams": "Copy input parameters",
+      "copyTextResult": "Copy text result",
       "executionFailed": "MCP execution failed"
     },
     "acpPermission": {
