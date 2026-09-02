@@ -1,6 +1,5 @@
-// Module-level popup state – used by ModernFlowChatContainer to conditionally
-// disable the Escape shortcut so that slash-command and @-mention popups can be
-// closed with Escape.
+// Module-level popup state used by Escape shortcut owners so slash-command,
+// mention, and modal surfaces can close without cancelling the current task.
 let _chatPopupActive = false;
 const _chatPopupListeners = new Set<() => void>();
 

@@ -11,6 +11,7 @@ import type { PermissionRequest } from '@/infrastructure/api/service-api/AgentAP
 
 const panelMocks = vi.hoisted(() => ({
   cancelSession: vi.fn(),
+  cancelSessionTask: vi.fn(),
   hydrateSessionHistoryForDetail: vi.fn(),
   notificationError: vi.fn(),
   permissionRequests: [] as PermissionRequest[],
@@ -188,6 +189,11 @@ vi.mock('../../store/FlowChatStore', () => ({
 }));
 
 vi.mock('../../services/FlowChatManager', () => ({
+  FlowChatManager: {
+    getInstance: () => ({
+      cancelSessionTask: (...args: unknown[]) => panelMocks.cancelSessionTask(...args),
+    }),
+  },
   flowChatManager: {
     hydrateSessionHistoryForDetail: (...args: unknown[]) =>
       panelMocks.hydrateSessionHistoryForDetail(...args),
@@ -368,6 +374,29 @@ function createPendingDeepReviewSession(): Session {
   } as Session;
 }
 
+function createRunningBtwSession(): Session {
+  return {
+    sessionId: 'btw-child',
+    title: 'Side question',
+    dialogTurns: [{
+      id: 'btw-turn-1',
+      sessionId: 'btw-child',
+      userMessage: { id: 'btw-user-1', content: 'question', timestamp: 1 },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 1,
+    }],
+    status: 'running',
+    config: {},
+    createdAt: 1,
+    lastActiveAt: 1,
+    error: null,
+    sessionKind: 'btw',
+    parentSessionId: 'parent-session',
+    workspacePath: 'D:/workspace/project',
+  } as Session;
+}
+
 function createParentSessionWithId(sessionId: string): Session {
   return {
     sessionId,
@@ -492,6 +521,8 @@ describe('BtwSessionPanel review action bar integration', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useReviewActionBarStore.getState().reset();
     panelMocks.cancelSession.mockReset();
+    panelMocks.cancelSessionTask.mockReset();
+    panelMocks.cancelSessionTask.mockResolvedValue(true);
     panelMocks.hydrateSessionHistoryForDetail.mockReset();
     panelMocks.hydrateSessionHistoryForDetail.mockResolvedValue(undefined);
     panelMocks.notificationError.mockReset();
@@ -537,6 +568,81 @@ describe('BtwSessionPanel review action bar integration', () => {
     container.remove();
     useReviewActionBarStore.getState().reset();
     vi.useRealTimers();
+  });
+
+  it('cancels a running side question with Escape inside its panel', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['btw-child', createRunningBtwSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+      activeSessionId: 'parent-session',
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="btw-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    const panelBody = container.querySelector<HTMLElement>('.btw-session-panel__body');
+    const escape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    await act(async () => {
+      panelBody?.dispatchEvent(escape);
+      await Promise.resolve();
+    });
+
+    expect(escape.defaultPrevented).toBe(true);
+    expect(panelMocks.cancelSessionTask).toHaveBeenCalledTimes(1);
+    expect(panelMocks.cancelSessionTask).toHaveBeenCalledWith('btw-child');
+    expect(panelMocks.cancelSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps Escape with the IME inside a running side-question panel', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['btw-child', createRunningBtwSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+      activeSessionId: 'parent-session',
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="btw-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    const panelBody = container.querySelector<HTMLElement>('.btw-session-panel__body');
+    const imeEscape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      keyCode: 229,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    await act(async () => {
+      panelBody?.dispatchEvent(imeEscape);
+      await Promise.resolve();
+    });
+
+    expect(imeEscape.defaultPrevented).toBe(false);
+    expect(panelMocks.cancelSessionTask).not.toHaveBeenCalled();
   });
 
   it('answers direct child permissions in the embedded panel without claiming delegated ones', async () => {
