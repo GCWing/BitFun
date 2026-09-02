@@ -56,8 +56,10 @@ extension MobileAppModel {
         remoteAssistants = []
         workspaceCatalog = []
         selectedRemoteWorkspaceKind = ""
-        workspaceLoading = false
+        workspaceLoading = !targetKey.isEmpty
         workspaceLoadFailed = false
+        workspaceSelectionBusy = false
+        remoteCreateWorkspacePhase = targetKey.isEmpty ? .unavailable : .loading
         let clearingVisibleRemoteConversation = surface == .remote || remoteSessionSelected
         remoteSessionSelected = false
         sessionDetails = nil
@@ -364,18 +366,19 @@ extension MobileAppModel {
 
     func selectRemoteWorkspace(_ workspace: MobileWorkspaceGroup) {
         pendingDirectoryRemoteDraft = nil
-        guard remoteConnected else {
+        guard remoteConnected, remoteCreateInteraction.canSelectWorkspace else {
             showToast(localized("请先连接桌面设备"))
             return
         }
         surface = .remote
         drawerOpen = false
+        workspaceSelectionBusy = true
         coreAdapter?.selectRemoteWorkspace(path: workspace.path)
     }
 
     func createRemoteSession(in workspace: MobileWorkspaceGroup, agentType: String) {
         pendingDirectoryRemoteDraft = nil
-        guard remoteConnected, !busy else { return }
+        guard remoteCreateInteraction.canSubmit else { return }
         drawerOpen = false
         surface = .remote
         createRemoteSession(
@@ -388,7 +391,7 @@ extension MobileAppModel {
 
     func createRemoteAssistantSession() {
         pendingDirectoryRemoteDraft = nil
-        guard remoteConnected, !busy else { return }
+        guard remoteCreateInteraction.canSubmit else { return }
         drawerOpen = false
         surface = .remote
         if selectedRemoteWorkspaceKind.lowercased() == "assistant" {
@@ -400,11 +403,13 @@ extension MobileAppModel {
             return
         }
         pendingRemoteAssistantCreate = true
+        workspaceSelectionBusy = true
         coreAdapter?.selectRemoteAssistant(path: assistant.path)
     }
 
     func selectRemoteAssistant(_ assistant: MobileAssistantOption) {
-        guard remoteConnected else { return }
+        guard remoteConnected, remoteCreateInteraction.canSelectWorkspace else { return }
+        workspaceSelectionBusy = true
         coreAdapter?.selectRemoteAssistant(path: assistant.path)
     }
 
@@ -415,9 +420,7 @@ extension MobileAppModel {
         modelID: String? = nil,
         workspacePath: String? = nil
     ) {
-        // `busy` also covers a background session-list refresh. It is not an
-        // active turn and must not silently discard a new-session request.
-        guard remoteConnected, !remoteCreateSubmitting else {
+        guard remoteCreateInteraction.canSubmit else {
             remoteCreateError = localized("远程会话当前不可创建，请重试")
             return
         }
@@ -622,6 +625,12 @@ extension MobileAppModel {
     }
 
     func retryRemoteWorkspaces() {
+        guard remoteExpectedDeviceKey != nil,
+              remoteCreateWorkspacePhase != .loading,
+              !workspaceSelectionBusy else { return }
+        remoteCreateWorkspacePhase = .loading
+        workspaceLoading = true
+        workspaceLoadFailed = false
         coreAdapter?.loadRemoteWorkspaces()
     }
 
@@ -846,6 +855,12 @@ extension MobileAppModel {
               ) else { return }
         workspaceLoading = state is RemoteWorkspaceUiStateLoading
         workspaceLoadFailed = state is RemoteWorkspaceUiStateFailed
+        workspaceSelectionBusy = (state as? RemoteWorkspaceUiStateReady)?.busy ?? false
+        if state is RemoteWorkspaceUiStateLoading {
+            remoteCreateWorkspacePhase = .loading
+        } else if state is RemoteWorkspaceUiStateFailed {
+            remoteCreateWorkspacePhase = .failed
+        }
         if !(state is RemoteWorkspaceUiStateReady) {
             remoteInitialWorkspaceReady = false
         }
@@ -863,6 +878,8 @@ extension MobileAppModel {
 
         workspaceLoading = false
         workspaceLoadFailed = false
+        workspaceSelectionBusy = ready.busy
+        remoteCreateWorkspacePhase = .ready
         remoteInitialWorkspaceReady = true
         selectedRemoteWorkspaceKind = ready.selected?.kind ?? ""
         var seen = Set<String>()

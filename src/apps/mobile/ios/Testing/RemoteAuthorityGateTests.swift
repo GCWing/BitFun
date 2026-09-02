@@ -31,6 +31,8 @@ struct RemoteAuthorityGateTests {
             )
         }
 
+        verifyRemoteCreateInteractionPolicy()
+
         expect(
             RemoteAuthorityGate.updatedScope(
                 targetKey: "device-b",
@@ -294,6 +296,181 @@ struct RemoteAuthorityGateTests {
             "token expiry prevents a late old Ready callback from reviving cleared authority"
         )
         verifyProductionInvalidationPaths()
+        verifyWorkspaceAndSessionReadinessProjection()
+    }
+
+    private static func verifyWorkspaceAndSessionReadinessProjection() {
+        let iosDirectory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
+        )
+
+        // Workspace-first: workspace authority is sufficient to dispatch the
+        // pending workspace selection; session authority is intentionally not
+        // part of this gate.
+        let workspaceApply = functionBody(in: source, startingAt: "func apply(workspaceState state:")
+        expect(
+            workspaceApply.contains("remoteInitialWorkspaceReady = true") &&
+                workspaceApply.contains("advancePendingDirectoryRemoteDraftIfReady()"),
+            "workspace-first applies authoritative catalog and advances workspace navigation"
+        )
+        let workspaceSelectionGate = "pending.epoch == remoteTargetEpoch,\n           remoteConnected,\n           remoteInitialWorkspaceReady {"
+        expect(source.contains("if let pending = pendingDirectoryWorkspace") &&
+            source.contains(workspaceSelectionGate), "workspace-first gate requires only workspace authority")
+        expect(!workspaceSelectionGate.contains("remoteInitialSessionReady"), "workspace-first gate does not require session authority")
+
+        // Session-first: opening a session and creating from a directory still
+        // require both authoritative projections, preserving the old guards.
+        let sessionOpen = functionBody(in: source, startingAt: "private func openPendingDirectorySessionIfReady()")
+        expect(
+            sessionOpen.contains("remoteInitialSessionReady") && sessionOpen.contains("remoteInitialWorkspaceReady"),
+            "session-first navigation waits for both session and workspace authority"
+        )
+        let draftOpen = functionBody(in: source, startingAt: "private func advancePendingDirectoryRemoteDraftIfReady()")
+        expect(
+            draftOpen.contains("remoteInitialSessionReady") && draftOpen.contains("remoteInitialWorkspaceReady"),
+            "pending create waits for both session and workspace authority"
+        )
+
+        // Failure and target switch: neither readiness bit can survive an
+        // invalid state or a changed target/epoch.
+        expect(
+            source.contains("if !(state is RemoteWorkspaceUiStateReady) {\n            remoteInitialWorkspaceReady = false") &&
+                source.contains("remoteInitialSessionReady = false"),
+            "workspace/session failure paths revoke readiness"
+        )
+        let clearProjection = functionBody(in: source, startingAt: "private func clearTargetScopedRemoteProjection(")
+        expect(
+            clearProjection.contains("remoteInitialSessionReady = false") &&
+                clearProjection.contains("remoteInitialWorkspaceReady = false"),
+            "target switch clears both readiness projections"
+        )
+        expect(source.contains("busy = ready.busy"), "session state keeps its original busy authority")
+
+        let modelSource = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel.swift")
+        )
+        let createViewSource = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Features/Shell/RemoteCreateSessionView.swift")
+        )
+        expect(
+            modelSource.contains("RemoteCreateInteractionPolicy.resolve(") &&
+                modelSource.contains("workspacePhase: remoteCreateWorkspacePhase") &&
+                modelSource.contains("workspaceSelecting: workspaceSelectionBusy"),
+            "remote-create interaction is projected from target-scoped workspace state"
+        )
+        expect(
+            createViewSource.contains("model.remoteCreateInteraction.canOpenWorkspacePicker") &&
+                createViewSource.contains("model.remoteCreateInteraction.canSelectWorkspace") &&
+                createViewSource.contains("case .loading:") &&
+                createViewSource.contains("selectionRetryRow()") &&
+                !createViewSource.contains(".disabled(model.busy || model.remoteCreateSubmitting || model.accountBusy)"),
+            "workspace picker owns loading, ready, failure, and retry presentation"
+        )
+    }
+
+    private static func verifyRemoteCreateInteractionPolicy() {
+        let loading = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: true,
+            remoteConnected: true,
+            accountSwitching: false,
+            workspacePhase: .loading,
+            workspaceSelecting: false,
+            createSubmitting: false,
+            activeTurn: false
+        )
+        expect(loading.canOpenWorkspacePicker, "loading workspace picker remains openable")
+        expect(!loading.canSelectWorkspace, "loading workspace rows are not selectable")
+        expect(!loading.canSubmit, "creation waits for workspace authority")
+
+        let ready = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: true,
+            remoteConnected: true,
+            accountSwitching: false,
+            workspacePhase: .ready,
+            workspaceSelecting: false,
+            createSubmitting: false,
+            activeTurn: false
+        )
+        expect(ready.canOpenDevicePicker, "ready state can change device")
+        expect(ready.canOpenWorkspacePicker, "ready state can open workspace picker")
+        expect(ready.canSelectWorkspace, "ready state can select workspace")
+        expect(ready.canSubmit, "ready state can create")
+
+        let selecting = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: true,
+            remoteConnected: true,
+            accountSwitching: false,
+            workspacePhase: .ready,
+            workspaceSelecting: true,
+            createSubmitting: false,
+            activeTurn: false
+        )
+        expect(selecting.canOpenWorkspacePicker, "workspace mutation remains observable")
+        expect(!selecting.canSelectWorkspace, "workspace mutation rejects duplicate selection")
+        expect(!selecting.canSubmit, "workspace mutation cannot race creation")
+
+        let failed = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: true,
+            remoteConnected: true,
+            accountSwitching: false,
+            workspacePhase: .failed,
+            workspaceSelecting: false,
+            createSubmitting: false,
+            activeTurn: false
+        )
+        expect(failed.canOpenWorkspacePicker, "failed workspace picker exposes retry")
+        expect(!failed.canSubmit, "failed workspace authority cannot create")
+
+        let switching = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: true,
+            remoteConnected: false,
+            accountSwitching: true,
+            workspacePhase: .loading,
+            workspaceSelecting: false,
+            createSubmitting: false,
+            activeTurn: false
+        )
+        expect(!switching.canOpenDevicePicker, "account target mutation rejects duplicate device selection")
+        expect(!switching.canOpenWorkspacePicker, "account target mutation isolates old workspace authority")
+
+        let activeTurn = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: true,
+            remoteConnected: true,
+            accountSwitching: false,
+            workspacePhase: .ready,
+            workspaceSelecting: false,
+            createSubmitting: false,
+            activeTurn: true
+        )
+        expect(!activeTurn.canOpenWorkspacePicker, "active turn protects remote workspace context")
+        expect(!activeTurn.canSubmit, "active turn cannot race remote creation")
+
+        let disconnected = RemoteCreateInteractionPolicy.resolve(
+            hasTarget: false,
+            remoteConnected: false,
+            accountSwitching: false,
+            workspacePhase: .unavailable,
+            workspaceSelecting: false,
+            createSubmitting: false,
+            activeTurn: false
+        )
+        expect(disconnected.canOpenDevicePicker, "disconnected state can choose a cached device")
+        expect(!disconnected.canOpenWorkspacePicker, "workspace picker requires a target")
+        expect(!disconnected.canSubmit, "disconnected state cannot create")
+    }
+
+    private static func functionBody(in source: String, startingAt marker: String) -> String {
+        guard let start = source.range(of: marker) else {
+            preconditionFailure("Missing production function contract for \(marker)")
+        }
+        let remainder = source[start.lowerBound...]
+        guard let end = remainder.range(of: "\n    }", range: remainder.startIndex..<remainder.endIndex) else {
+            preconditionFailure("Unable to locate end of production function contract for \(marker)")
+        }
+        return String(remainder[..<end.upperBound])
     }
 
     private static func verifyProductionInvalidationPaths() {

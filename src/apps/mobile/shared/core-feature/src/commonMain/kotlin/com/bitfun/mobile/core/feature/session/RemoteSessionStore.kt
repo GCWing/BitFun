@@ -44,6 +44,8 @@ import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -402,8 +404,15 @@ public class RemoteSessionStore internal constructor(
                     failKnown(RemoteSessionFailureReason.NO_WORKSPACE, current)
                     return@launch
                 }
-                val page = listSessions(0, query, filter)
-                val catalog = loadModelCatalog(force = false)
+                // The catalog is independent of the authoritative workspace/session
+                // projection. Start both requests together so a slow catalog cannot
+                // add its latency to the session-list request (while still awaiting
+                // both before publishing the existing Ready contract).
+                val (page, catalog) = coroutineScope {
+                    val pageRequest = async { listSessions(0, query, filter) }
+                    val catalogRequest = async { loadModelCatalog(force = false) }
+                    pageRequest.await() to catalogRequest.await()
+                }
                 if (!isCurrentWork(generation)) return@launch
                 commitSessionPage(page)
                 commitModelCatalog(catalog)

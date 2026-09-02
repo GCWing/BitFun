@@ -78,6 +78,8 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteWorkspaces: [MobileWorkspaceGroup] = []
     @Published var workspaceLoading = false
     @Published var workspaceLoadFailed = false
+    @Published var workspaceSelectionBusy = false
+    @Published var remoteCreateWorkspacePhase: RemoteCreateWorkspacePhase = .unavailable
     @Published var filePreview: MobileFilePreview?
     @Published var sessionDetails: ChatSession? = nil
     @Published var filePreviewLoading = false
@@ -166,6 +168,18 @@ final class MobileAppModel: ObservableObject {
 
     var visibleSessions: [ChatSession] {
         surface == .local ? sessions : remoteSessions
+    }
+
+    var remoteCreateInteraction: RemoteCreateInteractionState {
+        RemoteCreateInteractionPolicy.resolve(
+            hasTarget: remoteExpectedDeviceKey != nil,
+            remoteConnected: remoteConnected,
+            accountSwitching: accountBusy,
+            workspacePhase: remoteCreateWorkspacePhase,
+            workspaceSelecting: workspaceSelectionBusy,
+            createSubmitting: remoteCreateSubmitting,
+            activeTurn: activeTurnID != nil || isSending
+        )
     }
 
     func switchSurface(_ next: MobileSurface) {
@@ -257,6 +271,12 @@ final class MobileAppModel: ObservableObject {
         remoteSessions = []
         remoteWorkspaces = []
         workspaceCatalog = []
+        remoteInitialSessionReady = false
+        remoteInitialWorkspaceReady = false
+        workspaceLoading = false
+        workspaceLoadFailed = false
+        workspaceSelectionBusy = false
+        remoteCreateWorkspacePhase = .unavailable
         pendingRemoteWorkspaceCreate = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteAssistantCreate = false
@@ -347,6 +367,8 @@ final class MobileAppModel: ObservableObject {
         workspaceCatalog = []
         workspaceLoading = false
         workspaceLoadFailed = false
+        workspaceSelectionBusy = false
+        remoteCreateWorkspacePhase = .unavailable
         pendingDirectorySession = nil
         pendingDirectoryWorkspace = nil
         pendingDirectoryRemoteDraft = nil

@@ -51,7 +51,8 @@ struct RemoteCreateSessionView: View {
             contextButton(
                 kind: .workspace,
                 icon: selectedWorkspacePath.isEmpty ? "message" : "folder",
-                label: model.workspaceLoading ? model.localized("正在加载工作区") : selectedWorkspaceName,
+                label: model.remoteCreateWorkspacePhase == .loading
+                    ? model.localized("正在加载工作区") : selectedWorkspaceName,
                 automationIdentifier: selectedWorkspaceAutomationIdentifier
             )
             createComposer
@@ -87,10 +88,14 @@ struct RemoteCreateSessionView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            if let selected = model.remoteWorkspaces.first(where: \.selected) {
-                selectedWorkspacePath = selected.path
-            }
+            reconcileSelectedWorkspace()
             selectedModelID = model.modelOptions.first(where: \.selected)?.id ?? model.modelOptions.first?.id
+        }
+        .onChange(of: model.remoteTargetEpoch) { _ in
+            selectedWorkspacePath = ""
+        }
+        .onChange(of: model.remoteWorkspaces) { _ in
+            reconcileSelectedWorkspace()
         }
     }
 
@@ -155,7 +160,9 @@ struct RemoteCreateSessionView: View {
             .padding(.horizontal, 28)
         }
         .buttonStyle(.plain)
-        .disabled(model.busy || model.remoteCreateSubmitting || model.accountBusy)
+        .disabled(kind == .device
+            ? !model.remoteCreateInteraction.canOpenDevicePicker
+            : !model.remoteCreateInteraction.canOpenWorkspacePicker)
         .accessibilityIdentifier(automationIdentifier)
         .accessibilityLabel(model.localized(kind.accessibilityLabelKey))
         .accessibilityValue(label)
@@ -176,6 +183,7 @@ struct RemoteCreateSessionView: View {
             )
             .font(MobileDesignTypography.bodyLarge.font)
             .lineLimit(1...4)
+            .accessibilityIdentifier("remoteCreate.composer.input")
             .padding(.horizontal, 6)
             .frame(minHeight: MobileDesignGeometry.composerExpandedInputRowHeight)
 
@@ -200,6 +208,7 @@ struct RemoteCreateSessionView: View {
                     .accessibilityLabel(model.localized(RemoteCreateSelectionKind.model.accessibilityLabelKey))
                     .accessibilityValue(selectedModel.primaryLabel)
                     .accessibilityHint(model.localized(RemoteCreateSelectionKind.model.accessibilityHintKey))
+                    .disabled(model.remoteCreateSubmitting || model.isSending)
                 }
                 Spacer(minLength: 0)
                 Button(action: primaryAction) {
@@ -243,7 +252,7 @@ struct RemoteCreateSessionView: View {
 
     private var canSubmit: Bool {
         !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            model.remoteConnected && !model.remoteCreateSubmitting
+            model.remoteCreateInteraction.canSubmit
     }
 
     private func createStatus(message: String, retryTitle: String, action: @escaping () -> Void) -> some View {
@@ -338,32 +347,53 @@ struct RemoteCreateSessionView: View {
                             }
                         }
                     case .workspace:
-                        selectionRow(
-                            kind: .workspace,
-                            icon: "message",
-                            title: model.localized("对话"),
-                            subtitle: "",
-                            selected: selectedWorkspacePath.isEmpty,
-                            enabled: true
-                        ) {
-                            selectedWorkspacePath = ""
-                            pickerKind = nil
-                            if let assistant = model.remoteAssistants.first {
-                                model.selectRemoteAssistant(assistant)
+                        switch model.remoteCreateWorkspacePhase {
+                        case .loading:
+                            selectionStatusRow(
+                                title: model.localized("正在加载工作区"),
+                                showsProgress: true
+                            )
+                        case .failed:
+                            selectionRetryRow()
+                        case .unavailable:
+                            selectionStatusRow(
+                                title: model.localized("连接不可用，请重新连接"),
+                                showsProgress: false
+                            )
+                        case .ready:
+                            if model.workspaceSelectionBusy {
+                                selectionStatusRow(
+                                    title: model.localized("正在加载"),
+                                    showsProgress: true
+                                )
                             }
-                        }
-                        ForEach(model.remoteWorkspaces) { workspace in
                             selectionRow(
                                 kind: .workspace,
-                                icon: "folder",
-                                title: workspace.name,
-                                subtitle: workspace.path,
-                                selected: workspace.path == selectedWorkspacePath,
-                                enabled: true
+                                icon: "message",
+                                title: model.localized("对话"),
+                                subtitle: "",
+                                selected: selectedWorkspacePath.isEmpty,
+                                enabled: model.remoteCreateInteraction.canSelectWorkspace
                             ) {
-                                selectedWorkspacePath = workspace.path
+                                selectedWorkspacePath = ""
                                 pickerKind = nil
-                                model.selectRemoteWorkspace(workspace)
+                                if let assistant = model.remoteAssistants.first {
+                                    model.selectRemoteAssistant(assistant)
+                                }
+                            }
+                            ForEach(model.remoteWorkspaces) { workspace in
+                                selectionRow(
+                                    kind: .workspace,
+                                    icon: "folder",
+                                    title: workspace.name,
+                                    subtitle: workspace.path,
+                                    selected: workspace.path == selectedWorkspacePath,
+                                    enabled: model.remoteCreateInteraction.canSelectWorkspace
+                                ) {
+                                    selectedWorkspacePath = workspace.path
+                                    pickerKind = nil
+                                    model.selectRemoteWorkspace(workspace)
+                                }
                             }
                         }
                     case .model:
@@ -441,6 +471,49 @@ struct RemoteCreateSessionView: View {
         .accessibilityValue(subtitle)
         .accessibilityHint(model.localized(kind.accessibilityHintKey))
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    private func selectionStatusRow(title: String, showsProgress: Bool) -> some View {
+        HStack(spacing: 10) {
+            if showsProgress {
+                ProgressView().controlSize(.small)
+            }
+            Text(title)
+                .font(.system(size: 14))
+                .foregroundStyle(BitFunTheme.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .frame(minHeight: 52)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+
+    private func selectionRetryRow() -> some View {
+        Button {
+            model.retryRemoteWorkspaces()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.clockwise")
+                Text(model.localized("工作区加载失败，请重试"))
+                    .font(.system(size: 14, weight: .medium))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(BitFunTheme.accent)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 52)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(model.localized("重试"))
+    }
+
+    private func reconcileSelectedWorkspace() {
+        if let selected = model.remoteWorkspaces.first(where: \.selected) {
+            selectedWorkspacePath = selected.path
+        } else if !selectedWorkspacePath.isEmpty,
+                  !model.remoteWorkspaces.contains(where: { $0.path == selectedWorkspacePath }) {
+            selectedWorkspacePath = ""
+        }
     }
 
     private func selectionHeight(_ kind: RemoteCreateSelectionKind) -> CGFloat {
