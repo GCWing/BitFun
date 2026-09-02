@@ -7,11 +7,13 @@ function source(relativePath: string): string {
 }
 
 describe('unified project session creation', () => {
-  it('keeps New Session beside search and moves realtime voice to the scene corner', () => {
+  it('keeps New Session beside search and makes Hello open shared chat before voice', () => {
     const mainNav = source('./MainNav.tsx');
     const workspaceBody = source('../../layout/WorkspaceBody.tsx');
-    const voiceLauncher = source('../../../flow_chat/components/voice/RealtimeVoiceCallButton.tsx');
-    const voiceLauncherStyles = source('../../../flow_chat/components/voice/RealtimeVoiceCallButton.scss');
+    const appLayout = source('../../layout/AppLayout.tsx');
+    const helloLauncher = source('../../layout/FloatingMiniChat.tsx');
+    const helloLauncherStyles = source('../../layout/FloatingMiniChat.scss');
+    const voicePanel = source('../../../flow_chat/components/voice/RealtimeVoiceCallPanel.tsx');
     const workspaceItem = source('./sections/workspaces/WorkspaceItem.tsx');
     const utilityRowIndex = mainNav.indexOf('data-bf-part="utilityRow"');
     const newSessionIndex = mainNav.indexOf('data-testid="nav-new-session-btn"');
@@ -24,20 +26,32 @@ describe('unified project session creation', () => {
     expect(mainNav).toContain('<Plus size={15} aria-hidden="true" />');
     expect(mainNav).toContain("activateProductAction('session.new')");
     expect(mainNav).not.toContain('<RealtimeVoiceCallButton />');
-    expect(workspaceBody).toContain('<RealtimeVoiceCallButton />');
-    expect(voiceLauncher).toContain('data-testid="realtime-voice-launcher"');
-    expect(voiceLauncher).toContain("t('voiceCall.call.launcherLabel')");
-    expect(voiceLauncher).toContain('<Mic');
-    expect(voiceLauncherStyles).toContain('right: 0;');
-    expect(voiceLauncherStyles).toContain('bottom: 0;');
-    expect(voiceLauncherStyles).toContain('width: 84px;');
-    expect(voiceLauncherStyles).toContain('height: 40px;');
-    expect(voiceLauncherStyles).toContain('font-weight: var(--bf-type-body-sm-font-weight);');
-    expect(voiceLauncherStyles).toContain('font-synthesis: none;');
-    expect(voiceLauncherStyles).toContain('opacity: 0.22;');
-    expect(voiceLauncherStyles).toMatch(/&\.is-active\s*\{\s*opacity: 1;/);
-    expect(voiceLauncherStyles).toContain('border-radius: var(--bf-radius-lg) 0 0 0;');
-    expect(voiceLauncherStyles).not.toContain('var(--bf-radius-lg) 0 var(--bf-radius-lg) 0');
+    expect(workspaceBody).not.toContain('<RealtimeVoiceCallButton />');
+    expect(appLayout).toContain('<FloatingMiniChat />');
+    expect(appLayout).not.toContain('isWelcomeScene');
+    expect(helloLauncher).toContain("tVoice('voiceCall.call.launcherLabel')");
+    expect(helloLauncher).not.toContain('<Icon name="side-chat" size="md" />');
+    expect(helloLauncher).toContain('onClick={handleOpen}');
+    expect(helloLauncher).toContain('<ChatPane');
+    expect(helloLauncher).toContain('data-testid="hello-realtime-voice-mode-switch"');
+    expect(helloLauncher).toContain('onClick={isVoiceMode ? endVoiceCall : startVoiceCall}');
+    expect(helloLauncher).toContain('<RealtimeVoiceCallPanel />');
+    expect(voicePanel).not.toContain('createPortal');
+    expect(helloLauncherStyles).toContain('$button-width: 104px;');
+    expect(helloLauncherStyles).toContain('$button-height: 40px;');
+    expect(helloLauncherStyles).toContain('right: 0;');
+    expect(helloLauncherStyles).toContain('bottom: 0;');
+    expect(helloLauncherStyles).toContain(
+      'z-index: calc(var(--bf-layer-overlay) + 1);',
+    );
+    expect(helloLauncherStyles).toContain('font-size: var(--bf-type-body-sm-font-size);');
+    expect(helloLauncherStyles).toContain(
+      'font-weight: var(--bf-type-label-selected-font-weight);',
+    );
+    expect(helloLauncherStyles).toContain('font-synthesis: none;');
+    expect(helloLauncherStyles).toContain('opacity: 0.22;');
+    expect(helloLauncherStyles).toContain('border-radius: var(--bf-radius-lg) 0 0 0;');
+    expect(helloLauncherStyles).toContain('.bitfun-fmc__mode-switch');
     expect(mainNav).not.toContain('nav-new-code-session-btn');
     expect(mainNav).not.toContain('nav-new-cowork-session-btn');
     expect(workspaceItem).toContain('data-testid="nav-workspace-menu-create-session"');

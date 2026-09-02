@@ -15,7 +15,6 @@ import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { usePermissionRequestNotify } from '../hooks/usePermissionRequestNotify';
 import { useApp } from '../hooks/useApp';
-import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
@@ -198,10 +197,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       window.removeEventListener('keydown', handleSystemFullscreenShortcut, { capture: true });
     };
   }, [canUseNativeWindowControls, handleToggleFullscreen, isToolbarMode, showWindowFullscreenHint]);
-  const activeSceneId = useSceneStore(s => s.activeTabId);
-  const isAgentScene = activeSceneId === 'session';
-  const isWelcomeScene = activeSceneId === null;
-
   const isTransitioning = false;
   const transitionDir: TransitionDirection = null;
 
@@ -768,12 +763,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           />
         </main>
 
-        {/* Non-agent scenes: floating mini chat button */}
-        {!isWelcomeScene && !isAgentScene && (
-          <Suspense fallback={null}>
-            <FloatingMiniChat />
-          </Suspense>
-        )}
+        {/* Hello stays available across every client scene, including Welcome. */}
+        <Suspense fallback={null}>
+          <FloatingMiniChat />
+        </Suspense>
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}

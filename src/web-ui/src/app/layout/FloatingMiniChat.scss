@@ -1,5 +1,5 @@
 /**
- * FloatingMiniChat — compact circular button + origin-aware expanded panel.
+ * FloatingMiniChat — Hello launcher + origin-aware expanded panel.
  *
  * Button style follows the app's muted dark-UI language.
  * Panel opens from the button position (bottom-right) with a short ease-out.
@@ -11,8 +11,10 @@ $fmc-ease: cubic-bezier(0.23, 1, 0.32, 1);
 $fmc-open-duration: 0.22s;
 $fmc-close-duration: 0.16s;
 
-$button-size: 42px;
-$button-offset: 20px;
+$button-width: 104px;
+$button-height: 40px;
+$miniapp-button-size: 42px;
+$miniapp-button-offset: 20px;
 // Sized for the full session composer (workspace strip, model/permission
 // controls, action row) rather than the single-line input it replaced.
 $panel-width: 440px;
@@ -30,16 +32,25 @@ $panel-height: 680px;
 // pointer-events alone — once the panel is open.
 .bitfun-fmc {
   position: fixed;
-  bottom: $button-offset;
-  right: $button-offset;
-  z-index: var(--bf-layer-overlay) + 1;
+  right: 0;
+  bottom: 0;
+  z-index: calc(var(--bf-layer-overlay) + 1);
   pointer-events: none;
   transition:
     right 220ms cubic-bezier(0.77, 0, 0.175, 1),
     bottom 220ms cubic-bezier(0.77, 0, 0.175, 1);
 
   &--miniapp-customizing {
-    right: calc(clamp(380px, 38vw, 560px) + #{$button-offset + 16px});
+    right: calc(clamp(380px, 38vw, 560px) + #{$miniapp-button-offset + 16px});
+  }
+
+  &[data-bf-mode='miniapp'] {
+    right: $miniapp-button-offset;
+    bottom: $miniapp-button-offset;
+  }
+
+  &[data-bf-mode='miniapp'].bitfun-fmc--miniapp-customizing {
+    right: calc(clamp(380px, 38vw, 560px) + #{$miniapp-button-offset + 16px});
   }
 }
 
@@ -51,43 +62,53 @@ $panel-height: 680px;
   pointer-events: auto;
 }
 
-// ─── Circular trigger button ───────────────────────────────
+// ─── Hello trigger button ──────────────────────────────────
 .bitfun-fmc__button {
   position: relative;
   z-index: 2;
   pointer-events: auto;
-  width: $button-size;
-  height: $button-size;
-  border-radius: 50%;
-  border: 1px solid var(--bf-color-border-default);
-  cursor: pointer;
-  display: flex;
+  display: inline-flex;
+  width: $button-width;
+  height: $button-height;
   align-items: center;
   justify-content: center;
-  color: var(--bf-color-content-secondary);
-  background: var(--bf-color-surface-tertiary);
-  box-shadow:
-    0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 35%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--bf-radius-lg) 0 0 0;
+  background: color-mix(
+    in srgb,
+    var(--bf-color-content-on-light) 79%,
+    var(--bf-color-content-on-dark)
+  );
+  color: var(--bf-color-content-on-dark);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-body-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  font-synthesis: none;
+  line-height: var(--bf-type-label-md-line-height);
+  opacity: 0.22;
+  cursor: pointer;
   transition:
-    transform 120ms $fmc-ease,
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
     opacity $fmc-close-duration $fmc-ease;
 
-  &:hover {
-    background: var(--bf-color-surface-raised);
-    border-color: var(--bf-color-field-border-hover);
-    color: var(--bf-color-content-primary);
-    box-shadow:
-      0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 45%, transparent),
-      0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
-    transform: scale(1.06);
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    background: color-mix(
+      in srgb,
+      var(--bf-color-content-on-light) 72%,
+      var(--bf-color-content-on-dark)
+    );
   }
 
   &:active {
-    transform: scale(0.96);
+    opacity: 0.86;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-color-accent-default);
+    outline-offset: -3px;
   }
 
   // Hide when the panel is open. `visibility` (delayed until the fade-out
@@ -95,25 +116,44 @@ $panel-height: 680px;
   // would leave an invisible but clickable trigger under the panel.
   .bitfun-fmc--open & {
     opacity: 0;
-    transform: scale(0.96);
     visibility: hidden;
     pointer-events: none;
     transition:
-      transform 120ms $fmc-ease,
       opacity $fmc-close-duration $fmc-ease,
       visibility 0s linear $fmc-close-duration;
   }
 }
 
+.bitfun-fmc__button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bitfun-fmc__button--miniapp {
+  width: $miniapp-button-size;
+  height: $miniapp-button-size;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--bf-color-field-border-hover);
+  border-radius: 50%;
   color: var(--bf-color-content-primary);
   background: var(--bf-color-surface-raised);
-  border-color: var(--bf-color-field-border-hover);
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 35%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  opacity: 1;
 
   &:hover {
     color: var(--bf-color-content-primary);
     background: var(--bf-color-action-neutral-surface-hover);
     border-color: var(--bf-color-border-strong);
+    transform: scale(1.06);
+  }
+
+  &:active {
+    transform: scale(0.96);
   }
 }
 
@@ -212,7 +252,7 @@ $panel-height: 680px;
   width: $panel-width;
   height: $panel-height;
   max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 80px);
+  max-height: calc(100vh - 32px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -304,7 +344,8 @@ $panel-height: 680px;
   border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
-.bitfun-fmc__miniapp-session-icon {
+.bitfun-fmc__miniapp-session-icon,
+.bitfun-fmc__voice-mode-icon {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
@@ -315,6 +356,10 @@ $panel-height: 680px;
   border-radius: 7px;
   border: 1px solid var(--bf-color-border-subtle);
   background: var(--bf-color-surface-subtle);
+}
+
+.bitfun-fmc__voice-mode-icon {
+  color: var(--bf-color-status-success-content);
 }
 
 // ─── Title ─────────────────────────────────────────────────
@@ -387,6 +432,68 @@ $panel-height: 680px;
       display: none;
     }
   }
+}
+
+// ─── Text / realtime voice mode switch ────────────────────
+.bitfun-fmc__mode-switch {
+  display: flex;
+  flex: 0 0 auto;
+  padding: var(--bf-space-2);
+  border-top: 1px solid var(--bf-color-border-subtle);
+  background: color-mix(in srgb, var(--bf-color-surface-subtle) 78%, transparent);
+}
+
+.bitfun-fmc__mode-switch-button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-2) var(--bf-space-3);
+  border: 1px solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-action-quiet-hover);
+  color: var(--bf-color-content-secondary);
+  font: inherit;
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
+  cursor: pointer;
+  transition:
+    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+
+  &:hover:not(:disabled) {
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-action-neutral-surface-hover);
+    color: var(--bf-color-content-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-color-accent-default);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: var(--bf-opacity-disabled);
+  }
+
+  &.is-voice {
+    border-color: color-mix(in srgb, var(--bf-color-status-success-content) 26%, transparent);
+    background: color-mix(in srgb, var(--bf-color-status-success-content) 9%, transparent);
+    color: var(--bf-color-content-primary);
+  }
+}
+
+.bitfun-fmc__mode-switch-spinner {
+  animation: fmc-mode-switch-spin 0.9s linear infinite;
+}
+
+@keyframes fmc-mode-switch-spin {
+  to { transform: rotate(360deg); }
 }
 
 .bitfun-fmc__miniapp-session-pending {
@@ -557,8 +664,8 @@ $panel-height: 680px;
 
 @media (max-width: 900px) {
   .bitfun-fmc--miniapp-customizing {
-    right: $button-offset;
-    bottom: calc(#{$button-offset} + 64px);
+    right: $miniapp-button-offset;
+    bottom: calc(#{$miniapp-button-offset} + 64px);
   }
 
   .bitfun-fmc__miniapp-welcome {
@@ -571,7 +678,8 @@ $panel-height: 680px;
   .bitfun-fmc__button,
   .bitfun-fmc__panel,
   .bitfun-fmc__header-btn,
-  .bitfun-fmc__miniapp-suggestion {
+  .bitfun-fmc__miniapp-suggestion,
+  .bitfun-fmc__mode-switch-button {
     transition: none;
   }
 
@@ -580,5 +688,9 @@ $panel-height: 680px;
   .bitfun-fmc__header-btn,
   .bitfun-fmc__miniapp-suggestion {
     transform: none;
+  }
+
+  .bitfun-fmc__mode-switch-spinner {
+    animation: none;
   }
 }

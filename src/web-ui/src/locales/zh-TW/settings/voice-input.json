@@ -65,7 +65,7 @@
     },
     "status": {
       "label": "連線設定",
-      "description": "儲存後，客戶端右下角的 Hello 入口即可建立全雙工語音通話。"
+      "description": "儲存後，開啟客戶端右下角的 Hello，即可從文字聊天切換到即時語音。"
     },
     "save": "儲存即時語音",
     "messages": {
@@ -77,6 +77,8 @@
       "title": "BitFun 即時通話",
       "button": "開始即時語音通話",
       "launcherLabel": "Hello",
+      "switchToVoice": "切換到即時語音",
+      "switchToChat": "返回文字聊天",
       "empty": "直接說話即可。需要做事時，我會啟動一個新的 BitFun 會話。",
       "mute": "將麥克風靜音",
       "unmute": "取消靜音",
