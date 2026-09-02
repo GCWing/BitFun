@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 use tokio::sync::Mutex as AsyncMutex;
 
+use bitfun_agent_runtime::sdk::AgentUserAnswersRequest;
 use bitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
     DialogSubmissionPolicy, DialogTriggerSource,
@@ -234,14 +235,10 @@ pub(crate) async fn cancel_dialog_turn(
 /// This reaches the Core-owned coordinator via the same compatibility surface
 /// the Desktop `cancel_tool` Tauri command uses — one level finer than
 /// `cancel_dialog_turn`.
-pub(crate) async fn cancel_tool(
-    state: &PeerHostState,
-    args: &Value,
-) -> Result<Value, String> {
+pub(crate) async fn cancel_tool(state: &PeerHostState, args: &Value) -> Result<Value, String> {
     let request = request_value(args);
     let tool_use_id = get_string(request, "toolUseId")?;
-    let reason = optional_string(request, "reason")
-        .unwrap_or_else(|| "User cancelled".to_string());
+    let reason = optional_string(request, "reason").unwrap_or_else(|| "User cancelled".to_string());
     state
         .compatibility
         .cancel_tool(&tool_use_id, reason)
@@ -249,11 +246,97 @@ pub(crate) async fn cancel_tool(
     Ok(json!({ "success": true }))
 }
 
+fn parse_user_answer_submission(
+    args: &Value,
+) -> Result<(Option<String>, AgentUserAnswersRequest), String> {
+    let request = request_value(args);
+    let session_id = optional_string(request, "sessionId");
+    let tool_id = get_string(request, "toolId")?;
+    let answers = request
+        .get("answers")
+        .cloned()
+        .ok_or_else(|| "Missing 'answers' field".to_string())?;
+    Ok((session_id, AgentUserAnswersRequest { tool_id, answers }))
+}
+
+/// Deliver an answer to the Runtime-owned AskUserQuestion mailbox.
+///
+/// Restoring a Peer session already exposes the pending question snapshot. The
+/// response must terminate on the same host as the waiting Tool future; before
+/// this handler existed a CLI peer could render that snapshot but every click
+/// fell through to the unsupported-command branch.
+pub(crate) async fn submit_user_answers(
+    state: &PeerHostState,
+    args: &Value,
+) -> Result<Value, String> {
+    let (session_id, submission) = parse_user_answer_submission(args)?;
+    let tool_id = submission.tool_id.clone();
+
+    if let Some(session_id) = session_id.as_deref() {
+        // Tool ids are process-wide, but current controllers scope the Peer
+        // request to a Session. Keep a stale card from one Session from
+        // answering an interaction rendered from another Session; the Runtime
+        // remains the final arbiter for concurrent answers after this check.
+        let interaction_snapshot = state.agent_runtime.session_interaction_snapshot(session_id);
+        if !interaction_snapshot
+            .user_questions
+            .questions
+            .iter()
+            .any(|question| question.tool_id == tool_id)
+        {
+            return Err(format!(
+                "No pending user question '{tool_id}' exists for session '{session_id}'"
+            ));
+        }
+    }
+
+    // Legacy controllers did not send `sessionId`. Keep their process-wide
+    // Tool-id path working against this newer host, matching Desktop's
+    // long-standing command shape; the Runtime still consumes each answer at
+    // most once.
+    state
+        .agent_runtime
+        .submit_user_answers(submission)
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to submit user answers for tool '{tool_id}': {}",
+                error.into_message()
+            )
+        })?;
+
+    Ok(json!({ "success": true }))
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use super::{dialog_submission_slot, peer_dialog_metadata};
+    use super::{dialog_submission_slot, parse_user_answer_submission, peer_dialog_metadata};
+
+    #[test]
+    fn user_answer_submission_accepts_legacy_and_session_scoped_payloads() {
+        let (legacy_session, legacy) = parse_user_answer_submission(&json!({
+            "toolId": "ask-legacy",
+            "answers": { "0": "Yes" }
+        }))
+        .expect("legacy answer payload");
+        assert_eq!(legacy_session, None);
+        assert_eq!(legacy.tool_id, "ask-legacy");
+        assert_eq!(legacy.answers, json!({ "0": "Yes" }));
+
+        let (session, current) = parse_user_answer_submission(&json!({
+            "request": {
+                "sessionId": "session-1",
+                "toolId": "ask-current",
+                "answers": { "0": ["A", "B"] }
+            }
+        }))
+        .expect("session-scoped answer payload");
+        assert_eq!(session.as_deref(), Some("session-1"));
+        assert_eq!(current.tool_id, "ask-current");
+        assert_eq!(current.answers, json!({ "0": ["A", "B"] }));
+    }
 
     #[test]
     fn peer_metadata_removes_reserved_runtime_fields() {

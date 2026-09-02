@@ -952,7 +952,10 @@ function reconcilePendingUserQuestionSnapshot(
       : undefined;
     const alreadyProjected =
       existing?._runtimeInteractionProjection?.revision === snapshot.revision &&
-      existing.status === 'waiting';
+      existing.status === 'waiting' &&
+      existing.toolName === 'AskUserQuestion' &&
+      existing.isParamsStreaming === false &&
+      existing.toolResult === undefined;
     if (!alreadyProjected) {
       const projected: FlowToolItem = {
         ...(existing || {
@@ -7720,11 +7723,13 @@ export class FlowChatStore {
       backendState: restored.session.state,
       latestTurnId: latestTurn?.id,
       latestTurnStatus: latestTurn?.status,
+      ...(pendingUserQuestions && scope.isCurrent()
+        ? { pendingUserQuestions }
+        : {}),
       ...(runtimeEventSnapshot && scope.isCurrent()
         ? {
             runtimeEventSnapshot,
             runtimeEventReplayRequired,
-            pendingUserQuestions,
           }
         : {}),
     };

@@ -1827,6 +1827,8 @@
       "completed": "已完成",
       "submittedWaiting": "已提交，等待處理",
       "submitting": "提交中...",
+      "submitFailed": "答案提交失敗，請檢查連線後重試。",
+      "unsupportedOnPeer": "該裝置的 BitFun 版本暫不支援回答此問題，請更新該裝置上的 BitFun。",
       "waitingAnswer": "等待回答",
       "questionsCount": "{{count}} 個問題",
       "answerAllBeforeSubmit": "請回答所有問題後再提交",

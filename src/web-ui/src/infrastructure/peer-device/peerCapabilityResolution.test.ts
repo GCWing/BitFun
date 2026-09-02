@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { canQueryToolCatalogOnSurface } from './peerCapabilityResolution';
+import {
+  canQueryToolCatalogOnSurface,
+  canSubmitUserQuestionsOnSurface,
+} from './peerCapabilityResolution';
 import type { PeerHostCapabilities } from './PeerConnectionManager';
 
 function caps(overrides: Partial<PeerHostCapabilities>): PeerHostCapabilities {
@@ -11,6 +14,7 @@ function caps(overrides: Partial<PeerHostCapabilities>): PeerHostCapabilities {
     miniAppAgentContextFilesV1: false,
     cancelTool: null,
     toolCatalog: null,
+    userQuestionResponse: null,
     hostKind: null,
     ...overrides,
   };
@@ -47,5 +51,26 @@ describe('canQueryToolCatalogOnSurface', () => {
     expect(
       canQueryToolCatalogOnSurface(true, caps({ toolCatalog: true, hostKind: 'cli' })),
     ).toBe(true);
+  });
+});
+
+describe('canSubmitUserQuestionsOnSurface', () => {
+  it('keeps local and Desktop interaction responses available', () => {
+    expect(canSubmitUserQuestionsOnSurface(false, null)).toBe(true);
+    expect(canSubmitUserQuestionsOnSurface(
+      true,
+      caps({ hostKind: 'desktop' }),
+    )).toBe(true);
+  });
+
+  it('requires the advertised capability from CLI peers', () => {
+    expect(canSubmitUserQuestionsOnSurface(
+      true,
+      caps({ hostKind: 'cli' }),
+    )).toBe(false);
+    expect(canSubmitUserQuestionsOnSurface(
+      true,
+      caps({ hostKind: 'cli', userQuestionResponse: true }),
+    )).toBe(true);
   });
 });

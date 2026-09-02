@@ -35,3 +35,27 @@ export function canQueryToolCatalogOnSurface(
   // toolCatalog === null: older host, field absent — decide by host kind.
   return capabilities.hostKind !== 'cli';
 }
+
+/**
+ * Resolve whether the rendered host can answer a Runtime-owned
+ * AskUserQuestion. Desktop has always exposed `submit_user_answers`; CLI only
+ * gained the Peer Host command together with the advertised capability.
+ */
+export function canSubmitUserQuestionsOnSurface(
+  peerActive: boolean,
+  capabilities: PeerHostCapabilities | null,
+): boolean {
+  if (!peerActive) {
+    return true;
+  }
+  if (capabilities === null) {
+    return true;
+  }
+  if (capabilities.userQuestionResponse === true) {
+    return true;
+  }
+  if (capabilities.userQuestionResponse === false) {
+    return false;
+  }
+  return capabilities.hostKind !== 'cli';
+}

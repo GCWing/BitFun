@@ -64,15 +64,20 @@ export class ToolAPI {
   /**
    * Submit user answers.
    */
-  async submitUserAnswers(toolId: string, answers: Record<string, string | string[]>): Promise<void> {
+  async submitUserAnswers(
+    toolId: string,
+    answers: Record<string, string | string[]>,
+    sessionId?: string,
+  ): Promise<void> {
     try {
       await api.invoke('submit_user_answers', { 
         toolId,
-        answers 
+        answers,
+        ...(sessionId ? { sessionId } : {}),
       });
     } catch (error) {
-      log.error('Failed to submit user answers', { toolId, error });
-      throw createTauriCommandError('submit_user_answers', error, { toolId, answers });
+      log.error('Failed to submit user answers', { toolId, sessionId, error });
+      throw createTauriCommandError('submit_user_answers', error, { toolId, sessionId, answers });
     }
   }
 }

@@ -1881,11 +1881,15 @@ describe('FlowChatStore historical session hydration state', () => {
       activeSessionId: 'history-1',
     }));
 
-    await flowChatStore.refreshPeerSessionSnapshot(
+    const firstRefresh = await flowChatStore.refreshPeerSessionSnapshot(
       'history-1',
       '/Users/host/project',
       { replaceRunningSnapshot: false },
     );
+    expect(firstRefresh.pendingUserQuestions).toEqual({
+      revision: 7,
+      questions: [pendingQuestion],
+    });
 
     const recoveredTurn = flowChatStore
       .getState()
@@ -2022,6 +2026,69 @@ describe('FlowChatStore historical session hydration state', () => {
       questions: [],
     })).toBe(true);
     expect(askUserQuestionDraftStore.getState().drafts[draftKey]).toBeUndefined();
+  });
+
+  it('re-enables a same-revision mailbox card changed back to parameter streaming', () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          dialogTurns: [{
+            id: 'turn-live',
+            sessionId: 'history-1',
+            userMessage: { id: 'user-live', content: 'ask me', timestamp: 1 },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1,
+          }],
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+    const snapshot = {
+      revision: 4,
+      questions: [{
+        toolId: 'ask-tool-1',
+        sessionId: 'history-1',
+        dialogTurnId: 'turn-live',
+        modelRoundId: 'round-question',
+        questions: {
+          questions: [{
+            question: 'Continue?',
+            header: 'Choice',
+            options: [{ label: 'Yes', description: 'Continue.' }],
+          }],
+        },
+        registeredAtMs: 3,
+      }],
+    };
+
+    expect(flowChatStore.reconcilePendingUserQuestions('history-1', snapshot)).toBe(true);
+    flowChatStore.setState(prev => {
+      const session = prev.sessions.get('history-1')!;
+      const dialogTurns = [...session.dialogTurns];
+      const modelRounds = [...dialogTurns[0].modelRounds];
+      const items = [...modelRounds[0].items];
+      items[0] = {
+        ...items[0],
+        isParamsStreaming: true,
+      } as any;
+      modelRounds[0] = { ...modelRounds[0], items };
+      dialogTurns[0] = { ...dialogTurns[0], modelRounds };
+      const sessions = new Map(prev.sessions);
+      sessions.set('history-1', { ...session, dialogTurns });
+      return { ...prev, sessions };
+    });
+
+    expect(flowChatStore.reconcilePendingUserQuestions('history-1', snapshot)).toBe(true);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({
+      status: 'waiting',
+      isParamsStreaming: false,
+    });
   });
 
   it('acquires an empty current-Turn base for Runtime event replay before applying interactions', async () => {

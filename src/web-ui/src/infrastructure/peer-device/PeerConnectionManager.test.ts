@@ -32,6 +32,7 @@ describe('PeerConnectionManager attach', () => {
         productControlV1: true,
         productControlNativeV1: false,
         productControlPresentationV1: false,
+        userQuestionResponse: true,
       },
     });
     expect(manager.get('peer-1')).toBe(connection);
@@ -83,6 +84,7 @@ describe('PeerConnectionManager attach', () => {
           capabilities: {
             cancel_tool: true,
             tool_catalog: true,
+            user_question_response: true,
             miniapp_agent_context_files_v1: true,
           },
         },
@@ -572,6 +574,7 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
             product_control_v1: true,
             cancel_tool: true,
             tool_catalog: true,
+            user_question_response: true,
           },
         },
       });

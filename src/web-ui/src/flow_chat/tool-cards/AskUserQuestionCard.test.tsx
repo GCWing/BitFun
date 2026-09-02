@@ -9,6 +9,7 @@ import {
   LOCAL_SURFACE_ID,
   activateSurface,
 } from '@/infrastructure/peer-device/deviceSurface';
+import { PeerDeviceContext } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { askUserQuestionDraftStore } from '../store/askUserQuestionDraftStore';
 
 vi.mock('react-i18next', () => ({
@@ -190,6 +191,71 @@ describe('AskUserQuestionCard', () => {
     ).toBe(true);
   });
 
+  it('switches to the draft owned by the newly activated device surface', () => {
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('pending_confirmation')}
+          config={config}
+          sessionId="session-a"
+          isLastItem
+        />,
+      );
+    });
+
+    const localRadio = container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]');
+    act(() => localRadio?.click());
+    expect(localRadio?.checked).toBe(true);
+
+    act(() => {
+      activateSurface('peer-device-b');
+    });
+
+    expect(
+      container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.checked,
+    ).toBe(false);
+  });
+
+  it('explains why an older CLI peer cannot answer instead of exposing a dead form', () => {
+    activateSurface('peer-cli');
+    act(() => {
+      root.render(
+        <PeerDeviceContext.Provider value={{
+          peerMode: { active: true, deviceId: 'peer-cli', deviceName: 'CLI' },
+          attachments: [],
+          currentPeerCapabilities: {
+            idempotentDialogSubmit: true,
+            targetedSessionRollback: true,
+            tokenUsageStatistics: true,
+            miniAppAgentContextFilesV1: false,
+            cancelTool: false,
+            toolCatalog: false,
+            userQuestionResponse: null,
+            hostKind: 'cli',
+          },
+          switchToDevice: vi.fn(),
+          switchToLocal: vi.fn(),
+          disconnectDevice: vi.fn(),
+          disconnectAllDevices: vi.fn(),
+        }}>
+          <AskUserQuestionCard
+            toolItem={questionTool('pending_confirmation')}
+            config={config}
+            sessionId="session-a"
+            isLastItem
+          />
+        </PeerDeviceContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('[data-bf-component="ask-user"]')?.getAttribute('data-bf-state'))
+      .toBe('error');
+    expect(container.querySelector('[data-bf-part="status-label"]')?.textContent)
+      .toBe('toolCards.askUser.unsupportedOnPeer');
+    expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.disabled)
+      .toBe(true);
+  });
+
   it('restores an unsubmitted custom input after the card is remounted', () => {
     const renderCard = () => {
       root.render(
@@ -305,6 +371,33 @@ describe('AskUserQuestionCard', () => {
     expect(toolAPI.submitUserAnswers).toHaveBeenCalledWith(
       'question-tool-1',
       { 0: ['PostgreSQL'] },
+      'session-a',
     );
+  });
+
+  it('keeps the form retryable and reports a failed response submission', async () => {
+    vi.mocked(toolAPI.submitUserAnswers).mockRejectedValueOnce(new Error('peer unavailable'));
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('pending_confirmation')}
+          config={config}
+          sessionId="session-a"
+          isLastItem
+        />,
+      );
+    });
+
+    act(() => {
+      container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.click();
+    });
+    const submitButton = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="submit"] button',
+    );
+    await act(async () => submitButton?.click());
+
+    expect(container.querySelector('[data-bf-part="status-label"]')?.textContent)
+      .toBe('toolCards.askUser.submitFailed');
+    expect(submitButton?.disabled).toBe(false);
   });
 });

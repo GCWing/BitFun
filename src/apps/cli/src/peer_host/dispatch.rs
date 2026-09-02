@@ -176,6 +176,10 @@ mod tests {
                     value.pointer("/capabilities/tool_catalog"),
                     Some(&json!(true))
                 );
+                assert_eq!(
+                    value.pointer("/capabilities/user_question_response"),
+                    Some(&json!(true))
+                );
             }
             other => panic!("unexpected response: {other:?}"),
         }
@@ -254,8 +258,8 @@ mod tests {
     /// branch, not here — that is caught by the capability advertisement +
     /// frontend gate instead.
     #[test]
-    fn cancel_tool_and_tool_catalog_are_not_refused_before_dispatch() {
-        for command in ["cancel_tool", "get_all_tools_info"] {
+    fn interactive_tools_and_tool_catalog_are_not_refused_before_dispatch() {
+        for command in ["cancel_tool", "get_all_tools_info", "submit_user_answers"] {
             assert!(
                 !is_local_only_command(command),
                 "{command} must be routable to the peer host"

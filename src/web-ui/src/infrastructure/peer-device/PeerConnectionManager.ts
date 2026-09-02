@@ -65,6 +65,12 @@ export interface PeerHostCapabilities {
    */
   readonly toolCatalog: boolean | null;
   /**
+   * Host implements `submit_user_answers` for Runtime-owned
+   * AskUserQuestion interactions. Older Desktop hosts already implemented the
+   * command; older CLI hosts did not.
+   */
+  readonly userQuestionResponse: boolean | null;
+  /**
    * Which kind of host answered `peer_mode_ping` (`"desktop"` | `"cli"`).
    * `null` = the host did not advertise `host_type` (even older host, or the
    * field is genuinely absent). Lets a controller resolve a `null` capability
@@ -141,6 +147,7 @@ interface PeerModePingResult {
     product_control_presentation_v1?: boolean;
     cancel_tool?: boolean;
     tool_catalog?: boolean;
+    user_question_response?: boolean;
   };
 }
 
@@ -156,6 +163,7 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   // Consumers treat `null` optimistically so an unprobed host is not gated off.
   cancelTool: null,
   toolCatalog: null,
+  userQuestionResponse: null,
   // Host kind is unknown until the first `peer_mode_ping` resolves. Consumers
   // treat `null` optimistically. See PR #2428 round 5 #1.
   hostKind: null,
@@ -432,18 +440,23 @@ export class PeerConnectionManager {
     const caps = result?.capabilities;
     let cancelTool = caps?.cancel_tool === undefined ? null : caps.cancel_tool === true;
     let toolCatalog = caps?.tool_catalog === undefined ? null : caps.tool_catalog === true;
+    let userQuestionResponse = caps?.user_question_response === undefined
+      ? null
+      : caps.user_question_response === true;
     let hostKind = parseHostKind(result?.host_type);
 
     if (hostKind !== null) {
       this.legacyHostKinds.set(deviceId, hostKind);
       cancelTool ??= hostKind === 'desktop';
       toolCatalog ??= hostKind === 'desktop';
+      userQuestionResponse ??= hostKind === 'desktop';
     } else {
       const cachedHostKind = this.legacyHostKinds.get(deviceId);
       if (cachedHostKind !== undefined) {
         hostKind = cachedHostKind;
         cancelTool ??= cachedHostKind === 'desktop';
         toolCatalog ??= cachedHostKind === 'desktop';
+        userQuestionResponse ??= cachedHostKind === 'desktop';
       }
     }
 
@@ -456,6 +469,7 @@ export class PeerConnectionManager {
           hostKind = 'desktop';
           cancelTool = true;
           toolCatalog = true;
+          userQuestionResponse = true;
           this.legacyHostKinds.set(deviceId, hostKind);
         }
       } catch (error) {
@@ -467,6 +481,7 @@ export class PeerConnectionManager {
           hostKind = 'cli';
           cancelTool = false;
           toolCatalog = false;
+          userQuestionResponse = false;
           this.legacyHostKinds.set(deviceId, hostKind);
         } else {
           log.warn('Could not classify legacy peer host', { deviceId, error });
@@ -485,6 +500,7 @@ export class PeerConnectionManager {
         caps?.product_control_presentation_v1 === true,
       cancelTool,
       toolCatalog,
+      userQuestionResponse,
       hostKind,
     };
   }
@@ -719,6 +735,7 @@ function capabilitiesEqual(
     a.miniAppAgentContextFilesV1 === b.miniAppAgentContextFilesV1 &&
     a.cancelTool === b.cancelTool &&
     a.toolCatalog === b.toolCatalog &&
+    a.userQuestionResponse === b.userQuestionResponse &&
     a.hostKind === b.hostKind;
 }
 

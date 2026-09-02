@@ -242,8 +242,14 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     and use it only to reconstruct UI in the owning Turn/round. Reattachment
     must never restart or cancel the
     running Session. Older peers may omit the field; absence is not an empty
-    authoritative mailbox. Any new interaction that can suspend execution is
-    incomplete until its owner exposes equivalent replayable attach state.
+    authoritative mailbox. Answering an `AskUserQuestion` is separately gated
+    by `peer_mode_ping.capabilities.user_question_response`: legacy Desktop
+    hosts already support the command, while legacy CLI hosts must show an
+    explicit unsupported/upgrade state. Current controllers include the owning
+    Session id with the mutation and hosts reject stale cross-Session answers;
+    newer hosts still accept the legacy Tool-id-only form. Any new
+    interaction that can suspend execution is incomplete until its owner
+    exposes equivalent replayable attach state and a negotiated response path.
 
 13. **Weak links use bounded, idempotency-aware recovery.** Default Peer
     HostInvoke concurrency is four with one slot reserved from normal/low

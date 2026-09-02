@@ -104,23 +104,23 @@ pub(crate) fn peer_mode_ping_value() -> Value {
         "device_id": device_id,
         // Declares which kind of host answered so the controller can resolve
         // capabilities that an older CLI did not advertise. An older CLI
-        // (pre-`50b76516`) omits `cancel_tool`/`tool_catalog` and never
-        // implemented them; reporting `host_type: "cli"` lets the controller
-        // gate the Terminal Interrupt button / tool list off instead of showing
-        // an action that silently fails. See PR #2428 round 5 #1.
+        // (pre-`50b76516`) omits `cancel_tool`/`tool_catalog`, and older CLI
+        // hosts also lack `submit_user_answers`; reporting `host_type: "cli"`
+        // lets the controller gate those controls instead of showing actions
+        // that silently fail. See PR #2428 round 5 #1.
         "host_type": "cli",
         "capabilities": {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
             "token_usage_statistics": true,
             "product_control_v1": true,
-            // Per-tool interrupt and read-only tool catalog are implemented on
-            // this host (see commands::dialog::cancel_tool and
-            // commands::tools::get_all_tools_info). Advertising them lets the
-            // controller gate the Terminal Interrupt button and the tool
-            // catalog UI on a real capability instead of guessing.
+            // Per-tool interrupt, read-only tool catalog, and Runtime-owned
+            // question responses are implemented on this host. Advertising
+            // them lets the controller gate the matching UI on real
+            // capabilities instead of guessing.
             "cancel_tool": true,
             "tool_catalog": true,
+            "user_question_response": true,
         },
     })
 }

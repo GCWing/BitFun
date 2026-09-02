@@ -560,8 +560,16 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         const alreadyCurrent = result.runtimeEventReplayRequired === false
           && runtimeProjectionCaughtUp(restoredSession, snapshot);
         if (alreadyCurrent) {
-          // Cursor match is not enough: the UI must already show journal
-          // terminal tools before we cover those events.
+          // Runtime cursor health and blocking-interaction health are separate
+          // projections. A live event can win the restore race after the
+          // persisted merge, leaving an AskUserQuestion card visible but
+          // unbound/disabled even though every journal event is already
+          // painted. Always reconcile the Runtime mailbox before covering the
+          // cursor.
+          context.flowChatStore.reconcilePendingUserQuestions(
+            sessionId,
+            result.pendingUserQuestions,
+          );
           attachment.finish({
             streamId: snapshot.streamId,
             cursor: snapshot.cursor,
@@ -642,6 +650,14 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       // and retain the existing persisted-snapshot reconciliation fallback.
       attachment.abort();
       attachmentFinished = true;
+      // `interactionSnapshot` was introduced independently of the Runtime
+      // journal. Apply it even when the persisted Turn merge lost a race; its
+      // own monotonic revision fence makes this safe and keeps the form bound
+      // to the owner mailbox.
+      context.flowChatStore.reconcilePendingUserQuestions(
+        sessionId,
+        result.pendingUserQuestions,
+      );
       if (!result.applied) {
         // A snapshot that changed nothing — or that was refused because it
         // would have dropped projected content — still reports whether the
