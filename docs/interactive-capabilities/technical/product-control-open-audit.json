@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "bf23a4123f01486935eb491f77cd73cddc5fb54a82f9b53798ab2181b8ffe483",
+  "catalogDigest": "e8dc3602d8f9d885d74da7bb2120f695699fb595adc9ec80a006f9c1c3c9a091",
   "count": 212,
   "reasonCounts": {
     "externalAuth": 4,
@@ -3110,11 +3110,11 @@
       "titleZh": "选择浏览器并查看、建立或断开 CDP 连接",
       "titleEn": "Choose a browser and inspect, establish, or disconnect its CDP connection",
       "reasonCode": "visualSelection",
-      "reasonZh": "浏览器与 CDP 状态来自当前执行主机，并可能需要浏览器确认或重启；Agent 会打开独立的浏览器控制页供用户完成。",
-      "reasonEn": "Browser and CDP state comes from the current execution host and may require browser confirmation or restart; the Agent opens the dedicated Browser Control page for completion.",
+      "reasonZh": "浏览器与 CDP 状态来自当前执行主机，并可能需要浏览器确认或重启；Agent 会打开“浏览器与桌面控制”设置页供用户完成。",
+      "reasonEn": "Browser and CDP state comes from the current execution host and may require browser confirmation or restart; the Agent opens the Browser & Desktop Control settings page for completion.",
       "presentationTarget": {
         "kind": "settings",
-        "pageId": "tools.browser-control"
+        "pageId": "tools.desktop-control"
       },
       "evidence": [
         "command:browser_control_get_status",
