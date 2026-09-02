@@ -102,8 +102,8 @@
     pointer-events: none;
 
     span {
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-semibold);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
       color: var(--bf-color-content-on-dark);
       white-space: nowrap;
       text-shadow: 0 1px 2px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);

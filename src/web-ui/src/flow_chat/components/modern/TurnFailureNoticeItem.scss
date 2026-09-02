@@ -12,8 +12,8 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, var(--bf-color-surface-panel));
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 
   &--warning {
     border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 45%, transparent);
@@ -54,7 +54,7 @@
 
 .turn-failure-notice__title {
   flex: 0 0 auto;
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   white-space: nowrap;
 }
 
@@ -115,7 +115,7 @@
     min-width: 0;
     margin: 0;
     overflow-wrap: anywhere;
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
   }
 }
 
@@ -158,9 +158,9 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--bf-color-surface-canvas) 75%, transparent);
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-meta);
-  line-height: var(--bf-line-height-support);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-meta-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

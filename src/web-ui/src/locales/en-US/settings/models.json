@@ -40,7 +40,6 @@
     "loginCancelled": "Sign-in cancelled",
     "logout": "Sign out",
     "refresh": "Refresh token",
-    "manageSubscription": "Manage subscription",
     "refreshSuccess": "Token refreshed",
     "refreshFailed": "Refresh failed: {{error}}",
     "loginSuccess": "Signed in",

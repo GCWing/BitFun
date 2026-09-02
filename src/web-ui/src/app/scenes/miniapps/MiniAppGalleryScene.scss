@@ -1,7 +1,3 @@
-// Gutter aligned with GalleryLayout ($gutter) so the tab strip lines up
-// with the page header content of every tab pane.
-$scene-gutter: clamp(28px, 4vw, 64px);
-
 .miniapp-gallery-scene {
   display: flex;
   flex-direction: column;
@@ -12,13 +8,6 @@ $scene-gutter: clamp(28px, 4vw, 64px);
   height: 100%;
   overflow: hidden;
   background: var(--bf-color-surface-scene);
-
-  &__nav {
-    flex: 0 0 auto;
-    padding: var(--bf-space-3) $scene-gutter;
-    background: var(--bf-color-surface-scene);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-  }
 
   // Layout glue: keep the active pane in the flex sizing chain so each
   // pane's GalleryLayout keeps its own internal scroll.
@@ -38,8 +27,15 @@ $scene-gutter: clamp(28px, 4vw, 64px);
   }
 }
 
-@media (max-width: 560px) {
-  .miniapp-gallery-scene__nav {
-    padding-inline: var(--bf-space-3);
+.miniapp-gallery-tabs {
+  width: min(calc(100% - var(--bf-space-6)), 680px);
+  margin: var(--bf-space-6) auto 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 720px) {
+  .miniapp-gallery-tabs {
+    width: calc(100% - var(--bf-space-8));
+    margin-top: var(--bf-space-4);
   }
 }

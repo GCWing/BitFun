@@ -20,7 +20,7 @@
     color: var(--bf-color-content-secondary);
     font: inherit;
     font-size: var(--bf-type-flow-micro-font-size);
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     cursor: pointer;
     transition:
       background-color 120ms ease,
@@ -85,13 +85,13 @@
     }
 
     strong {
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     small {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
   }
 
@@ -101,7 +101,7 @@
     gap: var(--bf-space-2);
     padding: 9px 8px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__spin {

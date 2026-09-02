@@ -92,16 +92,16 @@
 
 .file-name {
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-semibold);
-  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  font-family: var(--bf-type-code-md-font-family);
   margin-bottom: 2px;
 }
 
 .file-path-full {
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 50%, transparent);
-  font-size: var(--bf-font-size-xs);
-  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-family: var(--bf-type-code-md-font-family);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -180,7 +180,7 @@
   justify-content: center;
   gap: 12px;
   color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
-  font-size: var(--bf-font-size-base);
+  font-size: var(--bf-type-body-md-font-size);
   backdrop-filter: blur(4px);
   z-index: 1000;
 }
@@ -234,11 +234,11 @@
   }
   
   .file-name {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
   
   .file-path-full {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
   }
 }
 

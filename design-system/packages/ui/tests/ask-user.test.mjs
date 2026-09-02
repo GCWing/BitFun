@@ -83,7 +83,7 @@ test("AskUser styles use public semantic and component geometry tokens", async (
   assert.match(styles, /--bf-color-action-neutral-content/);
   assert.match(styles, /--bf-color-content-muted/);
   assert.match(styles, /--bf-color-status-success-content/);
-  assert.match(styles, /--bf-line-height-tight/);
+  assert.match(styles, /--bf-type-heading-page-line-height/);
   assert.match(
     styles,
     /circle:nth-of-type\(2\)\s*\{\s*fill:\s*currentColor/,

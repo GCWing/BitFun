@@ -23,9 +23,12 @@ export interface SegmentedControlProps
   > {
   defaultValue?: string;
   disabled?: boolean;
+  distribution?: "content" | "fill";
   onValueChange?: (value: string) => void;
   options: readonly SegmentedControlOption[];
+  size?: "sm" | "md";
   value?: string;
+  variant?: "bar" | "pills";
 }
 
 function getFirstEnabledValue(options: readonly SegmentedControlOption[]): string {
@@ -47,9 +50,12 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
     className,
     defaultValue,
     disabled = false,
+    distribution = "content",
     onValueChange,
     options,
+    size = "sm",
     value,
+    variant = "bar",
     ...props
   }, ref) {
     const segmentRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -122,6 +128,9 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
         data-bf-component="segmented-control"
         data-bf-part="root"
         data-disabled={disabled ? "true" : "false"}
+        data-distribution={distribution}
+        data-size={size}
+        data-variant={variant}
         ref={ref}
         role="radiogroup"
       >

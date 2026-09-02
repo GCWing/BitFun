@@ -15,10 +15,11 @@
     border-radius: var(--bf-control-status-pill-radius);
     color: var(--bf-color-status-success-content);
     background: var(--bf-color-status-success-surface);
-    font-family:var(--bf-font-family-sans);
+    font-family: var(--bf-type-meta-font-family);
     font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-tight);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
     white-space: nowrap;
   }
 

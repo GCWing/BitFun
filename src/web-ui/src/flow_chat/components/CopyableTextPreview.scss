@@ -1,20 +1,20 @@
 .copyable-text-preview {
   flex: 1;
   min-width: 0;
-  font-family:var(--bf-font-family-mono);
+  font-family:var(--bf-type-code-md-font-family);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .copyable-text-preview.copyable-text-preview--theme-font {
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
 }
 
 .copyable-text-preview--compact {
   font-size: var(--bf-type-flow-support-font-size);
   line-height: var(--bf-type-flow-support-line-height);
-  font-weight: var(--bf-font-weight-regular);
+  font-weight: var(--bf-type-body-sm-font-weight);
   color: var(--bf-color-content-muted);
 }
 
@@ -28,7 +28,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--bf-space-2);
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
   font-size: var(--bf-type-flow-control-font-size);
   line-height: var(--bf-type-flow-support-line-height);
 }

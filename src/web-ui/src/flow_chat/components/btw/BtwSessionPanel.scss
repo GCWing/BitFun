@@ -66,7 +66,7 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
     background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
     flex-shrink: 0;
@@ -74,7 +74,7 @@
 
   &__title {
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -258,7 +258,7 @@
     border: 1px solid var(--bf-color-border-default);
     color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     cursor: pointer;
     box-shadow: 0 2px 12px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
     transition: transform 0.2s ease, box-shadow 0.2s ease;

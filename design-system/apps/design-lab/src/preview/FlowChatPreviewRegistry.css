@@ -18,8 +18,8 @@
   gap: var(--bf-space-3);
   overflow: hidden;
   color: var(--bf-color-content-secondary);
-  font-family:var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-meta);
+  font-family:var(--bf-type-body-md-font-family);
+  font-size: var(--bf-type-support-font-size);
   white-space: nowrap;
 }
 
@@ -58,7 +58,7 @@
   color: var(--bf-color-content-primary);
   background: transparent;
   font: inherit;
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-md-line-height);
 }
 
 .flow-chat-composer-preview textarea::placeholder {
@@ -95,8 +95,8 @@
   gap: var(--bf-space-1);
   padding-inline: var(--bf-space-2);
   border-radius: var(--bf-radius-pill);
-  font-family:var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-sm);
+  font-family:var(--bf-type-body-md-font-family);
+  font-size: var(--bf-type-body-sm-font-size);
 }
 
 .flow-chat-composer-preview__model > span {
@@ -124,7 +124,7 @@
   overflow: hidden;
   min-inline-size: 0;
   color: inherit;
-  font-family:var(--bf-font-family-mono);
+  font-family:var(--bf-type-code-md-font-family);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -167,7 +167,7 @@
 .flow-chat-tool-card-preview__details code {
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-mono);
+  font-family:var(--bf-type-code-md-font-family);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -181,7 +181,7 @@
   align-items: center;
   gap: var(--bf-space-1);
   color: var(--bf-color-content-muted);
-  font-family:var(--bf-font-family-mono);
+  font-family:var(--bf-type-code-md-font-family);
   font-variant-numeric: tabular-nums;
 }
 
@@ -200,9 +200,9 @@
   gap: var(--bf-space-1);
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-family:var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-base);
+  font-family:var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-body-sm-font-size);
+  line-height: var(--bf-type-body-md-line-height);
   white-space: pre-wrap;
 }
 

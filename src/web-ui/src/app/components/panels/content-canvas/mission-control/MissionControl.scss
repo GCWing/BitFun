@@ -40,8 +40,8 @@
 
   &__title {
     margin: 0;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
   }
 
@@ -96,8 +96,8 @@
     color: var(--bf-color-content-muted);
     cursor: pointer;
     border-radius: 3px;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     transition:
       transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
       background-color 140ms ease,
@@ -144,7 +144,7 @@
     &-text {
       position: relative;
       z-index: 1;
-      line-height: var(--bf-line-height-none);
+      line-height: var(--bf-type-modifier-leading-none-line-height);
     }
   }
 
@@ -184,7 +184,7 @@
     justify-content: center;
     padding: 40px 30px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     border: 1px dashed var(--bf-color-border-default);
     border-radius: 6px;
   }
@@ -196,7 +196,7 @@
     justify-content: center;
     gap: 12px;
     padding: 6px 16px;
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     border-top: 1px dashed var(--bf-color-border-default);
     flex-shrink: 0;

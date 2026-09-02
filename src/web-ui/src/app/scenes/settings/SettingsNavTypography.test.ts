@@ -44,8 +44,8 @@ describe('SettingsNav typography and layout ownership', () => {
     // typography-audit: negative-test-start -- verifies Appearance no longer owns the navigation font scale
     expect(stylesheet).not.toContain('--bf-appearance-token-font-size-');
     // typography-audit: negative-test-end
-    expect(stylesheet).toContain('font-size: var(--bf-font-size-meta);');
-    expect(stylesheet).toContain('line-height: var(--bf-line-height-compact);');
+    expect(stylesheet).toContain('font-size: var(--bf-type-meta-font-size);');
+    expect(stylesheet).toContain('line-height: var(--bf-type-meta-line-height);');
     expect(stylesheet).not.toContain('text-transform: uppercase;');
   });
 

@@ -18,7 +18,6 @@ import { createPortal } from 'react-dom';
 import { FolderOpen, FolderSearch, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RetainedMountBoundary } from '@/shared/presence';
-import { BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon } from '@/app/icons';
 import { InputDialog } from '@/app/components/InputDialog';
 
 import { useI18n } from '@/infrastructure/i18n';
@@ -868,11 +867,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           >
             <span className="bitfun-nav-panel__assistant-item-avatar is-group-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
               <span className="bitfun-nav-panel__assistant-item-group-icon">
-                {isActive ? (
-                  <SessionGroupAssistantSelectedIcon size={BITFUN_ICON_SIZE.navigation} />
-                ) : (
-                  <SessionGroupAssistantIcon size={BITFUN_ICON_SIZE.navigation} />
-                )}
+                <Icon name="user" size="sm" />
               </span>
               <span className={`bitfun-nav-panel__assistant-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
                 <Icon name="chevron-down" size="sm" />
@@ -1138,15 +1133,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           <span className="bitfun-nav-panel__workspace-item-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
             <span className="bitfun-nav-panel__workspace-item-icon-default">
               {workspaceIsRemote ? (
-                isActive ? (
-                  <SessionGroupRemoteWorkspaceSelectedIcon size={BITFUN_ICON_SIZE.navigation} />
-                ) : (
-                  <SessionGroupRemoteWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />
-                )
-              ) : isActive ? (
-                <SessionGroupWorkspaceSelectedIcon size={BITFUN_ICON_SIZE.navigation} />
+                <Network size={16} />
               ) : (
-                <SessionGroupWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />
+                <Icon name="folder" size="sm" />
               )}
             </span>
             <span className={`bitfun-nav-panel__workspace-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>

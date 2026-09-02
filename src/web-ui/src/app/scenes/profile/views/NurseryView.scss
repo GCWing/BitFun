@@ -35,15 +35,15 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     &__title {
       margin-bottom: var(--bf-space-2);
       color: var(--bf-color-content-on-light);
-      font-size: var(--bf-font-size-4xl);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-display);
-      letter-spacing: var(--bf-letter-spacing-tighter);
+      font-size: var(--bf-type-heading-display-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-display-sm-line-height);
+      letter-spacing: var(--bf-type-modifier-tracking-tighter-letter-spacing);
     }
 
     &__subtitle {
       color: var(--bf-color-overlay-scrim);
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
     }
 
     &__actions {
@@ -62,15 +62,15 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     &__title {
       color: var(--bf-color-content-on-light);
-      font-size: var(--bf-font-size-2xl);
-      font-weight: var(--bf-font-weight-semibold);
-      letter-spacing: var(--bf-letter-spacing-tight);
+      font-size: var(--bf-type-flow-section-title-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
     }
   }
 
   .gallery-zone__subtitle {
     color: var(--bf-color-overlay-scrim);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   .gallery-zone-count {
@@ -80,8 +80,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border: 0;
     background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
     color: var(--bf-color-content-on-light);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__page-title {
@@ -149,14 +149,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     strong {
       color: var(--bf-color-content-on-light);
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-semibold);
+      font-size: var(--bf-type-label-md-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
 
     small {
       color: var(--bf-color-overlay-scrim);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-relaxed);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-lg-line-height);
     }
   }
 }
@@ -218,10 +218,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   &__title {
     margin: 0;
     color: var(--bf-color-content-on-light);
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
-    letter-spacing: var(--bf-letter-spacing-tight);
+    font-size: var(--bf-type-flow-section-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
   }
 
   &__badge {
@@ -232,16 +232,16 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border-radius: var(--bf-radius-pill);
     background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
     color: var(--bf-color-overlay-scrim);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
   }
 
   &__subtitle {
     margin: 0;
     color: var(--bf-color-overlay-scrim);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-relaxed);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
   }
 
   &__stats {
@@ -258,8 +258,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     gap: 5px;
     color: var(--bf-color-overlay-scrim);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
 
     svg {
@@ -315,10 +315,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     box-shadow:
       0 7px 18px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
       8px 0 24px color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent) 22%, transparent);
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: left;
     cursor: pointer;
     user-select: none;
@@ -455,7 +455,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border: 0;
     background: transparent;
     color: inherit;
-    font-family: var(--bf-font-family-sans);
+    font-family: var(--bf-type-body-sm-font-family);
     text-align: left;
     cursor: pointer;
 
@@ -491,8 +491,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   &__emoji {
     max-width: 100%;
     overflow: hidden;
-    font-size: var(--bf-font-size-3xl);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     white-space: nowrap;
   }
 
@@ -517,10 +517,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__name {
     min-width: 0;
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-on-light);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -544,9 +544,9 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     display: -webkit-box;
     max-width: 100%;
     color: var(--bf-color-overlay-scrim);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-relaxed);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-lg-line-height);
     overflow: hidden;
     word-break: break-word;
     -webkit-box-orient: vertical;
@@ -569,9 +569,9 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border-radius: var(--bf-radius-sm);
     background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
     color: var(--bf-color-overlay-scrim);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-dense);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
     white-space: nowrap;
   }
 
@@ -663,14 +663,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__title {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     margin: 0;
   }
 
   &__subtitle {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -790,11 +790,11 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__title {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     flex: 1;
   }
 
@@ -805,8 +805,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     padding: 1px 7px;
     border-radius: var(--bf-radius-pill);
     background: var(--bf-color-action-neutral-surface-hover);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-muted);
     font-variant-numeric: tabular-nums;
   }
@@ -861,14 +861,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__label {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
     flex: 1;
   }
 
   &__desc {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
   }
 }
@@ -889,12 +889,12 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
   gap: var(--bf-space-2);
 
   &--total {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-secondary);
     padding-top: var(--bf-space-2);
     border-top: 1px solid var(--bf-color-border-subtle);
@@ -917,7 +917,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__label {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     margin-top: 3px;
     text-align: right;
@@ -953,13 +953,13 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__name {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   &__desc {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -976,7 +976,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 }
 
 .nursery-skill-chip {
-  font-size: var(--bf-font-size-meta);
+  font-size: var(--bf-type-meta-font-size);
   padding: 3px var(--bf-space-2);
   border-radius: var(--bf-radius-pill);
   border: 1px solid var(--bf-color-border-subtle);
@@ -1014,7 +1014,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__dim-label {
     width: 60px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     flex-shrink: 0;
   }
@@ -1036,7 +1036,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__dim-val {
     width: 26px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -1044,7 +1044,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__hint {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     margin-top: var(--bf-space-3);
     text-align: center;
@@ -1055,12 +1055,12 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
 .nursery-identity {
   &__name {
-    font-size: var(--bf-font-size-3xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     cursor: pointer;
     margin: 0;
-    letter-spacing: var(--bf-letter-spacing-tight);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
@@ -1069,8 +1069,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__name-input {
-    font-size: var(--bf-font-size-3xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   &__meta-row {
@@ -1091,17 +1091,17 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__meta-label {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     width: 52px;
     flex-shrink: 0;
   }
 
   &__meta-value {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     padding: 2px var(--bf-space-2);
@@ -1130,7 +1130,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 // ── Empty state ────────────────────────────────────────────────────────────
 
 .nursery-empty {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
   font-style: italic;
   padding: var(--bf-space-3) 0;
@@ -1407,11 +1407,11 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__name {
-    font-size: var(--bf-font-size-5xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-display-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
-    letter-spacing: var(--bf-letter-spacing-tight);
-    line-height: var(--bf-line-height-display);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+    line-height: var(--bf-type-display-sm-line-height);
     cursor: pointer;
     border-radius: var(--bf-radius-sm);
     padding: 1px 4px;
@@ -1424,9 +1424,9 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__name-input {
-    font-size: var(--bf-font-size-5xl);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-tight);
+    font-size: var(--bf-type-display-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
     width: 100%;
   }
 
@@ -1440,7 +1440,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__meta-tag {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-muted);
     cursor: pointer;
     border-radius: var(--bf-radius-sm);
@@ -1459,14 +1459,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__meta-dot {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-muted);
     opacity: 0.35;
     user-select: none;
   }
 
   &__meta-input {
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     max-width: 140px;
   }
 }
@@ -1513,16 +1513,16 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    font-size: var(--bf-font-size-5xl);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-display-sm-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     white-space: nowrap;
   }
 
   &__section-label {
     margin-bottom: var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
 
     &.is-secondary {
       margin-top: var(--bf-space-3);
@@ -1557,7 +1557,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     max-height: calc(100vh - 16px);
     padding: var(--bf-space-3);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
   }
 
   &__header {
@@ -1576,15 +1576,15 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     strong {
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-label-md-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-body-sm-line-height);
     }
 
     span {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-meta);
-      line-height: var(--bf-line-height-relaxed);
+      font-size: var(--bf-type-meta-font-size);
+      line-height: var(--bf-type-body-lg-line-height);
     }
   }
 
@@ -1604,8 +1604,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border: 1px solid transparent;
     border-radius: var(--bf-radius-sm);
     background: transparent;
-    font-size: var(--bf-font-size-2xl);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-flow-section-title-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     cursor: pointer;
     transition:
       border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -1660,8 +1660,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     gap: 4px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
 
     &.is-saved {
       color: var(--bf-color-status-success-content);
@@ -1687,10 +1687,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   &__title {
     margin: 0 0 var(--bf-space-2);
     padding: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
-    letter-spacing: var(--bf-letter-spacing-snug);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-flow-title-letter-spacing);
     color: var(--bf-color-content-secondary);
   }
 
@@ -1718,18 +1718,18 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     min-height: 34px;
     padding: var(--bf-space-1) var(--bf-space-2);
     border-radius: var(--bf-radius-lg);
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   .bitfun-nav-panel__inline-item.is-child {
     min-height: 30px;
     padding-left: calc(var(--bf-space-2) + 22px);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   .bitfun-nav-panel__inline-empty {
     padding: var(--bf-space-3) 0;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
 }
@@ -1809,8 +1809,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__emoji {
-    font-size: var(--bf-font-size-3xl);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     cursor: pointer;
     border-radius: var(--bf-radius-sm);
     padding: 2px;
@@ -1823,7 +1823,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__emoji-input {
     width: 38px;
-    font-size: var(--bf-font-size-xl);
+    font-size: var(--bf-type-flow-title-font-size);
     text-align: center;
   }
 
@@ -1837,15 +1837,15 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__name {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     cursor: pointer;
     border-radius: var(--bf-radius-sm);
     padding: 1px 4px;
     margin-left: -4px;
-    letter-spacing: var(--bf-letter-spacing-snug);
-    line-height: var(--bf-line-height-tight);
+    letter-spacing: var(--bf-type-flow-title-letter-spacing);
+    line-height: var(--bf-type-label-md-line-height);
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
@@ -1855,8 +1855,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__name-input {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     width: 100%;
   }
 
@@ -1876,10 +1876,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__meta-label {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     color: var(--bf-color-content-muted);
     width: 44px;
   }
@@ -1887,7 +1887,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   &__meta-value {
     flex: 1;
     min-width: 0;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     padding: 1px var(--bf-space-1);
@@ -1967,10 +1967,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__title {
     flex: 1;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-widest);
+    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
     color: var(--bf-color-content-muted);
   }
 
@@ -2024,7 +2024,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   border-radius: var(--bf-radius-base);
   background: transparent;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   text-align: left;
   cursor: pointer;
   transition:
@@ -2049,7 +2049,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   &__label {
     flex: 1;
     min-width: 0;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2057,8 +2057,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__file {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-meta);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-meta-font-size);
+    font-family: var(--bf-type-code-md-font-family);
     color: var(--bf-color-content-muted);
   }
 }
@@ -2066,11 +2066,11 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 // ── Empty / loading states ────────────────────────────────────────────────────
 
 .acp-empty {
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-muted);
   font-style: italic;
   padding: var(--bf-space-4) 0;
-  line-height: var(--bf-line-height-relaxed);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .acp-loading {
@@ -2111,8 +2111,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__title {
     flex: 1;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2134,9 +2134,9 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__error {
     margin: 0 0 var(--bf-space-3);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-status-danger-content);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
   }
 
   &__meditor {

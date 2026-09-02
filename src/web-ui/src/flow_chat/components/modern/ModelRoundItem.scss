@@ -131,7 +131,7 @@
   font-size: var(--bf-type-flow-meta-font-size);
   line-height: var(--bf-type-flow-meta-line-height);
   text-transform: uppercase;
-  letter-spacing: var(--bf-letter-spacing-wider);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
 }
 
 .model-round-item__attempt-diagnostic-toggle,
@@ -174,8 +174,8 @@
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-regular);
-  letter-spacing: var(--bf-letter-spacing-normal);
+  font-weight: var(--bf-type-body-sm-font-weight);
+  letter-spacing: var(--bf-type-body-sm-letter-spacing);
   line-height: var(--bf-type-flow-support-line-height);
   text-transform: none;
 }
@@ -189,7 +189,7 @@
 .model-round-item__attempt-diagnostic-category {
   margin-bottom: 0.35rem;
   color: var(--bf-color-content-primary);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .model-round-item__attempt-diagnostic-section + .model-round-item__attempt-diagnostic-section {
@@ -199,7 +199,7 @@
 .model-round-item__attempt-diagnostic-tool-title {
   margin-bottom: 0.2rem;
   color: var(--bf-color-content-primary);
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .model-round-item__attempt-diagnostic-section-header {
@@ -220,9 +220,9 @@
   border-radius: 3px;
   background: var(--bf-color-surface-tertiary);
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-font-family-mono);
+  font-family:var(--bf-type-code-md-font-family);
   font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-line-height-compact);
+  line-height: var(--bf-type-meta-line-height);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -256,12 +256,6 @@
   &:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
   }
 
   &:disabled {

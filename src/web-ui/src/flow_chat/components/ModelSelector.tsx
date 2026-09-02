@@ -2056,6 +2056,60 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               </>
             ) : (
               <>
+                {providerGroups.map(group => {
+                  const isSelected = selectedProviderKey === group.key;
+                  const selectedModel = isSelected
+                    ? group.models.find(model => model.id === currentModelId) ?? null
+                    : null;
+
+                  return (
+                    <Tooltip
+                      key={group.key}
+                      content={`${group.providerName} · ${t('modelSelector.providerModelCount', { total: group.models.length })}`}
+                      placement="right"
+                    >
+                      <MenuItem
+                        aria-haspopup="menu"
+                        aria-expanded={false}
+                        data-testid="chat-model-selector-provider"
+                        data-provider-key={group.key}
+                        data-selected={isSelected ? 'true' : 'false'}
+                        data-bf-component="model-selector"
+                        data-bf-part="providerOption"
+                        data-bf-state={isSelected ? 'selected' : undefined}
+                        metadata={group.models.length}
+                        shortcut={<ChevronRight size={14} aria-hidden />}
+                        onClick={() => openProviderLevel(group.key)}
+                      >
+                        <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
+                          <span className="bitfun-model-selector__option-name">
+                            {group.providerName}
+                          </span>
+                          {selectedModel && (
+                            <span
+                              className="bitfun-model-selector__option-desc bitfun-model-selector__option-desc--selected-model"
+                              data-testid="chat-model-selector-provider-selected-model"
+                              data-model-id={selectedModel.id}
+                            >
+                              <span className="bitfun-model-selector__option-desc-label">
+                                {selectedModel.modelName}
+                              </span>
+                              <Check
+                                size={11}
+                                aria-hidden="true"
+                                className="bitfun-model-selector__option-selected-check"
+                                data-testid="chat-model-selector-provider-selected-check"
+                              />
+                            </span>
+                          )}
+                        </div>
+                      </MenuItem>
+                    </Tooltip>
+                  );
+                })}
+
+                <MenuSeparator />
+
                 {(() => {
                   const primaryModel = allModels.find(m => m.id === defaultModels.primary);
                   const primaryTooltip = primaryModel
@@ -2114,59 +2168,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   );
                 })()}
 
-                <MenuSeparator />
-
-                {providerGroups.map(group => {
-                  const isSelected = selectedProviderKey === group.key;
-                  const selectedModel = isSelected
-                    ? group.models.find(model => model.id === currentModelId) ?? null
-                    : null;
-
-                  return (
-                    <Tooltip
-                      key={group.key}
-                      content={`${group.providerName} · ${t('modelSelector.providerModelCount', { total: group.models.length })}`}
-                      placement="right"
-                    >
-                      <MenuItem
-                        aria-haspopup="menu"
-                        aria-expanded={false}
-                        data-testid="chat-model-selector-provider"
-                        data-provider-key={group.key}
-                        data-selected={isSelected ? 'true' : 'false'}
-                        data-bf-component="model-selector"
-                        data-bf-part="providerOption"
-                        data-bf-state={isSelected ? 'selected' : undefined}
-                        metadata={group.models.length}
-                        shortcut={<ChevronRight size={14} aria-hidden />}
-                        onClick={() => openProviderLevel(group.key)}
-                      >
-                        <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                          <span className="bitfun-model-selector__option-name">
-                            {group.providerName}
-                          </span>
-                          {selectedModel && (
-                            <span
-                              className="bitfun-model-selector__option-desc bitfun-model-selector__option-desc--selected-model"
-                              data-testid="chat-model-selector-provider-selected-model"
-                              data-model-id={selectedModel.id}
-                            >
-                              <span className="bitfun-model-selector__option-desc-label">
-                                {selectedModel.modelName}
-                              </span>
-                              <Check
-                                size={11}
-                                aria-hidden="true"
-                                className="bitfun-model-selector__option-selected-check"
-                                data-testid="chat-model-selector-provider-selected-check"
-                              />
-                            </span>
-                          )}
-                        </div>
-                      </MenuItem>
-                    </Tooltip>
-                  );
-                })}
               </>
             )}
           </ModelSelectorMenuLevel>

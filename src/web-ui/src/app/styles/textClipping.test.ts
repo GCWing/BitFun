@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, extname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { brotliDecompressSync } from 'node:zlib';
 import { compile } from 'sass';
 import { describe, expect, it } from 'vitest';
 
@@ -10,53 +9,38 @@ const systemTokens = JSON.parse(readFileSync(
   resolve(webRoot, '../../design-system/packages/design-tokens/src/system.tokens.json'), 'utf8',
 ));
 
-// Read the bundled WOFF2's untransformed head/hhea tables. No font download or
-// platform font fallback is involved in this line-box contract.
+// Read the bundled non-Apple SC face directly from its SFNT head/hhea tables.
+// No font download or platform fallback is involved in this line-box contract.
 function bundledFontLineHeight(): number {
   const font = readFileSync(resolve(webRoot,
-    'public/fonts/Noto_Sans_SC/variable/noto-sans-sc-latin-wght-normal.woff2'));
-  expect(font.toString('ascii', 0, 4)).toBe('wOF2');
-  let cursor = 48;
-  const readBase128 = () => {
-    let value = 0;
-    for (let index = 0; index < 5; index += 1) {
-      const byte = font[cursor++];
-      value = value * 128 + (byte & 127);
-      if (!(byte & 128)) return value;
-    }
-    throw new Error('Invalid WOFF2 table length');
-  };
-  const tables: { tag: string; length: number }[] = [];
-  for (let index = 0; index < font.readUInt16BE(12); index += 1) {
-    const flags = font[cursor++];
-    const tagIndex = flags & 63;
-    let tag = String(tagIndex);
-    if (tagIndex === 63) {
-      tag = font.toString('ascii', cursor, cursor + 4);
-      cursor += 4;
-    } else if (tagIndex === 1) tag = 'head';
-    else if (tagIndex === 2) tag = 'hhea';
-    const originalLength = readBase128();
-    const transformed = tagIndex === 10 || tagIndex === 11
-      ? (flags >> 6) === 0 : (flags >> 6) !== 0;
-    if (tag === 'head' || tag === 'hhea') expect(transformed).toBe(false);
-    tables.push({ tag, length: transformed ? readBase128() : originalLength });
+    'src/assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Regular.ttf'));
+  expect(font.readUInt32BE(0)).toBe(0x00010000);
+
+  const tables = new Map<string, { offset: number; length: number }>();
+  for (let index = 0; index < font.readUInt16BE(4); index += 1) {
+    const recordOffset = 12 + index * 16;
+    const tag = font.toString('ascii', recordOffset, recordOffset + 4);
+    const offset = font.readUInt32BE(recordOffset + 8);
+    const length = font.readUInt32BE(recordOffset + 12);
+    expect(offset + length).toBeLessThanOrEqual(font.byteLength);
+    tables.set(tag, { offset, length });
   }
-  const data = brotliDecompressSync(font.subarray(cursor, cursor + font.readUInt32BE(20)));
-  let offset = 0;
-  let unitsPerEm = 0;
-  let extent = 0;
-  for (const { tag, length } of tables) {
-    if (tag === 'head') unitsPerEm = data.readUInt16BE(offset + 18);
-    if (tag === 'hhea') {
-      extent = data.readInt16BE(offset + 4) - data.readInt16BE(offset + 6)
-        + data.readInt16BE(offset + 8);
-    }
-    offset += length;
-  }
-  expect(unitsPerEm).toBeGreaterThan(0);
-  expect(extent).toBeGreaterThan(0);
-  return extent / unitsPerEm;
+
+  const head = tables.get('head');
+  const hhea = tables.get('hhea');
+  expect(head).toBeDefined();
+  expect(hhea).toBeDefined();
+  const unitsPerEm = font.readUInt16BE(head!.offset + 18);
+  const ascent = font.readInt16BE(hhea!.offset + 4);
+  const descent = font.readInt16BE(hhea!.offset + 6);
+  const lineGap = font.readInt16BE(hhea!.offset + 8);
+  expect({ unitsPerEm, ascent, descent, lineGap }).toEqual({
+    unitsPerEm: 1000,
+    ascent: 928,
+    descent: -244,
+    lineGap: 0,
+  });
+  return (ascent - descent + lineGap) / unitsPerEm;
 }
 
 function compiledRules(filename: string) {
@@ -96,9 +80,11 @@ function compiledRules(filename: string) {
 }
 
 describe('Truncated product text line boxes', () => {
-  it('fits the bundled font metrics without changing the compact system scale globally', () => {
+  it('keeps the bundled font metrics inside the existing system line-height scale', () => {
     const required = bundledFontLineHeight();
-    expect(systemTokens.lineHeight.tight.$value).toBeLessThan(required);
+    expect(required).toBeCloseTo(1.172, 3);
+    expect(systemTokens.lineHeight.tight.$value).toBe(1.2);
+    expect(systemTokens.lineHeight.tight.$value).toBeGreaterThanOrEqual(required);
     expect(systemTokens.lineHeight.base.$value).toBeGreaterThanOrEqual(required);
   });
 
@@ -114,7 +100,7 @@ describe('Truncated product text line boxes', () => {
     ['scenes/skills/SkillsScene.scss', '.skills-card__name'],
     ['scenes/skills/SkillsScene.scss', '.skills-card__desc'],
   ])('%s gives %s a font-relative, descender-safe line height', (filename, selector) => {
-    expect(compiledRules(filename)(selector)['line-height']).toBe('var(--bf-line-height-base)');
+    expect(compiledRules(filename)(selector)['line-height']).toBe('var(--bf-type-body-sm-line-height)');
   });
 
   it('retains single-line ellipsis and the two-line skills description clamp', () => {

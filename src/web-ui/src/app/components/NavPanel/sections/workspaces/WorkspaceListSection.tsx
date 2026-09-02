@@ -5,9 +5,9 @@ import { notificationService } from '@/shared/notification-system';
 import WorkspaceItem from './WorkspaceItem';
 import SessionsSection, { type WorkspaceSessionScope } from '../sessions/SessionsSection';
 import { isRemoteWorkspace } from '@/shared/types';
-import { isSamePath } from '@/shared/utils/pathUtils';
 import { useWorkspaceSessionViewStore } from '../../workspaceSessionView';
 import {
+  isWorkspaceBackedSessionGroupActive,
   projectWorkspaceBackedSessionGroups,
   type SessionNavigationScope,
 } from '../../sessionNavigationProjection';
@@ -65,9 +65,6 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     [sessionGroups],
   );
   const activeWorkspace = openedWorkspacesList.find(workspace => workspace.id === activeWorkspaceId);
-  const activeProjectPath = activeWorkspace?.worktree && !activeWorkspace.worktree.isMain
-    ? activeWorkspace.worktree.mainRepoPath
-    : activeWorkspace?.rootPath;
   const emptyLabel = variant === 'assistants'
     ? t('nav.workspaces.emptyAssistants')
     : variant === 'projects'
@@ -289,10 +286,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
             >
               <WorkspaceItem
                 workspace={workspace}
-                isActive={
-                  workspace.id === activeWorkspaceId ||
-                  Boolean(activeProjectPath && isSamePath(workspace.rootPath, activeProjectPath))
-                }
+                isActive={isWorkspaceBackedSessionGroupActive(workspace, activeWorkspace)}
                 isSingle={workspaces.length === 1}
                 draggable={workspaces.length > 1}
                 isDragging={draggedWorkspaceId === workspace.id}

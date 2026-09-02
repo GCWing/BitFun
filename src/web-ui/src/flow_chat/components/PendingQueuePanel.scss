@@ -15,8 +15,8 @@
     display: block;
     min-width: 0;
     overflow: hidden;
-    font-size: var(--bf-font-size-base);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-body-md-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -28,8 +28,8 @@
 
   &__sending-label,
   &__failed-label {
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__sending-label {
@@ -38,7 +38,7 @@
 
   &__failed-label {
     color: var(--bf-color-status-danger-content);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   &__actions {

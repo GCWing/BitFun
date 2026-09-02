@@ -77,10 +77,10 @@
   }
 
   &__name {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -93,7 +93,7 @@
     border-color: transparent;
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     text-overflow: ellipsis;
   }
 
@@ -106,8 +106,8 @@
     padding-top: 2px;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     white-space: nowrap;
 
     .core-agent-card__status-icon {
@@ -136,10 +136,10 @@
 
   &__desc {
     margin: 0;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -176,14 +176,14 @@
       min-width: 0;
       overflow: hidden;
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-meta);
+      font-size: var(--bf-type-meta-font-size);
       font-variant-numeric: tabular-nums;
-      line-height: var(--bf-line-height-none);
+      line-height: var(--bf-type-modifier-leading-none-line-height);
       text-overflow: ellipsis;
       white-space: nowrap;
 
       &.core-agent-card__meta-value--text {
-        font-size: var(--bf-font-size-2xs);
+        font-size: var(--bf-type-overline-sm-font-size);
       }
     }
   }
@@ -202,8 +202,8 @@
   &__meta-label {
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-2xs);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-overline-sm-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

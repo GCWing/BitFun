@@ -26,9 +26,11 @@
     justify-content: center;
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
     white-space: nowrap;
   }
 

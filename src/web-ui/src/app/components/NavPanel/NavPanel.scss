@@ -166,8 +166,8 @@ $_section-header-height: 22px;
   &__mode-pill-caption {
     margin: 0;
     padding: 0 4px;
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-meta-line-height);
     color: var(--bf-color-content-muted);
     opacity: 0.78;
     overflow-wrap: break-word;
@@ -286,9 +286,9 @@ $_section-header-height: 22px;
     gap: 4px;
     min-width: 0;
     padding: 6px 4px;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-muted);
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
@@ -387,8 +387,8 @@ $_section-header-height: 22px;
     border-radius: var(--bf-radius-base) 0 0 var(--bf-radius-base);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     cursor: pointer;
     transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -541,37 +541,12 @@ $_section-header-height: 22px;
     margin: 0 var(--bf-space-1);
     border-radius: 4px;
     opacity: 0.92;
-    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    &--interactive {
-      cursor: pointer;
-
-      &:hover {
-        opacity: 1;
-        background: var(--bf-color-action-quiet-hover);
-
-        .bitfun-nav-panel__section-label {
-          color: var(--bf-color-content-primary);
-        }
-      }
-
-      &:active {
-        opacity: 1;
-        background: var(--bf-color-action-neutral-surface-hover);
-      }
-
-      &:focus-visible {
-        outline: 1px solid var(--bf-color-accent-default);
-        outline-offset: -1px;
-      }
-    }
   }
 
   &__section-label {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wider);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
     color: var(--bf-color-content-muted);
     flex: 1;
@@ -579,14 +554,6 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-  }
-
-  &__section-header--current-scene &__section-label {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-normal);
-    text-transform: none;
-    color: var(--bf-color-content-primary);
   }
 
   &__bottom-bar {
@@ -614,8 +581,8 @@ $_section-header-height: 22px;
     background: transparent;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -697,9 +664,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-display);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-display-sm-line-height);
   }
 
   &__miniapp-entry-wrap {
@@ -797,9 +764,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-display);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-display-sm-line-height);
   }
 
   &__miniapp-entry-apps {
@@ -871,9 +838,9 @@ $_section-header-height: 22px;
     &--more {
       background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 92%, transparent);
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-micro);
-      font-weight: var(--bf-font-weight-bold);
-      letter-spacing: var(--bf-letter-spacing-subtle);
+      font-size: var(--bf-type-micro-font-size);
+      font-weight: var(--bf-type-heading-page-font-weight);
+      letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
       filter: none;
       opacity: 1;
 
@@ -971,23 +938,6 @@ $_section-header-height: 22px;
     white-space: nowrap;
   }
 
-  &__section-indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--bf-color-content-muted);
-    opacity: 0.7;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    .bitfun-nav-panel__section-header--opens-scene:hover & {
-      color: var(--bf-color-content-secondary);
-      opacity: 1;
-      transform: translateX(1px);
-    }
-  }
-
   &__section-action {
     display: inline-flex;
     align-items: center;
@@ -1061,14 +1011,14 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__workspace-menu-item-host-sep {
     flex: 0 0 auto;
     color: var(--bf-color-content-muted);
     opacity: 0.55;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__workspace-menu-item-name {
@@ -1081,42 +1031,12 @@ $_section-header-height: 22px;
   &__workspace-menu-empty {
     padding: var(--bf-space-2) var(--bf-space-3);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__workspace-menu-workspaces {
     max-height: 240px;
     overscroll-behavior: contain;
-  }
-
-  // ──────────────────────────────────────────────
-  // Collapsible wrapper (grid-template-rows 0fr→1fr)
-  // ──────────────────────────────────────────────
-
-  &__collapsible {
-    display: grid;
-    grid-template-rows: 1fr;
-    min-width: 0;
-    max-width: 100%;
-    transition: grid-template-rows var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate),
-                opacity var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate);
-
-    &.is-hidden {
-      display: none;
-    }
-
-    &.is-collapsed {
-      grid-template-rows: 0fr;
-      pointer-events: none;
-    }
-  }
-
-  &__collapsible-inner {
-    overflow: hidden;
-    min-height: 0;
-    min-width: 0;
-    max-width: 100%;
   }
 
   // ──────────────────────────────────────────────
@@ -1151,7 +1071,7 @@ $_section-header-height: 22px;
   //   .is-departing-up     → items above anchor slide up + fade
   //   .is-departing-anchor → the anchor item itself (brief scale pulse)
   //   .is-departing-down   → items below anchor slide down + fade
-  // These play on top of the grid-row collapse for a "split-open" feel.
+  // These provide the "split-open" feel while scene navigation changes.
   // ──────────────────────────────────────────────
 
   $_depart-distance: 28px;
@@ -1200,18 +1120,6 @@ $_section-header-height: 22px;
     }
   }
 
-  &__collapsible {
-    &.is-departing-up {
-      transform: translateY(-$_depart-distance);
-      opacity: 0;
-    }
-
-    &.is-departing-down {
-      transform: translateY($_depart-distance);
-      opacity: 0;
-    }
-  }
-
   &__item {
     display: flex;
     align-items: center;
@@ -1224,8 +1132,8 @@ $_section-header-height: 22px;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     text-align: left;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     width: 100%;
     position: relative;
     opacity: 1;
@@ -1248,7 +1156,7 @@ $_section-header-height: 22px;
       opacity: 1;
       color: var(--bf-color-content-primary);
       background: var(--bf-color-action-quiet-hover);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
 
       &::before {
         content: '';
@@ -1301,7 +1209,7 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 
   // ──────────────────────────────────────────────
@@ -1310,14 +1218,14 @@ $_section-header-height: 22px;
 
   &__item-badge {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     margin-left: auto;
     max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-type-label-md-line-height);
 
     &--clickable {
       cursor: pointer;
@@ -1530,7 +1438,7 @@ $_section-header-height: 22px;
   background: transparent;
   color: var(--bf-color-content-muted);
   cursor: pointer;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   text-align: left;
   transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
               background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -1559,9 +1467,9 @@ $_section-header-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-dense);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-dense-line-height);
 }
 
 // Attached remote parties are shown once per device kind. Message-app marks
@@ -1587,7 +1495,7 @@ $_section-header-height: 22px;
   border: 1px solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
-  line-height: var(--bf-line-height-none);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 
   &[data-bf-device-kind='message-app'] {
     border: 0;
@@ -1597,9 +1505,9 @@ $_section-header-height: 22px;
 }
 
 .bitfun-nav-panel__footer-device-status-attached-count {
-  font-size: var(--bf-font-size-2xs);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-overline-sm-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 }
 
 // Footer notification: yellow only when there are unread messages (BellDot)
@@ -1813,16 +1721,16 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 }
 
 .bitfun-device-overview__detail {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .bitfun-device-overview__tag {
@@ -1833,9 +1741,9 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-pill);
   background: transparent;
   color: var(--bf-color-accent-default);
-  font-size: var(--bf-font-size-micro);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-micro-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-meta-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1846,9 +1754,9 @@ $_section-header-height: 22px;
   h3 {
     margin: 0 0 10px;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 }
 
@@ -1874,9 +1782,9 @@ $_section-header-height: 22px;
   min-width: 0;
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
-  line-height: var(--bf-line-height-snug);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  line-height: var(--bf-type-modifier-leading-snug-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1889,8 +1797,8 @@ $_section-header-height: 22px;
   box-sizing: border-box;
   margin-top: 20px;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-compact);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-meta-line-height);
 }
 
 .bitfun-device-overview__backup.is-done {
@@ -1939,10 +1847,10 @@ $_section-header-height: 22px;
 
   .bitfun-device-overview__title {
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     text-align: center;
     overflow-wrap: anywhere;
   }
@@ -1999,17 +1907,17 @@ $_section-header-height: 22px;
   box-sizing: border-box;
   padding-inline: var(--bf-space-5);
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-control);
-  font-size: var(--bf-font-size-meta);
-  line-height: var(--bf-line-height-base);
+  font-family: var(--bf-type-label-md-font-family);
+  font-size: var(--bf-type-meta-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   overflow-wrap: anywhere;
 }
 
 .bitfun-device-overview__activity {
   padding: var(--bf-space-1) var(--bf-space-5) 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-meta);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-meta-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   overflow-wrap: anywhere;
 }
 
@@ -2019,9 +1927,9 @@ $_section-header-height: 22px;
   h3 {
     margin: 0 6px 7px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-meta-line-height);
   }
 }
 
@@ -2050,8 +1958,8 @@ $_section-header-height: 22px;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -2059,8 +1967,8 @@ $_section-header-height: 22px;
   > span:not(.bitfun-device-overview__device-icon) {
     grid-column: 2;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     overflow-wrap: anywhere;
 
     // Green dot plus muted label, the live-state pairing the workspace list
@@ -2107,15 +2015,15 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-sm);
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-micro);
+  font-size: var(--bf-type-micro-font-size);
 
   strong {
     grid-column: 2;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2126,7 +2034,7 @@ $_section-header-height: 22px;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-2xs);
+    font-size: var(--bf-type-overline-sm-font-size);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2143,8 +2051,8 @@ $_section-header-height: 22px;
 
 .bitfun-nav-panel__remote-disclaimer-text {
   margin: 0;
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-tight);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-label-md-line-height);
   color: var(--bf-color-content-muted);
 }
 
@@ -2156,8 +2064,8 @@ $_section-header-height: 22px;
   gap: 0;
 
   li {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-secondary);
     padding-right: 0;
   }
@@ -2177,7 +2085,7 @@ $_section-header-height: 22px;
   border: 1px solid transparent;
   min-width: 112px;
   padding: 7px 16px;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   cursor: pointer;
   transition:
     background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -2219,7 +2127,6 @@ $_section-header-height: 22px;
     &__item-icon,
     &__section,
     &__section-label,
-    &__collapsible,
     &__mode-pill,
     &__mode-pill-liquid,
     &__mode-pill-segment,
@@ -2344,9 +2251,9 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-pill);
   background: var(--bf-color-action-quiet-hover);
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-none);
+  font-size: var(--bf-type-meta-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  line-height: var(--bf-type-modifier-leading-none-line-height);
 
 }
 
@@ -2415,8 +2322,8 @@ $_section-header-height: 22px;
   border-radius: var(--bf-radius-base);
   background: transparent;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   cursor: pointer;
   text-align: left;
   transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -2483,16 +2390,12 @@ $_section-header-height: 22px;
 // 扩展：默认 Blocks，悬停时图标位切换为 Chevron；展开时箭头朝上
 .bitfun-nav-panel__top-action-expand-icons {
   position: relative;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  flex-shrink: 0;
 
-  > svg {
+  > .bitfun-nav-panel__top-action-expand-icon-default,
+  > .bitfun-nav-panel__top-action-expand-icon-chevron {
     position: absolute;
-    left: 50%;
-    top: 50%;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
     transform: translate(-50%, -50%);
     transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -2500,6 +2403,9 @@ $_section-header-height: 22px;
 
   .bitfun-nav-panel__top-action-expand-icon-default {
     opacity: 1;
+    // The puzzle glyph's filled mass sits left of its viewBox center. At the
+    // 14px navigation size, a 1px optical correction aligns it with the row.
+    transform: translate(calc(-50% + 1px), -50%);
   }
 
   .bitfun-nav-panel__top-action-expand-icon-chevron {
@@ -2601,8 +2507,8 @@ $_section-header-height: 22px;
     gap: var(--bf-space-1);
     padding: 0 var(--bf-space-2) 0 38px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
 
     > span:first-child {
       flex: 1;
@@ -2743,10 +2649,6 @@ $_section-header-height: 22px;
     &:active {
       transform: scale(0.94);
     }
-  }
-
-  &__collapsible {
-    transition: grid-template-rows 150ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   &__item-slot {
@@ -2959,14 +2861,12 @@ $_section-header-height: 22px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-nav-panel__section-header--interactive:hover,
   .bitfun-nav-panel__top-action-btn:hover,
   .bitfun-nav-panel__item:hover,
   .bitfun-nav-panel__footer-btn--icon:hover {
     @include shell-surfaces.navigation-hover-feedback;
   }
 
-  .bitfun-nav-panel__section-header--interactive:hover,
   .bitfun-nav-panel__top-action-btn:hover {
     transform: none;
     box-shadow: none;
@@ -2996,7 +2896,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel {
   @include nav-font.nav-panel-text-body;
 
-  line-height: var(--bf-line-height-compact);
+  line-height: var(--bf-type-meta-line-height);
 
   &__search-trigger {
     @include nav-font.nav-panel-text-meta;
@@ -3009,10 +2909,10 @@ $_section-header-height: 22px;
     height: 34px;
     padding: 0 var(--bf-space-2);
     border: 0;
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: left;
   }
 
@@ -3026,7 +2926,6 @@ $_section-header-height: 22px;
 
   &__search-trigger__icon,
   &__utility-action,
-  &__section-indicator,
   &__section-action,
   &__item-action,
   &__footer-btn--icon {
@@ -3039,10 +2938,6 @@ $_section-header-height: 22px;
 
   &__section-label {
     @include nav-font.nav-panel-text-group;
-  }
-
-  &__section-header--current-scene &__section-label {
-    @include nav-font.nav-panel-text-row-active;
   }
 
   &__top-action-btn,

@@ -43,16 +43,16 @@
       display: inline-flex;
       align-items: center;
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
       flex-shrink: 0;
       white-space: nowrap;
       color: var(--bf-color-content-primary);
     }
 
     .command-text {
-      font-family:var(--bf-font-family-mono);
+      font-family:var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-font-weight-medium);
+      font-weight: var(--bf-type-label-sm-font-weight);
       color: var(--bf-color-content-primary);
       white-space: nowrap;
       overflow: hidden;
@@ -68,7 +68,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 200px;
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   .error-indicator {
@@ -78,7 +78,7 @@
     .error-text {
       font-size: var(--bf-type-flow-control-font-size);
       color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
-      font-weight: var(--bf-font-weight-semibold);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
   }
 
@@ -105,15 +105,15 @@
 
   .miniapp-result-label {
     font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     flex-shrink: 0;
   }
 
   .miniapp-result-value {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-color-content-primary);
     flex: 1;
@@ -146,7 +146,7 @@
       color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
       font-size: var(--bf-type-flow-control-font-size);
       margin-bottom: var(--bf-control-flow-chat-card-gap);
-      font-family:var(--bf-font-family-mono);
+      font-family:var(--bf-type-code-md-font-family);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -160,7 +160,7 @@
 
       .error-operation {
         color: color-mix(in srgb, var(--bf-color-status-danger-content) 70%, transparent);
-        font-family:var(--bf-font-family-mono);
+        font-family:var(--bf-type-code-md-font-family);
       }
     }
   }

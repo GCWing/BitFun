@@ -60,8 +60,8 @@
 
   // Overflow count badge
   &__badge {
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-accent-default);
     margin-left: 2px;
     transition: color 0.15s ease;
@@ -101,8 +101,8 @@
   &__mission-control {
     > span {
       flex: 1;
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-medium);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
     }
 
     svg {
@@ -128,7 +128,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-content-primary);
 
       em {
@@ -139,7 +139,7 @@
 
     &-dirty {
       flex-shrink: 0;
-      font-size: var(--bf-font-size-3xs);
+      font-size: var(--bf-type-overline-xs-font-size);
       color: var(--bf-color-status-warning-content);
     }
 

@@ -37,8 +37,8 @@ $config-input-height: 32px;
 
 
 .bitfun-config-form__label {
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: var(--bf-color-content-secondary);
   display: flex;
   align-items: center;
@@ -57,15 +57,15 @@ $config-input-height: 32px;
     display: inline-block !important;
     content: " *" !important;
     color: var(--bf-color-status-danger-content);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 }
 
 .bitfun-config-form__hint {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
   margin-top: var(--bf-space-1);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 
@@ -75,7 +75,7 @@ $config-input-height: 32px;
 .bitfun-config-form__textarea {
   width: 100%;
   padding: 0 12px !important;
-  font-size: var(--bf-font-size-sm) !important;
+  font-size: var(--bf-type-label-md-font-size) !important;
   line-height: var(--bf-type-label-md-line-height) !important;
   color: var(--bf-color-content-primary) !important;
   background: transparent !important;
@@ -86,7 +86,7 @@ $config-input-height: 32px;
   transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
               background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard) !important;
   outline: none !important;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
   transform: none !important;
   box-shadow: none !important;
 
@@ -124,8 +124,8 @@ $config-input-height: 32px;
 
   
   &[type="password"] {
-    font-family:var(--bf-font-family-mono);
-    letter-spacing: var(--bf-letter-spacing-caps);
+    font-family:var(--bf-type-code-md-font-family);
+    letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   }
 
   
@@ -175,8 +175,8 @@ $config-input-height: 32px;
     background: var(--bf-color-surface-panel) !important;
     color: var(--bf-color-content-primary) !important;
     padding: 6px 10px !important;
-    font-size: var(--bf-font-size-sm) !important;
-    line-height: var(--bf-line-height-base) !important;
+    font-size: var(--bf-type-label-md-font-size) !important;
+    line-height: var(--bf-type-body-sm-line-height) !important;
   }
 }
 
@@ -185,7 +185,7 @@ $config-input-height: 32px;
 .bitfun-config-form__textarea {
   min-height: 80px;
   resize: vertical;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
 
   &::placeholder {
     color: var(--bf-color-content-muted);
@@ -294,16 +294,16 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__checkbox-title {
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-ui);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
 }
 
 .bitfun-config-form__checkbox-description {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 
@@ -337,8 +337,8 @@ $config-input-height: 32px;
   gap: var(--bf-space-3);
   padding: var(--bf-space-3) var(--bf-space-4);
   border-radius: var(--bf-radius-base);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-base);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-body-sm-line-height);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   margin-top: var(--bf-space-4);
@@ -392,8 +392,8 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__section-title {
-  font-size: var(--bf-font-size-lg);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-body-lg-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
   margin: 0 0 var(--bf-space-3) 0;
   display: flex;
@@ -402,10 +402,10 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__section-description {
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-muted);
   margin: 0 0 var(--bf-space-5) 0;
-  line-height: var(--bf-line-height-base);
+  line-height: var(--bf-type-body-sm-line-height);
 }
 
 
@@ -592,7 +592,7 @@ $config-input-height: 32px;
 .config-form-section-chevron {
   margin-left: 8px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-base);
+  font-size: var(--bf-type-body-md-font-size);
   transition: transform 150ms var(--bf-motion-easing-standard);
 }
 

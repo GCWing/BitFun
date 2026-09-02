@@ -62,15 +62,15 @@
 
   &__status-title {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
   }
 
   &__status-description,
   &__status-error {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__status-description {
@@ -160,21 +160,21 @@
     padding: var(--bf-space-2) 0 var(--bf-space-2) var(--bf-space-3);
     border-left: 2px solid var(--bf-color-status-success-content);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     overflow-wrap: anywhere;
 
     small {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
     }
   }
 
   &__diagnostic-note,
   &__diagnostic-error {
     max-width: 340px;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: right;
   }
 
@@ -218,9 +218,9 @@
 
   &__model-name {
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
   }
 
   &__model-title-row {
@@ -235,8 +235,8 @@
     flex-wrap: wrap;
     gap: var(--bf-space-1) var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__model-error {
@@ -244,8 +244,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__model-error {
@@ -274,8 +274,8 @@
 
   &__progress-text {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__model-actions {
@@ -298,14 +298,14 @@
     justify-content: space-between;
     gap: var(--bf-space-3);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__model-empty {
     padding: var(--bf-space-5);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     text-align: center;
   }
 }

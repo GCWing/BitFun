@@ -49,8 +49,8 @@ $_diff-error-max-width: 400px;
     align-items: center;
     gap: var(--bf-space-4);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-label-md-font-size);
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   &__stats {
@@ -60,10 +60,10 @@ $_diff-error-max-width: 400px;
   }
 
   &__stat {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     padding: 2px 6px;
     border-radius: var(--bf-radius-sm);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
     &--add {
       color: var(--bf-domain-git-staged);
@@ -79,15 +79,15 @@ $_diff-error-max-width: 400px;
   }
 
   &__changes-count {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__file-path {
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__actions {
@@ -106,8 +106,8 @@ $_diff-error-max-width: 400px;
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-lg);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-body-lg-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     cursor: pointer;
     transition:
       transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
@@ -209,16 +209,16 @@ $_diff-error-max-width: 400px;
 
   &__message {
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     margin: 0;
-    line-height: var(--bf-line-height-relaxed);
+    line-height: var(--bf-type-body-lg-line-height);
   }
 
   &__path {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-family: var(--bf-type-code-md-font-family);
     margin: 0;
     max-width: 100%;
     overflow: hidden;
@@ -518,11 +518,11 @@ $_diff-error-max-width: 400px;
     max-width: 280px;
 
     &__message {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
     }
 
     &__path {
-      font-size: var(--bf-font-size-micro);
+      font-size: var(--bf-type-micro-font-size);
     }
   }
 }

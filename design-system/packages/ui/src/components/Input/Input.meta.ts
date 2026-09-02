@@ -32,9 +32,7 @@ export const inputMeta = {
     "control.height.sm",
     "control.height.md",
     "control.height.lg",
-    "font.family.control",
-    "font.size.sm",
-    "font.weight.regular",
+    "type.label.md.fontSize",
     "radius.base",
   ],
 } as const satisfies ComponentMeta;

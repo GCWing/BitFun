@@ -41,10 +41,11 @@
     border-radius: var(--bf-overlay-tooltip-surface-radius);
     background: color-mix(in srgb, var(--bf-color-surface-raised) 96%, transparent);
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
+    font-family: var(--bf-type-support-font-family);
     font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-weight: var(--bf-type-support-font-weight);
+    line-height: var(--bf-type-support-line-height);
+    letter-spacing: var(--bf-type-support-letter-spacing);
     overflow-wrap: break-word;
     user-select: text;
     box-shadow: var(--bf-shadow-sm);

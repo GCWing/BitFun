@@ -35,10 +35,10 @@
 .bitfun-config-page-header__subtitle {
   display: block;
   margin: 0;
-  font-size: var(--bf-font-size-lg);
+  font-size: var(--bf-type-body-lg-font-size);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-compact);
-  font-family:var(--bf-font-family-sans);
+  line-height: var(--bf-type-meta-line-height);
+  font-family:var(--bf-type-body-sm-font-family);
   max-width: 100%;
 }
 
@@ -71,7 +71,7 @@
   }
 
   .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 }
 
@@ -120,7 +120,7 @@
 
   .bitfun-config-page-header__subtitle {
     margin-top: var(--bf-space-1);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;

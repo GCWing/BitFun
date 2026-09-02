@@ -334,8 +334,8 @@ $panel-height: 680px;
   border: none;
   background: transparent;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   cursor: pointer;
   border-radius: 6px;
   transition: background 0.15s ease;
@@ -431,10 +431,10 @@ $panel-height: 680px;
   h2 {
     max-width: 420px;
     margin: 8px 0 0;
-    font-size: var(--bf-font-size-3xl);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-dense);
-    letter-spacing: var(--bf-letter-spacing-tight);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
+    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
   }
 }
 
@@ -455,8 +455,8 @@ $panel-height: 680px;
   margin-top: 18px;
   color: var(--bf-color-content-muted);
   font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-font-weight-medium);
-  letter-spacing: var(--bf-letter-spacing-wider);
+  font-weight: var(--bf-type-label-sm-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
 }
 
 .bitfun-fmc__miniapp-welcome-description {
@@ -464,7 +464,7 @@ $panel-height: 680px;
   margin: 12px 0 0;
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-line-height-relaxed);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .bitfun-fmc__miniapp-workspace {
@@ -520,7 +520,7 @@ $panel-height: 680px;
   color: var(--bf-color-content-secondary);
   font: inherit;
   font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-line-height-compact);
+  line-height: var(--bf-type-meta-line-height);
   text-align: left;
   cursor: pointer;
   transition:

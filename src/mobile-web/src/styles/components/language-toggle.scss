@@ -9,9 +9,9 @@
   border-radius: 999px;
   background: var(--bf-color-surface-subtle);
   color: var(--bf-color-content-secondary);
-  font-size: 11px;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.04em;
+  font-size: var(--bf-type-support-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   cursor: pointer;
   transition: all var(--motion-fast) var(--easing-standard);
 

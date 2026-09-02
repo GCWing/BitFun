@@ -21,7 +21,7 @@
     border: none;
     border-radius: var(--bf-radius-base);
     font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     color: var(--bf-color-content-secondary);
     cursor: pointer;
     transition:
@@ -54,8 +54,8 @@
   }
 
   &__stats {
-    font-weight: var(--bf-font-weight-medium);
-    font-family: var(--bf-font-family-mono);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    font-family: var(--bf-type-code-md-font-family);
     font-size: inherit;
     line-height: inherit;
 
@@ -78,43 +78,6 @@
   }
 
   &__review-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 22px;
-    padding: 0 6px;
-    background: transparent;
-    border: none;
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-content-muted);
-    cursor: pointer;
-    transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    span,
-    svg {
-      cursor: inherit;
-    }
-
-    &:hover:not(:disabled) {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-primary);
-    }
-
-    &:active:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface);
-      transform: scale(0.95);
-    }
-
-    &:disabled {
-      opacity: 0.68;
-      cursor: not-allowed;
-    }
-
     &--glint {
       position: relative;
       overflow: hidden;
@@ -187,27 +150,8 @@
     display: inline-flex;
   }
 
-  &__review-actions-label {
-    position: relative;
-    z-index: 1;
-    max-width: 4.5rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-none);
-    letter-spacing: var(--bf-letter-spacing-tight);
-    white-space: nowrap;
-  }
-
-  &__review-menu-chevron {
-    flex-shrink: 0;
-    color: var(--bf-color-content-muted);
-    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-    &--open {
-      transform: rotate(180deg);
-    }
+  &__review-trigger {
+    display: inline-flex;
   }
 
   &__review-menu-popover {
@@ -231,8 +175,8 @@
     position: relative;
     z-index: 1;
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-none);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 
   // Expanded state
@@ -254,7 +198,7 @@
     max-height: calc(100vh - 16px);
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-sans);
+    font-family:var(--bf-type-body-sm-font-family);
     animation: session-files-badge-popover-in 0.2s var(--bf-motion-easing-standard);
 
     @keyframes session-files-badge-popover-in {
@@ -283,7 +227,7 @@
 
   &__popover-summary-count {
     min-width: 0;
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -295,7 +239,7 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   // ==================== File list ====================
@@ -400,7 +344,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
   }
 
   &__file-stats {
@@ -409,8 +353,8 @@
     gap: 4px;
     flex-shrink: 0;
     font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-font-weight-medium);
-    font-family: var(--bf-font-family-mono);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   &__file-stat {

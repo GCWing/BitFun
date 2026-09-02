@@ -70,8 +70,8 @@
   flex-shrink: 0;
   padding: 1px 7px;
   border-radius: var(--bf-radius-sm);
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   white-space: nowrap;
   background: var(--bf-color-action-neutral-surface-hover);
   color: var(--bf-color-content-muted);
@@ -172,7 +172,7 @@
   gap: var(--bf-space-3);
   padding: var(--bf-space-6) var(--bf-space-4);
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
 
   p {
     margin: 0;
@@ -195,8 +195,8 @@
 
   h3 {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 }
@@ -217,14 +217,14 @@
 // ─── details inner blocks ──────────────────────────────────────────────────────
 
 .bitfun-collection-details__field {
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-secondary);
-  line-height: var(--bf-line-height-relaxed);
+  line-height: var(--bf-type-body-lg-line-height);
 }
 
 .bitfun-collection-details__label {
-  font-size: var(--bf-font-size-xs);
-  font-weight: var(--bf-font-weight-medium);
+  font-size: var(--bf-type-label-sm-font-size);
+  font-weight: var(--bf-type-label-sm-font-weight);
   color: var(--bf-color-content-muted);
   margin-bottom: var(--bf-space-1);
 }
@@ -235,17 +235,17 @@
   background: var(--bf-color-action-neutral-surface-hover);
   border: 1px solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-sm);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-xs);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-primary);
-  line-height: var(--bf-line-height-relaxed);
+  line-height: var(--bf-type-body-lg-line-height);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 200px;
 }
 
 .bitfun-collection-details__meta {
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-muted);
   padding-top: var(--bf-space-3);
   border-top: 1px solid var(--bf-color-border-subtle);
@@ -255,8 +255,8 @@
   padding: 1px 6px;
   background: var(--bf-color-action-neutral-surface-hover);
   border-radius: var(--bf-radius-sm);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-xs);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-accent-default);
 }
 

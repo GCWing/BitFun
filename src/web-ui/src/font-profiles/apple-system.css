@@ -1,0 +1,7 @@
+@layer bf.tokens.system {
+  :where([data-bf-design-system-root]) {
+    --bf-font-family-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --bf-font-family-control: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --bf-font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, monospace;
+  }
+}

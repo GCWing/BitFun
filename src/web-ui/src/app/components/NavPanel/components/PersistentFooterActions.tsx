@@ -212,7 +212,7 @@ const PersistentFooterActions: React.FC = () => {
                 data-bf-component="nav-panel"
                 data-bf-part="settingsEntry"
                 data-bf-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
-                icon={<Icon name="settings" size="sm" aria-hidden="true" />}
+                icon={<Icon name="gear" size="sm" aria-hidden="true" />}
                 size="sm"
                 variant="quiet"
               />

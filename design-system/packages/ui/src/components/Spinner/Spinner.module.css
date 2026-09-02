@@ -62,12 +62,12 @@
     align-items: center;
     justify-content: center;
     gap: 0.2em;
-    font-size: var(--bf-font-size-2xl);
+    font-size: var(--bf-type-flow-section-title-font-size);
   }
 
-  .root[data-variant="bars"][data-size="xs"] { font-size: var(--bf-font-size-meta); }
-  .root[data-variant="bars"][data-size="sm"] { font-size: var(--bf-font-size-base); }
-  .root[data-variant="bars"][data-size="lg"] { font-size: var(--bf-font-size-3xl); }
+  .root[data-variant="bars"][data-size="xs"] { font-size: var(--bf-type-support-font-size); }
+  .root[data-variant="bars"][data-size="sm"] { font-size: var(--bf-type-body-md-font-size); }
+  .root[data-variant="bars"][data-size="lg"] { font-size: var(--bf-type-flow-page-title-font-size); }
 
   .root[data-variant="bars"] .cell {
     inline-size: 0.22em;

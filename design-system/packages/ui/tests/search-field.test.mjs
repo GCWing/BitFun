@@ -69,7 +69,8 @@ test("SearchField owns pill composition while reusing Input behavior", async () 
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /border-radius:var\(--bf-radius-pill\)/);
-  assert.match(styles, /--bf-font-size-xs/);
+  assert.match(styles, /--bf-type-label-md-font-size/);
+  assert.match(styles, /--bf-type-meta-font-size/);
 });
 
 test("SearchField focus changes only the existing border color", async () => {

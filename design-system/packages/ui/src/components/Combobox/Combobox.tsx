@@ -502,6 +502,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
           aria-expanded={resolvedOpen}
           aria-label={designSystem.messages.searchOptions}
           autoComplete="off"
+          className={styles.searchField}
           clearLabel={designSystem.messages.clearSelection}
           onClear={() => {
             setQuery("");

@@ -58,10 +58,11 @@
     min-inline-size: 0;
     flex: 1 1 auto;
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-body-md-font-family);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-body-md-font-weight);
+    line-height: var(--bf-type-body-md-line-height);
+    letter-spacing: var(--bf-type-body-md-letter-spacing);
   }
 
   .message > :first-child {
@@ -89,9 +90,11 @@
   .preview pre {
     margin: 0;
     color: inherit;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-family: var(--bf-type-code-sm-font-family);
+    font-size: var(--bf-type-code-sm-font-size);
+    font-weight: var(--bf-type-code-sm-font-weight);
+    line-height: var(--bf-type-code-sm-line-height);
+    letter-spacing: var(--bf-type-code-sm-letter-spacing);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }

@@ -24,8 +24,8 @@
 
     &__label {
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-xs);
-      font-weight: var(--bf-font-weight-semibold);
+      font-size: var(--bf-type-label-sm-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
     }
 
     &__source {
@@ -33,9 +33,9 @@
       padding: var(--bf-space-3);
       overflow-x: auto;
       color: var(--bf-color-content-secondary);
-      font-family:var(--bf-font-family-mono);
-      font-size: var(--bf-font-size-sm);
-      line-height: var(--bf-line-height-comfortable);
+      font-family:var(--bf-type-code-md-font-family);
+      font-size: var(--bf-type-label-md-font-size);
+      line-height: var(--bf-type-support-line-height);
       white-space: pre;
     }
   }

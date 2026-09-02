@@ -29,16 +29,16 @@ test("KeyHint preserves textual platform modifiers in the icon slot", () => {
   assert.match(markup, /data-bf-part="label">K<\/span>/);
 });
 
-test("KeyHint styles use shared primitive tokens", async () => {
+test("KeyHint styles use the shared micro typography role", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-color-key-hint-background/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-color-content-muted/);
-  assert.match(styles, /--bf-font-family-sans/);
-  assert.match(styles, /--bf-font-size-micro/);
-  assert.match(styles, /--bf-letter-spacing-normal/);
-  assert.match(styles, /--bf-line-height-none/);
+  assert.match(styles, /--bf-type-micro-font-family/);
+  assert.match(styles, /--bf-type-micro-font-size/);
+  assert.match(styles, /--bf-type-micro-letter-spacing/);
+  assert.match(styles, /--bf-type-micro-line-height/);
   assert.match(styles, /--bf-radius-xs/);
   assert.match(styles, /--bf-radius-sm/);
   assert.match(styles, /flex:\s*0 0 auto/);

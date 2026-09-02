@@ -255,7 +255,7 @@ function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): Sel
 
 /**
  * Compute the stored request URL from a base URL and provider format.
- * For gemini, stores the bare base (no /v1beta/models/... suffix) �
+ * For Gemini, stores the bare base without the /v1beta/models/... suffix;
  * the backend dynamically appends /v1beta/models/{model}:streamGenerateContent?alt=sse.
  */
 function resolveRequestUrl(baseUrl: string, provider: string, _modelName = ''): string {
@@ -2276,9 +2276,9 @@ const ModelSettingsPage: React.FC = () => {
                     <div className="bitfun-model-settings__selected-model-head-bottom">
                       <span className="bitfun-model-settings__selected-model-summary">
                         {categoryLabel}
-                        {' � '}
+                        {' · '}
                         {formatTokenCountShort(draft.contextWindow)} ctx
-                        {' � '}
+                        {' · '}
                         {formatReasoningSummary(draft, reasoningProjection)}
                       </span>
                     </div>
@@ -2496,7 +2496,7 @@ const ModelSettingsPage: React.FC = () => {
                           }));
                         }}
                         placeholder={t('form.baseUrl')}
-                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} � ${opt.note}` }))}
+                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.note}` }))}
                         size="sm"
                       />
                     )}
@@ -3280,18 +3280,6 @@ const ModelSettingsPage: React.FC = () => {
                             : 'subscriptionAuth.login')}
                         </Button>
                       )}
-                      {account.management_url && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={anyLoginInProgress}
-                          onClick={() => void handleOpenSubscriptionAuthorization(
-                            account.management_url!,
-                          )}
-                        >
-                          {t('subscriptionAuth.manageSubscription')}
-                        </Button>
-                      )}
                       {isLoggingIn && (
                         <Button
                           size="sm"
@@ -3621,7 +3609,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
             <div className="bitfun-model-settings__catalog-path">
-              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '�'}</code>
+              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
               <Tooltip content={t('modelsDevCatalog.reveal')}>
                 <IconButton
                   aria-label={t('modelsDevCatalog.reveal')}
@@ -3639,7 +3627,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.revision')} align="center">
             <code className="bitfun-model-settings__catalog-revision" title={modelsDevStatus?.revision}>
-              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}�` : '�'}
+              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}…` : '—'}
             </code>
           </ConfigPageRow>
           <div className="bitfun-model-settings__catalog-offline-help" role="note">
@@ -3703,7 +3691,7 @@ const ModelSettingsPage: React.FC = () => {
             <ScrollArea className="bitfun-model-settings__subscription-logout-list">
               <ul>
                 {subscriptionLogoutRequest.affectedModels.map((model) => (
-                  <li key={model.id}>{model.name} � {model.model_name}</li>
+                  <li key={model.id}>{model.name} · {model.model_name}</li>
                 ))}
               </ul>
             </ScrollArea>

@@ -13,8 +13,8 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--bf-color-surface-panel) 92%, transparent);
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-support);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 
   &--warning {
     border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 45%, transparent);
@@ -61,7 +61,7 @@
 }
 
 .turn-completion-notice__title {
-  font-weight: var(--bf-font-weight-semibold);
+  font-weight: var(--bf-type-label-selected-font-weight);
   flex: 0 1 auto;
   min-width: 0;
 }
@@ -91,8 +91,8 @@
   background: color-mix(in srgb, currentColor 10%, transparent);
   color: color-mix(in srgb, currentColor 72%, transparent);
   border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-meta);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-meta-font-size);
 }
 
 @media (max-width: 900px) {

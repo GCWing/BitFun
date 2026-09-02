@@ -40,7 +40,6 @@
     "loginCancelled": "已取消登录",
     "logout": "退出登录",
     "refresh": "刷新 Token",
-    "manageSubscription": "开通或管理订阅",
     "refreshSuccess": "Token 已刷新",
     "refreshFailed": "刷新失败：{{error}}",
     "loginSuccess": "登录成功",

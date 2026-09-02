@@ -29,7 +29,5 @@ export const statusPillMeta = {
     "control.statusPill.radius",
     "control.statusPill.iconSize",
     "type.meta.fontSize",
-    "font.family.control",
-    "font.weight.regular",
   ],
 } as const satisfies ComponentMeta;

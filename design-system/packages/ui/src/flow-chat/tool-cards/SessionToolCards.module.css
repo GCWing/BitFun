@@ -12,13 +12,13 @@
     grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
     gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .fieldLabel,
   .sectionLabel {
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .fieldValue {
@@ -27,7 +27,7 @@
   }
 
   .field[data-monospace="true"] .fieldValue {
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   .sessionList {
@@ -45,13 +45,13 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-raised);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .sessionId {
     overflow-wrap: anywhere;
     color: var(--bf-color-content-primary);
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
   }
 
   .sessionName {
@@ -84,21 +84,21 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-raised);
     color: var(--bf-color-content-secondary);
-    font-family:var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
   .empty {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
   }
 
   .error {
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-body-sm-font-size);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }

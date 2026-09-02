@@ -164,13 +164,13 @@
   &__tab-separator {
     flex: 0 0 auto;
     color: var(--bf-color-content-disabled);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__tab-subtitle {
     flex: 1 1 auto;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 }
 

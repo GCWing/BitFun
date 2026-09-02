@@ -10,7 +10,7 @@
   min-width: 280px;
   max-width: 320px;
   animation: bitfun-progress-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
 
   
   &--completed {
@@ -56,8 +56,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
 
     &--success {
       background: var(--bf-color-status-success-surface);
@@ -87,24 +87,24 @@
   }
 
   &__title {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-snug);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 
   &__percentage {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-status-warning-content);
     font-variant-numeric: tabular-nums;
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
   }
 
   &__message {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-snug);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
     word-break: break-word;
   }
 

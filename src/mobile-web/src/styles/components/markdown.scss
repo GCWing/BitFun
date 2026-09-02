@@ -1,9 +1,9 @@
 // Markdown content styling — aligned with desktop Markdown.scss
 .chat-msg__assistant-content {
   color: var(--bf-color-content-primary);
-  line-height: var(--line-height-relaxed);
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-sm);
+  line-height: var(--bf-type-body-lg-line-height);
+  font-family: var(--bf-type-body-md-font-family);
+  font-size: var(--bf-type-body-md-font-size);
   word-wrap: break-word;
   overflow-wrap: break-word;
   max-width: 100%;
@@ -31,8 +31,8 @@
     margin-top: 0;
     margin-bottom: 0.5rem;
     display: block;
-    line-height: 1.5;
-    font-size: var(--font-size-sm);
+    line-height: var(--bf-type-body-md-line-height);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-primary);
     &:last-child { margin-bottom: 0; }
 
@@ -42,38 +42,38 @@
   // ─── Headings ───────────────────────────────────────────────────────────────
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-family-sans);
+    font-family: var(--bf-type-body-md-font-family);
     color: var(--bf-color-content-primary);
     margin-top: 1.25rem;
     margin-bottom: 0.6rem;
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
-    letter-spacing: 0.015em;
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-heading-page-line-height);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     &:first-child { margin-top: 0; }
   }
 
   h1 {
-    font-size: var(--font-size-xl);
+    font-size: var(--bf-type-flow-section-title-font-size);
     margin: 1.25rem 0 0.75rem 0;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
   h2 {
-    font-size: var(--font-size-lg);
+    font-size: var(--bf-type-flow-title-font-size);
     margin: 1rem 0 0.6rem 0;
     padding-bottom: 0.35rem;
     border-bottom: 1px solid var(--bf-color-border-subtle);
   }
 
   h3 {
-    font-size: var(--font-size-base);
+    font-size: var(--bf-type-body-lg-font-size);
     margin: 0.85rem 0 0.5rem 0;
   }
 
-  h4 { font-size: var(--font-size-sm); margin: 0.7rem 0 0.4rem 0; color: var(--bf-color-content-secondary); }
-  h5 { font-size: var(--font-size-sm); margin: 0.6rem 0 0.4rem 0; color: var(--bf-color-content-secondary); }
-  h6 { font-size: var(--font-size-xs); margin: 0.5rem 0 0.35rem 0; color: var(--bf-color-content-muted); opacity: 0.85; }
+  h4 { font-size: var(--bf-type-body-md-font-size); margin: 0.7rem 0 0.4rem 0; color: var(--bf-color-content-secondary); }
+  h5 { font-size: var(--bf-type-body-md-font-size); margin: 0.6rem 0 0.4rem 0; color: var(--bf-color-content-secondary); }
+  h6 { font-size: var(--bf-type-body-xs-font-size); margin: 0.5rem 0 0.35rem 0; color: var(--bf-color-content-muted); opacity: 0.85; }
 
   // ─── Lists ──────────────────────────────────────────────────────────────────
 
@@ -81,15 +81,15 @@
     margin-top: 0;
     margin-bottom: 0.5rem;
     padding-left: 1.5rem;
-    line-height: 1.5;
-    font-size: var(--font-size-sm);
+    line-height: var(--bf-type-body-md-line-height);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   li {
     word-wrap: break-word;
     margin-bottom: 0.1rem;
     position: relative;
-    line-height: 1.5;
+    line-height: var(--bf-type-body-md-line-height);
     color: var(--bf-color-content-primary);
     &:last-child { margin-bottom: 0; }
 
@@ -100,8 +100,9 @@
     }
   }
 
-  ul > li::marker { color: var(--bf-color-content-muted); font-size: 1.2em; font-weight: bold; }
-  ol > li::marker { color: var(--bf-color-content-muted); font-weight: bold; }
+  /* typography-audit: allow -- list marker geometry scales with its owning text */
+  ul > li::marker { color: var(--bf-color-content-muted); font-size: 1.2em; font-weight: var(--bf-type-heading-page-font-weight); }
+  ol > li::marker { color: var(--bf-color-content-muted); font-weight: var(--bf-type-heading-page-font-weight); }
 
   ul ul, ol ol, ul ol, ol ul {
     margin-top: 0.1rem;
@@ -124,16 +125,16 @@
   .inline-code {
     padding: 0.15em 0.35em;
     margin: 0 0.05em;
-    font-size: 0.85em;
+    font-size: var(--bf-type-body-xs-font-size);
     background: var(--bf-color-action-neutral-surface-hover);
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: 4px;
-    font-family: var(--font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
     white-space: nowrap;
     vertical-align: baseline;
-    line-height: 1.4;
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     color: var(--bf-color-content-primary);
-    font-weight: 500;
+    font-weight: var(--bf-type-label-lg-font-weight);
   }
 
   // ─── Code blocks ────────────────────────────────────────────────────────────
@@ -168,13 +169,13 @@
       padding: 1rem !important;
       background: var(--bf-color-surface-canvas) !important;
       box-shadow: none !important;
-      font-size: 0.75rem !important;
+      font-size: var(--bf-type-body-xs-font-size) !important;
     }
 
     pre code {
-      font-family: var(--font-family-mono) !important;
+      font-family: var(--bf-type-code-md-font-family) !important;
       background: var(--bf-color-surface-canvas) !important;
-      font-size: 0.75rem !important;
+      font-size: var(--bf-type-body-xs-font-size) !important;
     }
 
     pre[style] {
@@ -223,8 +224,8 @@
     padding: 1rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    font-size: 0.75rem;
-    line-height: 1.5;
+    font-size: var(--bf-type-body-xs-font-size);
+    line-height: var(--bf-type-body-md-line-height);
     background: var(--bf-color-surface-canvas);
     border: 1px dashed var(--bf-color-border-subtle);
     border-radius: var(--size-radius-base);
@@ -235,7 +236,7 @@
     code {
       background: none;
       padding: 0;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-type-body-xs-font-size);
     }
   }
 
@@ -282,7 +283,7 @@
       border-spacing: 0;
       border-collapse: collapse;
       width: 100%;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-type-body-xs-font-size);
     }
   }
 
@@ -294,7 +295,7 @@
   }
 
   .table-wrapper th {
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
@@ -334,7 +335,7 @@
   // ─── Typography ─────────────────────────────────────────────────────────────
 
   strong {
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 

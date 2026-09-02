@@ -13,11 +13,11 @@
     border-radius: var(--bf-radius-xs);
     color: var(--bf-color-content-muted);
     background: var(--bf-color-key-hint-background);
-    font-family:var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-regular);
-    letter-spacing: var(--bf-letter-spacing-normal);
-    line-height: var(--bf-line-height-none);
+    font-family: var(--bf-type-micro-font-family);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-micro-font-weight);
+    letter-spacing: var(--bf-type-micro-letter-spacing);
+    line-height: var(--bf-type-micro-line-height);
     text-decoration: none;
     vertical-align: middle;
     white-space: nowrap;

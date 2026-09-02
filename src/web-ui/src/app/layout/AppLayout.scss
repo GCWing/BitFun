@@ -42,7 +42,7 @@ html, body {
   background: var(--bf-color-surface-canvas);
 
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
   position: relative;
 
   // Ensure layout stability
@@ -51,7 +51,7 @@ html, body {
   overflow: hidden;
   background: var(--bf-color-surface-canvas);
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -163,17 +163,17 @@ html, body {
   &__title {
     flex: 0 0 auto;
     min-width: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-meta-line-height);
     white-space: nowrap;
   }
 
   &__detail {
     min-width: 0;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-meta-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

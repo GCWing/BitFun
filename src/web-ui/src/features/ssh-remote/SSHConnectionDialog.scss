@@ -10,7 +10,7 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  font-family:var(--bf-font-family-sans);
+  font-family:var(--bf-type-body-sm-font-family);
 
   &__error-banner {
     flex-shrink: 0;
@@ -45,13 +45,13 @@
   }
 
   &__section-title {
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
-    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    font-family:var(--bf-type-body-sm-font-family);
     color: var(--bf-color-content-muted);
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     white-space: nowrap;
   }
 
@@ -121,25 +121,25 @@
   }
 
   &__saved-name {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    font-family:var(--bf-type-body-sm-font-family);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: var(--bf-line-height-snug);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
   }
 
   &__saved-detail {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-regular);
-    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    font-family:var(--bf-type-body-sm-font-family);
     color: var(--bf-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: var(--bf-line-height-snug);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
     font-variant-numeric: tabular-nums;
   }
 
@@ -157,7 +157,7 @@
     background: var(--bf-color-surface-subtle);
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: 4px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-muted);
     white-space: nowrap;
   }
@@ -191,13 +191,13 @@
     }
 
     span {
-      font-size: var(--bf-font-size-meta);
-      font-weight: var(--bf-font-weight-medium);
-      font-family:var(--bf-font-family-sans);
+      font-size: var(--bf-type-meta-font-size);
+      font-weight: var(--bf-type-label-sm-font-weight);
+      font-family:var(--bf-type-body-sm-font-family);
       color: var(--bf-color-content-muted);
       white-space: nowrap;
       text-transform: uppercase;
-      letter-spacing: var(--bf-letter-spacing-wider);
+      letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
     }
   }
 
@@ -294,8 +294,8 @@
     background: transparent;
     color: var(--bf-color-content-secondary);
     font: inherit;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     text-align: start;
     cursor: pointer;
     transition:
@@ -356,7 +356,7 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-secondary);
 
     > span:last-child:not(:nth-child(2)) {
@@ -369,8 +369,8 @@
 
   &__hint {
     margin-top: 5px;
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-color-content-muted);
 
     &--warning {
@@ -385,9 +385,9 @@
 
   &__label {
     display: block;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
-    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    font-family:var(--bf-type-body-sm-font-family);
     color: var(--bf-color-content-muted);
     margin-bottom: 6px;
   }

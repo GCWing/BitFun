@@ -5,7 +5,7 @@
     --_button-background-active: var(--bf-color-action-neutral-surface);
     --_button-border: var(--bf-color-action-neutral-border);
     --_button-content: var(--bf-color-action-neutral-content);
-    --_button-font-size: var(--bf-font-size-sm);
+    --_button-font-size: var(--bf-type-label-md-font-size);
     --_button-height: var(--bf-control-height-md);
     --_button-leading-icon-size: 16px;
     --_button-padding-block: var(--bf-space-component-block);
@@ -24,11 +24,11 @@
     border-radius: var(--bf-radius-pill);
     color: var(--_button-content);
     background: var(--_button-background);
-    font-family:var(--bf-font-family-sans);
+    font-family: var(--bf-type-label-md-font-family);
     font-size: var(--_button-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    letter-spacing: var(--bf-letter-spacing-normal);
-    line-height: var(--bf-line-height-tight);
+    font-weight: var(--bf-type-label-md-font-weight);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    line-height: var(--bf-type-label-md-line-height);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -43,7 +43,7 @@
 
   .button:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
     background: var(--_button-background-active);
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
   }
 
   .button:focus-visible {
@@ -146,7 +146,7 @@
   }
 
   .button[data-size="sm"] {
-    --_button-font-size: var(--bf-font-size-xs);
+    --_button-font-size: var(--bf-type-label-sm-font-size);
     --_button-height: var(--bf-control-height-sm);
     --_button-leading-icon-size: 12px;
     --_button-padding-block: var(--bf-space-1);
@@ -155,7 +155,7 @@
   }
 
   .button[data-size="lg"] {
-    --_button-font-size: var(--bf-font-size-base);
+    --_button-font-size: var(--bf-type-label-lg-font-size);
     --_button-height: var(--bf-control-height-lg);
     --_button-leading-icon-size: 20px;
     --_button-padding-inline: var(--bf-space-6);
@@ -174,7 +174,7 @@
     align-items: center;
     min-inline-size: 0;
     gap: var(--bf-space-1);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
   }

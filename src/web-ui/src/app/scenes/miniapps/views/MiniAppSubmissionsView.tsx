@@ -60,7 +60,11 @@ async function loadCurrentClientVersion(): Promise<string | undefined> {
   }
 }
 
-const MiniAppSubmissionsView: React.FC = () => {
+interface MiniAppSubmissionsViewProps {
+  tabs?: React.ReactNode;
+}
+
+const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs }) => {
   const { t } = useI18n('scenes/miniapp');
   const notification = useNotification();
   const { workspace } = useCurrentWorkspace();
@@ -241,6 +245,7 @@ const MiniAppSubmissionsView: React.FC = () => {
   if (!authResolved || loading) {
     return (
       <GalleryLayout className="miniapp-submissions">
+        {tabs}
         <div className="miniapp-submissions__loading"><Loader2 className="gallery-spinning" /></div>
       </GalleryLayout>
     );
@@ -253,6 +258,7 @@ const MiniAppSubmissionsView: React.FC = () => {
           title={t('market.submissions.title')}
           subtitle={t('market.submissions.subtitle')}
         />
+        {tabs}
         <GalleryEmpty
           icon={<Github size={36} />}
           message={t('market.submissions.signInRequired')}
@@ -277,6 +283,8 @@ const MiniAppSubmissionsView: React.FC = () => {
           </div>
         )}
       />
+
+      {tabs}
 
       {localActionsDisabled ? (
         <div className="miniapp-submissions__remote-warning">

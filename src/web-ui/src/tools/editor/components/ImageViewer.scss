@@ -9,7 +9,7 @@
   background: var(--bf-color-surface-canvas);
   color: var(--bf-color-content-primary);
   overflow: hidden;
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
 
   &.fullscreen {
     position: fixed;
@@ -30,13 +30,13 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-3);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     flex: 1;
     min-width: 0;
   }
 
   &__filename {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -45,7 +45,7 @@
 
   &__dimensions,
   &__filesize {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
   }
@@ -104,7 +104,7 @@
 
     p {
       margin: 0;
-      font-size: var(--bf-font-size-base);
+      font-size: var(--bf-type-body-md-font-size);
     }
   }
 
@@ -142,12 +142,12 @@
     p {
       margin: 0;
       color: var(--bf-color-status-danger-content);
-      font-size: var(--bf-font-size-base);
+      font-size: var(--bf-type-body-md-font-size);
     }
   }
 
   &__error-path {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     word-break: break-all;
     max-width: 600px;

@@ -62,17 +62,22 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
   assert.equal(tokens["control.tabGroup.itemRadius"], "9999px");
 });
 
-test("SegmentedControl geometry preserves the compact mode-switch pill contract", async () => {
+test("SegmentedControl geometry preserves compact, filled, and filter compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["control.segmentedControl.gap"], "2px");
   assert.equal(tokens["control.segmentedControl.padding"], "2px");
+  assert.equal(tokens["control.segmentedControl.paddingMd"], "3px");
   assert.equal(tokens["control.segmentedControl.segmentHeight"], "22px");
+  assert.equal(tokens["control.segmentedControl.segmentHeightMd"], "28px");
+  assert.equal(tokens["control.segmentedControl.pillSegmentHeight"], "24px");
   assert.equal(tokens["control.segmentedControl.segmentPaddingInline"], "8px");
   assert.equal(tokens["control.segmentedControl.segmentGap"], "4px");
   assert.equal(tokens["control.segmentedControl.iconSize"], "12px");
+  assert.equal(tokens["control.segmentedControl.iconSizeMd"], "14px");
   assert.equal(systemDocument.control.segmentedControl.radius.$value, "{radius.pill}");
   assert.equal(systemDocument.control.segmentedControl.segmentRadius.$value, "{radius.pill}");
+  assert.equal(systemDocument.control.segmentedControl.pillSegmentRadius.$value, "{radius.sm}");
 });
 
 test("Composer geometry preserves independent context, editor, and action regions", async () => {
@@ -375,19 +380,18 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
     },
   );
   const controlFontFamily = tokens["font.family.control"];
-  assert.equal(controlFontFamily.startsWith("'SF Pro Text'"), true);
+  assert.equal(controlFontFamily.startsWith("system-ui"), true);
+  assert.equal(controlFontFamily.includes("-apple-system"), true);
   assert.equal(controlFontFamily.includes("'Segoe UI Variable Text'"), true);
-  assert.equal(controlFontFamily.includes("'Noto Sans SC'"), true);
-  assert.ok(
-    controlFontFamily.indexOf("'Segoe UI Variable Text'")
-      < controlFontFamily.indexOf("'Noto Sans SC'"),
-  );
-  assert.equal(tokens["font.family.sans"].startsWith("'Noto Sans SC'"), true);
+  assert.equal(controlFontFamily.includes("'Noto Sans SC'"), false);
+  assert.equal(tokens["font.family.sans"].startsWith("system-ui"), true);
   assert.equal(tokens["font.family.mono"].startsWith("'JetBrains Mono'"), true);
+  assert.equal(tokens["font.family.mono"].includes("'Fira Code'"), true);
   assert.equal(tokens["font.size.micro"], "10px");
   assert.equal(tokens["font.size.meta"], "11px");
   assert.equal(tokens["font.size.xs"], "12px");
   assert.equal(tokens["font.size.sm"], "13px");
+  assert.equal(tokens["font.size.3xl-plus"], "24px");
   assert.equal(tokens["font.size.4xl"], "26px");
   assert.equal(tokens["font.size.8xl"], "56px");
   assert.equal(tokens["font.weight.regular"], 400);
@@ -415,7 +419,35 @@ test("semantic typography roles resolve to the canonical foundation", async () =
   assert.equal(systemDocument.type.flow.body.lineHeight.$value, "{lineHeight.reading}");
   assert.equal(tokens["type.body.md.fontSize"], "14px");
   assert.equal(tokens["type.label.selected.fontWeight"], 600);
-  assert.equal(tokens["type.heading.page.fontSize"], "18px");
+  assert.equal(systemDocument.type.heading.page.fontFamily.$value, "{font.family.control}");
+  assert.equal(systemDocument.type.heading.page.fontWeight.$value, "{font.weight.bold}");
+  assert.equal(systemDocument.type.heading.navigation.fontSize.$value, "{font.size.xl-plus}");
+  assert.equal(systemDocument.type.heading.compactPage.fontSize.$value, "{font.size.2xl-plus}");
+  assert.equal(systemDocument.type.heading.section.fontSize.$value, "{font.size.lg}");
+  assert.equal(systemDocument.type.heading.card.fontSize.$value, "{font.size.sm}");
+  assert.equal(systemDocument.type.body.lg.fontSize.$value, "{font.size.lg}");
+  assert.equal(systemDocument.type.support.fontSize.$value, "{font.size.meta}");
+  assert.equal(systemDocument.type.label.md.fontWeight.$value, "{font.weight.regular}");
+  assert.equal(systemDocument.type.overline.xs.fontSize.$value, "{font.size.3xs}");
+  assert.equal(systemDocument.type.overline.sm.fontSize.$value, "{font.size.2xs}");
+  assert.equal(systemDocument.type.modifier.leading.ui.lineHeight.$value, "{lineHeight.ui}");
+  assert.equal(systemDocument.type.modifier.leading.balanced.lineHeight.$value, "{lineHeight.balanced}");
+  assert.equal(systemDocument.type.modifier.tracking.wider.letterSpacing.$value, "{letterSpacing.wider}");
+  assert.equal(systemDocument.type.display.xxl.fontSize.$value, "{font.size.9xl}");
+  assert.equal(tokens["type.heading.page.fontSize"], "24px");
+  assert.equal(tokens["type.heading.page.fontWeight"], 700);
+  assert.equal(tokens["type.heading.navigation.fontSize"], "17px");
+  assert.equal(tokens["type.heading.compactPage.fontSize"], "20px");
+  assert.equal(tokens["type.heading.section.fontSize"], "15px");
+  assert.equal(tokens["type.heading.card.fontSize"], "13px");
+  assert.equal(tokens["type.body.lg.fontSize"], "15px");
+  assert.equal(tokens["type.support.fontSize"], "11px");
+  assert.equal(tokens["type.label.md.fontWeight"], 400);
+  assert.equal(tokens["type.overline.xs.fontSize"], "8px");
+  assert.equal(tokens["type.modifier.leading.ui.lineHeight"], 1.4);
+  assert.equal(tokens["type.modifier.leading.balanced.lineHeight"], 1.35);
+  assert.equal(tokens["type.modifier.tracking.wider.letterSpacing"], "0.04em");
+  assert.equal(tokens["type.display.xxl.fontSize"], "64px");
   assert.equal(tokens["type.code.md.fontSize"], "13px");
   assert.equal(tokens["type.flow.body.lineHeight"], 1.58);
 });
@@ -426,6 +458,10 @@ test("generated CSS preserves semantic typography references", async () => {
   assert.match(css, /--bf-type-body-md-font-size: var\(--bf-font-size-base\);/);
   assert.match(css, /--bf-type-flow-body-line-height: var\(--bf-line-height-reading\);/);
   assert.match(css, /--bf-type-label-selected-font-weight: var\(--bf-font-weight-semibold\);/);
+  assert.match(css, /--bf-type-heading-compact-page-font-size: var\(--bf-font-size-2xl-plus\);/);
+  assert.match(css, /--bf-type-modifier-leading-ui-line-height: var\(--bf-line-height-ui\);/);
+  assert.match(css, /--bf-type-modifier-leading-balanced-line-height: var\(--bf-line-height-balanced\);/);
+  assert.match(css, /--bf-type-modifier-tracking-wider-letter-spacing: var\(--bf-letter-spacing-wider\);/);
 });
 
 test("runtime typography scaling uses the canonical complete size ladder", () => {
@@ -440,8 +476,11 @@ test("runtime typography scaling uses the canonical complete size ladder", () =>
     base: "14px",
     lg: "15px",
     xl: "16px",
+    "xl-plus": "17px",
     "2xl": "18px",
+    "2xl-plus": "20px",
     "3xl": "22px",
+    "3xl-plus": "24px",
     "4xl": "26px",
     "5xl": "32px",
     "6xl": "40px",

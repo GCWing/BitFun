@@ -47,8 +47,8 @@
   }
 
   &__title {
-    font-size: var(--bf-font-size-2xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-section-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     margin: 0 0 6px 0;
     position: relative;
@@ -56,7 +56,7 @@
   }
 
   &__subtitle {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     margin: 0;
     position: relative;
@@ -99,8 +99,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
     margin: 0;
 
@@ -127,7 +127,7 @@
       width: 100%;
       cursor: default;
       user-select: none;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
       border: 1px dashed var(--bf-color-border-subtle);
@@ -136,7 +136,7 @@
 
       &::placeholder {
         color: var(--bf-color-content-muted);
-        font-size: var(--bf-font-size-xs);
+        font-size: var(--bf-type-label-sm-font-size);
       }
 
       &:focus {
@@ -157,7 +157,7 @@
   &__name-input {
     input {
       width: 100%;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
       border: 1px solid var(--bf-color-border-subtle);
@@ -171,7 +171,7 @@
 
       &::placeholder {
         color: var(--bf-color-content-muted);
-        font-size: var(--bf-font-size-xs);
+        font-size: var(--bf-type-label-sm-font-size);
       }
 
       &:focus {
@@ -233,15 +233,15 @@
   }
 
   &__preview-label {
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__preview-path {
-    font-size: var(--bf-font-size-meta);
-    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-type-meta-font-size);
+    font-family: var(--bf-type-code-md-font-family);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -268,7 +268,7 @@
     }
 
     span {
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       color: var(--bf-color-status-danger-content);
     }
   }

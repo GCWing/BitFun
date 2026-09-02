@@ -13,16 +13,16 @@
 
 .bitfun-remote-disclaimer__text {
   margin: 0;
-  font-size: var(--bf-font-size-xs);
-  line-height: var(--bf-line-height-ui);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-modifier-leading-ui-line-height);
   color: var(--bf-color-content-muted);
 }
 
 .bitfun-remote-disclaimer__section-title {
   margin: 2px 0 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
 }
 
 .bitfun-remote-disclaimer__list {
@@ -33,8 +33,8 @@
   gap: 4px;
 
   li {
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-color-content-secondary);
   }
 }
@@ -51,8 +51,8 @@
   summary {
     padding: 9px 12px;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     cursor: pointer;
   }
 

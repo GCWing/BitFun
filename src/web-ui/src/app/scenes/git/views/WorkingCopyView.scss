@@ -18,16 +18,16 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__branch {
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   &__badge {
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
   }
 
@@ -47,7 +47,7 @@
     flex: 1;
     min-height: 56px;
     resize: none;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
 
   &__commit-actions {
@@ -88,12 +88,12 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-muted);
     cursor: pointer;
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__file-row {
@@ -101,7 +101,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     cursor: pointer;
     color: var(--bf-color-content-secondary);
 
@@ -128,15 +128,15 @@
   }
 
   &__file-dir {
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     flex-shrink: 0;
   }
 
   &__file-status {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
 
     &.wcv-status--modified { color: var(--bf-color-status-warning-content); }
     &.wcv-status--added { color: var(--bf-color-status-success-content); }
@@ -146,16 +146,16 @@
 
   &__empty {
     padding: 12px;
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
   }
 
   &__file-list-placeholder {
     padding: 12px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
 
-    span { font-weight: var(--bf-font-weight-medium); color: var(--bf-color-content-secondary); }
+    span { font-weight: var(--bf-type-label-sm-font-weight); color: var(--bf-color-content-secondary); }
   }
 
   &__diff-area {
@@ -174,11 +174,11 @@
     flex: 1;
     gap: 8px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 
   &__hint {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     opacity: 0.8;
   }
 }

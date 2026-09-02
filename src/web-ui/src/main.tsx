@@ -14,8 +14,8 @@ import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
 import { BitFunDesignSystemProvider } from "./infrastructure/design-system";
 import "./app/styles/index.scss";
 
-// Font: Noto Sans SC is loaded via a <link> tag in index.html.
-// File path: public/fonts/fonts.css, served as /fonts/fonts.css.
+// The build-selected font profile is linked from index.html before first paint.
+// Apple uses system faces; non-Apple bundles HarmonyOS Sans and Fira Code.
 
 import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger';
 import { elapsedMs, logElapsed, measureAsyncAndLog, nowMs } from './shared/utils/timing';

@@ -26,7 +26,7 @@
     background: transparent;
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     cursor: pointer;
     transition:
       color 140ms ease,
@@ -37,7 +37,7 @@
     outline: none;
     opacity: 0.72;
     white-space: nowrap;
-    letter-spacing: var(--bf-letter-spacing-wide);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
 
     // More visible while input is focused
     .bitfun-chat-input__box:focus-within & {
@@ -84,8 +84,8 @@
     overflow: hidden;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-none);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -104,9 +104,9 @@
     background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
     color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
     font-size: var(--bf-type-flow-meta-font-size);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wider);
-    line-height: var(--bf-line-height-none);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
   }
 
   &__tooltip {
@@ -264,7 +264,7 @@
     align-items: center;
     gap: 4px;
     font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -320,6 +320,7 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-model-selector__trigger,
   .bitfun-model-selector__chevron,
+  .bitfun-model-selector__submenu,
   .bitfun-model-selector__level {
     transition-duration: 0ms;
   }

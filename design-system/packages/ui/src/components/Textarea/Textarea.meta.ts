@@ -11,5 +11,5 @@ export const textareaMeta = {
     { name: "autoResize", type: "boolean", defaultValue: "false" }, { name: "showCount", type: "boolean", defaultValue: "false" },
   ],
   states: ["default", "hover", "focus-visible", "invalid", "disabled"],
-  tokens: ["color.content.primary", "color.content.muted", "color.content.disabled", "color.field.background", "color.field.border", "color.field.borderFocus", "color.focus.ring", "color.status.danger.border"],
+  tokens: ["color.content.primary", "color.content.muted", "color.content.disabled", "color.field.background", "color.field.border", "color.field.borderFocus", "color.focus.ring", "color.status.danger.border", "type.label.md.fontSize", "type.body.sm.fontSize", "type.support.fontSize", "type.code.md.fontSize"],
 } as const satisfies ComponentMeta;

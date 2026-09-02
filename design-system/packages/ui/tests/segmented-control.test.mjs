@@ -56,11 +56,28 @@ test("SegmentedControl disables every segment as one contract", () => {
   assert.equal((markup.match(/disabled=""/g) ?? []).length, 2);
 });
 
+test("SegmentedControl exposes stable layout and visual variants", () => {
+  const markup = renderToStaticMarkup(
+    createElement(SegmentedControl, {
+      distribution: "fill",
+      options,
+      size: "md",
+      variant: "pills",
+    }),
+  );
+
+  assert.match(markup, /data-distribution="fill"/);
+  assert.match(markup, /data-size="md"/);
+  assert.match(markup, /data-variant="pills"/);
+});
+
 test("SegmentedControl styles bind pill geometry and shared action tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-control-segmented-control-padding/);
   assert.match(styles, /--bf-control-segmented-control-segment-height/);
+  assert.match(styles, /--bf-control-segmented-control-segment-height-md/);
+  assert.match(styles, /--bf-control-segmented-control-pill-segment-height/);
   assert.match(styles, /--bf-control-segmented-control-segment-padding-inline/);
   assert.match(styles, /--bf-control-segmented-control-icon-size/);
   assert.match(styles, /--bf-type-meta-font-size/);
@@ -69,4 +86,6 @@ test("SegmentedControl styles bind pill geometry and shared action tokens", asyn
   assert.match(styles, /--bf-color-action-neutral-surface-hover/);
   assert.match(styles, /--bf-color-action-neutral-content-disabled/);
   assert.match(styles, /--bf-color-focus-ring/);
+  assert.match(styles, /data-distribution=fill/);
+  assert.match(styles, /data-variant=pills/);
 });

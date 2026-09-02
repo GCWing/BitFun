@@ -102,29 +102,29 @@ textarea:focus-visible,
 .remote-home__eyebrow {
   margin-bottom: 12px;
   color: var(--bf-color-content-muted);
-  font-size: 11px;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.14em;
+  font-size: var(--bf-type-overline-sm-font-size);
+  font-weight: var(--bf-type-overline-sm-font-weight);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
   text-transform: uppercase;
 }
 
 .remote-home h2 {
   max-width: 480px;
   margin: 0;
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-display-fluid-title-font-family);
   color: var(--bf-color-content-primary);
-  font-size: clamp(30px, 3vw, 44px);
-  font-weight: 650;
-  line-height: 1.14;
-  letter-spacing: -0.04em;
+  font-size: var(--bf-type-display-fluid-title-font-size);
+  font-weight: var(--bf-type-display-fluid-title-font-weight);
+  line-height: var(--bf-type-display-fluid-title-line-height);
+  letter-spacing: var(--bf-type-modifier-tracking-tighter-letter-spacing);
 }
 
 .remote-home p {
   max-width: 470px;
   margin: 16px 0 30px;
   color: var(--bf-color-content-secondary);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-modifier-leading-spacious-line-height);
 }
 
 .remote-home__workspace {
@@ -174,8 +174,8 @@ textarea:focus-visible,
   > span {
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-size: 14px;
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -183,7 +183,7 @@ textarea:focus-visible,
   small {
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: 11px;
+    font-size: var(--bf-type-meta-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -203,9 +203,9 @@ textarea:focus-visible,
 .session-list__header-copy h1,
 .devices-page__title,
 .workspace-page__header h1 {
-  font-family: var(--bf-font-family-sans);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.02em;
+  font-family: var(--bf-type-heading-compact-page-font-family);
+  font-weight: var(--bf-type-heading-compact-page-font-weight);
+  letter-spacing: var(--bf-type-heading-compact-page-letter-spacing);
 }
 
 .session-list__theme-btn,
@@ -260,10 +260,10 @@ textarea:focus-visible,
 
 .session-list__section-title {
   margin: 0;
-  font-family: var(--bf-font-family-sans);
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.015em;
+  font-family: var(--bf-type-heading-section-font-family);
+  font-size: var(--bf-type-heading-section-font-size);
+  font-weight: var(--bf-type-heading-section-font-weight);
+  letter-spacing: var(--bf-type-heading-section-letter-spacing);
 }
 
 .session-list__workspace-bar,
@@ -290,8 +290,8 @@ textarea:focus-visible,
 .session-list__workspace-label,
 .session-list__assistant-label {
   color: var(--bf-color-content-muted);
-  font-size: 9px;
-  letter-spacing: 0.1em;
+  font-size: var(--bf-type-overline-sm-font-size);
+  letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
 }
 
 .session-list__workspace-branch {
@@ -391,7 +391,7 @@ textarea:focus-visible,
   box-shadow: inset 3px 0 0 var(--bf-color-content-primary);
 }
 
-.session-list__item-name { font-weight: var(--font-weight-medium); }
+.session-list__item-name { font-weight: var(--bf-type-label-lg-font-weight); }
 
 .session-list__agent-badge {
   padding: 0 6px;
@@ -500,9 +500,9 @@ textarea:focus-visible,
 .chat-page__header-row { gap: 8px; }
 
 .chat-page__title {
-  font-family: var(--bf-font-family-sans);
-  font-size: 15px;
-  font-weight: var(--font-weight-medium);
+  font-family: var(--bf-type-label-lg-font-family);
+  font-size: var(--bf-type-label-lg-font-size);
+  font-weight: var(--bf-type-label-lg-font-weight);
 }
 
 .chat-page__messages {
@@ -682,11 +682,11 @@ textarea:focus-visible,
 }
 
 @media (max-width: 390px) {
-  .session-list__header-copy h1 { font-size: 15px; }
+  .session-list__header-copy h1 { font-size: var(--bf-type-heading-section-font-size); }
   .session-list__header-account-name { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
   .session-list__items { padding-inline: 10px; }
   .session-list__create-desc { display: none; }
-  .chat-page__header-workspace { font-size: 12px; }
+  .chat-page__header-workspace { font-size: var(--bf-type-body-xs-font-size); }
 }
 
 @media (prefers-reduced-motion: reduce) {

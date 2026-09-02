@@ -40,10 +40,11 @@
 
   .visibleLabel {
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
   }
 
   .error {
@@ -52,6 +53,7 @@
     font-size: var(--bf-type-support-font-size);
     font-weight: var(--bf-type-support-font-weight);
     line-height: var(--bf-type-support-line-height);
+    letter-spacing: var(--bf-type-support-letter-spacing);
   }
 
   .control {
@@ -81,10 +83,11 @@
     outline: 0;
     color: inherit;
     background: var(--bf-color-field-background);
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
     text-align: start;
     cursor: pointer;
     transition:
@@ -253,6 +256,8 @@
   }
 
   .popover {
+    position: fixed;
+    z-index: var(--bf-layer-popover);
     display: flex;
     min-inline-size: var(--bf-overlay-menu-inline-size);
     max-inline-size: calc(100vw - var(--bf-space-4));
@@ -266,21 +271,13 @@
     box-shadow: var(--bf-shadow-menu);
   }
 
-  .popover[data-popover-mode="overlay"] {
-    position: fixed;
-  }
-
-  .popover[data-popover-mode="inline"] {
-    position: absolute;
-    z-index: 1;
-    inset-block-start: calc(100% + var(--bf-space-1));
-    inset-inline-start: 0;
-    inline-size: 100%;
-  }
-
   .search {
     flex: 0 0 auto;
     padding: var(--bf-space-1);
+  }
+
+  .searchField {
+    inline-size: 100%;
   }
 
   .listbox {

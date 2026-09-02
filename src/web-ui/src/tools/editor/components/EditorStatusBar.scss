@@ -17,8 +17,8 @@ $_section-gap: 12px;
   padding: $_statusbar-padding;
   background: var(--bf-color-surface-scene);
   border-top: 1px solid var(--bf-color-border-subtle);
-  font-size: var(--bf-font-size-meta);
-  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-meta-font-size);
+  font-family: var(--bf-type-code-md-font-family);
   color: var(--bf-color-content-muted);
   user-select: none;
   flex-shrink: 0;
@@ -79,10 +79,10 @@ $_section-gap: 12px;
     color: var(--bf-color-status-warning-content);
     padding: 1px 6px;
     border-radius: 3px;
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
 }

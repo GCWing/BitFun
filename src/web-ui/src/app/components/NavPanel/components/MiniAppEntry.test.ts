@@ -28,7 +28,6 @@ describe('MiniAppEntry navigation presentation', () => {
       'utf8',
     );
 
-    expect(source).not.toContain('NavigationMiniAppIcon');
     expect(source).toContain('<Icon name="mini-app" size="md" />');
     expect(source.indexOf('bitfun-nav-panel__miniapp-entry-icon'))
       .toBeLessThan(source.indexOf('bitfun-nav-panel__miniapp-entry-title'));

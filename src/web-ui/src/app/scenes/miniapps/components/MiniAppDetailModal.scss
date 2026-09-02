@@ -18,9 +18,11 @@
 
 .miniapp-detail-dialog__title {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-lg);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
+  font-family: var(--bf-type-heading-section-font-family);
+  font-size: var(--bf-type-heading-section-font-size);
+  font-weight: var(--bf-type-heading-section-font-weight);
+  line-height: var(--bf-type-heading-section-line-height);
+  letter-spacing: var(--bf-type-heading-section-letter-spacing);
 }
 
 .miniapp-detail-dialog__body {
@@ -49,8 +51,11 @@
     padding: 0 var(--bf-space-3);
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-family: var(--bf-type-label-sm-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-label-sm-line-height);
+    letter-spacing: var(--bf-type-label-sm-letter-spacing);
   }
 
   &__hero {
@@ -117,25 +122,33 @@
   &__name {
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-5xl);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-tight);
-    line-height: var(--bf-line-height-tight);
+    font-family: var(--bf-type-display-sm-font-family);
+    font-size: var(--bf-type-display-sm-font-size);
+    font-weight: var(--bf-type-display-sm-font-weight);
+    letter-spacing: var(--bf-type-display-sm-letter-spacing);
+    line-height: var(--bf-type-display-sm-line-height);
   }
 
   &__version {
     min-height: 34px;
     padding: 0 var(--bf-space-3);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
   }
 
   &__description {
     max-width: 720px;
     margin: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-base);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-body-md-font-family);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-body-md-font-weight);
+    line-height: var(--bf-type-body-md-line-height);
+    letter-spacing: var(--bf-type-body-md-letter-spacing);
   }
 
   &__tags {
@@ -150,7 +163,11 @@
     padding: 0 var(--bf-space-3);
     background: transparent;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-label-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-md-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
+    letter-spacing: var(--bf-type-label-md-letter-spacing);
   }
 
   &__highlights {
@@ -165,8 +182,11 @@
   &__section-title {
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
+    font-family: var(--bf-type-heading-section-font-family);
+    font-size: var(--bf-type-heading-section-font-size);
+    font-weight: var(--bf-type-heading-section-font-weight);
+    line-height: var(--bf-type-heading-section-line-height);
+    letter-spacing: var(--bf-type-heading-section-letter-spacing);
   }
 
   &__highlight-grid {
@@ -206,9 +226,11 @@
     strong {
       overflow: hidden;
       color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-base);
+      font-family: var(--bf-type-heading-card-font-family);
+      font-size: var(--bf-type-heading-card-font-size);
+      font-weight: var(--bf-type-heading-card-font-weight);
+      line-height: var(--bf-type-heading-card-line-height);
+      letter-spacing: var(--bf-type-heading-card-letter-spacing);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -217,8 +239,11 @@
       display: -webkit-box;
       overflow: hidden;
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-base);
+      font-family: var(--bf-type-support-font-family);
+      font-size: var(--bf-type-support-font-size);
+      font-weight: var(--bf-type-support-font-weight);
+      line-height: var(--bf-type-support-line-height);
+      letter-spacing: var(--bf-type-support-letter-spacing);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -241,7 +266,11 @@
     min-width: 0;
     gap: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-type-body-sm-font-family);
+    font-size: var(--bf-type-body-sm-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
+    line-height: var(--bf-type-body-sm-line-height);
+    letter-spacing: var(--bf-type-body-sm-letter-spacing);
 
     svg {
       flex-shrink: 0;
@@ -312,7 +341,7 @@
     }
 
     &__name {
-      font-size: var(--bf-font-size-4xl);
+      font-size: var(--bf-type-heading-display-font-size);
     }
 
     &__highlights {

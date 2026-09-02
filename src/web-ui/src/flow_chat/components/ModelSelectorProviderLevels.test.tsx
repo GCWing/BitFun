@@ -343,6 +343,11 @@ describe('ModelSelector provider levels', () => {
       .toEqual(['provider-acme', 'provider-umbra']);
     expect(modelOption('primary')).not.toBeNull();
     expect(modelOption('fast')).not.toBeNull();
+    const submenuButtons = Array.from(
+      sharedSubmenuItems()?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+    );
+    expect(submenuButtons.indexOf(providerRows()[1]))
+      .toBeLessThan(submenuButtons.indexOf(modelOption('primary')!));
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-provider-selected-model"]',
     )).toBeNull();

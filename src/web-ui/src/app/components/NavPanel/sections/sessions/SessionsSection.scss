@@ -37,7 +37,7 @@
   }
 
   &__inline-empty {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     padding: 4px var(--bf-space-1);
     font-style: italic;
@@ -59,14 +59,14 @@
     flex: 1;
     flex-direction: column;
     gap: 1px;
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-type-label-md-line-height);
   }
 
   &__inline-empty-name {
     overflow: hidden;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -79,7 +79,7 @@
     height: 24px;
     padding: 0 var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
 
     svg {
       flex: 0 0 auto;
@@ -106,8 +106,8 @@
     border-radius: 4px;
     background: transparent;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-regular);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-body-sm-font-weight);
     cursor: pointer;
     width: 100%;
     overflow: hidden;
@@ -146,7 +146,7 @@
     &.is-child {
       margin-top: 0;
       min-height: 24px;
-      font-size: var(--bf-font-size-xs);
+      font-size: var(--bf-type-label-sm-font-size);
       padding-left: calc(var(--bf-nav-session-rail) + 14px);
       position: relative;
 
@@ -224,8 +224,8 @@
   &__inline-item-assistant-name {
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -236,8 +236,8 @@
     margin-left: auto;
     overflow: hidden;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -266,9 +266,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 13%, var(--bf-color-action-quiet-hover));
     color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 62%, var(--bf-color-content-primary));
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wide);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     opacity: 0.96;
     overflow: visible;
     white-space: nowrap;
@@ -287,8 +287,8 @@
     border-radius: 999px;
     background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 12%, var(--bf-color-action-quiet-hover));
     color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 76%, var(--bf-color-content-primary));
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
 
@@ -318,9 +318,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 18%, var(--bf-color-action-quiet-hover));
     color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 82%, var(--bf-color-content-primary));
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wide);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     white-space: nowrap;
 
     svg {
@@ -382,9 +382,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
     color: color-mix(in srgb, var(--bf-color-status-warning-content) 80%, var(--bf-color-content-primary));
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    letter-spacing: var(--bf-letter-spacing-wide);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
     white-space: nowrap;
   }
 
@@ -396,17 +396,17 @@
   }
 
   &__inline-item-tooltip-title {
-    font-size: var(--bf-font-size-xs);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     word-break: break-word;
   }
 
   &__inline-item-tooltip-meta {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-secondary);
-    line-height: var(--bf-line-height-ui);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     word-break: break-word;
   }
 
@@ -487,7 +487,7 @@
     border-radius: 4px;
     background: transparent;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     text-align: left;
     cursor: pointer;
     width: 100%;
@@ -545,10 +545,10 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-color-content-primary) 9%, transparent);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-meta);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     font-variant-numeric: tabular-nums;
-    line-height: var(--bf-line-height-none);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
                 color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
@@ -617,8 +617,8 @@
   // Inline item badge (count / status text)
   &__inline-item-badge {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
     color: var(--bf-color-content-muted);
     margin-left: auto;
     padding: 1px 4px;
@@ -826,7 +826,7 @@
     &.is-child {
       height: 30px;
       margin-top: 0;
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
     }
 
     &.is-assistant-session {
@@ -850,16 +850,16 @@
   &__inline-item-workspace-name {
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__inline-toggle {
     height: 32px;
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
 
     &:hover,
     &:focus-visible {

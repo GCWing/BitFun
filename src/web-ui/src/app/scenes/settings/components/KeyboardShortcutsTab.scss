@@ -25,7 +25,7 @@
     border-radius: 6px;
     background: var(--bf-color-status-danger-surface);
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
 
   &__list {
@@ -67,7 +67,7 @@
   }
 
   &__item-name {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -75,16 +75,16 @@
   }
 
   &__item-hint {
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-compact);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-meta-line-height);
     color: var(--bf-color-content-muted);
-    font-weight: var(--bf-font-weight-regular);
+    font-weight: var(--bf-type-body-sm-font-weight);
     white-space: normal;
     opacity: 0.62;
   }
 
   &__item-conflict-hint {
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-status-warning-content);
   }
 
@@ -118,8 +118,8 @@
     border: 1px solid var(--bf-color-border-default);
     background: var(--bf-color-surface-subtle);
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-sm-font-size);
     cursor: pointer;
     white-space: nowrap;
     min-width: 60px;
@@ -152,7 +152,7 @@
     border: 1px solid var(--bf-color-border-default);
     background: transparent;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     cursor: pointer;
     padding: 0;
 
@@ -166,7 +166,7 @@
     padding: 32px;
     text-align: center;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
   }
 }
 
@@ -174,7 +174,7 @@
 /* Page subtitle: keep primary title dominant */
 .kb-shortcuts-page-header.bitfun-config-page-header {
   .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
     color: var(--bf-color-content-muted);
     opacity: 0.88;
   }

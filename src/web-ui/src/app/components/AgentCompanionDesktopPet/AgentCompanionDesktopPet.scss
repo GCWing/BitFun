@@ -108,8 +108,8 @@
     background: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
     color: inherit;
     font: inherit;
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-snug);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-modifier-leading-snug-line-height);
     user-select: text;
     -webkit-user-select: text;
 
@@ -354,16 +354,16 @@
     box-sizing: border-box;
     max-width: 100%;
     padding-right: 8px;
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-dense);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
+    font-weight: var(--bf-type-label-selected-font-weight);
     min-width: 0;
   }
 
   &__bubble-status {
     margin-top: 2px;
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-dense);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
     color: color-mix(in srgb, var(--bf-color-content-on-light) 70%, transparent);
   }
 
@@ -373,8 +373,8 @@
     min-height: 0;
     flex: 0 0 calc(12px * 4);
     height: calc(12px * 4);
-    font-size: var(--bf-font-size-micro);
-    line-height: var(--bf-line-height-tight);
+    font-size: var(--bf-type-micro-font-size);
+    line-height: var(--bf-type-label-md-line-height);
     color: color-mix(in srgb, var(--bf-color-content-on-light) 82%, transparent);
     white-space: pre-wrap;
     word-break: break-word;

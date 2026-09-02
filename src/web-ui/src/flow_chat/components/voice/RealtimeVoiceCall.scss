@@ -44,16 +44,16 @@
     gap: 2px;
 
     strong {
-      font-size: var(--bf-font-size-sm);
-      font-weight: var(--bf-font-weight-semibold);
-      line-height: var(--bf-line-height-tight);
+      font-size: var(--bf-type-label-md-font-size);
+      font-weight: var(--bf-type-label-selected-font-weight);
+      line-height: var(--bf-type-label-md-line-height);
     }
 
     small {
       overflow: hidden;
       color: var(--bf-color-content-secondary);
-      font-size: var(--bf-font-size-xs);
-      line-height: var(--bf-line-height-base);
+      font-size: var(--bf-type-label-sm-font-size);
+      line-height: var(--bf-type-body-sm-line-height);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -99,8 +99,8 @@
     padding: var(--bf-space-3);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     overflow-wrap: anywhere;
 
     svg { margin-top: 2px; }
@@ -124,8 +124,8 @@
     justify-content: center;
     padding: var(--bf-space-4);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: center;
   }
 
@@ -139,8 +139,8 @@
     border-radius: var(--bf-radius-sm);
     background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-xs);
-    line-height: var(--bf-line-height-base);
+    font-size: var(--bf-type-label-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
   }
 
   &__task-pulse {

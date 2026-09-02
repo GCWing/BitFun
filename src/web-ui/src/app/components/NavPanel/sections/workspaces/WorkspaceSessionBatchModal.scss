@@ -72,15 +72,15 @@
   }
 
   &__workspace {
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-bold);
-    line-height: var(--bf-line-height-dense);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-heading-page-font-weight);
+    line-height: var(--bf-type-modifier-leading-dense-line-height);
     color: var(--bf-color-content-primary);
   }
 
   &__description {
-    font-size: var(--bf-font-size-meta);
-    line-height: var(--bf-line-height-support);
+    font-size: var(--bf-type-meta-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-color-content-secondary);
     max-width: 56ch;
   }
@@ -116,7 +116,7 @@
   &__toolbar-summary {
     min-width: 0;
     flex: 1 1 180px;
-    font-size: var(--bf-font-size-meta);
+    font-size: var(--bf-type-meta-font-size);
     color: var(--bf-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -237,18 +237,18 @@
 
   &__row-title {
     min-width: 0;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    letter-spacing: var(--bf-letter-spacing-snug);
+    letter-spacing: var(--bf-type-flow-title-letter-spacing);
   }
 
   &__row-updated {
     flex-shrink: 0;
-    font-size: var(--bf-font-size-micro);
+    font-size: var(--bf-type-micro-font-size);
     color: var(--bf-color-content-muted);
     white-space: nowrap;
   }
@@ -267,9 +267,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-color-surface-subtle) 78%, transparent);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-micro);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-none);
+    font-size: var(--bf-type-micro-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-modifier-leading-none-line-height);
 
   }
 

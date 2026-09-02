@@ -80,7 +80,7 @@
 
     p {
       margin: 0;
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
       color: var(--bf-color-content-secondary);
     }
 
@@ -90,42 +90,42 @@
 // Markdown preview inside m-editor only (align with flow-chat markdown chrome via shared Sass values).
 .m-editor .markdown-body {
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-sans);
-  font-size: var(--bf-font-size-sm);
-  line-height: var(--bf-line-height-relaxed);
+  font-family: var(--bf-type-body-sm-font-family);
+  font-size: var(--bf-type-label-md-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
 
   h1, h2, h3, h4, h5, h6 {
     margin-top: var(--bf-space-6);
     margin-bottom: var(--bf-space-4);
-    font-weight: var(--bf-font-weight-semibold);
-    line-height: var(--bf-line-height-tight);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-label-md-line-height);
     color: var(--bf-color-content-primary);
   }
 
   strong, b {
-    font-weight: var(--bf-font-weight-bold);
+    font-weight: var(--bf-type-heading-page-font-weight);
     color: var(--bf-color-status-warning-content);
   }
 
   h1 {
-    font-size: var(--bf-font-size-3xl);
+    font-size: var(--bf-type-heading-dialog-font-size);
     color: var(--bf-color-content-primary);
     border-bottom: 1px solid var(--bf-color-border-subtle);
     padding-bottom: var(--bf-space-3);
     text-align: center;
-    letter-spacing: var(--bf-letter-spacing-wider);
+    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
   }
 
   h2 {
-    font-size: var(--bf-font-size-2xl);
+    font-size: var(--bf-type-flow-section-title-font-size);
     border-bottom: 1px solid var(--bf-color-border-subtle);
     padding-bottom: var(--bf-space-2);
   }
 
-  h3 { font-size: var(--bf-font-size-xl); }
-  h4 { font-size: var(--bf-font-size-lg); }
-  h5 { font-size: var(--bf-font-size-base); }
-  h6 { font-size: var(--bf-font-size-sm); }
+  h3 { font-size: var(--bf-type-flow-title-font-size); }
+  h4 { font-size: var(--bf-type-body-lg-font-size); }
+  h5 { font-size: var(--bf-type-body-md-font-size); }
+  h6 { font-size: var(--bf-type-label-md-font-size); }
 
   p {
     margin-top: 0;
@@ -146,12 +146,12 @@
   code {
     padding: 0.1em 0.4em;
     margin: 0 0.05em;
-    font-size: var(--bf-font-size-sm);
-    font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-ui);
+    font-size: var(--bf-type-label-md-font-size);
+    font-weight: var(--bf-type-label-sm-font-weight);
+    line-height: var(--bf-type-modifier-leading-ui-line-height);
     vertical-align: baseline;
     white-space: nowrap;
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     color: markdownCode.$inline-code-fg;
     background: markdownCode.$inline-code-bg;
     border: 1px solid markdownCode.$inline-code-border;
@@ -175,9 +175,9 @@
     padding: markdownCode.$pre-padding;
     overflow: auto;
     font-size: var(--bf-type-flow-code-font-size);
-    line-height: var(--bf-line-height-base);
+    line-height: var(--bf-type-body-sm-line-height);
     position: relative;
-    font-family:var(--bf-font-family-mono);
+    font-family:var(--bf-type-code-md-font-family);
     color: markdownCode.$pre-code-fg;
     background: markdownCode.$pre-bg;
     border: 1px dashed markdownCode.$pre-border;
@@ -199,7 +199,7 @@
       margin: 0;
       overflow: visible;
       white-space: pre;
-      font-family:var(--bf-font-family-mono);
+      font-family:var(--bf-type-code-md-font-family);
       font-size: var(--bf-type-flow-code-font-size);
       font-weight: inherit;
       line-height: inherit;
@@ -263,7 +263,7 @@
     top: 0;
     width: markdownLayout.$list-marker-width;
     color: var(--bf-color-content-primary);
-    font-weight: var(--bf-font-weight-medium);
+    font-weight: var(--bf-type-label-sm-font-weight);
   }
 
   > ul:not(.contains-task-list) > li::before {
@@ -311,7 +311,7 @@
     width: max-content;
     max-width: 100%;
     margin-bottom: var(--bf-space-4);
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     border: 1px solid markdownTable.$border;
     border-radius: var(--bf-control-flow-chat-card-radius);
     background: markdownTable.$surface;
@@ -333,7 +333,7 @@
   }
 
   table th {
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     background: markdownTable.$th-bg;
     color: markdownTable.$th-fg;
   }
@@ -439,7 +439,7 @@
 
   summary {
     cursor: pointer;
-    font-weight: var(--bf-font-weight-semibold);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
     list-style-position: outside;
 
@@ -495,7 +495,7 @@
 
   // KaTeX math formula styles
   .katex {
-    font-size: var(--bf-font-size-lg);
+    font-size: var(--bf-type-body-lg-font-size);
   }
 
   .katex-display {

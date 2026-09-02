@@ -18,7 +18,7 @@
     background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
     border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
     opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-  font-family: var(--bf-font-family-sans);
+  font-family: var(--bf-type-body-sm-font-family);
   position: relative;
 
   &.is-collapsed {
@@ -118,8 +118,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--bf-font-size-base);
-  font-weight: var(--bf-font-weight-semibold);
+  font-size: var(--bf-type-body-md-font-size);
+  font-weight: var(--bf-type-label-selected-font-weight);
   color: var(--bf-color-content-primary);
 }
 
@@ -127,7 +127,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--bf-font-size-sm);
+  font-size: var(--bf-type-label-md-font-size);
   color: var(--bf-color-content-secondary);
 }
 
@@ -179,7 +179,7 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
     color: var(--bf-color-content-secondary);
   }
 }
@@ -207,14 +207,14 @@
 
   h3 {
     margin: 0 0 var(--bf-space-2) 0;
-    font-size: var(--bf-font-size-xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-secondary);
   }
 }
@@ -239,9 +239,9 @@
     background: var(--bf-color-surface-panel);
     border: none;
     border-radius: 0;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
     overflow: auto;
   }
 
@@ -313,9 +313,9 @@
   border-radius: var(--bf-radius-base);
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-base);
-  line-height: var(--bf-line-height-relaxed);
+  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--bf-type-body-md-font-size);
+  line-height: var(--bf-type-body-lg-line-height);
   resize: vertical;
   outline: none;
   transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -341,9 +341,9 @@
     background: var(--bf-color-surface-panel);
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-base);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-base);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-body-md-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
     white-space: pre-wrap;
     word-break: break-word;
     overflow: auto;
@@ -377,14 +377,14 @@
 
   h3 {
     margin: 0;
-    font-size: var(--bf-font-size-xl);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-title-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-secondary);
     max-width: 400px;
   }
@@ -395,10 +395,10 @@
     background: var(--bf-color-surface-panel);
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-base);
-    font-family: var(--bf-font-family-mono);
+    font-family: var(--bf-type-code-md-font-family);
 
     code {
-      font-size: var(--bf-font-size-sm);
+      font-size: var(--bf-type-label-md-font-size);
       color: var(--bf-color-content-primary);
       background: transparent;
       padding: 0;
@@ -428,7 +428,7 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-status-danger-content);
   }
 }
@@ -447,7 +447,7 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-muted);
     font-style: italic;
   }
@@ -464,7 +464,7 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-base);
+    font-size: var(--bf-type-body-md-font-size);
     color: var(--bf-color-content-secondary);
   }
 
@@ -474,9 +474,9 @@
     background: var(--bf-color-surface-panel);
     border: 1px solid var(--bf-color-border-default);
     border-radius: var(--bf-radius-base);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
     overflow: auto;
     max-width: 100%;
   }
@@ -500,17 +500,17 @@
 
   h4 {
     margin: 0 0 4px 0;
-    font-size: var(--bf-font-size-base);
-    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-body-md-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
     color: var(--bf-color-content-primary);
   }
 }
 
 .bitfun-flexible-panel__file-path {
   margin: 0;
-  font-size: var(--bf-font-size-xs);
+  font-size: var(--bf-type-label-sm-font-size);
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-mono);
+  font-family: var(--bf-type-code-md-font-family);
 }
 
 .bitfun-flexible-panel__file-content {
@@ -520,9 +520,9 @@
 
   pre {
     margin: 0;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-sm);
-    line-height: var(--bf-line-height-relaxed);
+    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--bf-type-label-md-font-size);
+    line-height: var(--bf-type-body-lg-line-height);
     color: var(--bf-color-content-primary);
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -640,11 +640,11 @@
   }
   
   .bitfun-flexible-panel__content-title {
-    font-size: var(--bf-font-size-sm);
+    font-size: var(--bf-type-label-md-font-size);
   }
   
   .bitfun-flexible-panel__content-type {
-    font-size: var(--bf-font-size-xs);
+    font-size: var(--bf-type-label-sm-font-size);
   }
   
   .bitfun-flexible-panel__code-content,

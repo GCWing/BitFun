@@ -505,7 +505,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
               title="Send Ctrl+C"
               data-testid="shell-command-rerun"
             >
-              <span style={{ fontSize: 'var(--bf-font-size-micro)', fontWeight: 'var(--bf-font-weight-bold)' }}>^C</span>
+              <span style={{ fontSize: 'var(--bf-type-micro-font-size)', fontWeight: 'var(--bf-type-heading-page-font-weight)' }}>^C</span>
             </button>
             <button
               className="bitfun-terminal__toolbar-btn bitfun-terminal__toolbar-btn--danger"
