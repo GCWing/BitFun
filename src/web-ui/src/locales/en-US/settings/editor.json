@@ -112,11 +112,15 @@
   },
   "messages": {
     "loading": "Loading...",
-    "loadFailed": "Failed to load config, using defaults",
+    "loadFailed": "Failed to load configuration",
+    "loadFailedLocked": "Editor settings could not be read. This page is locked to avoid overwriting the current configuration with defaults.",
+    "retry": "Reload",
     "saving": "Saving...",
     "saveSuccess": "Config saved, open editors will update",
     "saveFailed": "Failed to save configuration",
     "confirmReset": "Are you sure you want to reset editor config to defaults?",
-    "resetDone": "Reset to defaults"
+    "resetTitle": "Reset editor settings?",
+    "resetAction": "Restore defaults",
+    "resetDone": "Defaults saved. Open editors will update automatically."
   }
 }

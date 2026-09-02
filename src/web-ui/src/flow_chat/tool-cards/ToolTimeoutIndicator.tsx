@@ -1,12 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, MenuItem } from '@bitfun/ui';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Timer,
-  Infinity as InfinityIcon,
-} from 'lucide-react';
+import { Menu, MenuItem, Icon } from '@bitfun/ui';
+import { AlertCircle, Timer, Infinity as InfinityIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -52,7 +47,7 @@ export interface ToolTimeoutIndicatorProps {
 
 function renderCompletedDurationIcon(status: ToolTimeoutIndicatorProps['completedStatus']) {
   if (status === 'success') {
-    return <CheckCircle2 size={13} strokeWidth={2.2} />;
+    return <Icon name="check-circle" size="lg" style={{ width: 13, height: 13 }} />;
   }
   if (status === 'error' || status === 'cancelled') {
     return <AlertCircle size={13} strokeWidth={2.2} />;

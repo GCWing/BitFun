@@ -506,7 +506,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                           e.stopPropagation();
                           toggleSelectAll();
                         }}
-                        icon={isAllSelected ? <Icon name="check-line" size="sm" /> : isPartialSelected ? <Minus size={14} /> : <Icon name="circle" size="sm" />}
+                        icon={isAllSelected ? <Icon name="check-line" size="sm" /> : isPartialSelected ? <Minus size={14} /> : <Icon name="unselected" size="sm" />}
                       />
                     </Tooltip>
                     <Tooltip content={t('actions.stageSelected', { count: selectedFiles.size })}>
@@ -546,7 +546,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                               toggleFileSelection(file.path);
                             }}
                           >
-                            {isSelected ? <Icon name="check-line" size="sm" /> : <Icon name="circle" size="sm" />}
+                            {isSelected ? <Icon name="check-line" size="sm" /> : <Icon name="unselected" size="sm" />}
                           </button>
                           <span className="bitfun-git-scene-working-copy__file-name" data-bf-component="working-copy-view" data-bf-part="fileName">{fileName}</span>
                           {dirPath && <span className="bitfun-git-scene-working-copy__file-dir">{dirPath}</span>}
@@ -601,7 +601,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                               toggleFileSelection(filePath);
                             }}
                           >
-                            {isSelected ? <Icon name="check-line" size="sm" /> : <Icon name="circle" size="sm" />}
+                            {isSelected ? <Icon name="check-line" size="sm" /> : <Icon name="unselected" size="sm" />}
                           </button>
                           <span className="bitfun-git-scene-working-copy__file-name" data-bf-component="working-copy-view" data-bf-part="fileName">{fileName}</span>
                           {dirPath && <span className="bitfun-git-scene-working-copy__file-dir">{dirPath}</span>}

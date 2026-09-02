@@ -14,7 +14,8 @@
   letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
   line-height: var(--bf-type-flow-meta-line-height);
 
-  svg {
+  svg,
+  [data-bf-component='icon'] {
     flex-shrink: 0;
     opacity: 0.95;
   }

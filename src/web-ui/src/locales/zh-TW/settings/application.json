@@ -1,6 +1,9 @@
 {
   "title": "基礎",
   "subtitle": "電源、日誌、終端、通知與登入時啟動",
+  "common": {
+    "retry": "重試"
+  },
   "appearance": {
     "title": "外觀",
     "hint": "界面語言、目前外觀、動態效果與外觀包管理",
@@ -112,14 +115,18 @@
     },
     "sensitiveDiagnostics": {
       "label": "包含敏感除錯資訊",
-      "description": "開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
+      "description": "預設關閉。開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
     },
     "path": {
       "description": "本次啟動寫入日誌檔案所在的目錄。"
     },
     "diagnostics": {
       "label": "診斷包",
-      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 檔案。BitFun 不會自動上傳。"
+      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 檔案。BitFun 不會自動上傳。",
+      "confirmTitle": "匯出診斷包？",
+      "confirmSensitive": "診斷包將包含敏感除錯資訊，可能涉及 Prompt、模型請求與回應、工具參數和檔案路徑。請只儲存到可信位置，並在分享前檢查內容。",
+      "confirmStandard": "診斷包可能包含本機路徑、運行環境和錯誤詳情。請只儲存到可信位置，並在分享前檢查內容。",
+      "confirmAction": "繼續匯出"
     },
     "previousCrash": {
       "title": "上次會話異常結束",
@@ -233,6 +240,8 @@
       "description": "每次啟動時隨機展示一條使用技巧卡片，幫助發現更多功能"
     },
     "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取通知設定",
       "saveSuccess": "通知設置已儲存",
       "saveFailed": "儲存通知設置失敗"
     }

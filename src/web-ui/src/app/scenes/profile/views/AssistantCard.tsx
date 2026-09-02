@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Icon, IconButton, StatusPill, Tooltip } from '@bitfun/ui';
-import { MessageSquarePlus } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
@@ -114,7 +114,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             <Button
               variant="fill"
               size="sm"
-              leadingIcon={<MessageSquarePlus />}
+              leadingIcon={<Icon name="side-chat" size="lg" />}
               loading={isStartingSession}
               onClick={onNewSession}
               disabled={isStartingSession || isDeleting || isSettingPrimary}

@@ -16,12 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Pencil,
-  ArrowUp,
-  Trash2,
-  ListEnd,
-} from 'lucide-react';
+import { ListEnd } from 'lucide-react';
 import { Tooltip } from '@bitfun/ui';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { stateMachineManager } from '../state-machine';
@@ -36,7 +31,7 @@ import type { QueuedMessage, SteeringImage } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
 import { getQueuedMessageAttachmentCount } from '../utils/pendingQueuePresentation';
 import './PendingQueuePanel.scss';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Icon } from '@bitfun/ui';
 import {
   ChatComposerQueue,
   ChatComposerQueueAttachmentBadge,
@@ -337,7 +332,7 @@ export function PendingQueuePanel({
                     data-bf-product-component="pending-queue-panel"
                     data-bf-product-part="action"
                     disabled={isSending || recoveryInFlight}
-                    icon={<ArrowUp strokeWidth={2.25} />}
+                    icon={<Icon name="arrow-up" size="lg" />}
                     loading={isSendingNow}
                     size="xs"
                     onClick={() => {
@@ -352,7 +347,7 @@ export function PendingQueuePanel({
                     data-bf-product-component="pending-queue-panel"
                     data-bf-product-part="action"
                     disabled={isSending}
-                    icon={<Trash2 strokeWidth={2.25} />}
+                    icon={<Icon name="delete" size="lg" />}
                     size="xs"
                     onClick={() => handleDelete(item)}
                   />
@@ -364,7 +359,7 @@ export function PendingQueuePanel({
                     data-bf-product-component="pending-queue-panel"
                     data-bf-product-part="action"
                     disabled={isSending}
-                    icon={<Pencil strokeWidth={2.25} />}
+                    icon={<Icon name="edit" size="lg" />}
                     size="xs"
                     onClick={() => handleRestoreToComposer(item)}
                   />

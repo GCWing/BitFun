@@ -1,6 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import React from 'react';
-import { AlertCircle, LoaderCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { SessionHistoryState } from '../../types/flow-chat';
 
@@ -36,7 +36,7 @@ export const HistorySessionPlaceholder: React.FC<HistorySessionPlaceholderProps>
         <Button
           variant="outline"
           size="md"
-          leadingIcon={<RefreshCw size={14} aria-hidden="true" />}
+          leadingIcon={<Icon name="refresh" size="sm" aria-hidden="true" />}
           onClick={onRetry}
         >
           {t('historyState.retry')}

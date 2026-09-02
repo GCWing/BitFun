@@ -12,6 +12,8 @@
     "title": "Auto Session Title",
     "subtitle": "AI automatically generates concise titles for new conversations",
     "loadFailed": "Failed to load session title settings",
+    "loadFailedLocked": "Session title settings could not be read. The switch and model selector are locked.",
+    "retry": "Reload",
     "model": {
       "label": "Session Title Generation Model",
       "inherit": "Current session model",
@@ -20,6 +22,7 @@
     },
     "models": {
       "empty": "No available models. Please add models in \"Models\" first.",
+      "unavailable": "{{id}} (disabled or missing)",
       "updateSuccess": "{{agentName}} will use {{modelName}}"
     },
     "messages": {
@@ -397,7 +400,7 @@
   },
   "proxy": {
     "enable": "Enable Proxy",
-    "enableHint": "When enabled, all AI requests will be sent through proxy (requires IDE restart)",
+    "enableHint": "When enabled, all AI requests are sent through the proxy (requires a BitFun restart)",
     "url": "Proxy URL",
     "urlPlaceholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
     "urlHint": "Supports HTTP/HTTPS/SOCKS5 proxy, format: protocol://address:port",
@@ -406,7 +409,7 @@
     "password": "Password (optional)",
     "passwordPlaceholder": "Proxy authentication password",
     "save": "Save Proxy Configuration",
-    "saveSuccess": "Proxy configuration saved, restart IDE to take effect"
+    "saveSuccess": "Proxy configuration saved. Restart BitFun to apply it"
   },
   "streamIdleTimeout": {
     "title": "Streaming Timeout",
@@ -458,6 +461,16 @@
     "addProvider": "Add Provider",
     "createFirst": "Create First Configuration"
   },
+  "deleteConfirm": {
+    "title": "Delete model configuration?",
+    "message": "This deletes the model “{{name}}”. It is explicitly referenced by {{count}} setting(s). Those references will not automatically switch to another model, so related features may fall back or become unavailable.",
+    "confirm": "Delete model"
+  },
+  "discardChanges": {
+    "title": "Discard unsaved changes?",
+    "message": "The model or provider draft has not been saved. Closing now will lose these changes.",
+    "confirm": "Discard changes"
+  },
   "empty": {
     "noModels": "No model configurations",
     "noMatchingModels": "No matching models found"
@@ -466,6 +479,10 @@
     "placeholder": "Search model name, provider..."
   },
   "messages": {
+    "loading": "Loading model settings…",
+    "loadFailedLocked": "Model settings could not be read. This page is locked to avoid overwriting the current configuration.",
+    "retry": "Reload",
+    "unsaved": "Unsaved",
     "fillRequired": "Please fill in required fields",
     "fillModelName": "Please fill in model name",
     "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
@@ -474,6 +491,8 @@
     "invalidReasoningPresets": "Fix the reasoning preset IDs, settings, default selection, or JSON before saving.",
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
+    "deleteSuccess": "Model configuration deleted",
+    "referenceCheckFailed": "BitFun could not verify whether other settings still reference this model, so deletion was cancelled",
     "loadFailed": "Failed to load AI configuration",
     "testSuccess": "Test successful",
     "testFailed": "Test failed",

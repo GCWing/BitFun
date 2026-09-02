@@ -1,5 +1,5 @@
-import { Check, Copy } from 'lucide-react';
-import { IconButton } from '@bitfun/ui';
+
+import { IconButton, Icon } from '@bitfun/ui';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 
 export interface ToolCardCopyActionProps {
@@ -40,7 +40,7 @@ export function ToolCardCopyAction({
       className={className}
       data-bf-state={copied ? 'copied' : undefined}
       disabled={disabled}
-      icon={copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      icon={copied ? <Icon name="check-line" size="lg" aria-hidden="true" /> : <Icon name="duplicate" size="lg" aria-hidden="true" />}
       onClick={copy}
       size="sm"
       title={label}

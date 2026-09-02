@@ -1,5 +1,6 @@
+import { Icon } from '@bitfun/ui';
 import React from 'react';
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { TurnCompletionNotice } from '../../utils/turnCompletionNotice';
 import './TurnCompletionNoticeItem.scss';
@@ -13,7 +14,7 @@ function getNoticeIcon(tone: TurnCompletionNotice['tone']): React.ReactNode {
     case 'error':
       return <AlertCircle size={16} />;
     case 'info':
-      return <Info size={16} />;
+      return <Icon name="info" size="md" />;
     case 'warning':
     default:
       return <AlertTriangle size={16} />;

@@ -4,8 +4,9 @@
  * Renders merged explore-only rounds as a collapsible region.
  */
 
+import { Icon } from '@bitfun/ui';
 import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
 import type { ExploreGroupData } from '../../store/modernFlowChatStore';
@@ -229,18 +230,24 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
       className={className}
     >
       {allowManualToggle && (
-        <div
+        <button
+          type="button"
           data-bf-component="explore-group"
           data-bf-part="header"
           className="explore-region__header"
           onClick={handleToggle}
+          aria-expanded={isExpanded}
           data-testid="chat-explore-group-toggle"
           data-group-kind={groupKind}
           data-expanded={isExpanded ? 'true' : 'false'}
         >
-          <ChevronRight size={14} className="explore-region__icon" />
+          <span aria-hidden="true" className="explore-region__leading-icon">
+            <Icon name="search" size="sm" className="explore-region__leading-icon--default" />
+            <Icon name="chevron-right" size="sm" className="explore-region__leading-icon--collapsed-hover" />
+            <Icon name="chevron-down" size="sm" className="explore-region__leading-icon--expanded" />
+          </span>
           <span data-bf-component="explore-group" data-bf-part="summary" className="explore-region__summary">{displaySummary}</span>
-        </div>
+        </button>
       )}
       <SmoothHeightCollapse
         isOpen={isExpanded}

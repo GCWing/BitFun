@@ -27,6 +27,27 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@bitfun/ui', async importOriginal => ({
   ...await importOriginal<typeof import('@bitfun/ui')>(),
+  ConfirmDialog: ({
+    confirmText,
+    message,
+    onConfirm,
+    open,
+    title,
+  }: {
+    confirmText: string;
+    message: React.ReactNode;
+    onConfirm: () => void;
+    open: boolean;
+    title: string;
+  }) => open ? (
+    <div role="dialog">
+      <h2>{title}</h2>
+      <div>{message}</div>
+      <button type="button" data-testid="confirm-install" onClick={onConfirm}>
+        {confirmText}
+      </button>
+    </div>
+  ) : null,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({
     children,
@@ -89,6 +110,20 @@ vi.mock('@bitfun/ui', async importOriginal => ({
 }));
 
 vi.mock('./common', () => ({
+  ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
+  ConfigMessage: ({ message }: { message: { text: string } | null }) => (
+    message ? <div>{message.text}</div> : null
+  ),
+  ConfigRetryState: ({ message, onRetry, retryLabel }: {
+    message: string;
+    onRetry: () => void;
+    retryLabel: string;
+  }) => (
+    <div>
+      <span>{message}</span>
+      <button type="button" onClick={onRetry}>{retryLabel}</button>
+    </div>
+  ),
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageHeader: ({ title, subtitle, extra }: {
     title: string;
@@ -604,6 +639,13 @@ describe('AcpAgentsConfig', () => {
     await act(async () => {
       installButtons[0].click();
       await Promise.resolve();
+    });
+    const confirmInstall = container.querySelector<HTMLButtonElement>(
+      '[data-testid="confirm-install"]',
+    );
+    expect(confirmInstall).not.toBeNull();
+    await act(async () => {
+      confirmInstall?.click();
       await Promise.resolve();
     });
 
@@ -778,6 +820,14 @@ describe('AcpAgentsConfig', () => {
 
     await act(async () => {
       installButtons[installButtons.length - 1].click();
+      await Promise.resolve();
+    });
+    const confirmInstall = container.querySelector<HTMLButtonElement>(
+      '[data-testid="confirm-install"]',
+    );
+    expect(confirmInstall).not.toBeNull();
+    await act(async () => {
+      confirmInstall?.click();
       await Promise.resolve();
     });
 

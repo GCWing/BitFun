@@ -217,12 +217,14 @@
     border-radius: 6px;
     background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 58%, transparent);
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       flex: 0 0 auto;
       color: var(--bf-color-content-secondary);
     }
 
     &--warning svg,
+    &--warning [data-bf-component='icon'],
     &--warning .session-usage-report-card__metric-value {
       color: var(--bf-color-status-warning-content);
     }
@@ -641,7 +643,8 @@
   line-height: var(--bf-type-meta-line-height);
 }
 
-.session-usage-report-card__compact-metric-label svg {
+.session-usage-report-card__compact-metric-label svg,
+.session-usage-report-card__compact-metric-label [data-bf-component='icon'] {
   flex: 0 0 auto;
   color: var(--bf-color-content-primary);
 }
@@ -691,6 +694,7 @@
 }
 
 .session-usage-report-card__compact-metric--warning .session-usage-report-card__compact-metric-label svg,
+.session-usage-report-card__compact-metric--warning .session-usage-report-card__compact-metric-label [data-bf-component='icon'],
 .session-usage-report-card__compact-metric--warning > .session-usage-report-card__metric-value,
 .session-usage-report-card__compact-metric--warning > [data-tooltip] .session-usage-report-card__metric-value {
   color: var(--bf-color-status-warning-content);

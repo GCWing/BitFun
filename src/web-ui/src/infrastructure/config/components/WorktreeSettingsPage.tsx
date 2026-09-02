@@ -30,6 +30,7 @@ import {
   ConfigLoadingState,
   ConfigMessage,
   ConfigRefreshButton,
+  ConfigRetryState,
 } from './common';
 import './WorktreeSettingsPage.scss';
 
@@ -90,6 +91,14 @@ function normalizeSettings(configured: unknown): WorktreeSettings {
   };
 }
 
+function settingsEqual(left: WorktreeSettings, right: WorktreeSettings): boolean {
+  return left.rootPath === right.rootPath
+    && left.branchPrefix === right.branchPrefix
+    && left.copyLocalChanges === right.copyLocalChanges
+    && left.autoDeleteEnabled === right.autoDeleteEnabled
+    && left.autoDeleteLimit === right.autoDeleteLimit;
+}
+
 function createDeleteRequestId(): string {
   return globalThis.crypto?.randomUUID?.()
     ?? `worktree-settings-delete-${Date.now()}-${Math.random()}`;
@@ -138,6 +147,7 @@ function waitFor(ms: number): Promise<void> {
 const WorktreeSettingsPage: React.FC = () => {
   const { t } = useI18n('worktrees');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [trustedSettings, setTrustedSettings] = useState<WorktreeSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState<PageMessage | null>(null);
@@ -155,6 +165,17 @@ const WorktreeSettingsPage: React.FC = () => {
   const pendingScrollSnapshotRef = useRef<ScrollSnapshot | null>(null);
   const worktreeMutationInFlightRef = useRef(false);
   const pendingWorktreeRefreshRef = useRef(false);
+  const settingsDirty = trustedSettings !== null && !settingsEqual(settings, trustedSettings);
+
+  useEffect(() => {
+    if (!settingsDirty) return undefined;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [settingsDirty]);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -163,13 +184,20 @@ const WorktreeSettingsPage: React.FC = () => {
       const configured = await configAPI.getConfig('app.worktrees', {
         skipRetryOnNotFound: true,
       });
-      setSettings(normalizeSettings(configured));
+      const nextSettings = normalizeSettings(configured);
+      setSettings(nextSettings);
+      setTrustedSettings(nextSettings);
     } catch {
-      setSettingsMessage({ type: 'error', text: t('settings.loadFailed') });
+      setTrustedSettings(null);
     } finally {
       setSettingsLoading(false);
     }
-  }, [t]);
+  }, []);
+
+  const updateSettings = useCallback((patch: Partial<WorktreeSettings>) => {
+    setSettings(current => ({ ...current, ...patch }));
+    setSettingsMessage(null);
+  }, []);
 
   const captureScrollSnapshot = useCallback((): ScrollSnapshot | null => {
     const anchor = projectsResultsRef.current;
@@ -244,6 +272,9 @@ const WorktreeSettingsPage: React.FC = () => {
   }, [loadProjects, loadSettings]);
 
   const save = async () => {
+    if (!trustedSettings || !settingsDirty || saving) {
+      return;
+    }
     if (!settings.rootPath.trim() || !settings.branchPrefix.trim()) {
       setSettingsMessage({ type: 'error', text: t('settings.required') });
       return;
@@ -273,6 +304,7 @@ const WorktreeSettingsPage: React.FC = () => {
       };
       await configAPI.setConfig('app.worktrees', normalized);
       setSettings(normalized);
+      setTrustedSettings(normalized);
       setSettingsMessage({ type: 'success', text: t('settings.saved') });
     } catch {
       setSettingsMessage({ type: 'error', text: t('settings.saveFailed') });
@@ -395,9 +427,23 @@ const WorktreeSettingsPage: React.FC = () => {
       return <ConfigLoadingState label={t('settings.loading')} />;
     }
 
+    if (!trustedSettings) {
+      return (
+        <ConfigRetryState
+          message={t('settings.loadFailed')}
+          retryLabel={t('settings.retry')}
+          onRetry={() => void loadSettings()}
+        />
+      );
+    }
+
     return (
       <>
-        <ConfigMessage message={settingsMessage} />
+        <ConfigMessage
+          message={settingsMessage ?? (settingsDirty
+            ? { type: 'info', text: t('settings.unsaved') }
+            : null)}
+        />
         <ConfigPageSection
           title={t('settings.isolation.title')}
           description={t('settings.isolation.description')}
@@ -408,10 +454,7 @@ const WorktreeSettingsPage: React.FC = () => {
           >
             <Input
               value={settings.rootPath}
-              onChange={event => setSettings(current => ({
-                ...current,
-                rootPath: event.target.value,
-              }))}
+              onChange={event => updateSettings({ rootPath: event.target.value })}
               disabled={saving}
             />
           </ConfigPageRow>
@@ -421,10 +464,7 @@ const WorktreeSettingsPage: React.FC = () => {
           >
             <Input
               value={settings.branchPrefix}
-              onChange={event => setSettings(current => ({
-                ...current,
-                branchPrefix: event.target.value,
-              }))}
+              onChange={event => updateSettings({ branchPrefix: event.target.value })}
               disabled={saving}
             />
           </ConfigPageRow>
@@ -435,10 +475,7 @@ const WorktreeSettingsPage: React.FC = () => {
           >
             <Switch
               checked={settings.copyLocalChanges}
-              onChange={event => setSettings(current => ({
-                ...current,
-                copyLocalChanges: event.target.checked,
-              }))}
+              onChange={event => updateSettings({ copyLocalChanges: event.target.checked })}
               disabled={saving}
             />
           </ConfigPageRow>
@@ -449,10 +486,7 @@ const WorktreeSettingsPage: React.FC = () => {
           >
             <Switch
               checked={settings.autoDeleteEnabled}
-              onChange={event => setSettings(current => ({
-                ...current,
-                autoDeleteEnabled: event.target.checked,
-              }))}
+              onChange={event => updateSettings({ autoDeleteEnabled: event.target.checked })}
               disabled={saving}
             />
           </ConfigPageRow>
@@ -463,10 +497,7 @@ const WorktreeSettingsPage: React.FC = () => {
           >
             <NumberInput
               value={settings.autoDeleteLimit}
-              onValueChange={value => setSettings(current => ({
-                ...current,
-                autoDeleteLimit: value,
-              }))}
+              onValueChange={value => updateSettings({ autoDeleteLimit: value })}
               min={AUTO_DELETE_LIMIT_MIN}
               max={AUTO_DELETE_LIMIT_MAX}
               showButtons={false}
@@ -480,8 +511,8 @@ const WorktreeSettingsPage: React.FC = () => {
             className="bitfun-worktree-settings__action"
             variant="outline"
             size="sm"
-            onClick={() => setSettings(DEFAULT_SETTINGS)}
-            disabled={saving}
+            onClick={() => updateSettings(DEFAULT_SETTINGS)}
+            disabled={saving || settingsEqual(settings, DEFAULT_SETTINGS)}
             leadingIcon={<RotateCcw size={14} aria-hidden />}
           >
 
@@ -493,6 +524,7 @@ const WorktreeSettingsPage: React.FC = () => {
             size="sm"
             onClick={() => void save()}
             loading={saving}
+            disabled={saving || !settingsDirty}
             leadingIcon={<Save size={14} aria-hidden />}
           >
 

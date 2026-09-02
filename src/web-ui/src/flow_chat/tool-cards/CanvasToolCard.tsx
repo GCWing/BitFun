@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
-import { AlertTriangle, Paintbrush } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+import { AlertTriangle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { getToolCardConfig } from './toolCardMetadata';
@@ -182,7 +183,7 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
 
   const header = (
     <ProminentToolCardHeader
-      icon={<span className="canvas-tool-card__icon"><Paintbrush size={16} /></span>}
+      icon={<span className="canvas-tool-card__icon"><Icon name="creative" size="md" /></span>}
       action={toolDisplayName}
       content={<span data-bf-component="canvas-tool-card" data-bf-part="title" className="canvas-tool-card__title">{title}</span>}
       extra={(

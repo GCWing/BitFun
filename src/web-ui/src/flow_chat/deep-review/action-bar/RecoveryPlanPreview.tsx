@@ -1,10 +1,7 @@
+import { Icon } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  CheckCircle,
-  RotateCcw,
-  SkipForward,
-} from 'lucide-react';
+import { RotateCcw, SkipForward } from 'lucide-react';
 import type { RecoveryPlan } from '../../utils/deepReviewExperience';
 
 interface RecoveryPlanPreviewProps {
@@ -21,7 +18,7 @@ export const RecoveryPlanPreview: React.FC<RecoveryPlanPreviewProps> = ({
       <div className="deep-review-action-bar__recovery-plan-detail">
         {recoveryPlan.willPreserve.length > 0 && (
           <div className="deep-review-action-bar__recovery-item">
-            <CheckCircle size={12} className="deep-review-action-bar__recovery-icon--preserve" />
+            <Icon name="check-circle" size="xs" className="deep-review-action-bar__recovery-icon--preserve" />
             <span>
               {t('deepReviewActionBar.recoveryPreserve', {
                 count: recoveryPlan.willPreserve.length,

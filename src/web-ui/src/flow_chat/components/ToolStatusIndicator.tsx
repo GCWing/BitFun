@@ -3,7 +3,8 @@
  */
 
 import React from 'react';
-import { Loader2, CheckCircle, XCircle, AlertCircle, type LucideIcon } from 'lucide-react';
+import { Icon, type IconName } from '@bitfun/ui';
+import { Loader2, XCircle, AlertCircle, type LucideIcon } from 'lucide-react';
 import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import type { ToolExecutionStatus } from '../../shared/types/tool-events';
 
@@ -18,6 +19,7 @@ const STATUS_CONFIG: Record<
   ToolExecutionStatus,
   {
     icon: LucideIcon | null;
+    catalogIcon?: IconName;
     color: string;
     bgColor: string;
     label: string;
@@ -56,7 +58,8 @@ const STATUS_CONFIG: Record<
     animate: true
   },
   completed: {
-    icon: CheckCircle,
+    icon: null,
+    catalogIcon: 'check-circle',
     color: 'text-green-500',
     bgColor: 'bg-green-100',
     label: 'Completed',
@@ -97,6 +100,12 @@ export const ToolStatusIndicator: React.FC<ToolStatusIndicatorProps> = ({
       <div className={`flex items-center justify-center w-5 h-5 rounded-full ${config.bgColor}`}>
         {config.useDots ? (
           <ToolProcessingDots size={12} className={config.color} />
+        ) : config.catalogIcon ? (
+          <Icon
+            name={config.catalogIcon}
+            size="xs"
+            className={`w-3 h-3 ${config.color}`}
+          />
         ) : config.icon ? (
           <config.icon
             className={`w-3 h-3 ${config.color} ${config.animate ? 'animate-spin' : ''}`}

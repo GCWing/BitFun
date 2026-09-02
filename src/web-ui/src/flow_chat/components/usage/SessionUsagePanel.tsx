@@ -1,17 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Activity,
-  AlertTriangle,
-  Check,
-  Copy,
-  Clock3,
-  Database,
-  FileText,
-  GitCompare,
-  ShieldCheck,
-  Wrench,
-} from 'lucide-react';
+import { Activity, AlertTriangle, Database, FileText, GitCompare, ShieldCheck, Wrench, type LucideProps } from 'lucide-react';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { Tooltip } from '@bitfun/ui';
 import { snapshotAPI } from '@/infrastructure/api';
@@ -51,7 +40,7 @@ import {
 } from './usageReportUtils';
 import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsagePanel.scss';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Icon } from '@bitfun/ui';
 
 const log = createLogger('SessionUsagePanel');
 type UsageTranslator = (key: string, options?: Record<string, unknown>) => string;
@@ -65,6 +54,15 @@ interface SessionUsagePanelProps {
 
 const TABS: SessionUsagePanelTab[] = ['overview', 'models', 'tools', 'files', 'errors', 'slowest'];
 const MAX_USAGE_TABLE_ROWS = 50;
+
+const UsageClockIcon: React.FC<LucideProps> = ({ className, size = 16, style }) => (
+  <Icon
+    name="clock"
+    size="md"
+    className={className}
+    style={{ width: size, height: size, ...style }}
+  />
+);
 
 function tabId(tab: SessionUsagePanelTab): string {
   return `session-usage-tab-${tab}`;
@@ -164,7 +162,7 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
               size="sm"
               onClick={handleCopy}
               aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-              icon={copied ? <Check size={14} /> : <Copy size={14} />}
+              icon={copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
             />
           </Tooltip>
         </div>
@@ -233,7 +231,7 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
               size="sm"
               onClick={handleCopy}
               aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-              icon={copied ? <Check size={14} /> : <Copy size={14} />}
+              icon={copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
             />
           </Tooltip>
         </div>
@@ -348,7 +346,7 @@ function UsageMetaRow({
             size="sm"
             onClick={onCopy}
             aria-label={copyLabel}
-            icon={copied ? <Check size={13} /> : <Copy size={13} />}
+            icon={copied ? <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="duplicate" size="lg" style={{ width: 13, height: 13 }} />}
           />
         </Tooltip>
       )}
@@ -577,7 +575,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
   const metrics = [
     {
       key: 'wall',
-      icon: Clock3,
+      icon: UsageClockIcon,
       label: t('usage.metrics.wall'),
       value: formatUsageDuration(report.time.wallTimeMs, t),
       help: t('usage.help.wall'),

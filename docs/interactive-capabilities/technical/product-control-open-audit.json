@@ -2691,7 +2691,7 @@
         "viewId": "shortcuts"
       },
       "evidence": [
-        "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#checkConflicts",
+        "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildFinalConflictMap",
         "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildStoredKeybindings({})"
       ]
     },

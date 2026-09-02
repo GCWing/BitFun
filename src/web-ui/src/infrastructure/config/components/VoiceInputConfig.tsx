@@ -24,6 +24,7 @@ import {
   ConfigMessage,
   ConfigPageRow,
   ConfigPageSection,
+  ConfigRetryState,
 } from './common';
 import './VoiceInputConfig.scss';
 
@@ -59,6 +60,19 @@ function statusBadgeVariant(status: VoiceInputStatus): StatusPillTone {
   }
 }
 
+function realtimeConfigsEqual(
+  left: SpeechRealtimeConfig,
+  right: SpeechRealtimeConfig,
+): boolean {
+  return left.enabled === right.enabled
+    && left.provider === right.provider
+    && left.apiKey === right.apiKey
+    && left.voice === right.voice
+    && left.speed === right.speed
+    && left.loudness === right.loudness
+    && left.microphoneDeviceId === right.microphoneDeviceId;
+}
+
 const VoiceInputConfig: React.FC = () => {
   const { t } = useTranslation('settings/voice-input');
   const speechRuntimeSupported = isTauriRuntime();
@@ -66,13 +80,22 @@ const VoiceInputConfig: React.FC = () => {
     settings,
     isLoading: settingsLoading,
     error: settingsError,
+    reload: reloadSettings,
   } = useAIExperienceSettings();
   const [models, setModels] = useState<SpeechModelStatus[]>([]);
   const [modelsLoading, setModelsLoading] = useState(speechRuntimeSupported);
+  const [modelsLoadFailed, setModelsLoadFailed] = useState(false);
+  const [voiceInputSaving, setVoiceInputSaving] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [localModelsOpen, setLocalModelsOpen] = useState(false);
   const [voiceCallDraft, setVoiceCallDraft] = useState<SpeechRealtimeConfig | null>(null);
+  const [trustedVoiceCallConfig, setTrustedVoiceCallConfig] = useState<SpeechRealtimeConfig | null>(null);
+  const [voiceCallLoading, setVoiceCallLoading] = useState(speechRuntimeSupported);
+  const [voiceCallLoadFailed, setVoiceCallLoadFailed] = useState(false);
   const cancelDownloadRequestedRef = useRef<Set<string>>(new Set());
+  const voiceCallRequestIdRef = useRef(0);
+  const voiceInputSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingVoiceInputSaveCountRef = useRef(0);
 
   const voiceInput = settings?.voice_input;
   const legacyCloudSelection = voiceInput?.provider === 'cloud';
@@ -90,19 +113,38 @@ const VoiceInputConfig: React.FC = () => {
     [models],
   );
 
-  useEffect(() => {
-    if (!speechRuntimeSupported) return undefined;
-    let active = true;
-    void speechAPI.getRealtimeConfig().then(config => {
-      if (active) setVoiceCallDraft(config);
-    }).catch(error => {
+  const loadVoiceCallConfig = useCallback(async () => {
+    if (!speechRuntimeSupported) {
+      setVoiceCallLoading(false);
+      return;
+    }
+    const requestId = ++voiceCallRequestIdRef.current;
+    setVoiceCallLoading(true);
+    setVoiceCallLoadFailed(false);
+    try {
+      const config = await speechAPI.getRealtimeConfig();
+      if (requestId !== voiceCallRequestIdRef.current) return;
+      setVoiceCallDraft(config);
+      setTrustedVoiceCallConfig(config);
+    } catch (error) {
+      if (requestId !== voiceCallRequestIdRef.current) return;
       log.error('Failed to load controller realtime voice call settings', { error });
-      notificationService.error(t('voiceCall.messages.loadFailed'));
-    });
+      setVoiceCallDraft(null);
+      setTrustedVoiceCallConfig(null);
+      setVoiceCallLoadFailed(true);
+    } finally {
+      if (requestId === voiceCallRequestIdRef.current) {
+        setVoiceCallLoading(false);
+      }
+    }
+  }, [speechRuntimeSupported]);
+
+  useEffect(() => {
+    void loadVoiceCallConfig();
     return () => {
-      active = false;
+      voiceCallRequestIdRef.current += 1;
     };
-  }, [speechRuntimeSupported, t]);
+  }, [loadVoiceCallConfig]);
 
   const languageOptions = useMemo<SelectOption[]>(() => {
     const languages = selectedModel?.languages?.length
@@ -121,15 +163,16 @@ const VoiceInputConfig: React.FC = () => {
     }
     try {
       setModelsLoading(true);
+      setModelsLoadFailed(false);
       const response = await speechAPI.listModels();
       setModels(response.models);
     } catch (error) {
       log.error('Failed to load local speech model status', { error });
-      notificationService.error(t('messages.loadFailed'));
+      setModelsLoadFailed(true);
     } finally {
       setModelsLoading(false);
     }
-  }, [speechRuntimeSupported, t]);
+  }, [speechRuntimeSupported]);
 
   useEffect(() => {
     if (!speechRuntimeSupported) return undefined;
@@ -150,19 +193,30 @@ const VoiceInputConfig: React.FC = () => {
     };
   }, [loadModels, speechRuntimeSupported]);
 
-  const updateVoiceInput = useCallback(async (patch: Partial<VoiceInputSettings>) => {
+  const updateVoiceInput = useCallback((patch: Partial<VoiceInputSettings>): Promise<boolean> => {
     if (!settings) {
       notificationService.error(t('messages.loadFailed'));
-      return false;
+      return Promise.resolve(false);
     }
-    try {
-      await aiExperienceConfigService.saveSettings({ voice_input: patch });
-      return true;
-    } catch (error) {
-      log.error('Failed to save voice input settings', { error });
-      notificationService.error(t('messages.saveFailed'));
-      return false;
-    }
+    pendingVoiceInputSaveCountRef.current += 1;
+    setVoiceInputSaving(true);
+    const operation = voiceInputSaveQueueRef.current.then(async () => {
+      try {
+        await aiExperienceConfigService.saveSettings({ voice_input: patch });
+        return true;
+      } catch (error) {
+        log.error('Failed to save voice input settings', { error });
+        notificationService.error(t('messages.saveFailed'));
+        return false;
+      } finally {
+        pendingVoiceInputSaveCountRef.current -= 1;
+        if (pendingVoiceInputSaveCountRef.current === 0) {
+          setVoiceInputSaving(false);
+        }
+      }
+    });
+    voiceInputSaveQueueRef.current = operation.then(() => undefined, () => undefined);
+    return operation;
   }, [settings, t]);
 
   const updateModelStatus = useCallback((status: SpeechModelStatus) => {
@@ -172,8 +226,11 @@ const VoiceInputConfig: React.FC = () => {
   }, []);
 
   const saveVoiceCall = useCallback(async () => {
-    if (!voiceCallDraft) {
+    if (!voiceCallDraft || !trustedVoiceCallConfig) {
       notificationService.error(t('messages.loadFailed'));
+      return;
+    }
+    if (realtimeConfigsEqual(voiceCallDraft, trustedVoiceCallConfig)) {
       return;
     }
     try {
@@ -187,6 +244,7 @@ const VoiceInputConfig: React.FC = () => {
         microphoneDeviceId: voiceCallDraft.microphoneDeviceId,
       });
       setVoiceCallDraft(saved);
+      setTrustedVoiceCallConfig(saved);
       window.dispatchEvent(new CustomEvent('bitfun:realtime-voice-config-changed', {
         detail: saved,
       }));
@@ -197,7 +255,21 @@ const VoiceInputConfig: React.FC = () => {
     } finally {
       setBusyAction(null);
     }
-  }, [t, voiceCallDraft]);
+  }, [t, trustedVoiceCallConfig, voiceCallDraft]);
+
+  const voiceCallDirty = voiceCallDraft !== null
+    && trustedVoiceCallConfig !== null
+    && !realtimeConfigsEqual(voiceCallDraft, trustedVoiceCallConfig);
+
+  useEffect(() => {
+    if (!voiceCallDirty) return undefined;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [voiceCallDirty]);
 
   const handleDownload = useCallback((model: SpeechModelStatus) => {
     if (model.state === 'downloading') return;
@@ -280,7 +352,12 @@ const VoiceInputConfig: React.FC = () => {
       <ConfigPageLayout className="voice-input-config" data-bf-component="voice-input-config" data-bf-part="root">
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <ConfigMessage message={{ type: 'error', text: t('messages.loadFailed') }} />
+          <ConfigRetryState
+            message={t('messages.loadFailed')}
+            retryLabel={t('messages.retry')}
+            onRetry={() => void reloadSettings()}
+            loading={settingsLoading}
+          />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -298,14 +375,17 @@ const VoiceInputConfig: React.FC = () => {
     : status === 'unavailable'
       ? <CloudOff size={18} />
       : status === 'setup'
-        ? <Icon name="download" size="lg" />
+        ? <Icon name="arrow-down" size="lg" />
         : <HardDrive size={18} />;
 
   return (
     <ConfigPageLayout className="voice-input-config" data-bf-component="voice-input-config" data-bf-part="root">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="voice-input-config__content">
-        <ConfigPageSection title={t('sections.basic')}>
+        <ConfigPageSection
+          title={t('sections.basic')}
+          description={t('sections.basicDescription')}
+        >
           <ConfigPageRow
             label={t('composer.enabled.label')}
             description={t('composer.enabled.description')}
@@ -313,10 +393,20 @@ const VoiceInputConfig: React.FC = () => {
           >
             <Switch
               checked={voiceInput.enabled}
+              disabled={voiceInputSaving || (modelsLoadFailed && !voiceInput.enabled)}
               onChange={(event) => void updateVoiceInput({ enabled: event.target.checked })}
             />
           </ConfigPageRow>
-          <ConfigPageRow label={t('status.label')} multiline>
+          {modelsLoadFailed ? (
+            <ConfigRetryState
+              message={t('messages.modelsLoadFailed')}
+              retryLabel={t('messages.retry')}
+              onRetry={() => void loadModels()}
+              loading={modelsLoading}
+            />
+          ) : (
+            <>
+              <ConfigPageRow label={t('status.label')} multiline>
             <div className="voice-input-config__status-panel">
               <div
                 className={`voice-input-config__status-card voice-input-config__status-card--${status}`}
@@ -342,7 +432,12 @@ const VoiceInputConfig: React.FC = () => {
                 </div>
                 <div className="voice-input-config__status-actions" data-bf-component="voice-input-config" data-bf-part="statusActions">
                   {status === 'unavailable' ? (
-                    <Button variant="fill" size="sm" onClick={() => void handleUseLocal()}>
+                    <Button
+                      variant="fill"
+                      size="sm"
+                      onClick={() => void handleUseLocal()}
+                      disabled={voiceInputSaving}
+                    >
                       {t('status.useLocal')}
                     </Button>
                   ) : null}
@@ -352,7 +447,7 @@ const VoiceInputConfig: React.FC = () => {
                       size="sm"
                       onClick={() => handleDownload(selectedModel)}
                       loading={busyAction === `download:${selectedModel.modelId}`}
-                      leadingIcon={<Icon name="download" size="sm" />}
+                      leadingIcon={<Icon name="arrow-down" size="sm" />}
                     >
 
                       {t('status.downloadAndEnable')}
@@ -395,34 +490,55 @@ const VoiceInputConfig: React.FC = () => {
                 </div>
               ) : null}
             </div>
-          </ConfigPageRow>
+              </ConfigPageRow>
 
-          <ConfigPageRow
-            label={t('composer.language.label')}
-            description={t('composer.language.description')}
-            align="center"
-          >
-            <Select
-              value={voiceInput.default_language}
-              onValueChange={(value) => void updateVoiceInput({ default_language: String(value) })}
-              options={languageOptions}
-              size="sm"
-              className="voice-input-config__select"
-            />
-          </ConfigPageRow>
+              <ConfigPageRow
+                label={t('composer.language.label')}
+                description={t('composer.language.description')}
+                align="center"
+              >
+                <Select
+                  value={voiceInput.default_language}
+                  onValueChange={(value) => void updateVoiceInput({ default_language: String(value) })}
+                  options={languageOptions}
+                  size="sm"
+                  className="voice-input-config__select"
+                  disabled={voiceInputSaving}
+                />
+              </ConfigPageRow>
 
-          <VoiceInputDiagnostics
-            settings={voiceInput}
-            modelInstalled={!legacyCloudSelection && selectedModel?.state === 'installed'}
-            unavailableReason={legacyCloudSelection ? t('diagnostics.recognition.cloudUnavailable') : undefined}
-            onDeviceChange={async microphoneDeviceId => {
-              await updateVoiceInput({ microphone_device_id: microphoneDeviceId });
-            }}
-          />
+              <VoiceInputDiagnostics
+                settings={voiceInput}
+                modelInstalled={!legacyCloudSelection && selectedModel?.state === 'installed'}
+                unavailableReason={legacyCloudSelection ? t('diagnostics.recognition.cloudUnavailable') : undefined}
+                onDeviceChange={async microphoneDeviceId => {
+                  await updateVoiceInput({ microphone_device_id: microphoneDeviceId });
+                }}
+              />
+            </>
+          )}
         </ConfigPageSection>
 
-        {voiceCallDraft ? (
-          <ConfigPageSection title={t('voiceCall.title')}>
+        <ConfigPageSection
+          title={t('voiceCall.title')}
+          description={t('voiceCall.description')}
+        >
+          {voiceCallLoading ? (
+            <ConfigLoadingState label={t('voiceCall.loading')} />
+          ) : voiceCallLoadFailed || !voiceCallDraft || !trustedVoiceCallConfig ? (
+            <ConfigRetryState
+              message={t('voiceCall.messages.loadFailed')}
+              retryLabel={t('messages.retry')}
+              onRetry={() => void loadVoiceCallConfig()}
+              loading={voiceCallLoading}
+            />
+          ) : (
+            <>
+              <ConfigMessage
+                message={voiceCallDirty
+                  ? { type: 'info', text: t('voiceCall.messages.unsaved') }
+                  : null}
+              />
             <ConfigPageRow
               label={t('voiceCall.enabled.label')}
               description={t('voiceCall.enabled.description')}
@@ -430,6 +546,7 @@ const VoiceInputConfig: React.FC = () => {
             >
               <Switch
                 checked={voiceCallDraft.enabled}
+                disabled={busyAction === 'save-voice-call'}
                 onChange={(event) => setVoiceCallDraft(previous => previous ? ({
                   ...previous,
                   enabled: event.target.checked,
@@ -448,7 +565,11 @@ const VoiceInputConfig: React.FC = () => {
                 autoComplete="off"
                 value={voiceCallDraft.apiKey}
                 placeholder={t('voiceCall.apiKey.placeholder')}
-                disabled={!voiceCallDraft.enabled || !speechRuntimeSupported}
+                disabled={
+                  !voiceCallDraft.enabled
+                  || !speechRuntimeSupported
+                  || busyAction === 'save-voice-call'
+                }
                 onChange={(event) => setVoiceCallDraft(previous => previous ? ({
                   ...previous,
                   apiKey: event.target.value,
@@ -464,7 +585,11 @@ const VoiceInputConfig: React.FC = () => {
                 className="voice-input-config__credential-input"
                 size="sm"
                 value={voiceCallDraft.voice}
-                disabled={!voiceCallDraft.enabled || !speechRuntimeSupported}
+                disabled={
+                  !voiceCallDraft.enabled
+                  || !speechRuntimeSupported
+                  || busyAction === 'save-voice-call'
+                }
                 onChange={(event) => setVoiceCallDraft(previous => previous ? ({
                   ...previous,
                   voice: event.target.value,
@@ -485,16 +610,20 @@ const VoiceInputConfig: React.FC = () => {
                 loading={busyAction === 'save-voice-call'}
                 disabled={
                   !speechRuntimeSupported
-                  || !voiceCallDraft.voice.trim()
-                  || (voiceCallDraft.enabled && !voiceCallDraft.apiKey.trim())
+                  || !voiceCallDirty
+                  || (voiceCallDraft.enabled && (
+                    !voiceCallDraft.voice.trim()
+                    || !voiceCallDraft.apiKey.trim()
+                  ))
                 }
                 onClick={() => void saveVoiceCall()}
               >
                 {t('voiceCall.save')}
               </Button>
             </ConfigPageRow>
-          </ConfigPageSection>
-        ) : null}
+            </>
+          )}
+        </ConfigPageSection>
 
       </ConfigPageContent>
       <LocalVoiceModelsConfig

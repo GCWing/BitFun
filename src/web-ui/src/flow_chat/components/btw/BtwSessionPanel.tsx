@@ -2,7 +2,7 @@ import { Button, IconButton } from '@bitfun/ui';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import path from 'path-browserify';
-import {CornerUpLeft, Link2, Loader2, Square, Sparkles} from 'lucide-react';
+import { CornerUpLeft, Loader2, Square } from 'lucide-react';
 import {FlowChatContext, FlowChatVolatileContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {RuntimeStatusSlot} from '../modern/RuntimeStatusSlot';
@@ -18,7 +18,7 @@ import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../ev
 import {fileTabManager} from '@/shared/services/FileTabManager';
 import {createTab} from '@/shared/utils/tabUtils';
 import { type LineRange } from '@/shared/editor/LineRange';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { DEFAULT_RETAINED_MOUNT_MS, RetainedMountBoundary } from '@/shared/presence';
 import {resolveSessionRelationship} from '../../utils/sessionMetadata';
 import {agentAPI} from '@/infrastructure/api';
@@ -1038,7 +1038,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             {showOriginMeta && (
               <div className="btw-session-panel__meta" data-bf-component="btw-session-panel" data-bf-part="meta">
                 <span className="btw-session-panel__meta-label">{childOriginLabel}</span>
-                <Link2 size={11} />
+                <Icon name="link" size="2xs" />
                 <span className="btw-session-panel__meta-title">{resolveSessionTitle(parentSession, t('btw.parent'))}</span>
               </div>
             )}
@@ -1169,7 +1169,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 label: minimizedActionLabel,
               })}
             >
-              <Sparkles size={14} />
+              <Icon name="spark" size="sm" />
               <span className="btw-session-panel__minimized-text">
                 {minimizedActionLabel}
               </span>

@@ -8,7 +8,6 @@ import { Icon, type IconName, type IconSize } from '@bitfun/ui';
 import { 
   Code, 
   FileText, 
-  Edit3,
   BookOpen,
   ClipboardList,
   Network,
@@ -159,7 +158,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'ui-editor': {
     type: 'ui-editor',
     displayName: 'UI Editor',
-    icon: Edit3,
+    icon: catalogPanelIcon('edit'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

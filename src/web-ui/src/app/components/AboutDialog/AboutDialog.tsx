@@ -19,7 +19,7 @@ import {
 } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { CalendarDays, Code2, ShieldCheck, Sparkle, Tag } from 'lucide-react';
+import { CalendarDays, Code2, ShieldCheck, Tag } from 'lucide-react';
 import {
   formatBuildDate,
   formatDisplayedVersion,
@@ -470,7 +470,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             <div className="bitfun-about-dialog__star-copy">
               <h2 id="bitfun-about-star-title" className="bitfun-about-dialog__star-title">
                 <span>{t('about.githubStarTitle')}</span>
-                <Sparkle size={13} fill="currentColor" aria-hidden="true" />
+                <Icon name="spark" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />
               </h2>
               <p className="bitfun-about-dialog__star-description">
                 {t('about.githubStarDescription')}

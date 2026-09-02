@@ -1,9 +1,9 @@
 {
-  "title": "Usage Statistics",
-  "subtitle": "Historical model calls stored on this device. Usage is not merged or synced across devices; view requests, tokens, and cache hit rates by model, provider, and endpoint.",
+  "title": "Call Statistics",
+  "subtitle": "Historical model calls stored on the current execution host. Data is not merged or synced across hosts; view requests, tokens, and cache hit rates by model, provider, and endpoint.",
   "overview": {
     "title": "Usage Overview",
-    "description": "Adjust the range and filters; statistics refresh automatically."
+    "description": "Calls from the current execution host for {{timeRange}}, with dates and hours grouped in {{timeZone}}. Changing filters refreshes the data automatically."
   },
   "timeRange": {
     "label": "Time range",

@@ -13,9 +13,9 @@
 
 import React, { useState } from 'react';
 import { Button } from '@bitfun/ui';
-import { Check, ShieldAlert, X } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import type {
   PermissionReplyKind,
   PermissionRequest,
@@ -286,7 +286,7 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
           type="button"
           variant="outline"
           size="sm"
-          leadingIcon={<X size={13} strokeWidth={2.2} />}
+          leadingIcon={<Icon name="xmark" size="lg" style={{ width: 13, height: 13 }} />}
           disabled={responding}
           data-testid="chat-input-approval-reject"
           onClick={() => void answer('reject', false)}
@@ -302,7 +302,7 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
               type="button"
               variant="outline"
               size="sm"
-              leadingIcon={<X size={13} strokeWidth={2.2} />}
+              leadingIcon={<Icon name="xmark" size="lg" style={{ width: 13, height: 13 }} />}
               disabled={responding}
               data-testid="chat-input-approval-reject-with-reason"
               onClick={() => void answer('reject', true)}
@@ -315,7 +315,7 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
           type="button"
           variant="fill"
           size="sm"
-          leadingIcon={<Check size={13} strokeWidth={2.2} />}
+          leadingIcon={<Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} />}
           disabled={responding}
           data-testid="chat-input-approval-allow"
           onClick={() => void answer('once', false)}

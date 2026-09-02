@@ -29,7 +29,10 @@
     "button": "編輯"
   },
   "delete": {
-    "button": "刪除"
+    "button": "刪除",
+    "confirmTitle": "刪除自訂動作？",
+    "confirmMessage": "將刪除「{{name}}」。此動作及其指令無法復原。",
+    "confirmAction": "刪除動作"
   },
   "add": {
     "button": "新增動作"
@@ -44,10 +47,15 @@
     "promptHint": "觸發動作時，此指令會傳送給 AI 執行。",
     "cancel": "取消",
     "saveEdit": "儲存",
-    "confirmAdd": "新增"
+    "confirmAdd": "新增",
+    "discardTitle": "放棄未儲存的修改？",
+    "discardMessage": "關閉後，本次編輯的動作名稱和觸發指令將會遺失。",
+    "discardConfirm": "放棄修改"
   },
   "messages": {
     "saved": "已儲存",
-    "saveFailed": "儲存失敗"
+    "saveFailed": "儲存失敗，編輯內容已保留，可重新儲存",
+    "loadFailedLocked": "無法讀取快捷動作。為避免把現有設定覆蓋為空，目前頁面已鎖定。",
+    "retry": "重新載入"
   }
 }

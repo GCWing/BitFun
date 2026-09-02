@@ -7,7 +7,7 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, u
 import { createPortal } from 'react-dom';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, Files, MessageSquarePlus, Play } from 'lucide-react';
+import { RotateCcw, Loader2, Play } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import {
@@ -241,7 +241,7 @@ import {
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
-import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSeparator, Icon } from '@bitfun/ui';
 import {
   ChatComposer,
   ChatComposerActionButton,
@@ -5355,7 +5355,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       aria-label={t('input.sendShortcut')}
       className="bitfun-chat-input__send-button"
       disabled
-      icon={<ArrowUp />}
+      icon={<Icon name="arrow-up" size="lg" />}
       variant="primary"
     /></span>;
 
@@ -5445,7 +5445,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onClick={() => void handleSendOrCancel()}
                 disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
                 data-testid="chat-input-send-btn"
-                icon={<ArrowUp />}
+                icon={<Icon name="arrow-up" size="lg" />}
                 variant="primary"
               />
             </Tooltip>
@@ -5463,7 +5463,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onClick={() => void handleSendOrCancel()}
             disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
             data-testid="chat-input-send-btn"
-            icon={<ArrowUp />}
+            icon={<Icon name="arrow-up" size="lg" />}
             variant="primary"
           />
         </Tooltip>
@@ -5680,7 +5680,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           />
                         ) : (
                           <div className="bitfun-chat-input__image-chip-thumb bitfun-chat-input__image-chip-thumb--placeholder" data-bf-component="chat-input" data-bf-part="imagePreview">
-                            <Image size={14} />
+                            <Icon name="image" size="sm" />
                           </div>
                         )}
                         <button
@@ -5694,7 +5694,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             removeContext(image.id);
                           }}
                         >
-                          <X size={12} />
+                          <Icon name="xmark" size="xs" />
                         </button>
                       </div>
                     );
@@ -6041,7 +6041,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             }
                             dispatchMode({ type: 'TOGGLE_DROPDOWN' });
                           }}
-                          icon={<Plus strokeWidth={2.25} />}
+                          icon={<Icon name="plus" size="lg" />}
                           variant="fill"
                         />
                       </Tooltip>
@@ -6081,7 +6081,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         <>
                           <ChatInputBoostSubmenu
                             label={t('chatInput.boostAdditionalModes')}
-                            icon={<Sparkles size={14} aria-hidden />}
+                            icon={<Icon name="spark" size="sm" aria-hidden />}
                             testId="chat-input-additional-modes"
                             open={activeBoostSubmenu === 'additional-modes'}
                             onOpenChange={open => setBoostSubmenuOpen('additional-modes', open)}
@@ -6095,7 +6095,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 data-bf-additional-mode-id={item.id}
                                 data-testid={`chat-input-additional-mode-${item.id}`}
                                 title={item.title}
-                                leading={<Sparkles size={12} aria-hidden />}
+                                leading={<Icon name="spark" size="xs" aria-hidden />}
                                 onClick={event => {
                                   event.stopPropagation();
                                   selectAdditionalMode(item.selection);
@@ -6114,7 +6114,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           data-bf-component="chat-input"
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
-                          leading={<Files size={14} aria-hidden />}
+                          leading={<Icon name="files" size="sm" aria-hidden />}
                           onClick={handleBoostOpenAtContext}
                         >
                           {t('chatInput.boostAddContext')}
@@ -6124,7 +6124,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           data-bf-component="chat-input"
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
-                          leading={<Image size={14} aria-hidden />}
+                          leading={<Icon name="image" size="sm" aria-hidden />}
                           onClick={handleBoostPickImage}
                         >
                           {t('input.addImage')}
@@ -6133,7 +6133,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         {canUseSkillsForTarget && (
                           <ChatInputBoostSubmenu
                             label={t('chatInput.boostSkills')}
-                            icon={<Sparkles size={14} aria-hidden />}
+                            icon={<Icon name="spark" size="sm" aria-hidden />}
                             testId="chat-input-skills"
                             open={activeBoostSubmenu === 'skills'}
                             onOpenChange={open => setBoostSubmenuOpen('skills', open)}
@@ -6165,7 +6165,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   data-bf-part="boostSubmenuItem"
                                   data-bf-boost-item-kind="skill"
                                   title={skill.description || skill.name}
-                                  leading={<Sparkles size={12} aria-hidden />}
+                                  leading={<Icon name="spark" size="xs" aria-hidden />}
                                   onClick={event => {
                                     event.stopPropagation();
                                     insertSkillIntoInput(skill.name);
@@ -6195,7 +6195,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                               data-bf-part="boostItem"
                               data-bf-boost-item-kind="context"
                               data-testid="chat-input-boost-start-btw"
-                              leading={<MessageSquarePlus size={14} aria-hidden />}
+                              leading={<Icon name="side-chat" size="sm" aria-hidden />}
                               onClick={handleBoostStartBtw}
                             >
                               {t('chatInput.boostStartBtw')}
@@ -6211,7 +6211,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
                           data-testid="chat-input-boost-new-session"
-                          leading={<Plus size={14} aria-hidden />}
+                          leading={<Icon name="plus" size="sm" aria-hidden />}
                           onClick={handleBoostNewSession}
                         >
                           {t('chatInput.boostNewSession')}

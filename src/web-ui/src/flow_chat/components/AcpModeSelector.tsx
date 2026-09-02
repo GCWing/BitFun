@@ -10,10 +10,10 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 import { Menu, MenuItem } from '@bitfun/ui';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type { AcpModeState } from '../utils/acpSessionConfig';
@@ -173,7 +173,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
           >
             {currentLabel}
           </span>
-          <ChevronDown size={10} aria-hidden="true" />
+          <Icon name="chevron-down" size="lg" style={{ width: 10, height: 10 }} aria-hidden="true" />
         </button>
       </Tooltip>
 
@@ -230,7 +230,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
                     data-bf-state={isSelected ? 'selected' : undefined}
                     title={hint}
                     onClick={() => select(candidate.value)}
-                    shortcut={isSelected ? <Check size={14} aria-hidden="true" /> : undefined}
+                    shortcut={isSelected ? <Icon name="check-line" size="sm" aria-hidden="true" /> : undefined}
                   >
                     <span className="bitfun-acp-mode-menu__option-content">
                       <strong>{candidate.name}</strong>

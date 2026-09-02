@@ -11,9 +11,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus } from 'lucide-react';
+
 import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { activateMainSession } from '../../services/sessionActivation';
@@ -112,7 +112,7 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
           aria-expanded={isMenuOpen}
           aria-haspopup="listbox"
         >
-          <Plus size={14} />
+          <Icon name="plus" size="sm" />
         </button>
       </Tooltip>
 
@@ -145,7 +145,7 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
               }}
               leading={(
                 <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon">
-                  <Plus size={13} strokeWidth={2.25} />
+                  <Icon name="plus" size="lg" style={{ width: 13, height: 13 }} />
                 </span>
               )}
             >

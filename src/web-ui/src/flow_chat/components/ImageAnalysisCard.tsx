@@ -3,17 +3,9 @@
  * Displays analysis progress and results.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import React, { useState } from 'react';
-import {
-  Loader, 
-  CheckCircle, 
-  AlertCircle, 
-  ChevronDown, 
-  ChevronUp,
-  Eye,
-  Sparkles
-} from 'lucide-react';
+import { Loader, AlertCircle } from 'lucide-react';
 import type { FlowImageAnalysisItem } from '../types/flow-chat';
 import './ImageAnalysisCard.scss';
 
@@ -45,7 +37,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
             />
           ) : (
             <div data-bf-component="image-analysis-card" data-bf-part="placeholder" className="image-analysis-card__thumbnail-placeholder">
-              <Eye size={24} />
+              <Icon name="eye" size="lg" />
             </div>
           )}
         </div>
@@ -64,7 +56,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
           
           {status === 'completed' && result && (
             <div data-bf-component="image-analysis-card" data-bf-part="status" className="image-analysis-card__status completed">
-              <CheckCircle className="icon" size={14} />
+              <Icon name="check-circle" size="sm" className="icon" />
               <span>Analysis complete</span>
               {duration && (
                 <span className="time">{duration}</span>
@@ -94,7 +86,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
       {status === 'completed' && result && (
         <div data-bf-component="image-analysis-card" data-bf-part="content" className="image-analysis-card__content">
           <div data-bf-component="image-analysis-card" data-bf-part="summary" className="image-analysis-card__summary">
-            <Sparkles size={14} className="summary-icon" />
+            <Icon name="spark" size="sm" className="summary-icon" />
             <span>{result.summary}</span>
           </div>
           
@@ -102,7 +94,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
             className="image-analysis-card__toggle"
             variant="outline"
             size="sm"
-            leadingIcon={expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            leadingIcon={expanded ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-down" size="sm" />}
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? 'Collapse details' : 'View detailed analysis'}

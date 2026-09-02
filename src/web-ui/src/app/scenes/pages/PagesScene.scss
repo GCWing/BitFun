@@ -256,7 +256,8 @@ $pages-gutter: clamp(24px, 4vw, 56px);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-type-label-sm-font-size);
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       flex-shrink: 0;
       opacity: 0.85;
     }
@@ -265,7 +266,8 @@ $pages-gutter: clamp(24px, 4vw, 56px);
   &__meta-item--visibility {
     color: var(--bf-color-content-secondary);
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       color: var(--bf-color-accent-default);
     }
   }
@@ -368,7 +370,8 @@ $pages-gutter: clamp(24px, 4vw, 56px);
     line-height: var(--bf-type-body-sm-line-height);
     text-align: left;
 
-    svg {
+    svg,
+    [data-bf-component='icon'] {
       flex-shrink: 0;
       color: var(--bf-color-accent-default);
     }

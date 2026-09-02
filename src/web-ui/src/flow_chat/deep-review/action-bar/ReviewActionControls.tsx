@@ -1,8 +1,8 @@
 import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Copy, Eye, Play, RotateCcw } from 'lucide-react';
-import { Tooltip } from '@bitfun/ui';
+import { AlertTriangle, Play, RotateCcw } from 'lucide-react';
+import { Tooltip, Icon } from '@bitfun/ui';
 import type { ReviewActionPhase } from '../../store/deepReviewActionBarStore';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
 
@@ -139,7 +139,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
                 : 'outline'}
               size="sm"
               onClick={onOpenFollowUpReview}
-              leadingIcon={<Eye size={14} />}
+              leadingIcon={<Icon name="eye" size="sm" />}
             >
 
               {t(followUpReviewState === 'running'
@@ -213,7 +213,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             variant="outline"
             size="sm"
             onClick={() => void onCopyDiagnostics()}
-            leadingIcon={<Copy size={14} />}
+            leadingIcon={<Icon name="duplicate" size="sm" />}
           >
 
             {t('deepReviewActionBar.copyDiagnostics')}
@@ -223,7 +223,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
               variant="outline"
               size="sm"
               onClick={onViewPartialResults}
-              leadingIcon={<Eye size={14} />}
+              leadingIcon={<Icon name="eye" size="sm" />}
             >
 
               {t('deepReviewActionBar.viewPartialResults')}

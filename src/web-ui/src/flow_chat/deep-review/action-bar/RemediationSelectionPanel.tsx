@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, ChevronDown, ChevronUp, Info, Loader2 } from 'lucide-react';
-import { Checkbox } from '@bitfun/ui';
+import { Loader2 } from 'lucide-react';
+import { Checkbox, Icon } from '@bitfun/ui';
 import type { ReviewRemediationItem } from '../../utils/codeReviewRemediation';
 import { REMEDIATION_GROUP_ORDER } from '../../utils/codeReviewRemediation';
 import type { RemediationGroupId } from '../../utils/codeReviewReport';
@@ -110,7 +110,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
             total: totalCount,
           })}
         </span>
-        {showRemediationList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {showRemediationList ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-down" size="sm" />}
       </button>
 
       {showRemediationList && (
@@ -186,7 +186,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                           title={item.decisionContext ? item.plan : undefined}
                         >
                           {isCompleted && (
-                            <CheckCircle size={12} className="deep-review-action-bar__completed-icon" />
+                            <Icon name="check-circle" size="xs" className="deep-review-action-bar__completed-icon" />
                           )}
                           {isFixing && (
                             <Loader2 size={12} className="deep-review-action-bar__fixing-icon" />
@@ -287,7 +287,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
 
       {!selectionDisabled && totalCount > 0 && selectedCount === 0 && (
         <div className="deep-review-action-bar__empty-selection" role="note">
-          <Info size={14} className="deep-review-action-bar__empty-selection-icon" />
+          <Icon name="info" size="sm" className="deep-review-action-bar__empty-selection-icon" />
           <span>
             {t('toolCards.codeReview.remediationActions.noSelectionHint')}
           </span>

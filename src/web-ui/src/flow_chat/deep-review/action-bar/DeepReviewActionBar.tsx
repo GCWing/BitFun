@@ -1,10 +1,9 @@
+import { Icon, type IconName } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  CheckCircle,
   AlertTriangle,
   AlertCircle,
-  Clock,
   Loader2,
   MessageSquare,
 } from 'lucide-react';
@@ -144,20 +143,39 @@ interface ReviewActionBarProps {
   childSessionId?: string;
 }
 
+type PhaseIconComponent = React.ComponentType<{
+  size?: number | string;
+  style?: React.CSSProperties;
+  className?: string;
+}>;
+
+function catalogPhaseIcon(name: Extract<IconName, 'check-circle' | 'clock'>): PhaseIconComponent {
+  return function CatalogPhaseIcon({ size = 18, style, className }) {
+    return (
+      <Icon
+        name={name}
+        size="lg"
+        className={className}
+        style={{ width: size, height: size, ...style }}
+      />
+    );
+  };
+}
+
 const PHASE_CONFIG: Record<ReviewActionPhase, {
-  icon: React.ComponentType<{ size?: number | string; style?: React.CSSProperties; className?: string }>;
+  icon: PhaseIconComponent;
   iconClass: string;
   variant: 'success' | 'warning' | 'error' | 'info' | 'loading';
 }> = {
-  idle: { icon: Clock, iconClass: '', variant: 'info' },
+  idle: { icon: catalogPhaseIcon('clock'), iconClass: '', variant: 'info' },
   review_running: { icon: Loader2, iconClass: 'deep-review-action-bar__icon--loading', variant: 'loading' },
-  review_completed: { icon: CheckCircle, iconClass: 'deep-review-action-bar__icon--success', variant: 'success' },
+  review_completed: { icon: catalogPhaseIcon('check-circle'), iconClass: 'deep-review-action-bar__icon--success', variant: 'success' },
   fix_running: { icon: Loader2, iconClass: 'deep-review-action-bar__icon--loading', variant: 'loading' },
-  fix_completed: { icon: CheckCircle, iconClass: 'deep-review-action-bar__icon--success', variant: 'success' },
+  fix_completed: { icon: catalogPhaseIcon('check-circle'), iconClass: 'deep-review-action-bar__icon--success', variant: 'success' },
   fix_failed: { icon: AlertCircle, iconClass: 'deep-review-action-bar__icon--error', variant: 'error' },
-  fix_timeout: { icon: Clock, iconClass: 'deep-review-action-bar__icon--warning', variant: 'warning' },
+  fix_timeout: { icon: catalogPhaseIcon('clock'), iconClass: 'deep-review-action-bar__icon--warning', variant: 'warning' },
   fix_interrupted: { icon: AlertTriangle, iconClass: 'deep-review-action-bar__icon--warning', variant: 'warning' },
-  review_waiting_capacity: { icon: Clock, iconClass: 'deep-review-action-bar__icon--warning', variant: 'warning' },
+  review_waiting_capacity: { icon: catalogPhaseIcon('clock'), iconClass: 'deep-review-action-bar__icon--warning', variant: 'warning' },
   review_interrupted: { icon: AlertTriangle, iconClass: 'deep-review-action-bar__icon--warning', variant: 'warning' },
   resume_blocked: { icon: AlertTriangle, iconClass: 'deep-review-action-bar__icon--error', variant: 'error' },
   resume_running: { icon: Loader2, iconClass: 'deep-review-action-bar__icon--loading', variant: 'loading' },
@@ -1070,7 +1088,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       {/* Friendly message when review completed with no remediation items */}
       {phase === 'review_completed' && remediationItems.length === 0 && (
         <div className="deep-review-action-bar__no-issues" data-bf-component="deep-review-action-bar" data-bf-part="noIssues">
-          <CheckCircle size={18} className="deep-review-action-bar__no-issues-icon" />
+          <Icon name="check-circle" size="lg" style={{ width: 18, height: 18 }} className="deep-review-action-bar__no-issues-icon" />
           <span className="deep-review-action-bar__no-issues-text">
             {t('reviewActionBar.noIssuesFound')}
           </span>
@@ -1080,7 +1098,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       {/* Fix completed — show success message */}
       {phase === 'fix_completed' && (
         <div className="deep-review-action-bar__fix-done" data-bf-component="deep-review-action-bar" data-bf-part="fixDone">
-          <CheckCircle size={16} className="deep-review-action-bar__fix-done-icon" />
+          <Icon name="check-circle" size="md" className="deep-review-action-bar__fix-done-icon" />
           <span className="deep-review-action-bar__fix-done-text">
             {t('deepReviewActionBar.fixCompletedMessage')}
           </span>

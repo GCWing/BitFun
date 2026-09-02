@@ -29,7 +29,7 @@ import {
 } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Server, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine, AlertTriangle, EyeOff, Rocket, PartyPopper } from 'lucide-react';
+import { Server, Lock, Key, FolderOpen, Loader2, Play, AlertTriangle, EyeOff, Rocket, PartyPopper } from 'lucide-react';
 import { sshApi } from '../ssh-remote/sshApi';
 import { pickSshPrivateKeyPath } from '../ssh-remote/pickSshPrivateKeyPath';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from '../ssh-remote/SSHAuthPromptDialog';
@@ -823,7 +823,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 </div>
                 <Button size="sm" variant="outline" disabled={connecting}
                   onClick={(e) => { e.stopPropagation(); handleFillFromConfig(entry); }}
-                  leadingIcon={<ArrowDownToLine size={12} />}>
+                  leadingIcon={<Icon name="arrow-down" size="xs" />}>
 
                   {t('ssh.remote.fillForm')}
                 </Button>

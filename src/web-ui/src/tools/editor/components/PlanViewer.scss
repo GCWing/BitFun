@@ -86,11 +86,13 @@
           color 0.15s ease,
           opacity 0.15s ease;
 
-        svg {
+        svg,
+        [data-bf-component='icon'] {
           transition: transform 0.15s ease;
         }
 
-        &--expanded svg {
+        &--expanded svg,
+        &--expanded [data-bf-component='icon'] {
           transform: rotate(180deg);
         }
 
@@ -344,6 +346,7 @@
   .bitfun-plan-viewer {
     .header-expand-indicator,
     .header-expand-indicator svg,
+    .header-expand-indicator [data-bf-component='icon'],
     .build-btn {
       transition: none;
     }

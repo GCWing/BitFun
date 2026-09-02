@@ -18,11 +18,22 @@
     "revert": "還原",
     "install": "安裝",
     "restorePreset": "恢復預設",
-    "predownloadAcp": "預下載 ACP"
+    "predownloadAcp": "預下載 ACP",
+    "retry": "重新載入"
   },
   "json": {
     "title": "JSON 設定",
     "description": "直接編輯 acpClients 設定。"
+  },
+  "security": {
+    "secretWarning": "ACP JSON 和環境變數可能包含 API 金鑰或存取權杖。BitFun 會把它們儲存到目前執行主機的設定中；請勿貼到線上 JSON 驗證工具、聊天或工單中。"
+  },
+  "installConfirm": {
+    "title": "安裝 {{name}} CLI？",
+    "message": "目標主機：{{host}}。BitFun 將執行「{{command}}」，把 npm 套件全域安裝到該主機；這會修改該主機的全域命令環境，並可能需要網路與寫入權限。",
+    "localHost": "目前執行主機",
+    "packageUnknown": "無法確認此 Agent 的安裝套件，已取消安裝",
+    "confirm": "在目標主機安裝"
   },
   "presets": {
     "opencode": { "description": "原生支援 ACP。" },
@@ -108,6 +119,7 @@
   },
   "notifications": {
     "loadFailed": "載入 ACP 設定失敗",
+    "loadFailedLocked": "無法讀取 ACP 設定。為避免把現有 Agent 設定覆蓋為空，目前頁面已鎖定。",
     "saveSuccess": "ACP 設定已儲存",
     "configAdded": "ACP Agent 設定已新增",
     "configAddedManualCliRequired": "{{name}} 設定已新增。請手動安裝 {{command}} CLI，然後重新整理檢測。",

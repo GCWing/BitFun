@@ -1,7 +1,7 @@
 import { Button, IconButton } from '@bitfun/ui';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Download, Loader2, Mic, VolumeX, X } from 'lucide-react';
-import { Tooltip } from '@bitfun/ui';
+import { Loader2, VolumeX } from 'lucide-react';
+import { Tooltip, Icon } from '@bitfun/ui';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;
@@ -109,7 +109,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
           >
             {downloading
               ? <Loader2 size={14} className="bitfun-chat-input__voice-spinner" />
-              : <Download size={14} />}
+              : <Icon name="arrow-down" size="sm" />}
           </span>
           <span
             className="bitfun-chat-input__voice-setup-copy"
@@ -148,7 +148,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                   event.stopPropagation();
                   controller.dismissSetup();
                 }}
-                icon={<X size={14} />}
+                icon={<Icon name="xmark" size="sm" />}
               />
             </Tooltip>
           </span>
@@ -246,7 +246,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                   event.stopPropagation();
                   controller.cancel();
                 }}
-                icon={<X size={16} />}
+                icon={<Icon name="xmark" size="md" />}
               />
             </Tooltip>
           </span>
@@ -265,7 +265,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                 icon={transcribing && controller.completionMode === 'transcribe' ? (
                   <Loader2 size={15} className="bitfun-chat-input__voice-spinner" />
                 ) : (
-                  <Check size={16} />
+                  <Icon name="check-line" size="md" />
                 )}
               />
             </Tooltip>
@@ -286,7 +286,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                 icon={transcribing && controller.completionMode === 'send' ? (
                   <Loader2 size={15} className="bitfun-chat-input__voice-spinner" />
                 ) : (
-                  <ArrowUp size={15} strokeWidth={2.5} />
+                  <Icon name="arrow-up" size="lg" style={{ width: 15, height: 15 }} />
                 )}
               />
             </Tooltip>
@@ -309,7 +309,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
               event.stopPropagation();
               controller.toggle();
             }}
-            icon={<Mic size={14} />}
+            icon={<Icon name="mic" size="sm" />}
           />
         </Tooltip>
       </span>

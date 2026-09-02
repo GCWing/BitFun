@@ -12,7 +12,7 @@ import { Menu, MenuItem, MenuSection, MenuSeparator, OverflowText } from '@bitfu
 import React, { useState, useEffect, useId, useRef, useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { ChevronDown, ChevronLeft, ChevronRight, Check, RotateCcw, Zap } from 'lucide-react';
+import { RotateCcw, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -25,7 +25,7 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName, getProviderGroupKey } from '@/infrastructure/config/services/modelConfigs';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
@@ -1547,7 +1547,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <OverflowText className="bitfun-model-selector__name">
               {getModelDisplayLabel(externalCurrentModel, externalCurrentModelId)}
             </OverflowText>
-            <ChevronDown size={10} className="bitfun-model-selector__chevron" />
+            <Icon name="chevron-down" size="lg" style={{ width: 10, height: 10 }} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>
 
@@ -1593,7 +1593,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       data-model-id={model.id}
                       data-model-name={model.modelName}
                       data-selected={isSelected ? 'true' : 'false'}
-                      metadata={isSelected ? <Check size={14} aria-hidden /> : null}
+                      metadata={isSelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
                       onClick={() => handleSelectModel(model.id)}
                     >
                       {model.modelName}
@@ -1684,7 +1684,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             {acpFastMode?.enabled && (
               <Zap size={9} className="bitfun-model-selector__fast-icon" />
             )}
-            <ChevronDown size={10} className="bitfun-model-selector__chevron" />
+            <Icon name="chevron-down" size="lg" style={{ width: 10, height: 10 }} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>
         )}
@@ -1750,7 +1750,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       data-bf-component="model-selector"
                       data-bf-part="option"
                       data-bf-state={isSelected ? 'selected' : undefined}
-                      metadata={isSelected ? <Check size={14} aria-hidden /> : null}
+                      metadata={isSelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
                       onClick={() => handleSelectModel(model.id)}
                     >
                       <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
@@ -1780,7 +1780,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     disabled={loading}
                     aria-busy={loading}
                     leading={<Zap size={13} aria-hidden />}
-                    metadata={acpFastMode.enabled ? <Check size={14} aria-hidden /> : null}
+                    metadata={acpFastMode.enabled ? <Icon name="check-line" size="sm" aria-hidden /> : null}
                     onClick={() => { void handleSetAcpFastMode(!acpFastMode.enabled); }}
                   >
                     {t('modelSelector.fastMode')}
@@ -1867,11 +1867,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               )}
             </span>
           )}
-          <ChevronDown
-            size={10}
-            className="bitfun-model-selector__chevron"
-            data-testid="chat-model-selector-dropdown-indicator"
-          />
+          <Icon name="chevron-down" size="lg" style={{ width: 10, height: 10 }} className="bitfun-model-selector__chevron" data-testid="chat-model-selector-dropdown-indicator" />
         </button>
       </Tooltip>
 
@@ -1913,7 +1909,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 )}
                 onClick={() => toggleNativeSubmenu('models')}
                 onKeyDown={(event) => handleNativeSubmenuTriggerKeyDown('models', event)}
-                shortcut={<ChevronRight size={14} aria-hidden />}
+                shortcut={<Icon name="chevron-right" size="sm" aria-hidden />}
               >
                 {t('modelSelector.model')}
               </MenuItem>
@@ -1934,7 +1930,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   )}
                   onClick={() => toggleNativeSubmenu('reasoning')}
                   onKeyDown={(event) => handleNativeSubmenuTriggerKeyDown('reasoning', event)}
-                  shortcut={<ChevronRight size={14} aria-hidden />}
+                  shortcut={<Icon name="chevron-right" size="sm" aria-hidden />}
                 >
                   {t('reasoningSelector.title')}
                 </MenuItem>
@@ -2024,7 +2020,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   data-bf-component="model-selector"
                   data-bf-part="back"
                   aria-label={t('modelSelector.backToProviders')}
-                  leading={<ChevronLeft size={12} aria-hidden />}
+                  leading={<Icon name="chevron-left" size="xs" aria-hidden />}
                   onClick={closeProviderLevel}
                 >
                   {activeProviderGroup.providerName}
@@ -2045,7 +2041,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         data-bf-component="model-selector"
                         data-bf-part="option"
                         data-bf-state={isSelected ? 'selected' : undefined}
-                        metadata={isSelected ? <Check size={14} aria-hidden /> : null}
+                        metadata={isSelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
                         onClick={() => handleSelectModel(model.id)}
                       >
                         {model.modelName}
@@ -2078,7 +2074,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         data-bf-part="providerOption"
                         data-bf-state={isSelected ? 'selected' : undefined}
                         metadata={group.models.length}
-                        shortcut={<ChevronRight size={14} aria-hidden />}
+                        shortcut={<Icon name="chevron-right" size="sm" aria-hidden />}
                         onClick={() => openProviderLevel(group.key)}
                       >
                         <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
@@ -2094,12 +2090,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                               <span className="bitfun-model-selector__option-desc-label">
                                 {selectedModel.modelName}
                               </span>
-                              <Check
-                                size={11}
-                                aria-hidden="true"
-                                className="bitfun-model-selector__option-selected-check"
-                                data-testid="chat-model-selector-provider-selected-check"
-                              />
+                              <Icon name="check-line" size="lg" style={{ width: 11, height: 11 }} aria-hidden="true" className="bitfun-model-selector__option-selected-check" data-testid="chat-model-selector-provider-selected-check" />
                             </span>
                           )}
                         </div>
@@ -2130,7 +2121,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         data-bf-component="model-selector"
                         data-bf-part="option"
                         data-bf-state={currentModelId === 'primary' ? 'selected' : undefined}
-                        metadata={currentModelId === 'primary' ? <Check size={14} aria-hidden /> : null}
+                        metadata={currentModelId === 'primary' ? <Icon name="check-line" size="sm" aria-hidden /> : null}
                         onClick={() => handleSelectModel('primary')}
                       >
                         {t('modelSelector.primaryModel')}
@@ -2159,7 +2150,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         data-bf-component="model-selector"
                         data-bf-part="option"
                         data-bf-state={currentModelId === 'fast' ? 'selected' : undefined}
-                        metadata={currentModelId === 'fast' ? <Check size={14} aria-hidden /> : null}
+                        metadata={currentModelId === 'fast' ? <Icon name="check-line" size="sm" aria-hidden /> : null}
                         onClick={() => handleSelectModel('fast')}
                       >
                         {t('modelSelector.fastModel')}

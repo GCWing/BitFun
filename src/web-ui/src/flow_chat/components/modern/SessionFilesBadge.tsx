@@ -5,15 +5,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  FileEdit,
-  FilePlus,
-  SearchCheck,
-  Trash2,
-  Zap,
-  GitCommitHorizontal,
-  GitPullRequest,
-} from 'lucide-react';
+import { FilePlus, SearchCheck, Zap, GitPullRequest } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Icon, IconButton, Menu, MenuItem, MenuSeparator, Tooltip } from '@bitfun/ui';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
@@ -751,9 +743,9 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       case 'write':
         return <FilePlus size={12} className="icon-write" />;
       case 'delete':
-        return <Trash2 size={12} className="icon-delete" />;
+        return <Icon name="delete" size="xs" className="icon-delete" />;
       default:
-        return <FileEdit size={12} className="icon-edit" />;
+        return <Icon name="edit" size="xs" className="icon-edit" />;
     }
   };
 
@@ -851,7 +843,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
                   type="button"
                   disabled={isSessionProcessing}
                   leading={action.id === 'commit' ? (
-                    <GitCommitHorizontal size={12} />
+                    <Icon name="commit" size="xs" />
                   ) : action.id === 'create_pr' ? (
                     <GitPullRequest size={12} />
                   ) : (

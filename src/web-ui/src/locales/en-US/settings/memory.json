@@ -1,6 +1,7 @@
 {
   "title": "Memory",
   "subtitle": "Control automatic memory generation, usage, and consolidation scope.",
+  "scopeNotice": "These settings, session candidates, and memory files belong to the host currently running BitFun. Another device or peer host may have different memory data and settings.",
   "sections": {
     "basic": {
       "title": "Basics",
@@ -85,7 +86,8 @@
     "primary": "Primary model",
     "fast": "Fast model",
     "followPrimary": "Follow primary model",
-    "followExtraction": "Follow extraction model"
+    "followExtraction": "Follow extraction model",
+    "unavailable": "{{id}} (disabled or missing)"
   },
   "externalContextPolicy": {
     "clearToolResults": "Clear external tool results",
@@ -96,6 +98,9 @@
     "expandAdvanced": "Expand advanced settings",
     "collapseAdvanced": "Collapse advanced settings",
     "resetSettings": "Reset Memory Settings",
+    "resetSettingsConfirmTitle": "Reset memory settings?",
+    "resetSettingsConfirm": "This restores the memory switches, models, and advanced parameters on the current execution host to their defaults. Existing memory data is not deleted.",
+    "resetSettingsConfirmAction": "Restore defaults",
     "openDirectory": "Open Memory Folder",
     "resetMemory": "Reset Memory",
     "resetMemoryConfirm": "Clear all memory data and memory workspace files? This cannot be undone.",
@@ -108,6 +113,8 @@
   "messages": {
     "loading": "Loading memory settings…",
     "loadFailed": "Failed to load memory settings",
+    "loadFailedLocked": "Memory settings could not be read. This page is locked to avoid overwriting the configuration on the current execution host.",
+    "retry": "Reload",
     "saved": "Memory settings saved",
     "saveFailed": "Failed to save memory settings",
     "rolloutAgeExceedsRetention": "Maximum session age cannot exceed candidate retention",

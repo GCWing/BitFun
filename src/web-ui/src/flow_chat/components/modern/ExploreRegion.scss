@@ -25,28 +25,68 @@
   .explore-region__header {
     display: flex;
     align-items: center;
-    gap: 4px;
+    width: 100%;
+    gap: var(--bf-control-flow-chat-inline-gap);
     padding: 0;
+    border: 0;
+    appearance: none;
+    background: transparent;
     color: var(--bf-color-content-muted);
+    font: inherit;
     font-size: var(--bf-type-flow-control-font-size);
     line-height: var(--bf-type-flow-support-line-height);
+    text-align: left;
     cursor: pointer;
     user-select: none;
     border-radius: var(--bf-radius-sm);
-    transition: color 0.15s ease, background 0.15s ease;
+    transition: color 0.15s ease;
 
     &:hover {
-    background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-secondary);
+      .explore-region__summary {
+        color: var(--bf-color-content-secondary);
+        opacity: 1;
+      }
+
+      .explore-region__leading-icon {
+        opacity: 1;
+      }
+
+      .explore-region__leading-icon--default {
+        opacity: 0;
+      }
+
+      .explore-region__leading-icon--collapsed-hover {
+        opacity: 1;
+      }
     }
   }
 
-  .explore-region__icon {
+  .explore-region__leading-icon {
+    position: relative;
+    width: var(--bf-control-icon-size-sm);
+    height: var(--bf-control-icon-size-sm);
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
-    // Rotate 90° when expanded; 0° = pointing right (collapsed).
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: rotate(0deg);
+    transition: opacity 0.15s ease;
+
+    > [data-bf-component='icon'] {
+      position: absolute;
+      inset: 0;
+      transition: opacity 0.15s ease;
+    }
+  }
+
+  .explore-region__leading-icon--default {
+    opacity: 1;
+  }
+
+  .explore-region__leading-icon--collapsed-hover,
+  .explore-region__leading-icon--expanded {
+    opacity: 0;
   }
 
   .explore-region__summary {
@@ -89,10 +129,17 @@
   }
 }
 
-// Expanded state: rotate icon + reveal content.
+// Expanded state: keep the disclosure arrow visible and reveal content.
 .explore-region--collapsible.explore-region--expanded {
-  .explore-region__icon {
-    transform: rotate(90deg); // pointing down = expanded
+  .explore-region__header {
+    .explore-region__leading-icon--default,
+    .explore-region__leading-icon--collapsed-hover {
+      opacity: 0;
+    }
+
+    .explore-region__leading-icon--expanded {
+      opacity: 1;
+    }
   }
 
   .explore-region__content-wrapper {

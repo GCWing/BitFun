@@ -79,7 +79,7 @@ describe('Nursery gallery presentation', () => {
     expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@bitfun\/ui';/);
     expect(source).toContain('leadingIcon={<Icon name="settings"');
     expect(source).toContain('trailingIcon={<Icon name="chevron-right"');
-    expect(source).toContain('leadingIcon={<MessageSquarePlus />}');
+    expect(source).toContain('leadingIcon={<Icon name="side-chat" size="lg" />}');
     expect(source).toContain('className="assistant-card__configure"');
     expect(source).toContain('className="assistant-card__session-actions"');
     expect(source).not.toContain('className="assistant-card__body"');

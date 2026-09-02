@@ -20,7 +20,7 @@ import {
   Dialog,
   DialogBody,
 } from '@bitfun/ui';
-import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, SlidersHorizontal, Users, type LucideIcon } from 'lucide-react';
+import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, Users, type LucideIcon } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -122,7 +122,7 @@ const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> =
   workspaces: catalogLucide('folder'),
   assistants: Bot,
   capabilities: Blocks,
-  settings: SlidersHorizontal,
+  settings: catalogLucide('settings'),
 };
 
 function iconForItem(item: GlobalSearchItem): LucideIcon {

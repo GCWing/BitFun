@@ -1,8 +1,6 @@
 import React, { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  PictureInPicture2,
-} from 'lucide-react';
+
 import {
   Icon,
   IconButton,
@@ -246,7 +244,7 @@ const PersistentFooterActions: React.FC = () => {
                   }}
                 >
                   <MenuItem
-                    leading={<PictureInPicture2 size={14} aria-hidden="true" />}
+                    leading={<Icon name="floating-window" size="sm" aria-hidden="true" />}
                     onClick={handleFloatingMode}
                     data-testid="nav-settings-floating-item"
                   >

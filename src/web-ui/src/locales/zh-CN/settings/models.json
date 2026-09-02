@@ -12,6 +12,8 @@
     "title": "会话标题自动生成",
     "subtitle": "新对话时 AI 自动生成简洁标题",
     "loadFailed": "加载会话标题配置失败",
+    "loadFailedLocked": "无法读取会话标题设置。当前开关和模型选择已锁定。",
+    "retry": "重新加载",
     "model": {
       "label": "会话标题生成模型",
       "inherit": "当前会话模型",
@@ -20,6 +22,7 @@
     },
     "models": {
       "empty": "暂无可用模型，请先在「模型」中添加模型。",
+      "unavailable": "{{id}}（已停用或不存在）",
       "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
     },
     "messages": {
@@ -397,7 +400,7 @@
   },
   "proxy": {
     "enable": "启用代理",
-    "enableHint": "启用后所有AI请求将通过代理发送（需重启IDE生效）",
+    "enableHint": "启用后所有 AI 请求将通过代理发送（需重启 BitFun 生效）",
     "url": "代理地址",
     "urlPlaceholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
     "urlHint": "支持 HTTP/HTTPS/SOCKS5 代理，格式：协议://地址:端口",
@@ -406,7 +409,7 @@
     "password": "密码（可选）",
     "passwordPlaceholder": "代理认证密码",
     "save": "保存代理配置",
-    "saveSuccess": "代理配置已保存，重启IDE后生效"
+    "saveSuccess": "代理配置已保存，重启 BitFun 后生效"
   },
   "streamIdleTimeout": {
     "title": "流式超时",
@@ -458,6 +461,16 @@
     "addProvider": "添加服务商",
     "createFirst": "创建第一个配置"
   },
+  "deleteConfirm": {
+    "title": "删除模型配置？",
+    "message": "将删除模型“{{name}}”。当前有 {{count}} 处设置显式引用此模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。",
+    "confirm": "删除模型"
+  },
+  "discardChanges": {
+    "title": "放弃未保存的修改？",
+    "message": "模型或服务商配置中的草稿尚未保存。关闭后这些修改将丢失。",
+    "confirm": "放弃修改"
+  },
   "empty": {
     "noModels": "暂无模型配置",
     "noMatchingModels": "没有找到匹配的模型"
@@ -466,6 +479,10 @@
     "placeholder": "搜索模型名称、提供商..."
   },
   "messages": {
+    "loading": "正在加载模型设置…",
+    "loadFailedLocked": "无法读取模型设置。为避免覆盖现有配置，当前页面已锁定。",
+    "retry": "重新加载",
+    "unsaved": "未保存",
     "fillRequired": "请填写必要字段",
     "fillModelName": "请填写模型名称",
     "duplicateModelNameUnderProvider": "该服务商下已有同名模型，请改用其他名称或编辑已有条目",
@@ -474,6 +491,8 @@
     "invalidReasoningPresets": "请先修正思考预设的 ID、设置、默认项或 JSON。",
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
+    "deleteSuccess": "模型配置已删除",
+    "referenceCheckFailed": "无法确认此模型是否仍被其他设置引用，已取消删除",
     "loadFailed": "加载AI配置失败",
     "testSuccess": "测试成功",
     "testFailed": "测试失败",
