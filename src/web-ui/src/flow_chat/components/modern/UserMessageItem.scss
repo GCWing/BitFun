@@ -1,6 +1,33 @@
 /**
  * User message item styles (BEM).
  */
+.user-message-item-shell {
+  position: relative;
+  margin:
+    0.06rem
+    var(--bf-control-flow-chat-content-padding-inline)
+    var(--bf-control-flow-chat-flow-item-gap)
+    var(--bf-control-flow-chat-content-padding-inline);
+
+  &--with-timestamp {
+    /* The timestamp occupies stable space even while transparent. Hover must
+       never resize a virtualized transcript row. */
+    margin-bottom: calc(var(--bf-control-flow-chat-flow-item-gap) + 1rem);
+  }
+
+  &:hover,
+  &:focus-within {
+    .user-message-item__timestamp {
+      opacity: 1;
+    }
+  }
+
+  @media (max-width: 768px) {
+    margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
+    margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
+  }
+}
+
 .user-message-item {
   box-sizing: border-box;
   /*
@@ -22,11 +49,7 @@
   background: var(--bf-color-action-quiet-hover);
   border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 72%, transparent);
   border-radius: calc(var(--bf-control-flow-chat-card-radius) + 2px);
-  margin:
-    0.06rem
-    var(--bf-control-flow-chat-content-padding-inline)
-    var(--bf-control-flow-chat-flow-item-gap)
-    var(--bf-control-flow-chat-content-padding-inline);
+  margin: 0;
   box-shadow: none;
   transition: opacity 140ms ease;
   /*
@@ -53,11 +76,24 @@
     }
   }
 
-  // Responsive: reduce margins on smaller screens.
-  @media (max-width: 768px) {
-    margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
-    margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
-  }
+}
+
+.user-message-item__timestamp {
+  position: absolute;
+  top: calc(100% + 0.12rem);
+  /* Align with the visible right edge of the rollback glyph: bubble padding
+     plus half of the 28px action hit area left outside its 14px icon. */
+  right: calc(0.68rem + 7px);
+  color: var(--bf-color-content-muted);
+  font-family: var(--bf-type-flow-meta-font-family);
+  font-size: var(--bf-type-flow-meta-font-size);
+  font-weight: var(--bf-type-flow-meta-font-weight);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--bf-type-flow-meta-line-height);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
 }
 
 .user-message-item__main {
@@ -468,6 +504,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .user-message-item,
+  .user-message-item__timestamp,
   .user-message-item__actions,
   .user-message-item__copy-btn,
   .user-message-item__edit-btn,

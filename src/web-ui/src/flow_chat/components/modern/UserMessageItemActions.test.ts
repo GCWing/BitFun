@@ -43,4 +43,21 @@ describe('UserMessageItem action visibility', () => {
     ].join('\n'));
     expect(stylesheet).not.toContain('.user-message-item__edit-btn {\n  opacity: 1;');
   });
+
+  it('reveals the out-of-bubble timestamp without changing row geometry', () => {
+    const stylesheet = readFileSync(
+      fileURLToPath(new URL('./UserMessageItem.scss', import.meta.url)),
+      'utf8',
+    ).replace(/\r\n?/g, '\n');
+    const shell = extractBlock(stylesheet, '.user-message-item-shell {');
+    const timestamp = extractBlock(stylesheet, '\n.user-message-item__timestamp {');
+    const hover = extractBlock(shell, '&:hover,');
+
+    expect(timestamp).toContain('position: absolute;');
+    expect(timestamp).toContain('right: calc(0.68rem + 7px);');
+    expect(timestamp).toContain('opacity: 0;');
+    expect(timestamp).toContain('pointer-events: none;');
+    expect(extractBlock(hover, '.user-message-item__timestamp {')).toContain('opacity: 1;');
+    expect(shell).toContain('margin-bottom: calc(var(--bf-control-flow-chat-flow-item-gap) + 1rem);');
+  });
 });

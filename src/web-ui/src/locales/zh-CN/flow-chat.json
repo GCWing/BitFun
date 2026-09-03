@@ -480,6 +480,7 @@
     "edit": "编辑消息",
     "delete": "删除消息",
     "retry": "重试",
+    "sentAt": "发送于 {{time}}",
     "clickToExpand": "点击展开",
     "clickToCollapse": "点击收起",
     "fillToInput": "填充到输入框",

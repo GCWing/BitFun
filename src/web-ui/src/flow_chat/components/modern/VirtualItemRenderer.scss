@@ -33,11 +33,16 @@
    * thinking, compact/expanded tools, notices, and completed-round footers all
    * resolve to the same `turnGap` instead of stacking two unrelated gaps. */
   &[data-turn-boundary-after='true'] {
-    > .user-message-item,
+    > .user-message-item-shell,
     > .turn-completion-notice,
     > .turn-failure-notice,
     > .explore-region {
       margin-bottom: 0;
+    }
+
+    > .user-message-item-shell--with-timestamp {
+      /* Preserve the timestamp line; the next Turn owns the trailing gap. */
+      margin-bottom: 1rem;
     }
 
     > .model-round-item > :is(

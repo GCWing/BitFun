@@ -240,6 +240,47 @@ describe('UserMessageItem steering tag', () => {
     expect(tag?.textContent).toBe('等待触发');
   });
 
+  it('renders a localized send time outside the user message bubble', () => {
+    const timestamp = Date.UTC(2026, 8, 3, 6, 32, 8);
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{ id: 'user-time-1', content: 'Timestamped message', timestamp }}
+            turnId="turn-time-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const bubble = container.querySelector('[data-testid="chat-user-message"]');
+    const shell = bubble?.parentElement;
+    const time = container.querySelector<HTMLTimeElement>('[data-testid="chat-user-message-timestamp"]');
+
+    expect(shell?.classList.contains('user-message-item-shell--with-timestamp')).toBe(true);
+    expect(time?.parentElement).toBe(shell);
+    expect(time?.parentElement).not.toBe(bubble);
+    expect(time?.dateTime).toBe('2026-09-03T06:32:08.000Z');
+    expect(time?.textContent?.trim()).not.toBe('');
+  });
+
+  it('does not invent a send time when the persisted timestamp is invalid', () => {
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{ id: 'user-time-invalid', content: 'Legacy message', timestamp: 0 }}
+            turnId="turn-time-invalid"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="chat-user-message-timestamp"]')).toBeNull();
+    expect(container.querySelector('.user-message-item-shell--with-timestamp')).toBeNull();
+  });
+
   it('does not render a steering tag after steering is triggered', () => {
     act(() => {
       root.render(
