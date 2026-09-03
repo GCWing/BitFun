@@ -456,6 +456,7 @@
     "cancel": "Cancel",
     "edit": "Edit",
     "delete": "Delete",
+    "deleteProvider": "Delete provider",
     "test": "Test Connection",
     "newConfig": "New Configuration",
     "addModel": "Add Model",
@@ -466,6 +467,12 @@
     "title": "Delete model configuration?",
     "message": "This deletes the model “{{name}}”. It is explicitly referenced by {{count}} setting(s). Those references will not automatically switch to another model, so related features may fall back or become unavailable.",
     "confirm": "Delete model"
+  },
+  "providerDeleteConfirm": {
+    "title": "Delete provider?",
+    "message": "This deletes provider “{{name}}” and its {{modelCount}} model configuration(s). Those models are explicitly referenced by {{referenceCount}} setting(s). The references will not automatically switch to another model, so related features may fall back or become unavailable. Any linked subscription account will remain signed in.",
+    "messageWithDraft": "This deletes provider “{{name}}”, its {{modelCount}} model configuration(s), and the provider's unsaved editing draft. Those models are explicitly referenced by {{referenceCount}} setting(s). The references will not automatically switch to another model, so related features may fall back or become unavailable. Any linked subscription account will remain signed in.",
+    "confirm": "Delete provider"
   },
   "draftClose": {
     "title": "Keep this editing draft?",
@@ -504,7 +511,10 @@
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "deleteSuccess": "Model configuration deleted",
+    "providerDeleteFailed": "Failed to delete provider",
+    "providerDeleteSuccess": "Provider and its model configurations deleted",
     "referenceCheckFailed": "BitFun could not verify whether other settings still reference this model, so deletion was cancelled",
+    "providerReferenceCheckFailed": "BitFun could not verify whether other settings still reference this provider's models, so deletion was cancelled",
     "loadFailed": "Failed to load AI configuration",
     "testSuccess": "Test successful",
     "testFailed": "Test failed",

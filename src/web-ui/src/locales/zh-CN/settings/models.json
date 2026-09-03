@@ -456,6 +456,7 @@
     "cancel": "取消",
     "edit": "编辑",
     "delete": "删除",
+    "deleteProvider": "删除服务商",
     "test": "测试连接",
     "newConfig": "新建配置",
     "addModel": "添加模型",
@@ -466,6 +467,12 @@
     "title": "删除模型配置？",
     "message": "将删除模型“{{name}}”。当前有 {{count}} 处设置显式引用此模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。",
     "confirm": "删除模型"
+  },
+  "providerDeleteConfirm": {
+    "title": "删除服务商？",
+    "message": "将删除服务商“{{name}}”及其 {{modelCount}} 个模型配置。当前有 {{referenceCount}} 处设置显式引用这些模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。关联的订阅账号不会退出登录。",
+    "messageWithDraft": "将删除服务商“{{name}}”及其 {{modelCount}} 个模型配置，同时丢弃该服务商尚未保存的编辑草稿。当前有 {{referenceCount}} 处设置显式引用这些模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。关联的订阅账号不会退出登录。",
+    "confirm": "删除服务商"
   },
   "draftClose": {
     "title": "保留这次编辑草稿？",
@@ -504,7 +511,10 @@
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
     "deleteSuccess": "模型配置已删除",
+    "providerDeleteFailed": "删除服务商失败",
+    "providerDeleteSuccess": "服务商及其模型配置已删除",
     "referenceCheckFailed": "无法确认此模型是否仍被其他设置引用，已取消删除",
+    "providerReferenceCheckFailed": "无法确认该服务商的模型是否仍被其他设置引用，已取消删除",
     "loadFailed": "加载AI配置失败",
     "testSuccess": "测试成功",
     "testFailed": "测试失败",

@@ -38,12 +38,14 @@ import { configManager } from '../services/ConfigManager';
 import { getCapabilitiesByCategory, resolveModelCategory } from '../services/modelCategory';
 import {
   allocateModelConfigId,
+  countModelConfigReferences,
   getModelDisplayName,
   getProviderDisplayName,
   getProviderGroupKey,
   getProviderInstanceId,
   getProviderTemplateId,
   PROVIDER_INSTANCE_METADATA_KEY,
+  removeProviderModelConfigs,
 } from '../services/modelConfigs';
 import { resolveProviderTemplates } from '../services/builtinProviderCatalog';
 import { normalizeProviderBaseUrl } from '../services/providerCatalog';
@@ -147,9 +149,23 @@ interface SubscriptionLogoutRequest {
 }
 
 interface ModelDeleteRequest {
+  kind: 'model';
   config: AIModelConfigType;
+  modelIds: string[];
   referenceCount: number;
 }
+
+interface ProviderDeleteRequest {
+  kind: 'provider';
+  groupKey: string;
+  providerName: string;
+  modelIds: string[];
+  modelCount: number;
+  referenceCount: number;
+  discardsRetainedDraft: boolean;
+}
+
+type DeleteRequest = ModelDeleteRequest | ProviderDeleteRequest;
 
 interface PendingEditorOpen {
   open: () => void;
@@ -339,18 +355,6 @@ function hasHttpUrlScheme(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 
-function countExactModelReferences(value: unknown, modelId: string): number {
-  if (value === modelId) return 1;
-  if (Array.isArray(value)) {
-    return value.reduce<number>((count, entry) => count + countExactModelReferences(entry, modelId), 0);
-  }
-  if (value && typeof value === 'object') {
-    return Object.values(value as Record<string, unknown>)
-      .reduce<number>((count, entry) => count + countExactModelReferences(entry, modelId), 0);
-  }
-  return 0;
-}
-
 function normalizeComparableString(value: string | undefined): string {
   return (value || '').trim();
 }
@@ -449,7 +453,7 @@ const ModelSettingsPage: React.FC = () => {
   const [subscriptionLoginPanel, setSubscriptionLoginPanel] = useState<SubscriptionLoginPanelState | null>(null);
   const [subscriptionLoginClock, setSubscriptionLoginClock] = useState(() => Date.now());
   const [subscriptionLogoutRequest, setSubscriptionLogoutRequest] = useState<SubscriptionLogoutRequest | null>(null);
-  const [deleteRequest, setDeleteRequest] = useState<ModelDeleteRequest | null>(null);
+  const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
   const [showSubscriptionMigrationNotice, setShowSubscriptionMigrationNotice] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -1831,36 +1835,113 @@ const ModelSettingsPage: React.FC = () => {
     }
   };
 
+  const inspectModelReferenceCount = async (modelIds: string[]): Promise<number> => {
+    const [defaultModels, taskModels, agentModelDefaults] = await Promise.all([
+      configManager.getConfig<unknown>('ai.default_models'),
+      configManager.getConfig<unknown>('ai.task_models'),
+      configManager.getConfig<unknown>('ai.agent_model_defaults'),
+    ]);
+    const ids = new Set(modelIds);
+    return [defaultModels, taskModels, agentModelDefaults]
+      .reduce<number>((count, value) => count + countModelConfigReferences(value, ids), 0);
+  };
+
   const requestDelete = async (config: AIModelConfigType) => {
     if (!config.id) return;
     try {
-      const [defaultModels, taskModels, agentModelDefaults] = await Promise.all([
-        configManager.getConfig<unknown>('ai.default_models'),
-        configManager.getConfig<unknown>('ai.task_models'),
-        configManager.getConfig<unknown>('ai.agent_model_defaults'),
-      ]);
-      const referenceCount = [defaultModels, taskModels, agentModelDefaults]
-        .reduce<number>((count, value) => count + countExactModelReferences(value, config.id!), 0);
-      setDeleteRequest({ config, referenceCount });
+      const referenceCount = await inspectModelReferenceCount([config.id]);
+      setDeleteRequest({ kind: 'model', config, modelIds: [config.id], referenceCount });
     } catch (error) {
       log.error('Failed to inspect model references before deletion', { configId: config.id, error });
       notification.error(t('messages.referenceCheckFailed'));
     }
   };
 
+  const requestProviderDelete = async (group: ProviderGroup) => {
+    const modelIds = group.models
+      .map(model => model.id)
+      .filter((id): id is string => !!id);
+    try {
+      const referenceCount = await inspectModelReferenceCount(modelIds);
+      setDeleteRequest({
+        kind: 'provider',
+        groupKey: group.key,
+        providerName: group.providerName,
+        modelIds,
+        modelCount: group.models.length,
+        referenceCount,
+        discardsRetainedDraft: editingModalHasUnsavedChanges
+          && editingTargetKey === `provider:${group.key}`,
+      });
+    } catch (error) {
+      log.error('Failed to inspect provider model references before deletion', {
+        providerGroupKey: group.key,
+        error,
+      });
+      notification.error(t('messages.providerReferenceCheckFailed'));
+    }
+  };
+
   const handleDelete = async () => {
-    const id = deleteRequest?.config.id;
-    if (!id) return;
+    const request = deleteRequest;
+    if (!request) return;
+    let deletedModelIds = request.modelIds;
     try {
       const updatedModels = await configManager.updateConfig<AIModelConfigType[]>(
-        'ai.models', current => current.filter(model => model.id !== id)
+        'ai.models',
+        (current) => {
+          if (request.kind === 'provider') {
+            const result = removeProviderModelConfigs(current, request.groupKey);
+            deletedModelIds = result.removed
+              .map(model => model.id)
+              .filter((id): id is string => !!id);
+            return result.remaining;
+          }
+          return current.filter(model => model.id !== request.config.id);
+        },
       );
+      const deletedIdSet = new Set(deletedModelIds);
+      deletedIdSet.forEach(id => {
+        delete activeConnectionTestsRef.current[id];
+      });
+      setTestingConfigs(current => Object.fromEntries(
+        Object.entries(current).filter(([id]) => !deletedIdSet.has(id)),
+      ));
+      setTestResults(current => Object.fromEntries(
+        Object.entries(current).filter(([id]) => !deletedIdSet.has(id)),
+      ));
+      setExpandedIds(current => new Set([...current].filter(id => !deletedIdSet.has(id))));
+      if (request.kind === 'provider') {
+        setExpandedProviderGroupKeys(current => {
+          const next = new Set(current);
+          next.delete(request.groupKey);
+          return next;
+        });
+        if (editingTargetKey === `provider:${request.groupKey}`) {
+          closeEditingModal();
+        }
+      } else if (editingTargetKey === `model:${request.config.id}`) {
+        closeEditingModal();
+      }
       setAiModels(updatedModels);
       setDeleteRequest(null);
-      notification.success(t('messages.deleteSuccess'));
+      notification.success(t(
+        request.kind === 'provider'
+          ? 'messages.providerDeleteSuccess'
+          : 'messages.deleteSuccess',
+      ));
     } catch (error) {
-      log.error('Failed to delete config', { configId: id, error });
-      notification.error(t('messages.deleteFailed'));
+      log.error(
+        request.kind === 'provider' ? 'Failed to delete provider config' : 'Failed to delete model config',
+        request.kind === 'provider'
+          ? { providerGroupKey: request.groupKey, error }
+          : { configId: request.config.id, error },
+      );
+      notification.error(t(
+        request.kind === 'provider'
+          ? 'messages.providerDeleteFailed'
+          : 'messages.deleteFailed',
+      ));
     }
   };
 
@@ -3747,6 +3828,15 @@ const ModelSettingsPage: React.FC = () => {
                             icon={<Icon name="edit" size="sm" />}
                           />
                         </Tooltip>
+                        <Tooltip content={t('actions.deleteProvider')}>
+                          <IconButton
+                            aria-label={`${t('actions.deleteProvider')}: ${group.providerName}`}
+                            tone="danger"
+                            size="sm"
+                            onClick={() => void requestProviderDelete(group)}
+                            icon={<Icon name="delete" size="sm" />}
+                          />
+                        </Tooltip>
                       </div>
                     </div>
                     {isExpanded && (
@@ -4137,12 +4227,24 @@ const ModelSettingsPage: React.FC = () => {
         open={!!deleteRequest}
         onOpenChange={(open) => { if (!open) setDeleteRequest(null); }}
         onConfirm={handleDelete}
-        title={t('deleteConfirm.title')}
-        message={t('deleteConfirm.message', {
-          name: deleteRequest?.config.model_name || '',
-          count: deleteRequest?.referenceCount ?? 0,
-        })}
-        confirmText={t('deleteConfirm.confirm')}
+        title={t(deleteRequest?.kind === 'provider'
+          ? 'providerDeleteConfirm.title'
+          : 'deleteConfirm.title')}
+        message={deleteRequest?.kind === 'provider'
+          ? t(deleteRequest.discardsRetainedDraft
+            ? 'providerDeleteConfirm.messageWithDraft'
+            : 'providerDeleteConfirm.message', {
+              name: deleteRequest.providerName,
+              modelCount: deleteRequest.modelCount,
+              referenceCount: deleteRequest.referenceCount,
+            })
+          : t('deleteConfirm.message', {
+              name: deleteRequest?.config.model_name || '',
+              count: deleteRequest?.referenceCount ?? 0,
+            })}
+        confirmText={t(deleteRequest?.kind === 'provider'
+          ? 'providerDeleteConfirm.confirm'
+          : 'deleteConfirm.confirm')}
         type="warning"
         confirmDanger
       />

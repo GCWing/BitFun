@@ -66,6 +66,31 @@ describe('modelConfigs', () => {
     expect(allocateModelConfigId('AUTO', [])).toBe('AUTO-2');
   });
 
+  it('counts nested references to every model in a provider deletion', async () => {
+    const { countModelConfigReferences } = await import('./modelConfigs');
+    const modelIds = new Set(['model-a', 'model-b']);
+
+    expect(countModelConfigReferences({
+      primary: 'model-a',
+      fast: 'model-c',
+      agents: [{ model: 'model-b' }, { model: 'model-a-suffix' }],
+    }, modelIds)).toBe(2);
+  });
+
+  it('removes only models from the selected provider instance', async () => {
+    const { removeProviderModelConfigs } = await import('./modelConfigs');
+    const configs = [
+      { id: 'model-a', metadata: { provider_instance_id: 'provider-1' } },
+      { id: 'model-b', metadata: { provider_instance_id: 'provider-1' } },
+      { id: 'model-c', metadata: { provider_instance_id: 'provider-2' } },
+    ];
+
+    expect(removeProviderModelConfigs(configs, 'provider-1')).toEqual({
+      remaining: [configs[2]],
+      removed: [configs[0], configs[1]],
+    });
+  });
+
   it('loads ai.models only when the model manager is actually used', async () => {
     configManagerMock.getConfig.mockResolvedValueOnce([
       {

@@ -59,4 +59,13 @@ describe('ModelSettingsPage dialog presentation', () => {
     expect(source).toContain('onConfirm={continueEditingCurrentDraft}');
     expect(source).toContain('onSecondary={discardDraftBeforeOpeningPendingEditor}');
   });
+
+  it('offers atomic provider deletion with provider-specific confirmation', () => {
+    expect(source).toContain("<Tooltip content={t('actions.deleteProvider')}>");
+    expect(source).toContain('onClick={() => void requestProviderDelete(group)}');
+    expect(source).toContain("kind: 'provider',");
+    expect(source).toContain('removeProviderModelConfigs(current, request.groupKey)');
+    expect(source).toContain("? 'providerDeleteConfirm.title'");
+    expect(source).toContain("? 'providerDeleteConfirm.confirm'");
+  });
 });
