@@ -1,16 +1,21 @@
 /** Branch picker and its guarded-checkout recovery dialogs. */
+@use '@/shared/styles/overlay-layout' as overlay-layout;
 @use '@/shared/styles/surface-recipes' as surfaces;
 
 .branch-quick-switch {
   @include surfaces.floating;
+  @include overlay-layout.anchored-picker-inline-size;
 
   position: fixed;
   z-index: var(--bf-layer-popover);
   box-sizing: border-box;
-  width: min(280px, calc(100vw - 16px));
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-family:var(--bf-type-body-sm-font-family);
+  font-family: var(--bf-type-label-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-md-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
+  letter-spacing: var(--bf-type-label-md-letter-spacing);
   user-select: none;
 }
 
@@ -25,7 +30,14 @@
 
 .branch-quick-switch__list {
   max-height: min(280px, calc(100vh - 96px));
-  padding: var(--bf-space-1);
+  padding: calc(
+    var(--bf-overlay-menu-surface-padding)
+    + var(--bf-focus-width)
+  );
+}
+
+.branch-quick-switch__list [data-bf-part='list'] {
+  gap: calc(var(--bf-space-1) / 2);
 }
 
 .branch-quick-switch__loading,
@@ -36,11 +48,17 @@
   gap: 8px;
   padding: 20px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
+  font-family: var(--bf-type-label-md-font-family);
+  font-size: var(--bf-type-label-md-font-size);
+  font-weight: var(--bf-type-label-md-font-weight);
+  line-height: var(--bf-type-label-md-line-height);
+  letter-spacing: var(--bf-type-label-md-letter-spacing);
   text-align: center;
 }
 
 .branch-quick-switch__item {
+  min-height: var(--bf-control-height-sm);
+
   &[data-bf-state='current'] {
     cursor: default;
   }
