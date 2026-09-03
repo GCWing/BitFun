@@ -162,6 +162,7 @@ describe('SessionList target initialization ownership', () => {
       'session-b',
       'sessions.remoteClawSession',
       true,
+      'claw',
     );
   });
 });
