@@ -125,6 +125,55 @@ export class ChatTimelineStore {
     };
   }
 
+  /**
+   * Binds the optimistic user bubble to the host turn acknowledged by the
+   * send response. New hosts preserve the client turn id, while older hosts
+   * generate a replacement id. Handling both here also closes the race where
+   * polling publishes the persisted message before the send response arrives.
+   */
+  acknowledgeOptimisticTurn(localMessageId: string, turnId: string): void {
+    const normalizedLocalId = localMessageId.trim();
+    const normalizedTurnId = turnId.trim();
+    if (normalizedLocalId.length === 0 || normalizedTurnId.length === 0) {
+      return;
+    }
+    const persistedAlreadyArrived = this.state.persistedMessages.some((message: ChatMessage) => {
+      return message.role === 'user' && (message.turnId || '').trim() === normalizedTurnId;
+    });
+    const optimisticMessages = persistedAlreadyArrived ?
+      this.state.optimisticMessages.filter((message: ChatMessage) => message.id !== normalizedLocalId) :
+      this.state.optimisticMessages.map((message: ChatMessage) => {
+        if (message.id !== normalizedLocalId) {
+          return message;
+        }
+        return {
+          id: message.id,
+          turnId: normalizedTurnId,
+          role: message.role,
+          text: message.text,
+          status: message.status,
+          renderVersion: message.renderVersion,
+          detail: message.detail,
+          error: message.error,
+          timestamp: message.timestamp,
+          thinking: message.thinking,
+          tools: message.tools,
+          items: message.items,
+          images: message.images
+        };
+      });
+    this.state = {
+      sessionId: this.state.sessionId,
+      persistedMessages: this.state.persistedMessages,
+      optimisticMessages,
+      activeTurn: this.state.activeTurn,
+      syncPhase: this.state.syncPhase,
+      cursor: this.state.cursor,
+      modelCatalog: this.state.modelCatalog,
+      selectedModelId: this.state.selectedModelId
+    };
+  }
+
   setPersistedMessages(messages: ChatMessage[]): void {
     const persistedMessages = ChatTimelineStore.carrySteeringItems(
       this.state.activeTurn,
@@ -972,6 +1021,11 @@ export class ChatTimelineStore {
     }
     if (pending.id === message.id) {
       return true;
+    }
+    const pendingTurnId = (pending.turnId || '').trim();
+    const messageTurnId = (message.turnId || '').trim();
+    if (pendingTurnId.length > 0 && messageTurnId.length > 0) {
+      return pendingTurnId === messageTurnId;
     }
     const pendingText = (pending.text || '').trim();
     const messageText = (message.text || '').trim();

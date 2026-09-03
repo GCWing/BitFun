@@ -2139,8 +2139,8 @@ export default function remoteControllersUnitTest() {
         onMessagesLoaded: (_messages: ChatMessage[], _hasMoreMessages: boolean) => {},
         onMessageCountKnown: (_pollVersion: number, _knownMessageCount: number) => {},
         onTimelineReady: () => {},
-        onSendSucceeded: (turnId: string, pendingActiveId: string) => {
-          succeeded.push(`${turnId}:${pendingActiveId}`);
+        onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => {
+          succeeded.push(`${turnId}:${pendingActiveId}:${localMessageId}`);
         },
         onSendFailed: (
           rawText: string,
@@ -2192,7 +2192,9 @@ export default function remoteControllersUnitTest() {
 
       expect(client.sendRequests[0]).assertEqual('images:session-1:Describe image:code:1');
       expect(client.sendRequests[1]).assertEqual('text:session-1:Retry text:code');
-      expect(succeeded[0]).assertEqual('turn-1:pending-1');
+      expect(client.sendTurnIds[0]).assertEqual('local-1');
+      expect(client.sendTurnIds[1]).assertEqual('local-2');
+      expect(succeeded[0]).assertEqual('turn-1:pending-1:local-1');
       expect(failed[0]).assertEqual('Retry text:0:local-2:pending-2');
       expect(busyEvents[0]).assertTrue();
       expect(busyEvents[1]).assertFalse();

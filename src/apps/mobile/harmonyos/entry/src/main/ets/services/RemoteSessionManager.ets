@@ -278,19 +278,29 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     };
   }
 
-  async sendMessage(sessionId: string, text: string, agentType?: string): Promise<string> {
+  async sendMessage(sessionId: string, text: string, agentType?: string, turnId?: string): Promise<string> {
     const startedAt = Date.now();
     RemoteLogger.info(`send_message start session=${RemoteSessionManager.shortId(sessionId)} len=${text.length}`);
-    const response = await this.send<SendMessageResponse>(RemoteCommandFactory.sendMessage(sessionId, text, agentType));
+    const response = await this.send<SendMessageResponse>(
+      RemoteCommandFactory.sendMessage(sessionId, text, agentType, undefined, turnId)
+    );
     RemoteLogger.info(`send_message done session=${RemoteSessionManager.shortId(sessionId)} turn=${response.turn_id || ''} ms=${Date.now() - startedAt}`);
     return response.turn_id || '';
   }
 
-  async sendMessageWithImages(sessionId: string, text: string, agentType: string, imageContexts: RemoteImageContext[]): Promise<string> {
+  async sendMessageWithImages(
+    sessionId: string,
+    text: string,
+    agentType: string,
+    imageContexts: RemoteImageContext[],
+    turnId?: string
+  ): Promise<string> {
     const startedAt = Date.now();
     RemoteLogger.info(`send_message_images start session=${RemoteSessionManager.shortId(sessionId)} len=${text.length} images=${imageContexts.length}`);
     const response =
-      await this.send<SendMessageResponse>(RemoteCommandFactory.sendMessage(sessionId, text, agentType, imageContexts));
+      await this.send<SendMessageResponse>(
+        RemoteCommandFactory.sendMessage(sessionId, text, agentType, imageContexts, turnId)
+      );
     RemoteLogger.info(`send_message_images done session=${RemoteSessionManager.shortId(sessionId)} turn=${response.turn_id || ''} ms=${Date.now() - startedAt}`);
     return response.turn_id || '';
   }

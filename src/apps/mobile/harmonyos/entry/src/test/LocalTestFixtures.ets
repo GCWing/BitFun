@@ -889,6 +889,7 @@ export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
   messageRequests: string[] = [];
   messageResolvers: Array<(result: SessionMessagesResult) => void> = [];
   sendRequests: string[] = [];
+  sendTurnIds: string[] = [];
   buildPlanRequests: string[] = [];
   steerRequests: string[] = [];
   cancelRequests: string[] = [];
@@ -925,8 +926,9 @@ export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
     resolve(result);
   }
 
-  async sendMessage(sessionId: string, text: string, agentType?: string): Promise<string> {
+  async sendMessage(sessionId: string, text: string, agentType?: string, turnId?: string): Promise<string> {
     this.sendRequests.push(`text:${sessionId}:${text}:${agentType || ''}`);
+    this.sendTurnIds.push(turnId || '');
     if (this.shouldFailSend) {
       throw new Error('Expected send failure.');
     }
@@ -937,9 +939,11 @@ export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
     sessionId: string,
     text: string,
     agentType: string,
-    imageContexts: RemoteImageContext[]
+    imageContexts: RemoteImageContext[],
+    turnId?: string
   ): Promise<string> {
     this.sendRequests.push(`images:${sessionId}:${text}:${agentType}:${imageContexts.length}`);
+    this.sendTurnIds.push(turnId || '');
     if (this.shouldFailSend) {
       throw new Error('Expected send failure.');
     }

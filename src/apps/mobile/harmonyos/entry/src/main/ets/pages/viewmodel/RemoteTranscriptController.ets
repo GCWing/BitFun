@@ -7,6 +7,7 @@ import {
 import { ChatTimelineItem } from '../../model/ChatTimelineModels';
 import { ChatTimelineState, ChatTimelineStore } from '../../services/ChatTimelineStore';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
+import { Encoding } from '../../services/Encoding';
 import { RemoteChatPollingCursor, RemoteChatPollingSnapshot } from '../../services/RemoteChatPollingLifecycleController';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';
@@ -127,7 +128,8 @@ export class RemoteTranscriptController {
     }
     // Older desktop hosts do not advertise steering. Keep their established
     // queue behavior so mixed-version Remote Connect sessions remain usable.
-    const localMessage = RemoteUiState.localUserMessage(text, images);
+    const clientTurnId = Encoding.randomId('harmony-turn');
+    const localMessage = RemoteUiState.localUserMessage(text, images, clientTurnId);
     runtime.timeline.appendOptimisticMessage(localMessage);
     const pendingActiveId = runtime.timeline.setPendingActiveTurn(localMessage.id);
     this.syncRemoteTimeline();
@@ -147,7 +149,8 @@ export class RemoteTranscriptController {
       localMessage.id,
       pendingActiveId,
       this.remote.isBusy,
-      true
+      true,
+      localMessage.turnId || ''
     );
   }
 

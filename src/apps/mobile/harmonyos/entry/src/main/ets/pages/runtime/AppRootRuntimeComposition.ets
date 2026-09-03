@@ -509,7 +509,8 @@ export abstract class AppRootRuntimeComposition {
         onTimelineReady: () => {
           this.remotePageState.setConversationLoading(false);
         },
-        onSendSucceeded: (turnId: string, pendingActiveId: string) => {
+        onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => {
+          this.chatTimelineStore.acknowledgeOptimisticTurn(localMessageId, turnId);
           if (turnId.length > 0) {
             this.chatTimelineStore.setLocalActiveTurn(turnId);
             this.conversationController.syncRemoteTimeline();

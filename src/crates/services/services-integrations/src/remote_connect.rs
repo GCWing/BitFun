@@ -2324,6 +2324,10 @@ pub enum RemoteCommand {
         content: String,
         #[serde(default)]
         display_content: Option<String>,
+        /// Client-generated stable identity for the turn. Older clients omit it;
+        /// older hosts ignore it as an unknown optional field.
+        #[serde(default)]
+        turn_id: Option<String>,
         agent_type: Option<String>,
         images: Option<Vec<ImageAttachment>>,
         image_contexts: Option<Vec<RemoteImageContext>>,
@@ -2754,6 +2758,7 @@ where
             session_id,
             content,
             display_content,
+            turn_id,
             agent_type,
             images,
             image_contexts,
@@ -2778,7 +2783,7 @@ where
                     agent_type: agent_type.clone(),
                     image_contexts: resolved_contexts,
                     policy: RemoteDialogSubmissionPolicy::for_source(source),
-                    turn_id: None,
+                    turn_id: turn_id.clone(),
                 })
                 .await,
             )

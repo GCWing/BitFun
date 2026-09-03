@@ -1871,6 +1871,10 @@ export default function transportAndGeneralChatUnitTest() {
 
     it('builds message and polling commands', 0, () => {
       expectCommandJson(RemoteCommandFactory.sendMessage('s1', 'hello', 'code'), '{"cmd":"send_message","session_id":"s1","content":"hello","agent_type":"code"}');
+      expectCommandJson(
+        RemoteCommandFactory.sendMessage('s1', 'hello', 'code', undefined, 'harmony-turn-1'),
+        '{"cmd":"send_message","session_id":"s1","content":"hello","agent_type":"code","turn_id":"harmony-turn-1"}'
+      );
       expectCommandJson(RemoteCommandFactory.sendMessage('s1', 'look', 'code', [{
         id: 'img1',
         data_url: 'data:image/png;base64,abc',

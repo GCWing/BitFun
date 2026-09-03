@@ -153,9 +153,10 @@ export class RemoteUiState {
     });
   }
 
-  static localUserMessage(text: string, images?: ImageAttachment[]): ChatMessage {
+  static localUserMessage(text: string, images?: ImageAttachment[], turnId?: string): ChatMessage {
     return {
       id: `optimistic-user-${Date.now()}`,
+      turnId,
       role: 'user',
       text,
       status: 'sent',
@@ -212,9 +213,15 @@ export class RemoteUiState {
   }
 
   private static isOptimisticDuplicate(local: ChatMessage, remote: ChatMessage): boolean {
-    return RemoteUiState.isLocalOptimisticMessage(local) &&
-      local.role === remote.role &&
-      local.text.trim() === remote.text.trim() &&
+    if (!RemoteUiState.isLocalOptimisticMessage(local) || local.role !== remote.role) {
+      return false;
+    }
+    const localTurnId = (local.turnId || '').trim();
+    const remoteTurnId = (remote.turnId || '').trim();
+    if (localTurnId.length > 0 && remoteTurnId.length > 0) {
+      return localTurnId === remoteTurnId;
+    }
+    return local.text.trim() === remote.text.trim() &&
       local.text.trim().length > 0 &&
       RemoteUiState.imageSignature(local.images || []) === RemoteUiState.imageSignature(remote.images || []);
   }
