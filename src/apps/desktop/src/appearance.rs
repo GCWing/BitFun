@@ -563,6 +563,8 @@ pub fn create_main_window(
         _ => "other",
     };
 
+    #[cfg(not(debug_assertions))]
+    let materialization_workbench = Arc::clone(&frontend_workbench);
     #[allow(unused_mut)]
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
         .title("BitFun")
@@ -591,6 +593,10 @@ pub fn create_main_window(
                     payload.url(),
                     total_started_at.elapsed().as_millis()
                 );
+                #[cfg(not(debug_assertions))]
+                if matches!(payload.event(), PageLoadEvent::Finished) {
+                    materialization_workbench.materialize_bundled_revision_in_background();
+                }
             }
         });
 
