@@ -585,6 +585,13 @@ pub async fn run() {
     };
     startup_trace.record_phase("native_process_start", "native");
     crash_diagnostics::initialize_run_state(session_log_dir.clone(), &startup_trace_id);
+    if let Err(error) = crash_diagnostics::acquire_single_instance_lock(&session_log_dir) {
+        // A second instance sharing this data root would corrupt controller
+        // state and workspace lifecycle; refuse to start instead.
+        eprintln!("BitFun desktop exited: {error}");
+        log::error!("{error}");
+        return;
+    }
     setup_panic_hook();
 
     // Install the rustls ring CryptoProvider as the process-level default early,

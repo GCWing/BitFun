@@ -92,6 +92,13 @@ re-entry instruction 必须稳定且轻量，不得缓存 todo 列表、cadence�
   Codex 专用 onboarding 分支，不代表 BitFun 模拟 Codex App。
 - scheduler hint 有数值时按数值调度；当前 outer-controller packet 只有 cadence label 时，
   使用代码中明确的兼容间隔。只有 packet 要求 ACK 时才按 packet 的 exact argv ACK。
+- PR 生命周期监控（`continuous_monitor` / `issue_fix_pr_state_*_monitor` todo）
+  由 LoopX packet 驱动、agent 在轮内执行；宿主不调用 `issue-fix pr-lifecycle`，
+  也不压缩 maintainer correction。宿主只把 turn plan envelope 的 selected todo
+  投影为任务快照 `currentTodo`（有界、非权威、Goal 终局清除），UI 据此区分
+  「PR 监控等待中」。当前 pin `v0.5.1` 不返回数值调度 hint（60s 兼容间隔）；
+  上游 ≥v0.5.x 的 monitor_wait 数值 cadence（[15,30,60] 分钟，宿主下限 15 分钟）
+  在升级 pin 后经既有 `scheduler_hint_ms` 路径自动生效。
 - runner 重启从 LoopX registry、host task snapshot 和 workspace readback 恢复，不能 replay
   transcript 重建控制状态。结果不确定时保留数据并进入 recovery，不自动重试外部副作用。
 
@@ -234,16 +241,14 @@ controller、environment DTO 或 UI。
    结束，并在正式 build 前立即复查一次，确认 target 无竞争者。
 2. **极速反馈只运行最终 build**：用户要求“编译看效果”时，不运行 `cargo check`、
    `cargo test`、Web UI type-check 或任何前置构建。它们重复解析/编译依赖，却不产生用户
-   要试用的 exe。若用户另外明确要求某个检查，该检查也必须继承 README 的三个
-   `CARGO_PROFILE_DEV_*` 值，禁止运行裸 Cargo 命令污染增量指纹。
-3. **本机强制单并发**：在统一 profile 之外设置 `CARGO_BUILD_JOBS=1`。该变量只限制
+   要试用的 exe。若用户另外明确要求某个检查，该检查也必须与 README 统一配方同指纹
+   （仓库 `[profile.dev]` 基线，不设置任何 `CARGO_PROFILE_DEV_*` 覆盖），禁止引入
+   profile 覆盖污染增量指纹。
+3. **本机强制单并发**：设置 `CARGO_BUILD_JOBS=1`。该变量只限制
    同时运行的 rustc 数量，不改变 Cargo 指纹；不要用默认并发或 `-j 2` 反复碰内存
-   上限。统一命令为：
+   上限。统一命令为（仓库 `[profile.dev]` 基线指纹，无任何 profile 环境变量）：
 
    ```powershell
-   $env:CARGO_PROFILE_DEV_DEBUG = "0"
-   $env:CARGO_PROFILE_DEV_INCREMENTAL = "true"
-   $env:CARGO_PROFILE_DEV_CODEGEN_UNITS = "256"
    $env:CARGO_BUILD_JOBS = "1"
    cargo build -p bitfun-desktop --bin bitfun-desktop
    ```
@@ -263,8 +268,10 @@ controller、environment DTO 或 UI。
    持续轮询同一个句柄直到退出；不得因为暂时没有输出而重复启动。正常构建不要用
    `-vv`，只有无诊断退出时才用它定位最后一个 rustc 命令。
 5. **成功必须有四项证据**：Cargo 退出码为 0；输出含 `Finished`；
-   `target/debug/bitfun-desktop.exe` 的 `LastWriteTime` 晚于本次构建开始；Cargo/rustc
-   已全部退出。缺一项都视为构建失败，不得启动旧 exe 冒充新版本。
+   `target/debug/bitfun-desktop.exe` 的 `LastWriteTime` 晚于本次构建触及的所有
+   Rust/内嵌源文件（指纹未变化时 Cargo 允许不重链，此时以 exe 晚于全部源文件
+   mtime 为准）；Cargo/rustc 已全部退出。缺一项都视为构建失败，不得启动旧 exe
+   冒充新版本。
 6. **启动前后都核对进程**：build 前停止全部 `bitfun-desktop.exe` 并确认已经退出，
    防止最终链接或 AppData reseed 冲突；仅在上述成功证据齐全后后台启动新 exe，再核对
    进程 `StartTime` 与路径。构建期间若 Desktop 被其他入口重新拉起，先停掉它再等待链接。

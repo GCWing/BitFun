@@ -556,7 +556,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   text-align: right;
 }
 .task-item__hint[data-status="waiting_for_user"] { color: var(--lx-warning); }
-.task-item__hint[data-status="recovery_required"], .task-item__hint[data-status="failed"] { color: var(--lx-error); }
+.task-item__hint[data-status="recovery_required"] { color: var(--lx-warning); }
+.task-item__hint[data-status="failed"] { color: var(--lx-error); }
 .task-item__hint[data-status="completed"] { color: var(--lx-success); }
 .task-item__hint[data-status="queued"], .task-item__hint[data-status="preparing"] { color: var(--lx-info); }
 .task-item__hint--running {
@@ -588,7 +589,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 }
 .task-rail.is-collapsed .task-item__state[data-status="running"], .task-rail.is-collapsed .task-item__state[data-status="queued"], .task-rail.is-collapsed .task-item__state[data-status="preparing"] { background: var(--lx-info); }
 .task-rail.is-collapsed .task-item__state[data-status="waiting_for_user"], .task-rail.is-collapsed .task-item__state[data-status="retry_wait"] { background: var(--lx-warning); }
-.task-rail.is-collapsed .task-item__state[data-status="failed"], .task-rail.is-collapsed .task-item__state[data-status="recovery_required"] { background: var(--lx-error); }
+.task-rail.is-collapsed .task-item__state[data-status="failed"] { background: var(--lx-error); }
+.task-rail.is-collapsed .task-item__state[data-status="recovery_required"] { background: var(--lx-warning); }
 .task-rail.is-collapsed .task-item__state[data-status="completed"] { background: var(--lx-success); }
 .task-rail.is-collapsed #collapse-tasks svg { transform: rotate(180deg); }
 
@@ -831,7 +833,31 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .state-pill[data-state="running"], .state-pill[data-state="completed"] { color: var(--lx-success); }
 .state-pill[data-state="waiting_for_user"], .state-pill[data-state="retry_wait"] { color: var(--lx-warning); }
 .state-pill[data-state="cancelling"] { color: var(--lx-warning); }
-.state-pill[data-state="failed"], .state-pill[data-state="recovery_required"] { color: var(--lx-error); }
+.state-pill[data-state="failed"] { color: var(--lx-error); }
+.state-pill[data-state="recovery_required"] { color: var(--lx-warning); }
+
+.issue-decision-card {
+  flex: 0 0 auto;
+  border: 1px solid var(--lx-warning);
+  border-left: 3px solid var(--lx-warning);
+  background: color-mix(in srgb, var(--lx-warning) 10%, var(--lx-surface));
+  border-radius: var(--lx-radius);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.issue-decision-card[hidden] { display: none; }
+.issue-decision-card__message { margin: 0; color: var(--lx-text); font-size: 13px; line-height: 1.5; }
+
+.output-block__thinking { margin-top: 6px; }
+.output-block__thinking summary {
+  cursor: pointer;
+  color: var(--lx-text-muted);
+  font-size: 12px;
+  user-select: none;
+}
+.output-block__thinking[open] summary { margin-bottom: 6px; }
 .task-actions { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .task-actions { justify-content: flex-end; }
 .task-actions button { min-height: 30px; padding: 4px 10px; font-size: 10.5px; white-space: nowrap; }

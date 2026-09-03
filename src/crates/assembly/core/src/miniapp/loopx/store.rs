@@ -41,6 +41,17 @@ pub struct LoopxTaskRuntimeRecord {
     pub loopx_turn_id: Option<String>,
     pub settlement_token: Option<String>,
     pub expected_durable_revision: Option<String>,
+    /// Last attempt time of the passive UI-attach Goal reconciliation. Tracked
+    /// separately from `updated_at` because the reconcile's own progress
+    /// events must not restart its throttle window.
+    pub last_goal_reconcile_at_ms: Option<i64>,
+    /// One-shot flag: after a NoDurableProgress settlement the host schedules
+    /// exactly one corrective turn (with a host note) before parking the task
+    /// for interactive recovery.
+    pub durable_compensation_pending: bool,
+    /// One-shot host note appended to the next agent instruction (used by the
+    /// durable-writeback compensation turn).
+    pub pending_host_note: Option<String>,
 }
 
 impl Default for LoopxPersistedState {

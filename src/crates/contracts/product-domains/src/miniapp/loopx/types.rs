@@ -354,6 +354,26 @@ pub struct LoopxSettlementSummary {
     pub settled_at: Option<i64>,
 }
 
+/// Bounded read-only projection of the LoopX frontier todo that the current
+/// turn plan selected. This is a UX snapshot only: the LoopX registry remains
+/// the sole authority for todo lifecycle, and the host must not act on this
+/// projection beyond display.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCurrentTodo {
+    pub todo_id: String,
+    pub task_class: String,
+    pub action_kind: String,
+    pub target_key: String,
+    pub claimed_by: String,
+    /// Authoritative LoopX due projection for monitor todos, kept as the raw
+    /// LoopX string (typically an ISO timestamp) so the host never fabricates
+    /// a parse result.
+    pub next_due_at: Option<String>,
+    /// Bounded recommended-action text from the same LoopX envelope.
+    pub recommended_action: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LoopxTaskSnapshot {
@@ -382,6 +402,9 @@ pub struct LoopxTaskSnapshot {
     pub granted_scopes: Vec<LoopxPermissionScope>,
     pub current_turn_id: Option<String>,
     pub current_tool: Option<String>,
+    /// Last known LoopX frontier todo projection. Absent for legacy records
+    /// and cleared when the Goal reaches a terminal projection.
+    pub current_todo: Option<LoopxCurrentTodo>,
     pub last_output_at: Option<i64>,
     /// Bounded final response from the latest Agent turn. It is persisted
     /// before settlement so recovery surfaces retain the useful outcome even

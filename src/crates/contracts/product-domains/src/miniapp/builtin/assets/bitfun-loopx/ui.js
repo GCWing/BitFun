@@ -110,6 +110,9 @@ const COPY = {
     gateKindDecision: '决策请求',
     outputUnavailable: '实时输出暂不可用',
     outputThinking: '思考',
+    outputThinkingSummary: '思考过程 · {value} 字（点击展开）',
+    decisionCardTitle: '需要你的决策',
+    decisionCardRecoveryHint: '本段工作已结束，但结算未能确认持久进展；可恢复重试一次，结论详情见下方最新进展。',
     outputTool: '工具',
     outputModel: '模型',
     outputText: '输出',
@@ -241,6 +244,15 @@ const COPY = {
     gateClarifyTitle: '维护者反馈存在歧义，需要你澄清方向',
     gateClarifySummary: '维护者对该修复提出的修改要求存在多种理解方式，Agent 无法确定预期行为，需要你给出明确方向。原始反馈见下方。',
     gateClarifyApproveEffect: '批准后请在备注中写清预期的行为或取舍，Agent 会按你的说明继续修改。',
+    gateReuseMergeTitle: '是否合并已有 PR 作为本 Issue 的解决方案？',
+    gateReuseMergeSummaryWithPr: 'Agent 评估认为已有 {pr}（{title}）可直接解决当前 Issue，验证证据齐全，无需重复实现；合并前请确认 PR 归属与合并权限。',
+    gateReuseMergeSummary: 'Agent 评估认为已有 PR 可直接解决当前 Issue，验证证据齐全，无需重复实现；合并前请确认 PR 归属与合并权限。',
+    gateReuseMergeApproveEffect: '批准后不会为当前 Issue 提交新补丁或新 PR；将复用 {pr} 作为解决方案并执行合并，之后继续跟进该 PR 的合并/关闭状态，直到本任务收尾。',
+    gateReuseMergeRejectEffect: '本轮不合并 {pr}，任务不再进入后续步骤；已完成的评估、工作区与证据全部保留。可在备注说明理由，或要求 Agent 改为独立补丁方案重新评估。',
+    gateReuseMergeRecommendation: '建议：确认 PR 内容与合并时机符合预期后再批准；合并是对上游仓库的对外动作。',
+    gateReuseMergeApprove: '批准合并',
+    gateReuseMergeReject: '拒绝',
+    gateReuseMergeFallbackPr: '已有 PR',
     gateClarifyRejectEffect: '本次不处理该反馈，任务保持等待；维护者后续补充说明后可以再次处理。',
     gateGrantAuthorityTitle: '需要授予额外写权限',
     gateGrantAuthoritySummary: '维护者的修改要求已被理解，但执行它需要的写权限当前未授权。请确认范围后决定是否授予。',
@@ -315,11 +327,11 @@ const COPY = {
     state_preparing: '准备中',
     state_queued: '排队中',
     state_running: '运行中',
-    state_waiting_for_user: '等待审批',
+    state_waiting_for_user: '待批准',
     state_retry_wait: '等待重试',
     state_cancelling: '正在停止',
     state_stopped: '已暂停',
-    state_recovery_required: '已中止',
+    state_recovery_required: '待恢复',
     state_completed: '已完成',
     state_failed: '失败',
     state_archived: '已归档',
@@ -341,6 +353,10 @@ const COPY = {
     phase_cancelling: '正在取消',
     phase_recovering: '恢复并同步',
     phase_finished: '流程结束',
+    monitor_phase_queued: 'PR 监控等待中',
+    monitor_chip: 'PR 监控',
+    monitor_waiting_detail: 'LoopX 心跳按自己的节奏检查 CI、Review 与新评论;这段等待是交付闭环的正常状态,不会消耗模型额度。',
+    monitor_next_check: '下次检查',
     scope_workspace_read: '读取工作区',
     scope_workspace_write: '修改工作区',
     scope_git_local: '本地 Git 操作',
@@ -428,6 +444,9 @@ const COPY = {
     gateKindDecision: 'Decision request',
     outputUnavailable: 'Live output is unavailable',
     outputThinking: 'Thinking',
+    outputThinkingSummary: 'Thinking · {value} chars (click to expand)',
+    decisionCardTitle: 'Needs your decision',
+    decisionCardRecoveryHint: 'This segment finished but settlement could not validate durable progress. You can retry recovery once; see the summary below for the conclusion.',
     outputTool: 'Tool',
     outputModel: 'Model',
     outputText: 'Output',
@@ -559,6 +578,15 @@ const COPY = {
     gateClarifyTitle: 'Maintainer feedback is ambiguous — clarification needed',
     gateClarifySummary: 'The maintainer\'s requested change can be interpreted in multiple ways; the agent cannot determine the intended behavior and needs your direction. The original feedback is below.',
     gateClarifyApproveEffect: 'After approving, describe the intended behavior or tradeoff in the note; the agent will continue accordingly.',
+    gateReuseMergeTitle: 'Merge the existing PR as this issue\'s solution?',
+    gateReuseMergeSummaryWithPr: 'The agent evaluated existing {pr} ({title}) as already fixing this issue with solid verification evidence; no duplicate implementation is needed. Confirm PR ownership and merge authority before approving.',
+    gateReuseMergeSummary: 'The agent evaluated an existing PR as already fixing this issue with solid verification evidence; no duplicate implementation is needed. Confirm PR ownership and merge authority before approving.',
+    gateReuseMergeApproveEffect: 'No new patch or PR will be submitted for this issue; {pr} will be reused as the solution and merged. The task keeps tracking that PR\'s merge/close state until it closes out.',
+    gateReuseMergeRejectEffect: 'This round will not merge {pr} and the task will not proceed; the evaluation, workspace, and evidence are preserved. Note a reason, or ask the agent for an independent patch route instead.',
+    gateReuseMergeRecommendation: 'Recommendation: approve only when the PR content and merge timing match your expectations; merging is an external action on the upstream repository.',
+    gateReuseMergeApprove: 'Approve merge',
+    gateReuseMergeReject: 'Reject',
+    gateReuseMergeFallbackPr: 'the existing PR',
     gateClarifyRejectEffect: 'The feedback will not be processed for now and the task stays waiting; it can be revisited after the maintainer clarifies.',
     gateGrantAuthorityTitle: 'Additional write authority required',
     gateGrantAuthoritySummary: 'The maintainer\'s requested change is understood, but applying it requires write authority that is not currently granted. Confirm the scope before deciding.',
@@ -633,11 +661,11 @@ const COPY = {
     state_preparing: 'Preparing',
     state_queued: 'Queued',
     state_running: 'Running',
-    state_waiting_for_user: 'Awaiting approval',
+    state_waiting_for_user: 'Pending approval',
     state_retry_wait: 'Retry wait',
     state_cancelling: 'Stopping',
     state_stopped: 'Paused',
-    state_recovery_required: 'Interrupted',
+    state_recovery_required: 'Pending recovery',
     state_completed: 'Completed',
     state_failed: 'Failed',
     state_archived: 'Archived',
@@ -659,6 +687,10 @@ const COPY = {
     phase_cancelling: 'Cancelling',
     phase_recovering: 'Recovering and syncing',
     phase_finished: 'Finished',
+    monitor_phase_queued: 'PR monitor waiting',
+    monitor_chip: 'PR monitor',
+    monitor_waiting_detail: 'The LoopX heartbeat checks CI, review, and new comments on its own cadence; waiting here is a normal part of the delivery loop and does not consume model quota.',
+    monitor_next_check: 'Next check',
     scope_workspace_read: 'Read workspace',
     scope_workspace_write: 'Modify workspace',
     scope_git_local: 'Local Git operations',
@@ -722,7 +754,6 @@ const view = {
   issueStatePill: byId('issue-state-pill'),
   issueLink: byId('issue-link'),
   issueUpdated: byId('issue-updated'),
-  unselectTask: byId('unselect-task'),
   issueDetail: byId('issue-detail'),
   issueApprovalPanel: byId('issue-approval-panel'),
   issueApprovalRaw: byId('issue-approval-raw'),
@@ -736,10 +767,7 @@ const view = {
   issueApprovalNote: byId('issue-approval-note'),
   issueApprovalReject: byId('issue-approval-reject'),
   issueApprovalApprove: byId('issue-approval-approve'),
-  issueProgressPanel: byId('issue-progress-panel'),
-  issueProgressSummary: byId('issue-progress-summary'),
-  issueCurrentHeading: byId('issue-current-heading'),
-  issueCurrentDetail: byId('issue-current-detail'),
+  issueDecisionCard: byId('issue-decision-card'),
   issueSummaryMeta: byId('issue-summary-meta'),
   issueSummary: byId('issue-summary'),
   issueFacts: byId('issue-facts'),
@@ -943,6 +971,31 @@ function taskPhaseLabel(task) {
   return isWorkspacePreparationFailure(task)
     ? text('workspacePreparationFailed')
     : phaseLabel(task && task.phase);
+}
+
+/// The LoopX frontier-todo projection marks the PR-lifecycle monitoring
+/// phase. It is display-only; the LoopX registry stays authoritative.
+function isMonitorTodo(task) {
+  const todo = task && task.currentTodo;
+  if (!todo) return false;
+  if (String(todo.taskClass || '') === 'continuous_monitor') return true;
+  return /^issue_fix_pr_state_.+_monitor$/.test(String(todo.actionKind || ''));
+}
+
+function monitorNextCheckLabel(task) {
+  const raw = task && task.currentTodo && task.currentTodo.nextDueAt;
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value.slice(0, 40);
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+}
+
+function monitorWaitDetail(task) {
+  const detail = text('monitor_waiting_detail');
+  const due = monitorNextCheckLabel(task);
+  return due ? `${detail} ${text('monitor_next_check')}: ${due}` : detail;
 }
 
 function compactItemLabel(item) {
@@ -1903,6 +1956,30 @@ function approvalPresentation(task, gate) {
   const body = stripGatePriorityPrefix(rawMessage);
   const actionKind = String(gate && gate.actionKind || '').toLowerCase();
 
+  // 复用既有 PR 的合并门：用户关心的是「不重复实现、复用哪个 PR、之后是否继续跟进」。
+  const reuseMerge = actionKind.includes('merge')
+    || actionKind.includes('reuse')
+    || /merge\s+PR\s+#(\d+)/i.test(body)
+    || /reuse[_\s-]*(?:existing[_\s-]*)?pr/i.test(body);
+  if (reuseMerge) {
+    const prNumber = body.match(/PR\s+#(\d+)/i)?.[1] || '';
+    const pr = prNumber ? `PR #${prNumber}` : text('gateReuseMergeFallbackPr');
+    const prTitle = body.match(/merge\s+PR\s+#\d+\s*\(([^)]+)\)/i)?.[1] || '';
+    return {
+      kind: 'reuse_merge',
+      title: text('gateReuseMergeTitle'),
+      summary: prTitle
+        ? text('gateReuseMergeSummaryWithPr', { pr, title: prTitle })
+        : text('gateReuseMergeSummary'),
+      rawMessage: body,
+      approveEffect: text('gateReuseMergeApproveEffect', { pr }),
+      rejectEffect: text('gateReuseMergeRejectEffect', { pr }),
+      recommendation: text('gateReuseMergeRecommendation'),
+      approveLabel: text('gateReuseMergeApprove'),
+      rejectLabel: text('gateReuseMergeReject'),
+    };
+  }
+
   const publishPullRequest = actionKind.includes('publish')
     || actionKind.includes('pull_request')
     || /\bpr bundle\b|(?:publish|push|creat(?:e|ing|ion)).{0,100}(?:pull request|\bpr\b)/i.test(body);
@@ -2066,9 +2143,6 @@ function renderTaskActions(task) {
   }
   if (isResolvedUpstream(task)) {
     return;
-  }
-  if (['preparing', 'queued', 'running', 'retry_wait'].includes(task.state)) {
-    fragment.append(makeActionButton(text('pause'), 'pause', task));
   }
   if (['recovery_required', 'failed', 'stopped'].includes(task.state)) {
     fragment.append(makeActionButton(text('resume'), 'resume', task));
@@ -2298,6 +2372,7 @@ function currentProgressHeading(task, evidence) {
   if (task.state === 'waiting_for_user') return text('progressWaiting');
   if (task.state === 'recovery_required' || task.state === 'failed') return text('progressRecovery');
   if (task.phase === 'preparing_workspace') return text('progressPreparing');
+  if (task.state === 'queued' && isMonitorTodo(task)) return text('monitor_phase_queued');
   if (task.state === 'queued' || task.phase === 'queued') return text('progressQueued');
   if (task.phase === 'validating_progress') return text('progressValidating');
   if (task.phase === 'settling_turn') return text('progressSettling');
@@ -2309,7 +2384,9 @@ function currentProgressHeading(task, evidence) {
 
 function currentProgressDetail(task, events) {
   if (isResolvedUpstream(task)) return text('progressResolvedUpstreamDetail');
-  if (task.state === 'queued') return latestTaskWaitReason(task);
+  if (task.state === 'queued') {
+    return isMonitorTodo(task) ? monitorWaitDetail(task) : latestTaskWaitReason(task);
+  }
   if (task.currentTool) {
     const activity = [...events].reverse().find((event) => (
       event.toolName === task.currentTool
@@ -2385,17 +2462,24 @@ function renderIssueApproval(task) {
 }
 
 function renderIssueStatus(task) {
-  const evidence = taskProgressEvidence(task);
-  const stages = progressStageStatus(task, evidence);
-  const current = stages.find(([, status]) => status !== 'complete');
-  const currentStage = current
-    ? `${text(current[0])}（${text(`stage${current[1][0].toUpperCase()}${current[1].slice(1)}`)}）`
-    : text('progressCompleted');
-  view.issueProgressSummary.textContent = text('progressSummaryLine', { stage: currentStage });
-
-  const taskEvents = progressTaskEvents(task);
-  view.issueCurrentHeading.textContent = currentProgressHeading(task, evidence);
-  view.issueCurrentDetail.textContent = currentProgressDetail(task, taskEvents);
+  const card = view.issueDecisionCard;
+  if (!card) return;
+  const show = Boolean(task)
+    && !isResolvedUpstream(task)
+    && (task.state === 'waiting_for_user' || task.state === 'recovery_required');
+  card.hidden = !show;
+  if (!show) {
+    card.replaceChildren();
+    return;
+  }
+  card.replaceChildren();
+  const heading = document.createElement('strong');
+  heading.textContent = text('decisionCardTitle');
+  const body = document.createElement('p');
+  body.className = 'issue-decision-card__message';
+  body.textContent = String(task.pendingGateMessage || '').trim()
+    || text('decisionCardRecoveryHint');
+  card.append(heading, body);
 }
 
 function renderIssueBrief(task) {
@@ -2424,6 +2508,12 @@ function renderIssueBrief(task) {
   }
   if (task.modelId && task.modelId !== 'auto') {
     facts.push({ label: text('factsModel'), value: task.modelId });
+  }
+  if (isMonitorTodo(task) && task.currentTodo && task.currentTodo.nextDueAt) {
+    facts.push({
+      label: text('monitor_chip'),
+      value: `${text('monitor_next_check')} ${monitorNextCheckLabel(task)}`,
+    });
   }
   if (evidence.artifacts.length > 0) {
     facts.push({
@@ -2471,7 +2561,6 @@ function renderIssueView() {
   const task = displayedTask();
   view.issueView.hidden = !task;
   view.issueEmpty.hidden = Boolean(task);
-  view.unselectTask.hidden = !state.selectedTaskId;
   renderFollowBanner(task);
   if (!task) {
     renderTaskActions(null);
@@ -2502,7 +2591,6 @@ function renderIssueView() {
     ? `${item.kind === 'pr' ? 'PR' : 'Issue'} #${item.number}`
     : '';
   renderIssueApproval(task);
-  view.issueProgressPanel.hidden = false;
   renderIssueStatus(task);
   renderIssueBrief(task);
 
@@ -2722,6 +2810,19 @@ function turnOutputBlockRow(block) {
     header.append(chunks);
   }
 
+  if (block.kind === 'thinking') {
+    const details = document.createElement('details');
+    details.className = 'output-block__thinking';
+    const summary = document.createElement('summary');
+    summary.textContent = text('outputThinkingSummary', { value: (block.text || '').length });
+    const content = document.createElement('div');
+    content.className = 'output-block__message';
+    content.textContent = block.text || outputKindLabel(block.kind);
+    details.append(summary, content);
+    row.append(header, details);
+    return row;
+  }
+
   const message = document.createElement('div');
   message.className = 'output-block__message';
   message.textContent = block.text || outputKindLabel(block.kind);
@@ -2738,6 +2839,43 @@ const TIMELINE_EVENT_KINDS = new Set([
   'settlement_recorded',
   'operation_cancelled',
 ]);
+
+// Routine engine heartbeat events (goal-state inspections, settlement
+// probes, turn-contract rebuilds) repeat every cycle and carry no operator
+// value; the durable event stream keeps them, the merged timeline hides them.
+const TIMELINE_NOISE_PATTERNS = [
+  /^inspecting durable loopx goal state$/i,
+  /^verifying durable loopx progress and quota settlement evidence$/i,
+  /^matched validated loopx progress and quota settlement evidence$/i,
+  /^building a fresh loopx custom-runner turn contract$/i,
+];
+
+function isTimelineNoiseEvent(event) {
+  const message = String((event && event.message) || '').trim();
+  return TIMELINE_NOISE_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+function visibleMilestoneEvents(task) {
+  const events = task
+    ? state.events.filter((event) => (
+      event.taskId === task.taskId
+      && TIMELINE_EVENT_KINDS.has(event.kind)
+      && !isTimelineNoiseEvent(event)
+      && (event.generation == null || Number(event.generation) === Number(task.generation))
+    ))
+    : [];
+  // Collapse consecutive duplicate milestones (same message fired back to
+  // back) so the timeline only shows state changes, not polling rhythm.
+  const deduped = [];
+  let lastMessage = '';
+  events.forEach((event) => {
+    const message = String(event.message || '').trim();
+    if (message && message === lastMessage) return;
+    lastMessage = message;
+    deduped.push(event);
+  });
+  return deduped;
+}
 
 function timelineMilestoneRow(event) {
   const row = document.createElement('li');
@@ -2774,12 +2912,14 @@ function timelineStageCard(task) {
     return card;
   }
   const heading = document.createElement('strong');
-  heading.textContent = taskPhaseLabel(task);
+  heading.textContent = task && task.state === 'queued' && isMonitorTodo(task)
+    ? text('monitor_phase_queued')
+    : taskPhaseLabel(task);
   card.append(heading);
   const detail = document.createElement('p');
   const taskEvents = progressTaskEvents(task);
   if (task.state === 'queued') {
-    detail.textContent = latestTaskWaitReason(task);
+    detail.textContent = isMonitorTodo(task) ? monitorWaitDetail(task) : latestTaskWaitReason(task);
   } else if (task.phase === 'preparing_workspace') {
     const elapsed = task.updatedAt ? relativeLabel(task.updatedAt) : '';
     detail.textContent = elapsed
@@ -2820,13 +2960,7 @@ function renderTimeline() {
     else blockGroups.push({ turnId: block.turnId, blocks: [block] });
   });
 
-  const milestoneEvents = task
-    ? state.events.filter((event) => (
-      event.taskId === task.taskId
-      && TIMELINE_EVENT_KINDS.has(event.kind)
-      && (event.generation == null || Number(event.generation) === Number(task.generation))
-    ))
-    : [];
+  const milestoneEvents = visibleMilestoneEvents(task);
   const toolEvents = task
     ? state.events.filter((event) => (
       event.taskId === task.taskId
@@ -3511,9 +3645,10 @@ async function performAction(action, task, extra = {}) {
     if (
       response
       && response.status === 'revision_conflict'
-      && task
-      && response.task
-      && response.task.taskId === task.taskId
+      && ((task && response.task && response.task.taskId === task.taskId)
+        // Snapshot-level actions (repository resume, reset) carry the fresh
+        // root revision in the conflict response instead of a task.
+        || (!task && Number.isSafeInteger(Number(response.currentRevision))))
     ) {
       const nextRevision = latestActionRevision(response, request.expectedRevision);
       if (nextRevision !== request.expectedRevision) {
@@ -3796,9 +3931,6 @@ function bindEvents() {
   });
   view.collapseTasks.addEventListener('click', () => {
     setRailCollapsed(!state.railCollapsed);
-  });
-  view.unselectTask.addEventListener('click', () => {
-    unselectTask();
   });
   view.logScroll.addEventListener('scroll', () => {
     const remaining = view.logScroll.scrollHeight - view.logScroll.scrollTop - view.logScroll.clientHeight;

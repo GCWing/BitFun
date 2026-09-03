@@ -702,6 +702,37 @@ impl LoopxIntakeMetadataProvider for GithubLoopxIntakeMetadataProvider {
         })
     }
 
+    async fn viewer_merge_authority(
+        &self,
+        repository: &loopx_contract::LoopxRepositoryKey,
+        deadline: Duration,
+    ) -> loopx_contract::LoopxCliResult<Option<bool>> {
+        let path = format!("/repos/{}/{}", repository.owner, repository.repository);
+        let value = match self
+            .get_json(&path, deadline, "github-merge-authority")
+            .await
+        {
+            Ok(value) => value,
+            Err(error) if error.kind == loopx_contract::LoopxCliErrorKind::NotFound => {
+                // Unknown repository for this identity: treat as no authority
+                // rather than blocking the gate behind a probe failure.
+                return Ok(Some(false));
+            }
+            Err(_) => return Ok(None),
+        };
+        let Some(permissions) = value.get("permissions") else {
+            // Unauthenticated responses omit the viewer permission block.
+            return Ok(None);
+        };
+        let can = |field: &str| {
+            permissions
+                .get(field)
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        };
+        Ok(Some(can("push") || can("maintain") || can("admin")))
+    }
+
     async fn probe_auth(
         &self,
         deadline: Duration,

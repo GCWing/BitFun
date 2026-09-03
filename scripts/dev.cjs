@@ -328,7 +328,7 @@ async function runDesktopTargetGc(profile = 'debug') {
 async function rebuildDesktopDebugBinary() {
   const buildEnv = {
     ...process.env,
-    CARGO_PROFILE_DEV_DEBUG: process.env.CARGO_PROFILE_DEV_DEBUG || '0',
+    CARGO_PROFILE_DEV_DEBUG: process.env.CARGO_PROFILE_DEV_DEBUG || 'line-tables-only',
     CARGO_PROFILE_DEV_INCREMENTAL: process.env.CARGO_PROFILE_DEV_INCREMENTAL || 'true',
     CARGO_PROFILE_DEV_CODEGEN_UNITS: process.env.CARGO_PROFILE_DEV_CODEGEN_UNITS || '256',
   };

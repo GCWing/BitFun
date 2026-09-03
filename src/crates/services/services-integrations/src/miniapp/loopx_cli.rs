@@ -368,6 +368,17 @@ pub trait LoopxIntakeMetadataProvider: Send + Sync {
         &self,
         deadline: Duration,
     ) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxGithubAuthProbe>;
+
+    /// Whether the authenticated GitHub identity can merge pull requests in
+    /// the repository. `Ok(None)` = unknown (no credential or probe failure);
+    /// callers must fail open to interactive decisions.
+    async fn viewer_merge_authority(
+        &self,
+        _repository: &loopx_contract::LoopxRepositoryKey,
+        _deadline: Duration,
+    ) -> loopx_contract::LoopxCliResult<Option<bool>> {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -1773,12 +1784,20 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             require_schema(&guard.payload, "loopx_turn_envelope_v0", operation_id)?;
             let durable_revision = extract_durable_revision(&guard.payload, operation_id)?;
             if durable_revision != request.expected_durable_revision {
-                return Err(port_error(
-                    loopx_contract::LoopxCliErrorKind::Conflict,
-                    operation_id,
-                    "durable LoopX state changed before the turn was built",
-                    true,
-                ));
+                // `turn plan` and `quota should-run` are two different LoopX
+                // envelope builders; loopx does not promise their action
+                // signatures agree for identical state. The fresh guard packet
+                // below is the authoritative execution contract, and durable
+                // settlement evidence is verified against the same turn
+                // identity, so a mismatch here is informational only.
+                log::info!(
+                    "LoopX guard revision differs from inspect projection: task_id={} goal={} turn_instance={} inspect_revision={} guard_revision={}",
+                    request.context.task_id,
+                    request.goal_id,
+                    turn_id,
+                    request.expected_durable_revision,
+                    durable_revision
+                );
             }
             require_turn_owner(
                 &guard.payload,
@@ -1795,6 +1814,19 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 ));
             }
             let settlement_binding = planned_settlement_binding(&guard.payload);
+            log::info!(
+                "LoopX turn guard accepted: task_id={} goal={} turn_instance={} should_run=true revision={} binding={:?}",
+                request.context.task_id,
+                request.goal_id,
+                turn_id,
+                durable_revision,
+                settlement_binding.as_ref().map(|binding| match binding {
+                    SettlementBinding::Todo { todo_id } => format!("todo:{todo_id}"),
+                    SettlementBinding::AutonomousReplan { obligation_id } => {
+                        format!("replan:{obligation_id}")
+                    }
+                }),
+            );
             let settlement_token = planned_settlement_token(
                 &guard.payload,
                 &request.goal_id,
@@ -1826,6 +1858,18 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 durable_revision,
                 deadline_at: request.context.call.deadline_at,
             })
+        })
+    }
+
+    fn viewer_merge_authority<'a>(
+        &'a self,
+        _context: &'a loopx_contract::LoopxCliGoalContext,
+        repository: &'a loopx_contract::LoopxRepositoryKey,
+    ) -> loopx_contract::LoopxCliFuture<'a, Option<bool>> {
+        Box::pin(async move {
+            self.intake_metadata
+                .viewer_merge_authority(repository, Duration::from_secs(15))
+                .await
         })
     }
 
@@ -3332,6 +3376,71 @@ mod custom_runner_contract_tests {
     }
 
     #[test]
+    fn monitor_todo_projection_is_bounded_and_non_authoritative() {
+        let snapshot = project_goal_snapshot(
+            "goal-1",
+            &json!({
+                "ok": true,
+                "schema_version": "loopx_turn_plan_v0",
+                "turn_envelope": {
+                    "should_run": false,
+                    "state": "monitor_wait",
+                    "effective_action": "monitor_wait",
+                    "open_count": 1,
+                    "action": {
+                        "recommended_action": "Wait for CI on the published PR; replan when a maintainer requests changes.",
+                        "selected_todo": {
+                            "todo_id": "todo-monitor-1",
+                            "task_class": "continuous_monitor",
+                            "action_kind": "issue_fix_pr_state_checks_pending_monitor",
+                            "target_key": "issue_fix_pr_state_checks_pending",
+                            "claimed_by": "bitfun-loopx",
+                            "next_due_at": "2026-09-03T12:00:00Z"
+                        }
+                    }
+                }
+            }),
+            "inspect-goal",
+        )
+        .unwrap();
+
+        assert_eq!(
+            snapshot.run_decision,
+            loopx_contract::LoopxCliRunDecision::Wait
+        );
+        let todo = snapshot
+            .selected_todo
+            .expect("monitor todo projection from the envelope");
+        assert_eq!(todo.todo_id, "todo-monitor-1");
+        assert_eq!(todo.task_class, "continuous_monitor");
+        assert_eq!(
+            todo.action_kind,
+            "issue_fix_pr_state_checks_pending_monitor"
+        );
+        assert_eq!(todo.next_due_at.as_deref(), Some("2026-09-03T12:00:00Z"));
+        assert!(todo.recommended_action.contains("Wait for CI"));
+    }
+
+    #[test]
+    fn selected_todo_without_an_id_is_dropped() {
+        let snapshot = project_goal_snapshot(
+            "goal-1",
+            &json!({
+                "ok": true,
+                "schema_version": "loopx_turn_plan_v0",
+                "turn_envelope": {
+                    "should_run": false,
+                    "state": "eligible",
+                    "action": {"selected_todo": {"task_class": "advancement_task"}}
+                }
+            }),
+            "inspect-goal",
+        )
+        .unwrap();
+        assert!(snapshot.selected_todo.is_none());
+    }
+
+    #[test]
     fn terminal_no_followup_is_a_completed_goal() {
         let snapshot = project_goal_snapshot(
             "goal-1",
@@ -3528,6 +3637,44 @@ fn answer_gate_args(
     Ok(args.into_iter().map(OsString::from).collect())
 }
 
+/// Bounded plain text for UX projections; never a control fact.
+fn bounded_projection_text(value: Option<&str>, limit: usize) -> String {
+    let raw = value.unwrap_or_default().trim();
+    if raw.chars().count() <= limit {
+        return raw.to_string();
+    }
+    let truncated: String = raw.chars().take(limit).collect();
+    format!("{truncated}...")
+}
+
+fn bounded_projection_field(value: &Value, key: &str) -> String {
+    bounded_projection_text(value.get(key).and_then(Value::as_str), 160)
+}
+
+fn project_selected_todo(envelope: &Value) -> Option<loopx_contract::LoopxCurrentTodo> {
+    let action = envelope.get("action")?;
+    let todo = action.get("selected_todo")?;
+    let todo_id = bounded_projection_field(todo, "todo_id");
+    if todo_id.is_empty() {
+        return None;
+    }
+    Some(loopx_contract::LoopxCurrentTodo {
+        todo_id,
+        task_class: bounded_projection_field(todo, "task_class"),
+        action_kind: bounded_projection_field(todo, "action_kind"),
+        target_key: bounded_projection_field(todo, "target_key"),
+        claimed_by: bounded_projection_field(todo, "claimed_by"),
+        next_due_at: todo
+            .get("next_due_at")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        recommended_action: bounded_projection_text(
+            action.get("recommended_action").and_then(Value::as_str),
+            240,
+        ),
+    })
+}
+
 fn project_goal_snapshot(
     goal_id: &str,
     payload: &Value,
@@ -3618,6 +3765,7 @@ fn project_goal_snapshot(
             .try_into()
             .unwrap_or(u32::MAX),
         pending_user_gate: None,
+        selected_todo: project_selected_todo(envelope),
         envelope_over_budget: envelope
             .pointer("/compaction/within_budget")
             .and_then(Value::as_bool)

@@ -63,6 +63,11 @@ source、又能继续通过受信任 built-in 校验的免编译入口。因此�
    target/debug/bitfun-desktop.exe
    ```
 
+   > Debug 构建直接启动时**默认使用隔离 dev 数据根**
+   > `%APPDATA%/com.bitfun.desktop.dev/bitfun`(与 `scripts/dev.cjs` 一致)，与安装
+   > 版互不可见，跨构建 schema 冲突从结构上不可能；需要显式覆盖时设置
+   > `BITFUN_USER_ROOT`。Release 构建仍使用默认根 `%APPDATA%/bitfun/`。
+
 6. 新二进制启动后会根据 built-in 内容哈希自动 reseed，并重新生成
    `compiled.html`。此时再进入 LoopX MiniApp 验收。
 
@@ -104,34 +109,34 @@ cargo build -p bitfun-desktop --bin bitfun-desktop
 
 ### 统一构建配方（重要）
 
-`bitfun-desktop` 的默认 features 为空，`--no-default-features` 没有实际差异；真正
-影响全量/增量的是 **profile 环境变量**。Cargo 指纹包含 `CARGO_PROFILE_DEV_*` 设置，
-一旦与上一次构建不同，整棵依赖树都会重编。请始终使用与
-`scripts/dev.cjs`（`desktop-preview` 快速重建）**完全相同**的配方：
+`bitfun-desktop` 的默认 features 为空，`--no-default-features` 没有实际差异。增量
+指纹的权威来源是仓库 `[profile.dev]` 基线：`Cargo.toml` 固定
+`debug = "line-tables-only"`，dev profile 默认 `incremental=true`、
+`codegen-units=256`。**任何 `CARGO_PROFILE_DEV_*` 覆盖都会改变指纹并触发整棵
+依赖树重编**（2026-09-03 实测：裸 `cargo run` 与旧 `DEBUG=0` 配方互踩，同一天内
+连续两次全量冷编译）。统一配方就是仓库基线本身，不再设置任何 profile 环境变量：
 
 ```powershell
-$env:CARGO_PROFILE_DEV_DEBUG = "0"
-$env:CARGO_PROFILE_DEV_INCREMENTAL = "true"
-$env:CARGO_PROFILE_DEV_CODEGEN_UNITS = "256"
+$env:CARGO_BUILD_JOBS = "1"
 cargo build -p bitfun-desktop --bin bitfun-desktop
 ```
 
-或单行（cmd）：
+`CARGO_BUILD_JOBS=1` 只限制并发 rustc 数量（16 GB 内存约束），不改变指纹。
+`scripts/dev.cjs` 的快速重建默认值已与该基线对齐
+（`DEBUG=line-tables-only`、`INCREMENTAL=true`、`CODEGEN_UNITS=256`），手动 build
+与 `desktop:dev` / `desktop-preview` 共享同一指纹，互相增量。
 
-```bat
-set CARGO_PROFILE_DEV_DEBUG=0&& set CARGO_PROFILE_DEV_INCREMENTAL=true&& set CARGO_PROFILE_DEV_CODEGEN_UNITS=256&& cargo build -p bitfun-desktop --bin bitfun-desktop
-```
-
-- **不要**混用不同的 `CARGO_PROFILE_DEV_*` / `CODEGEN_UNITS` 配置，也不要与
-  `--no-default-features` 的裸命令交替使用——那会把本可增量的重编退化成全量冷编译；
+- **不要**设置 `CARGO_PROFILE_DEV_DEBUG=0` 或其他 profile 覆盖；需要断点调试时按
+  `Cargo.toml` 注释临时使用 `CARGO_PROFILE_DEV_DEBUG=2`（接受一次全量重编，用完
+  清除该环境变量再回到基线）；
 - 快速反馈不要在 build 前追加 `cargo check`、测试或 Web UI type-check。指定
   `--bin bitfun-desktop` 明确请求 binary target；但当前同包 lib 同时声明
   `staticlib/cdylib/rlib`，Cargo 仍会生成并链接 `bitfun_desktop_lib.dll`。要去掉该阶段，
   需要把移动端/FFI wrapper 与 Desktop rlib 拆成独立 package/target；
 - `src/web-ui/**` 由 Vite HMR 直接刷新，不需要 Rust build；内嵌 MiniApp source
   仍须一次 binary build 才能 reseed；
-- 需要断点调试信息时（`CARGO_PROFILE_DEV_DEBUG=2`）、或需要同时持续改 Desktop
-  Rust 时，改用 `pnpm run desktop:dev` 完整会话，不要在同一 target 上混跑；
+- 需要同时持续改 Desktop Rust 时，改用 `pnpm run desktop:dev` 完整会话，不要在同一
+  target 上混跑；
 - 装 sccache 可进一步让配方/feature 切换也不触发全量重编（可选优化）。
 
 ### 提交或发布前
@@ -251,6 +256,14 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
   `active_repositories` + `schedule_next_for_repository`）。每次 durable settlement
   是公平轮转边界：有其他排队 Issue 时先让出仓库槽，不把当前 task 标记为 pending
   并在同一 worker 内自重入；轮到其他 Issue 结算后再回到当前 Goal。
+- **PR 生命周期监控投影**：PR 发布后 LoopX 用 `continuous_monitor` /
+  `issue_fix_pr_state_*_monitor` todo 继续持有 Goal，pr-lifecycle 的四种转移
+  （runnable_successor / monitor_continuation / user_gate / no_followup）全部在
+  pinned CLI 内决策。宿主不调用 `issue-fix pr-lifecycle`，也不压缩 maintainer
+  correction——两者都是 agent 轮内按 TurnEnvelope / packet 的职责。宿主只把
+  turn plan envelope 的 selected todo 投影为任务快照 `currentTodo`（有界、非权威、
+  Goal 终局清除），UI 据此把排队态区分为「PR 监控等待中」并展示下次检查时间，
+  避免等待 CI/review 被误读为卡住。
 - **worktree 成本**：同仓库所有 task 共享一份裸仓库对象库
   （`<root>/<repo-hash>/bare.git/`，首个 task `git clone --bare` 建立），每个
   task 用 `git worktree add -b bitfun-loopx/<task-hash>` 挂出独立工作区

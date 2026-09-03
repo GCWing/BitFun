@@ -1,8 +1,9 @@
 //! Narrow service boundary for the pinned LoopX CLI adapter.
 
 use super::types::{
-    LoopxCliGoalState, LoopxEventCursor, LoopxIntakeCandidate, LoopxIntakeTarget, LoopxIssueKey,
-    LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey, LoopxTurnOutputEvent,
+    LoopxCliGoalState, LoopxCurrentTodo, LoopxEventCursor, LoopxIntakeCandidate, LoopxIntakeTarget,
+    LoopxIssueKey, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
+    LoopxTurnOutputEvent,
 };
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -329,6 +330,9 @@ pub struct LoopxCliGoalSnapshot {
     pub open_todo_count: u32,
     pub waiting_user_todo_count: u32,
     pub pending_user_gate: Option<LoopxCliUserGate>,
+    /// Read-only projection of the frontier todo selected by the same LoopX
+    /// envelope. Absent when LoopX did not select a todo; never authoritative.
+    pub selected_todo: Option<LoopxCurrentTodo>,
     /// LoopX returned the turn envelope over its compaction budget
     /// (`compaction.within_budget == false`, route `contract_error`): the goal
     /// cannot be planned until its durable state shrinks. The host must not
@@ -528,6 +532,16 @@ pub trait LoopxCliPort: Send + Sync {
         request: LoopxCliAnswerGateRequest,
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliAnswerGateResult>;
+
+    /// Probes whether the authenticated GitHub identity can merge pull
+    /// requests in the goal's repository. `Ok(None)` means unknown (no
+    /// credential, probe failure, or unsupported provider); callers must fail
+    /// open to the interactive gate instead of guessing.
+    fn viewer_merge_authority<'a>(
+        &'a self,
+        context: &'a LoopxCliGoalContext,
+        repository: &'a LoopxRepositoryKey,
+    ) -> LoopxCliFuture<'a, Option<bool>>;
 
     /// Verify one external-host turn from LoopX-owned durable writeback. This
     /// read boundary must never repair, synthesize, or spend on the Agent's

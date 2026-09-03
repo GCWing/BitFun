@@ -907,7 +907,7 @@ async fn ordinary_monitor_wait_does_not_require_a_user_gate() {
 }
 
 #[tokio::test]
-async fn build_turn_uses_one_fresh_quota_envelope_as_gate_and_agent_contract() {
+async fn build_turn_accepts_a_fresh_guard_revision_as_the_agent_contract() {
     let temporary = tempfile::tempdir().unwrap();
     stage_bundle(temporary.path(), "v0.5.1", 1);
     let worktree = temporary.path().join("worktree");
@@ -958,7 +958,7 @@ async fn build_turn_uses_one_fresh_quota_envelope_as_gate_and_agent_contract() {
                 },
                 goal_id: "goal-42".to_string(),
                 agent_id: "bitfun-agent".to_string(),
-                expected_durable_revision: "sha256:durable-revision".to_string(),
+                expected_durable_revision: "sha256:earlier-inspect-revision".to_string(),
             },
             &RecordingProgressSink::default(),
         )
@@ -969,6 +969,7 @@ async fn build_turn_uses_one_fresh_quota_envelope_as_gate_and_agent_contract() {
     assert!(turn
         .agent_instruction
         .contains("Claim the selected executable todo"));
+    assert_eq!(turn.durable_revision, "sha256:durable-revision");
     assert_eq!(
         turn.settlement_token,
         format!("goal-42:bitfun-agent:todo-42:{}", turn.turn_id)

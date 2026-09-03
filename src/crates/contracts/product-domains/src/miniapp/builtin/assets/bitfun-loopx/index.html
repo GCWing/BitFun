@@ -165,7 +165,6 @@
             </div>
             <div class="issue-header__side">
               <div id="task-actions" class="task-actions"></div>
-              <button id="unselect-task" class="text-button" type="button" hidden data-i18n="backToFollow">恢复自动跟随</button>
             </div>
           </header>
 
@@ -205,14 +204,15 @@
                 </div>
               </section>
 
-              <div id="issue-progress-panel" class="issue-progress-panel">
-                <p id="issue-progress-summary" class="issue-progress-summary"></p>
-                <div class="issue-status-row">
-                  <span class="issue-status-row__label" data-i18n="currentWork">当前</span>
-                  <strong id="issue-current-heading"></strong>
-                  <span id="issue-current-detail" class="issue-status-row__detail"></span>
-                </div>
-              </div>
+              <div id="issue-decision-card" class="issue-decision-card" role="status" hidden></div>
+
+              <details id="issue-description-panel" class="issue-description-panel" open>
+                <summary>
+                  <h2 data-i18n="issueDescription">Issue 描述</h2>
+                  <span id="issue-number" class="issue-number"></span>
+                </summary>
+                <div id="issue-description" class="issue-description markdown-body"></div>
+              </details>
 
               <section id="issue-brief" class="issue-brief" aria-labelledby="issue-brief-title">
                 <div class="issue-brief__head">
@@ -223,14 +223,6 @@
                 <ul id="issue-facts" class="issue-facts"></ul>
                 <p id="issue-error" class="issue-error" role="alert" hidden></p>
               </section>
-
-              <details id="issue-description-panel" class="issue-description-panel">
-                <summary>
-                  <h2 data-i18n="issueDescription">Issue 描述</h2>
-                  <span id="issue-number" class="issue-number"></span>
-                </summary>
-                <div id="issue-description" class="issue-description markdown-body"></div>
-              </details>
             </section>
 
             <section id="issue-timeline" class="issue-timeline" aria-labelledby="timeline-title">

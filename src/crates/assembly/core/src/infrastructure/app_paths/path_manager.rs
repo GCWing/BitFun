@@ -91,6 +91,13 @@ impl PathManager {
     /// - Windows: %APPDATA%\bitfun\
     /// - macOS: ~/Library/Application Support/bitfun/
     /// - Linux: ~/.config/bitfun/
+    ///
+    /// Debug builds launched directly from a build tree default to the
+    /// isolated dev data root (`%APPDATA%\com.bitfun.desktop.dev\bitfun`,
+    /// matching `scripts/dev.cjs`): cross-build stores such as the agent
+    /// coordination sqlite schema guard turn shared roots into hard failures
+    /// (see the LoopX miniapp AGENTS.md 2026-09-02 postmortem). Explicit
+    /// `BITFUN_USER_ROOT` / `BITFUN_E2E_USER_ROOT` always win.
     fn get_user_config_root() -> BitFunResult<PathBuf> {
         if let Some(path) =
             Self::env_path("BITFUN_USER_ROOT").or_else(|| Self::env_path("BITFUN_E2E_USER_ROOT"))
@@ -100,6 +107,10 @@ impl PathManager {
 
         let config_dir = dirs::config_dir()
             .ok_or_else(|| BitFunError::config("Failed to get config directory".to_string()))?;
+
+        if cfg!(debug_assertions) {
+            return Ok(config_dir.join("com.bitfun.desktop.dev").join("bitfun"));
+        }
 
         Ok(config_dir.join("bitfun"))
     }
