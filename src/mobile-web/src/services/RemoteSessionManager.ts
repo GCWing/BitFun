@@ -498,6 +498,40 @@ export class RemoteSessionManager {
     await this.request({ cmd: 'answer_question', tool_id: toolId, answers });
   }
 
+  async rollbackSession(
+    sessionId: string,
+    targetMessageId: string,
+  ): Promise<{
+    success: boolean;
+    restored_files?: string[];
+    deleted_turn_count?: number;
+    composer_text?: string;
+  }> {
+    return this.request({
+      cmd: 'rollback_session',
+      session_id: sessionId,
+      target_message_id: targetMessageId,
+    });
+  }
+
+  async editAndRerunMessage(
+    sessionId: string,
+    targetMessageId: string,
+    newContent: string,
+    agentType?: string,
+  ): Promise<{
+    success: boolean;
+    turn_id?: string;
+  }> {
+    return this.request({
+      cmd: 'edit_and_rerun_message',
+      session_id: sessionId,
+      target_message_id: targetMessageId,
+      new_content: newContent,
+      agent_type: agentType ?? undefined,
+    });
+  }
+
   async pollSession(
     sessionId: string,
     sinceVersion: number,

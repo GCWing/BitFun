@@ -2265,6 +2265,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [deletingMsg, setDeletingMsg] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const msgLongPressPosRef = useRef({ x: 0, y: 0 });
   const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -2637,6 +2640,120 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       setMenuMessage(null);
     }
   }, [menuMessage, sessionId, showMsgToast, t]);
+
+  const handleEditMessage = useCallback(() => {
+    if (!menuMessage || menuMessage.role !== 'user') return;
+    const text = sanitizeMessageText(menuMessage.content);
+    setEditDraft(text);
+    setEditingMessage(menuMessage);
+    setMenuMessage(null);
+  }, [menuMessage]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingMessage(null);
+    setEditDraft('');
+    setIsEditSubmitting(false);
+  }, []);
+
+  const handleSubmitEdit = useCallback(async () => {
+    if (!editingMessage || !editDraft.trim() || isEditSubmitting) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+
+    const confirmed = window.confirm(
+      t('chat.editMessageConfirm') || 
+      '编辑消息将回滚到此消息，删除后续对话，然后重新发送编辑后的内容。确认继续？'
+    );
+    if (!confirmed) return;
+
+    setIsEditSubmitting(true);
+    try {
+      await sessionMgr.editAndRerunMessage(
+        sessionId,
+        editingMessage.id,
+        editDraft.trim(),
+        agentMode
+      );
+      if (!isChatTargetCurrent(targetEpoch)) return;
+      
+      // 清空本地消息，等待轮询更新
+      const msgIdx = messages.findIndex(m => m.id === editingMessage.id);
+      if (msgIdx >= 0) {
+        setMessages(sessionId, messages.slice(0, msgIdx + 1));
+      }
+      
+      pollerRef.current?.nudge();
+      handleCancelEdit();
+      showMsgToast(t('chat.messageEdited') || '消息已编辑并重新发送');
+    } catch (e: any) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      showMsgToast(t('chat.editFailed') || `编辑失败: ${errorMsg}`);
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  }, [
+    agentMode,
+    captureChatTargetEpoch,
+    editDraft,
+    editingMessage,
+    handleCancelEdit,
+    isChatTargetCurrent,
+    isEditSubmitting,
+    messages,
+    sessionId,
+    sessionMgr,
+    setMessages,
+    showMsgToast,
+    t,
+  ]);
+
+  const handleRollbackToMessage = useCallback(async () => {
+    if (!menuMessage || menuMessage.role !== 'user') return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+
+    const confirmed = window.confirm(
+      t('chat.rollbackConfirm') || 
+      '回滚到此消息将删除此消息之后的所有对话，并将原消息内容填入输入框。确认继续？'
+    );
+    if (!confirmed) return;
+
+    setMenuMessage(null);
+    try {
+      const result = await sessionMgr.rollbackSession(sessionId, menuMessage.id);
+      if (!isChatTargetCurrent(targetEpoch)) return;
+
+      // 清空本地消息到回滚点
+      const msgIdx = messages.findIndex(m => m.id === menuMessage.id);
+      if (msgIdx >= 0) {
+        setMessages(sessionId, messages.slice(0, msgIdx + 1));
+      }
+
+      // 将原消息内容填入输入框
+      const text = sanitizeMessageText(menuMessage.content);
+      if (text) {
+        setInput(text);
+        setInputExpanded(true);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+
+      pollerRef.current?.nudge();
+      showMsgToast(t('chat.rollbackSuccess') || '已回滚到此消息');
+    } catch (e: any) {
+      reportRemoteSessionError(e, setError);
+    }
+  }, [
+    captureChatTargetEpoch,
+    isChatTargetCurrent,
+    menuMessage,
+    messages,
+    sessionId,
+    sessionMgr,
+    setError,
+    setMessages,
+    showMsgToast,
+    t,
+  ]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -3061,34 +3178,65 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
 
             if (m.role === 'user') {
               const userText = sanitizeMessageText(m.content);
+              const isEditing = editingMessage?.id === m.id;
+              
               return (
                 <div
                     key={m.id}
-                    className={`chat-msg chat-msg--user${menuMessage?.id === m.id ? ' chat-msg--menu-active' : ''}`}
+                    className={`chat-msg chat-msg--user${menuMessage?.id === m.id ? ' chat-msg--menu-active' : ''}${isEditing ? ' chat-msg--editing' : ''}`}
                     onTouchStart={(e) => handleMsgTouchStart(m, e)}
                     onTouchMove={handleMsgTouchMove}
                     onTouchEnd={handleMsgTouchEnd}
                     onTouchCancel={handleMsgTouchEnd}
                     onContextMenu={(e) => { e.preventDefault(); setMenuMessage(m); }}
                   >
-                  <div className="chat-msg__user-card">
-                    <div className="chat-msg__user-avatar">U</div>
-                    <div className="chat-msg__user-content">
-                      {userText}
-                      {m.images && m.images.length > 0 && (
-                        <div className="chat-msg__user-images">
-                          {m.images.map((img, imgIdx) => (
-                            <img
-                              key={imgIdx}
-                              src={img.data_url}
-                              alt={img.name}
-                              className="chat-msg__user-image"
-                            />
-                          ))}
-                        </div>
-                      )}
+                  {isEditing ? (
+                    <div className="chat-msg__edit-box">
+                      <textarea
+                        className="chat-msg__edit-input"
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        placeholder={t('chat.editPlaceholder') || '编辑消息内容...'}
+                        autoFocus
+                        rows={3}
+                      />
+                      <div className="chat-msg__edit-actions">
+                        <button
+                          className="chat-msg__edit-btn chat-msg__edit-btn--cancel"
+                          onClick={handleCancelEdit}
+                          disabled={isEditSubmitting}
+                        >
+                          {t('common.cancel') || '取消'}
+                        </button>
+                        <button
+                          className="chat-msg__edit-btn chat-msg__edit-btn--submit"
+                          onClick={handleSubmitEdit}
+                          disabled={!editDraft.trim() || isEditSubmitting}
+                        >
+                          {isEditSubmitting ? '...' : (t('chat.saveEdit') || '保存并重新发送')}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="chat-msg__user-card">
+                      <div className="chat-msg__user-avatar">U</div>
+                      <div className="chat-msg__user-content">
+                        {userText}
+                        {m.images && m.images.length > 0 && (
+                          <div className="chat-msg__user-images">
+                            {m.images.map((img, imgIdx) => (
+                              <img
+                                key={imgIdx}
+                                src={img.data_url}
+                                alt={img.name}
+                                className="chat-msg__user-image"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -3331,13 +3479,29 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                 <span>{t('chat.copyMessage')}</span>
               </button>
               {menuMessage.role === 'user' && (
-                <button className="chat-msg__menu-btn" onClick={handleResendMessage}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10" />
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                  </svg>
-                  <span>{t('chat.resendMessage')}</span>
-                </button>
+                <>
+                  <button className="chat-msg__menu-btn" onClick={handleEditMessage}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>{t('chat.editMessage')}</span>
+                  </button>
+                  <button className="chat-msg__menu-btn" onClick={handleRollbackToMessage}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 4 1 10 7 10" />
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                    <span>{t('chat.rollbackToMessage')}</span>
+                  </button>
+                  <button className="chat-msg__menu-btn" onClick={handleResendMessage}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="23 4 23 10 17 10" />
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                    </svg>
+                    <span>{t('chat.resendMessage')}</span>
+                  </button>
+                </>
               )}
               <button
                 className="chat-msg__menu-btn chat-msg__menu-btn--danger"
