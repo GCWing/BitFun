@@ -7,7 +7,7 @@
  * directly with explicit success or failure feedback.
  */
 
-import { Button, Icon, IconButton } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Inbox } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ import {
   ConfigPageHeader,
   ConfigPageContent,
   ConfigMessage,
+  ConfigRefreshButton,
   ConfigPageSection,
 } from '@/infrastructure/config/components/common';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -167,6 +168,7 @@ const ArchivedSessionsConfig: React.FC = () => {
   const { openedWorkspacesList } = useWorkspaceContext();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [entries, setEntries] = useState<ArchivedEntry[]>([]);
   const [loadFailures, setLoadFailures] = useState<WorkspaceLoadFailure[]>([]);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -174,12 +176,14 @@ const ArchivedSessionsConfig: React.FC = () => {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<string>>(new Set());
   const prevLoadingRef = useRef(loading);
   const loadRequestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
 
   // ── Load archived sessions from all open workspaces ──────────────────────
 
-  const loadArchived = useCallback(async () => {
+  const loadArchived = useCallback(async (background = false) => {
     const requestId = ++loadRequestIdRef.current;
-    setLoading(true);
+    if (background) setRefreshing(true);
+    else setLoading(true);
     const collected: ArchivedEntry[] = [];
     const failures: WorkspaceLoadFailure[] = [];
 
@@ -224,14 +228,28 @@ const ArchivedSessionsConfig: React.FC = () => {
 
     // Sort by last active descending
     collected.sort((a, b) => b.session.lastActiveAt - a.session.lastActiveAt);
-    setEntries(collected);
+    if (background && failures.length > 0) {
+      const failedWorkspaceKeys = new Set(failures.map(failure => failure.workspaceKey));
+      setEntries(previous => [
+        ...collected,
+        ...previous.filter(entry => failedWorkspaceKeys.has(workspaceIdentityKey(
+          entry.workspacePath,
+          entry.remoteConnectionId,
+          entry.remoteSshHost,
+        ))),
+      ].sort((a, b) => b.session.lastActiveAt - a.session.lastActiveAt));
+    } else {
+      setEntries(collected);
+    }
     setLoadFailures(failures);
+    hasLoadedRef.current = true;
     setLoading(false);
+    setRefreshing(false);
   }, [openedWorkspacesList]);
 
   // This view only mounts while selected, so mounting is the activation boundary.
   useEffect(() => {
-    void loadArchived();
+    void loadArchived(hasLoadedRef.current);
     return () => {
       loadRequestIdRef.current += 1;
     };
@@ -240,7 +258,7 @@ const ArchivedSessionsConfig: React.FC = () => {
   // Re-fetch when a session is archived elsewhere while this page is open
   useEffect(() => {
     const handler = () => {
-      void loadArchived();
+      void loadArchived(true);
     };
     window.addEventListener('bitfun:session-archived', handler);
     return () => window.removeEventListener('bitfun:session-archived', handler);
@@ -491,13 +509,11 @@ const ArchivedSessionsConfig: React.FC = () => {
 
   const headerExtra = (
     <div data-bf-component="archived-sessions-config" data-bf-part="headerActions" className="archived-sessions-config__header-actions">
-      <IconButton
-        type="button"
-        size="sm"
-        onClick={() => { void loadArchived(); }}
-        disabled={loading || pendingAction !== null || bulkDeleting}
-        aria-label={t('actions.refresh')}
-        icon={<Icon name="refresh" size="lg" aria-hidden />}
+      <ConfigRefreshButton
+        tooltip={t('actions.refresh')}
+        onClick={() => { void loadArchived(true); }}
+        disabled={loading || refreshing || pendingAction !== null || bulkDeleting}
+        loading={refreshing}
       />
       {hasEntries && (
         <Button

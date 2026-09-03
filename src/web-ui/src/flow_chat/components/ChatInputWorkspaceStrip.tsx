@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Circle, EyeOff, Shield, ShieldAlert, ShieldCheck, Square, SquareCheck } from 'lucide-react';
+import { Circle, Shield, ShieldAlert, ShieldCheck, Square, SquareCheck } from 'lucide-react';
 import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
 import { Tooltip, Icon } from '@bitfun/ui';
 import { BranchQuickSwitch } from '@/tools/git/components/BranchQuickSwitch';
@@ -79,7 +79,6 @@ export interface ChatInputWorkspaceStripProps {
     onChangeForNextTurn?: (
       mode: Exclude<ChatInputPermissionMode, 'acp'>,
     ) => void | Promise<void>;
-    onHide?: () => void | Promise<void>;
   };
   /** Keep the strip on cached Git state while historical content is still restoring. */
   deferPassiveGitRefresh?: boolean;
@@ -166,7 +165,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     preferredPlacement: 'top',
     alignment: 'end',
     gap: 7,
-    layoutRevision: `${permissionMenuView}:${permissionControl?.options?.length ?? 0}:${Boolean(permissionControl?.onHide)}`,
+    layoutRevision: `${permissionMenuView}:${permissionControl?.options?.length ?? 0}`,
   });
   const workspaceMenuLayout = useAnchoredPopoverPosition({
     open: workspaceMenuOpen,
@@ -949,22 +948,6 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                           }}
                         >
                           {t('chatInput.permissionMode.resetToDefault')}
-                        </MenuItem>
-                      </>
-                    ) : null}
-                    {permissionControl.onHide ? (
-                      <>
-                        <MenuSeparator />
-                        <MenuItem
-                          leading={<EyeOff size={14} strokeWidth={2} aria-hidden />}
-                          data-testid="chat-input-permission-hide-control"
-                          onClick={event => {
-                            event.stopPropagation();
-                            closePermissionMenu();
-                            void permissionControl.onHide?.();
-                          }}
-                        >
-                          {t('chatInput.permissionMode.hideControl')}
                         </MenuItem>
                       </>
                     ) : null}

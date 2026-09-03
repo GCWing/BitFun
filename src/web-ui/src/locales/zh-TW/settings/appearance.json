@@ -1,9 +1,9 @@
 {
   "title": "外觀",
-  "subtitle": "介面語言、視覺外觀、外觀包與全域字體大小",
+  "subtitle": "介面語言、外觀與全域字體大小",
   "package": {
-    "title": "外觀包",
-    "description": "從清單選擇外觀包；懸停微縮圖可查看大圖，資源僅儲存在目前裝置。",
+    "title": "外觀",
+    "description": "在 BitFun 預設卡片內選擇內建主題，或選擇與它並列顯示的其他已安裝外觀；懸停縮圖可查看大圖，資源僅儲存在目前裝置。",
     "import": "匯入外觀包",
     "importSuccess": "已匯入 {{name}}",
     "importFailed": "無法匯入外觀包，請查看問題詳情。",
@@ -16,7 +16,8 @@
     "deleteSuccess": "已刪除 {{name}}",
     "deleteFailed": "無法刪除外觀包：{{error}}",
     "nativeName": "BitFun 預設",
-    "nativeDescription": "使用目前內建外觀。",
+    "nativeDescription": "選擇任一內建主題。",
+    "builtinTheme": "內建主題",
     "unknownAuthor": "未知作者",
     "empty": "尚未匯入外觀包。",
     "missingSelection": "共用選擇的外觀 {{id}} 尚未安裝在目前裝置。請從 Skin 市場安裝它以恢復選擇。",

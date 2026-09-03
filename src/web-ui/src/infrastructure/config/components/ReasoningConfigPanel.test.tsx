@@ -117,6 +117,32 @@ describe('ReasoningConfigPanel', () => {
     });
   });
 
+  it('publishes nested edits to the provider draft without treating them as persisted', () => {
+    const onDraftChange = vi.fn();
+    const onApply = vi.fn();
+    act(() => root.render(
+      <ReasoningConfigPanel
+        value={{ catalog: { source: 'auto' }, presets: [] }}
+        onCancel={vi.fn()}
+        onApply={onApply}
+        onDraftChange={onDraftChange}
+      />,
+    ));
+    onDraftChange.mockClear();
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="change-reasoning"]')?.click());
+
+    expect(onDraftChange).toHaveBeenLastCalledWith({
+      reasoning: {
+        catalog: { source: 'auto' },
+        presets: [{ id: 'custom', actions: [{ type: 'effort', value: 'high' }] }],
+      },
+      projectionCatalog: { source: 'auto' },
+      projection: undefined,
+    });
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
   it('cancels without applying and blocks invalid drafts', () => {
     const onCancel = vi.fn();
     const onApply = vi.fn();

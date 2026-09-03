@@ -14,6 +14,7 @@ export const settingsNavAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'items', visualRole: 'content' },
     { id: 'item', propertyProfile: 'control', visualRole: 'control' },
     { id: 'highlight', propertyProfile: 'paint', visualRole: 'decoration' },
+    { id: 'dirtyMarker', propertyProfile: 'paint', visualRole: 'decoration' },
   ],
   states: [
     { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },

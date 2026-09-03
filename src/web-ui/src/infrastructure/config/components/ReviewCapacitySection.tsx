@@ -89,7 +89,6 @@ const ReviewCapacitySection: React.FC = () => {
         label={t('capacity.maxParallelReviewers.label')}
         description={t('capacity.maxParallelReviewers.description')}
         align="center"
-        balanced
       >
         <NumberInput
           value={team.concurrencyPolicy.maxParallelInstances}
@@ -105,7 +104,6 @@ const ReviewCapacitySection: React.FC = () => {
         label={t('capacity.maxQueueWaitSeconds.label')}
         description={t('capacity.maxQueueWaitSeconds.description')}
         align="center"
-        balanced
       >
         <NumberInput
           value={team.concurrencyPolicy.maxQueueWaitSeconds}

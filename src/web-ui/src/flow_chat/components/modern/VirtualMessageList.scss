@@ -39,6 +39,32 @@
     overflow-x: hidden;
     overflow-anchor: none;
     scrollbar-gutter: stable;
+
+    // Fade the transcript pixels themselves before they pass behind the
+    // floating ChatInput. This is an alpha mask, not a tinted or blurred
+    // overlay, so text, bullets, cards, and every other row dissolve together.
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      var(--bf-color-content-on-light) 0,
+      var(--bf-color-content-on-light) calc(
+        100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
+      ),
+      transparent calc(100% - var(--_flow-chat-input-overlay-inset)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      var(--bf-color-content-on-light) 0,
+      var(--bf-color-content-on-light) calc(
+        100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
+      ),
+      transparent calc(100% - var(--_flow-chat-input-overlay-inset)),
+      transparent 100%
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
   }
 
   /*
@@ -154,5 +180,12 @@
 @media (prefers-reduced-motion: reduce) {
   .virtual-message-list__history-paging-spinner {
     animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .virtual-message-list__scroller {
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }

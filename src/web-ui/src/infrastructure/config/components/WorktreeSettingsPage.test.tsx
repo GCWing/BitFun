@@ -140,6 +140,22 @@ vi.mock('@bitfun/ui', () => ({
 }));
 
 vi.mock('./common', () => ({
+  ConfigActionBar: ({
+    discardLabel,
+    onDiscard,
+    onSave,
+    saveLabel,
+  }: {
+    discardLabel?: React.ReactNode;
+    onDiscard: () => void;
+    onSave: () => void;
+    saveLabel?: React.ReactNode;
+  }) => (
+    <div>
+      <button type="button" onClick={onDiscard}>{discardLabel ?? 'discard'}</button>
+      <button type="button" onClick={onSave}>{saveLabel ?? 'save'}</button>
+    </div>
+  ),
   ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
   ConfigMessage: ({ message }: { message: { text: string } | null }) => message ? <div>{message.text}</div> : null,
   ConfigRetryState: ({ message, onRetry, retryLabel }: {
@@ -362,6 +378,38 @@ describe('WorktreeSettingsPage', () => {
       copyLocalChanges: false,
       autoDeleteEnabled: true,
       autoDeleteLimit: 24,
+    });
+  });
+
+  it('submits a settings draft only once when save is triggered twice synchronously', async () => {
+    const saveRequest = deferred<void>();
+    setConfigMock.mockReturnValueOnce(saveRequest.promise);
+
+    await act(async () => {
+      root.render(<WorktreeSettingsPage />);
+    });
+    await flushPromises();
+
+    const limit = container.querySelector<HTMLInputElement>('input[type="number"]');
+    await act(async () => {
+      if (!limit) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(limit, '24');
+      limit.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const saveButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('settings.save'));
+    act(() => {
+      saveButton?.click();
+      saveButton?.click();
+    });
+
+    expect(setConfigMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      saveRequest.resolve();
+      await saveRequest.promise;
+      await Promise.resolve();
     });
   });
 

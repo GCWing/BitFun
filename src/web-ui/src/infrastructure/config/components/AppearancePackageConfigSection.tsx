@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Select, Tooltip } from '@bitfun/ui';
 
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
   useAppearance,
+  type AppearanceCatalogEntry,
   type AppearancePackageValidationError,
   type AppearanceValidationIssue,
 } from '@/infrastructure/appearance';
@@ -45,6 +46,14 @@ function issueText(
       : 'package.diagnostics.unknownComponent');
   }
   return issue.message;
+}
+
+function builtinAppearanceDisplayName(
+  appearance: AppearanceCatalogEntry,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  const presetId = appearance.id.replace(/^builtin\./, '');
+  return t(`appearance.presets.${presetId}.name`, { defaultValue: appearance.name });
 }
 
 export function AppearancePackageFailurePanel({
@@ -145,12 +154,24 @@ function AppearancePackagePreview({
   appearanceDescription,
   getPreviewAsset,
   fallbackSrc,
+  packageType,
+  selected,
+  disabled = false,
+  onSelect,
+  inlineControl = false,
+  children,
 }: {
   appearanceId: string;
   appearanceName: string;
   appearanceDescription: string;
   getPreviewAsset: ReturnType<typeof useAppearance>['getPreviewAsset'];
   fallbackSrc?: string;
+  packageType: 'native' | 'imported';
+  selected: boolean;
+  disabled?: boolean;
+  onSelect?: () => void;
+  inlineControl?: boolean;
+  children?: React.ReactNode;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(fallbackSrc ?? null);
 
@@ -176,51 +197,79 @@ function AppearancePackagePreview({
     };
   }, [appearanceId, fallbackSrc, getPreviewAsset]);
 
-  return (
-    <Tooltip
-      placement="top"
-      delay={180}
-      content={(
-        <div
-          className="appearance-package-config__preview-popover"
-          data-testid="appearance-package-preview-popover"
-        >
-          <div className="appearance-package-config__preview-popover-image">
-            {previewUrl
-              ? <img src={previewUrl} alt="" />
-              : <Icon name="image" size="lg" aria-hidden="true" />}
+  const cardContent = (
+    <>
+      <Tooltip
+        placement="top"
+        delay={180}
+        content={(
+          <div
+            className="appearance-package-config__preview-popover"
+            data-testid="appearance-package-preview-popover"
+          >
+            <div className="appearance-package-config__preview-popover-image">
+              {previewUrl
+                ? <img src={previewUrl} alt="" />
+                : <Icon name="image" size="lg" aria-hidden="true" />}
+            </div>
+            <span>{appearanceName}</span>
           </div>
-          <span>{appearanceName}</span>
-        </div>
-      )}
-    >
-      <article
-        className="appearance-package-config__card"
-        aria-label={appearanceName}
-        data-testid="appearance-package-card"
-        data-bf-component="appearance-settings"
-        data-bf-part="packagePreview"
-        data-bf-state="selected"
+        )}
       >
-        <div className={`appearance-package-config__card-preview${fallbackSrc ? ' appearance-package-config__card-preview--builtin' : ''}`}>
+        <span className={`appearance-package-config__card-preview${fallbackSrc ? ' appearance-package-config__card-preview--builtin' : ''}`}>
           {previewUrl
             ? <img src={previewUrl} alt="" />
             : <Icon name="image" size="lg" aria-hidden="true" />}
-          <span className="appearance-package-config__selected-mark" aria-hidden="true">
-            <Icon name="check-line" size="xs" />
-          </span>
-        </div>
-        <div className="appearance-package-config__card-body">
+          {selected && (
+            <span className="appearance-package-config__selected-mark" aria-hidden="true">
+              <Icon name="check-line" size="xs" />
+            </span>
+          )}
+        </span>
+      </Tooltip>
+      <span className={`appearance-package-config__card-body${inlineControl ? ' appearance-package-config__card-body--inline' : ''}`}>
+        <span className="appearance-package-config__card-copy">
           <strong>{appearanceName}</strong>
-          <span>{appearanceDescription}</span>
-        </div>
-      </article>
-    </Tooltip>
+          <span className="appearance-package-config__card-description">
+            {appearanceDescription}
+          </span>
+        </span>
+        {children}
+      </span>
+    </>
+  );
+  const state = [selected && 'selected', disabled && 'disabled'].filter(Boolean).join(' ');
+
+  return (
+    <article
+      className="appearance-package-config__card"
+      aria-label={appearanceName}
+      data-testid="appearance-package-card"
+      data-appearance-id={appearanceId}
+      data-bf-component="appearance-settings"
+      data-bf-part="packagePreview"
+      data-bf-package-type={packageType}
+      data-bf-state={state || undefined}
+    >
+      {onSelect ? (
+        <button
+          type="button"
+          className="appearance-package-config__card-select"
+          aria-label={appearanceName}
+          aria-pressed={selected}
+          disabled={disabled}
+          onClick={onSelect}
+        >
+          {cardContent}
+        </button>
+      ) : cardContent}
+    </article>
   );
 }
 
 export function AppearancePackageConfigSection() {
   const { t } = useTranslation('settings/appearance');
+  const { t: tApplication } = useTranslation('settings/application');
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
@@ -233,19 +282,61 @@ export function AppearancePackageConfigSection() {
     importPackage,
     exportPackage,
     deletePackage,
+    select,
+    initialized,
     status,
   } = useAppearance();
-  const appearances = useMemo(
+  const builtinAppearances = useMemo(
+    () => appearanceCatalog.filter(appearance => appearance.source === 'builtin'),
+    [appearanceCatalog],
+  );
+  const importedAppearances = useMemo(
     () => appearanceCatalog.filter(appearance => appearance.source === 'imported'),
     [appearanceCatalog],
   );
-  const selectedAppearance = appearances.find(appearance => appearance.id === selectedAppearanceId);
-  const selectedPackageId = selectedAppearance?.id ?? SYSTEM_APPEARANCE_ID;
-  const selectedPackageName = selectedAppearance?.name ?? t('package.nativeName');
-  const selectedPackageDescription = selectedAppearance
-    ? `${selectedAppearance.author || t('package.unknownAuthor')} · v${selectedAppearance.version}`
-    : t('package.nativeDescription');
-  const busy = loading || status === 'applying';
+  const selectedAppearance = importedAppearances.find(
+    appearance => appearance.id === selectedAppearanceId,
+  );
+  const defaultPackageSelected = selectedAppearanceId === SYSTEM_APPEARANCE_ID
+    || builtinAppearances.some(appearance => appearance.id === selectedAppearanceId);
+  const builtinThemeOptions = useMemo(() => [
+    {
+      value: SYSTEM_APPEARANCE_ID,
+      label: tApplication('appearance.systemAppearance'),
+      testId: 'appearance-builtin-theme-option',
+      testAttributes: { 'data-appearance-id': SYSTEM_APPEARANCE_ID },
+    },
+    ...builtinAppearances.map(appearance => ({
+      value: appearance.id,
+      label: builtinAppearanceDisplayName(appearance, tApplication),
+      testId: 'appearance-builtin-theme-option',
+      testAttributes: { 'data-appearance-id': appearance.id },
+    })),
+  ], [builtinAppearances, tApplication]);
+  const selectedBuiltinThemeId = defaultPackageSelected ? selectedAppearanceId : '';
+  const busy = loading || !initialized || status === 'applying';
+
+  const handleAppearanceSelection = async (id: string) => {
+    if (busy || id === selectedAppearanceId) return;
+    try {
+      await select(id);
+      setFailure(null);
+    } catch (error) {
+      const validationError = getAppearancePackageValidationError(error);
+      setFailure({
+        operation: 'activate',
+        ...(validationError
+          ? { validationError }
+          : { message: error instanceof Error ? error.message : String(error) }),
+      });
+      notificationService.error(
+        validationError
+          ? t('package.diagnostics.activateSummary', { count: validationError.issues.length })
+          : t('package.activateFailed'),
+        { duration: 5000 },
+      );
+    }
+  };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -368,13 +459,46 @@ export function AppearancePackageConfigSection() {
       />
       <div className="appearance-package-config__gallery">
         <AppearancePackagePreview
-          key={selectedPackageId}
-          appearanceId={selectedPackageId}
-          appearanceName={selectedPackageName}
-          appearanceDescription={selectedPackageDescription}
+          appearanceId={SYSTEM_APPEARANCE_ID}
+          appearanceName={t('package.nativeName')}
+          appearanceDescription={t('package.nativeDescription')}
           getPreviewAsset={getPreviewAsset}
-          fallbackSrc={selectedAppearance ? undefined : DEFAULT_APPEARANCE_PREVIEW_SRC}
-        />
+          fallbackSrc={DEFAULT_APPEARANCE_PREVIEW_SRC}
+          packageType="native"
+          selected={defaultPackageSelected}
+          disabled={busy}
+          inlineControl
+        >
+          <span
+            className="appearance-package-config__builtin-theme-select"
+            data-bf-component="appearance-settings"
+            data-bf-part="packageBuiltinTheme"
+          >
+            <Select
+              size="sm"
+              value={selectedBuiltinThemeId}
+              placeholder={t('package.builtinTheme')}
+              options={builtinThemeOptions}
+              onValueChange={(value) => void handleAppearanceSelection(String(value))}
+              disabled={busy}
+              aria-label={t('package.builtinTheme')}
+              data-testid="appearance-builtin-theme-select"
+            />
+          </span>
+        </AppearancePackagePreview>
+        {importedAppearances.map(appearance => (
+          <AppearancePackagePreview
+            key={appearance.id}
+            appearanceId={appearance.id}
+            appearanceName={appearance.name}
+            appearanceDescription={`${appearance.author || t('package.unknownAuthor')} · v${appearance.version}`}
+            getPreviewAsset={getPreviewAsset}
+            packageType="imported"
+            selected={appearance.id === selectedAppearanceId}
+            disabled={busy}
+            onSelect={() => void handleAppearanceSelection(appearance.id)}
+          />
+        ))}
       </div>
       <AppearanceMarketDialog isOpen={marketOpen} onClose={() => setMarketOpen(false)} />
       {failure && (

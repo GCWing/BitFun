@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { FolderGit2, LoaderCircle, MessageSquareText, RotateCcw, Save } from 'lucide-react';
+import { FolderGit2, LoaderCircle, MessageSquareText, RotateCcw } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -22,6 +22,7 @@ import type {
 import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import {
+  ConfigActionBar,
   ConfigPageContent,
   ConfigPageHeader,
   ConfigPageLayout,
@@ -32,6 +33,7 @@ import {
   ConfigRefreshButton,
   ConfigRetryState,
 } from './common';
+import { useSettingsDraft } from '@/infrastructure/config/settingsDraftRegistry';
 import './WorktreeSettingsPage.scss';
 
 const AUTO_DELETE_LIMIT_MIN = 1;
@@ -165,17 +167,8 @@ const WorktreeSettingsPage: React.FC = () => {
   const pendingScrollSnapshotRef = useRef<ScrollSnapshot | null>(null);
   const worktreeMutationInFlightRef = useRef(false);
   const pendingWorktreeRefreshRef = useRef(false);
+  const settingsSaveInFlightRef = useRef(false);
   const settingsDirty = trustedSettings !== null && !settingsEqual(settings, trustedSettings);
-
-  useEffect(() => {
-    if (!settingsDirty) return undefined;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [settingsDirty]);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -271,13 +264,14 @@ const WorktreeSettingsPage: React.FC = () => {
     });
   }, [loadProjects, loadSettings]);
 
-  const save = async () => {
-    if (!trustedSettings || !settingsDirty || saving) {
-      return;
+  const save = async (): Promise<boolean> => {
+    if (!trustedSettings || !settingsDirty) {
+      return !settingsDirty;
     }
+    if (settingsSaveInFlightRef.current || saving) return false;
     if (!settings.rootPath.trim() || !settings.branchPrefix.trim()) {
       setSettingsMessage({ type: 'error', text: t('settings.required') });
-      return;
+      return false;
     }
     if (
       settings.autoDeleteLimit < AUTO_DELETE_LIMIT_MIN
@@ -290,9 +284,10 @@ const WorktreeSettingsPage: React.FC = () => {
           max: AUTO_DELETE_LIMIT_MAX,
         }),
       });
-      return;
+      return false;
     }
 
+    settingsSaveInFlightRef.current = true;
     setSaving(true);
     setSettingsMessage(null);
     try {
@@ -306,12 +301,31 @@ const WorktreeSettingsPage: React.FC = () => {
       setSettings(normalized);
       setTrustedSettings(normalized);
       setSettingsMessage({ type: 'success', text: t('settings.saved') });
+      return true;
     } catch {
       setSettingsMessage({ type: 'error', text: t('settings.saveFailed') });
+      return false;
     } finally {
+      settingsSaveInFlightRef.current = false;
       setSaving(false);
     }
   };
+
+  const discardSettings = useCallback(() => {
+    if (!trustedSettings) return;
+    setSettings(trustedSettings);
+    setSettingsMessage(null);
+  }, [trustedSettings]);
+
+  useSettingsDraft({
+    id: 'worktree-settings',
+    pageId: 'workspace.worktrees',
+    label: t('settings.title'),
+    dirty: settingsDirty,
+    saving,
+    save,
+    discard: discardSettings,
+  });
 
   const confirmDelete = async () => {
     const target = deleteTarget;
@@ -439,14 +453,20 @@ const WorktreeSettingsPage: React.FC = () => {
 
     return (
       <>
-        <ConfigMessage
-          message={settingsMessage ?? (settingsDirty
-            ? { type: 'info', text: t('settings.unsaved') }
-            : null)}
-        />
         <ConfigPageSection
           title={t('settings.isolation.title')}
           description={t('settings.isolation.description')}
+          extra={(
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateSettings(DEFAULT_SETTINGS)}
+              disabled={saving || settingsEqual(settings, DEFAULT_SETTINGS)}
+              leadingIcon={<RotateCcw size={14} aria-hidden />}
+            >
+              {t('settings.reset')}
+            </Button>
+          )}
         >
           <ConfigPageRow
             label={t('settings.rootPath.label')}
@@ -506,31 +526,22 @@ const WorktreeSettingsPage: React.FC = () => {
             />
           </ConfigPageRow>
         </ConfigPageSection>
-        <div className="bitfun-worktree-settings__actions">
-          <Button
-            className="bitfun-worktree-settings__action"
-            variant="outline"
-            size="sm"
-            onClick={() => updateSettings(DEFAULT_SETTINGS)}
-            disabled={saving || settingsEqual(settings, DEFAULT_SETTINGS)}
-            leadingIcon={<RotateCcw size={14} aria-hidden />}
-          >
-
-            {t('settings.reset')}
-          </Button>
-          <Button
-            className="bitfun-worktree-settings__action"
-            variant="fill"
-            size="sm"
-            onClick={() => void save()}
-            loading={saving}
-            disabled={saving || !settingsDirty}
-            leadingIcon={<Save size={14} aria-hidden />}
-          >
-
-            {t('settings.save')}
-          </Button>
-        </div>
+        <ConfigActionBar
+          status={settingsMessage?.type === 'error'
+            ? 'error'
+            : saving
+              ? 'saving'
+              : settingsDirty
+                ? 'unsaved'
+                : 'saved'}
+          statusMessage={settingsMessage?.text}
+          saving={saving}
+          saveDisabled={!settingsDirty}
+          discardDisabled={!settingsDirty}
+          saveLabel={t('settings.save')}
+          onSave={() => void save()}
+          onDiscard={discardSettings}
+        />
       </>
     );
   };

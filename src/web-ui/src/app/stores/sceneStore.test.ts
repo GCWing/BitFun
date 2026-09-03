@@ -1,14 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordInteractionModality } from '@/shared/utils/motionPreference';
 import { useSceneStore } from './sceneStore';
+import {
+  discardAndContinueSettingsNavigation,
+  getSettingsDraftSnapshot,
+  registerSettingsDraft,
+  resetSettingsDraftRegistryForTests,
+} from '@/infrastructure/config/settingsDraftRegistry';
 
 describe('sceneStore transition snapshots', () => {
   beforeEach(() => {
     recordInteractionModality('programmatic');
+    resetSettingsDraftRegistryForTests();
     useSceneStore.getState().resetForPeerSwitch();
   });
 
   afterEach(() => {
+    resetSettingsDraftRegistryForTests();
     vi.restoreAllMocks();
   });
 
@@ -141,5 +149,65 @@ describe('sceneStore transition snapshots', () => {
     expect(state.activeTabId).toBeNull();
     expect(state.navHistory).toEqual([]);
     expect(state.navCursor).toBe(-1);
+  });
+
+  it('keeps Settings active until its draft is resolved before changing scenes', async () => {
+    useSceneStore.getState().openScene('session');
+    useSceneStore.getState().openScene('settings');
+    registerSettingsDraft({
+      id: 'settings-form',
+      pageId: 'application.voice',
+      label: 'Voice',
+      dirty: true,
+      save: vi.fn(),
+      discard: vi.fn(),
+    });
+
+    useSceneStore.getState().openScene('session');
+    expect(useSceneStore.getState().activeTabId).toBe('settings');
+    expect(getSettingsDraftSnapshot().pendingNavigation).not.toBeNull();
+
+    await discardAndContinueSettingsNavigation();
+    expect(useSceneStore.getState().activeTabId).toBe('session');
+  });
+
+  it('abandons device-owned drafts during the non-interactive peer reset', () => {
+    const save = vi.fn();
+    const discard = vi.fn();
+    registerSettingsDraft({
+      id: 'old-device-form',
+      pageId: 'application.voice',
+      label: 'Voice',
+      dirty: true,
+      save,
+      discard,
+    });
+
+    useSceneStore.getState().resetForPeerSwitch();
+
+    expect(getSettingsDraftSnapshot().resources).toEqual([]);
+    expect(save).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+  });
+
+  it('reveals a background Settings tab before asking whether to close its draft', async () => {
+    useSceneStore.getState().openScene('settings');
+    useSceneStore.getState().openScene('session');
+    registerSettingsDraft({
+      id: 'background-form',
+      pageId: 'application.voice',
+      label: 'Voice',
+      dirty: true,
+      save: vi.fn(),
+      discard: vi.fn(),
+    });
+
+    useSceneStore.getState().closeScene('settings');
+    expect(useSceneStore.getState().activeTabId).toBe('settings');
+    expect(getSettingsDraftSnapshot().pendingNavigation).not.toBeNull();
+
+    await discardAndContinueSettingsNavigation();
+    expect(useSceneStore.getState().openTabs.some(tab => tab.id === 'settings')).toBe(false);
+    expect(useSceneStore.getState().activeTabId).toBe('session');
   });
 });

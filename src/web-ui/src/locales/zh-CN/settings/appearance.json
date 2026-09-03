@@ -1,9 +1,9 @@
 {
   "title": "外观",
-  "subtitle": "界面语言、视觉外观、外观包与全局字体大小",
+  "subtitle": "界面语言、外观与全局字体大小",
   "package": {
-    "title": "外观包",
-    "description": "从列表选择外观包；悬停微缩图可查看大图，资源仅保存在当前设备。",
+    "title": "外观",
+    "description": "在 BitFun 默认卡片内选择内置主题，或选择与它并列显示的其他已安装皮肤；悬停缩略图可查看大图，资源仅保存在当前设备。",
     "import": "导入外观包",
     "importSuccess": "已导入 {{name}}",
     "importFailed": "无法导入外观包，请查看问题详情。",
@@ -16,7 +16,8 @@
     "deleteSuccess": "已删除 {{name}}",
     "deleteFailed": "无法删除外观包：{{error}}",
     "nativeName": "BitFun 默认",
-    "nativeDescription": "使用当前内置外观。",
+    "nativeDescription": "选择任一内置主题。",
+    "builtinTheme": "内置主题",
     "unknownAuthor": "未知作者",
     "empty": "尚未导入外观包。",
     "missingSelection": "共享选择的外观 {{id}} 尚未安装在当前设备。请从 Skin 市场安装它以恢复选择。",

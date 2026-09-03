@@ -34,7 +34,10 @@ import {
 } from '../../store/modernFlowChatStore';
 import { useChatInputState } from '../../store/chatInputStateStore';
 import type { ActiveTurnRenderRange } from '../../types/flow-chat';
-import { computeFlowChatInputStackFooterPx } from '../../utils/flowChatScrollLayout';
+import {
+  computeFlowChatInputOverlayInsetPx,
+  computeFlowChatInputStackFooterPx,
+} from '../../utils/flowChatScrollLayout';
 import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
 import { ScrollToLatestBar } from '../ScrollToLatestBar';
 import { ScrollToTurnHeaderButton } from '../ScrollToTurnHeaderButton';
@@ -533,6 +536,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [activeSession, activeSessionState.isProcessing, viewportMode]);
 
   const inputHeight = useChatInputState(state => state.inputHeight);
+  const inputOverlayInsetPx = computeFlowChatInputOverlayInsetPx(inputHeight);
   const bottomLayoutInsetPx = computeFlowChatInputStackFooterPx(inputHeight);
 
   const tailSpacerPx = tailSpacerPxForViewport(viewportHeightPx, bottomLayoutInsetPx);
@@ -2501,6 +2505,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         className="virtual-message-list__scroller"
         data-flowchat-scroller="true"
         data-testid="flowchat-scroller"
+        style={{
+          '--_flow-chat-input-overlay-inset': `${inputOverlayInsetPx}px`,
+        } as React.CSSProperties}
       >
         <FlowChatListHeader
           ref={headerElementRef}

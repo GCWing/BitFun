@@ -23,7 +23,7 @@
       "memory": { "label": "记忆", "description": "记忆生成、使用、提取与整理。" },
       "sessionWorkspace": { "label": "会话与工作区", "description": "会话标题与当前工作区搜索。" },
       "worktrees": { "label": "Worktrees", "description": "Git Worktree 隔离与并行会话默认值。" },
-      "execution": { "label": "执行与权限", "description": "常用权限设置与高级执行、Review 和容错参数。" },
+      "execution": { "label": "执行与权限", "description": "工具权限、执行参数、Review 与容错设置。" },
       "browserDesktopControl": { "label": "浏览器与桌面控制", "description": "配置浏览器连接、桌面操作及所需的系统权限。" },
       "automation": { "label": "自动化", "description": "快捷动作与 Agent 生命周期 Hooks。" },
       "webSearch": { "label": "网页搜索", "description": "选择 WebSearch 服务、端点与设备本地凭据。" },
@@ -42,6 +42,27 @@
       "quick-actions": "快捷动作",
       "hooks": "Hooks"
     }
+  },
+  "changeGuard": {
+    "title": "保存未完成的设置？",
+    "message": "离开前需要处理未保存的设置。",
+    "message_one": "离开前需要处理 {{count}} 项未保存的设置。保存失败时会留在当前页面。",
+    "message_other": "离开前需要处理 {{count}} 项未保存的设置。保存失败时会留在当前页面，已经保存的项目不会重复提交。",
+    "saveFailed": "部分设置未能保存。请检查当前页面的错误后重试，或放弃这些更改再离开。",
+    "saveAndLeave": "保存并离开",
+    "discardAndLeave": "放弃并离开",
+    "keepEditing": "继续编辑",
+    "unsavedPage": "此页面有未保存的更改"
+  },
+  "changeStatus": {
+    "unsaved": "尚未保存",
+    "saving": "正在保存…",
+    "saved": "已保存",
+    "error": "保存失败"
+  },
+  "changeActions": {
+    "save": "保存更改",
+    "discard": "放弃更改"
   },
   "general": {
     "title": "通用",

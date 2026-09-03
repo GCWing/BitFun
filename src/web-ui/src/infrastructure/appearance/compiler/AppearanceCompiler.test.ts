@@ -113,16 +113,44 @@ describe('AppearanceCompiler', () => {
     const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="petTrigger"][data-bf-view="pet"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="petTrigger"][data-bf-view="session-workspace"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution-common"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution-advanced"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="control"][data-bf-view="browser-desktop-control"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution-common"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution-advanced"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="execution"]');
     expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="platformNote"][data-bf-view="browser-desktop-control"]');
     expect(snapshot.cssText).not.toContain('data-bf-view="desktop-control"');
     expect(snapshot.cssText).not.toContain('data-bf-view="browser-control"');
     expect(snapshot.cssText).not.toContain('[data-bf-component="session-config"]');
     expect(snapshot.components).toHaveProperty('runtime-settings');
+  });
+
+  it('migrates split execution appearance facets into the unified execution page', () => {
+    const pkg: AppearancePackage = {
+      schema: 'bitfun.appearance',
+      schemaVersion: 2,
+      id: 'test.split-execution-settings',
+      name: 'Split Execution Settings',
+      version: '1.0.0',
+      mode: 'dark',
+      components: {
+        'runtime-settings': {
+          parts: {
+            content: {
+              facets: {
+                view: {
+                  'execution-common': { color: { kind: 'hex', value: '#4488ff' } },
+                  'execution-advanced': { color: { kind: 'hex', value: '#8844ff' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
+    expect(snapshot.cssText).toContain('[data-bf-component="runtime-settings"][data-bf-part="content"][data-bf-view="execution"]');
+    expect(snapshot.cssText).not.toContain('data-bf-view="execution-common"');
+    expect(snapshot.cssText).not.toContain('data-bf-view="execution-advanced"');
   });
 
   it('drops retired appearance-card parts while migrating legacy Settings packages', () => {
@@ -180,6 +208,7 @@ describe('AppearanceCompiler', () => {
               base: { opacity: visible },
               states: { saving: { opacity: retired } },
             },
+            actions: { base: { opacity: retired } },
             saving: { base: { opacity: retired } },
           },
         },
@@ -201,6 +230,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-scene="skills"][data-bf-part="root"]');
     expect(snapshot.cssText).not.toContain('[data-bf-part="action"]');
     expect(snapshot.cssText).not.toContain('[data-bf-part="retry"]');
+    expect(snapshot.cssText).not.toContain('[data-bf-component="editor-config"][data-bf-part="actions"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="editor-config"][data-bf-part="saving"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="editor-config"][data-bf-state~="saving"]');
     expect(snapshot.cssText).not.toContain('[data-bf-part="addAction"]');

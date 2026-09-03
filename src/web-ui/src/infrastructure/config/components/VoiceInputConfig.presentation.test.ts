@@ -48,15 +48,11 @@ describe('VoiceInputConfig status presentation', () => {
     const languageRow = readyControls.match(
       /<ConfigPageRow[\s\S]*?label=\{t\('composer\.language\.label'\)\}[\s\S]*?>/,
     )?.[0] ?? '';
-    const selectWidthRule = styles.match(
-      /&__select,\s*&__device-select\s*{([^}]*)}/,
-    )?.[1] ?? '';
-
     expect(readyControls).toContain("label={t('composer.language.label')}");
-    expect(languageRow).toContain('className="voice-input-config__balanced-row"');
+    expect(languageRow).not.toContain('voice-input-config__balanced-row');
     expect(readyControls).toContain('<VoiceInputDiagnostics');
-    expect(selectWidthRule).toContain('inline-size: min(220px, 100%)');
-    expect(selectWidthRule).toContain('max-inline-size: 220px');
+    expect(source).not.toContain('voice-input-config__credential-input');
+    expect(styles).not.toContain('&__credential-input');
     expect(source).not.toContain('modelInstalled=');
     expect(source).not.toContain('unavailableReason=');
   });

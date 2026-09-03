@@ -227,7 +227,6 @@ export function VoiceInputDiagnostics({
         label={t('diagnostics.microphone.label')}
         description={t('diagnostics.microphone.description')}
         align="center"
-        className="voice-input-config__balanced-row"
       >
         <div className="voice-input-config__device-control" data-bf-component="voice-input-diagnostics" data-bf-part="deviceControl">
           <Select
@@ -238,7 +237,6 @@ export function VoiceInputDiagnostics({
             onPointerDown={() => void loadMicrophones()}
             options={microphoneOptions}
             size="sm"
-            className="voice-input-config__device-select"
           />
         </div>
       </ConfigPageRow>

@@ -764,8 +764,6 @@
       "globalScope": "全域",
       "current": "權限：{{mode}}",
       "changeFailed": "切換權限模式失敗。",
-      "hideControl": "隱藏權限模式選擇器",
-      "hideControlFailed": "隱藏權限模式選擇器失敗。",
       "ask": {
         "label": "需要確認",
         "description": "外部存取、修改檔案和執行命令需要確認。"
@@ -2492,7 +2490,6 @@
     "providerModelCount": "{{total}} 個模型",
     "backToProviders": "返回供應商列表",
     "backToSettings": "返回模型設定",
-    "resetToDefaults": "重設為預設設定",
     "fastMode": "Fast 模式",
     "fastModeDescription": "1.5 倍速度，消耗更多額度",
     "acpMode": "模式",

@@ -150,11 +150,11 @@ export interface ConfigPageRowProps {
   align?: 'start' | 'center';
   /** Stack label above control for multi-line editors (textarea, code blocks, etc.) */
   multiline?: boolean;
-  /** Flip to 3/7 ratio giving the control column more space */
+  /** Gives long-form or complex controls a 2/8 fill layout instead of the standard field width. */
   wide?: boolean;
   /**
    * ~40% label / ~60% control — middle ground between default (7:3) and wide (2:8).
-   * Use when the label must stay on one line (e.g. two-word titles) and controls need room.
+   * Use for composite controls; ordinary single-line fields retain the shared field width.
    */
   balanced?: boolean;
 }
@@ -181,20 +181,9 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
     className,
   ].filter(Boolean).join(' ');
 
-  const gridStyle: React.CSSProperties | undefined = !hasControl
-    ? { gridTemplateColumns: 'minmax(0, 1fr)' }
-    : wide
-    ? { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 8fr)' }
-    : balanced
-    ? { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 3fr)' }
-    : multiline
-    ? { gridTemplateColumns: '1fr' }
-    : undefined;
-
   return (
     <div
       className={cls}
-      style={gridStyle}
       data-bf-component="config"
       data-bf-part="row"
       data-bf-align={align}

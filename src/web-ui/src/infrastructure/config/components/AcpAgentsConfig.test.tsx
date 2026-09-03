@@ -4,6 +4,12 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import AcpAgentsConfigPage from './AcpAgentsConfig';
+import {
+  discardAndContinueSettingsNavigation,
+  getSettingsDraftSnapshot,
+  requestSettingsNavigation,
+  resetSettingsDraftRegistryForTests,
+} from '@/infrastructure/config/settingsDraftRegistry';
 
 const AcpAgentsConfig = () => <AcpAgentsConfigPage navigationRequestId={0} />;
 
@@ -286,6 +292,7 @@ describe('AcpAgentsConfig', () => {
       });
     }
     container?.remove();
+    resetSettingsDraftRegistryForTests();
     vi.clearAllMocks();
   });
 
@@ -378,9 +385,9 @@ describe('AcpAgentsConfig', () => {
     expect(container.textContent).not.toContain('remote.title');
   });
 
-  it('asks before leaving advanced JSON with unsaved changes', async () => {
+  it('registers advanced JSON changes with the shared settings navigation guard', async () => {
     await act(async () => {
-      root.render(<AcpAgentsConfig />);
+      root.render(<AcpAgentsConfigPage navigationRequestId={0} settingsDraftEnabled />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -400,6 +407,59 @@ describe('AcpAgentsConfig', () => {
       valueSetter?.call(editor, `${editor.value}\n`);
       editor.dispatchEvent(new Event('input', { bubbles: true }));
     });
+
+    const commit = vi.fn();
+    expect(requestSettingsNavigation(
+      { pageId: 'tools.acp', viewId: 'json' },
+      { kind: 'settings', pageId: 'tools.acp', viewId: 'local' },
+      commit,
+    )).toBe(false);
+    expect(getSettingsDraftSnapshot().pendingNavigation?.resourceLabels).toEqual([
+      'json.title',
+    ]);
+
+    await act(async () => {
+      await discardAndContinueSettingsNavigation();
+      await Promise.resolve();
+    });
+
+    expect(commit).toHaveBeenCalledOnce();
+    expect(getSettingsDraftSnapshot().pendingNavigation).toBeNull();
+    expect(saveJsonConfigMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the ecosystem compatibility fallback guard without registering a Settings draft', async () => {
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await openView(container, 'views.json');
+    const editor = container.querySelector<HTMLTextAreaElement>('textarea');
+    expect(editor).not.toBeNull();
+    await act(async () => {
+      if (!editor) return;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
+        editor,
+        `${editor.value}\n`,
+      );
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const commit = vi.fn();
+    expect(requestSettingsNavigation(
+      { pageId: 'tools.acp', viewId: 'json' },
+      { kind: 'settings', pageId: 'tools.acp', viewId: 'local' },
+      commit,
+    )).toBe(true);
+    expect(commit).toHaveBeenCalledOnce();
+    expect(getSettingsDraftSnapshot().resources).toHaveLength(0);
+
+    const beforeUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
 
     await openView(container, 'views.local');
     expect(container.textContent).toContain('json.discardTitle');

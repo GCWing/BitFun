@@ -23,7 +23,7 @@
       "memory": { "label": "記憶", "description": "記憶生成、使用、提取與整理。" },
       "sessionWorkspace": { "label": "會話與工作區", "description": "會話標題與目前工作區搜尋。" },
       "worktrees": { "label": "Worktrees", "description": "Git Worktree 隔離與平行會話預設值。" },
-      "execution": { "label": "執行與權限", "description": "常用權限設定與進階執行、Review 和容錯參數。" },
+      "execution": { "label": "執行與權限", "description": "工具權限、執行參數、Review 與容錯設定。" },
       "browserDesktopControl": { "label": "瀏覽器與桌面控制", "description": "設定瀏覽器連線、桌面操作及所需的系統權限。" },
       "automation": { "label": "自動化", "description": "快捷動作與 Agent 生命週期 Hooks。" },
       "webSearch": { "label": "網頁搜尋", "description": "選擇 WebSearch 服務、端點與裝置本機憑據。" },
@@ -42,6 +42,27 @@
       "quick-actions": "快捷動作",
       "hooks": "Hooks"
     }
+  },
+  "changeGuard": {
+    "title": "儲存未完成的設定？",
+    "message": "離開前需要處理未儲存的設定。",
+    "message_one": "離開前需要處理 {{count}} 項未儲存的設定。儲存失敗時會留在目前頁面。",
+    "message_other": "離開前需要處理 {{count}} 項未儲存的設定。儲存失敗時會留在目前頁面，已經儲存的項目不會重複提交。",
+    "saveFailed": "部分設定未能儲存。請檢查目前頁面的錯誤後重試，或放棄這些變更再離開。",
+    "saveAndLeave": "儲存並離開",
+    "discardAndLeave": "放棄並離開",
+    "keepEditing": "繼續編輯",
+    "unsavedPage": "此頁面有未儲存的變更"
+  },
+  "changeStatus": {
+    "unsaved": "尚未儲存",
+    "saving": "正在儲存…",
+    "saved": "已儲存",
+    "error": "儲存失敗"
+  },
+  "changeActions": {
+    "save": "儲存變更",
+    "discard": "放棄變更"
   },
   "general": {
     "title": "通用",

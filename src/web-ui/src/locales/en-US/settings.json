@@ -23,7 +23,7 @@
       "memory": { "label": "Memory", "description": "Memory generation, use, extraction, and consolidation." },
       "sessionWorkspace": { "label": "Session & Workspace", "description": "Session titles and current workspace search." },
       "worktrees": { "label": "Worktrees", "description": "Git worktree isolation and parallel-session defaults." },
-      "execution": { "label": "Execution & Permissions", "description": "Common permissions plus advanced execution, review, and recovery settings." },
+      "execution": { "label": "Execution & Permissions", "description": "Tool permissions, execution, review, and recovery settings." },
       "browserDesktopControl": { "label": "Browser & Desktop Control", "description": "Browser connections, desktop interaction, and required system permissions." },
       "automation": { "label": "Automation", "description": "Quick actions and Agent lifecycle hooks." },
       "webSearch": { "label": "Web Search", "description": "Choose the WebSearch provider, endpoint, and device-local credential." },
@@ -42,6 +42,27 @@
       "quick-actions": "Quick Actions",
       "hooks": "Hooks"
     }
+  },
+  "changeGuard": {
+    "title": "Save unfinished settings?",
+    "message": "Unsaved settings need attention before you leave.",
+    "message_one": "{{count}} unsaved settings item needs attention before you leave. If it fails, you will stay here.",
+    "message_other": "{{count}} unsaved settings items need attention before you leave. If one fails, you will stay here and completed saves will not run again.",
+    "saveFailed": "Some settings could not be saved. Review the error on this page and retry, or discard those changes before leaving.",
+    "saveAndLeave": "Save and Leave",
+    "discardAndLeave": "Discard and Leave",
+    "keepEditing": "Keep Editing",
+    "unsavedPage": "This page has unsaved changes"
+  },
+  "changeStatus": {
+    "unsaved": "Not saved",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "error": "Save failed"
+  },
+  "changeActions": {
+    "save": "Save Changes",
+    "discard": "Discard Changes"
   },
   "general": {
     "title": "General",

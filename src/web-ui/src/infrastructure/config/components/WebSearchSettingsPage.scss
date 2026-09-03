@@ -1,28 +1,9 @@
-.web-search-settings__provider-select {
-  inline-size: 240px;
-  max-inline-size: 100%;
-}
-
-.web-search-settings__credential-status,
-.web-search-settings__credential-field {
+.web-search-settings__credential-status {
   inline-size: 100%;
   display: flex;
   align-items: center;
   gap: var(--bf-space-2);
-}
-
-.web-search-settings__credential-status {
   justify-content: space-between;
-}
-
-.web-search-settings__credential-field {
-  flex-wrap: wrap;
-}
-
-.web-search-settings__credential-field [data-bf-component='input'] {
-  flex: 1 1 200px;
-  inline-size: auto;
-  min-inline-size: 0;
 }
 
 #web-search-bitfun-protocol {
