@@ -282,28 +282,30 @@ const InsightsScene: React.FC = () => {
       {generating && <GenerationPanel progress={progress} />}
 
       <ScrollArea className="insights-scene__history" data-bf-scene="insights" data-bf-part="content">
-        <div className="insights-scene__history-header">
-          <div className="insights-scene__history-label">
-            {t('insights.history')}
-            {reportMetas.length > 0 && (
-              <span className="insights-scene__history-count">{reportMetas.length}</span>
-            )}
+        <div className="insights-scene__history-inner">
+          <div className="insights-scene__history-header">
+            <div className="insights-scene__history-label">
+              {t('insights.history')}
+              {reportMetas.length > 0 && (
+                <span className="insights-scene__history-count">{reportMetas.length}</span>
+              )}
+            </div>
+            <span className="insights-scene__history-hint">{t('insights.keepLatest5')}</span>
           </div>
-          <span className="insights-scene__history-hint">{t('insights.keepLatest5')}</span>
+          {loadingMetas ? (
+            <div className="insights-scene__loading" data-bf-scene="insights" data-bf-part="loading">
+              <Loader2 size={16} className="insights-scene__spinner" />
+            </div>
+          ) : reportMetas.length === 0 ? (
+            <div className="insights-scene__empty" data-bf-scene="insights" data-bf-part="empty">{t('insights.noReports')}</div>
+          ) : (
+            <div className="insights-scene__report-list">
+              {reportMetas.map((meta) => (
+                <ReportMetaCard key={meta.generated_at} meta={meta} onSelect={loadReport} />
+              ))}
+            </div>
+          )}
         </div>
-        {loadingMetas ? (
-          <div className="insights-scene__loading" data-bf-scene="insights" data-bf-part="loading">
-            <Loader2 size={16} className="insights-scene__spinner" />
-          </div>
-        ) : reportMetas.length === 0 ? (
-          <div className="insights-scene__empty" data-bf-scene="insights" data-bf-part="empty">{t('insights.noReports')}</div>
-        ) : (
-          <div className="insights-scene__report-list">
-            {reportMetas.map((meta) => (
-              <ReportMetaCard key={meta.generated_at} meta={meta} onSelect={loadReport} />
-            ))}
-          </div>
-        )}
       </ScrollArea>
     </div>
   );
