@@ -23,6 +23,29 @@ fn default_min_bitfun_version() -> &'static str {
     crate::VERSION
 }
 
+fn read_string_paths(input: &Value, key: &str) -> Option<Vec<String>> {
+    input.get(key).and_then(Value::as_array).map(|items| {
+        items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect()
+    })
+}
+
+fn listing_image_paths(input: &Value) -> BitFunResult<Vec<String>> {
+    let current = read_string_paths(input, "listing_image_paths");
+    let legacy = read_string_paths(input, "screenshot_paths");
+    match (current, legacy) {
+        (Some(current), Some(legacy)) if current == legacy => Ok(current),
+        (Some(_), Some(_)) => Err(BitFunError::validation(
+            "listing_image_paths and its deprecated screenshot_paths compatibility alias must not disagree.",
+        )),
+        (Some(paths), None) | (None, Some(paths)) => Ok(paths),
+        (None, None) => Ok(Vec::new()),
+    }
+}
+
 pub struct PublishMiniAppTool;
 
 impl PublishMiniAppTool {
@@ -48,7 +71,7 @@ impl Tool for PublishMiniAppTool {
 
 Identify the app by `app_name` — the display name the user used (e.g. "循天问命"), matched against installed apps' manifest names in every locale — or by `app_id` if you already have one. Installed apps are resolved through the running MiniApp manager: do NOT search the filesystem for the app; if the name does not resolve, the error lists every installed app to pick from.
 
-Listing metadata (name, description, icon, category, tags) is derived from the app's manifest; the marketplace slug and release number are derived automatically from the user's submission history. Provide 1-5 screenshot file paths (PNG/JPEG/WebP, each <= 5 MiB) — ask the user for screenshots, or have them use 市场 → 我的投稿 → 截取当前画面 to capture one.
+Listing metadata (name, description, icon, category, tags) is derived from the app's manifest; the marketplace slug and release number are derived automatically from the user's submission history. Provide 1-5 `listing_image_paths` (PNG/JPEG/WebP, each <= 5 MiB) for the marketplace gallery. A 16:9 composition is recommended; the first image becomes the listing-card cover. Keep key content clear and away from the edges because marketplace surfaces crop images to 16:9. If no image path is available, ask the user to provide one or have them use 市场 → 我的投稿 → 截取当前画面.
 
 If the user is not signed in to the market, the tool returns a GitHub authorization link. Show the link to the user, wait for them to authorize in the browser, then call this tool again with the same arguments.
 
@@ -64,7 +87,7 @@ Publishing is an outward-facing action: only call this when the user explicitly 
         json!({
             "type": "object",
             "additionalProperties": false,
-            "required": ["screenshot_paths"],
+            "required": ["listing_image_paths"],
             "properties": {
                 "app_name": {
                     "type": "string",
@@ -74,12 +97,12 @@ Publishing is an outward-facing action: only call this when the user explicitly 
                     "type": "string",
                     "description": "Installed MiniApp id (e.g. returned by InitMiniApp or an earlier PublishMiniApp error). Provide this or app_name."
                 },
-                "screenshot_paths": {
+                "listing_image_paths": {
                     "type": "array",
                     "items": { "type": "string" },
                     "minItems": 1,
                     "maxItems": 5,
-                    "description": "1-5 absolute paths to PNG/JPEG/WebP screenshots of the running app, each <= 5 MiB. Use a 16:9 aspect ratio (1920x1080 recommended, 2560x1440 max useful): both the web market and the BitFun desktop client crop screenshots to 16:9, so other ratios lose their edges. The first screenshot is the listing card cover — pick the one that best shows what the app does, and keep key content away from the edges."
+                    "description": "1-5 absolute paths to PNG/JPEG/WebP marketplace images, each <= 5 MiB. A 16:9 composition works best (1920x1080 recommended, 2560x1440 max useful); the first image becomes the listing-card cover. Keep key content clear and away from the edges because the web market and BitFun desktop client crop images to 16:9."
                 },
                 "changelog": {
                     "type": "string",
@@ -194,26 +217,16 @@ Publishing is an outward-facing action: only call this when the user explicitly 
             )));
         };
 
-        let screenshot_paths: Vec<String> = input
-            .get("screenshot_paths")
-            .and_then(Value::as_array)
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
-            .unwrap_or_default();
-        if screenshot_paths.is_empty() || screenshot_paths.len() > MARKET_MAX_SCREENSHOTS {
+        let listing_image_paths = listing_image_paths(input)?;
+        if listing_image_paths.is_empty() || listing_image_paths.len() > MARKET_MAX_SCREENSHOTS {
             return Err(BitFunError::validation(
-                "screenshot_paths must contain 1-5 image paths (PNG/JPEG/WebP). Ask the user for screenshots of the running app, or have them capture one via 市场 → 我的投稿 → 截取当前画面.",
+                "listing_image_paths must contain 1-5 marketplace image paths (PNG/JPEG/WebP). Ask the user to provide an image, or have them add one via 市场 → 我的投稿.",
             ));
         }
-        for path in &screenshot_paths {
+        for path in &listing_image_paths {
             if tokio::fs::metadata(path).await.is_err() {
                 return Err(BitFunError::validation(format!(
-                    "Screenshot not found: {path}"
+                    "Marketplace image file not found: {path}"
                 )));
             }
         }
@@ -397,8 +410,14 @@ Publishing is an outward-facing action: only call this when the user explicitly 
         let mut progress = |submission_id: Option<&str>, phase: &'static str, completed, total| {
             let _ = progress_tx.send((submission_id.map(str::to_string), phase, completed, total));
         };
-        let result =
-            submit_installed_app(&mut client, &app, &draft, &screenshot_paths, &mut progress).await;
+        let result = submit_installed_app(
+            &mut client,
+            &app,
+            &draft,
+            &listing_image_paths,
+            &mut progress,
+        )
+        .await;
         drop(progress_tx);
         let _ = forwarder.await;
         let submission = result.map_err(|error| {
@@ -494,7 +513,9 @@ fn unix_now() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_min_bitfun_version, find_apps_by_name, PublishMiniAppTool};
+    use super::{
+        default_min_bitfun_version, find_apps_by_name, listing_image_paths, PublishMiniAppTool,
+    };
     use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
     use bitfun_product_domains::miniapp::types::MiniAppMeta;
     use serde_json::json;
@@ -527,13 +548,38 @@ mod tests {
     }
 
     #[test]
-    fn publish_miniapp_schema_requires_only_screenshots() {
+    fn publish_miniapp_schema_requires_listing_images() {
         let tool = PublishMiniAppTool::new();
         let schema = tool.input_schema();
-        assert_eq!(schema["required"], json!(["screenshot_paths"]));
+        assert_eq!(schema["required"], json!(["listing_image_paths"]));
+        assert!(schema["properties"]["listing_image_paths"]["description"]
+            .as_str()
+            .is_some_and(|description| description.contains("listing-card cover")));
+        assert!(schema["properties"].get("screenshot_paths").is_none());
         assert!(schema["properties"]["app_name"].is_object());
         assert!(schema["properties"]["app_id"].is_object());
         assert_eq!(schema["additionalProperties"], json!(false));
+    }
+
+    #[test]
+    fn publish_miniapp_accepts_legacy_screenshot_paths_for_pending_calls() {
+        assert_eq!(
+            listing_image_paths(&json!({ "screenshot_paths": ["/tmp/cover.webp"] })).unwrap(),
+            vec!["/tmp/cover.webp".to_string()]
+        );
+        assert_eq!(
+            listing_image_paths(&json!({
+                "listing_image_paths": ["/tmp/cover.webp"],
+                "screenshot_paths": ["/tmp/cover.webp"]
+            }))
+            .unwrap(),
+            vec!["/tmp/cover.webp".to_string()]
+        );
+        assert!(listing_image_paths(&json!({
+            "listing_image_paths": ["/tmp/new.webp"],
+            "screenshot_paths": ["/tmp/old.webp"]
+        }))
+        .is_err());
     }
 
     #[test]

@@ -1596,6 +1596,12 @@ main {
   font-weight: 600;
 }
 
+.field-hint {
+  color: var(--bf-color-content-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .field input,
 .field select,
 .field textarea,

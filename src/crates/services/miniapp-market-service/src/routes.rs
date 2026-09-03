@@ -461,7 +461,7 @@ async fn get_screenshot(
     Query(query): Query<ImageVariantQuery>,
 ) -> MarketResult<Response> {
     if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(MarketError::not_found("Screenshot was not found."));
+        return Err(MarketError::not_found("Marketplace image was not found."));
     }
     let variant = match query.variant.as_deref() {
         None => None,
@@ -732,7 +732,7 @@ async fn upload_submission_screenshot(
     if position as usize >= MARKET_MAX_SCREENSHOTS {
         return Err(MarketError::bad_request(
             "invalid_screenshot_position",
-            "Screenshot positions range from 0 through 4.",
+            "Marketplace image positions range from 0 through 4.",
         ));
     }
     let submission = submission_by_id(&state, &submission_id, auth.user.internal_id, false).await?;
@@ -816,7 +816,7 @@ async fn submit_submission(
     if submission.screenshot_urls.is_empty() {
         return Err(MarketError::bad_request(
             "screenshot_required",
-            "At least one screenshot is required.",
+            "At least one marketplace image is required.",
         ));
     }
     validate_listing_ownership_and_release(
@@ -1635,7 +1635,7 @@ async fn approve_submission(
     if screenshot_rows.is_empty() {
         return Err(MarketError::conflict(
             "screenshot_required",
-            "The submission lost its screenshots before approval.",
+            "The submission lost its marketplace images before approval.",
         ));
     }
     let screenshot_hashes = screenshot_rows

@@ -1087,8 +1087,9 @@ function SubmitPage({
             <Field label={t('package')}>
               <input name="package" type="file" accept=".bfminiapp,application/zip" required />
             </Field>
-            <Field label={`${t('screenshots')} (1-5)`}>
+            <Field label={`${t('screenshots')} (1–5)`}>
               <input name="screenshots" type="file" accept="image/png,image/jpeg,image/webp" multiple required />
+              <small className="field-hint">{t('listingImageHint')}</small>
             </Field>
           </div>
           <div className="safety-note">

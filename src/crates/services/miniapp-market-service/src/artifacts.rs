@@ -92,7 +92,7 @@ impl ArtifactStore {
             .await
             .map_err(|error| {
                 if error.kind() == std::io::ErrorKind::NotFound {
-                    MarketError::not_found("Screenshot artifact was not found.")
+                    MarketError::not_found("Marketplace image artifact was not found.")
                 } else {
                     MarketError::internal(error)
                 }
