@@ -10,8 +10,20 @@ function readLocalFile(name: string): string {
 const readWorkspaceStripStylesheet = () => readLocalFile('ChatInputWorkspaceStrip.scss');
 const readChatInputStylesheet = () => readLocalFile('ChatInput.scss');
 const readWorkspaceStripComponent = () => readLocalFile('ChatInputWorkspaceStrip.tsx');
+const readOverlayLayoutStylesheet = () => readFileSync(
+  fileURLToPath(new URL('../../shared/styles/_overlay-layout.scss', import.meta.url)),
+  'utf8',
+).replace(/\r\n/g, '\n');
+const readBranchQuickSwitchStylesheet = () => readFileSync(
+  fileURLToPath(new URL('../../tools/git/components/BranchQuickSwitch.scss', import.meta.url)),
+  'utf8',
+).replace(/\r\n/g, '\n');
 const readDispatchTargetPickerComponent = () => readFileSync(
   fileURLToPath(new URL('../../features/dispatch/DispatchTargetPicker.tsx', import.meta.url)),
+  'utf8',
+).replace(/\r\n/g, '\n');
+const readDispatchTargetPickerStylesheet = () => readFileSync(
+  fileURLToPath(new URL('../../features/dispatch/DispatchTargetPicker.scss', import.meta.url)),
   'utf8',
 ).replace(/\r\n/g, '\n');
 
@@ -40,6 +52,42 @@ describe('composer context track layout', () => {
 
     expect(stylesheet).toMatch(/&__context \{[\s\S]*?flex: 1 1 auto;/);
     expect(stylesheet).toMatch(/&__next \{[\s\S]*?flex: 0 0 auto;/);
+  });
+
+  it('keeps context pickers on one responsive width and one option rhythm', () => {
+    const overlayLayout = readOverlayLayoutStylesheet();
+    const workspaceStrip = readWorkspaceStripStylesheet();
+    const branchPicker = readBranchQuickSwitchStylesheet();
+    const targetPicker = readDispatchTargetPickerStylesheet();
+
+    expect(overlayLayout).toContain(
+      '@mixin anchored-picker-inline-size($inline-size: 280px)',
+    );
+    for (const stylesheet of [workspaceStrip, branchPicker, targetPicker]) {
+      expect(stylesheet).toContain('@include overlay-layout.anchored-picker-inline-size;');
+    }
+
+    expect(branchPicker).toMatch(
+      /branch-quick-switch__item \{[\s\S]*?min-height: var\(--bf-control-height-sm\);/,
+    );
+    expect(branchPicker).toMatch(
+      /branch-quick-switch__list \[data-bf-part='list'\] \{\n  gap: calc\(var\(--bf-space-1\) \/ 2\);/,
+    );
+    expect(targetPicker).toContain(
+      '&__option-row {\n    min-height: var(--bf-control-height-md);\n  }',
+    );
+    expect(targetPicker).toMatch(
+      /&__menu \{[\s\S]*?--bf-overlay-menu-section-gap: var\(--bf-space-1\);/,
+    );
+    expect(targetPicker).toMatch(
+      /&__status \{[\s\S]*?min-height: var\(--bf-overlay-menu-heading-height\);/,
+    );
+    expect(targetPicker).toMatch(
+      /strong \{[\s\S]*?font-size: var\(--bf-type-label-md-font-size\);/,
+    );
+    expect(targetPicker).toMatch(
+      /small \{[\s\S]*?font-size: var\(--bf-type-meta-font-size\);/,
+    );
   });
 
   it('keeps passive context aligned and promotes consequential controls', () => {

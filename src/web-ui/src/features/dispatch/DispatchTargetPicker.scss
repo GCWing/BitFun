@@ -1,3 +1,5 @@
+@use '@/shared/styles/overlay-layout' as overlay-layout;
+
 .dispatch-target-picker {
   position: relative;
   display: inline-flex;
@@ -62,20 +64,23 @@
   }
 
   &__menu {
+    @include overlay-layout.anchored-picker-inline-size;
+
+    --bf-overlay-menu-section-gap: var(--bf-space-1);
+
     position: fixed;
     z-index: var(--bf-layer-popover);
   }
 
   &__option-row {
-    min-height: 46px;
-    padding-block: 5px;
+    min-height: var(--bf-control-height-md);
   }
 
   &__option-copy {
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 2px;
+    gap: calc(var(--bf-space-1) / 2);
 
     strong,
     small {
@@ -85,13 +90,20 @@
     }
 
     strong {
-      font-size: var(--bf-type-label-sm-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
+      font-family: var(--bf-type-label-md-font-family);
+      font-size: var(--bf-type-label-md-font-size);
+      font-weight: var(--bf-type-label-md-font-weight);
+      line-height: var(--bf-type-label-md-line-height);
+      letter-spacing: var(--bf-type-label-md-letter-spacing);
     }
 
     small {
       color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-micro-font-size);
+      font-family: var(--bf-type-meta-font-family);
+      font-size: var(--bf-type-meta-font-size);
+      font-weight: var(--bf-type-meta-font-weight);
+      line-height: var(--bf-type-meta-line-height);
+      letter-spacing: var(--bf-type-meta-letter-spacing);
     }
   }
 
@@ -99,9 +111,14 @@
     display: flex;
     align-items: center;
     gap: var(--bf-space-2);
-    padding: 9px 8px;
+    min-height: var(--bf-overlay-menu-heading-height);
+    padding-inline: var(--bf-overlay-menu-item-padding-inline);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
   }
 
   &__spin {

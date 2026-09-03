@@ -21,7 +21,7 @@
  * form. Inside one segment, grouping is spacing alone, at a fixed 2.5:1 —
  * $track-item-gap between segments, $track-part-gap inside one.
  */
-@use '@/shared/styles/surface-recipes' as surfaces;
+@use '@/shared/styles/overlay-layout' as overlay-layout;
 
 // The only two spacings on the track. Their ratio is what replaces the
 // separators: parts of one segment sit close, segments sit apart.
@@ -474,9 +474,10 @@ $track-item-gap: 10px;
   // strip feel like one family; the layout is simpler — a single column of
   // workspace names with a check on the active one.
   &__workspace-menu {
+    @include overlay-layout.anchored-picker-inline-size;
+
     position: fixed;
     z-index: var(--bf-layer-popover);
-    width: min(220px, calc(100vw - 16px));
   }
 
 }
