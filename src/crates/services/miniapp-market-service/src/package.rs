@@ -175,13 +175,13 @@ pub fn validate_screenshot(bytes: &[u8]) -> MarketResult<ValidatedScreenshot> {
     if bytes.is_empty() || bytes.len() as u64 > MARKET_MAX_SCREENSHOT_BYTES {
         return Err(MarketError::bad_request(
             "invalid_screenshot_size",
-            "Screenshots must be between 1 byte and 5 MiB.",
+            "Marketplace images must be between 1 byte and 5 MiB.",
         ));
     }
     let format = image::guess_format(bytes).map_err(|error| {
         MarketError::bad_request(
             "invalid_screenshot",
-            format!("The screenshot format could not be identified: {error}"),
+            format!("The marketplace image format could not be identified: {error}"),
         )
     })?;
     if !matches!(
@@ -190,7 +190,7 @@ pub fn validate_screenshot(bytes: &[u8]) -> MarketResult<ValidatedScreenshot> {
     ) {
         return Err(MarketError::bad_request(
             "unsupported_screenshot_format",
-            "Screenshots must be PNG, JPEG, or WebP.",
+            "Marketplace images must be PNG, JPEG, or WebP.",
         ));
     }
     let (original_width, original_height) =
@@ -199,7 +199,7 @@ pub fn validate_screenshot(bytes: &[u8]) -> MarketResult<ValidatedScreenshot> {
             .map_err(|error| {
                 MarketError::bad_request(
                     "invalid_screenshot",
-                    format!("The screenshot dimensions could not be read: {error}"),
+                    format!("The marketplace image dimensions could not be read: {error}"),
                 )
             })?;
     let pixels = u64::from(original_width).saturating_mul(u64::from(original_height));
@@ -211,13 +211,13 @@ pub fn validate_screenshot(bytes: &[u8]) -> MarketResult<ValidatedScreenshot> {
     {
         return Err(MarketError::bad_request(
             "invalid_screenshot_dimensions",
-            "Screenshot dimensions are invalid or exceed 40 megapixels.",
+            "Marketplace image dimensions are invalid or exceed 40 megapixels.",
         ));
     }
     let image = image::load_from_memory_with_format(bytes, format).map_err(|error| {
         MarketError::bad_request(
             "invalid_screenshot",
-            format!("The screenshot could not be decoded: {error}"),
+            format!("The marketplace image could not be decoded: {error}"),
         )
     })?;
     let normalized = if original_width > 2560 || original_height > 2560 {

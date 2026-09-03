@@ -16,7 +16,7 @@
 4. API 前缀、DTO、分页和错误 envelope 是 Web 与桌面共享的稳定契约；变化时
    必须同步消费者和测试。
 5. 安全约束不是可选功能。不得放宽 OAuth state/PKCE、CSRF、token 轮换、管理员
-   数字 ID、包白名单、zip 限制、截图重编码、hash 绑定或审计规则来绕过失败。
+   数字 ID、包白名单、zip 限制、市场展示图重编码、hash 绑定或审计规则来绕过失败。
 6. 不读取、输出或提交生产 secret、Cookie、token、包内容或个人 IP。
 7. 生产发布只能来自明确 commit，并按部署手册先备份、后构建、再验证 revision。
 
@@ -28,7 +28,7 @@
 | `src/routes.rs` | `/miniapp/api/v1` 路由、请求/响应和事务流程 |
 | `src/auth.rs` | GitHub Web OAuth、桌面授权事务、session 和 token |
 | `src/db.rs` | SQLite WAL、查询、唯一性和审核事务 |
-| `src/package.rs` | `.bfminiapp` ZIP、Node/npm/ESM、大小和截图验证 |
+| `src/package.rs` | `.bfminiapp` ZIP、Node/npm/ESM、大小和市场展示图验证 |
 | `src/artifacts.rs` | SHA-256 内容寻址持久化 |
 | `src/retention.rs` | 草稿、驳回和撤回 artifact 清理 |
 | `src/error.rs` | 统一 API 错误 envelope |
@@ -44,9 +44,9 @@
 - 投稿状态保持 `draft → submitted → approved | rejected | withdrawn`；批准的
   release 可被永久 yank。
 - Release 不可变，新版本审核期间继续提供旧的已批准版本。
-- 批准必须原子绑定 package hash、截图 hash、规范化 metadata 和
+- 批准必须原子绑定 package hash、市场展示图 hash、规范化 metadata 和
   `review_bundle_hash`。
-- 截图 URL 无 query 时保持规范化原图兼容；只允许 `compact-v1`（最大边 640px）
+- 市场展示图 URL 无 query 时保持规范化原图兼容；只允许 `compact-v1`（最大边 640px）
   和 `large-v1`（最大边 1280px）两个有界变体。变体按需生成到原图旁，不进入
   审核 hash，删除原图时必须同步删除变体。
 - 市场包只能包含协议白名单文件，必须拒绝 Node、npm、非空 ESM、zip-slip、
@@ -71,7 +71,7 @@
 | 公开目录、详情、下载 | 可选登录 | 可选登录 | 不变 |
 | 评分与收藏 | 登录并校验 CSRF | 登录 | 不变 |
 | `GET /submissions`、`GET /submissions/{id}` | 登录 | 登录 | 保持可读 |
-| `POST /submissions`、包/截图 PUT/DELETE、submit、withdraw | 登录并校验 CSRF | 登录 | Web 在读取 body 前返回 `403 web_submissions_disabled`；Desktop 保持可写 |
+| `POST /submissions`、包/市场展示图 PUT/DELETE、submit、withdraw | 登录并校验 CSRF | 登录 | Web 在读取 body 前返回 `403 web_submissions_disabled`；Desktop 保持可写 |
 | `/admin/*` 审核和下架 | 管理员登录并校验 CSRF | 管理员登录 | 不受该开关影响 |
 
 匿名或无效凭据的投稿写请求仍先返回 `401 unauthorized`。未来重新开放 Web 投稿时，
