@@ -7,7 +7,15 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 const WEBVIEW_RESIZE_DEBOUNCE_MS = 160;
 const WEBVIEW_BOUNDS_EPSILON = 1;
 const WEBVIEW_BOUNDS_WAIT_TIMEOUT_MS = 2000;
-const OVERLAY_SELECTOR = "[data-bf-component='dialog'][data-bf-part='overlay'], [data-bf-component='sheet'][data-bf-part='overlay'], .canvas-mission-control";
+// Native child WebViews sit above the main document's CSS stacking contexts.
+// Full-window DOM surfaces use this contract so the browser can be hidden while
+// they are open and restored without tearing down its page state.
+export const NATIVE_WEBVIEW_OCCLUSION_SELECTOR = [
+  '[data-bf-native-webview-occlusion]',
+  "[data-bf-component='dialog'][data-bf-part='overlay']",
+  "[data-bf-component='sheet'][data-bf-part='overlay']",
+  '.canvas-mission-control',
+].join(', ');
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];
 
@@ -537,7 +545,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
 
     let hiddenByOverlay = false;
     const checkOverlays = () => {
-      const overlay = document.querySelector<HTMLElement>(OVERLAY_SELECTOR);
+      const overlay = document.querySelector<HTMLElement>(NATIVE_WEBVIEW_OCCLUSION_SELECTOR);
       const hasOverlay = overlay !== null;
       // #region agent log
       if (overlay) {
@@ -581,6 +589,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
 
     const observer = new MutationObserver(checkOverlays);
     observer.observe(document.body, { childList: true, subtree: true });
+    checkOverlays();
 
     const handleToolbarActivating = () => {
       void webviewRef.current?.hide().catch(() => {});

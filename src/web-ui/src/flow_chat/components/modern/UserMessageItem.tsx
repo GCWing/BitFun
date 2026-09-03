@@ -665,7 +665,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         )}
 
         {lightboxImage && createPortal(
-          <div className="user-message-item__lightbox" onClick={() => setLightboxImage(null)} data-bf-component="user-message-item" data-bf-part="lightbox">
+          <div
+            className="user-message-item__lightbox"
+            onClick={() => setLightboxImage(null)}
+            data-bf-component="user-message-item"
+            data-bf-part="lightbox"
+            data-bf-native-webview-occlusion
+          >
             <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
               <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
             </button>
