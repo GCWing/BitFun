@@ -604,7 +604,9 @@
   "workspaceStrip": {
     "branchSwitchLabel": "切換分支。目前分支：{{branch}}",
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支",
-    "branchTooltipUntrusted": "該目錄屬於其他使用者，Git 拒絕讀取此存放庫。信任該目錄後即可看到分支。"
+    "branchTooltipUntrusted": "該目錄屬於其他使用者，Git 拒絕讀取此存放庫。信任該目錄後即可看到分支。",
+    "primaryAssistant": "主助理",
+    "personalAssistant": "個人助理"
   },
   "context": {
     "title": "上下文",
