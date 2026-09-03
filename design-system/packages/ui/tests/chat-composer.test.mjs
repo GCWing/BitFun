@@ -189,6 +189,24 @@ test("ChatComposer queue promotes message text from secondary to primary on inte
   );
 });
 
+test("ChatComposer queue never changes the input surface geometry", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/composer/ChatComposer.module.css", import.meta.url),
+    "utf8",
+  );
+  const bodyRule = styles.match(/\.body\s*\{[^}]*\}/s)?.[0];
+  const queueRule = styles.match(/\.queue\s*\{[^}]*\}/s)?.[0];
+
+  assert.ok(bodyRule);
+  assert.match(bodyRule, /display:\s*flex/);
+  assert.match(bodyRule, /flex-direction:\s*column/);
+  assert.match(bodyRule, /gap:\s*var\(--bf-space-2\)/);
+  assert.ok(queueRule);
+  assert.match(queueRule, /display:\s*contents/);
+  assert.doesNotMatch(styles, /\.body:has\(/);
+  assert.doesNotMatch(styles, /\.queue:empty/);
+});
+
 test("ChatComposer resolves compound slots into the same stable anatomy", () => {
   const markup = renderToStaticMarkup(
     createElement(

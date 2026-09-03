@@ -29,35 +29,18 @@
   }
 
   .body {
-    display: contents;
+    display: flex;
+    min-inline-size: 0;
+    inline-size: 100%;
+    flex-direction: column;
+    gap: var(--bf-space-2);
   }
 
   .queue {
-    min-inline-size: 0;
-  }
-
-  .queue:empty {
-    display: none;
-  }
-
-  .body:has(> .queue:not(:empty)) {
-    box-sizing: border-box;
-    display: grid;
-    min-inline-size: 0;
-    inline-size: 100%;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2);
-    border: var(--bf-border-width-default) solid var(--bf-color-action-neutral-border);
-    border-radius: var(--bf-radius-2xl);
-    background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-base);
-    transition:
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-  }
-
-  .body:has(> .queue:not(:empty)):focus-within {
-    border-color: var(--bf-color-border-default);
+    /* The wrapper exists when a queue component later renders `null`. Keeping
+       it out of the box tree makes both that transition and the no-queue path
+       geometrically identical to a composer that never received the slot. */
+    display: contents;
   }
 
   .surface {
@@ -109,20 +92,6 @@
 
   .surface:focus-within {
     border-color: var(--bf-color-border-default);
-  }
-
-  .body:has(> .queue:not(:empty)) .surface {
-    border-color: transparent;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .body:has(> .queue:not(:empty)) .surface:focus-within {
-    border-color: transparent;
-  }
-
-  .body:has(> .queue:not(:empty)) .surface[data-bf-layout="compact"] {
-    padding-inline: 0;
   }
 
   .content {
@@ -199,7 +168,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .body,
     .surface {
       transition: none;
     }
@@ -207,8 +175,7 @@
 
   @media (forced-colors: active) {
     .surface,
-    .surface:focus-within,
-    .body:has(> .queue:not(:empty)) {
+    .surface:focus-within {
       border-color: CanvasText;
       box-shadow: none;
     }
