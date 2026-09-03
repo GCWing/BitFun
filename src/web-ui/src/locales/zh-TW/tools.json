@@ -106,6 +106,20 @@
       "exitFullscreen": "退出全屏",
       "imageUrlEmpty": "圖片URL為空"
     },
+    "pdfViewer": {
+      "loading": "正在載入 PDF...",
+      "filePathEmpty": "檔案路徑為空",
+      "loadFailedWithMessage": "載入 PDF 失敗：{{message}}",
+      "renderFailedWithMessage": "渲染 PDF 頁面失敗：{{message}}",
+      "pageCount": "第 {{current}} / {{total}} 頁",
+      "currentPage": "目前頁碼",
+      "previousPage": "上一頁",
+      "nextPage": "下一頁",
+      "zoomOut": "縮小",
+      "zoomLevel": "縮放比例",
+      "zoomIn": "放大",
+      "rotate90": "旋轉 90°"
+    },
     "meditor": {
       "placeholder": "請輸入 Markdown 內容...",
       "toolbarPlaceholder": "工具欄",

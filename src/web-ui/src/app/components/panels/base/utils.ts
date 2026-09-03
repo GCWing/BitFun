@@ -99,6 +99,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'pdf-viewer': {
+    type: 'pdf-viewer',
+    displayName: 'PDF Viewer',
+    icon: FileText,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
   'diff-code-editor': {
     type: 'diff-code-editor',
     displayName: 'Diff Editor',

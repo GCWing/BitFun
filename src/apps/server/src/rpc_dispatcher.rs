@@ -97,19 +97,22 @@ pub async fn dispatch(
             let request = extract_request(&params)?;
             let file_path = get_string(&request, "filePath")?;
             let encoding = request.get("encoding").and_then(|value| value.as_str());
+
+            if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64")) {
+                let bytes = state
+                    .filesystem_service
+                    .read_file_bytes(&file_path)
+                    .await
+                    .map_err(|e| anyhow!("{}", e))?;
+                return Ok(serde_json::json!(BASE64.encode(bytes)));
+            }
+
             let result = state
                 .filesystem_service
                 .read_file(&file_path)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
-            let content = if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64"))
-                && !result.encoding.eq_ignore_ascii_case("base64")
-            {
-                BASE64.encode(result.content.as_bytes())
-            } else {
-                result.content
-            };
-            Ok(serde_json::json!(content))
+            Ok(serde_json::json!(result.content))
         }
         "write_file_content" => {
             let request = extract_request(&params)?;

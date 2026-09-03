@@ -18,6 +18,7 @@ export const FILE_VIEWER_TYPES: PanelContentType[] = [
   'text-viewer',
   'file-viewer',
   'image-viewer',
+  'pdf-viewer',
   'diff-code-editor',
   'plan-viewer',
 ];

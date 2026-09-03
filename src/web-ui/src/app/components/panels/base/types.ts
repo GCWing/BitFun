@@ -13,6 +13,7 @@ export type PanelContentType =
   | 'text-viewer'
   | 'file-viewer'
   | 'image-viewer'
+  | 'pdf-viewer'
   | 'diff-code-editor'
   | 'git-diff'
   | 'git-settings'
