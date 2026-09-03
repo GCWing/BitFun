@@ -9,6 +9,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  server: {
+    proxy: {
+      '/relay': {
+        target: 'https://remote.openbitfun.com',
+        changeOrigin: true,
+        secure: true,
+        ws: true,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

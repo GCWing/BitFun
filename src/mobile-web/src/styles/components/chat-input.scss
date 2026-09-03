@@ -447,21 +447,47 @@
   }
 
   &.is-stop {
-    background: var(--bf-color-status-danger-content) !important;
-    border-color: var(--bf-color-status-danger-content) !important;
+    background: var(--bf-color-action-primary-background) !important;
+    border-color: transparent !important;
     color: var(--bf-color-action-primary-content) !important;
     opacity: 1 !important;
-    box-shadow: var(--bf-shadow-sm);
+    box-shadow: none;
+
+    &:hover:not(:disabled) {
+      background: var(--bf-color-action-primary-hover) !important;
+      box-shadow: var(--bf-shadow-base);
+      transform: scale(1.05);
+    }
 
     &:active { transform: scale(0.92); }
+
+    &:disabled {
+      background: var(--bf-color-action-primary-background) !important;
+      color: var(--bf-color-action-primary-content) !important;
+      cursor: wait;
+      opacity: 0.78 !important;
+    }
   }
 }
 
-.chat-page__stream-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+.chat-page__stop-glyph {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.chat-page__stop-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: chat-stop-spin 0.8s linear infinite;
+}
+
+@keyframes chat-stop-spin {
+  to { transform: rotate(360deg); }
 }
 
 // ── Image previews ───────────────────────────────────────────────────────────

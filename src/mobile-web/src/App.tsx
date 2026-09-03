@@ -10,7 +10,9 @@ import { RemoteSessionManager } from './services/RemoteSessionManager';
 import { reconcileDelegatedAccountOwner } from './services/delegatedAccountOwner';
 import { ThemeProvider } from './theme';
 import { useConnectionHealth } from './hooks/useConnectionHealth';
+import { useWideLayout } from './hooks/useWideLayout';
 import { useMobileStore } from './services/store';
+import RemoteHomePanel from './components/RemoteHomePanel';
 import './styles/index.scss';
 
 type Page = 'pairing' | 'workspace' | 'sessions' | 'chat' | 'devices';
@@ -39,6 +41,9 @@ const AppContent: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
+  const [homeConversationStarting, setHomeConversationStarting] = useState(false);
+  const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
+  const isWideLayout = useWideLayout();
   const connectionHealth = useMobileStore((state) => state.connectionHealth);
   const clientRef = useRef<RelayHttpClient | null>(null);
   const delegatedOwnerUnlistenRef = useRef<(() => void) | null>(null);
@@ -136,6 +141,7 @@ const AppContent: React.FC = () => {
       pageStackRef.current = ['pairing', 'sessions'];
       history.pushState({ page: 'sessions' }, '');
       setPage('sessions');
+      setCompactSidebarOpen(false);
     },
     [],
   );
@@ -196,13 +202,88 @@ const AppContent: React.FC = () => {
     setActiveSessionId(sessionId);
     setActiveSessionName(sessionName || 'Session');
     setChatAutoFocus(!!isNew);
+    setCompactSidebarOpen(false);
+    if (isWideLayout) {
+      clearTimeout(timerRef.current);
+      setPrevPage(null);
+      setNavDir(null);
+      if (page !== 'chat') {
+        pageStackRef.current = [...pageStackRef.current.filter((entry) => entry !== 'chat'), 'chat'];
+        history.pushState({ page: 'chat' }, '');
+      }
+      setPage('chat');
+      return;
+    }
     navigateTo('chat', 'push');
-  }, [navigateTo]);
+  }, [isWideLayout, navigateTo, page]);
+
+  const handleStartConversation = useCallback(async () => {
+    const activeManager = sessionMgrRef.current;
+    if (!activeManager || homeConversationStarting) return;
+    const targetEpoch = activeManager.controlTargetEpoch;
+    const state = useMobileStore.getState();
+    const assistantMode = !!state.currentAssistant && !state.currentWorkspace;
+    const workspacePath = assistantMode
+      ? state.currentAssistant?.path
+      : state.currentWorkspace?.path;
+    const identity = assistantMode
+      ? undefined
+      : {
+          remoteConnectionId: state.currentWorkspace?.remote_connection_id,
+          remoteSshHost: state.currentWorkspace?.remote_ssh_host,
+        };
+    const agentType = assistantMode ? 'claw' : 'code';
+
+    setHomeConversationStarting(true);
+    useMobileStore.getState().setError(null);
+    try {
+      const sessionId = await activeManager.createSession(
+        agentType,
+        undefined,
+        workspacePath,
+        identity,
+      );
+      if (
+        sessionMgrRef.current !== activeManager
+        || activeManager.controlTargetEpoch !== targetEpoch
+      ) return;
+      handleSelectSession(
+        sessionId,
+        assistantMode ? t('sessions.remoteClawSession') : t('sessions.remoteCodeSession'),
+        true,
+      );
+    } catch (error: unknown) {
+      if (
+        sessionMgrRef.current === activeManager
+        && activeManager.controlTargetEpoch === targetEpoch
+      ) {
+        useMobileStore.getState().setError(
+          String((error as { message?: string })?.message || error),
+        );
+      }
+    } finally {
+      setHomeConversationStarting(false);
+    }
+  }, [handleSelectSession, homeConversationStarting, t]);
 
   const handleBackToSessions = useCallback(() => {
     navigateTo('sessions', 'pop');
     setTimeout(() => setActiveSessionId(null), NAV_DURATION);
   }, [navigateTo]);
+
+  const handleControlTargetChanged = useCallback(() => {
+    clearTimeout(timerRef.current);
+    setActiveSessionId(null);
+    setActiveSessionName('Session');
+    setChatAutoFocus(false);
+    setHomeConversationStarting(false);
+    setPrevPage(null);
+    setNavDir(null);
+    pageStackRef.current = ['pairing', 'sessions'];
+    history.replaceState({ page: 'sessions' }, '');
+    setPage('sessions');
+    setCompactSidebarOpen(true);
+  }, []);
 
   const handleDisconnect = useCallback(() => {
     delegatedOwnerUnlistenRef.current?.();
@@ -214,6 +295,8 @@ const AppContent: React.FC = () => {
     setActiveSessionId(null);
     setActiveSessionName('Session');
     setChatAutoFocus(false);
+    setHomeConversationStarting(false);
+    setCompactSidebarOpen(false);
     setPrevPage(null);
     setNavDir(null);
     clearTimeout(timerRef.current);
@@ -233,8 +316,58 @@ const AppContent: React.FC = () => {
 
   const shouldShow = (p: Page) => currentPage === p || (isAnimating && prevPage === p);
 
+  const renderSessionList = () => sessionMgrRef.current && (
+    <SessionListPage
+      sessionMgr={sessionMgrRef.current}
+      client={clientRef.current ?? undefined}
+      compact
+      activeSessionId={activeSessionId}
+      onSelectSession={handleSelectSession}
+      onOpenWorkspace={handleOpenWorkspace}
+      onDisconnect={handleDisconnect}
+      onOpenDevices={() => navigateTo('devices', 'push')}
+      onControlTargetChanged={handleControlTargetChanged}
+    />
+  );
+
+  const renderDetailPage = () => {
+    if (currentPage === 'workspace' && sessionMgrRef.current) {
+      return (
+        <WorkspacePage
+          sessionMgr={sessionMgrRef.current}
+          onReady={handleWorkspaceReady}
+          onBack={doPopFromWorkspace}
+        />
+      );
+    }
+    if (currentPage === 'devices' && clientRef.current) {
+      return <DevicesPage client={clientRef.current} onBack={doPopFromDevices} />;
+    }
+    if (currentPage === 'chat' && sessionMgrRef.current && activeSessionId) {
+      return (
+        <Suspense fallback={<div className="spinner" aria-hidden="true" />}>
+          <ChatPage
+            sessionMgr={sessionMgrRef.current}
+            sessionId={activeSessionId}
+            sessionName={activeSessionName}
+            onBack={handleBackToSessions}
+            autoFocus={chatAutoFocus}
+            wideLayout
+          />
+        </Suspense>
+      );
+    }
+    return (
+      <RemoteHomePanel
+        onOpenWorkspace={handleOpenWorkspace}
+        onStartConversation={handleStartConversation}
+        conversationStarting={homeConversationStarting}
+      />
+    );
+  };
+
   return (
-    <div className="mobile-app">
+    <div className="mobile-app" data-layout={isWideLayout ? 'wide' : 'compact'}>
       {connectionHealth === 'unreachable' && page !== 'pairing' && (
         <div className="mobile-reconnect-banner" role="alert">
           <span className="mobile-reconnect-spinner" />
@@ -245,45 +378,83 @@ const AppContent: React.FC = () => {
         </div>
       )}
       {page === 'pairing' && <PairingPage onPaired={handlePaired} />}
-      {shouldShow('workspace') && sessionMgrRef.current && (
-        <div className={`nav-page ${getNavClass('workspace', currentPage, navDir, isAnimating)}`}>
-          <WorkspacePage
-            sessionMgr={sessionMgrRef.current}
-            onReady={handleWorkspaceReady}
-          />
+      {page !== 'pairing' && isWideLayout && sessionMgrRef.current && (
+        <div className="remote-shell remote-shell--wide">
+          <aside className="remote-shell__master" aria-label={t('sessions.sessionHistory')}>
+            {renderSessionList()}
+          </aside>
+          <section className="remote-shell__detail">
+            {renderDetailPage()}
+          </section>
         </div>
       )}
-      {shouldShow('devices') && clientRef.current && (
-        <div className={`nav-page ${getNavClass('devices', currentPage, navDir, isAnimating)}`}>
-          <DevicesPage
-            client={clientRef.current}
-            onBack={doPopFromDevices}
-          />
-        </div>
-      )}
-      {shouldShow('sessions') && sessionMgrRef.current && (
-        <div className={`nav-page ${getNavClass('sessions', currentPage, navDir, isAnimating)}`}>
-          <SessionListPage
-            sessionMgr={sessionMgrRef.current}
-            onSelectSession={handleSelectSession}
-            onOpenWorkspace={handleOpenWorkspace}
-            onDisconnect={handleDisconnect}
-            onOpenDevices={() => navigateTo('devices', 'push')}
-          />
-        </div>
-      )}
-      {shouldShow('chat') && sessionMgrRef.current && activeSessionId && (
-        <div className={`nav-page ${getNavClass('chat', currentPage, navDir, isAnimating)}`}>
-          <Suspense fallback={<div className="spinner" aria-hidden="true" />}>
-            <ChatPage
-              sessionMgr={sessionMgrRef.current}
-              sessionId={activeSessionId}
-              sessionName={activeSessionName}
-              onBack={handleBackToSessions}
-              autoFocus={chatAutoFocus}
-            />
-          </Suspense>
-        </div>
+      {!isWideLayout && (
+        <>
+          {shouldShow('workspace') && sessionMgrRef.current && (
+            <div className={`nav-page ${getNavClass('workspace', currentPage, navDir, isAnimating)}`}>
+              <WorkspacePage
+                sessionMgr={sessionMgrRef.current}
+                onReady={handleWorkspaceReady}
+                onBack={doPopFromWorkspace}
+              />
+            </div>
+          )}
+          {shouldShow('devices') && clientRef.current && (
+            <div className={`nav-page ${getNavClass('devices', currentPage, navDir, isAnimating)}`}>
+              <DevicesPage
+                client={clientRef.current}
+                onBack={doPopFromDevices}
+              />
+            </div>
+          )}
+          {(shouldShow('sessions') || shouldShow('chat')) && sessionMgrRef.current && (
+            <div className={`nav-page compact-remote-shell${compactSidebarOpen ? ' is-sidebar-open' : ''}`}>
+              <aside
+                className="compact-remote-shell__sidebar"
+                aria-label={t('sessions.sessionHistory')}
+                aria-hidden={!compactSidebarOpen}
+              >
+                <SessionListPage
+                  sessionMgr={sessionMgrRef.current}
+                  client={clientRef.current ?? undefined}
+                  compact
+                  activeSessionId={activeSessionId}
+                  onSelectSession={handleSelectSession}
+                  onOpenWorkspace={handleOpenWorkspace}
+                  onDisconnect={handleDisconnect}
+                  onOpenDevices={() => navigateTo('devices', 'push')}
+                  onControlTargetChanged={handleControlTargetChanged}
+                />
+              </aside>
+              <button
+                type="button"
+                className="compact-remote-shell__scrim"
+                aria-label={t('common.close')}
+                onClick={() => setCompactSidebarOpen(false)}
+              />
+              <section className="compact-remote-shell__main">
+                {currentPage === 'chat' && activeSessionId ? (
+                  <Suspense fallback={<div className="spinner" aria-hidden="true" />}>
+                    <ChatPage
+                      sessionMgr={sessionMgrRef.current}
+                      sessionId={activeSessionId}
+                      sessionName={activeSessionName}
+                      onBack={() => setCompactSidebarOpen(true)}
+                      autoFocus={chatAutoFocus}
+                    />
+                  </Suspense>
+                ) : (
+                  <RemoteHomePanel
+                    onOpenSidebar={() => setCompactSidebarOpen(true)}
+                    onOpenWorkspace={handleOpenWorkspace}
+                    onStartConversation={handleStartConversation}
+                    conversationStarting={homeConversationStarting}
+                  />
+                )}
+              </section>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

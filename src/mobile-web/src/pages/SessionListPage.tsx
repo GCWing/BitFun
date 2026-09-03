@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import LanguageToggleButton from '../components/LanguageToggleButton';
 import { useControlTargetEpoch } from '../hooks/useControlTargetEpoch';
 import { useI18n } from '../i18n';
@@ -11,6 +12,10 @@ import {
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
 import logoIcon from '../assets/Logo-ICON.png';
+import {
+  isDelegatedIdentityChangedError,
+  type RelayHttpClient,
+} from '../services/RelayHttpClient';
 
 const PAGE_SIZE = 30;
 
@@ -23,10 +28,69 @@ type DisplayMode = 'pro' | 'assistant';
 
 interface SessionListPageProps {
   sessionMgr: RemoteSessionManager;
+  client?: RelayHttpClient;
+  compact?: boolean;
+  activeSessionId?: string | null;
   onSelectSession: (sessionId: string, sessionName?: string, isNew?: boolean) => void;
   onOpenWorkspace: () => void;
   onDisconnect: () => void;
   onOpenDevices?: () => void;
+  onControlTargetChanged?: () => void;
+}
+
+type CompactDevice = {
+  device_id: string;
+  device_name: string;
+  online: boolean;
+};
+
+type CompactWorkspaceLoadStatus = 'idle' | 'loading' | 'ready' | 'failed';
+
+function compactWorkspaceKey(workspace: RecentWorkspaceEntry): string {
+  return `${workspace.remote_connection_id ?? 'local'}:${workspace.remote_ssh_host ?? ''}:${workspace.path}`;
+}
+
+function mergeCompactWorkspaces(
+  recent: RecentWorkspaceEntry[],
+  currentWorkspace: {
+    path?: string;
+    project_name?: string;
+    workspace_kind?: 'normal' | 'assistant' | 'remote';
+    remote_connection_id?: string;
+    remote_ssh_host?: string;
+  } | null,
+  sessions: SessionInfo[],
+): RecentWorkspaceEntry[] {
+  const merged: RecentWorkspaceEntry[] = [];
+  const seen = new Set<string>();
+  const append = (workspace: RecentWorkspaceEntry) => {
+    if (!workspace.path) return;
+    const key = compactWorkspaceKey(workspace);
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(workspace);
+  };
+
+  if (currentWorkspace?.path) {
+    append({
+      path: currentWorkspace.path,
+      name: currentWorkspace.project_name || currentWorkspace.path.split('/').filter(Boolean).pop() || currentWorkspace.path,
+      last_opened: '',
+      workspace_kind: currentWorkspace.workspace_kind,
+      remote_connection_id: currentWorkspace.remote_connection_id,
+      remote_ssh_host: currentWorkspace.remote_ssh_host,
+    });
+  }
+  recent.forEach(append);
+  sessions.forEach((session) => {
+    if (!session.workspace_path) return;
+    append({
+      path: session.workspace_path,
+      name: session.workspace_name || session.workspace_path.split('/').filter(Boolean).pop() || session.workspace_path,
+      last_opened: session.updated_at,
+    });
+  });
+  return merged;
 }
 
 type SessionListTargetOwner = {
@@ -144,6 +208,29 @@ function SessionTypeIcon({ agentType }: { agentType: string }) {
   );
 }
 
+function CompactDeviceIcon({ name }: { name: string }) {
+  const normalized = name.toLocaleLowerCase();
+  if (/(macbook|laptop|notebook)/.test(normalized)) {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2.5 19h19M7 19l1-4h8l1 4"/>
+      </svg>
+    );
+  }
+  if (/(server|ecs|cloud|host)/.test(normalized)) {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="3" width="16" height="6" rx="2"/><rect x="4" y="15" width="16" height="6" rx="2"/><path d="M8 6h.01M8 18h.01M12 9v6"/>
+      </svg>
+    );
+  }
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="14" rx="2.4"/><path d="M8 21h8M12 18v3"/>
+    </svg>
+  );
+}
+
 /* Mode Selection Icons */
 const ProModeIcon = () => (
   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -179,7 +266,17 @@ const ThemeToggleIcon: React.FC<{ isDark: boolean }> = ({ isDark }) => (
   </svg>
 );
 
-const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace, onDisconnect, onOpenDevices }) => {
+const SessionListPage: React.FC<SessionListPageProps> = ({
+  sessionMgr,
+  client,
+  compact = false,
+  activeSessionId,
+  onSelectSession,
+  onOpenWorkspace,
+  onDisconnect,
+  onOpenDevices,
+  onControlTargetChanged,
+}) => {
   const renameInputCompositionActiveRef = useRef(false);
   const { t, formatDate } = useI18n();
   const {
@@ -195,6 +292,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     authenticatedUserLabel,
     connectionHealth,
     controlTarget,
+    setControlTarget,
+    resetForDeviceSwitch,
   } = useMobileStore();
   const { isDark, toggleTheme } = useTheme();
   const [creating, setCreating] = useState(false);
@@ -232,6 +331,20 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [actionToast, setActionToast] = useState<string | null>(null);
 
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [compactSearchOpen, setCompactSearchOpen] = useState(false);
+  const [compactDevices, setCompactDevices] = useState<CompactDevice[]>([]);
+  const [compactDirectoryLoading, setCompactDirectoryLoading] = useState(false);
+  const [compactSelectedDeviceId, setCompactSelectedDeviceId] = useState<string | null>(
+    () => client?.pairedDeviceId ?? null,
+  );
+  const [compactSwitchingDeviceId, setCompactSwitchingDeviceId] = useState<string | null>(null);
+  const [compactExpandedWorkspaces, setCompactExpandedWorkspaces] = useState<Set<string>>(() => new Set());
+  const [compactWorkspaceSessions, setCompactWorkspaceSessions] = useState<Record<string, SessionInfo[]>>({});
+  const [compactWorkspaceStatuses, setCompactWorkspaceStatuses] = useState<Record<string, CompactWorkspaceLoadStatus>>({});
+  const [compactVisibleSessionCounts, setCompactVisibleSessionCounts] = useState<Record<string, number>>({});
+  const [compactVisibleDeviceCount, setCompactVisibleDeviceCount] = useState(3);
+  const [compactVisibleWorkspaceCount, setCompactVisibleWorkspaceCount] = useState(3);
+  const [compactSettingsOpen, setCompactSettingsOpen] = useState(false);
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const longPressPosRef = useRef({ x: 0, y: 0 });
@@ -422,6 +535,15 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       setActionToast(null);
       setShowDisconnectConfirm(false);
       setSearchQuery('');
+      setCompactSelectedDeviceId(client?.pairedDeviceId ?? null);
+      setCompactSwitchingDeviceId(null);
+      setCompactExpandedWorkspaces(new Set());
+      setCompactWorkspaceSessions({});
+      setCompactWorkspaceStatuses({});
+      setCompactVisibleSessionCounts({});
+      setCompactVisibleDeviceCount(3);
+      setCompactVisibleWorkspaceCount(3);
+      setCompactSettingsOpen(false);
       setDisplayMode('pro');
       setHasMore(false);
       setSessions([]);
@@ -439,6 +561,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     };
   }, [
     controlTargetEpoch,
+    client,
     sessionMgr,
     setCurrentAssistant,
     setCurrentWorkspace,
@@ -527,6 +650,207 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       }
     }
   }, [captureSessionListEpoch, isSessionListCurrent, sessionMgr, setError]);
+
+  const loadCompactDirectory = useCallback(async () => {
+    if (!compact) return;
+    setCompactDirectoryLoading(true);
+    try {
+      const tasks: Promise<unknown>[] = [loadWorkspaceList()];
+      if (client?.hasDelegatedIdentity) {
+        tasks.push(client.listDevices().then((list) => {
+          setCompactDevices(list.filter((device) => (
+            device.device_id !== client.controllerDeviceId
+          )));
+        }));
+      }
+      await Promise.all(tasks);
+    } catch (e: any) {
+      setError(e?.message || t('devices.loadFailed'));
+    } finally {
+      setCompactDirectoryLoading(false);
+    }
+  }, [client, compact, loadWorkspaceList, setError, t]);
+
+  const loadCompactWorkspaceCatalog = useCallback(async (expectedTargetEpoch: number) => {
+    if (!compact || !client) return;
+    setCompactDirectoryLoading(true);
+    try {
+      const workspaces = await sessionMgr.listRecentWorkspaces();
+      if (client.controlTargetEpoch !== expectedTargetEpoch) return;
+      setWorkspaceList(workspaces);
+    } catch (error: unknown) {
+      if (
+        client.controlTargetEpoch === expectedTargetEpoch
+        && !isRemoteControlTargetChangedError(error)
+      ) {
+        setError(String((error as { message?: string })?.message || error));
+      }
+    } finally {
+      if (client.controlTargetEpoch === expectedTargetEpoch) {
+        setCompactDirectoryLoading(false);
+      }
+    }
+  }, [client, compact, sessionMgr, setError]);
+
+  useEffect(() => {
+    if (!compact) return;
+    void loadCompactDirectory();
+  }, [compact, loadCompactDirectory]);
+
+  const handleSelectCompactDevice = useCallback(async (device: CompactDevice) => {
+    if (!client || !device.online || compactSwitchingDeviceId) return;
+    setCompactSelectedDeviceId(device.device_id);
+    if (client.pairedDeviceId === device.device_id) {
+      await loadCompactWorkspaceCatalog(client.controlTargetEpoch);
+      return;
+    }
+    const accountEpoch = client.delegatedAccountEpoch;
+    const targetEpoch = client.controlTargetEpoch;
+    setCompactSwitchingDeviceId(device.device_id);
+    setError(null);
+    try {
+      const ping = await client.sendDeviceRpc<{ resp?: string; ok?: boolean; error?: string }>(
+        device.device_id,
+        {
+          cmd: 'host_invoke',
+          command: 'peer_mode_ping',
+          args: {},
+        },
+        { retryable: true },
+      );
+      if (
+        client.delegatedAccountEpoch !== accountEpoch
+        || client.controlTargetEpoch !== targetEpoch
+      ) return;
+      if (ping.resp === 'host_invoke_result' && ping.ok === false) {
+        throw new Error(ping.error || t('devices.switchFailed'));
+      }
+      client.setPairedDeviceId(device.device_id);
+      const switchedTargetEpoch = client.controlTargetEpoch;
+      resetForDeviceSwitch();
+      setControlTarget({
+        deviceId: device.device_id,
+        deviceName: device.device_name || null,
+        isHome: device.device_id === client.homeDeviceId,
+      });
+      onControlTargetChanged?.();
+      await loadCompactWorkspaceCatalog(switchedTargetEpoch);
+    } catch (error: unknown) {
+      if (isDelegatedIdentityChangedError(error)) return;
+      const message = String((error as { message?: string })?.message || error);
+      setError(message || t('devices.switchFailed'));
+    } finally {
+      setCompactSwitchingDeviceId((current) => (
+        current === device.device_id ? null : current
+      ));
+    }
+  }, [
+    client,
+    compactSwitchingDeviceId,
+    loadCompactWorkspaceCatalog,
+    onControlTargetChanged,
+    resetForDeviceSwitch,
+    setControlTarget,
+    setError,
+    t,
+  ]);
+
+  const handleToggleCompactWorkspace = useCallback(async (workspace: RecentWorkspaceEntry) => {
+    const key = compactWorkspaceKey(workspace);
+    if (compactExpandedWorkspaces.has(key)) {
+      setCompactExpandedWorkspaces((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+      return;
+    }
+
+    setCompactExpandedWorkspaces((current) => new Set(current).add(key));
+    if (compactWorkspaceStatuses[key] === 'ready' || compactWorkspaceStatuses[key] === 'loading') {
+      return;
+    }
+
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
+    setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'loading' }));
+    try {
+      const response = await sessionMgr.listSessions(workspace.path, PAGE_SIZE, 0, '', {
+        remoteConnectionId: workspace.remote_connection_id,
+        remoteSshHost: workspace.remote_ssh_host,
+      });
+      if (!isSessionListCurrent(targetEpoch)) return;
+      setCompactWorkspaceSessions((current) => ({ ...current, [key]: response.sessions }));
+      setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'ready' }));
+      setCompactVisibleSessionCounts((current) => ({ ...current, [key]: 3 }));
+    } catch (error: unknown) {
+      if (!isSessionListCurrent(targetEpoch) || isRemoteControlTargetChangedError(error)) return;
+      setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'failed' }));
+    }
+  }, [
+    captureSessionListEpoch,
+    compactExpandedWorkspaces,
+    compactWorkspaceStatuses,
+    isSessionListCurrent,
+    sessionMgr,
+  ]);
+
+  const handleRetryCompactWorkspace = useCallback(async (workspace: RecentWorkspaceEntry) => {
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
+    const key = compactWorkspaceKey(workspace);
+    setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'loading' }));
+    try {
+      const response = await sessionMgr.listSessions(workspace.path, PAGE_SIZE, 0, '', {
+        remoteConnectionId: workspace.remote_connection_id,
+        remoteSshHost: workspace.remote_ssh_host,
+      });
+      if (!isSessionListCurrent(targetEpoch)) return;
+      setCompactWorkspaceSessions((current) => ({ ...current, [key]: response.sessions }));
+      setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'ready' }));
+      setCompactVisibleSessionCounts((current) => ({ ...current, [key]: 3 }));
+    } catch (error: unknown) {
+      if (!isSessionListCurrent(targetEpoch) || isRemoteControlTargetChangedError(error)) return;
+      setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'failed' }));
+    }
+  }, [captureSessionListEpoch, isSessionListCurrent, sessionMgr]);
+
+  const handleCreateInCompactWorkspace = useCallback(async (workspace: RecentWorkspaceEntry) => {
+    if (creating || targetInitializingRef.current) return;
+    const targetEpoch = captureSessionListEpoch();
+    if (targetEpoch === null) return;
+    setCreating(true);
+    try {
+      const identity = {
+        remoteConnectionId: workspace.remote_connection_id,
+        remoteSshHost: workspace.remote_ssh_host,
+      };
+      const sessionId = await sessionMgr.createSession('code', undefined, workspace.path, identity);
+      if (!isSessionListCurrent(targetEpoch)) return;
+      const response = await sessionMgr.listSessions(workspace.path, PAGE_SIZE, 0, '', identity);
+      if (!isSessionListCurrent(targetEpoch)) return;
+      const key = compactWorkspaceKey(workspace);
+      setCompactExpandedWorkspaces((current) => new Set(current).add(key));
+      setCompactWorkspaceSessions((current) => ({ ...current, [key]: response.sessions }));
+      setCompactWorkspaceStatuses((current) => ({ ...current, [key]: 'ready' }));
+      setCompactVisibleSessionCounts((current) => ({ ...current, [key]: 3 }));
+      onSelectSession(sessionId, t('sessions.remoteCodeSession'), true);
+    } catch (error: unknown) {
+      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(error)) {
+        setError(String((error as { message?: string })?.message || error));
+      }
+    } finally {
+      if (isSessionListCurrent(targetEpoch)) setCreating(false);
+    }
+  }, [
+    captureSessionListEpoch,
+    creating,
+    isSessionListCurrent,
+    onSelectSession,
+    sessionMgr,
+    setError,
+    t,
+  ]);
 
   const handleSelectWorkspace = useCallback(async (workspace: {
     path: string;
@@ -944,13 +1268,329 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const assistantDisplayName = currentAssistant?.name || t('shared.agents.default');
   const isProMode = displayMode === 'pro';
 
+  if (compact) {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const visibleSessions = sessions.filter((session) => (
+      query.length === 0 || (session.name || '').toLocaleLowerCase().includes(query)
+    ));
+    const compactWorkspaces = mergeCompactWorkspaces(workspaceList, currentWorkspace, sessions);
+    const projectedCompactDevices = compactDevices.some((device) => (
+      device.device_id === client?.pairedDeviceId
+    )) || !client?.pairedDeviceId
+      ? compactDevices
+      : [{
+          device_id: client.pairedDeviceId,
+          device_name: controlTarget?.deviceName || client.pairedDeviceId,
+          online: connectionHealth !== 'unreachable',
+        }, ...compactDevices];
+
+    return (
+      <div className="harmony-sidebar">
+        <header className="harmony-sidebar__header">
+          <h1>BitFun</h1>
+          <button
+            type="button"
+            className="harmony-sidebar__round-action"
+            aria-label={t('shared.tools.search')}
+            onClick={() => {
+              setCompactSearchOpen((open) => !open);
+              if (compactSearchOpen) setSearchQuery('');
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m16.5 16.5 4 4" />
+            </svg>
+          </button>
+        </header>
+
+        {compactSearchOpen && (
+          <input
+            className="harmony-sidebar__search"
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t('sessions.searchSessions')}
+            autoFocus
+          />
+        )}
+
+        <div className="harmony-sidebar__scroll">
+          <section className="harmony-sidebar__section">
+            <div className="harmony-sidebar__section-heading">
+              <h2>{t('devices.title')}</h2>
+              <span className="harmony-sidebar__heading-actions">
+                <button type="button" aria-label={t('devices.refresh')} onClick={() => void loadCompactDirectory()}>
+                  <svg className={compactDirectoryLoading ? 'is-spinning' : ''} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/>
+                  </svg>
+                </button>
+                <button type="button" aria-label={t('devices.title')} onClick={onOpenDevices}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
+                </button>
+              </span>
+            </div>
+            <div className="harmony-sidebar__rows">
+              {projectedCompactDevices.slice(0, compactVisibleDeviceCount).map((device) => {
+                const isCurrent = device.device_id === compactSelectedDeviceId;
+                const isSwitching = device.device_id === compactSwitchingDeviceId;
+                return (
+                  <button
+                    type="button"
+                    className={`harmony-sidebar__device-row${isCurrent ? ' is-current' : ''}`}
+                    key={device.device_id}
+                    disabled={!device.online || (!!compactSwitchingDeviceId && !isSwitching)}
+                    onClick={() => void handleSelectCompactDevice(device)}
+                  >
+                    <span className="harmony-sidebar__device-icon" aria-hidden="true">
+                      <CompactDeviceIcon name={device.device_name || device.device_id}/>
+                    </span>
+                    <span className="harmony-sidebar__row-label">{device.device_name || device.device_id}</span>
+                    {isSwitching
+                      ? <span className="spinner harmony-sidebar__row-spinner"/>
+                      : <span className={`harmony-sidebar__status${device.online ? ' is-online' : ''}`}/>}
+                    <span className={`harmony-sidebar__chevron${isCurrent ? ' is-expanded' : ''}`} aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 2.5 4.5 4.5-4.5 4.5"/></svg>
+                    </span>
+                  </button>
+                );
+              })}
+              {projectedCompactDevices.length > compactVisibleDeviceCount && (
+                <button type="button" className="harmony-sidebar__more-row" onClick={() => setCompactVisibleDeviceCount((count) => count + 3)}>
+                  <span>···</span>{t('shell.moreDevices', { count: projectedCompactDevices.length - compactVisibleDeviceCount })}
+                </button>
+              )}
+            </div>
+          </section>
+
+          {compactSelectedDeviceId && (
+            <section className="harmony-sidebar__section harmony-sidebar__section--workspaces">
+              <div className="harmony-sidebar__section-heading">
+                <h2>{t('shared.features.workspace')}</h2>
+                <button type="button" aria-label={t('workspace.selectWorkspace')} onClick={onOpenWorkspace}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
+                </button>
+              </div>
+              <div className="harmony-sidebar__rows">
+                {compactDirectoryLoading && compactWorkspaces.length === 0 && (
+                  <p className="harmony-sidebar__empty"><span className="spinner" />{t('common.loading')}</p>
+                )}
+                {!compactDirectoryLoading && compactWorkspaces.length === 0 && (
+                  <p className="harmony-sidebar__empty">{t('sessions.noWorkspaces')}</p>
+                )}
+                {compactWorkspaces.slice(0, compactVisibleWorkspaceCount).map((workspace) => {
+                  const key = compactWorkspaceKey(workspace);
+                  const expanded = compactExpandedWorkspaces.has(key);
+                  const projectedSessions = sessions.filter((session) => (
+                    (session.workspace_path || currentWorkspace?.path) === workspace.path
+                  ));
+                  const workspaceSessions = compactWorkspaceSessions[key] ?? projectedSessions;
+                  const status = compactWorkspaceStatuses[key]
+                    ?? (projectedSessions.length > 0 ? 'ready' : 'idle');
+                  const visibleCount = compactVisibleSessionCounts[key] ?? 3;
+                  const current = currentWorkspace?.path === workspace.path
+                    && currentWorkspace?.remote_connection_id === workspace.remote_connection_id;
+                  return (
+                    <div className="harmony-sidebar__workspace-group" key={key}>
+                      <div className={`harmony-sidebar__workspace-row${current ? ' is-current' : ''}`}>
+                        <button type="button" className={`harmony-sidebar__workspace-disclosure${expanded ? ' is-expanded' : ''}`} onClick={() => void handleToggleCompactWorkspace(workspace)} aria-label={expanded ? t('common.close') : t('sessions.sessionHistory')}>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 2.5 4.5 4.5-4.5 4.5"/></svg>
+                        </button>
+                        <button type="button" className="harmony-sidebar__workspace-main" onClick={() => void handleToggleCompactWorkspace(workspace)}>
+                          <span className="harmony-sidebar__folder-icon" aria-hidden="true">
+                            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4l2 2h7A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                          </span>
+                          <span className="harmony-sidebar__row-label">{workspace.name || workspace.path}</span>
+                        </button>
+                        <button type="button" className="harmony-sidebar__row-plus" onClick={() => void handleCreateInCompactWorkspace(workspace)} aria-label={t('shell.newChat')} disabled={creating}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 4v16M4 12h16"/></svg>
+                        </button>
+                      </div>
+                      {expanded && (
+                        <div className="harmony-sidebar__workspace-sessions">
+                          {status === 'loading' && <p className="harmony-sidebar__workspace-message"><span className="spinner"/>{t('sessions.loadingSessions')}</p>}
+                          {status === 'failed' && <button type="button" className="harmony-sidebar__workspace-message" onClick={() => void handleRetryCompactWorkspace(workspace)}>{t('devices.retry')}</button>}
+                          {status === 'ready' && workspaceSessions.length === 0 && <p className="harmony-sidebar__workspace-message">{t('sessions.noSessions')}</p>}
+                          {workspaceSessions.slice(0, visibleCount).map((session) => (
+                            <button type="button" className={`harmony-sidebar__workspace-session${activeSessionId === session.session_id ? ' is-current' : ''}`} key={session.session_id} onClick={(event) => handleSessionClick(session, event)}>
+                              <span className="harmony-sidebar__session-icon" aria-hidden="true"><SessionTypeIcon agentType={session.agent_type}/></span>
+                              <span className="harmony-sidebar__row-label">{session.name || t('sessions.untitledSession')}</span>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></svg>
+                            </button>
+                          ))}
+                          {workspaceSessions.length > visibleCount && (
+                            <button type="button" className="harmony-sidebar__more-row harmony-sidebar__more-row--nested" onClick={() => setCompactVisibleSessionCounts((counts) => ({ ...counts, [key]: visibleCount + 3 }))}>
+                              <span>···</span>{t('shell.moreConversations', { count: workspaceSessions.length - visibleCount })}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {compactWorkspaces.length > compactVisibleWorkspaceCount && (
+                  <button type="button" className="harmony-sidebar__more-row" onClick={() => setCompactVisibleWorkspaceCount((count) => count + 3)}>
+                    <span>···</span>{t('shell.moreWorkspaces', { count: compactWorkspaces.length - compactVisibleWorkspaceCount })}
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section className="harmony-sidebar__section harmony-sidebar__section--conversations">
+            <div className="harmony-sidebar__section-heading harmony-sidebar__section-heading--plain">
+              <h2>{t('shell.recentConversations')}</h2>
+            </div>
+            {visibleSessions.length === 0 ? (
+              <p className="harmony-sidebar__empty">{hasSearchQuery ? t('sessions.emptySearch') : t('sessions.noSessions')}</p>
+            ) : (
+              <div className="harmony-sidebar__rows">
+                {visibleSessions.slice(0, 6).map((session) => (
+                  <button
+                    type="button"
+                    className={`harmony-sidebar__session-row${activeSessionId === session.session_id ? ' is-current' : ''}`}
+                    key={session.session_id}
+                    onClick={(event) => handleSessionClick(session, event)}
+                  >
+                    <span className="harmony-sidebar__session-icon" aria-hidden="true"><SessionTypeIcon agentType={session.agent_type}/></span>
+                    <span className="harmony-sidebar__row-label">{session.name || t('sessions.untitledSession')}</span>
+                    <span className="harmony-sidebar__session-more" aria-hidden="true">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18" cy="12" r="1.25"/></svg>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <footer className="harmony-sidebar__footer">
+          <button type="button" className="harmony-sidebar__new-chat" onClick={() => void handleCreate(isProMode ? 'code' : 'claw')} disabled={creating || targetInitializing}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>
+            <span>{t('shell.newChat')}</span>
+          </button>
+          <button type="button" className="harmony-sidebar__settings" onClick={() => setCompactSettingsOpen(true)} aria-label={t('shared.features.settings')}>
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.09A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.09A1.7 1.7 0 0 0 15 4.2a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7 1z"/></svg>
+          </button>
+        </footer>
+
+        {compactSettingsOpen && createPortal((
+          <div className="harmony-sidebar__sheet-backdrop" onClick={() => setCompactSettingsOpen(false)}>
+            <section className="harmony-sidebar__settings-sheet" role="dialog" aria-modal="true" aria-labelledby="compact-settings-title" onClick={(event) => event.stopPropagation()}>
+              <header>
+                <h2 id="compact-settings-title">{t('shared.features.settings')}</h2>
+                <button type="button" onClick={() => setCompactSettingsOpen(false)} aria-label={t('common.close')}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+              </header>
+              <div className="harmony-sidebar__settings-scroll">
+                <h3>{t('settings.accountSection')}</h3>
+                <div className="harmony-sidebar__account-card">
+                  <span className="harmony-sidebar__account-avatar" aria-hidden="true">
+                    {(authenticatedUserLabel || 'B').slice(0, 1).toLocaleUpperCase()}
+                  </span>
+                  <span className="harmony-sidebar__account-copy">
+                    <strong>{t('settings.currentAccount')}</strong>
+                    <small>{authenticatedUserLabel || t('shared.product.remote')}</small>
+                  </span>
+                  <span className="harmony-sidebar__verified">{t('settings.signedIn')}</span>
+                </div>
+
+                <h3>{t('settings.generalSection')}</h3>
+                <div className="harmony-sidebar__settings-card">
+                  <button type="button" className="harmony-sidebar__settings-row" onClick={toggleTheme}>
+                    <span className="harmony-sidebar__settings-row-icon"><ThemeToggleIcon isDark={isDark}/></span>
+                    <span>{t('settings.appearance')}</span>
+                    <small>{isDark ? 'Dark' : 'Light'}</small>
+                    <span className="harmony-sidebar__settings-chevron">›</span>
+                  </button>
+                  <div className="harmony-sidebar__settings-row">
+                    <span className="harmony-sidebar__settings-row-icon" aria-hidden="true">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.45 3.3 5.45 3.3 9S14.2 18.55 12 21M12 3C9.8 5.45 8.7 8.45 8.7 12s1.1 6.55 3.3 9"/>
+                      </svg>
+                    </span>
+                    <span>{t('settings.language')}</span>
+                    <LanguageToggleButton className="harmony-sidebar__settings-language"/>
+                    <span className="harmony-sidebar__settings-chevron">›</span>
+                  </div>
+                </div>
+
+                <h3>{t('settings.modelSection')}</h3>
+                <div className="harmony-sidebar__settings-card">
+                  <div className="harmony-sidebar__settings-row">
+                    <span className="harmony-sidebar__settings-row-icon" aria-hidden="true">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+                    </span>
+                    <span>{t('settings.defaultModel')}</span>
+                    <small>{t('settings.followDesktop')}</small>
+                  </div>
+                </div>
+
+                <h3>{t('settings.devicesSection')}</h3>
+                <div className="harmony-sidebar__settings-card harmony-sidebar__settings-card--devices">
+                  {projectedCompactDevices.map((device) => {
+                    const current = device.device_id === compactSelectedDeviceId;
+                    return (
+                      <button type="button" className={`harmony-sidebar__settings-device${current ? ' is-current' : ''}`} key={device.device_id} disabled={!device.online} onClick={() => void handleSelectCompactDevice(device)}>
+                        <span className="harmony-sidebar__settings-device-icon"><CompactDeviceIcon name={device.device_name || device.device_id}/></span>
+                        <span className="harmony-sidebar__account-copy">
+                          <strong>{device.device_name || device.device_id}</strong>
+                          <small>{current ? t('settings.currentDevice') : device.online ? t('devices.online') : t('devices.offline')}</small>
+                        </span>
+                        <span className={`harmony-sidebar__status${device.online ? ' is-online' : ''}`}/>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <h3>{t('settings.aboutSection')}</h3>
+                <div className="harmony-sidebar__settings-card">
+                  <div className="harmony-sidebar__settings-row harmony-sidebar__settings-row--static"><span>{t('shared.product.remote')}</span><small>{t('settings.platform')}</small></div>
+                </div>
+
+                <button type="button" className="harmony-sidebar__settings-disconnect" onClick={() => { setCompactSettingsOpen(false); setShowDisconnectConfirm(true); }}>
+                  {t('sessions.disconnect')}
+                </button>
+              </div>
+            </section>
+          </div>
+        ), document.body)}
+
+        {showDisconnectConfirm && createPortal((
+          <div
+            className="session-list__picker-overlay"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="compact-disconnect-confirm-title"
+            aria-describedby="compact-disconnect-confirm-desc"
+            onClick={() => setShowDisconnectConfirm(false)}
+          >
+            <div className="session-list__confirm-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="session-list__confirm-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
+              </div>
+              <h3 id="compact-disconnect-confirm-title" className="session-list__confirm-title">{t('sessions.disconnect')}</h3>
+              <p id="compact-disconnect-confirm-desc" className="session-list__confirm-desc">{t('sessions.disconnectConfirm')}</p>
+              <div className="session-list__confirm-actions">
+                <button className="session-list__confirm-btn session-list__confirm-btn--cancel" onClick={() => setShowDisconnectConfirm(false)} autoFocus>{t('common.cancel')}</button>
+                <button className="session-list__confirm-btn session-list__confirm-btn--danger" onClick={() => { setShowDisconnectConfirm(false); onDisconnect(); }}>{t('sessions.disconnect')}</button>
+              </div>
+            </div>
+          </div>
+        ), document.body)}
+      </div>
+    );
+  }
+
   return (
     <div className="session-list">
       <div className="session-list__header">
         <div className="session-list__header-brand">
           <img src={logoIcon} alt="BitFun" className="session-list__logo" />
           <div className="session-list__header-copy">
-            <h1>{t('shared.product.remote')}</h1>
+            <h1>BitFun</h1>
             {authenticatedUserLabel && (
               <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
@@ -1018,7 +1658,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         {showResumeCard && (
           <button
             type="button"
-            className="session-list__resume-card"
+            className={`session-list__resume-card${activeSessionId === sessions[0].session_id ? ' is-selected' : ''}`}
             onClick={(e) => handleSessionClick(sessions[0], e)}
             onTouchStart={(e) => handleSessionTouchStart(sessions[0], e)}
             onTouchMove={handleSessionTouchMove}
@@ -1322,7 +1962,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 {sessions.slice(showResumeCard ? 1 : 0).map((s) => (
                   <div
                     key={s.session_id}
-                    className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}`}
+                    className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}${activeSessionId === s.session_id ? ' is-selected' : ''}`}
                     onClick={(e) => handleSessionClick(s, e)}
                     onTouchStart={(e) => handleSessionTouchStart(s, e)}
                     onTouchMove={handleSessionTouchMove}
