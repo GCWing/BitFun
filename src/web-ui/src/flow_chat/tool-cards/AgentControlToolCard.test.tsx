@@ -160,7 +160,7 @@ describeWithJsdom('AgentControlToolCard', () => {
   });
 
   it.each(['AgentSpawn', 'AgentSendInput'] as const)(
-    'shares the agent pill, status, and expandable prompt for %s',
+    'shares the design-system agent summary, status, and expandable prompt for %s',
     async (toolName) => {
       await act(async () => {
         root.render(
@@ -173,21 +173,23 @@ describeWithJsdom('AgentControlToolCard', () => {
       });
 
       const card = container.querySelector<HTMLElement>('[data-bf-tool-card="agent-control"]');
-      const pill = card?.querySelector<HTMLButtonElement>('[data-bf-part="agentIdentity"]');
+      const identity = card?.querySelector<HTMLElement>('[data-bf-part="agentIdentity"]');
+      const openButton = card?.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
       const toggle = card?.querySelector<HTMLElement>('[data-bf-part="surface"]');
       expect(card?.getAttribute('data-bf-attention')).toBe('prominent');
-      expect(pill?.textContent?.trim()).toBeTruthy();
-      expect(pill?.textContent).toContain(
+      expect(identity?.textContent?.trim()).toBeTruthy();
+      expect(identity?.textContent).toContain(
         toolName === 'AgentSpawn' ? 'Parser review worker 2' : 'Agent 1',
       );
-      expect(pill?.textContent).not.toContain(
+      expect(identity?.textContent).not.toContain(
         toolName === 'AgentSpawn' ? 'parser_review-worker_2' : 'agent-1',
       );
-      expect(pill?.querySelector('[data-bf-component="subagent-avatar"]')).not.toBeNull();
+      expect(card?.querySelector('[data-bf-part="avatar"] [data-bf-component="subagent-avatar"]')).not.toBeNull();
       expect(container.querySelector('[data-bf-part="type"]')).toBeNull();
       expect(container.textContent).not.toContain('SwarmWorker');
       expect(container.textContent).toContain('Running');
-      expect(card?.querySelector('[data-bf-part="expandIndicator"]')).not.toBeNull();
+      expect(card?.querySelector('[data-bf-part="affordanceButton"]')).not.toBeNull();
+      expect(card?.querySelector('[data-bf-part="processing"]')).not.toBeNull();
       expect(container.textContent).not.toContain(
         toolName === 'AgentSpawn'
           ? 'Inspect the parser flow and report findings.'
@@ -204,7 +206,7 @@ describeWithJsdom('AgentControlToolCard', () => {
       );
 
       await act(async () => {
-        pill!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       });
       expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(expect.objectContaining({
         childSessionId: 'child-session',
@@ -288,7 +290,7 @@ describeWithJsdom('AgentControlToolCard', () => {
         .querySelector('[data-bf-tool-card="agent-control"] [data-bf-part="surface"]')
         ?.getAttribute('data-bf-interactive'),
     ).toBe('false');
-    expect(container.querySelector('[data-bf-part="expandIndicator"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="affordanceButton"]')).toBeNull();
     expect(container.textContent).not.toContain('Inspect the parser flow and report findings.');
     expect(
       container.querySelector('[data-bf-part="expandedCollapse"]')?.getAttribute('aria-hidden'),

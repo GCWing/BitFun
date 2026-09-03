@@ -1,5 +1,5 @@
 
-import { IconButton, Icon } from '@bitfun/ui';
+import { ToolCardCopyButton } from '@bitfun/ui/flow-chat';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 
 export interface ToolCardCopyActionProps {
@@ -32,19 +32,14 @@ export function ToolCardCopyAction({
     showSuccessNotification,
   });
 
-  const label = copied ? (copiedTooltip ?? successMessage) : tooltip;
-
   return (
-    <IconButton
-      aria-label={ariaLabel ?? label}
+    <ToolCardCopyButton
       className={className}
-      data-bf-state={copied ? 'copied' : undefined}
+      copied={copied}
+      copiedLabel={copiedTooltip ?? successMessage}
       disabled={disabled}
-      icon={copied ? <Icon name="check-line" size="lg" aria-hidden="true" /> : <Icon name="duplicate" size="lg" aria-hidden="true" />}
-      onClick={copy}
-      size="sm"
-      title={label}
-      variant="quiet"
+      label={ariaLabel ?? tooltip}
+      onPress={copy}
     />
   );
 }

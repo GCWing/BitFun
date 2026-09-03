@@ -54,8 +54,11 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
   assert.equal(tokens["control.tabGroup.gap"], "8px");
   assert.equal(tokens["control.tabGroup.itemGap"], "6px");
   assert.equal(tokens["control.tabGroup.itemHeight"], "40px");
+  assert.equal(tokens["control.tabGroup.itemHeightSm"], "30px");
   assert.equal(tokens["control.tabGroup.itemIconSize"], "16px");
   assert.equal(tokens["control.tabGroup.itemPaddingInline"], "16px");
+  assert.equal(tokens["control.tabGroup.itemPaddingBlockSm"], "7px");
+  assert.equal(tokens["control.tabGroup.itemPaddingInlineSm"], "12px");
   assert.equal(tokens["control.tabGroup.itemActionSize"], "20px");
   assert.equal(tokens["control.tabGroup.itemActionInset"], "8px");
   assert.equal(systemDocument.control.tabGroup.itemRadius.$value, "{radius.pill}");
@@ -178,6 +181,14 @@ test("ChatComposer geometry preserves the scaled compact capsule contract", () =
   assert.equal(tokens["control.chatComposer.compactPaddingInline"], "9px");
   assert.equal(tokens["control.chatComposer.compactTrackHeight"], "25px");
   assert.equal(tokens["control.chatComposer.controlHeight"], "25px");
+});
+
+test("FlowChat rhythm keeps compact rows line-like and Turn boundaries distinct", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.toolCard.ambientRowMinBlockSize"], "22px");
+  assert.equal(systemDocument.control.flowChat.turnGap.$value, "{space.4}");
+  assert.equal(tokens["control.flowChat.turnGap"], "16px");
 });
 
 test("split-view content panels preserve the elevated shell curvature contract", async () => {

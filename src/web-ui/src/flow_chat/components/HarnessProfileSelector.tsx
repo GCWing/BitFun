@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip, type IconName } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -110,10 +109,10 @@ function HarnessProfileMark({
       aria-hidden
     >
       {profile === 'other' ? (
-        <Bot
+        <Icon
+          name="user"
           className="bitfun-harness-selector__density-frame"
-          size={15}
-          strokeWidth={1.45}
+          size="md"
         />
       ) : (
         <Icon
@@ -347,7 +346,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
             onKeyDown={handleTriggerKeyDown}
             leading={knownSelectedProfile
               ? <HarnessProfileMark profile={knownSelectedProfile} />
-              : <Bot size={15} strokeWidth={1.45} aria-hidden />}
+              : <Icon name="user" size="md" aria-hidden />}
             metadata={(
               <Icon
                 name="chevron-right"
@@ -497,7 +496,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                         checked={!creatingNewSession && connected}
                         data-bf-agent-id={agent.id}
                         data-bf-state={state}
-                        leading={<Bot size={15} strokeWidth={1.55} aria-hidden />}
+                        leading={<Icon name="user" size="md" aria-hidden />}
                         metadata={(
                           <span className="bitfun-harness-selector__profile-status">
                             {connected ? <Icon name="check-line" size="sm" style={{ width: 13, height: 13 }} aria-hidden /> : null}

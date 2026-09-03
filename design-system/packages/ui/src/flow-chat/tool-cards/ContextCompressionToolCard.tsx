@@ -3,7 +3,7 @@ import { Archive } from "lucide-react";
 import { classNames } from "../../internal/classNames";
 import {
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   type FlowChatToolStatus,
 } from "./FlowChatToolCard";
 import { ToolProcessingDots } from "./ToolProcessingDots";
@@ -48,8 +48,8 @@ export function ContextCompressionToolCard({
     >
       <ProminentToolCard
         errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
-        header={(
-          <ProminentToolCardHeader
+        summary={(
+          <ProminentToolCardSummary
             action={title}
             content={content !== undefined && content !== null ? (
               <span

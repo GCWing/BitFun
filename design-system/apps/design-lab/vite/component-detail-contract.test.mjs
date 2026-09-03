@@ -81,7 +81,7 @@ test("FlowChat component details are registry-driven and stack every state verti
   assert.match(preview, /ContextCompressionToolCard/);
   assert.match(preview, /FileOperationToolCard/);
   assert.match(preview, /ReadFileToolCard/);
-  assert.match(preview, /ToolCardHeaderActions/);
+  assert.match(preview, /ToolCardActions/);
   assert.match(styles, /\.flow-chat-state-list\s*\{[^}]*display:\s*grid/s);
   assert.match(styles, /\.flow-chat-state-list__item\s*\{[^}]*border-bottom:/s);
   assert.match(
@@ -107,6 +107,8 @@ test("FlowChat gallery renders only the real migrated tool-card components", asy
   const migratedToolNames = [
     "AgentSpawn",
     "AgentSendInput",
+    "Task",
+    "LaunchReviewAgent",
     "AgentWait",
     "AskUserQuestion",
     "Bash",
@@ -144,8 +146,6 @@ test("FlowChat gallery renders only the real migrated tool-card components", asy
   ];
   const productOwnedToolNames = [
     "CreatePlan",
-    "Task",
-    "LaunchReviewAgent",
     "submit_code_review",
     "MCP",
     "InitMiniApp",
@@ -553,6 +553,8 @@ test("TabGroup preview carries the selected and outline reference composition", 
   assert.match(source, /components\.preview\.settings/);
   assert.match(source, /data-component="tab-group"/);
   assert.match(source, /<TabGroup/);
+  assert.match(source, /setTabGroupSize/);
+  assert.match(source, /size=\{tabGroupSize\}/);
 });
 
 test("Toolbar preview keeps leading, centered, trailing, and overflow compositions independent", async () => {
@@ -569,6 +571,7 @@ test("Toolbar preview keeps leading, centered, trailing, and overflow compositio
   assert.match(detail, /case "Toolbar":\s*return \["default", "with-center", "overflow"\] as const/);
   assert.match(detail, /leadingOverflow=\{state === "overflow" \? "scroll" : "visible"\}/);
   assert.match(detail, /center=\{state === "with-center"/);
+  assert.match(detail, /items=\{tabItems\}\s+size="sm"/);
   assert.match(detail, /setToolbarSize/);
   assert.match(styles, /\.component-toolbar-example\s*\{[^}]*max-inline-size:\s*760px/s);
 });

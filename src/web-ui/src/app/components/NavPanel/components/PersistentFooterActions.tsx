@@ -259,7 +259,7 @@ const PersistentFooterActions: React.FC = () => {
                   />
                   <MenuSeparator />
                   <MenuItem
-                    leading={<Icon name="settings" size="sm" aria-hidden="true" />}
+                    leading={<Icon name="gear" size="sm" aria-hidden="true" />}
                     onClick={handleOpenSettings}
                     data-testid="nav-settings-open-item"
                   >

@@ -40,12 +40,15 @@
     overflow-anchor: none;
     scrollbar-gutter: stable;
 
-    // Fade the transcript pixels themselves before they pass behind the
-    // floating ChatInput. This is an alpha mask, not a tinted or blurred
-    // overlay, so text, bullets, cards, and every other row dissolve together.
+    // Fade the transcript pixels themselves at both viewport edges: content
+    // entering beneath the top chrome appears gradually, while content leaving
+    // behind the floating ChatInput dissolves before reaching it. This is an
+    // alpha mask, not a tinted or blurred overlay, so text, bullets, cards, and
+    // every other row fade together without intercepting interaction.
     -webkit-mask-image: linear-gradient(
       to bottom,
-      var(--bf-color-content-on-light) 0,
+      transparent 0,
+      var(--bf-color-content-on-light) var(--bf-space-12),
       var(--bf-color-content-on-light) calc(
         100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
       ),
@@ -54,7 +57,8 @@
     );
     mask-image: linear-gradient(
       to bottom,
-      var(--bf-color-content-on-light) 0,
+      transparent 0,
+      var(--bf-color-content-on-light) var(--bf-space-12),
       var(--bf-color-content-on-light) calc(
         100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
       ),

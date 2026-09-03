@@ -7,7 +7,7 @@
 
 $_nav-width: 300px;
 $_nav-collapsed-width: 76px;
-$_nav-bar-height: 35px;
+$_nav-bar-height: var(--bf-layout-toolbar-md-height);
 $_resize-target-width: 6px;
 
 .bitfun-workspace-body {
@@ -91,10 +91,10 @@ $_resize-target-width: 6px;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--bf-space-4);
+  gap: 0;
   min-width: 0;
   min-height: 0;
-  padding: var(--bf-space-4) var(--bf-space-4) 0;
+  padding: 0 var(--bf-space-4);
   overflow: hidden;
   border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
   background: var(--bf-color-surface-scene);

@@ -19,6 +19,9 @@ import { getVirtualItemStableKey } from './virtualItemIdentity';
 interface VirtualItemRendererProps {
   item: VirtualItem;
   index: number;
+  /** Stable projection facts used for spacing across virtual-row boundaries. */
+  endsBeforeUserTurn?: boolean;
+  continuesAmbientToolRunAfter?: boolean;
   /**
    * Ref callback the virtualizer measures this item through.
    *
@@ -29,7 +32,7 @@ interface VirtualItemRendererProps {
 }
 
 export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
-  ({ item, index, measureRef }) => {
+  ({ item, index, endsBeforeUserTurn = false, continuesAmbientToolRunAfter = false, measureRef }) => {
     const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatVolatileContext();
     const isSearchMatch = searchMatchIndices != null && searchMatchIndices.size > 0
       ? searchMatchIndices.has(index)
@@ -126,6 +129,8 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
         data-testid="flowchat-message-item"
         data-turn-id={item.turnId}
         data-item-type={item.type}
+        data-turn-boundary-after={endsBeforeUserTurn ? 'true' : undefined}
+        data-ambient-tool-run-continuation-after={continuesAmbientToolRunAfter ? 'true' : undefined}
         data-virtual-item-key={getVirtualItemStableKey(item)}
         data-virtual-index={index}
         data-item-index={index}
@@ -137,6 +142,8 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
   (prev, next) => (
     prev.item === next.item &&
     prev.index === next.index &&
+    prev.endsBeforeUserTurn === next.endsBeforeUserTurn &&
+    prev.continuesAmbientToolRunAfter === next.continuesAmbientToolRunAfter &&
     prev.measureRef === next.measureRef
   )
 );

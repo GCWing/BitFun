@@ -2,18 +2,37 @@
   position: relative;
   z-index: 10;
   align-items: center;
-  flex: 0 0 var(--bf-control-tab-group-item-height);
+  flex: 0 0 var(--bf-layout-toolbar-md-height);
   width: 100%;
   min-width: 0;
-  height: var(--bf-control-tab-group-item-height);
-  min-block-size: var(--bf-control-tab-group-item-height);
-  padding: 0;
-  column-gap: 0;
+  height: var(--bf-layout-toolbar-md-height);
+  min-block-size: var(--bf-layout-toolbar-md-height);
   overflow: visible;
   background: var(--bf-color-surface-scene);
   container-name: scene-top-bar;
   container-type: inline-size;
   user-select: none;
+
+  &[data-bordered='true'] {
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block-end: calc(0px - var(--bf-border-width-default));
+      width: var(--bf-space-4);
+      height: var(--bf-border-width-default);
+      background: var(--bf-color-border-subtle);
+      pointer-events: none;
+    }
+
+    &::before {
+      inset-inline-end: 100%;
+    }
+
+    &::after {
+      inset-inline-start: 100%;
+    }
+  }
 
   &__actions {
     display: flex;
@@ -34,5 +53,12 @@
     flex: 0 0 auto;
     height: 100%;
     margin-inline-start: var(--bf-space-2);
+  }
+}
+
+@media (forced-colors: active) {
+  .bitfun-scene-top-bar[data-bordered='true']::before,
+  .bitfun-scene-top-bar[data-bordered='true']::after {
+    background: ButtonText;
   }
 }

@@ -195,6 +195,9 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(menu?.dataset.bfPage).toBe('agents');
+    expect(
+      menu?.querySelector('[data-testid="harness-agent-DeepResearch"] [data-bf-name="user"][data-size="md"]'),
+    ).not.toBeNull();
     expect(onSelectionComplete).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -276,7 +279,7 @@ describe('HarnessProfileSelector', () => {
     expect(creative?.dataset.bfState).toBe('available');
     const other = rows[4];
     expect(other?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
-    expect(other?.querySelector('.lucide-bot')).not.toBeNull();
+    expect(other?.querySelector('[data-bf-name="user"][data-size="md"]')).not.toBeNull();
     expect(other?.querySelector('.bitfun-harness-selector__agent-count')?.textContent).toBe('3');
     expect(rows[1]?.dataset.bfState).toBe('current');
   });

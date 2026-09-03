@@ -109,8 +109,9 @@ import {
   ContextCompressionToolCard,
   FileOperationToolCard,
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   ReadFileToolCard,
+  ToolCardCopyButton,
   ToolCardChangeSummary,
 } from "@bitfun/ui/flow-chat";
 ```

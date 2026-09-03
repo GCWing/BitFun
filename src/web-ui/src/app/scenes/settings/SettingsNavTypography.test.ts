@@ -80,6 +80,15 @@ describe('SettingsNav typography and layout ownership', () => {
     expect(readSettingsNavStylesheet()).not.toContain('element-bg-soft');
   });
 
+  it('keeps adjacent navigation interaction surfaces separated by the shared compact rhythm', () => {
+    expect(declarations('.bitfun-settings-nav__items').getPropertyValue('gap')).toBe(
+      'calc(var(--bf-space-1) / 2)',
+    );
+    expect(declarations('.bitfun-settings-nav__search-results').getPropertyValue('gap')).toBe(
+      'calc(var(--bf-space-1) / 2)',
+    );
+  });
+
   it('stacks search copy inside the shared label without overriding the selected item', () => {
     const label = declarations('.bitfun-settings-nav__search-result-copy');
     expect(label.getPropertyValue('display')).toBe('flex');

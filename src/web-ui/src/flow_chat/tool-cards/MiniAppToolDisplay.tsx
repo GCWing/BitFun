@@ -2,11 +2,11 @@
  * MiniAppToolDisplay — InitMiniApp result on the prominent FlowChat framework.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Spinner, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
-import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
+import { ProminentToolCard, ProminentToolCardSummary, ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import './MiniAppToolDisplay.scss';
@@ -79,13 +79,13 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
 
   const renderStatusIcon = () => {
     if (isLoading) {
-      return <Spinner size="sm" />;
+      return <ToolProcessingDots size={16} />;
     }
     return null;
   };
 
-  const renderHeader = () => (
-    <ProminentToolCardHeader
+  const renderSummary = () => (
+    <ProminentToolCardSummary
       icon={<span className="miniapp-icon"><Icon name="floating-window" size="md" /></span>}
       action={`${t('toolCards.initMiniApp.title')}:`}
       content={
@@ -205,11 +205,11 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       <ProminentToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={hasExpandableDetails ? handleCardClick : undefined}
+        onToggle={hasExpandableDetails ? handleCardClick : undefined}
         className="miniapp-tool-display"
-        header={renderHeader()}
+        summary={renderSummary()}
         expandedContent={isExpanded ? renderDetailsWhenExpanded() : null}
-        headerExpandAffordance={hasExpandableDetails}
+        summaryExpandAffordance={hasExpandableDetails}
       />
     </div>
   );

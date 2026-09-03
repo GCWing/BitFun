@@ -83,6 +83,7 @@ import {
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
 import type { FlowChatViewportSnapshot } from './flowChatViewportSnapshot';
 import { getVirtualItemStableKey } from './virtualItemIdentity';
+import { isAmbientToolRunContinuationAfter } from './flowChatRhythm';
 import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/historySessionDiagnostics';
 import {
   VIEWPORT_PLACEMENT_SETTLE_MS,
@@ -2528,14 +2529,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
             paddingBottom: `${virtualizer.paddingBottomPx}px`,
           }}
         >
-          {virtualizer.rows.map(row => (
-            <VirtualItemRenderer
-              key={row.key}
-              item={virtualItems[row.index]}
-              index={row.index}
-              measureRef={virtualizer.measureRowElement}
-            />
-          ))}
+          {virtualizer.rows.map(row => {
+            const item = virtualItems[row.index];
+            const nextItem = virtualItems[row.index + 1];
+            return (
+              <VirtualItemRenderer
+                key={row.key}
+                item={item}
+                index={row.index}
+                endsBeforeUserTurn={nextItem?.type === 'user-message'}
+                continuesAmbientToolRunAfter={isAmbientToolRunContinuationAfter(item, nextItem)}
+                measureRef={virtualizer.measureRowElement}
+              />
+            );
+          })}
         </div>
         <FlowChatListFooter
           bottomLayoutInsetPx={bottomLayoutInsetPx}

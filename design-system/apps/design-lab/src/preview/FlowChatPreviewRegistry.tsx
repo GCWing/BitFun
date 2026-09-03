@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   Circle,
   Code2,
-  Copy,
   FileEdit,
   FileText,
   FolderOpen,
@@ -71,7 +70,7 @@ import {
   PageDeployToolCard,
   PagePublishToolCard,
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   ReadFileToolCard,
   ReviewSummaryToolCard,
   RunCodeToolCard,
@@ -81,7 +80,8 @@ import {
   TerminalControlToolCard,
   TodoToolCard,
   ToolCardChangeSummary,
-  ToolCardHeaderActions,
+  ToolCardActions,
+  ToolCardCopyButton,
   ViewImageToolCard,
   WebFetchToolCard,
   WebSearchToolCard,
@@ -288,22 +288,18 @@ function FrameworkPreview({
   }
 
   const actions = interactive ? (
-    <ToolCardHeaderActions>
-      <button
+    <ToolCardActions>
+      <IconButton
         aria-label={t("components.preview.flowChat.download")}
-        className="flow-chat-tool-card-preview__action"
-        type="button"
-      >
-        <ArrowDownToLine aria-hidden="true" />
-      </button>
-      <button
-        aria-label={t("components.preview.flowChat.copy")}
-        className="flow-chat-tool-card-preview__action"
-        type="button"
-      >
-        <Copy aria-hidden="true" />
-      </button>
-    </ToolCardHeaderActions>
+        icon={<ArrowDownToLine aria-hidden="true" />}
+        size="sm"
+        variant="quiet"
+      />
+      <ToolCardCopyButton
+        label={t("components.preview.flowChat.copy")}
+        onPress={() => undefined}
+      />
+    </ToolCardActions>
   ) : undefined;
 
   return (
@@ -312,8 +308,8 @@ function FrameworkPreview({
         data-bf-preview-state={previewState}
         errorContent={t("components.preview.flowChat.commandFailed")}
         expandedContent={expandedContent}
-        header={(
-          <ProminentToolCardHeader
+        summary={(
+          <ProminentToolCardSummary
             action={t("components.preview.flowChat.runCommand")}
             actions={actions}
             content={(
@@ -332,7 +328,7 @@ function FrameworkPreview({
           />
         )}
         isExpanded={isExpanded}
-        onClick={toggleExpanded}
+        onToggle={toggleExpanded}
         requiresConfirmation={state === "confirmation"}
         status={status}
       />
@@ -803,10 +799,18 @@ function ConcreteProminentPreview({
       <AgentControlToolCard
         {...common}
         agentName="reviewer"
+        agentModel="gpt-5.6"
+        interruptAction={state === "loading" ? {
+          label: "Stop agent",
+          onPress: () => undefined,
+        } : undefined}
+        onOpenAgent={interactive ? () => undefined : undefined}
         openAgentLabel="Open agent"
         prompt={<p>Review the FlowChat migration boundary and public contracts.</p>}
-        statusLabel={state === "loading" ? t("components.preview.flowChat.running") : t("components.preview.flowChat.completed")}
-        statusTone={state === "error" ? "danger" : state === "loading" ? "success" : "neutral"}
+        statusLabel={state === "error" ? t("components.preview.flowChat.failed") : undefined}
+        statusMeta={<span><Timer aria-hidden="true" />{state === "loading" ? "4s" : "12s"}</span>}
+        statusTone={state === "error" ? "danger" : "neutral"}
+        summary="Review the shared FlowChat card boundary"
       />
     );
   } else if (kind === "diff") {
@@ -989,6 +993,8 @@ export const flowChatPreviewDefinitions = {
     specimens: [
       { tool: "AgentSpawn" },
       { tool: "AgentSendInput" },
+      { tool: "Task" },
+      { tool: "LaunchReviewAgent" },
     ],
   },
   AgentWaitToolCard: {
@@ -1136,7 +1142,7 @@ export const flowChatPreviewDefinitions = {
   },
   ProminentToolCard: {
     attention: "prominent",
-    codeSample: (t) => `import { ProminentToolCard, ProminentToolCardHeader } from "@bitfun/ui/flow-chat";\nimport { SquareTerminal } from "lucide-react";\n\n<ProminentToolCard\n  status="completed"\n  isExpanded={isExpanded}\n  onClick={() => setIsExpanded((value) => !value)}\n  header={(\n    <ProminentToolCardHeader\n      icon={<SquareTerminal />}\n      action="${t("components.preview.flowChat.runCommand")}"\n      content={<code>curl https://openbitfun.com</code>}\n    />\n  )}\n  expandedContent={<CommandOutput />}\n/>`,
+    codeSample: (t) => `import { ProminentToolCard, ProminentToolCardSummary } from "@bitfun/ui/flow-chat";\nimport { SquareTerminal } from "lucide-react";\n\n<ProminentToolCard\n  status="completed"\n  isExpanded={isExpanded}\n  onToggle={() => setIsExpanded((value) => !value)}\n  summary={(\n    <ProminentToolCardSummary\n      icon={<SquareTerminal />}\n      action="${t("components.preview.flowChat.runCommand")}"\n      content={<code>curl https://openbitfun.com</code>}\n    />\n  )}\n  expandedContent={<CommandOutput />}\n/>`,
     icon: SquareTerminal,
     render: (options) => <FrameworkPreview {...options} kind="prominent" />,
     section: "framework",

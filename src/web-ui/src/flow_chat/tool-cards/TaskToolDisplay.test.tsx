@@ -67,14 +67,6 @@ vi.mock('react-i18next', () => {
   };
 });
 
-vi.mock('@bitfun/ui', async () => {
-  const actual = await vi.importActual<typeof import('@bitfun/ui')>('@bitfun/ui');
-  return {
-    ...actual,
-    Spinner: () => <span data-testid="spinner" />,
-  };
-});
-
 vi.mock('@/infrastructure/markdown', () => ({
   MarkdownRenderer: ({ content }: { content: string }) => <div>{content}</div>,
 }));
@@ -657,7 +649,8 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).toContain('Timed out after returning partial details');
     expect(container.textContent).not.toContain('private partial findings');
     expect(container.textContent).not.toContain('src/private.ts');
-    expect(container.querySelector('.task-failed-badge')).toBeNull();
+    expect(container.querySelector('[data-bf-part="agentStatus"]')?.textContent)
+      .toBe('Timed out after returning partial details');
   });
 
   it('shows a safe timeout outcome for a Review check', async () => {
@@ -682,7 +675,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.textContent).not.toContain('provider timeout');
     expect(container.textContent).not.toContain('src/private.ts');
     expect(container.querySelector('[data-completed-failure-reason="Timed out"]')).toBeTruthy();
-    expect(container.querySelector('.task-failed-badge')).toBeNull();
+    expect(container.querySelector('[data-bf-part="agentStatus"]')?.textContent).toBe('Timed out');
   });
 
   it('shows a stopped outcome for a cancelled Review check', async () => {
@@ -707,7 +700,7 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     expect(container.textContent).toContain('Stopped');
     expect(container.textContent).not.toContain('private cancellation detail');
-    expect(container.querySelector('.task-failed-badge')).toBeNull();
+    expect(container.querySelector('[data-bf-part="agentStatus"]')?.textContent).toBe('Stopped');
   });
 
   it.each([
@@ -742,10 +735,9 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
-    expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
-    expect(container.querySelector('.task-review-outcome')).toBeNull();
-    expect(container.querySelector('.task-failed-badge')).toBeNull();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="interruptAgentButton"]')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="agentStatus"]')).toBeNull();
     expect(container.textContent).not.toContain(label);
     const indicator = container.querySelector('[data-testid="tool-timeout-indicator"]');
     expect(indicator?.getAttribute('data-completed-status')).toBeNull();
@@ -777,8 +769,8 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
-    expect(container.querySelector('.task-subagent-stop-button')).toBeNull();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="interruptAgentButton"]')).toBeNull();
     expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
       ?.getAttribute('data-is-running')).toBe('false');
   });
@@ -818,7 +810,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeTruthy();
     expect(container.textContent).toContain('Review CLI app layer diff');
   });
 
@@ -912,7 +904,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
       );
     });
-    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeTruthy();
 
     await act(async () => {
       mocks.dynamicReviewTurn.status = 'error';
@@ -921,7 +913,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       mocks.flowChatListeners.forEach((listener) => listener());
     });
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeFalsy();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeFalsy();
     expect(container.textContent).toContain('toolCards.taskTool.failed');
     expect(container.querySelector('[data-completed-status="error"]')).toBeTruthy();
   });
@@ -952,7 +944,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
       );
     });
-    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeTruthy();
 
     await act(async () => {
       mocks.dynamicReviewTurn.status = 'cancelled';
@@ -960,7 +952,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       mocks.flowChatListeners.forEach((listener) => listener());
     });
 
-    expect(container.querySelector('[data-testid="spinner"]')).toBeFalsy();
+    expect(container.querySelector('[data-bf-part="processing"]')).toBeFalsy();
     expect(container.querySelector('[data-completed-status="cancelled"]')).toBeTruthy();
   });
 
@@ -996,7 +988,7 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(false);
     expect(container.textContent).toContain('ReviewFixer');
-    expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="interruptAgentButton"]')).toBeTruthy();
   });
 
   it('opens the real subagent session in the aux pane when the task card rail is clicked', async () => {
@@ -1019,7 +1011,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    const openButton = container.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
     expect(openButton).toBeTruthy();
     expect(container.querySelector('[data-bf-component="subagent-avatar"][data-bf-avatar-id]'))
       .toBeTruthy();
@@ -1089,7 +1081,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    const openButton = container.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
     expect(openButton).toBeTruthy();
 
     await act(async () => {
@@ -1123,7 +1115,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    const openButton = container.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
     expect(openButton).toBeTruthy();
 
     await act(async () => {
@@ -1159,7 +1151,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    const openButton = container.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
     await act(async () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
@@ -1193,7 +1185,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    const openButton = container.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
     await act(async () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
@@ -1241,10 +1233,10 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const header = container.querySelector<HTMLElement>('.task-action');
-    expect(header?.textContent).toContain('Explore');
-    expect(header?.textContent).toContain('fast');
-    expect(header?.textContent).toContain('Explore isolated context');
+    const summary = container.querySelector<HTMLElement>('[data-bf-tool-card="agent-control"] [data-bf-part="summary"]');
+    expect(summary?.textContent).toContain('Explore');
+    expect(summary?.textContent).toContain('fast');
+    expect(summary?.textContent).toContain('Explore isolated context');
   });
 
   it('renders send_input task cards from the target subagent session metadata', async () => {
@@ -1275,13 +1267,13 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const header = container.querySelector<HTMLElement>('.task-action');
-    expect(header?.textContent).toContain('Explore');
-    expect(header?.textContent).toContain('fast');
-    expect(header?.textContent).toContain('Continue investigation');
+    const summary = container.querySelector<HTMLElement>('[data-bf-tool-card="agent-control"] [data-bf-part="summary"]');
+    expect(summary?.textContent).toContain('Explore');
+    expect(summary?.textContent).toContain('fast');
+    expect(summary?.textContent).toContain('Continue investigation');
   });
 
-  it('stops a running foreground subagent from the task header', async () => {
+  it('stops a running foreground subagent from the task summary actions', async () => {
     mocks.cancelSession.mockResolvedValueOnce({ cancelled: true, dialogTurnId: 'turn-1' });
 
     const toolItem: FlowToolItem = {
@@ -1299,7 +1291,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button');
+    const stopButton = container.querySelector<HTMLButtonElement>('[data-bf-part="interruptAgentButton"]');
     expect(stopButton).toBeTruthy();
 
     await act(async () => {
@@ -1323,8 +1315,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         );
       });
 
-      expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
-      expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
+      expect(container.querySelector('[data-bf-part="processing"]')).toBeTruthy();
+      expect(container.querySelector('[data-bf-part="interruptAgentButton"]')).toBeTruthy();
       expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
         ?.getAttribute('data-is-running')).toBe('true');
     },
@@ -1343,7 +1335,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button')!;
+    const stopButton = container.querySelector<HTMLButtonElement>('[data-bf-part="interruptAgentButton"]')!;
     await act(async () => {
       stopButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
@@ -1383,7 +1375,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button');
+    const stopButton = container.querySelector<HTMLButtonElement>('[data-bf-part="interruptAgentButton"]');
     expect(stopButton).toBeTruthy();
 
     await act(async () => {
@@ -1429,7 +1421,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    const stopButton = container.querySelector<HTMLButtonElement>('.task-subagent-stop-button');
+    const stopButton = container.querySelector<HTMLButtonElement>('[data-bf-part="interruptAgentButton"]');
     expect(stopButton).toBeTruthy();
 
     await act(async () => {
@@ -1476,7 +1468,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('.task-subagent-stop-button')!
+      container.querySelector<HTMLButtonElement>('[data-bf-part="interruptAgentButton"]')!
         .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
@@ -1516,7 +1508,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('.task-subagent-stop-button')).toBeNull();
+    expect(container.querySelector('[data-bf-part="interruptAgentButton"]')).toBeNull();
   });
 
   it('renders cancelled foreground subagent results as cancelled instead of failed', async () => {
@@ -1541,7 +1533,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('.task-failed-badge')).toBeNull();
+    expect(container.querySelector('[data-bf-part="agentStatus"]')).toBeTruthy();
     expect(container.querySelector(
       '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-status="cancelled"]',
     )).toBeTruthy();
@@ -1584,7 +1576,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('.task-header-rail__hit')).toBeNull();
+    expect(container.querySelector('[data-bf-part="openAgentButton"]')).toBeNull();
     expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeTruthy();
     expect(container.textContent).toContain('Cancel session: subagent-session-1');
     expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();

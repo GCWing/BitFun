@@ -89,7 +89,7 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   blocks: Blocks,
   'check-square': CheckSquare2,
   chart: BarChart3,
-  settings: catalogLucide('settings'),
+  gear: catalogLucide('gear'),
   keyboard: Keyboard,
   network: Network,
 };
@@ -122,7 +122,7 @@ const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> =
   workspaces: catalogLucide('folder'),
   assistants: Bot,
   capabilities: Blocks,
-  settings: catalogLucide('settings'),
+  settings: catalogLucide('gear'),
 };
 
 function iconForItem(item: GlobalSearchItem): LucideIcon {

@@ -21,7 +21,7 @@ const sceneHarness = vi.hoisted(() => ({
     navigationMotion: 'instant' as InteractionMotion,
     sessionTitle: undefined as string | undefined,
     tabDefs: [
-      { id: 'session' as const, label: 'Session', pinned: true, closable: true, singleton: true, defaultOpen: false },
+      { id: 'session' as const, label: 'Session', Icon: () => null, pinned: true, closable: true, singleton: true, defaultOpen: false },
       { id: 'settings' as const, label: 'Settings', pinned: false, singleton: true, defaultOpen: false },
       { id: 'terminal' as const, label: 'Terminal', pinned: false, singleton: true, defaultOpen: false },
       { id: 'git' as const, label: 'Git', pinned: false, singleton: true, defaultOpen: false },
@@ -106,6 +106,11 @@ describe('SceneBar overflow navigation', () => {
       .toBe('Investigate top tabs');
     expect(settingsTab.querySelector('.bitfun-scene-bar__tab-title')?.textContent)
       .toBe('Settings');
+    expect(sessionTab.querySelector('[data-bf-part="icon"]')).toBeNull();
+    expect(sessionTab.closest('[data-bf-part="item"]')?.getAttribute('data-has-icon'))
+      .toBe('false');
+    expect(container.querySelector('[data-scene-bar-part="tabs"]')?.getAttribute('data-size'))
+      .toBe('sm');
     expect(container.querySelector('.bitfun-scene-bar__tab-subtitle')).toBeNull();
     expect(container.querySelector('.bitfun-scene-bar__tab-separator')).toBeNull();
   });

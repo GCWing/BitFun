@@ -44,4 +44,13 @@ describe('WorkspaceBody presentation contract', () => {
       /&--collapsed\s*\{[^}]*background:\s*transparent;/,
     );
   });
+
+  it('keeps navigation and scene tabs on the same toolbar row with the viewport attached below', () => {
+    expect(stylesheet).toContain('$_nav-bar-height: var(--bf-layout-toolbar-md-height);');
+    expect(stylesheet).toContain('padding: 0 var(--bf-space-4);');
+    expect(stylesheet).toMatch(
+      /\.bitfun-workspace-body__scene-surface\s*\{[^}]*gap:\s*0;/s,
+    );
+    expect(navBarStylesheet).toContain('height: var(--bf-layout-toolbar-md-height);');
+  });
 });

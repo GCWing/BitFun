@@ -24,10 +24,13 @@ import {
 import {
   AmbientToolCard,
   AmbientToolCardHeader,
-  ToolCardHeaderActions,
+  ToolCardActions,
   type FlowChatToolStatus,
 } from "./FlowChatToolCard";
-import { ToolCardStatusSlot } from "./ToolCardStatusSlot";
+import {
+  hasVisibleToolCardStatusGlyph,
+  ToolCardStatusSlot,
+} from "./ToolCardStatusSlot";
 import { ToolProcessingDots } from "./ToolProcessingDots";
 import styles from "./StandardAmbientToolCards.module.css";
 
@@ -50,7 +53,7 @@ function Section({ children, label }: { children: ReactNode; label?: ReactNode }
 export interface RunCodeToolCardProps extends AmbientCardProps {
   action: ReactNode;
   error?: ReactNode;
-  headerActions?: ReactNode;
+  actions?: ReactNode;
   output?: ReactNode;
   outputLabel?: ReactNode;
   program?: ReactNode;
@@ -60,8 +63,8 @@ export interface RunCodeToolCardProps extends AmbientCardProps {
 
 export function RunCodeToolCard({
   action,
+  actions,
   error,
-  headerActions,
   isExpanded = false,
   onToggle,
   output,
@@ -93,7 +96,7 @@ export function RunCodeToolCard({
         <AmbientToolCardHeader
           action={action}
           content={summary}
-          extra={headerActions ? <ToolCardHeaderActions>{headerActions}</ToolCardHeaderActions> : undefined}
+          extra={actions ? <ToolCardActions>{actions}</ToolCardActions> : undefined}
           icon={<ToolCardStatusSlot status={status} toolIcon={<Code2 aria-hidden="true" />} />}
         />
       )}
@@ -162,7 +165,7 @@ export function WebFetchToolCard({
                   <span className={styles.pill} data-bf-part="detail" key={index}>{detail}</span>
                 ))}
               </span>
-              {copyAction && <ToolCardHeaderActions>{copyAction}</ToolCardHeaderActions>}
+              {copyAction && <ToolCardActions>{copyAction}</ToolCardActions>}
             </div>
           )}
           {error ? (
@@ -255,7 +258,9 @@ export function DefaultToolCard({
         <AmbientToolCardHeader
           action={displayName}
           content={summary}
-          icon={<ToolCardStatusSlot status={status} toolIcon={icon} />}
+          icon={hasVisibleToolCardStatusGlyph(status) || icon
+            ? <ToolCardStatusSlot status={status} toolIcon={icon} />
+            : undefined}
         />
       )}
       isExpanded={Boolean(isExpanded && detailsAvailable)}

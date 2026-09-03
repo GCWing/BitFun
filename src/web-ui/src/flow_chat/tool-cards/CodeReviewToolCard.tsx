@@ -12,7 +12,7 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 import {
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   ToolProcessingDots,
 } from '@bitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
@@ -537,9 +537,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     return null;
   };
 
-  const renderHeader = () => {
+  const renderSummary = () => {
     return (
-      <ProminentToolCardHeader
+      <ProminentToolCardSummary
         icon={null}
         content={renderContent()}
         actions={hasData && reviewData ? (
@@ -955,9 +955,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       <ProminentToolCard
         status={normalizedStatus as 'pending' | 'preparing' | 'streaming' | 'running' | 'completed' | 'error' | 'cancelled'}
         isExpanded={isExpanded}
-        onClick={handleCardClick}
+        onToggle={handleCardClick}
         className="code-review-card"
-        header={renderHeader()}
+        summary={renderSummary()}
         expandedContent={expandedContent ?? undefined}
       />
     </div>

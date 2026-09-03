@@ -686,7 +686,7 @@ const flowChatToolCardSource = fs.existsSync(flowChatToolCardFile)
 if (!flowChatToolCardSource.includes('data-bf-component="flow-chat-tool-card"')
   || !flowChatToolCardSource.includes('data-bf-part="root"')
   || !flowChatToolCardSource.includes('data-bf-part="surface"')
-  || !flowChatToolCardSource.includes('data-bf-part="header"')
+  || !flowChatToolCardSource.includes('data-bf-part="summary"')
   || !flowChatToolCardSource.includes('part: "error" | "expanded"')
   || !flowChatToolCardSource.includes('data-bf-part={part}')) {
   failures.push('@bitfun/ui FlowChat tool cards must project the shared multi-part Appearance contract');

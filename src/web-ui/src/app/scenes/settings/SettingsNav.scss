@@ -74,7 +74,9 @@
   &__search-results {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    // Keep neighboring rounded interaction surfaces visually distinct using
+    // the same compact item rhythm as the shared NavigationPanel.
+    gap: calc(var(--bf-space-1) / 2);
   }
 
   &__search-result-item {
@@ -135,7 +137,7 @@
   &__items {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: calc(var(--bf-space-1) / 2);
   }
 
   &__item {

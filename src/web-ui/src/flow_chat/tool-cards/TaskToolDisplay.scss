@@ -1,363 +1,27 @@
-/* Task tool card styles on the shared FlowChat attention frameworks. */
 .task-tool-display {
-  /* Keep custom task header content aligned with the framework icon rail. */
-  .task-header-wrapper {
+  .task-expanded-content {
     display: flex;
-    align-items: stretch;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    width: 100%;
-  }
-
-  .task-icon {
-    color: var(--bf-color-content-secondary);
-
-    &.is-running {
-      color: var(--bf-color-accent-default);
-    }
-  }
-
-  .task-content-wrapper {
-    display: flex;
+    min-width: 0;
     flex-direction: column;
-    flex: 1;
-    min-width: 0;
-    align-self: stretch;
-    justify-content: center;
+    gap: var(--bf-space-2);
   }
 
-  /* Title row + right rail: same vertical midline (avoid stretch making icons look low). */
-  .task-body-columns {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .task-body-main {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-self: stretch;
-    flex: 1;
-    min-width: 0;
-  }
-
-  /* Narrow right rail; invisible hit layer matches hover tint + opens detail panel.
-     Stretch full header row height so ::before hover fill reaches padding edges (no vertical gap). */
-  .task-header-rail {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    align-self: stretch;
-    flex-shrink: 0;
-    width: var(--bf-control-tool-card-header-icon-slot);
-    padding: 0;
-    margin-left: 4px;
-
-    /* Hover fill: full header height + extend into header right padding to card inner edge. */
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      right: calc(-1 * var(--bf-control-tool-card-header-padding-inline-end));
-      top: calc(-1 * var(--bf-control-tool-card-header-padding-block));
-      bottom: calc(-1 * var(--bf-control-tool-card-header-padding-block));
-      background-color: transparent;
-      border-radius: 0;
-      transition: background-color 0.15s ease;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    &:hover::before {
-      background-color: var(--bf-color-action-neutral-surface-hover);
-    }
-
-    &:hover .task-header-rail__visual {
-      color: var(--bf-color-content-primary);
-    }
-
-    &::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: calc(-1 * var(--bf-control-tool-card-header-padding-block));
-      bottom: calc(-1 * var(--bf-control-tool-card-header-padding-block));
-      width: 0;
-      border-left: 1px solid var(--bf-color-border-default);
-      pointer-events: none;
-      z-index: 1;
-    }
-  }
-
-  .task-header-rail__hit {
-    position: absolute;
-    left: 0;
-    top: calc(-1 * var(--bf-control-tool-card-header-padding-block));
-    right: calc(-1 * var(--bf-control-tool-card-header-padding-inline-end));
-    bottom: calc(-1 * var(--bf-control-tool-card-header-padding-block));
-    z-index: 2;
-    margin: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    appearance: none;
-    font: inherit;
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
-      outline-offset: -2px;
-    }
-  }
-
-  /*
-   * Rail icons: fill exactly the same rectangle as ::before (hover tint) and __hit (click zone).
-   *
-   * Root cause of "偏左":
-   *   - The hover/hit area extends right: calc(-1 * --bf-control-tool-card-header-padding-inline-end) = -10px
-   *     into the card's right padding, so its total width is rail(34px) + padding(10px) = 44px.
-   *   - Previously __visual used right: 0, giving only 33px. Icon center was at 17.5px from
-   *     the divider; hover center was at 22px — a 4.5px leftward offset, visible to the eye.
-   *   - Fix: match the same right edge so icon center == hover center == 22px from divider.
-   */
-  .task-header-rail__visual {
-    position: absolute;
-    z-index: 1;
-    /* Start after the 1px divider line (::after sits at left: 0). */
-    left: 1px;
-    /* Match hover fill (::before) and hit area right edge — both extend into right padding. */
-    right: calc(-1 * var(--bf-control-tool-card-header-padding-inline-end));
-    top: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    margin: 0;
-    padding: 0;
-    line-height: 0;
-    font-size: 0;
-    color: var(--bf-color-content-muted);
-    pointer-events: none;
-
-    > * + * {
-      margin-top: var(--bf-control-flow-chat-inline-gap);
-    }
-
-    > svg {
-      display: block;
-      flex-shrink: 0;
-    }
-
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='status']:empty {
-      display: none;
-    }
-
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='status']:not(:empty) {
-      line-height: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .cube-loading {
-      flex-direction: column;
-      gap: 0 !important;
-      line-height: 0;
-    }
-  }
-
-  .task-header-main {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    width: 100%;
-    min-height: 20px;
-  }
-
-
-  .task-action {
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
-    flex-shrink: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &__model-tag {
-      font-size: var(--bf-type-flow-micro-font-size);
-      font-weight: var(--bf-type-body-sm-font-weight);
-      color: var(--bf-color-content-secondary);
-      vertical-align: baseline;
-    }
-  }
-
-  .task-header-main--failed {
-    .task-action {
-      color: var(--bf-color-content-muted);
-    }
-
-    
-    .agent-type-badge {
-      opacity: 0.6;
-    }
-  }
-
-  .task-failed-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.1rem var(--bf-control-flow-chat-inline-gap);
-    border-radius: 3px;
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    flex-shrink: 0;
-    color: var(--bf-color-content-muted);
-    background: color-mix(in srgb, var(--bf-color-content-muted) 15%, transparent);
-  }
-
-  .task-review-outcome {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.1rem var(--bf-control-flow-chat-inline-gap);
-    border-radius: 3px;
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    flex-shrink: 0;
-    color: var(--bf-color-content-muted);
-    background: var(--bf-color-action-quiet-hover);
-
-    &--partial-timeout {
-      color: var(--bf-color-status-warning-content);
-      background: var(--bf-color-status-warning-surface);
-    }
-
-    &--timed-out {
-      color: var(--bf-color-status-danger-content);
-    }
-  }
-
-  .task-subagent-stop-button {
-    width: 22px;
-    height: 22px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: 0;
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: 4px;
-    color: var(--bf-color-content-secondary);
-    background: var(--bf-color-action-quiet-hover);
-    cursor: pointer;
-    transition:
-      color 0.15s ease,
-      background-color 0.15s ease,
-      border-color 0.15s ease;
-
-    &:hover:not(:disabled) {
-      color: var(--bf-color-status-danger-content);
-      background: var(--bf-color-action-neutral-surface-hover);
-      border-color: var(--bf-color-status-danger-content);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
-      outline-offset: 2px;
-    }
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.7;
-    }
-
-    svg {
-      display: block;
-      flex-shrink: 0;
-    }
-
-    &:disabled svg {
-      animation: task-subagent-stop-spin 1s linear infinite;
-    }
-  }
-
-  .agent-type-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.125rem var(--bf-control-flow-chat-inline-gap);
-    border-radius: 4px;
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    flex-shrink: 0;
-    color: var(--bf-color-content-secondary);
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
-  }
-
-  .task-header-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    margin-left: auto;
-    margin-right: 10px;
-    flex-shrink: 0;
-    min-width: 0;
-
-    svg {
-      flex-shrink: 0;
-    }
-  }
-
-  .task-status-icon--rail {
-    margin: 0;
-    padding: 0;
-  }
-
-  /* Prompt uses the thinking markdown typography, but needs its own clipping box.
-     The generic thinking content has vertical padding; with a one-line max-height
-     that can leave only padding visible and push the prompt text out of view. */
-  .task-expanded-content .task-prompt-content {
-    padding: 0;
+  /* The product adapter owns the prompt renderer; the card shell and spacing
+     are supplied by AgentControlToolCard in @bitfun/ui. */
+  .task-prompt-content {
     max-height: 3.2em;
+    padding: 0;
     overflow-y: auto;
   }
 
-  .task-expanded-content .task-prompt-wrapper {
+  .task-prompt-wrapper {
     &::before,
     &::after {
       content: none;
     }
   }
 
-  .task-interruption-note {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
-
-    svg {
-      flex-shrink: 0;
-      margin-top: 0.15em;
-      color: var(--bf-color-status-warning-content);
-    }
-  }
-
-  .task-interruption-divider {
-    height: 1px;
-    background: var(--bf-color-border-default);
-    margin: -2px calc(-1 * var(--bf-control-tool-card-expanded-padding-inline)) 0;
-  }
-
-  .task-expanded-content .task-prompt-markdown {
+  .task-prompt-markdown {
     > :first-child {
       margin-top: 0 !important;
     }
@@ -367,191 +31,64 @@
     }
   }
 
-  /* Extra breathing room below header / divider before prompt + actions. */
-  > [data-bf-component='flow-chat-tool-card'][data-bf-part='expandedCollapse']
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'] {
-    padding-top: 8px;
-  }
-
-  > [data-bf-component='flow-chat-tool-card'][data-bf-part='expandedCollapse']
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded']:has(.task-prompt-content) {
-    padding-bottom: 0;
-  }
-
-  .section-header {
+  .task-interruption-note {
     display: flex;
-    align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    margin-bottom: var(--bf-control-flow-chat-card-gap);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    align-items: flex-start;
+    gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
-    opacity: 0.8;
-  }
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-md-line-height);
 
-  .section-icon {
-    color: var(--bf-color-content-muted);
-    flex-shrink: 0;
-  }
-
-  .section-title {
-    flex: 1;
-  }
-
-  .task-expanded-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--bf-control-flow-chat-card-gap);
-  }
-
-
-  .error-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--bf-control-flow-chat-card-gap);
-  }
-
-  .error-message {
-    font-size: var(--bf-type-flow-control-font-size);
-    color: var(--bf-color-status-danger-content);
-    line-height: var(--bf-type-flow-support-line-height);
-  }
-
-  .error-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
-  }
-
-  .error-task,
-  .error-agent {
-    flex-shrink: 0;
-  }
-
-  .error-separator {
-    color: var(--bf-color-border-default);
-  }
-
-  .tool-actions {
-    display: flex;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    margin-top: var(--bf-control-flow-chat-card-gap);
-  }
-
-  .confirm-button,
-  .reject-button {
-    padding: var(--bf-control-flow-chat-control-padding-block) var(--bf-control-flow-chat-control-padding-inline);
-    border-radius: 4px;
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    cursor: pointer;
-    transition:
-      scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      background-color 160ms ease,
-      border-color 160ms ease,
-      color 160ms ease,
-      opacity 160ms ease;
-    border: none;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: default;
+    svg {
+      margin-top: 0.15em;
+      flex-shrink: 0;
+      color: var(--bf-color-status-warning-content);
     }
   }
 
-  .confirm-button {
-    background: var(--bf-color-accent-default);
-    color: var(--bf-color-content-on-dark);
-
-    &:hover:not(:disabled) {
-      background: var(--bf-color-accent-hover);
-    }
-  }
-
-  .reject-button {
-    background: var(--bf-color-action-quiet-hover);
-    color: var(--bf-color-content-primary);
-    border: 1px solid var(--bf-color-border-default);
-
-    &:hover:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
-      border-color: var(--bf-color-status-danger-content);
-      color: var(--bf-color-status-danger-content);
-    }
+  .task-interruption-divider {
+    height: var(--bf-border-width-default);
+    margin-inline: calc(-1 * var(--bf-space-3));
+    background: var(--bf-color-border-subtle);
   }
 }
 
-
-/**
- * Make the entire header area show pointer cursor.
- * Keep the summary surface pointer explicit for task cards.
- */
-.task-tool-display {
-  > [data-bf-component='flow-chat-tool-card'][data-bf-part='surface'] {
-    cursor: pointer;
-  }
-}
-
-/**
- * Unified task + subagent card wrapper.
- * Wraps the task tool header card and the subagent items container so they
- * behave as a single flat card with shared border feedback.
- */
+/* Task projection is a product composition around the public tool card. */
 .task-with-subagent-wrapper {
   position: relative;
-  border-radius: 8px;
-  margin: 4px 0 10px;
-  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   contain: layout paint style;
+  margin-block: 0;
+  border-radius: var(--bf-radius-md);
+  transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root'] {
     margin: 0;
-    /*
-     * Keep only border hover feedback in this grouped shell. Layout properties
-     * must not interpolate while the task and subagent surfaces merge into one
-     * card.
-     */
-    transition: border-color 0.18s ease;
+    transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
-  // Expanded state: the wrapper becomes the unified visual container.
   &.task-with-subagent-wrapper--expanded {
-    // The wrapper itself provides the unified card appearance.
-    background: var(--bf-color-surface-scene);
-    border: 1px solid var(--bf-color-border-default);
-    backdrop-filter: blur(10px);
+    margin-block: var(--bf-space-1) var(--bf-space-3);
     overflow: hidden;
+    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
+    background: var(--bf-color-surface-panel);
     box-shadow: none;
 
-    // Strip the shared framework shell so it merges
-    // into the wrapper; the wrapper provides the unified card chrome.
     .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root'] {
-      border: none;
+      border: 0;
       border-radius: 0;
       background: transparent;
-      backdrop-filter: none;
       box-shadow: none;
       transition: none;
 
       &:hover {
-        box-shadow: none;
         border-color: transparent;
-      }
-
-      &:active {
         box-shadow: none;
       }
     }
 
-    // Strip the subagent container's own border/background/shadow so it
-    // merges into the wrapper; the wrapper provides the unified card chrome.
     .subagent-items-container,
     .subagent-projection-container {
-      border: none;
+      border: 0;
       background: transparent;
       backdrop-filter: none;
     }
@@ -562,54 +99,32 @@
 
     &.task-with-subagent-wrapper--has-prompt .subagent-items-container,
     &.task-with-subagent-wrapper--has-prompt .subagent-projection-container--expanded {
-      border-top: 1px solid var(--bf-color-border-default);
+      border-top: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
     }
 
-    // Keep the subagent body aligned with the task card while preserving the
-    // same internal inset on every side.
     .subagent-projection-container--expanded {
-      --task-prompt-inline-pad: calc(
-        var(--bf-control-flow-chat-card-expanded-padding-inline) + var(--bf-control-flow-chat-card-padding-inline)
-      );
-      padding:
-        8px
-        var(--task-prompt-inline-pad)
-        10px
-        var(--task-prompt-inline-pad);
+      padding: var(--bf-space-2) var(--bf-space-3) var(--bf-space-3);
     }
-
   }
 
-  // Hover over expanded card: border feedback without elevation.
   &.task-with-subagent-wrapper--expanded:hover {
+    border-color: var(--bf-color-border-strong);
     box-shadow: none;
-    border-color: var(--bf-color-field-border-hover);
   }
 }
 
-/* Loading: the framework owns the shell state while task copy keeps its local fade. */
-.task-tool-display[data-bf-state~='loading'] [data-bf-component='flow-chat-tool-card'][data-bf-part='status']:has(.cube-loading) {
-  display: none !important;
-}
-
-/* E — task description text fades with the card */
-.task-tool-display[data-bf-state~='loading'] .task-action {
-  animation: task-tool-loading-fade 2.2s ease-in-out infinite;
-}
-
-/* Reviewer context block — replaces raw prompt for review-team members. */
 .task-reviewer-context {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-control-flow-chat-inline-gap);
-  padding: var(--bf-control-flow-chat-inline-gap) 0;
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  gap: var(--bf-space-2);
+  padding-block: var(--bf-space-1);
   color: var(--bf-color-content-secondary);
+  font-size: var(--bf-type-body-sm-font-size);
+  line-height: var(--bf-type-body-md-line-height);
 
   &__role {
+    font-size: var(--bf-type-body-sm-font-size);
     font-weight: var(--bf-type-label-selected-font-weight);
-    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__description {
@@ -618,7 +133,7 @@
 
   &__responsibilities {
     margin: 0;
-    padding-left: 16px;
+    padding-left: var(--bf-space-4);
     list-style: disc;
 
     li {
@@ -627,27 +142,9 @@
   }
 }
 
-@keyframes task-subagent-stop-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes task-tool-loading-fade {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.68;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .task-tool-display .task-subagent-stop-button:disabled svg,
-  .task-tool-display[data-bf-state~='loading'] .task-action {
-    animation: none;
+  .task-with-subagent-wrapper,
+  .task-with-subagent-wrapper .flow-tool-card-wrapper .task-tool-display {
+    transition: none;
   }
 }

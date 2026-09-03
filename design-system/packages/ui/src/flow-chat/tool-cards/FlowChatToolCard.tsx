@@ -30,7 +30,7 @@ export type FlowChatToolStatus =
   | "pending_confirmation"
   | "confirmed";
 
-export type ToolCardHeaderAffordanceKind = "expand" | "open-panel-right";
+export type ToolCardAffordanceKind = "expand" | "open-panel-right";
 
 const LOADING_STATUSES = new Set<FlowChatToolStatus>([
   "queued",
@@ -44,15 +44,15 @@ const LOADING_STATUSES = new Set<FlowChatToolStatus>([
 
 const TOOL_CARD_COLLAPSE_DURATION_MS = 300;
 
-interface HeaderLayoutContextValue {
-  affordanceKind: ToolCardHeaderAffordanceKind;
+interface ToolCardRowLayoutContextValue {
+  affordanceKind: ToolCardAffordanceKind;
   attention: "ambient" | "prominent";
   expandable: boolean;
   isExpanded: boolean;
   onAffordanceClick?: (event: ReactMouseEvent<HTMLElement>) => void;
 }
 
-const HeaderLayoutContext = createContext<HeaderLayoutContextValue>({
+const ToolCardRowLayoutContext = createContext<ToolCardRowLayoutContextValue>({
   affordanceKind: "expand",
   attention: "ambient",
   expandable: false,
@@ -229,14 +229,14 @@ export interface ProminentToolCardProps
   disableExpandAnimation?: boolean;
   errorContent?: ReactNode;
   expandedContent?: ReactNode;
-  header: ReactNode;
-  headerAffordanceKind?: ToolCardHeaderAffordanceKind;
-  headerExpandAffordance?: boolean;
   isExpanded?: boolean;
   isFailed?: boolean;
-  onClick?: (event: ReactMouseEvent<HTMLElement>) => void;
+  onToggle?: (event: ReactMouseEvent<HTMLElement>) => void;
   requiresConfirmation?: boolean;
   status: FlowChatToolStatus;
+  summary: ReactNode;
+  summaryAffordanceKind?: ToolCardAffordanceKind;
+  summaryExpandAffordance?: boolean;
   toggleTestId?: string;
 }
 
@@ -247,14 +247,14 @@ export function ProminentToolCard({
   disableExpandAnimation = false,
   errorContent,
   expandedContent,
-  header,
-  headerAffordanceKind = "expand",
-  headerExpandAffordance,
   isExpanded = false,
   isFailed = false,
-  onClick,
+  onToggle,
   requiresConfirmation = false,
   status,
+  summary,
+  summaryAffordanceKind = "expand",
+  summaryExpandAffordance,
   toggleTestId,
   ...props
 }: ProminentToolCardProps) {
@@ -262,9 +262,9 @@ export function ProminentToolCard({
   const hasCollapsibleErrorContent = Boolean(
     collapsibleErrorContent && failed && errorContent,
   );
-  const expandable = headerExpandAffordance
+  const expandable = summaryExpandAffordance
     ?? Boolean(
-      onClick && (
+      onToggle && (
         hasCollapsibleErrorContent
         || (expandedContent && (!failed || allowExpandedWhenFailed))
       ),
@@ -285,10 +285,10 @@ export function ProminentToolCard({
   });
 
   const handleSurfaceClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!onClick || shouldIgnoreToggleClick(event, event.currentTarget)) {
+    if (!onToggle || shouldIgnoreToggleClick(event, event.currentTarget)) {
       return;
     }
-    onClick(event);
+    onToggle(event);
   };
 
   return (
@@ -301,7 +301,7 @@ export function ProminentToolCard({
       data-bf-attention="prominent"
       data-bf-component="flow-chat-tool-card"
       data-bf-expandable={expandable ? "true" : "false"}
-      data-bf-interactive={onClick ? "true" : "false"}
+      data-bf-interactive={onToggle ? "true" : "false"}
       data-bf-part="root"
       data-bf-state={appearanceState}
       data-bf-status={status}
@@ -314,24 +314,24 @@ export function ProminentToolCard({
         data-bf-attention="prominent"
         data-bf-component="flow-chat-tool-card"
         data-bf-expandable={expandable ? "true" : "false"}
-        data-bf-interactive={onClick ? "true" : "false"}
+        data-bf-interactive={onToggle ? "true" : "false"}
         data-bf-part="surface"
         data-bf-state={appearanceState}
         data-bf-status={status}
-        data-testid={onClick ? toggleTestId : undefined}
+        data-testid={onToggle ? toggleTestId : undefined}
         onClick={handleSurfaceClick}
       >
-        <HeaderLayoutContext.Provider
+        <ToolCardRowLayoutContext.Provider
           value={{
-            affordanceKind: headerAffordanceKind,
+            affordanceKind: summaryAffordanceKind,
             attention: "prominent",
             expandable,
             isExpanded,
-            onAffordanceClick: onClick,
+            onAffordanceClick: onToggle,
           }}
         >
-          {header}
-        </HeaderLayoutContext.Provider>
+          {summary}
+        </ToolCardRowLayoutContext.Provider>
       </div>
 
       <CollapsibleRegion
@@ -383,43 +383,8 @@ export function AmbientToolCard({
   ...props
 }: AmbientToolCardProps) {
   const hasExpandedContent = Boolean(expandedContent);
-  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [keepExpandedShell, setKeepExpandedShell] = useState(
-    Boolean(isExpanded && hasExpandedContent),
-  );
-
-  useEffect(() => {
-    if (collapseTimerRef.current !== null) {
-      clearTimeout(collapseTimerRef.current);
-      collapseTimerRef.current = null;
-    }
-
-    if (isExpanded && hasExpandedContent) {
-      setKeepExpandedShell(true);
-      return;
-    }
-
-    if (!hasExpandedContent) {
-      setKeepExpandedShell(false);
-      return;
-    }
-
-    if (keepExpandedShell) {
-      collapseTimerRef.current = setTimeout(() => {
-        collapseTimerRef.current = null;
-        setKeepExpandedShell(false);
-      }, TOOL_CARD_COLLAPSE_DURATION_MS);
-    }
-  }, [hasExpandedContent, isExpanded, keepExpandedShell]);
-
-  useEffect(() => () => {
-    if (collapseTimerRef.current !== null) {
-      clearTimeout(collapseTimerRef.current);
-    }
-  }, []);
-
   const loading = LOADING_STATUSES.has(status);
-  const expandedShell = keepExpandedShell || Boolean(isExpanded && hasExpandedContent);
+  const expandedShell = Boolean(isExpanded && hasExpandedContent);
   const interactive = Boolean(onClick);
   const directAction = interactive && !hasExpandedContent;
   const appearanceState = getAppearanceState({
@@ -486,7 +451,7 @@ export function AmbientToolCard({
         data-testid={interactive ? toggleTestId : undefined}
         onClick={handleSurfaceClick}
       >
-        <HeaderLayoutContext.Provider
+        <ToolCardRowLayoutContext.Provider
           value={{
             affordanceKind: "expand",
             attention: "ambient",
@@ -496,7 +461,7 @@ export function AmbientToolCard({
           }}
         >
           {header}
-        </HeaderLayoutContext.Provider>
+        </ToolCardRowLayoutContext.Provider>
       </div>
 
       <CollapsibleRegion
@@ -511,7 +476,7 @@ export function AmbientToolCard({
 }
 
 export interface ToolCardIconSlotProps {
-  affordanceKind?: ToolCardHeaderAffordanceKind;
+  affordanceKind?: ToolCardAffordanceKind;
   className?: string;
   expandable?: boolean;
   icon: ReactNode;
@@ -529,7 +494,7 @@ export function ToolCardIconSlot({
   onAffordanceClick,
   showDivider = false,
 }: ToolCardIconSlotProps) {
-  const layout = useContext(HeaderLayoutContext);
+  const layout = useContext(ToolCardRowLayoutContext);
   const resolvedExpandable = expandable ?? layout.expandable;
   const resolvedKind = affordanceKind ?? layout.affordanceKind;
   const resolvedExpanded = isExpanded ?? layout.isExpanded;
@@ -618,15 +583,15 @@ export function ToolCardStatusIcon({
   );
 }
 
-export interface ToolCardHeaderActionsProps {
+export interface ToolCardActionsProps {
   children: ReactNode;
   className?: string;
 }
 
-export function ToolCardHeaderActions({ children, className }: ToolCardHeaderActionsProps) {
+export function ToolCardActions({ children, className }: ToolCardActionsProps) {
   return (
     <span
-      className={classNames(styles.headerActions, className)}
+      className={classNames(styles.toolCardActions, className)}
       data-bf-component="flow-chat-tool-card"
       data-bf-part="actions"
       onClick={(event) => event.stopPropagation()}
@@ -635,6 +600,7 @@ export function ToolCardHeaderActions({ children, className }: ToolCardHeaderAct
     </span>
   );
 }
+
 
 export interface ToolCardChangeSummaryProps
   extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
@@ -672,23 +638,23 @@ export function ToolCardChangeSummary({
   );
 }
 
-export interface ProminentToolCardHeaderProps {
+export interface ProminentToolCardSummaryProps {
   action?: ReactNode;
   actionDataAttributes?: Record<`data-${string}`, boolean | number | string | undefined>;
   actionTestId?: string;
   actions?: ReactNode;
-  affordanceKind?: ToolCardHeaderAffordanceKind;
+  affordanceKind?: ToolCardAffordanceKind;
   content?: ReactNode;
   expandAffordance?: boolean;
   extra?: ReactNode;
-  headerExpanded?: boolean;
+  summaryExpanded?: boolean;
   icon?: ReactNode;
   onAffordanceClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   statusIcon?: ReactNode;
   trailingActions?: ReactNode;
 }
 
-export function ProminentToolCardHeader({
+export function ProminentToolCardSummary({
   action,
   actionDataAttributes,
   actionTestId,
@@ -697,27 +663,27 @@ export function ProminentToolCardHeader({
   content,
   expandAffordance,
   extra,
-  headerExpanded,
+  summaryExpanded,
   icon,
   onAffordanceClick,
   statusIcon,
   trailingActions,
-}: ProminentToolCardHeaderProps) {
-  const layout = useContext(HeaderLayoutContext);
+}: ProminentToolCardSummaryProps) {
+  const layout = useContext(ToolCardRowLayoutContext);
   const expandable = expandAffordance ?? layout.expandable;
   const resolvedKind = affordanceKind ?? layout.affordanceKind;
-  const expanded = headerExpanded ?? layout.isExpanded;
+  const expanded = summaryExpanded ?? layout.isExpanded;
   const handleAffordance = onAffordanceClick ?? layout.onAffordanceClick;
   const affordanceAction = expandable ? handleAffordance : undefined;
   const hasActionRegion = Boolean(actions || affordanceAction || trailingActions);
 
   return (
     <div
-      className={classNames(styles.header, styles.prominentHeader)}
+      className={classNames(styles.summaryRow, styles.prominentSummary)}
       data-bf-affordance={resolvedKind}
       data-bf-component="flow-chat-tool-card"
       data-bf-expandable={expandable ? "true" : "false"}
-      data-bf-part="header"
+      data-bf-part="summary"
     >
       {icon !== undefined && icon !== null && icon !== false && icon !== "" && (
         <ToolCardIconSlot icon={icon} />
@@ -802,9 +768,10 @@ export function ProminentToolCardHeader({
   );
 }
 
+
 export interface AmbientToolCardHeaderProps {
   action?: ReactNode;
-  affordanceKind?: ToolCardHeaderAffordanceKind;
+  affordanceKind?: ToolCardAffordanceKind;
   content?: ReactNode;
   expandable?: boolean;
   extra?: ReactNode;
@@ -829,7 +796,7 @@ export function AmbientToolCardHeader({
   rightStatusIconWithDivider = false,
   showDivider = false,
 }: AmbientToolCardHeaderProps) {
-  const layout = useContext(HeaderLayoutContext);
+  const layout = useContext(ToolCardRowLayoutContext);
 
   return (
     <>

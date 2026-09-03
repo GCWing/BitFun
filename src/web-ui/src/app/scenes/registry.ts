@@ -59,7 +59,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'settings' as SceneTabId,
     label: 'Settings',
     labelKey: 'shared:features.settings',
-    Icon: catalogSceneIcon('settings'),
+    Icon: catalogSceneIcon('gear'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
