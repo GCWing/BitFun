@@ -551,6 +551,10 @@ async function startDesktopPreview() {
 
   appProcess = spawnBackgroundCommand(desktopBinary, [], ROOT_DIR, {
     ...process.env,
+    // Debug previews must upload the current workspace build. The adjacent
+    // target/debug resource tree is only a build-time copy and can lag behind
+    // mobile-web edits made while the desktop binary is being reused.
+    BITFUN_MOBILE_WEB_DIR: path.join(ROOT_DIR, 'src/mobile-web/dist'),
   });
 
   appProcess.on('error', (error) => {
@@ -794,6 +798,10 @@ async function main() {
       const tauriDevEnv = {
         ...process.env,
         CARGO_PROFILE_DEV_CODEGEN_UNITS: process.env.CARGO_PROFILE_DEV_CODEGEN_UNITS || '256',
+        // Tauri copies bundle resources into target/debug at process startup.
+        // Point Remote Connect at the live workspace dist so a newly generated
+        // QR code never uploads a stale mobile-web bundle.
+        BITFUN_MOBILE_WEB_DIR: path.join(ROOT_DIR, 'src/mobile-web/dist'),
       };
       try {
         if (process.platform === 'win32') {
@@ -806,6 +814,7 @@ async function main() {
           const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
           await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir, {
             CARGO_PROFILE_DEV_CODEGEN_UNITS: tauriDevEnv.CARGO_PROFILE_DEV_CODEGEN_UNITS,
+            BITFUN_MOBILE_WEB_DIR: tauriDevEnv.BITFUN_MOBILE_WEB_DIR,
           });
         }
       } finally {

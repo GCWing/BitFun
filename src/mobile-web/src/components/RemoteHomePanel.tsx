@@ -55,7 +55,7 @@ const RemoteHomePanel: React.FC<RemoteHomePanelProps> = ({
           {conversationStarting ? (
             <span className="spinner remote-home__composer-spinner" aria-hidden="true" />
           ) : (
-            <svg className="remote-home__composer-mic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg>
+            <span aria-hidden="true" />
           )}
         </button>
       </div>

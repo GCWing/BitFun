@@ -50,6 +50,7 @@ export interface WorkspaceInfo {
   /** Required to disambiguate multiple SSH hosts that share the same POSIX path. */
   remote_connection_id?: string;
   remote_ssh_host?: string;
+  capabilities?: string[];
 }
 
 export interface RemoteWorkspaceIdentity {
@@ -200,17 +201,36 @@ export interface InitialSyncData {
   sessions: SessionInfo[];
   has_more_sessions: boolean;
   authenticated_user_id?: string;
+  capabilities?: string[];
 }
+
+export const REMOTE_CAPABILITY_HARNESS_PROFILES_V1 = 'harness_profiles_v1';
 
 export class RemoteSessionManager {
   private client: RelayHttpClient;
+  private hostCapabilities = new Set<string>();
 
-  constructor(client: RelayHttpClient) {
+  constructor(client: RelayHttpClient, capabilities: string[] = []) {
     this.client = client;
+    this.replaceHostCapabilities(capabilities);
   }
 
   get controlTargetEpoch(): number {
     return this.client.controlTargetEpoch;
+  }
+
+  get controlTargetDeviceId(): string | null {
+    return this.client.pairedDeviceId;
+  }
+
+  supportsHostCapability(capability: string): boolean {
+    return this.hostCapabilities.has(capability);
+  }
+
+  private replaceHostCapabilities(capabilities: string[] | undefined): void {
+    this.hostCapabilities = new Set(
+      (capabilities ?? []).filter((capability) => typeof capability === 'string'),
+    );
   }
 
   onControlTargetChange(listener: () => void): () => void {
@@ -273,6 +293,7 @@ export class RemoteSessionManager {
     const resp = await this.request<{ resp: string } & WorkspaceInfo>({
       cmd: 'get_workspace_info',
     });
+    this.replaceHostCapabilities(resp.capabilities);
     return {
       has_workspace: resp.has_workspace,
       path: resp.path,
@@ -282,6 +303,7 @@ export class RemoteSessionManager {
       assistant_id: resp.assistant_id,
       remote_connection_id: resp.remote_connection_id,
       remote_ssh_host: resp.remote_ssh_host,
+      capabilities: resp.capabilities,
     };
   }
 

@@ -43,6 +43,7 @@ import {
   type RemoteModelConfig,
 } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
+import { createRemoteCacheScope, remoteCache } from '../services/RemoteCache';
 import { useTheme } from '../theme';
 
 function reportRemoteSessionError(
@@ -98,6 +99,7 @@ interface ChatPageProps {
   sessionMgr: RemoteSessionManager;
   sessionId: string;
   sessionName?: string;
+  agentType?: string;
   onBack: () => void;
   autoFocus?: boolean;
   wideLayout?: boolean;
@@ -2151,7 +2153,15 @@ const ReasoningPresetPill: React.FC<{
 
 // ─── ChatPage ───────────────────────────────────────────────────────────────
 
-const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName, onBack, autoFocus, wideLayout = false }) => {
+const ChatPage: React.FC<ChatPageProps> = ({
+  sessionMgr,
+  sessionId,
+  sessionName,
+  agentType: sessionAgentType = 'agentic',
+  onBack,
+  autoFocus,
+  wideLayout = false,
+}) => {
   const { t } = useI18n();
   const {
     getMessages,
@@ -2162,6 +2172,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     error,
     setError,
     currentWorkspace,
+    authenticatedUserId,
     controlTarget,
     updateSessionName,
   } = useMobileStore();
@@ -2192,6 +2203,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const isLoadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
   const controlTargetEpoch = useControlTargetEpoch(sessionMgr);
+  const cacheScope = useMemo(() => createRemoteCacheScope(
+    authenticatedUserId,
+    controlTarget?.deviceId ?? sessionMgr.controlTargetDeviceId,
+  ), [authenticatedUserId, controlTarget?.deviceId, sessionMgr, controlTargetEpoch]);
   const chatTargetOwnerRef = useRef({
     sessionMgr,
     sessionId,
@@ -2530,9 +2545,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       ) return;
       if (beforeId) {
         const currentMsgs = getMessages(sessionId);
-        setMessages(sessionId, [...resp.messages, ...currentMsgs]);
+        const nextMessages = [...resp.messages, ...currentMsgs];
+        setMessages(sessionId, nextMessages);
+        remoteCache.saveTranscript(cacheScope, sessionId, nextMessages, resp.has_more);
       } else {
         setMessages(sessionId, resp.messages);
+        remoteCache.saveTranscript(cacheScope, sessionId, resp.messages, resp.has_more);
       }
       setHasMore(resp.has_more);
       hasMoreRef.current = resp.has_more;
@@ -2550,7 +2568,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         setIsLoadingMore(false);
       }
     }
-  }, [captureChatTargetEpoch, getMessages, isChatTargetCurrent, sessionId, sessionMgr, setError, setMessages]);
+  }, [cacheScope, captureChatTargetEpoch, getMessages, isChatTargetCurrent, sessionId, sessionMgr, setError, setMessages]);
 
   // ── Message long-press context menu ──────────────────────────────
   const clearMsgLongPressTimer = () => {
@@ -2617,25 +2635,31 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         })
       : undefined;
     try {
-      await sessionMgr.sendMessage(sessionId, text, 'agentic', imageContexts);
+      await sessionMgr.sendMessage(sessionId, text, sessionAgentType, imageContexts);
       if (!isChatTargetCurrent(targetEpoch)) return;
       pollerRef.current?.nudge();
     } catch (e: any) {
       reportRemoteSessionError(e, setError);
     }
-  }, [captureChatTargetEpoch, isChatTargetCurrent, menuMessage, sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, isChatTargetCurrent, menuMessage, sessionAgentType, sessionId, sessionMgr, setError]);
 
   const handleDeleteMessage = useCallback(async () => {
     if (!menuMessage) return;
     setDeletingMsg(true);
     try {
       useMobileStore.getState().deleteMessage(sessionId, menuMessage.id);
+      remoteCache.saveTranscript(
+        cacheScope,
+        sessionId,
+        useMobileStore.getState().getMessages(sessionId),
+        hasMoreRef.current,
+      );
       showMsgToast(t('chat.messageDeleted'));
     } finally {
       setDeletingMsg(false);
       setMenuMessage(null);
     }
-  }, [menuMessage, sessionId, showMsgToast, t]);
+  }, [cacheScope, menuMessage, sessionId, showMsgToast, t]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -2708,7 +2732,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       && chatInitSeqRef.current === initSeq
       && isChatTargetCurrent(targetEpoch)
     );
-    Promise.all([loadMessages(), loadModelCatalog()]).then(([_, initialCatalog]) => {
+    const initialize = async () => {
+      const catalogPromise = loadModelCatalog();
+      const cached = await remoteCache.loadTranscript(cacheScope, sessionId);
+      if (!isInitCurrent()) return;
+      if (cached) {
+        setMessages(sessionId, cached.messages);
+        setHasMore(cached.hasMore);
+        hasMoreRef.current = cached.hasMore;
+        pendingInitialScroll.current = true;
+      }
+
+      // Always reconcile with the authoritative host. The cached transcript is
+      // only an immediate paint and remains isolated to this account/device.
+      await loadMessages();
+      const initialCatalog = await catalogPromise;
       if (!isInitCurrent()) return;
       const initialMsgCount = useMobileStore.getState().getMessages(sessionId).length;
       pendingInitialScroll.current = true;
@@ -2720,8 +2758,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
           // message. Replace from the host's durable transcript; message count
           // alone cannot detect that repair.
           setMessages(sessionId, resp.message_snapshot);
+          remoteCache.saveTranscript(
+            cacheScope,
+            sessionId,
+            resp.message_snapshot,
+            hasMoreRef.current,
+          );
         } else if (resp.new_messages && resp.new_messages.length > 0) {
           appendNewMessages(sessionId, resp.new_messages);
+          remoteCache.saveTranscript(
+            cacheScope,
+            sessionId,
+            useMobileStore.getState().getMessages(sessionId),
+            hasMoreRef.current,
+          );
         }
 
         // Detect count mismatch (messages inserted in the middle due to
@@ -2733,6 +2783,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             sessionMgr.getSessionMessages(sessionId, 200).then(fresh => {
               if (!isInitCurrent()) return;
               useMobileStore.getState().setMessages(sessionId, fresh.messages);
+              remoteCache.saveTranscript(cacheScope, sessionId, fresh.messages, fresh.has_more);
             }).catch(() => {});
           }
         }
@@ -2740,6 +2791,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         if (resp.title) {
           setLiveTitle(resp.title);
           updateSessionName(sessionId, resp.title);
+          remoteCache.renameSession(cacheScope, sessionId, resp.title);
         }
         if (resp.model_catalog) {
           setModelCatalog(resp.model_catalog);
@@ -2753,7 +2805,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
 
       poller.start(initialMsgCount);
       pollerRef.current = poller;
-    });
+    };
+    void initialize();
 
     return () => {
       cancelled = true;
@@ -2764,6 +2817,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     };
   }, [
     appendNewMessages,
+    cacheScope,
     captureChatTargetEpoch,
     isChatTargetCurrent,
     loadMessages,
@@ -2871,7 +2925,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       await sessionMgr.sendMessage(
         sessionId,
         text || t('chat.imageAttachmentFallback'),
-        'agentic',
+        sessionAgentType,
         imageContexts,
       );
       if (!isChatTargetCurrent(targetEpoch)) return;
@@ -2887,7 +2941,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         setOptimisticMsg(null);
       }
     }
-  }, [captureChatTargetEpoch, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionId, sessionMgr, setError, t]);
+  }, [captureChatTargetEpoch, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionAgentType, sessionId, sessionMgr, setError, t]);
 
   const handleImageSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -3497,25 +3551,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                     ? <span className="chat-page__stop-spinner" aria-hidden="true" />
                     : <span className="chat-page__stop-glyph" aria-hidden="true" />}
                 </button>
-              ) : (
+              ) : inputExpanded ? (
                 <button
                   className="chat-page__send-btn"
-                  onClick={inputExpanded ? handleSend : expandInput}
-                  disabled={inputExpanded && !input.trim() && pendingImages.length === 0}
-                  aria-label={inputExpanded ? t('common.submit') : t('chat.collapsedInputPlaceholder')}
+                  onClick={handleSend}
+                  disabled={!input.trim() && pendingImages.length === 0}
+                  aria-label={t('common.submit')}
                 >
-                  {inputExpanded ? (
-                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                      <path d="M10 3L10 17M10 3L5 8M10 3L15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  ) : (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <rect x="9" y="3" width="6" height="12" rx="3" />
-                      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" />
-                    </svg>
-                  )}
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M10 3L10 17M10 3L5 8M10 3L15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
