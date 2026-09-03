@@ -28,10 +28,11 @@ use bitfun_runtime_ports::{
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_runtime_ports::{
-    AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionSource,
-    AgentTurnCancellationRequest, PermissionPolicyPreset, RemoteControlStatePort,
-    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
-    RuntimeServiceCapability, RuntimeServicePort, ToolPermissionConfig,
+    AgentInputAttachment, AgentSessionComposerUpdate, AgentSessionCreateRequest,
+    AgentSubmissionSource, AgentTurnCancellationRequest, PermissionPolicyPreset,
+    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
+    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
+    ToolPermissionConfig,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_services_integrations::remote_connect::{
@@ -49,10 +50,11 @@ use bitfun_services_integrations::remote_connect::{
     RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
     RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
     RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteSessionModelSelection, RemoteSessionRollbackOutcome, RemoteSessionRuntimeHost,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
+    RemoteWorkspaceUpdate,
 };
 #[cfg(feature = "remote-connect")]
 use log::{debug, info};
@@ -351,6 +353,7 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
 
     RemoteChatHistoryTurn {
         turn_id: turn.turn_id.clone(),
+        turn_index: turn.turn_index,
         user_message_id: turn.user_message.id.clone(),
         user_display_content: user_projection.content,
         user_timestamp_ms: turn.user_message.timestamp,
@@ -2364,6 +2367,62 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         session_id: &str,
     ) -> Result<(Vec<ChatMessage>, bool), String> {
         CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
+    }
+
+    /// Reuse the desktop targeted-rollback transaction so a remote client
+    /// retires turns and restores files for real instead of hiding messages in
+    /// its own transcript.
+    async fn rollback_session_to_turn(
+        &self,
+        session_id: &str,
+        target_turn_id: &str,
+        expected_storage_turn_index: Option<usize>,
+    ) -> Result<RemoteSessionRollbackOutcome, String> {
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
+        if binding.is_remote() {
+            return Err("Session rollback is unavailable for remote workspaces".to_string());
+        }
+        self.coordinator
+            .ensure_workspace_runtime_ownership(binding.logical_workspace_path(), None, None)
+            .map_err(|error| error.to_string())?;
+
+        let outcome = self
+            .runtime
+            .rollback_session_to_turn(AgentSessionRollbackToTurnRequest {
+                workspace_path: binding.logical_workspace_path_string(),
+                workspace_id: binding.workspace_id.clone(),
+                workspace_hostname: Some(binding.session_identity.hostname.clone()),
+                session_id: session_id.to_string(),
+                target_turn_id: target_turn_id.to_string(),
+                expected_storage_turn_index,
+                expected_catalog_revision: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| error.into_message())?;
+
+        match outcome {
+            AgentSessionRollbackToTurnOutcome::Completed { result } => {
+                Ok(RemoteSessionRollbackOutcome {
+                    retired_turn_ids: result.retired_turn_ids,
+                    restored_files: result.restored_files,
+                    composer_text: match result.composer {
+                        AgentSessionComposerUpdate::Replace { text } => Some(text),
+                        AgentSessionComposerUpdate::Preserve
+                        | AgentSessionComposerUpdate::Clear => None,
+                    },
+                    changed: result.changed,
+                })
+            }
+            AgentSessionRollbackToTurnOutcome::RecoveryRequired { reason, .. } => Err(format!(
+                "Session rollback requires recovery before it can continue: {reason}"
+            )),
+        }
     }
 
     async fn delete_session(

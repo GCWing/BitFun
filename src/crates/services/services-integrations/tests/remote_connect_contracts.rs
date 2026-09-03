@@ -434,6 +434,8 @@ fn remote_chat_history_assembly_preserves_message_shape_and_item_order() {
     assert_eq!(messages[0].role, "user");
     assert_eq!(messages[0].content, "original question");
     assert_eq!(messages[0].timestamp, "1");
+    assert_eq!(messages[0].turn_id.as_deref(), Some("turn-1"));
+    assert_eq!(messages[0].turn_index, Some(4));
     assert_eq!(
         messages[0].images.as_ref().unwrap()[0],
         ChatImageAttachment {
@@ -444,6 +446,8 @@ fn remote_chat_history_assembly_preserves_message_shape_and_item_order() {
 
     assert_eq!(messages[1].id, "turn-1_assistant");
     assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].turn_id, None);
+    assert_eq!(messages[1].turn_index, None);
     assert_eq!(messages[1].content, "visible text");
     assert_eq!(messages[1].timestamp, "1");
     assert_eq!(messages[1].thinking.as_deref(), Some("visible thought"));
@@ -511,6 +515,7 @@ fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
 fn remote_history_contract_turn(is_in_progress: bool) -> RemoteChatHistoryTurn {
     RemoteChatHistoryTurn {
         turn_id: "turn-1".to_string(),
+        turn_index: 4,
         user_message_id: "user-1".to_string(),
         user_display_content: "original question".to_string(),
         user_timestamp_ms: 1_000,
@@ -1065,6 +1070,25 @@ async fn remote_connect_command_owner_preserves_cancel_and_group_routing() {
             requested_turn_id: Some("turn-1".to_string()),
         }
     );
+}
+
+#[tokio::test]
+async fn remote_connect_command_owner_routes_rollback_to_the_session_group() {
+    let host = RecordingCommandHost::default();
+
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::RollbackSessionToTurn {
+            session_id: "session-1".to_string(),
+            target_turn_id: "turn-7".to_string(),
+            expected_storage_turn_index: Some(6),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+
+    assert!(matches!(response, RemoteResponse::SessionCreated { .. }));
+    assert_eq!(host.events(), vec!["session"]);
 }
 
 #[tokio::test]
@@ -1921,6 +1945,8 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
         content: "done".to_string(),
         timestamp: "1".to_string(),
         metadata: None,
+        turn_id: None,
+        turn_index: None,
         tools: Some(vec![RemoteToolStatus {
             id: "tool-1".to_string(),
             name: "bash".to_string(),
@@ -2158,6 +2184,76 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
     .expect("serialize title response");
     assert_eq!(title_updated["resp"], "session_title_updated");
     assert_eq!(title_updated["title"], "Renamed session");
+}
+
+#[test]
+fn remote_connect_rollback_wire_shape_lives_in_owner_contract() {
+    let with_guard: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "rollback_session_to_turn",
+        "session_id": "session-1",
+        "target_turn_id": "turn-7",
+        "expected_storage_turn_index": 6
+    }))
+    .expect("deserialize rollback command with guard");
+    let without_guard: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "rollback_session_to_turn",
+        "session_id": "session-1",
+        "target_turn_id": "turn-7"
+    }))
+    .expect("deserialize rollback command without guard");
+
+    assert!(matches!(
+        with_guard,
+        RemoteCommand::RollbackSessionToTurn {
+            expected_storage_turn_index: Some(6),
+            ref target_turn_id,
+            ..
+        } if target_turn_id == "turn-7"
+    ));
+    assert!(matches!(
+        without_guard,
+        RemoteCommand::RollbackSessionToTurn {
+            expected_storage_turn_index: None,
+            ..
+        }
+    ));
+
+    let rolled_back = serde_json::to_value(RemoteResponse::SessionRolledBack {
+        session_id: "session-1".to_string(),
+        retired_turn_ids: vec!["turn-8".to_string(), "turn-9".to_string()],
+        restored_files: vec!["src/main.rs".to_string()],
+        composer_text: Some("original question".to_string()),
+        changed: true,
+    })
+    .expect("serialize rollback response");
+
+    assert_eq!(rolled_back["resp"], "session_rolled_back");
+    assert_eq!(rolled_back["retired_turn_ids"][1], "turn-9");
+    assert_eq!(rolled_back["restored_files"][0], "src/main.rs");
+    assert_eq!(rolled_back["composer_text"], "original question");
+    assert_eq!(rolled_back["changed"], true);
+
+    let without_composer = serde_json::to_value(RemoteResponse::SessionRolledBack {
+        session_id: "session-1".to_string(),
+        retired_turn_ids: Vec::new(),
+        restored_files: Vec::new(),
+        composer_text: None,
+        changed: false,
+    })
+    .expect("serialize rollback response without composer text");
+    assert!(without_composer.get("composer_text").is_none());
+}
+
+#[test]
+fn remote_connect_user_message_carries_rollback_turn_identity_on_the_wire() {
+    let messages = build_remote_chat_messages(vec![remote_history_contract_turn(false)]);
+    let user = serde_json::to_value(&messages[0]).expect("serialize user message");
+    let assistant = serde_json::to_value(&messages[1]).expect("serialize assistant message");
+
+    assert_eq!(user["turn_id"], "turn-1");
+    assert_eq!(user["turn_index"], 4);
+    assert!(assistant.get("turn_id").is_none());
+    assert!(assistant.get("turn_index").is_none());
 }
 
 fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
@@ -2750,6 +2846,8 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         content: "answer".to_string(),
         timestamp: "2".to_string(),
         metadata: None,
+        turn_id: None,
+        turn_index: None,
         tools: None,
         thinking: None,
         items: None,

@@ -148,10 +148,21 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   metadata?: any;
+  /** Persisted turn that owns this message. Host sends it on user messages only. */
+  turn_id?: string;
+  /** Storage turn index for `turn_id`, used as the rollback staleness guard. */
+  turn_index?: number;
   tools?: RemoteToolStatus[];
   thinking?: string;
   items?: ChatMessageItem[];
   images?: ChatImageAttachment[];
+}
+
+export interface SessionRollbackResult {
+  retired_turn_ids: string[];
+  restored_files: string[];
+  composer_text?: string;
+  changed: boolean;
 }
 
 export interface ActiveTurnSnapshot {
@@ -484,6 +495,38 @@ export class RemoteSessionManager {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.request({ cmd: 'delete_session', session_id: sessionId });
+  }
+
+  /**
+   * Retire every turn after `targetTurnId` on the host and restore the files
+   * those turns wrote. `expectedStorageTurnIndex` comes from the same message
+   * the user targeted, so a transcript that moved since it was loaded fails
+   * instead of rolling back a different turn.
+   */
+  async rollbackSessionToTurn(
+    sessionId: string,
+    targetTurnId: string,
+    expectedStorageTurnIndex?: number,
+  ): Promise<SessionRollbackResult> {
+    const resp = await this.request<{
+      resp: string;
+      session_id: string;
+      retired_turn_ids?: string[];
+      restored_files?: string[];
+      composer_text?: string;
+      changed?: boolean;
+    }>({
+      cmd: 'rollback_session_to_turn',
+      session_id: sessionId,
+      target_turn_id: targetTurnId,
+      expected_storage_turn_index: expectedStorageTurnIndex,
+    });
+    return {
+      retired_turn_ids: resp.retired_turn_ids ?? [],
+      restored_files: resp.restored_files ?? [],
+      composer_text: resp.composer_text,
+      changed: resp.changed ?? false,
+    };
   }
 
   async renameSession(sessionId: string, title: string): Promise<void> {

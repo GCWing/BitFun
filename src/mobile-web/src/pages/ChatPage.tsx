@@ -2265,6 +2265,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [deletingMsg, setDeletingMsg] = useState(false);
+  const [rollbackTarget, setRollbackTarget] = useState<{
+    message: ChatMessage;
+    mode: 'rollback' | 'edit';
+  } | null>(null);
+  const [rollbackDraft, setRollbackDraft] = useState('');
+  const [rollbackBusy, setRollbackBusy] = useState(false);
   const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const msgLongPressPosRef = useRef({ x: 0, y: 0 });
   const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -2637,6 +2643,80 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       setMenuMessage(null);
     }
   }, [menuMessage, sessionId, showMsgToast, t]);
+
+  const openRollbackSheet = useCallback((mode: 'rollback' | 'edit') => {
+    if (!menuMessage?.turn_id) return;
+    setRollbackDraft(mode === 'edit' ? sanitizeMessageText(menuMessage.content) : '');
+    setRollbackTarget({ message: menuMessage, mode });
+    setMenuMessage(null);
+  }, [menuMessage]);
+
+  const closeRollbackSheet = useCallback(() => {
+    if (rollbackBusy) return;
+    setRollbackTarget(null);
+    setRollbackDraft('');
+  }, [rollbackBusy]);
+
+  // Rollback is the host-side mutation: it retires the later turns and restores
+  // the files they wrote. Editing is that same rollback followed by a normal
+  // send, which is how the desktop reruns an edited user message.
+  const handleConfirmRollback = useCallback(async () => {
+    if (!rollbackTarget || rollbackBusy) return;
+    const { message, mode } = rollbackTarget;
+    const turnId = message.turn_id;
+    if (!turnId) return;
+    const editedText = mode === 'edit' ? rollbackDraft.trim() : '';
+    if (mode === 'edit' && !editedText) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+
+    setRollbackBusy(true);
+    try {
+      const result = await sessionMgr.rollbackSessionToTurn(sessionId, turnId, message.turn_index);
+      if (!isChatTargetCurrent(targetEpoch)) return;
+
+      if (mode === 'edit') {
+        const imageContexts = message.images?.length
+          ? message.images.map((img, idx) => ({
+              id: `mobile_edit_${Date.now()}_${idx}`,
+              data_url: img.data_url,
+              mime_type: img.data_url.split(';')[0]?.replace('data:', '') || 'image/png',
+              metadata: { name: img.name, source: 'remote' },
+            }))
+          : undefined;
+        await sessionMgr.sendMessage(sessionId, editedText, agentMode, imageContexts);
+        if (!isChatTargetCurrent(targetEpoch)) return;
+      } else if (result.composer_text) {
+        setInput(result.composer_text);
+        setInputExpanded(true);
+      }
+
+      showMsgToast(
+        result.restored_files.length > 0
+          ? t('chat.rollbackDoneRestored', { count: result.restored_files.length })
+          : t('chat.rollbackDone'),
+      );
+      pollerRef.current?.nudge();
+    } catch (e: any) {
+      reportRemoteSessionError(e, setError);
+    } finally {
+      setRollbackBusy(false);
+      setRollbackTarget(null);
+      setRollbackDraft('');
+    }
+  }, [
+    agentMode,
+    captureChatTargetEpoch,
+    isChatTargetCurrent,
+    rollbackBusy,
+    rollbackDraft,
+    rollbackTarget,
+    sessionId,
+    sessionMgr,
+    setError,
+    showMsgToast,
+    t,
+  ]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -3339,6 +3419,24 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                   <span>{t('chat.resendMessage')}</span>
                 </button>
               )}
+              {menuMessage.role === 'user' && !!menuMessage.turn_id && (
+                <>
+                  <button className="chat-msg__menu-btn" onClick={() => openRollbackSheet('edit')}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+                    </svg>
+                    <span>{t('chat.editAndResend')}</span>
+                  </button>
+                  <button className="chat-msg__menu-btn" onClick={() => openRollbackSheet('rollback')}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 4 1 10 7 10" />
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                    <span>{t('chat.rollbackToHere')}</span>
+                  </button>
+                </>
+              )}
               <button
                 className="chat-msg__menu-btn chat-msg__menu-btn--danger"
                 onClick={handleDeleteMessage}
@@ -3352,6 +3450,58 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
               </button>
             </div>
             <button className="chat-msg__menu-cancel" onClick={() => setMenuMessage(null)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rollback / edit confirmation sheet */}
+      {rollbackTarget && (
+        <div className="chat-msg__menu-overlay" onClick={closeRollbackSheet}>
+          <div className="chat-msg__menu-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-msg__menu-handle" />
+            <div className="chat-msg__rollback">
+              <p className="chat-msg__rollback-title">
+                {rollbackTarget.mode === 'edit' ? t('chat.editSheetTitle') : t('chat.rollbackSheetTitle')}
+              </p>
+              <p className="chat-msg__rollback-hint">
+                {rollbackTarget.mode === 'edit' ? t('chat.editSheetHint') : t('chat.rollbackSheetHint')}
+              </p>
+              {rollbackTarget.mode === 'edit' ? (
+                <textarea
+                  className="chat-msg__rollback-input"
+                  value={rollbackDraft}
+                  onChange={(e) => setRollbackDraft(e.target.value)}
+                  placeholder={t('chat.editPlaceholder')}
+                  rows={4}
+                  autoFocus
+                  disabled={rollbackBusy}
+                />
+              ) : (
+                <p className="chat-msg__rollback-quote">{sanitizeMessageText(rollbackTarget.message.content)}</p>
+              )}
+            </div>
+            <div className="chat-msg__menu-actions">
+              <button
+                className="chat-msg__menu-btn chat-msg__menu-btn--danger chat-msg__menu-btn--confirm"
+                onClick={handleConfirmRollback}
+                disabled={rollbackBusy || (rollbackTarget.mode === 'edit' && !rollbackDraft.trim())}
+              >
+                <span>
+                  {rollbackBusy
+                    ? '...'
+                    : rollbackTarget.mode === 'edit'
+                      ? t('chat.editAction')
+                      : t('chat.rollbackAction')}
+                </span>
+              </button>
+            </div>
+            <button
+              className="chat-msg__menu-cancel"
+              onClick={closeRollbackSheet}
+              disabled={rollbackBusy}
+            >
               {t('common.cancel')}
             </button>
           </div>
