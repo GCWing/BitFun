@@ -1027,6 +1027,7 @@ async fn remote_connect_command_owner_routes_send_message_and_prefers_explicit_i
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
             display_content: None,
+            turn_id: Some("harmony-turn-1".to_string()),
             agent_type: Some("code".to_string()),
             images: Some(vec![ImageAttachment {
                 name: "legacy.png".to_string(),
@@ -1064,7 +1065,7 @@ async fn remote_connect_command_owner_routes_send_message_and_prefers_explicit_i
     assert_eq!(submitted.agent_type.as_deref(), Some("code"));
     assert_eq!(submitted.image_contexts, vec!["explicit:ctx-1".to_string()]);
     assert_eq!(submitted.policy.source, RemoteConnectSubmissionSource::Bot);
-    assert!(submitted.turn_id.is_none());
+    assert_eq!(submitted.turn_id.as_deref(), Some("harmony-turn-1"));
 }
 
 #[tokio::test]
@@ -2205,6 +2206,7 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
         session_id: "session-1".to_string(),
         content: "hello".to_string(),
         display_content: None,
+        turn_id: Some("harmony-turn-1".to_string()),
         agent_type: Some("code".to_string()),
         images: Some(vec![ImageAttachment {
             name: "clip.png".to_string(),
@@ -2222,6 +2224,7 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
 
     assert_eq!(json["cmd"], "send_message");
     assert_eq!(json["session_id"], "session-1");
+    assert_eq!(json["turn_id"], "harmony-turn-1");
     assert_eq!(json["agent_type"], "code");
     assert_eq!(json["images"][0]["name"], "clip.png");
     assert_eq!(json["image_contexts"][0]["id"], "ctx-1");
@@ -2230,6 +2233,18 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
         "D:/workspace/project/screenshot.png"
     );
     assert!(json.get("imageContexts").is_none());
+
+    let legacy: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "send_message",
+        "session_id": "session-legacy",
+        "content": "hello",
+        "agent_type": "code"
+    }))
+    .expect("deserialize legacy send command");
+    match legacy {
+        RemoteCommand::SendMessage { turn_id, .. } => assert!(turn_id.is_none()),
+        other => panic!("unexpected legacy command: {other:?}"),
+    }
 
     let cancel = serde_json::to_value(RemoteCommand::CancelTask {
         session_id: "session-1".to_string(),

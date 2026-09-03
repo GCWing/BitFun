@@ -435,6 +435,45 @@ export default function conversationStateUnitTest() {
       expect(merged[1].id).assertEqual('optimistic-user-image');
     });
 
+    it('reconciles a transformed image by stable turn identity', 0, () => {
+      const optimistic = chatMessageWithImage(
+        'optimistic-user-image', 'user', '分析图片', 'capture.png', 'data:image/png;base64,original'
+      );
+      optimistic.turnId = 'harmony-turn-image';
+      const persisted = chatMessageWithImage(
+        'persisted-user-image', 'user', '分析图片', 'capture.png', 'data:image/jpeg;base64,thumbnail'
+      );
+      persisted.turnId = 'harmony-turn-image';
+
+      const remaining = ChatTimelineStore.optimisticMessagesNotPersisted([optimistic], [persisted]);
+
+      expect(remaining.length).assertEqual(0);
+
+      const merged = RemoteUiState.mergeRemoteWithLocalOptimistic([persisted], [optimistic]);
+      expect(merged.length).assertEqual(1);
+      expect(merged[0].id).assertEqual('persisted-user-image');
+    });
+
+    it('removes an optimistic image when an older host acknowledgement arrives after polling', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-image-race');
+      const optimistic = chatMessageWithImage(
+        'optimistic-user-image', 'user', '分析图片', 'capture.png', 'data:image/png;base64,original'
+      );
+      optimistic.turnId = 'harmony-client-turn';
+      store.appendOptimisticMessage(optimistic);
+      const persisted = chatMessageWithImage(
+        'persisted-user-image', 'user', '分析图片', 'capture.png', 'data:image/jpeg;base64,thumbnail'
+      );
+      persisted.turnId = 'legacy-host-turn';
+      store.setPersistedMessages([persisted]);
+      expect(store.snapshot().optimisticMessages.length).assertEqual(1);
+
+      store.acknowledgeOptimisticTurn('optimistic-user-image', 'legacy-host-turn');
+
+      expect(store.snapshot().optimisticMessages.length).assertEqual(0);
+    });
+
     it('does not hide an active reply that matches historical assistant text', 0, () => {
       const store = new ChatTimelineStore();
       store.reset('session-repeat-assistant');

@@ -560,6 +560,7 @@ mod tests {
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
             display_content: None,
+            turn_id: Some("harmony-turn-1".to_string()),
             agent_type: Some("code".to_string()),
             images: Some(vec![ImageAttachment {
                 name: "clip.png".to_string(),
@@ -570,6 +571,7 @@ mod tests {
         let json = serde_json::to_value(command).expect("serialize send command");
         assert_eq!(json["cmd"], "send_message");
         assert_eq!(json["session_id"], "session-1");
+        assert_eq!(json["turn_id"], "harmony-turn-1");
         assert_eq!(json["agent_type"], "code");
         assert_eq!(json["images"][0]["name"], "clip.png");
         assert!(json["image_contexts"].is_null());

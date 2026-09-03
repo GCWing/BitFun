@@ -52,7 +52,13 @@ export class RemoteCommandFactory {
     };
   }
 
-  static sendMessage(sessionId: string, text: string, agentType?: string, imageContexts?: RemoteImageContext[]): RemoteCommand {
+  static sendMessage(
+    sessionId: string,
+    text: string,
+    agentType?: string,
+    imageContexts?: RemoteImageContext[],
+    turnId?: string
+  ): RemoteCommand {
     const command: RemoteCommand = {
       cmd: 'send_message',
       session_id: sessionId,
@@ -63,6 +69,9 @@ export class RemoteCommandFactory {
     }
     if (imageContexts && imageContexts.length > 0) {
       command.image_contexts = imageContexts;
+    }
+    if (turnId && turnId.length > 0) {
+      command.turn_id = turnId;
     }
     return command;
   }

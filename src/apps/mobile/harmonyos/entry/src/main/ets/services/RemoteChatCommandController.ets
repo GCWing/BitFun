@@ -14,12 +14,13 @@ import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 
 export interface RemoteChatCommandClient {
   getSessionMessages(sessionId: string): Promise<SessionMessagesResult>;
-  sendMessage(sessionId: string, text: string, agentType?: string): Promise<string>;
+  sendMessage(sessionId: string, text: string, agentType?: string, turnId?: string): Promise<string>;
   sendMessageWithImages(
     sessionId: string,
     text: string,
     agentType: string,
-    imageContexts: RemoteImageContext[]
+    imageContexts: RemoteImageContext[],
+    turnId?: string
   ): Promise<string>;
   steerTurn(
     sessionId: string,
@@ -40,7 +41,7 @@ export interface RemoteChatCommandCallbacks {
   // before any request has been sent. Without it the loading skeleton would
   // outlive the messages it is standing in for.
   onTimelineReady: () => void;
-  onSendSucceeded: (turnId: string, pendingActiveId: string) => void;
+  onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => void;
   onSteerSucceeded?: (
     steeringId: string,
     turnId: string,
@@ -320,7 +321,8 @@ export class RemoteChatCommandController {
     localMessageId: string,
     pendingActiveId: string,
     isBusy: boolean,
-    remoteAvailable: boolean
+    remoteAvailable: boolean,
+    clientTurnId: string = ''
   ): Promise<void> {
     if ((text.length === 0 && images.length === 0) || sessionId.length === 0 || isBusy || !remoteAvailable) {
       return;
@@ -328,10 +330,11 @@ export class RemoteChatCommandController {
     try {
       this.callbacks.onBusy(true);
       this.callbacks.onStatusText(images.length > 0 ? RemoteI18n.t('status.sendImage') : RemoteI18n.t('status.sendCommand'));
+      const requestedTurnId = clientTurnId.trim().length > 0 ? clientTurnId : localMessageId;
       const turnId = images.length > 0 ?
-        await this.client.sendMessageWithImages(sessionId, text, agentType, imageContexts) :
-        await this.client.sendMessage(sessionId, text, agentType);
-      this.callbacks.onSendSucceeded(turnId, pendingActiveId);
+        await this.client.sendMessageWithImages(sessionId, text, agentType, imageContexts, requestedTurnId) :
+        await this.client.sendMessage(sessionId, text, agentType, requestedTurnId);
+      this.callbacks.onSendSucceeded(turnId, pendingActiveId, localMessageId);
       this.callbacks.onStatusText(RemoteI18n.t('status.sentWaiting'));
     } catch (err) {
       this.callbacks.onSendFailed(rawText, images, localMessageId, pendingActiveId);
@@ -395,7 +398,7 @@ export class RemoteChatCommandController {
     try {
       this.callbacks.onBusy(true);
       const turnId = await this.client.buildPlan(sessionId, planFilePath, planName, agentType);
-      this.callbacks.onSendSucceeded(turnId, pendingActiveId);
+      this.callbacks.onSendSucceeded(turnId, pendingActiveId, localMessageId);
       this.callbacks.onStatusText(RemoteI18n.t('status.sentWaiting'));
       this.callbacks.onPollRequested();
     } catch (err) {
