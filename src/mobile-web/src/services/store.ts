@@ -29,7 +29,7 @@ interface MobileStore {
   /** Canonical account identity used for ownership checks. Never render this value. */
   authenticatedUserId: string | null;
   setAuthenticatedUserId: (userId: string | null) => void;
-  /** Username in account mode, or the user-entered pairing id in legacy mode. */
+  /** User-facing username only when this browser completed account authentication. */
   authenticatedUserLabel: string | null;
   setAuthenticatedUserLabel: (label: string | null) => void;
 

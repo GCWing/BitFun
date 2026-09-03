@@ -176,8 +176,7 @@
   white-space: nowrap;
 }
 
-.remote-home__composer-plus,
-.remote-home__composer-mic {
+.remote-home__composer-plus {
   justify-self: center;
 }
 
@@ -555,11 +554,17 @@
   color: var(--bf-color-content-primary);
 }
 
-.harmony-sidebar__workspace-session > svg {
-  flex: 0 0 30px;
-  width: 30px;
-  margin-left: 4px;
-  opacity: 0.56;
+.harmony-sidebar__session-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
 }
 
 .harmony-sidebar__workspace-message {
@@ -603,13 +608,25 @@
 }
 
 .harmony-sidebar__session-more {
+  display: grid;
+  place-items: center;
   flex: 0 0 34px;
   width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--bf-color-content-secondary);
   font-size: var(--bf-type-meta-font-size);
   letter-spacing: var(--bf-type-modifier-tracking-tighter-letter-spacing);
   text-align: center;
   opacity: 0.62;
+}
+
+.harmony-sidebar__session-more:active {
+  background: var(--harmony-soft);
+  opacity: 1;
 }
 
 .harmony-sidebar__empty {

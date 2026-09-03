@@ -1123,6 +1123,26 @@
   }
 }
 
+.harness-profile-picker__option {
+  min-height: 52px;
+}
+
+.harness-profile-picker__density {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+
+  > span {
+    width: 4px;
+    border-radius: 2px;
+    background: currentColor;
+  }
+}
+
 .session-list__item--active {
   border-color: var(--bf-color-accent-default) !important;
   background: var(--bf-color-surface-subtle) !important;

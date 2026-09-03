@@ -20,7 +20,10 @@ interface DeviceInfo {
   device_name: string;
   online: boolean;
   last_seen_at?: number | null;
+  room_route?: boolean;
 }
+
+const PAIRED_ROOM_DEVICE_ID = '__bitfun_paired_room__';
 
 interface Props {
   client: RelayHttpClient;
@@ -61,7 +64,7 @@ const NoIdentityIcon = () => (
 
 const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const { t, formatRelativeTime } = useI18n();
-  const { setControlTarget, resetForDeviceSwitch } = useMobileStore();
+  const { connectionHealth, setControlTarget, resetForDeviceSwitch } = useMobileStore();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [identityReady, setIdentityReady] = useState(client.hasDelegatedIdentity);
   const [identityChecking, setIdentityChecking] = useState(!client.hasDelegatedIdentity);
@@ -72,7 +75,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const identityRequestRef = useRef(0);
   const devicesRequestRef = useRef(0);
   const switchRequestRef = useRef(0);
-  const sortedDevices = useMemo(() => devices.filter((device) => (
+  const sortedDevices = useMemo(() => {
+    const listedDevices = devices.filter((device) => (
     device.device_id !== client.controllerDeviceId
   )).sort((left, right) => {
     const leftCurrent = left.device_id === client.pairedDeviceId;
@@ -80,7 +84,17 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
     if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
     if (left.online !== right.online) return left.online ? -1 : 1;
     return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
-  }), [client.controllerDeviceId, client.pairedDeviceId, devices]);
+    });
+    if (client.isPaired && client.pairedDeviceId === null) {
+      listedDevices.unshift({
+        device_id: PAIRED_ROOM_DEVICE_ID,
+        device_name: '',
+        online: connectionHealth !== 'unreachable',
+        room_route: true,
+      });
+    }
+    return listedDevices;
+  }, [client, client.controllerDeviceId, client.pairedDeviceId, connectionHealth, devices]);
 
   const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
     const message = String((value as { message?: string })?.message || value);
@@ -234,48 +248,13 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
     }
   }, [client, friendlyError, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
 
-  const renderBody = () => {
-    if (identityChecking) {
-      return (
-        <div className="devices-page__loading">
-          <span className="spinner" />
-          {t('devices.loading')}
-        </div>
-      );
-    }
-
-    if (!identityReady) {
-      return (
-        <div className="devices-page__empty-card">
-          <span className="devices-page__empty-icon"><NoIdentityIcon /></span>
-          <p className="devices-page__empty-text">{t('devices.noDelegatedIdentity')}</p>
-          <button type="button" className="devices-page__retry-btn" onClick={handleManualRefresh}>
-            {t('devices.retry')}
-          </button>
-        </div>
-      );
-    }
-
-    if (loading && devices.length === 0) {
-      return (
-        <div className="devices-page__loading">
-          <span className="spinner" />
-          {t('devices.loading')}
-        </div>
-      );
-    }
-
-    if (devices.length === 0) {
-      return <div className="devices-page__empty">{t('devices.noDevices')}</div>;
-    }
-
-    return (
+  const renderDeviceList = () => (
       <div className="devices-page__list">
         {sortedDevices.map((d) => {
-          const isCurrent = client.pairedDeviceId === d.device_id;
+          const isCurrent = d.room_route || client.pairedDeviceId === d.device_id;
           const isHome = client.homeDeviceId === d.device_id;
           const isSwitching = switchingId === d.device_id;
-          const clickable = d.online && !isCurrent && !switchingId;
+          const clickable = !d.room_route && d.online && !isCurrent && !switchingId;
           return (
             <button
               key={d.device_id}
@@ -293,7 +272,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
               <span className="devices-page__device-copy">
                 <span className="devices-page__device-name-row">
                   <span className="devices-page__device-name">
-                    {d.device_name || t('devices.unknownDevice')}
+                    {d.room_route
+                      ? t('devices.pairedDesktopName')
+                      : d.device_name || t('devices.unknownDevice')}
                   </span>
                   {isCurrent && (
                     <span className="devices-page__badge devices-page__badge--current">
@@ -313,7 +294,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                     : d.last_seen_at
                       ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
                       : t('devices.offline')}
-                  <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
+                  {!d.room_route && (
+                    <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
+                  )}
                 </span>
               </span>
               {isSwitching ? (
@@ -329,7 +312,50 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
           );
         })}
       </div>
-    );
+  );
+
+  const renderBody = () => {
+    if (identityChecking) {
+      return (
+        <>
+          {sortedDevices.length > 0 && renderDeviceList()}
+          <div className="devices-page__loading">
+            <span className="spinner" />
+            {t('devices.loading')}
+          </div>
+        </>
+      );
+    }
+
+    if (!identityReady) {
+      return (
+        <>
+          {sortedDevices.length > 0 && renderDeviceList()}
+          <div className="devices-page__empty-card">
+            <span className="devices-page__empty-icon"><NoIdentityIcon /></span>
+            <p className="devices-page__empty-text">{t('devices.noDelegatedIdentity')}</p>
+            <button type="button" className="devices-page__retry-btn" onClick={handleManualRefresh}>
+              {t('devices.retry')}
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    if (loading && sortedDevices.length === 0) {
+      return (
+        <div className="devices-page__loading">
+          <span className="spinner" />
+          {t('devices.loading')}
+        </div>
+      );
+    }
+
+    if (sortedDevices.length === 0) {
+      return <div className="devices-page__empty">{t('devices.noDevices')}</div>;
+    }
+
+    return renderDeviceList();
   };
 
   return (

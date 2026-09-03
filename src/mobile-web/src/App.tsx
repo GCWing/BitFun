@@ -6,13 +6,17 @@ import DevicesPage from './pages/DevicesPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
-import { RemoteSessionManager } from './services/RemoteSessionManager';
+import {
+  REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
+  RemoteSessionManager,
+} from './services/RemoteSessionManager';
 import { reconcileDelegatedAccountOwner } from './services/delegatedAccountOwner';
 import { ThemeProvider } from './theme';
 import { useConnectionHealth } from './hooks/useConnectionHealth';
 import { useWideLayout } from './hooks/useWideLayout';
 import { useMobileStore } from './services/store';
 import RemoteHomePanel from './components/RemoteHomePanel';
+import HarnessProfilePicker from './components/HarnessProfilePicker';
 import './styles/index.scss';
 
 type Page = 'pairing' | 'workspace' | 'sessions' | 'chat' | 'devices';
@@ -40,8 +44,10 @@ const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
+  const [activeSessionAgentType, setActiveSessionAgentType] = useState('agentic');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
   const [homeConversationStarting, setHomeConversationStarting] = useState(false);
+  const [homeHarnessPickerOpen, setHomeHarnessPickerOpen] = useState(false);
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const isWideLayout = useWideLayout();
   const connectionHealth = useMobileStore((state) => state.connectionHealth);
@@ -129,7 +135,9 @@ const AppContent: React.FC = () => {
         clearTimeout(timerRef.current);
         setActiveSessionId(null);
         setActiveSessionName('Session');
+        setActiveSessionAgentType('agentic');
         setChatAutoFocus(false);
+        setHomeHarnessPickerOpen(false);
         setPrevPage(null);
         setNavDir(null);
         pageStackRef.current = ['pairing', 'sessions'];
@@ -198,9 +206,15 @@ const AppContent: React.FC = () => {
     navigateTo('sessions', 'pop');
   }, [navigateTo]);
 
-  const handleSelectSession = useCallback((sessionId: string, sessionName?: string, isNew?: boolean) => {
+  const handleSelectSession = useCallback((
+    sessionId: string,
+    sessionName?: string,
+    isNew?: boolean,
+    agentType = 'agentic',
+  ) => {
     setActiveSessionId(sessionId);
     setActiveSessionName(sessionName || 'Session');
+    setActiveSessionAgentType(agentType);
     setChatAutoFocus(!!isNew);
     setCompactSidebarOpen(false);
     if (isWideLayout) {
@@ -217,7 +231,7 @@ const AppContent: React.FC = () => {
     navigateTo('chat', 'push');
   }, [isWideLayout, navigateTo, page]);
 
-  const handleStartConversation = useCallback(async () => {
+  const handleStartConversation = useCallback(async (agentTypeOverride?: string) => {
     const activeManager = sessionMgrRef.current;
     if (!activeManager || homeConversationStarting) return;
     const targetEpoch = activeManager.controlTargetEpoch;
@@ -232,7 +246,7 @@ const AppContent: React.FC = () => {
           remoteConnectionId: state.currentWorkspace?.remote_connection_id,
           remoteSshHost: state.currentWorkspace?.remote_ssh_host,
         };
-    const agentType = assistantMode ? 'claw' : 'code';
+    const agentType = agentTypeOverride ?? (assistantMode ? 'claw' : 'code');
 
     setHomeConversationStarting(true);
     useMobileStore.getState().setError(null);
@@ -251,6 +265,7 @@ const AppContent: React.FC = () => {
         sessionId,
         assistantMode ? t('sessions.remoteClawSession') : t('sessions.remoteCodeSession'),
         true,
+        agentType,
       );
     } catch (error: unknown) {
       if (
@@ -266,6 +281,20 @@ const AppContent: React.FC = () => {
     }
   }, [handleSelectSession, homeConversationStarting, t]);
 
+  const handleRequestStartConversation = useCallback(() => {
+    const activeManager = sessionMgrRef.current;
+    const state = useMobileStore.getState();
+    const assistantMode = !!state.currentAssistant && !state.currentWorkspace;
+    if (
+      !assistantMode
+      && activeManager?.supportsHostCapability(REMOTE_CAPABILITY_HARNESS_PROFILES_V1)
+    ) {
+      setHomeHarnessPickerOpen(true);
+      return;
+    }
+    void handleStartConversation();
+  }, [handleStartConversation]);
+
   const handleBackToSessions = useCallback(() => {
     navigateTo('sessions', 'pop');
     setTimeout(() => setActiveSessionId(null), NAV_DURATION);
@@ -275,8 +304,10 @@ const AppContent: React.FC = () => {
     clearTimeout(timerRef.current);
     setActiveSessionId(null);
     setActiveSessionName('Session');
+    setActiveSessionAgentType('agentic');
     setChatAutoFocus(false);
     setHomeConversationStarting(false);
+    setHomeHarnessPickerOpen(false);
     setPrevPage(null);
     setNavDir(null);
     pageStackRef.current = ['pairing', 'sessions'];
@@ -294,8 +325,10 @@ const AppContent: React.FC = () => {
     setSessionMgr(null);
     setActiveSessionId(null);
     setActiveSessionName('Session');
+    setActiveSessionAgentType('agentic');
     setChatAutoFocus(false);
     setHomeConversationStarting(false);
+    setHomeHarnessPickerOpen(false);
     setCompactSidebarOpen(false);
     setPrevPage(null);
     setNavDir(null);
@@ -350,6 +383,7 @@ const AppContent: React.FC = () => {
             sessionMgr={sessionMgrRef.current}
             sessionId={activeSessionId}
             sessionName={activeSessionName}
+            agentType={activeSessionAgentType}
             onBack={handleBackToSessions}
             autoFocus={chatAutoFocus}
             wideLayout
@@ -360,7 +394,7 @@ const AppContent: React.FC = () => {
     return (
       <RemoteHomePanel
         onOpenWorkspace={handleOpenWorkspace}
-        onStartConversation={handleStartConversation}
+        onStartConversation={handleRequestStartConversation}
         conversationStarting={homeConversationStarting}
       />
     );
@@ -439,6 +473,7 @@ const AppContent: React.FC = () => {
                       sessionMgr={sessionMgrRef.current}
                       sessionId={activeSessionId}
                       sessionName={activeSessionName}
+                      agentType={activeSessionAgentType}
                       onBack={() => setCompactSidebarOpen(true)}
                       autoFocus={chatAutoFocus}
                     />
@@ -447,7 +482,7 @@ const AppContent: React.FC = () => {
                   <RemoteHomePanel
                     onOpenSidebar={() => setCompactSidebarOpen(true)}
                     onOpenWorkspace={handleOpenWorkspace}
-                    onStartConversation={handleStartConversation}
+                    onStartConversation={handleRequestStartConversation}
                     conversationStarting={homeConversationStarting}
                   />
                 )}
@@ -456,6 +491,14 @@ const AppContent: React.FC = () => {
           )}
         </>
       )}
+      <HarnessProfilePicker
+        open={homeHarnessPickerOpen}
+        onClose={() => setHomeHarnessPickerOpen(false)}
+        onSelect={(agentType) => {
+          setHomeHarnessPickerOpen(false);
+          void handleStartConversation(agentType);
+        }}
+      />
     </div>
   );
 };

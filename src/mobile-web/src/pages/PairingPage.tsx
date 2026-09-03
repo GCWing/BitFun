@@ -307,15 +307,12 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
       setLockUntil(null);
       setPassword('');
       // `authenticated_user_id` is the canonical account UUID used for
-      // ownership checks. The submitted value is the verified username in
-      // account mode and is the appropriate user-facing label.
-      setAuthenticatedUserId(
-        initialSync.authenticated_user_id
-        ?? (requiresAccountAuth ? null : userIdValue),
-      );
-      setAuthenticatedUserLabel(userIdValue);
+      // ownership checks. A QR pairing id is only a connection credential; it
+      // must never be presented as a browser-authenticated account.
+      setAuthenticatedUserId(initialSync.authenticated_user_id ?? null);
+      setAuthenticatedUserLabel(requiresAccountAuth ? userIdValue : null);
 
-      const sessionMgr = new RemoteSessionManager(client);
+      const sessionMgr = new RemoteSessionManager(client, initialSync.capabilities);
       const store = useMobileStore.getState();
       if (initialSync.has_workspace) {
         if (initialSync.workspace_kind === 'assistant' && initialSync.path) {
