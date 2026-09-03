@@ -5,6 +5,11 @@ import type {
   AppearanceRendererContext,
   MonacoAppearanceSettings,
 } from '../types';
+import {
+  isMonacoAppearanceColor,
+  projectMonacoAppearanceSettings,
+  validateMonacoAppearanceColorSemantics,
+} from './monacoThemeColorCodec';
 
 const log = createLogger('MonacoAppearanceAdapter');
 
@@ -17,8 +22,6 @@ export interface MonacoAppearanceChangeEvent {
 type MonacoModule = typeof Monaco;
 type MonacoAppearanceListener = (event: MonacoAppearanceChangeEvent) => void;
 
-const COLOR_PATTERN = /^(?:#[0-9a-f]{3,8}|rgba?\(\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\))$/i;
-const TOKEN_COLOR_PATTERN = /^(?:[0-9a-f]{6}|[0-9a-f]{8}|#[0-9a-f]{3,8}|rgba?\(\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\))$/i;
 const FONT_STYLE_PATTERN = /^(?:|italic|bold|underline|strikethrough)(?: (?:italic|bold|underline|strikethrough))*$/;
 const THEME_ID_PATTERN = /^[a-z][a-z0-9-]{0,95}$/;
 
@@ -63,7 +66,7 @@ export class MonacoAppearanceAdapter implements AppearanceRendererAdapter<'monac
         });
         for (const key of ['foreground', 'background'] as const) {
           const color = rule[key];
-          if (color !== undefined && (typeof color !== 'string' || !TOKEN_COLOR_PATTERN.test(color))) {
+          if (color !== undefined && (typeof color !== 'string' || !isMonacoAppearanceColor(color, true))) {
             errors.push(`rules.${index}.${key} is not a supported color`);
           }
         }
@@ -77,8 +80,16 @@ export class MonacoAppearanceAdapter implements AppearanceRendererAdapter<'monac
     } else {
       Object.entries(settings.colors).forEach(([key, value]) => {
         if (!/^[A-Za-z][A-Za-z0-9.]{0,159}$/.test(key)) errors.push(`colors.${key} has an invalid key`);
-        if (typeof value !== 'string' || !COLOR_PATTERN.test(value)) errors.push(`colors.${key} is not a supported color`);
+        if (typeof value !== 'string' || !isMonacoAppearanceColor(value)) {
+          errors.push(`colors.${key} is not a supported color`);
+        }
       });
+    }
+    if (Array.isArray(settings.rules)
+      && settings.rules.every(isRecord)
+      && isRecord(settings.colors)
+      && Object.values(settings.colors).every(value => typeof value === 'string')) {
+      errors.push(...validateMonacoAppearanceColorSemantics(settings as unknown as MonacoAppearanceSettings));
     }
     return errors;
   }
@@ -95,11 +106,15 @@ export class MonacoAppearanceAdapter implements AppearanceRendererAdapter<'monac
     }
     this.settings = settings;
     this.revision = context.revision;
-    if (this.monaco && settings) this.applyToMonaco(this.monaco, settings, context.revision);
+    if (this.monaco && settings) {
+      this.applyToMonaco(this.monaco, settings, context.revision);
+    }
   }
 
   initialize(): void {
-    if (this.monaco && this.settings) this.applyToMonaco(this.monaco, this.settings, this.revision);
+    if (this.monaco && this.settings) {
+      this.applyToMonaco(this.monaco, this.settings, this.revision);
+    }
   }
 
   attachMonaco(monaco: MonacoModule): string {
@@ -118,13 +133,18 @@ export class MonacoAppearanceAdapter implements AppearanceRendererAdapter<'monac
     return () => this.listeners.delete(listener);
   }
 
-  private applyToMonaco(monaco: MonacoModule, settings: MonacoAppearanceSettings, revision: number): void {
+  private applyToMonaco(
+    monaco: MonacoModule,
+    settings: MonacoAppearanceSettings,
+    revision: number,
+  ): void {
     const previousThemeId = this.currentThemeId;
+    const projectedSettings = projectMonacoAppearanceSettings(settings);
     monaco.editor.defineTheme(settings.id, {
-      base: settings.base,
-      inherit: settings.inherit,
-      rules: settings.rules,
-      colors: settings.colors,
+      base: projectedSettings.base,
+      inherit: projectedSettings.inherit,
+      rules: projectedSettings.rules,
+      colors: projectedSettings.colors,
     });
     monaco.editor.setTheme(settings.id);
     monaco.editor.getEditors().forEach((editor, index) => {

@@ -232,6 +232,13 @@ Monaco、xterm/ANSI、Mermaid、syntax、diff、语言标识、调试 overlay、
 稳定语义。它们必须留在对应 renderer/domain owner 中，并通过明确 payload 或 `--bf-domain-*` 消费；不得
 泄漏成普通组件可随手调用的 palette。
 
+Renderer adapter 同时拥有第三方格式边界。设计系统和 Appearance payload 可以使用其已声明支持的 CSS
+颜色格式，但 adapter 必须在调用第三方 API 前投影为对方的原生格式；不得把通用语义 Token 原样透传并
+假设第三方具有相同的颜色语法或 alpha 语义。例如 Monaco workbench colors 使用 hex alpha，而 token
+colors 必须先相对编辑器背景合成为不透明 hex。
+需要 alpha token color 的 Monaco payload 必须显式提供不透明的 `editor.background`，不得在 adapter 中复制
+或猜测第三方 base theme 的默认背景值。
+
 ### 显式排除不是 allowlist
 
 Monaco 拷贝产物、Relay static、E2E fixture、诊断报表 HTML、PPT 内容 renderer、native template icons 和
