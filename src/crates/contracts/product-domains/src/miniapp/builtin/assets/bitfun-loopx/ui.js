@@ -815,6 +815,7 @@ const state = {
   eventKeys: new Set(),
   selectedTaskId: null,
   followLogs: true,
+  expandedThinking: new Set(),
   preview: null,
   pendingCreate: null,
   pendingRetry: null,
@@ -1248,15 +1249,34 @@ function runningOutputTask() {
 
 /// The task whose context fills the issue workspace. An explicit selection
 /// always wins; without one the view follows the currently running task, then
-/// the most recently updated non-archived task, so the pane is never blank
-/// while any task exists.
+/// the first task in execution order (state priority, then queue order), so
+/// the pane opens on the issue that will be solved first.
 function displayedTask() {
   const selected = selectedTask();
   if (selected) return selected;
-  return runningOutputTask() || sortedTaskList(
+  return runningOutputTask() || firstActionableTask() || sortedTaskList(
     ((state.snapshot && state.snapshot.tasks) || [])
       .filter((task) => task.state !== 'archived'),
   )[0] || sortedTaskList((state.snapshot && state.snapshot.tasks) || [])[0] || null;
+}
+
+function firstActionableTask() {
+  const actionableStates = [
+    'waiting_for_user',
+    'preparing',
+    'queued',
+    'retry_wait',
+    'recovery_required',
+    'failed',
+  ];
+  const actionable = ((state.snapshot && state.snapshot.tasks) || [])
+    .filter((task) => !taskForId(task.taskId) || !isResolvedUpstream(taskForId(task.taskId)))
+    .filter((task) => actionableStates.includes(task.state));
+  if (!actionable.length) return null;
+  return [...actionable].sort((left, right) =>
+    taskSortPriority(left) - taskSortPriority(right)
+    || Number(left.createdAt || left.updatedAt || 0)
+      - Number(right.createdAt || right.updatedAt || 0))[0] || null;
 }
 
 function isFollowingRunningTask() {
@@ -2697,24 +2717,47 @@ function canMergeOutputEvent(event) {
   return event.kind === 'thinking' || event.kind === 'text';
 }
 
-function compactTurnOutputBlocks(events) {
+function compactTurnOutputBlocks(rawEvents) {
+  // Drop empty chunks and stray marker chunks (for example a thinking chunk
+  // whose entire text is the word "thinking") before grouping.
+  const events = rawEvents.filter((event) => {
+    if (event.kind !== 'thinking' && event.kind !== 'text') return true;
+    const value = String(event.text == null ? '' : event.text).trim();
+    if (!value) return false;
+    return !(event.kind === 'thinking' && value.toLowerCase() === 'thinking');
+  });
   const blocks = [];
   events.forEach((event) => {
     const kind = event.kind || 'text';
     const roundId = event.roundId || '';
     const toolName = event.toolName || '';
     const last = blocks[blocks.length - 1];
-    if (
-      canMergeOutputEvent(event)
+    const sameToolRun = kind === 'tool'
       && last
-      && last.kind === kind
+      && last.kind === 'tool'
+      && last.toolName === toolName
       && last.roundId === roundId
       && last.taskId === event.taskId
-      && last.turnId === event.turnId
-      && !last.isEnd
+      && last.turnId === event.turnId;
+    if (
+      (canMergeOutputEvent(event)
+        && last
+        && last.kind === kind
+        && last.roundId === roundId
+        && last.taskId === event.taskId
+        && last.turnId === event.turnId
+        && !last.isEnd)
+      || sameToolRun
     ) {
       last.endCursor = event.cursor;
-      last.text = appendOutputText(last.text, event.text);
+      if (kind === 'tool') {
+        // Later tool lifecycle events supersede earlier ones: the completed
+        // summary describes the same invocation better than the started one.
+        if (event.text) last.text = event.text;
+        last.toolState = event.toolState || last.toolState;
+      } else {
+        last.text = appendOutputText(last.text, event.text);
+      }
       last.isEnd = Boolean(last.isEnd || event.isEnd);
       last.eventCount += 1;
       return;
@@ -2733,7 +2776,28 @@ function compactTurnOutputBlocks(events) {
       eventCount: 1,
     });
   });
-  return blocks;
+  // Fold trivial fragments (sentence tails like a lone period) into the
+  // preceding text block of the same turn so they do not become rows.
+  const merged = [];
+  blocks.forEach((block) => {
+    const previous = merged[merged.length - 1];
+    if (
+      previous
+      && block.kind === 'text'
+      && previous.kind === 'text'
+      && previous.taskId === block.taskId
+      && previous.turnId === block.turnId
+      && (block.text || '').trim().length <= 3
+    ) {
+      previous.endCursor = block.endCursor;
+      previous.text = appendOutputText(previous.text, block.text);
+      previous.isEnd = Boolean(previous.isEnd || block.isEnd);
+      previous.eventCount += block.eventCount;
+      return;
+    }
+    merged.push(block);
+  });
+  return merged;
 }
 
 function cursorRangeLabel(block) {
@@ -2811,8 +2875,16 @@ function turnOutputBlockRow(block) {
   }
 
   if (block.kind === 'thinking') {
+    const thinkingKey = outputBlockDomKey(block);
     const details = document.createElement('details');
     details.className = 'output-block__thinking';
+    // Expansion is remembered across re-renders: streaming regrows the block
+    // and would otherwise collapse it under the reader.
+    if (state.expandedThinking.has(thinkingKey)) details.open = true;
+    details.addEventListener('toggle', () => {
+      if (details.open) state.expandedThinking.add(thinkingKey);
+      else state.expandedThinking.delete(thinkingKey);
+    });
     const summary = document.createElement('summary');
     summary.textContent = text('outputThinkingSummary', { value: (block.text || '').length });
     const content = document.createElement('div');
@@ -2829,52 +2901,6 @@ function turnOutputBlockRow(block) {
 
   row.append(header, message);
   return row;
-}
-
-const TIMELINE_EVENT_KINDS = new Set([
-  'task_created',
-  'state_changed',
-  'progress',
-  'approval_required',
-  'settlement_recorded',
-  'operation_cancelled',
-]);
-
-// Routine engine heartbeat events (goal-state inspections, settlement
-// probes, turn-contract rebuilds) repeat every cycle and carry no operator
-// value; the durable event stream keeps them, the merged timeline hides them.
-const TIMELINE_NOISE_PATTERNS = [
-  /^inspecting durable loopx goal state$/i,
-  /^verifying durable loopx progress and quota settlement evidence$/i,
-  /^matched validated loopx progress and quota settlement evidence$/i,
-  /^building a fresh loopx custom-runner turn contract$/i,
-];
-
-function isTimelineNoiseEvent(event) {
-  const message = String((event && event.message) || '').trim();
-  return TIMELINE_NOISE_PATTERNS.some((pattern) => pattern.test(message));
-}
-
-function visibleMilestoneEvents(task) {
-  const events = task
-    ? state.events.filter((event) => (
-      event.taskId === task.taskId
-      && TIMELINE_EVENT_KINDS.has(event.kind)
-      && !isTimelineNoiseEvent(event)
-      && (event.generation == null || Number(event.generation) === Number(task.generation))
-    ))
-    : [];
-  // Collapse consecutive duplicate milestones (same message fired back to
-  // back) so the timeline only shows state changes, not polling rhythm.
-  const deduped = [];
-  let lastMessage = '';
-  events.forEach((event) => {
-    const message = String(event.message || '').trim();
-    if (message && message === lastMessage) return;
-    lastMessage = message;
-    deduped.push(event);
-  });
-  return deduped;
 }
 
 function timelineMilestoneRow(event) {
@@ -2946,9 +2972,10 @@ function renderTimeline() {
     })
     : '';
 
-  // Model-output blocks are keyed per turn; task events are keyed by the
-  // durable event-stream cursor. A turn's blocks are anchored right after its
-  // "Agent turn started" milestone so the merged timeline stays in order.
+  // Model-output blocks are keyed per turn; each block group is anchored to
+  // its turn so the merged timeline stays in chronological order. Durable
+  // milestone events (scheduler/engine heartbeats) are intentionally not
+  // rendered: the issue summary and decision card cover that information.
   const taskBlocks = task
     ? compactTurnOutputBlocks(state.outputHistory.filter((event) => event.taskId === task.taskId))
     : [];
@@ -2960,39 +2987,21 @@ function renderTimeline() {
     else blockGroups.push({ turnId: block.turnId, blocks: [block] });
   });
 
-  const milestoneEvents = visibleMilestoneEvents(task);
-  const toolEvents = task
-    ? state.events.filter((event) => (
-      event.taskId === task.taskId
-      && event.kind === 'log'
-      && (event.generation == null || Number(event.generation) === Number(task.generation))
-    ))
-    : [];
-  // Tool activity already appears inside model-output blocks; fall back to the
-  // durable tool-activity log only when no output stream was captured.
-  const includeToolRows = visibleBlocks.length === 0;
-
   const rows = [];
-  if (includeToolRows) {
-    // No model-output stream was captured for this task: rebuild the timeline
-    // from the durable event stream only (milestones + tool activity), ordered
-    // by event time.
-    const allEvents = [...milestoneEvents, ...toolEvents]
-      .sort((left, right) => (
-        (Number(left.occurredAt) || 0) - (Number(right.occurredAt) || 0)
-        || (Number(left.cursor) || 0) - (Number(right.cursor) || 0)
-      ));
-    allEvents.forEach((event) => {
+  if (visibleBlocks.length === 0) {
+    // No live output captured for this task: fall back to the durable
+    // tool-activity log so the timeline is not blank for older turns.
+    const toolEvents = task
+      ? state.events.filter((event) => (
+        event.taskId === task.taskId
+        && event.kind === 'log'
+        && (event.generation == null || Number(event.generation) === Number(task.generation))
+      ))
+      : [];
+    toolEvents.forEach((event) => {
       rows.push({ key: `e:${event.cursor}`, kind: 'milestone', event });
     });
   } else {
-    milestoneEvents.forEach((event) => {
-      rows.push({ key: `e:${event.cursor}`, kind: 'milestone', event });
-      if (/agent turn started/i.test(String(event.message || '')) && blockGroups.length) {
-        const group = blockGroups.shift();
-        group.blocks.forEach((block) => rows.push({ key: `b:${outputBlockDomKey(block)}`, kind: 'block', block }));
-      }
-    });
     blockGroups.forEach((group) => {
       group.blocks.forEach((block) => rows.push({ key: `b:${outputBlockDomKey(block)}`, kind: 'block', block }));
     });

@@ -67,37 +67,72 @@ pub(super) fn project_tool_activity(event: &ToolEventData) -> Option<ToolActivit
         ),
         ToolEventData::Rejected { .. } => (format!("Tool rejected: {tool_name}"), None, true),
         ToolEventData::Completed {
+            params,
             result,
             duration_ms,
             ..
         } => {
             details.insert("durationMs".to_string(), duration_ms.to_string());
+            if let Some(summary) = params
+                .as_ref()
+                .and_then(|params| tool_input_summary(&tool_name, params))
+            {
+                details.insert("summary".to_string(), summary);
+            }
             insert_result_facts(&tool_name, result, &mut details);
             (format!("Tool completed: {tool_name}"), None, false)
         }
         ToolEventData::Failed {
-            error, duration_ms, ..
+            params,
+            error,
+            duration_ms,
+            ..
         } => {
+            if let Some(params) = params {
+                if let Some(summary) = tool_input_summary(&tool_name, params) {
+                    details.insert("summary".to_string(), summary);
+                }
+            }
             if let Some(duration_ms) = duration_ms {
                 details.insert("durationMs".to_string(), duration_ms.to_string());
             }
+            let error_summary = redact_usage_input_summary(error, MAX_TOOL_SUMMARY_CHARS).value;
+            let input_summary = params
+                .as_ref()
+                .and_then(|params| tool_input_summary(&tool_name, params));
             details.insert(
                 "summary".to_string(),
-                redact_usage_input_summary(error, MAX_TOOL_SUMMARY_CHARS).value,
+                match input_summary {
+                    Some(input) => format!("{input} — {error_summary}"),
+                    None => error_summary,
+                },
             );
             (format!("Tool failed: {tool_name}"), None, true)
         }
         ToolEventData::Cancelled {
+            params,
             reason,
             duration_ms,
             ..
         } => {
+            if let Some(params) = params {
+                if let Some(summary) = tool_input_summary(&tool_name, params) {
+                    details.insert("summary".to_string(), summary);
+                }
+            }
             if let Some(duration_ms) = duration_ms {
                 details.insert("durationMs".to_string(), duration_ms.to_string());
             }
+            let reason_summary = redact_usage_input_summary(reason, MAX_TOOL_SUMMARY_CHARS).value;
+            let input_summary = params
+                .as_ref()
+                .and_then(|params| tool_input_summary(&tool_name, params));
             details.insert(
                 "summary".to_string(),
-                redact_usage_input_summary(reason, MAX_TOOL_SUMMARY_CHARS).value,
+                match input_summary {
+                    Some(input) => format!("{input} — {reason_summary}"),
+                    None => reason_summary,
+                },
             );
             (format!("Tool cancelled: {tool_name}"), None, false)
         }

@@ -541,6 +541,10 @@ pub enum ToolEventData {
     Completed {
         #[serde(flatten)]
         identity: ToolEventIdentity,
+        /// Tool input snapshot so late projections (task timelines) can show
+        /// what the tool operated on without replaying the whole turn.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<serde_json::Value>,
         result: serde_json::Value,
         #[serde(skip_serializing_if = "Option::is_none")]
         result_for_assistant: Option<String>,
@@ -559,6 +563,8 @@ pub enum ToolEventData {
     Failed {
         #[serde(flatten)]
         identity: ToolEventIdentity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<serde_json::Value>,
         error: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -574,6 +580,8 @@ pub enum ToolEventData {
     Cancelled {
         #[serde(flatten)]
         identity: ToolEventIdentity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<serde_json::Value>,
         reason: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -891,6 +899,7 @@ mod tests {
     #[test]
     fn completed_tool_reports_total_and_execution_duration() {
         let event = ToolEventData::Completed {
+            params: None,
             identity: ToolEventIdentity::direct("tool-1", "write_file"),
             result: serde_json::json!({ "ok": true }),
             result_for_assistant: None,
@@ -935,6 +944,7 @@ mod tests {
     #[test]
     fn completed_tool_serializes_image_attachments() {
         let event = ToolEventData::Completed {
+            params: None,
             identity: ToolEventIdentity::direct("tool-image-1", "view_image"),
             result: serde_json::json!({ "path": "preview.png" }),
             result_for_assistant: Some("Image attached".to_string()),
@@ -958,6 +968,7 @@ mod tests {
     #[test]
     fn failed_tool_reports_best_effort_total_duration() {
         let event = ToolEventData::Failed {
+            params: None,
             identity: ToolEventIdentity::direct("tool-1", "write_file"),
             error: "failed".to_string(),
             duration_ms: Some(120),
@@ -976,6 +987,7 @@ mod tests {
     #[test]
     fn cancelled_tool_reports_best_effort_total_duration() {
         let event = ToolEventData::Cancelled {
+            params: None,
             identity: ToolEventIdentity::direct("tool-1", "write_file"),
             reason: "cancelled".to_string(),
             duration_ms: Some(120),
