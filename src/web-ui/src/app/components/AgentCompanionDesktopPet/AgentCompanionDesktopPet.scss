@@ -103,15 +103,19 @@
     height: 21px;
     box-sizing: border-box;
     padding: 2px 5px;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+    border: 1px solid var(--bf-color-field-border);
     border-radius: 5px;
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
-    color: inherit;
+    background: var(--bf-color-field-background);
+    color: var(--bf-color-content-primary);
     font: inherit;
     font-size: var(--bf-type-micro-font-size);
     line-height: var(--bf-type-modifier-leading-snug-line-height);
     user-select: text;
     -webkit-user-select: text;
+
+    &::placeholder {
+      color: var(--bf-color-content-muted);
+    }
 
     &:focus,
     &:focus-visible {
@@ -130,14 +134,14 @@
     padding: 0;
     display: grid;
     place-items: center;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+    border: 1px solid var(--bf-color-action-neutral-border);
     border-radius: 5px;
-    background: color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent);
-    color: inherit;
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-action-neutral-content);
     cursor: pointer;
 
     &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+      background: var(--bf-color-action-neutral-surface-hover);
     }
 
     &:disabled {
@@ -251,10 +255,10 @@
     padding: 0;
     display: grid;
     place-items: center;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
-    color: var(--bf-color-content-on-light);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-primary);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -264,7 +268,7 @@
     cursor: pointer;
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+      background: var(--bf-color-surface-tertiary);
     }
 
     &:focus-visible {
@@ -289,10 +293,10 @@
     max-width: 100%;
     box-sizing: border-box;
     padding: 7px 10px;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+    border: 1px solid var(--bf-color-border-default);
     border-radius: 10px 10px 2px 10px;
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
-    color: var(--bf-color-content-on-light);
+    background-color: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-primary);
     backdrop-filter: blur(10px);
     cursor: pointer;
     position: relative;
@@ -364,7 +368,7 @@
     margin-top: 2px;
     font-size: var(--bf-type-micro-font-size);
     line-height: var(--bf-type-modifier-leading-dense-line-height);
-    color: color-mix(in srgb, var(--bf-color-content-on-light) 70%, transparent);
+    color: var(--bf-color-content-secondary);
   }
 
   &__bubble-output {
@@ -375,7 +379,7 @@
     height: calc(12px * 4);
     font-size: var(--bf-type-micro-font-size);
     line-height: var(--bf-type-label-md-line-height);
-    color: color-mix(in srgb, var(--bf-color-content-on-light) 82%, transparent);
+    color: var(--bf-color-content-secondary);
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -394,14 +398,17 @@
       height: 1em;
       margin-left: 2px;
       vertical-align: -0.12em;
-      background: color-mix(in srgb, var(--bf-color-content-on-light) 55%, transparent);
+      background: var(--bf-color-content-muted);
       animation: bitfun-agent-companion-caret 920ms steps(2, start) infinite;
     }
   }
 
   &__bubble--attention {
     border-color: var(--bf-color-status-warning-border);
-    background: var(--bf-color-status-warning-surface);
+    background-image: linear-gradient(
+      var(--bf-color-status-warning-surface),
+      var(--bf-color-status-warning-surface)
+    );
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent);
     animation: bitfun-agent-companion-attention-pulse 1.5s ease-in-out infinite !important;
 
@@ -420,18 +427,27 @@
 
   &__bubble--waiting {
     border-color: var(--bf-color-status-warning-border);
-    background: var(--bf-color-status-warning-surface);
+    background-image: linear-gradient(
+      var(--bf-color-status-warning-surface),
+      var(--bf-color-status-warning-surface)
+    );
   }
 
   &__bubble--completed {
     border-color: var(--bf-color-status-success-border);
-    background: var(--bf-color-status-success-surface);
+    background-image: linear-gradient(
+      var(--bf-color-status-success-surface),
+      var(--bf-color-status-success-surface)
+    );
   }
 
   &__bubble--error,
   &__bubble--interrupted {
     border-color: var(--bf-color-status-danger-border);
-    background: var(--bf-color-status-danger-surface);
+    background-image: linear-gradient(
+      var(--bf-color-status-danger-surface),
+      var(--bf-color-status-danger-surface)
+    );
   }
 
   .bitfun-agent-companion-pet {
