@@ -467,10 +467,21 @@
     "message": "This deletes the model “{{name}}”. It is explicitly referenced by {{count}} setting(s). Those references will not automatically switch to another model, so related features may fall back or become unavailable.",
     "confirm": "Delete model"
   },
-  "discardChanges": {
-    "title": "Discard unsaved changes?",
-    "message": "The model or provider draft has not been saved. Closing now will lose these changes.",
-    "confirm": "Discard changes"
+  "draftClose": {
+    "title": "Keep this editing draft?",
+    "message": "These changes have not been written to the model configuration. Keeping the draft will not run a connection test, and you can resume it when you reopen this editor.",
+    "keepAndClose": "Keep draft and close",
+    "discard": "Discard changes",
+    "continueEditing": "Continue editing",
+    "discardDraft": "Discard draft",
+    "retainedHint": "The model editing draft is retained and has not been written to the active configuration."
+  },
+  "draftConflict": {
+    "title": "Resolve the unfinished model draft",
+    "message": "Before opening another model or provider, continue the current draft or discard it and open the selected configuration.",
+    "continueDraft": "Continue current draft",
+    "discardAndContinue": "Discard and continue",
+    "cancel": "Cancel"
   },
   "empty": {
     "noModels": "No model configurations",
@@ -497,6 +508,7 @@
     "loadFailed": "Failed to load AI configuration",
     "testSuccess": "Test successful",
     "testFailed": "Test failed",
+    "testUnsupportedOnHost": "Configuration saved; the current CLI device does not support model connection tests",
     "errorDetails": "Error details",
     "connectionTestMessages": {
       "toolCallsNotDetected": "This test did not detect any tool calls, so tool calling could not be verified this time.",

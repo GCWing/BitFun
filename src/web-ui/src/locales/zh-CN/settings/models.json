@@ -467,10 +467,21 @@
     "message": "将删除模型“{{name}}”。当前有 {{count}} 处设置显式引用此模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。",
     "confirm": "删除模型"
   },
-  "discardChanges": {
-    "title": "放弃未保存的修改？",
-    "message": "模型或服务商配置中的草稿尚未保存。关闭后这些修改将丢失。",
-    "confirm": "放弃修改"
+  "draftClose": {
+    "title": "保留这次编辑草稿？",
+    "message": "这些修改尚未写入模型配置。保留草稿不会触发连接测试，再次打开此编辑器时可以继续。",
+    "keepAndClose": "保留草稿并关闭",
+    "discard": "放弃修改",
+    "continueEditing": "继续编辑",
+    "discardDraft": "放弃草稿",
+    "retainedHint": "模型编辑草稿已保留，尚未写入正式配置。"
+  },
+  "draftConflict": {
+    "title": "先处理未完成的模型草稿",
+    "message": "打开另一个模型或服务商前，请继续处理当前草稿，或放弃草稿后打开所选配置。",
+    "continueDraft": "继续当前草稿",
+    "discardAndContinue": "放弃草稿并继续",
+    "cancel": "取消"
   },
   "empty": {
     "noModels": "暂无模型配置",
@@ -497,6 +508,7 @@
     "loadFailed": "加载AI配置失败",
     "testSuccess": "测试成功",
     "testFailed": "测试失败",
+    "testUnsupportedOnHost": "配置已保存，当前 CLI 设备不支持模型连接测试",
     "errorDetails": "详细错误",
     "connectionTestMessages": {
       "toolCallsNotDetected": "本次测试未检测到工具调用，因此暂时无法验证工具调用能力。",

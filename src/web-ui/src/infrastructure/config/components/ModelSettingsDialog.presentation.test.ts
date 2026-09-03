@@ -43,4 +43,20 @@ describe('ModelSettingsPage dialog presentation', () => {
     expect(styles).toMatch(/&__selected-model-row\s*{[\s\S]*?background:\s*var\(--bf-color-surface-raised\);/);
     expect(styles).toMatch(/&__reasoning-summary\s*{[\s\S]*?background:\s*var\(--bf-color-surface-tertiary\);/);
   });
+
+  it('keeps unsaved editor state behind an explicit draft decision', () => {
+    expect(source).toContain('if (editingModalHasUnsavedChanges) {');
+    expect(source).toContain('setDraftCloseConfirmOpen(true);');
+    expect(source).toContain('onConfirm={preserveEditingDraftAndClose}');
+    expect(source).toContain('onSecondary={closeEditingModal}');
+    expect(source).toContain("confirmText={t('draftClose.keepAndClose')}");
+    expect(source).toContain("cancelText={t('draftClose.continueEditing')}");
+    expect(source).toContain("statusMessage={t('draftClose.retainedHint')}");
+  });
+
+  it('protects a retained draft when another editor target is requested', () => {
+    expect(source).toContain('pendingEditorOpenRef.current = { open };');
+    expect(source).toContain('onConfirm={continueEditingCurrentDraft}');
+    expect(source).toContain('onSecondary={discardDraftBeforeOpeningPendingEditor}');
+  });
 });

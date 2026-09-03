@@ -467,10 +467,21 @@
     "message": "將刪除模型「{{name}}」。目前有 {{count}} 處設定明確引用此模型；這些引用不會自動改用其他模型，相關功能可能回退或無法使用。",
     "confirm": "刪除模型"
   },
-  "discardChanges": {
-    "title": "放棄未儲存的修改？",
-    "message": "模型或服務商設定中的草稿尚未儲存。關閉後這些修改將遺失。",
-    "confirm": "放棄修改"
+  "draftClose": {
+    "title": "保留這次編輯草稿？",
+    "message": "這些修改尚未寫入模型設定。保留草稿不會觸發連接測試，再次開啟此編輯器時可以繼續。",
+    "keepAndClose": "保留草稿並關閉",
+    "discard": "放棄修改",
+    "continueEditing": "繼續編輯",
+    "discardDraft": "放棄草稿",
+    "retainedHint": "模型編輯草稿已保留，尚未寫入正式設定。"
+  },
+  "draftConflict": {
+    "title": "先處理未完成的模型草稿",
+    "message": "開啟另一個模型或服務商前，請繼續處理目前草稿，或放棄草稿後開啟所選設定。",
+    "continueDraft": "繼續目前草稿",
+    "discardAndContinue": "放棄草稿並繼續",
+    "cancel": "取消"
   },
   "empty": {
     "noModels": "暫無模型設定",
@@ -497,6 +508,7 @@
     "loadFailed": "載入AI設定失敗",
     "testSuccess": "測試成功",
     "testFailed": "測試失敗",
+    "testUnsupportedOnHost": "設定已儲存，目前 CLI 裝置不支援模型連接測試",
     "errorDetails": "詳細錯誤",
     "connectionTestMessages": {
       "toolCallsNotDetected": "本次測試未檢測到工具調用，因此暫時無法驗證工具調用能力。",

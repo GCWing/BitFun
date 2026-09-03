@@ -73,9 +73,13 @@ import {
   ConfigRetryState,
 } from './common';
 import {
-  requestSettingsDraftExit,
   useSettingsDraft,
 } from '@/infrastructure/config/settingsDraftRegistry';
+import {
+  configsNeedingAutoTest,
+  providerConnectionChanged,
+  stableJson,
+} from './modelConnectionTestPlan';
 import DefaultModelConfig from './DefaultModelConfig';
 import ReasoningConfigPanel, { type ReasoningConfigApplyResult } from './ReasoningConfigPanel';
 import { createLogger } from '@/shared/utils/logger';
@@ -83,6 +87,7 @@ import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestM
 import { i18nService } from '@/infrastructure/i18n';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { LONG_CONTEXT_WARNING_THRESHOLD_TOKENS } from '@/shared/constants/modelContext';
 import {
   preferredSubscriptionLoginMethod,
@@ -144,6 +149,15 @@ interface SubscriptionLogoutRequest {
 interface ModelDeleteRequest {
   config: AIModelConfigType;
   referenceCount: number;
+}
+
+interface PendingEditorOpen {
+  open: () => void;
+}
+
+interface ActiveConnectionTest {
+  token: symbol;
+  signature: string;
 }
 
 const SUBSCRIPTION_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -325,19 +339,6 @@ function hasHttpUrlScheme(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableJson).join(',')}]`;
-  }
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJson(entryValue)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
 function countExactModelReferences(value: unknown, modelId: string): number {
   if (value === modelId) return 1;
   if (Array.isArray(value)) {
@@ -352,43 +353,6 @@ function countExactModelReferences(value: unknown, modelId: string): number {
 
 function normalizeComparableString(value: string | undefined): string {
   return (value || '').trim();
-}
-
-function providerConnectionChanged(
-  previous: AIModelConfigType | undefined,
-  next: AIModelConfigType
-): boolean {
-  if (!previous) return true;
-
-  return (
-    normalizeComparableString(previous.provider) !== normalizeComparableString(next.provider) ||
-    normalizeComparableString(previous.base_url) !== normalizeComparableString(next.base_url) ||
-    normalizeComparableString(previous.api_key) !== normalizeComparableString(next.api_key) ||
-    stableJson(previous.auth || { type: 'api_key' }) !== stableJson(next.auth || { type: 'api_key' }) ||
-    stableJson(previous.custom_headers || {}) !== stableJson(next.custom_headers || {}) ||
-    normalizeComparableString(previous.custom_headers_mode) !== normalizeComparableString(next.custom_headers_mode) ||
-    normalizeComparableString(previous.custom_request_body) !== normalizeComparableString(next.custom_request_body) ||
-    normalizeComparableString(previous.custom_request_body_mode) !== normalizeComparableString(next.custom_request_body_mode) ||
-    (previous.skip_ssl_verify ?? false) !== (next.skip_ssl_verify ?? false)
-  );
-}
-
-function modelRequestBehaviorChanged(
-  previous: AIModelConfigType | undefined,
-  next: AIModelConfigType
-): boolean {
-  if (!previous) return true;
-
-  return (
-    normalizeComparableString(previous.model_name) !== normalizeComparableString(next.model_name) ||
-    normalizeComparableString(previous.request_url) !== normalizeComparableString(next.request_url) ||
-    previous.context_window !== next.context_window ||
-    previous.max_tokens !== next.max_tokens ||
-    previous.category !== next.category ||
-    stableJson(previous.capabilities || []) !== stableJson(next.capabilities || []) ||
-    stableJson(canonicalReasoningConfig(previous)) !== stableJson(next.reasoning || canonicalReasoningConfig(next)) ||
-    (previous.inline_think_in_text ?? true) !== (next.inline_think_in_text ?? true)
-  );
 }
 
 function modelDraftHasUnsavedChanges(
@@ -410,34 +374,13 @@ function modelDraftHasUnsavedChanges(
   );
 }
 
-function configsNeedingAutoTest(
-  previousModels: AIModelConfigType[],
-  nextConfigs: AIModelConfigType[],
-  isProviderGroupEdit: boolean
-): AIModelConfigType[] {
-  const previousById = new Map(previousModels.map(model => [model.id, model]));
-  const providerConnectionWasChanged = isProviderGroupEdit && nextConfigs.some(config =>
-    providerConnectionChanged(previousById.get(config.id), config)
-  );
-
-  if (providerConnectionWasChanged) {
-    return nextConfigs;
-  }
-
-  return nextConfigs.filter(config => {
-    const previous = previousById.get(config.id);
-    return (
-      !previous ||
-      providerConnectionChanged(previous, config) ||
-      modelRequestBehaviorChanged(previous, config)
-    );
-  });
-}
-
 const ModelSettingsPage: React.FC = () => {
   const { t, i18n } = useTranslation('settings/models');
   const { t: tDefault } = useTranslation('settings/default-model');
   const { t: tComponents } = useTranslation('components');
+  const peerDevice = usePeerDeviceModeOptional();
+  const connectionTestSupported = !peerDevice?.peerMode.active
+    || peerDevice.currentPeerCapabilities?.hostKind !== 'cli';
   const [aiModels, setAiModels] = useState<AIModelConfigType[]>([]);
   const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [configLoadError, setConfigLoadError] = useState(false);
@@ -449,6 +392,9 @@ const ModelSettingsPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditorSaving, setIsEditorSaving] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Partial<AIModelConfigType> | null>(null);
+  const [editingTargetKey, setEditingTargetKey] = useState<string | null>(null);
+  const [draftCloseConfirmOpen, setDraftCloseConfirmOpen] = useState(false);
+  const [draftConflictConfirmOpen, setDraftConflictConfirmOpen] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingConfigs, setTestingConfigs] = useState<Record<string, boolean>>({});
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string } | null>>({});
@@ -515,6 +461,8 @@ const ModelSettingsPage: React.FC = () => {
   const lastRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const activeRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const editorSavingRef = React.useRef(false);
+  const pendingEditorOpenRef = React.useRef<PendingEditorOpen | null>(null);
+  const activeConnectionTestsRef = React.useRef<Record<string, ActiveConnectionTest>>({});
 
   const requestFormatOptions = useMemo(
     () => [
@@ -1095,65 +1043,87 @@ const ModelSettingsPage: React.FC = () => {
     void fetchRemoteModels(editingConfig);
   };
 
+  const requestEditorOpen = useCallback((targetKey: string, open: () => void) => {
+    const matchesSuspendedDraft = editingTargetKey === targetKey
+      || (targetKey === 'new-provider' && editingTargetKey?.startsWith('new-provider:'));
+    if (!isEditing && editingConfig && editingModalHasUnsavedChanges) {
+      if (matchesSuspendedDraft) {
+        setIsEditing(true);
+        return;
+      }
+      pendingEditorOpenRef.current = { open };
+      setDraftConflictConfirmOpen(true);
+      return;
+    }
+    open();
+  }, [editingConfig, editingModalHasUnsavedChanges, editingTargetKey, isEditing]);
+
   
   const handleCreateNew = () => {
-    resetRemoteModelDiscovery();
-    setSelectedModelDrafts([]);
-    setEditingProviderModelIds(new Set());
-    setManualModelInput('');
-    setShowApiKey(false);
-    setSelectedProviderId(null);
-    setProviderQuery('');
-    setShowAllProviders(false);
-    setCreationMode('selection');
+    requestEditorOpen('new-provider', () => {
+      resetRemoteModelDiscovery();
+      setSelectedModelDrafts([]);
+      setEditingProviderModelIds(new Set());
+      setManualModelInput('');
+      setShowApiKey(false);
+      setSelectedProviderId(null);
+      setProviderQuery('');
+      setShowAllProviders(false);
+      setEditingTargetKey(null);
+      setCreationMode('selection');
+    });
   };
 
   const handleImportFromSubscription = useCallback((
     account: SubscriptionAccount,
     offering?: SubscriptionApiOffering,
   ) => {
-    resetRemoteModelDiscovery();
-    const offeringModels = (offering?.models || []).map((model) => ({
-      id: model.id,
-      display_name: model.display_name || undefined,
-    }));
-    if (offeringModels.length > 0) {
-      setRemoteModelOptions(offeringModels);
-      setHasAttemptedRemoteFetch(true);
-    }
-    setManualModelInput('');
-    setShowApiKey(false);
-    setSelectedProviderId(null);
-    setEditingConfig({
-      name: offering
-        ? getOpenCodePlanLabel(offering.plan)
-        : account.display_label,
-      provider: offering?.format || account.suggested_format,
-      base_url: offering?.base_url || account.suggested_base_url,
-      // Leave request_url + model_name empty so the user must pick a model
-      // from the live list. We never inject a hard-coded default slug.
-      request_url: '',
-      api_key: '',
-      model_name: '',
-      enabled: true,
-      context_window: 200000,
-      category: 'general_chat',
-      capabilities: ['text_chat', 'function_calling'],
-      recommended_for: [],
-      metadata: {},
-      inline_think_in_text: true,
-      auth: {
-        type: 'subscription',
-        provider: account.provider,
-        ...(offering ? { plan: offering.plan } : {}),
-      },
+    const targetKey = `new-provider:subscription:${account.provider}:${offering?.plan || offering?.format || 'default'}`;
+    requestEditorOpen(targetKey, () => {
+      resetRemoteModelDiscovery();
+      const offeringModels = (offering?.models || []).map((model) => ({
+        id: model.id,
+        display_name: model.display_name || undefined,
+      }));
+      if (offeringModels.length > 0) {
+        setRemoteModelOptions(offeringModels);
+        setHasAttemptedRemoteFetch(true);
+      }
+      setManualModelInput('');
+      setShowApiKey(false);
+      setSelectedProviderId(null);
+      setEditingTargetKey(targetKey);
+      setEditingConfig({
+        name: offering
+          ? getOpenCodePlanLabel(offering.plan)
+          : account.display_label,
+        provider: offering?.format || account.suggested_format,
+        base_url: offering?.base_url || account.suggested_base_url,
+        // Leave request_url + model_name empty so the user must pick a model
+        // from the live list. We never inject a hard-coded default slug.
+        request_url: '',
+        api_key: '',
+        model_name: '',
+        enabled: true,
+        context_window: 200000,
+        category: 'general_chat',
+        capabilities: ['text_chat', 'function_calling'],
+        recommended_for: [],
+        metadata: {},
+        inline_think_in_text: true,
+        auth: {
+          type: 'subscription',
+          provider: account.provider,
+          ...(offering ? { plan: offering.plan } : {}),
+        },
+      });
+      setSelectedModelDrafts([]);
+      setEditingProviderModelIds(new Set());
+      setShowAdvancedSettings(false);
+      setCreationMode('form');
+      setIsEditing(true);
     });
-    setSelectedModelDrafts([]);
-    setEditingProviderModelIds(new Set());
-    setShowAdvancedSettings(false);
-    setCreationMode('form');
-    setIsEditing(true);
-  }, [getOpenCodePlanLabel, resetRemoteModelDiscovery]);
+  }, [getOpenCodePlanLabel, requestEditorOpen, resetRemoteModelDiscovery]);
 
   const loginCoordinatorRef = React.useRef(new SubscriptionLoginCoordinator());
   const subscriptionLoginMountedRef = React.useRef(true);
@@ -1492,6 +1462,7 @@ const ModelSettingsPage: React.FC = () => {
     setManualModelInput('');
     setShowApiKey(false);
     setSelectedProviderId(providerId);
+    setEditingTargetKey(`new-provider:${providerId}`);
     
     // Dynamically get translated name
     const providerName = t(`providers.${template.id}.name`);
@@ -1535,6 +1506,7 @@ const ModelSettingsPage: React.FC = () => {
     setEditingProviderModelIds(new Set());
     setShowApiKey(false);
     setSelectedProviderId(null);
+    setEditingTargetKey('new-provider:custom');
     setEditingConfig({
       name: '',
       base_url: 'https://open.bigmodel.cn/api/paas/v4',
@@ -1557,79 +1529,137 @@ const ModelSettingsPage: React.FC = () => {
   };
 
   const handleEditProvider = (config: AIModelConfigType) => {
-    resetRemoteModelDiscovery();
-    setManualModelInput('');
-    setShowApiKey(false);
-
     const providerName = getProviderDisplayName(config);
     const providerGroupKey = getProviderGroupKey(config);
-    const configuredProviderModels = aiModels
-      .filter(model => getProviderGroupKey(model) === providerGroupKey)
-      .sort((a, b) => a.model_name.localeCompare(b.model_name));
-    const providerTemplateId = getProviderTemplateId(config);
-    setEditingProviderModelIds(new Set(
-      configuredProviderModels
-        .map(model => model.id)
-        .filter((id): id is string => !!id)
-    ));
-    setSelectedProviderId(providerTemplateId || null);
-    setEditingConfig({
-      name: providerName,
-      base_url: config.base_url,
-      request_url: resolveRequestUrl(config.base_url, config.provider || 'openai'),
-      api_key: config.api_key || '',
-      model_name: '',
-      provider: config.provider,
-      enabled: true,
-      context_window: config.context_window || 200000,
-      max_tokens: config.max_tokens,
-      category: config.category || 'general_chat',
-      capabilities: config.capabilities || getCapabilitiesByCategory(config.category || 'general_chat'),
-      recommended_for: config.recommended_for || [],
-      metadata: config.metadata || {},
-      inline_think_in_text: config.inline_think_in_text ?? true,
-      custom_headers: config.custom_headers,
-      custom_headers_mode: config.custom_headers_mode,
-      skip_ssl_verify: config.skip_ssl_verify ?? false,
-      custom_request_body: config.custom_request_body,
-      custom_request_body_mode: config.custom_request_body_mode,
-      auth: config.auth || { type: 'api_key' },
+    const targetKey = `provider:${providerGroupKey}`;
+    requestEditorOpen(targetKey, () => {
+      resetRemoteModelDiscovery();
+      setManualModelInput('');
+      setShowApiKey(false);
+
+      const configuredProviderModels = aiModels
+        .filter(model => getProviderGroupKey(model) === providerGroupKey)
+        .sort((a, b) => a.model_name.localeCompare(b.model_name));
+      const providerTemplateId = getProviderTemplateId(config);
+      setEditingProviderModelIds(new Set(
+        configuredProviderModels
+          .map(model => model.id)
+          .filter((id): id is string => !!id)
+      ));
+      setSelectedProviderId(providerTemplateId || null);
+      setEditingTargetKey(targetKey);
+      setEditingConfig({
+        name: providerName,
+        base_url: config.base_url,
+        request_url: resolveRequestUrl(config.base_url, config.provider || 'openai'),
+        api_key: config.api_key || '',
+        model_name: '',
+        provider: config.provider,
+        enabled: true,
+        context_window: config.context_window || 200000,
+        max_tokens: config.max_tokens,
+        category: config.category || 'general_chat',
+        capabilities: config.capabilities || getCapabilitiesByCategory(config.category || 'general_chat'),
+        recommended_for: config.recommended_for || [],
+        metadata: config.metadata || {},
+        inline_think_in_text: config.inline_think_in_text ?? true,
+        custom_headers: config.custom_headers,
+        custom_headers_mode: config.custom_headers_mode,
+        skip_ssl_verify: config.skip_ssl_verify ?? false,
+        custom_request_body: config.custom_request_body,
+        custom_request_body_mode: config.custom_request_body_mode,
+        auth: config.auth || { type: 'api_key' },
+      });
+      setSelectedModelDrafts(createDraftsFromConfigs(configuredProviderModels));
+      setShowAdvancedSettings(
+        !!config.skip_ssl_verify ||
+        config.custom_request_body_mode === 'trim' ||
+        (!!config.custom_request_body && config.custom_request_body.trim() !== '') ||
+        (!!config.custom_headers && Object.keys(config.custom_headers).length > 0)
+      );
+      setCreationMode('form');
+      setIsEditing(true);
     });
-    setSelectedModelDrafts(createDraftsFromConfigs(configuredProviderModels));
-    setShowAdvancedSettings(
-      !!config.skip_ssl_verify ||
-      config.custom_request_body_mode === 'trim' ||
-      (!!config.custom_request_body && config.custom_request_body.trim() !== '') ||
-      (!!config.custom_headers && Object.keys(config.custom_headers).length > 0)
-    );
-    setCreationMode('form');
-    setIsEditing(true);
   };
 
   const handleEdit = (config: AIModelConfigType) => {
-    resetRemoteModelDiscovery();
-    setManualModelInput('');
-    setEditingProviderModelIds(new Set());
-    setShowApiKey(false);
-    setEditingConfig({ ...config, name: getProviderDisplayName(config) });
-    setSelectedModelDrafts([
-      createModelDraft(config.model_name, config, {
-        contextWindow: config.context_window || 200000,
-        maxTokens: config.max_tokens,
-        reasoning: canonicalReasoningConfig(config),
-      })
-    ]);
-    
-    const hasCustomHeaders = !!config.custom_headers && Object.keys(config.custom_headers).length > 0;
-    const hasCustomBody = !!config.custom_request_body && config.custom_request_body.trim() !== '';
-    setShowAdvancedSettings(
-      hasCustomHeaders ||
-      hasCustomBody ||
-      config.custom_request_body_mode === 'trim' ||
-      !!config.skip_ssl_verify
-    );
-    setIsEditing(true);
+    const targetKey = `model:${config.id || `${config.provider}:${config.base_url}:${config.model_name}`}`;
+    requestEditorOpen(targetKey, () => {
+      resetRemoteModelDiscovery();
+      setManualModelInput('');
+      setEditingProviderModelIds(new Set());
+      setShowApiKey(false);
+      setEditingTargetKey(targetKey);
+      setEditingConfig({ ...config, name: getProviderDisplayName(config) });
+      setSelectedModelDrafts([
+        createModelDraft(config.model_name, config, {
+          contextWindow: config.context_window || 200000,
+          maxTokens: config.max_tokens,
+          reasoning: canonicalReasoningConfig(config),
+        })
+      ]);
+
+      const hasCustomHeaders = !!config.custom_headers && Object.keys(config.custom_headers).length > 0;
+      const hasCustomBody = !!config.custom_request_body && config.custom_request_body.trim() !== '';
+      setShowAdvancedSettings(
+        hasCustomHeaders ||
+        hasCustomBody ||
+        config.custom_request_body_mode === 'trim' ||
+        !!config.skip_ssl_verify
+      );
+      setIsEditing(true);
+    });
   };
+
+  const runConfigConnectionTest = useCallback(async (config: AIModelConfigType) => {
+    const configId = config.id;
+    if (!configId || !connectionTestSupported) return;
+
+    const signature = stableJson(config);
+    const activeTest = activeConnectionTestsRef.current[configId];
+    if (activeTest?.signature === signature) return;
+
+    const token = Symbol(configId);
+    activeConnectionTestsRef.current[configId] = { token, signature };
+    setTestingConfigs(previous => ({ ...previous, [configId]: true }));
+    setTestResults(previous => ({ ...previous, [configId]: null }));
+
+    try {
+      const result = await aiApi.testAIConfigConnection(config);
+      if (activeConnectionTestsRef.current[configId]?.token !== token) return;
+
+      const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
+      let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
+      const localizedMessage = translateConnectionTestMessage(result.message_code, t);
+
+      if (localizedMessage) {
+        message += `\n${localizedMessage}`;
+      }
+      if (result.error_details) {
+        message += result.success
+          ? `\n${result.error_details}`
+          : `\n${t('messages.errorDetails')}: ${result.error_details}`;
+      }
+
+      setTestResults(previous => ({
+        ...previous,
+        [configId]: { success: result.success, message },
+      }));
+    } catch (error) {
+      if (activeConnectionTestsRef.current[configId]?.token !== token) return;
+      const message = `${t('messages.testFailed')}\n${t('messages.errorDetails')}: ${error}`;
+      setTestResults(previous => ({
+        ...previous,
+        [configId]: { success: false, message },
+      }));
+      log.warn('Model connection test failed', { configId, error });
+    } finally {
+      if (activeConnectionTestsRef.current[configId]?.token === token) {
+        delete activeConnectionTestsRef.current[configId];
+        setTestingConfigs(previous => ({ ...previous, [configId]: false }));
+      }
+    }
+  }, [connectionTestSupported, t]);
 
   const handleSave = async (): Promise<boolean> => {
     if (editorSavingRef.current) return false;
@@ -1737,13 +1767,9 @@ const ModelSettingsPage: React.FC = () => {
           auth: editingConfig.auth || { type: 'api_key' },
         };
       });
-      const configsToAutoTest = configsNeedingAutoTest(
-        aiModels,
-        configsToSave,
-        isProviderGroupEdit
-      );
-
+      let previousModelsBeforeSave: AIModelConfigType[] = [];
       const updatedModels = await configManager.updateConfig<AIModelConfigType[]>('ai.models', current => {
+        previousModelsBeforeSave = current;
         if (editingConfig.id) {
           if (!current.some(model => model.id === editingConfig.id)) {
             throw new Error('The model was removed while it was being edited');
@@ -1758,6 +1784,11 @@ const ModelSettingsPage: React.FC = () => {
         }
         return [...current, ...configsToSave];
       });
+      const configsToAutoTest = configsNeedingAutoTest(
+        previousModelsBeforeSave,
+        configsToSave,
+        isProviderGroupEdit
+      );
       setAiModels(updatedModels);
       // The host reconciles default selectors using model capabilities.
       
@@ -1767,58 +1798,28 @@ const ModelSettingsPage: React.FC = () => {
       setCreationMode(null);
       setSelectedProviderId(null);
       setEditingProviderModelIds(new Set());
+      setSelectedModelDrafts([]);
+      setEditingTargetKey(null);
+      setDraftCloseConfirmOpen(false);
+      setDraftConflictConfirmOpen(false);
       
       
       const autoTestConfigIds = configsToAutoTest.map(config => config.id).filter((id): id is string => !!id);
-      if (autoTestConfigIds.length > 0) {
+      if (connectionTestSupported && autoTestConfigIds.length > 0) {
         setExpandedIds(prev => new Set([...prev, ...autoTestConfigIds]));
       }
       
       
       
-      configsToAutoTest.forEach(config => {
-        const configId = config.id;
-        if (!configId) return;
-
+      if (connectionTestSupported) {
         void (async () => {
-          setTestingConfigs(prev => ({ ...prev, [configId]: true }));
-          setTestResults(prev => ({ ...prev, [configId]: null }));
-
-          try {
-            const result = await aiApi.testAIConfigConnection(config);
-            const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
-            let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
-            const localizedMessage = translateConnectionTestMessage(result.message_code, t);
-
-            if (localizedMessage) {
-              message += `\n${localizedMessage}`;
-            }
-
-            if (result.error_details) {
-              message += result.success
-                ? `\n${result.error_details}`
-                : `\n${t('messages.errorDetails')}: ${result.error_details}`;
-            }
-
-            setTestResults(prev => ({
-              ...prev,
-              [configId]: {
-                success: result.success,
-                message
-              }
-            }));
-          } catch (error) {
-            const message = `${t('messages.testFailed')}\n${t('messages.errorDetails')}: ${error}`;
-            setTestResults(prev => ({
-              ...prev,
-              [configId]: { success: false, message }
-            }));
-            log.warn('Auto test failed after save', { configId, error });
-          } finally {
-            setTestingConfigs(prev => ({ ...prev, [configId]: false }));
+          for (const config of configsToAutoTest) {
+            await runConfigConnectionTest(config);
           }
         })();
-      });
+      } else if (configsToAutoTest.length > 0) {
+        notification.info(t('messages.testUnsupportedOnHost'));
+      }
       return true;
     } catch (error) {
       log.error('Failed to save config', error);
@@ -1876,45 +1877,7 @@ const ModelSettingsPage: React.FC = () => {
   };
 
   const handleTest = async (config: AIModelConfigType) => {
-    if (!config.id) return;
-    
-    const configId = config.id;
-    setTestingConfigs(prev => ({ ...prev, [configId]: true }));
-    setTestResults(prev => ({ ...prev, [configId]: null }));
-
-    try {
-      
-      const result = await aiApi.testAIConfigConnection(config);
-      
-      
-      const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
-      let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
-      const localizedMessage = translateConnectionTestMessage(result.message_code, t);
-      
-      if (localizedMessage) {
-        message += `\n${localizedMessage}`;
-      }
-
-      if (result.error_details) {
-        message += `\n${t('messages.errorDetails')}: ${result.error_details}`;
-      }
-      
-      setTestResults(prev => ({
-        ...prev,
-        [configId]: { 
-          success: result.success, 
-          message
-        }
-      }));
-    } catch (error) {
-      const message = `${t('messages.testFailed')}\n${t('messages.errorDetails')}: ${error}`;
-      setTestResults(prev => ({
-        ...prev,
-        [configId]: { success: false, message }
-      }));
-    } finally {
-      setTestingConfigs(prev => ({ ...prev, [configId]: false }));
-    }
+    await runConfigConnectionTest(config);
   };
 
   const handleToggleEnabled = async (config: AIModelConfigType, enabled: boolean) => {
@@ -2016,15 +1979,45 @@ const ModelSettingsPage: React.FC = () => {
     setEditingConfig(null);
     setCreationMode(null);
     setSelectedProviderId(null);
+    setEditingTargetKey(null);
     setProviderQuery('');
     setShowAllProviders(false);
     setReasoningPanelDraftKey(null);
+    setDraftCloseConfirmOpen(false);
+    setDraftConflictConfirmOpen(false);
+    pendingEditorOpenRef.current = null;
     reasoningPanelInitialRef.current = null;
+  };
+
+  const preserveEditingDraftAndClose = () => {
+    setDraftCloseConfirmOpen(false);
+    setIsEditing(false);
   };
 
   const requestCloseEditingModal = () => {
     if (editorSavingRef.current) return;
-    requestSettingsDraftExit(['model-provider-editor'], closeEditingModal);
+    if (editingModalHasUnsavedChanges) {
+      setDraftCloseConfirmOpen(true);
+      return;
+    }
+    closeEditingModal();
+  };
+
+  const continueEditingCurrentDraft = () => {
+    pendingEditorOpenRef.current = null;
+    setDraftConflictConfirmOpen(false);
+    setIsEditing(true);
+  };
+
+  const discardDraftBeforeOpeningPendingEditor = () => {
+    const pending = pendingEditorOpenRef.current;
+    closeEditingModal();
+    pending?.open();
+  };
+
+  const cancelPendingEditorOpen = () => {
+    pendingEditorOpenRef.current = null;
+    setDraftConflictConfirmOpen(false);
   };
 
   const discardProxyDraft = useCallback(() => {
@@ -2058,12 +2051,20 @@ const ModelSettingsPage: React.FC = () => {
   useSettingsDraft({
     id: 'model-provider-editor',
     pageId: 'ai.models',
-    label: editingConfig?.id ? t('editModel') : t('newProvider'),
+    label: editingConfig?.id
+      ? t('editModel')
+      : getProviderInstanceId(editingConfig)
+        ? t('editProvider')
+        : t('newProvider'),
     dirty: editingConfig !== null && editingModalHasUnsavedChanges,
     saving: isEditorSaving,
     save: handleSave,
     discard: closeEditingModal,
   });
+
+  const hasSuspendedEditorDraft = !isEditing
+    && editingConfig !== null
+    && editingModalHasUnsavedChanges;
 
   const providerGroups = useMemo<ProviderGroup[]>(() => {
     const grouped = aiModels.reduce<Map<string, ProviderGroup>>((map, model) => {
@@ -3251,11 +3252,14 @@ const ModelSettingsPage: React.FC = () => {
           data-bf-component="model-settings"
           data-bf-part="modelActions"
         >
-          <Tooltip content={t('actions.test')}>
+          <Tooltip content={connectionTestSupported
+            ? t('actions.test')
+            : t('messages.testUnsupportedOnHost')}>
             <IconButton
               aria-label={t('actions.test')}
               size="sm"
               loading={isTesting}
+              disabled={!connectionTestSupported}
               onClick={() => void handleTest(config)}
               icon={isTesting ? <Loader size={14} /> : <Wifi size={14} />}
             />
@@ -3675,6 +3679,16 @@ const ModelSettingsPage: React.FC = () => {
             </Tooltip>
           )}
         >
+          {hasSuspendedEditorDraft && (
+            <ConfigActionBar
+              status="unsaved"
+              statusMessage={t('draftClose.retainedHint')}
+              saveLabel={t('draftClose.continueEditing')}
+              discardLabel={t('draftClose.discardDraft')}
+              onSave={() => setIsEditing(true)}
+              onDiscard={closeEditingModal}
+            />
+          )}
           {aiModels.length === 0 ? (
             <div className="bitfun-model-settings__empty" data-bf-component="model-settings" data-bf-part="empty">
               <Wifi size={36} />
@@ -4093,6 +4107,32 @@ const ModelSettingsPage: React.FC = () => {
           </>
         )}</DialogFooter>
       </Dialog>
+      <ConfirmDialog
+        open={draftCloseConfirmOpen}
+        onOpenChange={(open) => { if (!open) setDraftCloseConfirmOpen(false); }}
+        onConfirm={preserveEditingDraftAndClose}
+        onSecondary={closeEditingModal}
+        title={t('draftClose.title')}
+        message={t('draftClose.message')}
+        confirmText={t('draftClose.keepAndClose')}
+        secondaryText={t('draftClose.discard')}
+        cancelText={t('draftClose.continueEditing')}
+        closeOnPointerOutside={false}
+        type="warning"
+      />
+      <ConfirmDialog
+        open={draftConflictConfirmOpen}
+        onOpenChange={(open) => { if (!open) cancelPendingEditorOpen(); }}
+        onConfirm={continueEditingCurrentDraft}
+        onSecondary={discardDraftBeforeOpeningPendingEditor}
+        title={t('draftConflict.title')}
+        message={t('draftConflict.message')}
+        confirmText={t('draftConflict.continueDraft')}
+        secondaryText={t('draftConflict.discardAndContinue')}
+        cancelText={t('draftConflict.cancel')}
+        closeOnPointerOutside={false}
+        type="warning"
+      />
       <ConfirmDialog
         open={!!deleteRequest}
         onOpenChange={(open) => { if (!open) setDeleteRequest(null); }}
