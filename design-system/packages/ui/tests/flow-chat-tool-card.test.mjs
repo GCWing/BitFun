@@ -21,7 +21,7 @@ import {
   PageDeployToolCard,
   PagePublishToolCard,
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   ReadFileToolCard,
   ReviewSummaryToolCard,
   RunCodeToolCard,
@@ -31,7 +31,8 @@ import {
   TerminalControlToolCard,
   TodoToolCard,
   ToolCardChangeSummary,
-  ToolCardHeaderActions,
+  ToolCardActions,
+  ToolCardCopyButton,
   ViewImageToolCard,
   WebFetchToolCard,
   WebSearchToolCard,
@@ -53,12 +54,12 @@ test("flow-chat entry publishes the ambient and prominent framework anatomy", ()
   const prominentMarkup = renderToStaticMarkup(
     createElement(ProminentToolCard, {
       expandedContent: createElement("div", null, "Command output"),
-      header: createElement(ProminentToolCardHeader, {
+      summary: createElement(ProminentToolCardSummary, {
         action: "Run command",
         actions: createElement(
-          ToolCardHeaderActions,
+          ToolCardActions,
           null,
-          createElement("button", { type: "button" }, "Copy"),
+          createElement(ToolCardCopyButton, { label: "Copy", onPress() {} }),
         ),
         content: createElement("code", null, "pnpm test"),
         extra: createElement(ToolCardChangeSummary, {
@@ -68,7 +69,7 @@ test("flow-chat entry publishes the ambient and prominent framework anatomy", ()
         }),
         icon: createElement("svg", { "data-icon": "terminal" }),
       }),
-      onClick() {},
+      onToggle() {},
       status: "completed",
     }),
   );
@@ -78,14 +79,49 @@ test("flow-chat entry publishes the ambient and prominent framework anatomy", ()
   assert.match(ambientMarkup, /data-bf-part="iconAffordanceButton"/);
   assert.match(ambientMarkup, /aria-label="Expand details"/);
   assert.match(prominentMarkup, /data-bf-attention="prominent"/);
+  assert.match(prominentMarkup, /data-bf-part="summary"/);
+  assert.doesNotMatch(prominentMarkup, /data-bf-part="header"/);
   assert.match(prominentMarkup, /data-bf-part="extra"/);
   assert.match(prominentMarkup, /data-bf-part="changeSummary"/);
   assert.match(prominentMarkup, /data-bf-change="added">\+6/);
   assert.match(prominentMarkup, /data-bf-change="removed">-0/);
   assert.match(prominentMarkup, /data-bf-part="actionRegion"/);
   assert.match(prominentMarkup, /data-bf-part="actions"/);
+  assert.match(prominentMarkup, /data-bf-part="copyButton"/);
   assert.match(prominentMarkup, /data-bf-part="affordanceButton"/);
   assert.match(prominentMarkup, /aria-expanded="false"/);
+});
+
+test("tool-card pointer cursors are limited to interactive surfaces and buttons", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const iconButtonStyles = await readFile(
+    new URL("../src/components/IconButton/IconButton.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(styles, /\.prominentSurface\s*\{[^}]*cursor:\s*default;/s);
+  assert.match(styles, /\.prominentSurface\[data-bf-interactive="true"\]\s*\{\s*cursor:\s*pointer;/s);
+  assert.match(styles, /\.ambientSurface\s*\{[^}]*cursor:\s*default;/s);
+  assert.match(styles, /\.ambientSurface\[data-bf-interactive="true"\]\s*\{\s*cursor:\s*pointer;/s);
+  assert.match(iconButtonStyles, /\.button\s*\{[^}]*cursor:\s*pointer;/s);
+});
+
+test("tool-card summary surfaces prevent accidental text selection without locking details", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const surfaceRule = styles.match(/\.surface\s*\{([^}]*)\}/s)?.[1];
+  const collapseRule = styles.match(/\.collapse\s*\{([^}]*)\}/s)?.[1];
+
+  assert.ok(surfaceRule);
+  assert.ok(collapseRule);
+  assert.match(surfaceRule, /-webkit-user-select:\s*none/);
+  assert.match(surfaceRule, /user-select:\s*none/);
+  assert.doesNotMatch(collapseRule, /user-select/);
 });
 
 test("tool-card change summaries use dedicated code-change colors", async () => {
@@ -108,7 +144,7 @@ test("prominent error status opens error content without a separate failure flag
   const markup = renderToStaticMarkup(
     createElement(ProminentToolCard, {
       errorContent: createElement("div", null, "Command failed"),
-      header: createElement(ProminentToolCardHeader, { action: "Run command" }),
+      summary: createElement(ProminentToolCardSummary, { action: "Run command" }),
       status: "error",
     }),
   );
@@ -125,9 +161,9 @@ test("prominent error status can opt into expandable supporting details", () => 
       allowExpandedWhenFailed: true,
       errorContent: createElement("div", null, "Command failed"),
       expandedContent: createElement("div", null, "Invocation input"),
-      header: createElement(ProminentToolCardHeader, { action: "Run command" }),
+      summary: createElement(ProminentToolCardSummary, { action: "Run command" }),
       isExpanded: true,
-      onClick() {},
+      onToggle() {},
       status: "error",
     }),
   );
@@ -139,6 +175,40 @@ test("prominent error status can opt into expandable supporting details", () => 
   assert.match(markup, /Invocation input/);
   assert.match(markup, /data-bf-part="errorCollapse"[^>]+data-open="true"/);
   assert.match(markup, /Command failed/);
+});
+
+test("cancelled and rejected tool cards rely on status copy instead of a duplicate x glyph", () => {
+  for (const [status, statusLabel] of [
+    ["cancelled", "Cancelled"],
+    ["rejected", "Rejected"],
+  ]) {
+    const agentMarkup = renderToStaticMarkup(
+      createElement(AgentControlToolCard, {
+        agentName: "reviewer",
+        status,
+        statusLabel,
+      }),
+    );
+
+    assert.match(agentMarkup, new RegExp(`data-bf-part="agentStatus"[^>]*>${statusLabel}<`));
+    assert.doesNotMatch(agentMarkup, /data-bf-part="status"/);
+    assert.doesNotMatch(agentMarkup, /lucide-x/);
+  }
+
+  const ambientMarkup = renderToStaticMarkup(
+    createElement(DefaultToolCard, {
+      displayName: "Custom tool",
+      icon: createElement("svg", { "data-icon": "custom-tool" }),
+      status: "cancelled",
+      summary: "Cancelled",
+      toolName: "custom_tool",
+    }),
+  );
+
+  assert.match(ambientMarkup, /data-bf-part="statusSlot"[^>]+data-default-icon="tool"/);
+  assert.match(ambientMarkup, /data-bf-part="toolIconLayer"/);
+  assert.match(ambientMarkup, /data-icon="custom-tool"/);
+  assert.doesNotMatch(ambientMarkup, /data-bf-part="statusLayer"|lucide-x/);
 });
 
 test("file-operation failures stay collapsed and use the warning emphasis status icon", async () => {
@@ -210,16 +280,57 @@ test("FlowChat tool-card shells stay flat at rest and on hover", async () => {
   );
   const prominentRule = styles.match(/\.prominentRoot\s*\{([^}]*)\}/s)?.[1];
   const ambientExpandedRule = styles.match(/\.ambientExpandedShell\s*\{([^}]*)\}/s)?.[1];
+  const ambientOutlineRule = styles.match(/\.ambientRoot::after\s*\{([^}]*)\}/s)?.[1];
 
   assert.ok(prominentRule);
   assert.ok(ambientExpandedRule);
+  assert.ok(ambientOutlineRule);
   assert.match(prominentRule, /box-shadow:\s*none/);
   assert.match(ambientExpandedRule, /box-shadow:\s*none/);
+  assert.match(ambientOutlineRule, /position:\s*absolute/);
+  assert.match(ambientOutlineRule, /pointer-events:\s*none/);
   assert.doesNotMatch(styles, /box-shadow:\s*var\(--bf-shadow-(?:xs|sm)\)/);
   assert.doesNotMatch(styles, /box-shadow\s+var\(--_tool-card-transition\)/);
 });
 
-test("FlowChat tool-card headers share compact title and content typography", async () => {
+test("ambient tool-card summary geometry stays stable while details expand", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const ambientSurfaceRule = styles.match(/\.ambientSurface\s*\{([^}]*)\}/s)?.[1];
+  const expandedAmbientSurfaceRule = styles.match(
+    /\.ambientExpandedShell \.ambientSurface\s*\{([^}]*)\}/s,
+  )?.[1];
+
+  assert.ok(ambientSurfaceRule);
+  assert.ok(expandedAmbientSurfaceRule);
+  assert.match(
+    ambientSurfaceRule,
+    /min-block-size:\s*max\(1lh,\s*var\(--bf-control-tool-card-ambient-row-min-block-size\)\)/,
+  );
+  assert.doesNotMatch(ambientSurfaceRule, /--bf-control-height-sm/);
+  assert.doesNotMatch(expandedAmbientSurfaceRule, /min-block-size|padding/);
+});
+
+test("ambient tool-card collapse has no delayed shell state or layout-changing shell chrome", async () => {
+  const source = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = await readFile(
+    new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
+    "utf8",
+  );
+  const ambientExpandedRule = styles.match(/\.ambientExpandedShell\s*\{([^}]*)\}/s)?.[1];
+
+  assert.ok(ambientExpandedRule);
+  assert.match(source, /const expandedShell = Boolean\(isExpanded && hasExpandedContent\)/);
+  assert.doesNotMatch(source, /keepExpandedShell|collapseTimerRef/);
+  assert.doesNotMatch(ambientExpandedRule, /margin|border(?!-color)/);
+});
+
+test("FlowChat tool-card summary rows share compact title and content typography", async () => {
   const styles = await readFile(
     new URL("../src/flow-chat/tool-cards/FlowChatToolCard.module.css", import.meta.url),
     "utf8",
@@ -555,7 +666,7 @@ test("every migrated FlowChat tool view publishes a stable concrete card identit
   }
 });
 
-test("file diff header matches the compact file-operation information hierarchy", async () => {
+test("file diff summary matches the compact file-operation information hierarchy", async () => {
   const markup = renderToStaticMarkup(createElement(FileDiffToolCard, {
     action: "Get diff:",
     changeSummary: {
@@ -585,10 +696,19 @@ test("file diff header matches the compact file-operation information hierarchy"
 test("concrete tool views expose semantic parts instead of legacy CSS selectors", () => {
   const agentMarkup = renderToStaticMarkup(createElement(AgentControlToolCard, {
     agentName: "reviewer",
+    agentModel: "gpt-5.6",
+    interruptAction: {
+      label: "Stop agent",
+      onPress() {},
+    },
+    onOpenAgent() {},
+    openAgentLabel: "Open agent",
     onToggle() {},
     prompt: "Review the migration",
     status: "running",
+    statusMeta: "4s",
     statusLabel: "Running",
+    summary: "Review the shared FlowChat boundary",
   }));
   const fetchMarkup = renderToStaticMarkup(createElement(WebFetchToolCard, {
     details: ["markdown"],
@@ -609,7 +729,16 @@ test("concrete tool views expose semantic parts instead of legacy CSS selectors"
   }));
 
   assert.match(agentMarkup, /data-bf-part="agentIdentity"/);
-  assert.match(agentMarkup, /data-bf-part="expandIndicator"/);
+  assert.match(agentMarkup, /data-bf-part="agentModel"/);
+  assert.match(agentMarkup, /data-bf-part="agentSummary"/);
+  assert.match(agentMarkup, /data-bf-part="agentMeta"/);
+  assert.match(agentMarkup, /data-bf-part="statusSlot"/);
+  assert.match(agentMarkup, /data-bf-part="processing"/);
+  assert.match(agentMarkup, /data-bf-part="interruptAgentButton"/);
+  assert.match(agentMarkup, /data-bf-part="affordanceButton"/);
+  assert.match(agentMarkup, /data-bf-part="openAgentButton"/);
+  assert.match(agentMarkup, /data-bf-affordance="open-panel-right"/);
+  assert.doesNotMatch(agentMarkup, /data-bf-part="expandIndicator"|cube-loading/);
   assert.match(fetchMarkup, /data-bf-part="sourceLink"/);
   assert.match(fetchMarkup, /data-bf-part="detail"/);
   assert.match(imageMarkup, /data-bf-part="imagePreview"/);

@@ -98,7 +98,6 @@ const SceneBar: React.FC<SceneBarProps> = ({
 
     items.push({
       value: tab.id,
-      icon: def.Icon ? <def.Icon aria-hidden="true" /> : undefined,
       label: <span className="bitfun-scene-bar__tab-title">{displayLabel}</span>,
       // Keep the close hit target stationary between pointer down and up;
       // shrinking it can retarget the click at the button edge (issue #2210).
@@ -154,6 +153,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
           className="bitfun-scene-bar__tabs"
           aria-label={t('sceneBar.tabsLabel')}
           items={tabItems}
+          size="sm"
           value={activeTabId ?? undefined}
           onValueChange={handleTabValueChange}
           onScroll={handleTabsScroll}

@@ -61,6 +61,27 @@ function fallbackLifecycle(status: FlowToolItem['status']): SessionLineageLifecy
   }
 }
 
+function statusForLifecycle(
+  lifecycle: SessionLineageLifecycle,
+  fallback: FlowToolItem['status'],
+): FlowToolItem['status'] {
+  switch (lifecycle) {
+    case 'running':
+    case 'finishing':
+      return 'running';
+    case 'waiting':
+      return 'waiting';
+    case 'completed':
+      return 'completed';
+    case 'error':
+      return 'error';
+    case 'cancelled':
+      return 'cancelled';
+    default:
+      return fallback;
+  }
+}
+
 function subscribeToFlowChatStore(listener: () => void): () => void {
   return flowChatStore.subscribe(() => listener());
 }
@@ -129,6 +150,9 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
   const stableSubagentType = linkedSession?.subagentType?.trim() || inputAgentType;
   const isParameterStreaming = Boolean(toolItem.isParamsStreaming)
     || PARAMETER_STREAMING_STATUSES.has(status);
+  const displayStatus = isParameterStreaming
+    ? status
+    : statusForLifecycle(lifecycle, status);
   const canExpand = Boolean(prompt) && !isParameterStreaming;
   const canOpenSession = Boolean(linkedSubagentSessionId && sessionId);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -199,7 +223,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
       data-tool-card-id={toolId ?? ''}
     >
       <AgentControlToolCardView
-        status={status}
+        status={displayStatus}
         isExpanded={isExpanded}
         onToggle={canExpand ? handleToggle : undefined}
         agentName={agentDisplayName}
@@ -207,7 +231,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
           <SubagentAvatar
             sessionId={linkedSubagentSessionId}
             name={agentName}
-            size={22}
+            size={16}
             status={lifecycle}
           />
         ) : undefined}

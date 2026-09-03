@@ -47,10 +47,11 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
   }, forwardedRef) {
     const elementRef = useRef<HTMLSpanElement | null>(null);
     const contentRef = useRef<HTMLSpanElement | null>(null);
-    const [measurement, setMeasurement] = useState<OverflowMeasurement>({
+    const measurementRef = useRef<OverflowMeasurement>({
       distance: 0,
       isOverflowing: false,
     });
+    const [measurement, setMeasurement] = useState<OverflowMeasurement>(measurementRef.current);
 
     const setElementRef = useCallback((element: HTMLSpanElement | null) => {
       elementRef.current = element;
@@ -64,16 +65,17 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
 
       const distance = Math.max(0, content.scrollWidth - element.clientWidth);
       const isOverflowing = distance > 0;
-      setMeasurement((current) => (
-        current.distance === distance && current.isOverflowing === isOverflowing
-          ? current
-          : { distance, isOverflowing }
-      ));
+      const current = measurementRef.current;
+      if (current.distance === distance && current.isOverflowing === isOverflowing) return;
+
+      const next = { distance, isOverflowing };
+      measurementRef.current = next;
+      setMeasurement(next);
     }, []);
 
     useIsomorphicLayoutEffect(() => {
       updateOverflow();
-    });
+    }, [children, updateOverflow]);
 
     useEffect(() => {
       const element = elementRef.current;

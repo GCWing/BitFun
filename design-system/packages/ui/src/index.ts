@@ -236,6 +236,7 @@ export {
   TabGroup,
   type TabGroupItem,
   type TabGroupProps,
+  type TabGroupSize,
 } from "./components/TabGroup";
 export {
   Toolbar,

@@ -54,15 +54,22 @@
     position: relative;
     inline-size: 100%;
     min-inline-size: 0;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .prominentSurface {
     border: 0;
     background: transparent;
     color: inherit;
+    cursor: default;
   }
 
-  .header {
+  .prominentSurface[data-bf-interactive="true"] {
+    cursor: pointer;
+  }
+
+  .summaryRow {
     box-sizing: border-box;
     display: flex;
     inline-size: 100%;
@@ -70,7 +77,7 @@
     align-items: center;
   }
 
-  .prominentHeader {
+  .prominentSummary {
     min-block-size: var(--bf-control-height-sm);
     gap: var(--bf-space-2);
     padding-block: var(--bf-space-1);
@@ -127,7 +134,7 @@
 
   .extra,
   .statusIcon,
-  .headerActions,
+  .toolCardActions,
   .actionRegion {
     display: inline-flex;
     flex: 0 0 auto;
@@ -237,11 +244,11 @@
     transition: transform var(--_tool-card-transition);
   }
 
-  .headerActions {
+  .toolCardActions {
     gap: var(--bf-space-1);
   }
 
-  .headerActions:empty {
+  .toolCardActions:empty {
     display: none;
   }
 
@@ -406,9 +413,24 @@
   }
 
   .ambientRoot {
+    position: relative;
     gap: 0;
+    border-radius: var(--bf-radius-md);
     color: var(--bf-color-content-muted);
+    background-color: transparent;
     line-height: var(--bf-type-body-md-line-height);
+    transition: background-color var(--_tool-card-transition);
+  }
+
+  .ambientRoot::after {
+    position: absolute;
+    inset: 0;
+    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
+    border-radius: inherit;
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--_tool-card-transition);
   }
 
   .ambientRoot[data-bf-direct-action="true"] {
@@ -423,7 +445,7 @@
 
   .ambientSurface {
     display: flex;
-    min-block-size: var(--bf-control-height-sm);
+    min-block-size: max(1lh, var(--bf-control-tool-card-ambient-row-min-block-size));
     align-items: center;
     gap: var(--bf-space-1);
     padding-inline: var(--bf-space-1) var(--bf-space-2);
@@ -477,16 +499,15 @@
 
   .ambientExpandedShell {
     overflow: hidden;
-    margin-block: var(--bf-space-1);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-md);
-    background: var(--bf-color-surface-panel);
+    background-color: var(--bf-color-surface-panel);
     box-shadow: none;
   }
 
+  .ambientExpandedShell::after {
+    opacity: 1;
+  }
+
   .ambientExpandedShell .ambientSurface {
-    min-block-size: var(--bf-control-height-md);
-    padding-inline: var(--bf-space-2);
     color: var(--bf-color-content-primary);
   }
 
@@ -516,6 +537,7 @@
   @media (prefers-reduced-motion: reduce) {
     .prominentRoot,
     .ambientRoot,
+    .ambientRoot::after,
     .actionRegion,
     .mainIcon,
     .inlineAffordance,
@@ -534,8 +556,11 @@
   }
 
   @media (forced-colors: active) {
-    .prominentRoot,
-    .ambientExpandedShell {
+    .prominentRoot {
+      border-color: CanvasText;
+    }
+
+    .ambientExpandedShell::after {
       border-color: CanvasText;
     }
 

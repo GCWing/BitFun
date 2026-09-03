@@ -18,9 +18,9 @@ import {
   AmbientToolCard,
   AmbientToolCardHeader,
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   ToolCardChangeSummary,
-  ToolCardHeaderActions,
+  ToolCardActions,
   type FlowChatToolStatus,
 } from "./FlowChatToolCard";
 import { ToolCardStatusSlot } from "./ToolCardStatusSlot";
@@ -168,12 +168,12 @@ export function FileOperationToolCard({
         collapsibleErrorContent
         errorContent={errorContent}
         expandedContent={hasPreview ? <div className={styles.preview}>{preview}</div> : undefined}
-        header={(
-          <ProminentToolCardHeader
+        summary={(
+          <ProminentToolCardSummary
             action={actionLabel}
             actionTestId={actionTestId}
             trailingActions={onOpenFile ? (
-              <ToolCardHeaderActions>
+              <ToolCardActions>
                 <IconButton
                   aria-label={onOpenFile.label}
                   data-bf-affordance="open-panel-right"
@@ -185,7 +185,7 @@ export function FileOperationToolCard({
                   title={onOpenFile.label}
                   variant="quiet"
                 />
-              </ToolCardHeaderActions>
+              </ToolCardActions>
             ) : undefined}
             content={inlineMessage ? (
               <span className={styles.inlineMessage}>{inlineMessage}</span>
@@ -223,10 +223,10 @@ export function FileOperationToolCard({
                 : undefined}
           />
         )}
-        headerExpandAffordance={hasExpandedContent}
+        summaryExpandAffordance={hasExpandedContent}
         isExpanded={Boolean(isExpanded && hasExpandedContent)}
         isFailed={failed}
-        onClick={hasExpandedContent && onToggle ? () => onToggle() : undefined}
+        onToggle={hasExpandedContent && onToggle ? () => onToggle() : undefined}
         requiresConfirmation={requiresConfirmation}
         status={status}
       />

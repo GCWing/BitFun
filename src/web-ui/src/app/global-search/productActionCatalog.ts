@@ -10,7 +10,7 @@ export type ProductActionIcon =
   | 'blocks'
   | 'check-square'
   | 'chart'
-  | 'settings'
+  | 'gear'
   | 'keyboard'
   | 'network';
 
@@ -135,7 +135,7 @@ export const PRODUCT_ACTION_CATALOG: readonly ProductActionDefinition[] = [
     labelKey: 'nav.search.actions.openSettings',
     descriptionKey: 'nav.search.actionDescriptions.openSettings',
     aliases: ['settings', 'preferences', 'configuration'],
-    icon: 'settings',
+    icon: 'gear',
     defaultPriority: 70,
   },
   {

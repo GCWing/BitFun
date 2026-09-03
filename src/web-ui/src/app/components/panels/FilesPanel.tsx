@@ -351,7 +351,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         workspacePath,
         ...(data.line ? { jumpToLine: data.line } : {}),
         ...(data.column ? { jumpToColumn: data.column } : {}),
-      });
+      }, { source: 'project-nav' });
     });
   }, [workspacePath, shouldOpenLargeFile]);
 

@@ -219,48 +219,40 @@
     overflow-wrap: anywhere;
   }
 
-  .agentHeader {
-    display: flex;
-    inline-size: 100%;
-    min-inline-size: 0;
-    align-items: center;
-    gap: var(--bf-space-2);
-  }
-
-  .agentPill {
+  .agentIdentity,
+  .agentExtra,
+  .agentMeta {
     display: inline-flex;
     min-inline-size: 0;
-    max-inline-size: min(52%, 15rem);
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-1) var(--bf-space-2) var(--bf-space-1) var(--bf-space-1);
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-surface-raised);
-    color: var(--bf-color-content-primary);
-    font: inherit;
+    gap: var(--bf-space-1);
   }
 
-  button.agentPill {
-    cursor: pointer;
+  .agentIdentity {
+    max-inline-size: min(18rem, 38vw);
   }
 
-  button.agentPill:is(:hover, :focus-visible) {
-    border-color: var(--bf-color-border-strong);
-    outline: none;
-    box-shadow: 0 0 0 2px var(--bf-color-focus-ring);
+  .agentExtra {
+    max-inline-size: min(20rem, 42vw);
   }
 
   .agentAvatar {
     display: inline-flex;
-    inline-size: 1.375rem;
-    block-size: 1.375rem;
-    flex: 0 0 1.375rem;
+    inline-size: 100%;
+    block-size: 100%;
     align-items: center;
     justify-content: center;
   }
 
+  .agentAvatar > :where(svg, img, span) {
+    max-inline-size: 100%;
+    max-block-size: 100%;
+  }
+
   .agentName,
+  .agentModel,
+  .agentSummary,
+  .agentMeta,
   .agentStatus {
     min-inline-size: 0;
     overflow: hidden;
@@ -270,6 +262,17 @@
 
   .agentName {
     font-weight: var(--bf-type-label-lg-font-weight);
+  }
+
+  .agentModel,
+  .agentSummary,
+  .agentMeta {
+    color: var(--bf-color-content-muted);
+    font-weight: var(--bf-type-body-sm-font-weight);
+  }
+
+  .agentSummary {
+    display: block;
   }
 
   .agentStatus {
@@ -288,24 +291,6 @@
     color: var(--bf-color-status-danger-content);
   }
 
-  .agentIndicator {
-    display: inline-flex;
-    inline-size: 1.125rem;
-    block-size: 1.125rem;
-    margin-inline-start: auto;
-    flex: 0 0 1.125rem;
-    align-items: center;
-    justify-content: center;
-    color: var(--bf-color-content-muted);
-    opacity: 0;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-  }
-
-  .agentRoot:is(:hover, :focus-within) .agentIndicator,
-  .agentRoot[data-bf-preview-state="hover"] .agentIndicator {
-    opacity: 1;
-  }
-
   .agentPrompt {
     max-block-size: 15rem;
     overflow: auto;
@@ -318,9 +303,4 @@
     line-height: var(--bf-type-body-md-line-height);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .agentIndicator {
-      transition: none;
-    }
-  }
 }

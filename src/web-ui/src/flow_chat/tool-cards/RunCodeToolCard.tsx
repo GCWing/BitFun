@@ -111,7 +111,7 @@ export const RunCodeToolCard: React.FC<ToolCardProps> = ({
         onToggle={canExpand ? handleToggleExpand : undefined}
         action={t('toolCards.runCode.title')}
         summary={summary}
-        headerActions={code ? (
+        actions={code ? (
           <ToolCardCopyAction
             getText={getCopyCodeText}
             tooltip={t('toolCards.runCode.copyCode')}

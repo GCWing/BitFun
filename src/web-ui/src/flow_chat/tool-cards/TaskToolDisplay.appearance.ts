@@ -3,8 +3,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const taskToolDisplayAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'task-tool-display',
   parts: [
-    { id: 'root' }, { id: 'header' }, { id: 'body' }, { id: 'main' },
-    { id: 'action' }, { id: 'meta' }, { id: 'rail' }, { id: 'expanded' },
+    { id: 'root' }, { id: 'expanded' },
     { id: 'interruption' }, { id: 'reviewer' }, { id: 'responsibilities' },
     { id: 'prompt' }, { id: 'cancel' },
   ],

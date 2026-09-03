@@ -3,7 +3,7 @@
  *
  * Left-right layout:
  *   .nav-area   (300px default, flex-column)
- *     NavBar        (35px — back/forward + drag + WindowControls)
+ *     NavBar        (45px — back/forward + drag + WindowControls)
  *     NavPanel      (flex:1 — navigation sidebar)
  *   .scene-area (flex:1, flex-column)
  *     SceneTopBar   (scene tabs + active-scene chrome + WindowControls)

@@ -4,24 +4,28 @@ import type {
   ReactNode,
 } from "react";
 import {
+  ArrowUpRight,
   Bot,
-  ChevronDown,
-  ChevronRight,
   FileText,
   GitBranch,
   GitCompare,
   Rocket,
   SearchCheck,
+  Square,
   Sparkles,
 } from "lucide-react";
-import { classNames } from "../../internal/classNames";
+import { IconButton } from "../../components/IconButton/IconButton";
 import {
   ProminentToolCard,
-  ProminentToolCardHeader,
+  ProminentToolCardSummary,
   ToolCardChangeSummary,
-  ToolCardHeaderActions,
+  ToolCardActions,
   type FlowChatToolStatus,
 } from "./FlowChatToolCard";
+import {
+  hasVisibleToolCardStatusGlyph,
+  ToolCardStatusSlot,
+} from "./ToolCardStatusSlot";
 import { ToolProcessingDots } from "./ToolProcessingDots";
 import styles from "./ProminentToolCards.module.css";
 
@@ -45,7 +49,7 @@ export interface GitToolCardProps extends ProminentCardProps {
   error?: ReactNode;
   errorMeta?: ReactNode;
   footerItems?: readonly GitToolCardFooterItem[];
-  headerActions?: ReactNode;
+  actions?: ReactNode;
   loading?: boolean;
   statusSummary?: ReactNode;
   statusTone?: "danger" | "neutral" | "warning";
@@ -57,11 +61,11 @@ export interface GitToolCardProps extends ProminentCardProps {
 
 export function GitToolCard({
   action,
+  actions,
   command,
   error,
   errorMeta,
   footerItems = [],
-  headerActions,
   isExpanded = false,
   loading = false,
   onToggle,
@@ -114,10 +118,10 @@ export function GitToolCard({
       data-bf-tool-card="git"
       errorContent={status === "error" ? body : undefined}
       expandedContent={status === "error" ? undefined : body}
-      header={(
-        <ProminentToolCardHeader
+      summary={(
+        <ProminentToolCardSummary
           action={action}
-          actions={headerActions ? <ToolCardHeaderActions>{headerActions}</ToolCardHeaderActions> : undefined}
+          actions={actions ? <ToolCardActions>{actions}</ToolCardActions> : undefined}
           content={<code className={styles.command}>{command}</code>}
           extra={statusSummary ? (
             <span className={styles.summary} data-tone={statusTone}>{statusSummary}</span>
@@ -126,9 +130,9 @@ export function GitToolCard({
           statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
         />
       )}
-      headerExpandAffordance={hasDetails}
+      summaryExpandAffordance={hasDetails}
       isExpanded={Boolean(isExpanded && hasDetails && status !== "error")}
-      onClick={hasDetails && onToggle ? onToggle : undefined}
+      onToggle={hasDetails && onToggle ? onToggle : undefined}
       status={status}
     />
   );
@@ -178,8 +182,8 @@ export function FileDiffToolCard({
       data-bf-tool-card="file-diff"
       errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
       expandedContent={body}
-      header={(
-        <ProminentToolCardHeader
+      summary={(
+        <ProminentToolCardSummary
           action={action}
           content={(
             <span
@@ -202,9 +206,9 @@ export function FileDiffToolCard({
           statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
         />
       )}
-      headerExpandAffordance={Boolean(body)}
+      summaryExpandAffordance={Boolean(body)}
       isExpanded={Boolean(isExpanded && body && status !== "error")}
-      onClick={body && onToggle ? onToggle : undefined}
+      onToggle={body && onToggle ? onToggle : undefined}
       status={status}
     />
   );
@@ -254,8 +258,8 @@ export function ReviewSummaryToolCard({
           {action && <div className={styles.actions}>{action}</div>}
         </div>
       )}
-      header={(
-        <ProminentToolCardHeader
+      summary={(
+        <ProminentToolCardSummary
           action={title}
           extra={changedFiles.length > 0 && fileCountLabel ? (
             <span className={styles.fileCount}><FileText aria-hidden="true" />{fileCountLabel}</span>
@@ -265,7 +269,7 @@ export function ReviewSummaryToolCard({
         />
       )}
       isExpanded={isExpanded}
-      onClick={onToggle}
+      onToggle={onToggle}
       status={status}
     />
   );
@@ -320,17 +324,17 @@ function PageLifecycleToolCardBase({
       data-bf-tool-card={toolCard}
       errorContent={status === "error" ? body : undefined}
       expandedContent={status === "error" ? undefined : body}
-      header={(
-        <ProminentToolCardHeader
+      summary={(
+        <ProminentToolCardSummary
           action={action}
           content={<span className={styles.command}>{subject}{version ? ` @ ${version}` : ""}</span>}
           icon={<Rocket aria-hidden="true" />}
           statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
         />
       )}
-      headerExpandAffordance={hasDetails}
+      summaryExpandAffordance={hasDetails}
       isExpanded={Boolean(isExpanded && hasDetails && status !== "error")}
-      onClick={hasDetails && onToggle ? onToggle : undefined}
+      onToggle={hasDetails && onToggle ? onToggle : undefined}
       status={status}
     />
   );
@@ -348,77 +352,152 @@ export function PagePublishToolCard(props: PagePublishToolCardProps) {
 
 export interface AgentControlToolCardProps extends ProminentCardProps {
   agentName: ReactNode;
+  agentModel?: ReactNode;
   avatar?: ReactNode;
+  details?: ReactNode;
+  error?: ReactNode;
+  summaryExpandAffordance?: boolean;
+  interruptAction?: AgentControlToolCardAction;
+  isFailed?: boolean;
   onOpenAgent?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   openAgentLabel?: string;
+  openAgentTestId?: string;
   prompt?: ReactNode;
-  statusLabel: ReactNode;
+  requiresConfirmation?: boolean;
+  statusLabel?: ReactNode;
+  statusMeta?: ReactNode;
   statusTone?: "danger" | "neutral" | "success" | "warning";
+  summary?: ReactNode;
+  toggleTestId?: string;
+}
+
+export interface AgentControlToolCardAction {
+  disabled?: boolean;
+  label: string;
+  onPress: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  pending?: boolean;
+  testId?: string;
 }
 
 export function AgentControlToolCard({
   agentName,
+  agentModel,
   avatar,
   className,
+  details,
+  error,
+  summaryExpandAffordance,
+  interruptAction,
   isExpanded = false,
+  isFailed = false,
   onOpenAgent,
   onToggle,
   openAgentLabel,
+  openAgentTestId,
   prompt,
+  requiresConfirmation = false,
   status,
   statusLabel,
+  statusMeta,
   statusTone = "neutral",
+  summary,
+  toggleTestId,
   ...props
 }: AgentControlToolCardProps) {
-  const expandable = Boolean(prompt && onToggle);
-  const agentPillContent = (
-    <>
-      <span className={styles.agentAvatar} data-bf-part="avatar">
-        {avatar ?? <Bot aria-hidden="true" />}
-      </span>
+  const expandedContent = details ?? (prompt ? (
+    <div className={styles.agentPrompt} data-bf-part="prompt">{prompt}</div>
+  ) : undefined);
+  const expandable = Boolean(onToggle && (
+    expandedContent || summaryExpandAffordance || isExpanded
+  ));
+  const hasActions = Boolean(interruptAction);
+  const hasTrailingActions = Boolean(onOpenAgent && openAgentLabel);
+  const hasExtra = Boolean(statusMeta || statusLabel);
+
+  const identity = (
+    <span className={styles.agentIdentity} data-bf-part="agentIdentity">
       <span className={styles.agentName} data-bf-part="agentName">{agentName}</span>
-    </>
-  );
-  const header = (
-    <div className={styles.agentHeader} data-bf-part="agentHeader">
-      {onOpenAgent ? (
-        <button
-          aria-label={openAgentLabel}
-          className={styles.agentPill}
-          data-bf-part="agentIdentity"
-          onClick={onOpenAgent}
-          title={openAgentLabel}
-          type="button"
-        >
-          {agentPillContent}
-        </button>
-      ) : <span className={styles.agentPill} data-bf-part="agentIdentity">{agentPillContent}</span>}
-      <span className={styles.agentStatus} data-bf-part="agentStatus" data-tone={statusTone}>
-        {statusLabel}
-      </span>
-      {expandable && (
-        <span
-          aria-hidden="true"
-          className={styles.agentIndicator}
-          data-bf-part="expandIndicator"
-        >
-          {isExpanded ? <ChevronDown /> : <ChevronRight />}
-        </span>
+      {agentModel !== undefined && agentModel !== null && agentModel !== false && (
+        <span className={styles.agentModel} data-bf-part="agentModel">{agentModel}</span>
       )}
-    </div>
+    </span>
   );
 
   return (
     <ProminentToolCard
       {...props}
-      className={classNames(styles.agentRoot, className)}
+      className={className}
       data-bf-tool-card="agent-control"
-      expandedContent={prompt ? <div className={styles.agentPrompt}>{prompt}</div> : undefined}
-      header={header}
-      headerExpandAffordance={false}
-      isExpanded={Boolean(isExpanded && prompt)}
-      onClick={expandable ? onToggle : undefined}
+      errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
+      expandedContent={expandedContent}
+      summary={(
+        <ProminentToolCardSummary
+          action={identity}
+          actions={hasActions ? (
+            <ToolCardActions>
+              <IconButton
+                aria-label={interruptAction!.label}
+                data-bf-part="interruptAgentButton"
+                disabled={interruptAction!.disabled}
+                icon={interruptAction!.pending
+                  ? <ToolProcessingDots size={12} />
+                  : <Square aria-hidden="true" fill="currentColor" />}
+                onClick={interruptAction!.onPress}
+                size="sm"
+                data-testid={interruptAction!.testId}
+                title={interruptAction!.label}
+                tone="danger"
+                variant="quiet"
+              />
+            </ToolCardActions>
+          ) : undefined}
+          content={summary !== undefined && summary !== null && summary !== false ? (
+            <span className={styles.agentSummary} data-bf-part="agentSummary">{summary}</span>
+          ) : undefined}
+          extra={hasExtra ? (
+            <span className={styles.agentExtra} data-bf-part="agentExtra">
+              {statusMeta !== undefined && statusMeta !== null && statusMeta !== false && (
+                <span className={styles.agentMeta} data-bf-part="agentMeta">{statusMeta}</span>
+              )}
+              {statusLabel !== undefined && statusLabel !== null && statusLabel !== false && (
+                <span className={styles.agentStatus} data-bf-part="agentStatus" data-tone={statusTone}>
+                  {statusLabel}
+                </span>
+              )}
+            </span>
+          ) : undefined}
+          icon={(
+            <span className={styles.agentAvatar} data-bf-part="avatar">
+              {avatar ?? <Bot aria-hidden="true" />}
+            </span>
+          )}
+          statusIcon={hasVisibleToolCardStatusGlyph(status)
+            ? <ToolCardStatusSlot size={16} status={status} />
+            : undefined}
+          trailingActions={hasTrailingActions ? (
+            <ToolCardActions>
+              <IconButton
+                aria-label={openAgentLabel!}
+                data-bf-affordance="open-panel-right"
+                data-bf-part="openAgentButton"
+                icon={<ArrowUpRight aria-hidden="true" data-bf-icon="open-panel-right" />}
+                onClick={onOpenAgent!}
+                size="sm"
+                data-testid={openAgentTestId}
+                title={openAgentLabel!}
+                variant="quiet"
+              />
+            </ToolCardActions>
+          ) : undefined}
+        />
+      )}
+      summaryExpandAffordance={summaryExpandAffordance ?? Boolean(expandedContent && onToggle)}
+      isExpanded={Boolean(isExpanded && expandedContent)}
+      isFailed={isFailed}
+      onToggle={expandable ? onToggle : undefined}
+      requiresConfirmation={requiresConfirmation}
       status={status}
+      toggleTestId={toggleTestId}
     />
   );
 }

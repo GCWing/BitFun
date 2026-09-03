@@ -7,7 +7,7 @@ export const prominentToolCardMeta = {
   name: "ProminentToolCard",
   props: [
     { name: "status", type: "FlowChatToolStatus" },
-    { name: "header", type: "ReactNode" },
+    { name: "summary", type: "ReactNode" },
     { defaultValue: "false", name: "isExpanded", type: "boolean" },
     { name: "expandedContent", type: "ReactNode" },
     { name: "errorContent", type: "ReactNode" },

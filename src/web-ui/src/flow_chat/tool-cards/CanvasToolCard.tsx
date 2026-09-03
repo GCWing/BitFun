@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { Icon } from '@bitfun/ui';
 import { AlertTriangle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
+import { ProminentToolCard, ProminentToolCardSummary } from '@bitfun/ui/flow-chat';
 import { getToolCardConfig } from './toolCardMetadata';
 import { flowChatStore } from '../store/FlowChatStore';
 import { CodePreview } from '../components/CodePreview';
@@ -181,8 +181,8 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
     toolItem.toolName,
   ]);
 
-  const header = (
-    <ProminentToolCardHeader
+  const summary = (
+    <ProminentToolCardSummary
       icon={<span className="canvas-tool-card__icon"><Icon name="creative" size="md" /></span>}
       action={toolDisplayName}
       content={<span data-bf-component="canvas-tool-card" data-bf-part="title" className="canvas-tool-card__title">{title}</span>}
@@ -243,14 +243,14 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       <ProminentToolCard
         status={status}
         isExpanded={!isOpenable || diagnostics.length > 0 || isFailed}
-        onClick={isOpenable ? handleOpenPanel : undefined}
+        onToggle={isOpenable ? handleOpenPanel : undefined}
         className={`canvas-tool-card ${isOpenable ? 'clickable' : ''}`.trim()}
-        header={header}
+        summary={summary}
         expandedContent={body}
         errorContent={isFailed ? body : undefined}
         isFailed={isFailed}
-        headerExpandAffordance={isOpenable}
-        headerAffordanceKind="open-panel-right"
+        summaryExpandAffordance={isOpenable}
+        summaryAffordanceKind="open-panel-right"
       />
     </div>
   );

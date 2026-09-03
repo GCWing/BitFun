@@ -4,8 +4,6 @@ import type {
   ReactNode,
 } from "react";
 import {
-  Check,
-  Copy,
   ExternalLink,
   Square,
   Terminal,
@@ -14,10 +12,11 @@ import { IconButton } from "../../components/IconButton/IconButton";
 import { classNames } from "../../internal/classNames";
 import {
   ProminentToolCard,
-  ProminentToolCardHeader,
-  ToolCardHeaderActions,
+  ProminentToolCardSummary,
+  ToolCardActions,
   type FlowChatToolStatus,
 } from "./FlowChatToolCard";
+import { ToolCardCopyButton } from "./ToolCardCopyButton";
 import { ToolProcessingDots } from "./ToolProcessingDots";
 import styles from "./CommandToolCard.module.css";
 
@@ -121,11 +120,23 @@ export function CommandToolCard({
     const label = copied && "copiedLabel" in item && item.copiedLabel
       ? item.copiedLabel
       : item.label;
-    const icon = kind === "copy"
-      ? copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />
-      : kind === "open"
-        ? <ExternalLink aria-hidden="true" />
-        : <Square aria-hidden="true" fill="currentColor" />;
+    if (kind === "copy") {
+      const copyItem = item as CommandToolCardCopyAction;
+      return (
+        <ToolCardCopyButton
+          copied={copied}
+          copiedLabel={copyItem.copiedLabel}
+          disabled={copyItem.disabled}
+          label={copyItem.label}
+          onPress={copyItem.onPress}
+          testId={copyItem.testId}
+        />
+      );
+    }
+
+    const icon = kind === "open"
+      ? <ExternalLink aria-hidden="true" />
+      : <Square aria-hidden="true" fill="currentColor" />;
 
     return (
       <IconButton
@@ -190,15 +201,15 @@ export function CommandToolCard({
       <ProminentToolCard
         errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
         expandedContent={details}
-        header={(
-          <ProminentToolCardHeader
+        summary={(
+          <ProminentToolCardSummary
             action={action}
             actions={actionItems ? (
-              <ToolCardHeaderActions>
+              <ToolCardActions>
                 {renderAction("interrupt", interruptAction)}
                 {renderAction("copy", copyAction)}
                 {renderAction("open", openAction)}
-              </ToolCardHeaderActions>
+              </ToolCardActions>
             ) : undefined}
             content={(
               <code
@@ -223,10 +234,10 @@ export function CommandToolCard({
             statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
           />
         )}
-        headerExpandAffordance={hasDetails}
+        summaryExpandAffordance={hasDetails}
         isExpanded={isExpanded}
         isFailed={failed}
-        onClick={hasDetails && onToggle ? () => onToggle() : undefined}
+        onToggle={hasDetails && onToggle ? () => onToggle() : undefined}
         requiresConfirmation={requiresConfirmation}
         status={status}
         toggleTestId={toggleTestId}

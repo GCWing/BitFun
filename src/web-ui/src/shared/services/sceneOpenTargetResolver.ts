@@ -29,15 +29,17 @@ export function resolveOpenTarget(intent: OpenIntent, context: OpenTargetContext
   const { activeTabId } = useSceneStore.getState();
   const source = context.source ?? 'default';
 
-  // Active-scene-first: if user is currently in Session scene, stay in agent AuxPane tabs.
-  if (activeTabId === 'session') {
-    return { mode: 'agent', targetSceneId: 'session', sceneJustOpened: false };
-  }
-
-  // Project navigation file tree opens files in file-viewer scene
-  // when user is not currently working in Session scene.
+  // An explicit project-navigation action owns its destination. The left
+  // project tree can remain open while Session is the active scene, so using
+  // activeTabId first would misroute the selection into Session's AuxPane and
+  // leave the file-viewer scene unopened.
   if (intent === 'file' && source === 'project-nav') {
     return { mode: 'project', targetSceneId: 'file-viewer', sceneJustOpened: false };
+  }
+
+  // Contextual file opens from the active Session stay in its AuxPane.
+  if (activeTabId === 'session') {
+    return { mode: 'agent', targetSceneId: 'session', sceneJustOpened: false };
   }
 
   // Non-agent scenes route to their dedicated host scenes.

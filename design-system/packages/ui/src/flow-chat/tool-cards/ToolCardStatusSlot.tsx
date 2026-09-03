@@ -15,6 +15,10 @@ export interface ToolCardStatusSlotProps {
   toolIcon?: React.ReactNode;
 }
 
+export function hasVisibleToolCardStatusGlyph(status: FlowChatToolStatus): boolean {
+  return status !== "cancelled" && status !== "rejected";
+}
+
 function StatusGlyph({
   size,
   status,
@@ -33,9 +37,6 @@ function StatusGlyph({
       return <Check {...iconProps} className={styles.success} />;
     case "error":
       return <X {...iconProps} className={styles.danger} />;
-    case "cancelled":
-    case "rejected":
-      return <X {...iconProps} className={styles.muted} />;
     case "queued":
     case "waiting":
       return <Clock {...iconProps} className={styles.muted} />;
@@ -51,21 +52,35 @@ export function ToolCardStatusSlot({
   status,
   toolIcon,
 }: ToolCardStatusSlotProps) {
+  const hasStatusGlyph = hasVisibleToolCardStatusGlyph(status);
+  const hasToolIcon = toolIcon !== undefined
+    && toolIcon !== null
+    && toolIcon !== false
+    && toolIcon !== "";
+
+  if (!hasStatusGlyph && !hasToolIcon) {
+    return null;
+  }
+
+  const resolvedDefaultIcon = hasStatusGlyph ? defaultIcon : "tool";
+
   return (
     <span
       className={classNames(styles.root, className)}
       data-bf-component="flow-chat-tool-card"
       data-bf-part="statusSlot"
-      data-default-icon={defaultIcon}
+      data-default-icon={resolvedDefaultIcon}
     >
-      <span
-        className={styles.statusLayer}
-        data-bf-component="flow-chat-tool-card"
-        data-bf-part="statusLayer"
-      >
-        <StatusGlyph size={size} status={status} />
-      </span>
-      {toolIcon !== undefined && toolIcon !== null && toolIcon !== false && (
+      {hasStatusGlyph && (
+        <span
+          className={styles.statusLayer}
+          data-bf-component="flow-chat-tool-card"
+          data-bf-part="statusLayer"
+        >
+          <StatusGlyph size={size} status={status} />
+        </span>
+      )}
+      {hasToolIcon && (
         <span
           aria-hidden="true"
           className={styles.iconLayer}

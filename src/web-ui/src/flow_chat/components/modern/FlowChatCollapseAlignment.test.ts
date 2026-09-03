@@ -90,11 +90,11 @@ describe('FlowChat collapse spacing', () => {
       'padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);',
     );
     expect(
-      extractBlock(taskStyles, '.task-expanded-content .task-prompt-content'),
+      extractBlock(taskStyles, '.task-prompt-content'),
     ).toContain('padding: 0;');
-    expect(taskStyles).toContain('--task-prompt-inline-pad: calc(');
+    expect(taskStyles).not.toContain('--task-prompt-inline-pad');
     expect(taskStyles).toMatch(
-      /\.subagent-projection-container--expanded\s*\{[\s\S]*?padding:\s*8px\s*var\(--task-prompt-inline-pad\)\s*10px\s*var\(--task-prompt-inline-pad\);/,
+      /^    \.subagent-projection-container--expanded\s*\{\s*padding:\s*var\(--bf-space-2\)\s*var\(--bf-space-3\)\s*var\(--bf-space-3\);/m,
     );
   });
 

@@ -456,7 +456,7 @@
       "$description": "Shared FlowChat rhythm for product and package-owned conversation surfaces.",
       "$type": "dimension",
       "flowItemGap": { "$value": "0.42rem" },
-      "turnGap": { "$value": "0.46rem" },
+      "turnGap": { "$value": "{space.4}" },
       "inlineGap": { "$value": "0.35rem" },
       "controlGap": { "$value": "0.5rem" },
       "controlPaddingBlock": { "$value": "0.35rem" },
@@ -475,6 +475,10 @@
     "toolCard": {
       "$description": "Shared tool-card header and expanded-content geometry.",
       "$type": "dimension",
+      "ambientRowMinBlockSize": {
+        "$description": "Compact one-line floor; the component may grow with its text line box.",
+        "$value": "22px"
+      },
       "headerPaddingBlock": { "$value": "0.44rem" },
       "headerPaddingInlineEnd": { "$value": "0.625rem" },
       "headerIconSlot": { "$value": "34px" },
@@ -512,8 +516,11 @@
       "gap": { "$value": "{space.2}" },
       "itemGap": { "$value": "6px" },
       "itemHeight": { "$value": "{control.height.md}" },
+      "itemHeightSm": { "$value": "30px" },
       "itemIconSize": { "$value": "16px" },
       "itemPaddingInline": { "$value": "{space.4}" },
+      "itemPaddingBlockSm": { "$value": "7px" },
+      "itemPaddingInlineSm": { "$value": "{space.3}" },
       "itemActionSize": { "$value": "{space.5}" },
       "itemActionInset": { "$value": "{space.2}" },
       "itemRadius": { "$value": "{radius.pill}" }

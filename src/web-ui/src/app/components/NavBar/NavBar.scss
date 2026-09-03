@@ -9,7 +9,7 @@
 
   display: flex;
   align-items: center;
-  height: 35px;
+  height: var(--bf-layout-toolbar-md-height);
   flex-shrink: 0;
   padding: 0 var(--bf-space-2);
   gap: var(--bf-space-1);

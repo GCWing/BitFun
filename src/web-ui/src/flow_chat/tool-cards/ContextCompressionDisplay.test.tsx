@@ -72,7 +72,7 @@ describe('ContextCompressionDisplay', () => {
     });
 
     expect(container.querySelector('[data-bf-part="action"]')?.textContent).toBe('Context compression:');
-    expect(container.querySelector('[data-bf-part="summary"]')?.textContent).toBe(
+    expect(container.querySelector('[data-bf-part="content"]')?.textContent).toBe(
       'Compressed context length 31,000 (compression ratio 75%)',
     );
     expect(container.querySelector('[data-bf-part="tokenChange"]')).toBeNull();

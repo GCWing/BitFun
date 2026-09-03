@@ -1,8 +1,23 @@
 @layer bf.components {
   .tabGroup {
+    --_tab-group-item-height: var(--bf-control-tab-group-item-height);
+    --_tab-group-item-padding-block: var(--bf-space-component-block);
+    --_tab-group-item-padding-inline: var(--bf-control-tab-group-item-padding-inline);
+    --_tab-group-item-action-reserve: calc(
+      var(--bf-control-tab-group-item-action-size)
+      + var(--bf-control-tab-group-item-action-inset)
+      + var(--bf-control-tab-group-item-gap)
+    );
+
     display: inline-flex;
     align-items: center;
     gap: var(--bf-control-tab-group-gap);
+  }
+
+  .tabGroup[data-size="sm"] {
+    --_tab-group-item-height: var(--bf-control-tab-group-item-height-sm);
+    --_tab-group-item-padding-block: var(--bf-control-tab-group-item-padding-block-sm);
+    --_tab-group-item-padding-inline: var(--bf-control-tab-group-item-padding-inline-sm);
   }
 
   .item {
@@ -24,9 +39,9 @@
     align-items: center;
     justify-content: center;
     min-inline-size: 0;
-    block-size: var(--bf-control-tab-group-item-height);
-    padding-block: var(--bf-space-component-block);
-    padding-inline: var(--bf-control-tab-group-item-padding-inline);
+    block-size: var(--_tab-group-item-height);
+    padding-block: var(--_tab-group-item-padding-block);
+    padding-inline: var(--_tab-group-item-padding-inline);
     border: var(--bf-border-width-default) solid var(--_tab-border);
     border-radius: var(--bf-control-tab-group-item-radius);
     color: var(--_tab-content);
@@ -45,11 +60,13 @@
   }
 
   .item[data-has-end-action="true"] .tab {
-    padding-inline-end: calc(
-      var(--bf-control-tab-group-item-action-size)
-      + var(--bf-control-tab-group-item-action-inset)
-      + var(--bf-control-tab-group-item-gap)
-    );
+    padding-inline-end: var(--_tab-group-item-action-reserve);
+  }
+
+  .item[data-has-end-action="true"][data-has-icon="false"] .tab {
+    /* Mirror the trailing action reserve so a text-only label remains centered
+       within the complete tab while the overlaid action fades in and out. */
+    padding-inline-start: var(--_tab-group-item-action-reserve);
   }
 
   .tab[aria-selected="true"] {
@@ -102,7 +119,7 @@
 
   .label {
     min-inline-size: 0;
-    line-height: var(--bf-type-body-sm-line-height);
+    line-height: var(--bf-type-label-md-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -197,5 +214,6 @@
     .endAction > :where(button, [role="button"]):focus-visible {
       outline-color: Highlight;
     }
+
   }
 }

@@ -25,7 +25,61 @@
   // the preceding Turn while keeping the first message aligned to the list
   // header and steering messages grouped with the active Turn.
   &[data-item-type='user-message']:not([data-virtual-index='0']) {
-    padding-top: var(--bf-space-6);
+    padding-top: var(--bf-control-flow-chat-turn-gap);
+  }
+
+  /* Turn spacing has one owner: this virtual-row boundary. Remove only the
+   * trailing leaf margin immediately before the next user Turn so text,
+   * thinking, compact/expanded tools, notices, and completed-round footers all
+   * resolve to the same `turnGap` instead of stacking two unrelated gaps. */
+  &[data-turn-boundary-after='true'] {
+    > .user-message-item,
+    > .turn-completion-notice,
+    > .turn-failure-notice,
+    > .explore-region {
+      margin-bottom: 0;
+    }
+
+    > .model-round-item > :is(
+      .flow-text-block,
+      .flow-thinking-item,
+      .flowchat-flow-item
+    ):is(:last-child, :has(+ .model-round-item__footer)),
+    > .explore-region .explore-region__content > :is(
+      .flow-text-block,
+      .flow-thinking-item,
+      .flowchat-flow-item
+    ):last-child {
+      margin-bottom: 0;
+    }
+
+    > .model-round-item
+      > .task-with-subagent-wrapper:is(
+        :last-child,
+        :has(+ .model-round-item__footer)
+      ),
+    > .model-round-item
+      > .task-with-subagent-wrapper:is(
+        :last-child,
+        :has(+ .model-round-item__footer)
+      )
+      > .flowchat-flow-item {
+      margin-bottom: 0;
+    }
+  }
+
+  /* Adjacent model rounds are runtime structure, not visual sections. The
+   * projection marks ambient-to-ambient boundaries from the full list so this rule
+   * remains stable when either virtual row enters or leaves the rendered
+   * window. Only collapsed, line-like tools lose their trailing item gap;
+   * expanded cards keep section spacing. */
+  &[data-ambient-tool-run-continuation-after='true']
+    > .model-round-item
+    > .flowchat-flow-item:last-child:has(
+      > .flow-tool-card-wrapper[data-bf-attention='ambient']
+        [data-bf-component='flow-chat-tool-card'][data-bf-part='root'][data-bf-expanded-shell='false']
+    ) {
+    margin-bottom: 0;
   }
 
   @media (max-width: 768px) {

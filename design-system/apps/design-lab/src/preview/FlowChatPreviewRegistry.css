@@ -129,35 +129,6 @@
   white-space: nowrap;
 }
 
-.flow-chat-tool-card-preview__action {
-  display: inline-grid;
-  inline-size: var(--bf-space-6);
-  block-size: var(--bf-space-6);
-  place-items: center;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--bf-radius-sm);
-  color: var(--bf-color-content-muted);
-  background: transparent;
-  cursor: pointer;
-}
-
-.flow-chat-tool-card-preview__action:hover {
-  color: var(--bf-color-content-primary);
-  background: var(--bf-color-action-neutral-surface);
-}
-
-.flow-chat-tool-card-preview__action:focus-visible {
-  outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-  outline-offset: var(--bf-focus-offset);
-}
-
-.flow-chat-tool-card-preview__action > svg {
-  inline-size: var(--bf-font-size-base);
-  block-size: var(--bf-font-size-base);
-}
-
 .flow-chat-tool-card-preview__details {
   display: grid;
   gap: var(--bf-space-2);
@@ -217,10 +188,4 @@
 
 .flow-chat-tool-card-preview__diff [data-change="removed"] {
   color: var(--bf-color-code-change-removed);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .flow-chat-tool-card-preview__action {
-    transition: none;
-  }
 }

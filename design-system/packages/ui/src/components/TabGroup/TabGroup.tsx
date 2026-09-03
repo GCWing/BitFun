@@ -20,6 +20,8 @@ export interface TabGroupItem {
   value: string;
 }
 
+export type TabGroupSize = "sm" | "md";
+
 export interface TabGroupProps
   extends Omit<
     HTMLAttributes<HTMLDivElement>,
@@ -28,6 +30,7 @@ export interface TabGroupProps
   defaultValue?: string;
   items: readonly TabGroupItem[];
   onValueChange?: (value: string) => void;
+  size?: TabGroupSize;
   value?: string;
 }
 
@@ -50,6 +53,7 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
   defaultValue,
   items,
   onValueChange,
+  size = "md",
   value,
   ...props
 }, ref) {
@@ -112,17 +116,20 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
       className={classNames(styles.tabGroup, className)}
       data-bf-component="tab-group"
       data-bf-part="root"
+      data-size={size}
       ref={ref}
       role="tablist"
     >
       {items.map((item, index) => {
         const selected = item.value === selectedValue;
         const hasEndAction = item.endAction !== undefined && item.endAction !== null;
+        const hasIcon = Boolean(item.icon);
         return (
           <div
             className={styles.item}
             data-bf-part="item"
             data-has-end-action={hasEndAction ? "true" : "false"}
+            data-has-icon={hasIcon ? "true" : "false"}
             key={item.value}
           >
             <button
@@ -143,7 +150,7 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
               tabIndex={selected ? 0 : -1}
               type="button"
             >
-              {item.icon && (
+              {hasIcon && (
                 <span aria-hidden="true" className={styles.icon} data-bf-part="icon">
                   {item.icon}
                 </span>

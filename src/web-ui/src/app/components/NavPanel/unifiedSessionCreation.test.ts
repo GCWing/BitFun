@@ -105,6 +105,9 @@ describe('unified project session creation', () => {
 
     expect(footerActions).toContain('data-testid="nav-footer-settings-item"');
     expect(footerActions).toContain('icon={<Icon name="gear" size="sm" aria-hidden="true" />}');
+    expect(footerActions).toMatch(
+      /leading=\{<Icon name="gear" size="sm" aria-hidden="true" \/>\}[\s\S]*?data-testid="nav-settings-open-item"/,
+    );
     expect(footerActions).toContain('data-testid="nav-settings-menu"');
     expect(floatingIndex).toBeGreaterThan(-1);
     expect(notificationIndex).toBeGreaterThan(floatingIndex);
@@ -116,6 +119,9 @@ describe('unified project session creation', () => {
     expect(footerActions).not.toContain('nav-footer-github-star-btn');
     expect(appearanceQuickSwitch).toContain('data-testid="nav-settings-appearance-item"');
     expect(appearanceQuickSwitch).toContain('data-testid="nav-settings-appearance-menu"');
+    expect(appearanceQuickSwitch).toMatch(
+      /leading=\{<Icon name="gear" size="sm" aria-hidden="true" \/>\}[\s\S]*?data-testid="nav-settings-appearance-settings"/,
+    );
     expect(appearanceQuickSwitch).toContain('role="menuitemradio"');
     expect(appearanceQuickSwitch).toContain('selectedDisplayName');
     expect(footerActions).not.toContain('onMouseMove=');

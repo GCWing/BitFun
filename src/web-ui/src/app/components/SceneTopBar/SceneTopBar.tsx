@@ -33,7 +33,9 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
   onClose,
   isMaximized = false,
 }) => {
-  const isSingleTab = useSceneStore(state => state.openTabs.length <= 1);
+  const openTabCount = useSceneStore(state => state.openTabs.length);
+  const hasTabs = openTabCount > 0;
+  const isSingleTab = openTabCount <= 1;
   const canDragWindow = supportsNativeWindowDragging();
   const lastMouseDownTimeRef = useRef(0);
   const hasWindowControls = Boolean(onMinimize && onMaximize && onClose);
@@ -67,13 +69,14 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
 
   return (
     <Toolbar
-      bordered={false}
+      bordered={hasTabs}
       className={`bitfun-scene-top-bar ${className}`.trim()}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
       data-bf-scene="workbench"
       data-bf-part="topBar"
       leading={<SceneBar />}
+      size="md"
       trailing={<>
       <SceneChromeHost
         className="bitfun-scene-top-bar__actions"

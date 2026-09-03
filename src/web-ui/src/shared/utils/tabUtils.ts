@@ -452,11 +452,12 @@ interface OpenFileTargetContext {
 
 /**
  * Open a file to the best target:
- * - active scene is session: open in agent AuxPane tabs
- * - otherwise: open in file-viewer scene project tabs
+ * - explicit project navigation: open in the file-viewer scene
+ * - contextual open while Session is active: open in agent AuxPane tabs
+ * - otherwise: open in the file-viewer scene
  *
- * This avoids unexpected focus stealing when session is merely opened but
- * not the currently active scene.
+ * Explicit user navigation outranks ambient scene state. This keeps the file
+ * tree deterministic while contextual links avoid unexpected focus stealing.
  */
 export function openFileInBestTarget(
   options: OpenFileInBestTargetOptions,

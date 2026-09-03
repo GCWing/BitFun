@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Spinner, Tooltip, Icon } from '@bitfun/ui';
+import { Tooltip, Icon } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
+import { ProminentToolCard, ProminentToolCardSummary, ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import { useTranslation } from 'react-i18next';
 import GenerativeWidgetFrame, {
   type WidgetContextMenuMessage,
@@ -245,8 +245,8 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
       ? t('toolCards.generativeUI.streamingPreview')
       : t('toolCards.generativeUI.openSource');
 
-  const header = (
-    <ProminentToolCardHeader
+  const summary = (
+    <ProminentToolCardSummary
       icon={<span className="generative-widget-card__icon"><Icon name="spark" size="md" /></span>}
       action={t('toolCards.generativeUI.action')}
       content={<span data-bf-component="generative-widget-tool-card" data-bf-part="title" className="generative-widget-card__title">{title}</span>}
@@ -280,7 +280,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
           </button>
         </Tooltip>
       )}
-      statusIcon={isLoading ? <Spinner size="sm" /> : null}
+      statusIcon={isLoading ? <ToolProcessingDots size={16} /> : null}
     />
   );
 
@@ -317,14 +317,14 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
         <ProminentToolCard
         status={status}
         isExpanded={isCardExpanded}
-        onClick={isFailed || isClickable ? handleCardClick : undefined}
+        onToggle={isFailed || isClickable ? handleCardClick : undefined}
         className={`generative-widget-card ${isClickable || isFailed ? 'clickable' : ''}`.trim()}
-        header={header}
+        summary={summary}
         expandedContent={expandedBody}
         errorContent={showFailedErrorPanel ? expandedBody : undefined}
         isFailed={isFailed}
-        headerExpandAffordance={isClickable || isFailed}
-        headerAffordanceKind={isFailed ? 'expand' : 'open-panel-right'}
+        summaryExpandAffordance={isClickable || isFailed}
+        summaryAffordanceKind={isFailed ? 'expand' : 'open-panel-right'}
         />
       </div>
       {shouldRenderExportClone && hasRenderableWidget && (

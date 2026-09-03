@@ -15,7 +15,7 @@
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
-  background: var(--bf-color-surface-canvas);
+  background: transparent;
   container-type: inline-size;
   container-name: files-panel;
 
@@ -158,6 +158,16 @@
     flex: 1;
     min-height: 0;
     overflow: hidden;
+  }
+
+  // FileSearchResults is also used outside navigation. Keep its standalone
+  // surface intact and only let this embedded instance inherit the sidebar.
+  &__search-results.bitfun-search-results {
+    background: transparent;
+
+    .bitfun-search-results__header {
+      background: transparent;
+    }
   }
 
   &__search-backend {
@@ -318,7 +328,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--bf-color-surface-canvas);
+    background: transparent;
   }
 
   &__main-content {

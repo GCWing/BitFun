@@ -17,8 +17,6 @@ interface FlowChatToolGalleryProps {
 
 const productOwnedToolExamples = [
   "CreatePlan",
-  "Task",
-  "LaunchReviewAgent",
   "submit_code_review",
   "MCP",
   "InitMiniApp",

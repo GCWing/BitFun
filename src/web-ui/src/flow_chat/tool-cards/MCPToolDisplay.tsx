@@ -8,7 +8,7 @@ import { Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Disclosure, Spinner } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
+import { ProminentToolCard, ProminentToolCardSummary, ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { MCPAPI, MCP_APPS_PROTOCOL_VERSION, type McpUiResourceCsp, type McpUiResourcePermissions, type McpUiMessageParams, type McpUiMessageResult, type McpAppMessageEvent, type McpAppMessageResponseEvent } from '@/infrastructure/api/service-api/MCPAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -687,13 +687,13 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
   const renderStatusIcon = () => {
     if (isLoading) {
-      return <Spinner size="sm" />;
+      return <ToolProcessingDots size={16} />;
     }
     return null;
   };
 
-  const renderHeader = () => (
-    <ProminentToolCardHeader
+  const renderSummary = () => (
+    <ProminentToolCardSummary
       icon={<span className="mcp-icon">{renderToolIcon()}</span>}
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
@@ -853,9 +853,9 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       <ProminentToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={hasExpandableDetails ? toggleExpanded : undefined}
+        onToggle={hasExpandableDetails ? toggleExpanded : undefined}
         className="mcp-tool-display"
-        header={renderHeader()}
+        summary={renderSummary()}
         expandedContent={renderExpandedContent()}
         errorContent={renderErrorContent()}
         isFailed={isFailed}

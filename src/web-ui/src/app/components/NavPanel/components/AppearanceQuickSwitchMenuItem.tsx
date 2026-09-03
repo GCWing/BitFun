@@ -285,7 +285,7 @@ const AppearanceQuickSwitchMenuItem: React.FC<AppearanceQuickSwitchMenuItemProps
           })}
           <MenuSeparator />
           <MenuItem
-            leading={<Icon name="settings" size="sm" aria-hidden="true" />}
+            leading={<Icon name="gear" size="sm" aria-hidden="true" />}
             onClick={onOpenAppearanceSettings}
             data-testid="nav-settings-appearance-settings"
           >

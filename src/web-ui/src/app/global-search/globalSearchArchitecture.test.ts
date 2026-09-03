@@ -62,6 +62,8 @@ describe('global search ownership', () => {
     expect(actionCatalog).toMatch(/id: 'session\.new',[\s\S]*?icon: 'message-circle'/);
     expect(actionCatalog).toMatch(/id: 'project\.open',[\s\S]*?icon: 'folder'/);
     expect(actionCatalog).toMatch(/id: 'project\.new',[\s\S]*?icon: 'plus'/);
+    expect(actionCatalog).toMatch(/id: 'settings\.open',[\s\S]*?icon: 'gear'/);
+    expect(globalSearch).toContain("settings: catalogLucide('gear')");
     expect(actionCatalog).not.toMatch(/'folder-open'|'folder-plus'/);
 
     expect(globalSearchStyles).toMatch(

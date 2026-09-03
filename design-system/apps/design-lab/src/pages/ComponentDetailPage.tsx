@@ -89,6 +89,7 @@ import {
   type ScrollAreaOrientation,
   type ScrollbarVisibility,
   type StatusPillTone,
+  type TabGroupSize,
   type ToolbarSize,
   type TokenOverrides,
 } from "@bitfun/ui";
@@ -301,6 +302,7 @@ export function ComponentDetailPage({
   const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
   const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
   const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
+  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("md");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
     component.name === "Card"
@@ -560,10 +562,10 @@ export function ComponentDetailPage({
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
-      return `import { Icon, TabGroup } from "@bitfun/ui";\n\nconst items = [\n  { icon: <Icon name="session" />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <Icon name="session" />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
+      return `import { Icon, TabGroup } from "@bitfun/ui";\n\nconst items = [\n  { icon: <Icon name="session" />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <Icon name="session" />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n  size="${tabGroupSize}"\n/>`;
     }
     if (component.name === "Toolbar") {
-      return `import { Icon, ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Icon name="search" />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<Icon name="more" />} size="xs" />\n  </ToolbarGroup>}\n/>`;
+      return `import { Icon, ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} size="sm" />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Icon name="search" />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<Icon name="more" />} size="xs" />\n  </ToolbarGroup>}\n/>`;
     }
     if (component.name !== "Switch") return `// ${t("detail.previewUnavailable")}: ${component.name}`;
     const stateProps = previewState === "on"
@@ -602,6 +604,7 @@ export function ComponentDetailPage({
     scrollAreaOrientation,
     selectValue,
     size,
+    tabGroupSize,
     t,
     toolbarSize,
     variant,
@@ -1656,6 +1659,7 @@ export function ComponentDetailPage({
             },
           ]}
           key={state}
+          size={tabGroupSize}
         />
       );
     }
@@ -1693,6 +1697,7 @@ export function ComponentDetailPage({
               aria-label={t("components.preview.tabGroupLabel")}
               defaultValue="tab-1"
               items={tabItems}
+              size="sm"
             />
           )}
           leadingOverflow={state === "overflow" ? "scroll" : "visible"}
@@ -2250,6 +2255,14 @@ export function ComponentDetailPage({
                       onChange={(value) => setToolbarSize(value as ToolbarSize)}
                       options={["sm", "md"]}
                       value={toolbarSize}
+                    />
+                  )}
+                  {component.name === "TabGroup" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setTabGroupSize(value as TabGroupSize)}
+                      options={["sm", "md"]}
+                      value={tabGroupSize}
                     />
                   )}
                   {component.name === "Composer" && (
