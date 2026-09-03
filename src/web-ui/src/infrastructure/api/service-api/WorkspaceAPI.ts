@@ -1045,6 +1045,19 @@ export class WorkspaceAPI {
     }
   }
 
+  async resolveBrowserDroppedFilePaths(token: string, fileCount: number): Promise<string[]> {
+    try {
+      return await api.invoke('resolve_browser_dropped_file_paths', {
+        request: { token, fileCount },
+      });
+    } catch (error) {
+      throw createTauriCommandError('resolve_browser_dropped_file_paths', error, {
+        token,
+        fileCount,
+      });
+    }
+  }
+
    
   async pasteFiles(
     sourcePaths: string[],

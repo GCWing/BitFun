@@ -581,6 +581,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("reset_mode_skill_selection",                                 Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("reset_workspace_persona_files",                              Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("resize_agent_companion_desktop_pet",                         LocalOnly,   ControllerLocal,  REFUSED),
+    op("resolve_browser_dropped_file_paths",                         LocalOnly,   ControllerLocal,  REFUSED),
     op("respond_permission",                                         Agnostic,    Proxied,          HANDLED),
     op("respond_permission_batch",                                   Agnostic,    Proxied,          HANDLED),
     op("restart_app",                                                LocalOnly,   ControllerLocal,  REFUSED),
