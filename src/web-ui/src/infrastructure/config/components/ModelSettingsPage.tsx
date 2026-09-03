@@ -1835,6 +1835,26 @@ const ModelSettingsPage: React.FC = () => {
     }
   };
 
+  const closeEditingModal = () => {
+    resetRemoteModelDiscovery();
+    setSelectedModelDrafts([]);
+    setEditingProviderModelIds(new Set());
+    setManualModelInput('');
+    setShowApiKey(false);
+    setIsEditing(false);
+    setEditingConfig(null);
+    setCreationMode(null);
+    setSelectedProviderId(null);
+    setEditingTargetKey(null);
+    setProviderQuery('');
+    setShowAllProviders(false);
+    setReasoningPanelDraftKey(null);
+    setDraftCloseConfirmOpen(false);
+    setDraftConflictConfirmOpen(false);
+    pendingEditorOpenRef.current = null;
+    reasoningPanelInitialRef.current = null;
+  };
+
   const inspectModelReferenceCount = async (modelIds: string[]): Promise<number> => {
     const [defaultModels, taskModels, agentModelDefaults] = await Promise.all([
       configManager.getConfig<unknown>('ai.default_models'),
@@ -2048,26 +2068,6 @@ const ModelSettingsPage: React.FC = () => {
       streamTimeoutSavingRef.current = false;
       setIsStreamTimeoutSaving(false);
     }
-  };
-
-  const closeEditingModal = () => {
-    resetRemoteModelDiscovery();
-    setSelectedModelDrafts([]);
-    setEditingProviderModelIds(new Set());
-    setManualModelInput('');
-    setShowApiKey(false);
-    setIsEditing(false);
-    setEditingConfig(null);
-    setCreationMode(null);
-    setSelectedProviderId(null);
-    setEditingTargetKey(null);
-    setProviderQuery('');
-    setShowAllProviders(false);
-    setReasoningPanelDraftKey(null);
-    setDraftCloseConfirmOpen(false);
-    setDraftConflictConfirmOpen(false);
-    pendingEditorOpenRef.current = null;
-    reasoningPanelInitialRef.current = null;
   };
 
   const preserveEditingDraftAndClose = () => {

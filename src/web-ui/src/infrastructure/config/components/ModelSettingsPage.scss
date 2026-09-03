@@ -394,6 +394,14 @@
     width: 100%;
   }
 
+  &__custom-headers-row,
+  &__custom-request-body-row {
+    > .bitfun-config-page-row__meta {
+      width: 100%;
+      max-width: none;
+    }
+  }
+
   &__warning-inline {
     display: inline-flex;
     align-items: flex-start;
@@ -1051,7 +1059,7 @@
       min-width: 0;
       overflow: visible;
 
-      > * {
+      > :not([data-bf-component='switch']) {
         min-width: 0;
         width: 100%;
         max-width: none;
@@ -1065,7 +1073,7 @@
       min-width: auto;
       justify-self: end;
 
-      > * {
+      > :not([data-bf-component='switch']) {
         width: auto;
         max-width: none;
         flex: 0 0 auto;
