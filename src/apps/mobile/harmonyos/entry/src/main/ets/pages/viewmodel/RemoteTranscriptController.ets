@@ -311,8 +311,10 @@ export class RemoteTranscriptController {
     }
     runtime.timeline.applySnapshot(snapshot);
     this.syncRemoteTimeline();
-    if (snapshot.newMessages.length > 0 || snapshot.messageSnapshot !== undefined) {
-      this.cacheRemoteTranscript(snapshot.sessionId);
+    if (snapshot.messageSnapshot !== undefined) {
+      this.cacheRemoteTranscript(snapshot.sessionId, true);
+    } else if (snapshot.newMessages.length > 0) {
+      this.cacheRemoteTranscript(snapshot.sessionId, false);
     }
     this.knownPollVersionValue = snapshot.cursor.pollVersion;
     this.knownModelCatalogVersion = snapshot.cursor.knownModelCatalogVersion;
@@ -343,10 +345,14 @@ export class RemoteTranscriptController {
    * that cannot be written only costs the next open a fetch it used to pay for
    * anyway.
    */
-  private cacheRemoteTranscript(sessionId: string): void {
+  private cacheRemoteTranscript(sessionId: string, authoritativeSnapshot: boolean): void {
     const runtime = requireRemoteRuntime(this.remoteRuntime);
     const state: ChatTimelineState = runtime.timeline.snapshotState();
-    runtime.chatCache.sync(sessionId, state.persistedMessages);
+    if (authoritativeSnapshot) {
+      runtime.chatCache.replaceSnapshot(sessionId, state.persistedMessages);
+    } else {
+      runtime.chatCache.syncIncremental(sessionId, state.persistedMessages);
+    }
   }
 
   /**

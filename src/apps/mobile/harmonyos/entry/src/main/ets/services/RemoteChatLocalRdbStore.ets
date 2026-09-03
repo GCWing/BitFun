@@ -17,7 +17,10 @@ const STORE_CONFIG: relationalStore.StoreConfig = {
  * A cache is reconstructible by definition, so a mismatch drops the tables and
  * refills them from the desktop instead of paying for a migration.
  */
-const SCHEMA_VERSION: number = 1;
+// Version 1 could retain an assistant row whose id was stable while its final
+// body became durable. The cache is reconstructible, so invalidate those rows
+// once instead of carrying potentially hollow completed replies forward.
+const SCHEMA_VERSION: number = 2;
 const SCHEMA_VERSION_KEY: string = 'schema_version';
 
 const CREATE_META_SQL =

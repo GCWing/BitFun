@@ -232,7 +232,7 @@ export class RemoteChatCommandController {
       // Writing another session's transcript moves the cache's append cursor
       // off the visible one, which costs that session a single full rewrite on
       // its next sync before appends resume.
-      await this.cache.sync(sessionId, result.messages);
+      await this.cache.replaceSnapshot(sessionId, result.messages);
     } catch (err) {
       // A failure belongs to the session it was fetched for. Unguarded, a slow
       // fetch the user switched away from would land its error text and its
@@ -302,7 +302,7 @@ export class RemoteChatCommandController {
       this.callbacks.onMessagesLoaded(result.messages, false);
       this.callbacks.onMessageCountKnown(currentPollVersion, result.messages.length);
       this.callbacks.onStatusText(RemoteI18n.t('status.messagesSynced'));
-      await this.cache.sync(sessionId, result.messages);
+      await this.cache.replaceSnapshot(sessionId, result.messages);
     } catch (err) {
       this.callbacks.onStatusText(ConnectionErrorPolicy.errorText(err));
     } finally {
