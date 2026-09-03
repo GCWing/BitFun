@@ -78,6 +78,24 @@ source scripts/ohos-env.sh
 
 ## Responsive interaction semantics
 
+- Every HarmonyOS change that can affect presentation or interaction — including
+  state, actions, ViewModels, and components — must treat compact phones, wide
+  screens, and foldables in both folded and unfolded postures as first-class
+  targets. Do not implement or review a feature against only the currently
+  visible layout.
+- Before editing, search for every responsive host and presentation branch that
+  exposes the affected action or state (for example compact overlays, wide
+  master/detail hosts, sidebars, routed destinations, sheets, and popovers).
+  Keep their behavior and capability gating aligned; a fix is incomplete while
+  an equivalent wide or compact entry point still uses legacy behavior.
+- Do not infer device class from a single width captured at startup. Layout must
+  remain correct when a foldable changes posture or window size while the app is
+  running, preserving state, selection, and interaction meaning across the
+  transition.
+- For UI changes, verify at minimum one compact layout and one wide layout. When
+  a foldable or resizable emulator/device is available, also exercise a live
+  folded/unfolded or resize transition. Record any unverified posture explicitly
+  in the handoff instead of treating a phone-only check as sufficient evidence.
 - Wide and compact layouts must keep the same interaction meaning. Responsive presentation may change spacing and available width, but it must not turn a lightweight anchored action menu into a bottom sheet by default.
 - Conversation-header overflow actions open from the top-right trigger as an anchored popover on both compact and wide layouts. Use a bottom sheet only when the content is a genuinely large or multi-step mobile workflow and the design explicitly calls for it.
 - Anchor popovers to their actual trigger with `bindPopup` or the equivalent platform API. Do not emulate the anchor with unrelated page-level absolute positioning.
