@@ -4025,7 +4025,6 @@ struct ManagedLoopxSourceManifest {
     loopx_version: String,
 }
 
-#[derive(Debug, Clone)]
 fn verify_managed_source_manifest(
     manifest: &ManagedLoopxSourceManifest,
 ) -> Result<(), LoopxCliAdapterError> {
