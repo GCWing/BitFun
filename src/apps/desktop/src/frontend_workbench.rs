@@ -1703,7 +1703,7 @@ mod tests {
         fs::create_dir_all(&misleading).expect("misleading directory");
         let uppercase = manager
             .revisions_dir()
-            .join(".copy-38E14F63-30AD-4AD7-9E4E-5AD556450BA3");
+            .join(".copy-48E14F63-30AD-4AD7-9E4E-5AD556450BA3");
         fs::create_dir_all(&uppercase).expect("uppercase directory");
         let matching_file = manager
             .revisions_dir()
