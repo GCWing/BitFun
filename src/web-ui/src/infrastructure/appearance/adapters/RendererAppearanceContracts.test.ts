@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import type * as Monaco from 'monaco-editor';
+import { describe, expect, it, vi } from 'vitest';
 import { builtinAppearancePackages } from '../builtins/catalog';
 import { themeTokenAppearanceAdapter } from './ThemeTokenAppearanceAdapter';
 import { MonacoAppearanceAdapter } from './MonacoAppearanceAdapter';
+import { projectMonacoAppearanceSettings } from './monacoThemeColorCodec';
 import { widgetAppearanceAdapter } from './WidgetAppearanceAdapter';
 
 describe('renderer appearance contracts', () => {
@@ -51,4 +53,61 @@ describe('renderer appearance contracts', () => {
       { revision: 1, appearanceId: 'bitfun-linglong', mode: 'dark', globals: {}, assets: {} },
     )).rejects.toThrow('Invalid Monaco appearance');
   });
+
+  it('projects every built-in Monaco payload into Monaco-native colors', () => {
+    const nativeColor = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
+    const opaqueTokenColor = /^#[0-9a-f]{6}$/i;
+
+    builtinAppearancePackages.forEach(pkg => {
+      const settings = pkg.renderers?.monaco?.settings;
+      expect(settings, `${pkg.id} must define Monaco settings`).toBeDefined();
+      expect(monacoAppearanceAdapterForValidation.validate(settings)).toEqual([]);
+
+      const projected = projectMonacoAppearanceSettings(settings!);
+      Object.values(projected.colors).forEach(value => {
+        expect(value, `${pkg.id} emitted non-native Monaco color`).toMatch(nativeColor);
+      });
+      [projected.colors['editor.foreground'], projected.colors['editor.background']]
+        .filter((value): value is string => value !== undefined)
+        .forEach(value => expect(value).toMatch(opaqueTokenColor));
+      projected.rules.forEach(rule => {
+        if (rule.foreground) expect(rule.foreground).toMatch(opaqueTokenColor);
+        if (rule.background) expect(rule.background).toMatch(opaqueTokenColor);
+      });
+    });
+  });
+
+  it('passes the projected light theme to Monaco defineTheme', async () => {
+    const settings = builtinAppearancePackages
+      .find(pkg => pkg.id === 'bitfun-light')
+      ?.renderers?.monaco?.settings;
+    expect(settings).toBeDefined();
+
+    let receivedTheme: Monaco.editor.IStandaloneThemeData | undefined;
+    const defineTheme = vi.fn((_: string, theme: Monaco.editor.IStandaloneThemeData) => {
+      receivedTheme = theme;
+    });
+    const monaco = {
+      editor: {
+        defineTheme,
+        setTheme: vi.fn(),
+        getEditors: () => [],
+      },
+    } as unknown as typeof Monaco;
+    const adapter = new MonacoAppearanceAdapter();
+    await adapter.apply(settings!, undefined, {
+      revision: 1,
+      appearanceId: 'bitfun-light',
+      mode: 'light',
+      globals: {},
+      assets: {},
+    });
+
+    expect(() => adapter.attachMonaco(monaco)).not.toThrow();
+    expect(defineTheme).toHaveBeenCalledOnce();
+    expect(receivedTheme?.colors['editor.foreground']).toBe('#333333');
+    expect(receivedTheme?.colors['editor.selectionBackground']).toBe('#101a2724');
+  });
 });
+
+const monacoAppearanceAdapterForValidation = new MonacoAppearanceAdapter();
