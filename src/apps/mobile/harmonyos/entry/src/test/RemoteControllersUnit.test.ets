@@ -1794,7 +1794,7 @@ export default function remoteControllersUnitTest() {
       hollow.thinking = '';
       hollow.tools = [];
       hollow.items = [];
-      await cache.sync('session-1', [
+      await cache.syncIncremental('session-1', [
         chatMessage('message-1', 'user', 'Hello'),
         hollow
       ]);
@@ -1923,12 +1923,12 @@ export default function remoteControllersUnitTest() {
       }, cache);
 
       await controller.loadMessages('session-1', (_sessionId: string) => true);
-      await cache.sync('session-1', [
+      await cache.syncIncremental('session-1', [
         chatMessage('message-1', 'user', 'Hello'),
         chatMessage('message-2', 'assistant', 'Hi')
       ]);
       // Nothing new arrived, so the second sync must not touch the store.
-      await cache.sync('session-1', [
+      await cache.syncIncremental('session-1', [
         chatMessage('message-1', 'user', 'Hello'),
         chatMessage('message-2', 'assistant', 'Hi')
       ]);
@@ -1938,14 +1938,44 @@ export default function remoteControllersUnitTest() {
       expect((await cache.load('session-1')).length).assertEqual(2);
     });
 
+    it('persists an authoritative body update when message ids and count stay unchanged', 0, async () => {
+      const store = new FakeRemoteChatCacheStore();
+      const cache = await readyRemoteChatCache(store);
+      const partialAssistant = chatMessage('message-2', 'assistant', '');
+      partialAssistant.status = 'done';
+      partialAssistant.thinking = 'Finished the work.';
+
+      await cache.syncIncremental('session-1', [
+        chatMessage('message-1', 'user', 'Open the PR'),
+        partialAssistant
+      ]);
+
+      const completedAssistant = chatMessage('message-2', 'assistant', 'PR created successfully.');
+      completedAssistant.status = 'done';
+      completedAssistant.thinking = 'Finished the work.';
+      await cache.replaceSnapshot('session-1', [
+        chatMessage('message-1', 'user', 'Open the PR'),
+        completedAssistant
+      ]);
+
+      // A fresh cache instance models an app restart: the completed body must
+      // come from RDB rather than from the in-memory resident transcript.
+      const restarted = await readyRemoteChatCache(store);
+      const restored = await restarted.load('session-1');
+      expect(store.replaceCount).assertEqual(2);
+      expect(restored.length).assertEqual(2);
+      expect(restored[1].id).assertEqual('message-2');
+      expect(restored[1].text).assertEqual('PR created successfully.');
+    });
+
     it('rewrites the cache when the stored prefix stops matching', 0, async () => {
       const store = new FakeRemoteChatCacheStore();
       const cache = await readyRemoteChatCache(store);
 
-      await cache.sync('session-1', [chatMessage('message-1', 'user', 'Hello')]);
+      await cache.syncIncremental('session-1', [chatMessage('message-1', 'user', 'Hello')]);
       // Same length, different first message: an append here would splice two
       // different transcripts together.
-      await cache.sync('session-1', [chatMessage('message-9', 'user', 'Rewritten')]);
+      await cache.syncIncremental('session-1', [chatMessage('message-9', 'user', 'Rewritten')]);
 
       const restored = await cache.load('session-1');
       expect(store.appendCount).assertEqual(0);
@@ -1958,8 +1988,8 @@ export default function remoteControllersUnitTest() {
       const store = new FakeRemoteChatCacheStore();
       const cache = await readyRemoteChatCache(store);
 
-      await cache.sync('session-1', [chatMessage('message-1', 'user', 'Hello')]);
-      await cache.sync('session-1', [
+      await cache.syncIncremental('session-1', [chatMessage('message-1', 'user', 'Hello')]);
+      await cache.syncIncremental('session-1', [
         chatMessage('message-1', 'user', 'Hello'),
         chatMessage('message-2', 'assistant', 'Hi')
       ]);
@@ -1975,7 +2005,7 @@ export default function remoteControllersUnitTest() {
 
       // One past the budget the prune above reported.
       for (let index = 0; index <= 20; index++) {
-        await cache.sync(`session-${index}`, [chatMessage(`message-${index}`, 'user', 'Hello')]);
+        await cache.syncIncremental(`session-${index}`, [chatMessage(`message-${index}`, 'user', 'Hello')]);
       }
 
       expect((await cache.load('session-0')).length).assertEqual(0);
@@ -1988,12 +2018,12 @@ export default function remoteControllersUnitTest() {
       const cache = await readyRemoteChatCache(store);
 
       for (let index = 0; index < 20; index++) {
-        await cache.sync(`session-${index}`, [chatMessage(`message-${index}`, 'user', 'Hello')]);
+        await cache.syncIncremental(`session-${index}`, [chatMessage(`message-${index}`, 'user', 'Hello')]);
       }
       // Reopening is what recency is supposed to be about: this read has to
       // outrank the nineteen sessions written after it.
       expect((await cache.load('session-0')).length).assertEqual(1);
-      await cache.sync('session-20', [chatMessage('message-20', 'user', 'Hello')]);
+      await cache.syncIncremental('session-20', [chatMessage('message-20', 'user', 'Hello')]);
 
       expect((await cache.load('session-0')).length).assertEqual(1);
       expect((await cache.load('session-1')).length).assertEqual(0);
@@ -2003,7 +2033,7 @@ export default function remoteControllersUnitTest() {
       const store = new FakeRemoteChatCacheStore();
       const cache = await readyRemoteChatCache(store);
 
-      await cache.sync('session-1', [chatMessage('message-1', 'user', 'Hello')]);
+      await cache.syncIncremental('session-1', [chatMessage('message-1', 'user', 'Hello')]);
       await cache.forget('session-1');
 
       expect((await cache.load('session-1')).length).assertEqual(0);
@@ -2168,6 +2198,51 @@ export default function remoteControllersUnitTest() {
       expect(busyEvents[1]).assertFalse();
       expect(busyEvents[2]).assertTrue();
       expect(busyEvents[3]).assertFalse();
+    });
+
+    it('steers the active turn and projects the accepted steering identity', 0, async () => {
+      const client = new FakeRemoteChatCommandClient();
+      const accepted: string[] = [];
+      const controller = new RemoteChatCommandController(client, {
+        onMessagesLoaded: (_messages: ChatMessage[], _hasMoreMessages: boolean) => {},
+        onMessageCountKnown: (_pollVersion: number, _knownMessageCount: number) => {},
+        onTimelineReady: () => {},
+        onSendSucceeded: (_turnId: string, _pendingActiveId: string) => {},
+        onSteerSucceeded: (
+          steeringId: string,
+          turnId: string,
+          displayText: string,
+          images: SelectedImageAttachment[]
+        ) => accepted.push(`${steeringId}:${turnId}:${displayText}:${images.length}`),
+        onSendFailed: (
+          _rawText: string,
+          _images: SelectedImageAttachment[],
+          _localMessageId: string,
+          _pendingActiveId: string
+        ) => {},
+        onActiveSession: (_session: SessionSummary) => {},
+        onSessionTitleChanged: (_sessionId: string, _title: string) => {},
+        onStatusText: (_statusText: string) => {},
+        onToast: (_message: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onPollRequested: () => {}
+      }, inertRemoteChatCache());
+
+      await controller.steerPreparedMessage(
+        'session-1',
+        'turn-1',
+        'Continue with this',
+        'Continue with this',
+        [selectedImage('image-1')],
+        [{ id: 'image-1', data_url: 'data:image/png;base64,AA==', mime_type: 'image/png' }],
+        false,
+        true
+      );
+
+      expect(client.steerRequests[0])
+        .assertEqual('session-1:turn-1:Continue with this:Continue with this:1');
+      expect(accepted[0]).assertEqual('steering-1:turn-1:Continue with this:1');
+      expect(client.sendRequests.length).assertEqual(0);
     });
 
     it('stops active tasks and reports guard states', 0, async () => {

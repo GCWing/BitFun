@@ -300,7 +300,8 @@ export class ChatMessageStructurePolicy {
 
   static isRenderableStructuredEntry(entry: ConversationUiMessageItem): boolean {
     if (ChatMessageStructurePolicy.isSubagentInternalTool(entry)) return false;
-    if (ChatMessageStructurePolicy.isThinkingEntry(entry) || ChatMessageStructurePolicy.isTextEntry(entry) ||
+    if (ChatMessageStructurePolicy.isUserSteeringEntry(entry) ||
+      ChatMessageStructurePolicy.isThinkingEntry(entry) || ChatMessageStructurePolicy.isTextEntry(entry) ||
       ChatMessageStructurePolicy.isSubagentEntry(entry) || !!entry.tool) return true;
     return !!entry.subItems && entry.subItems.some((child: ConversationUiMessageItem) =>
       ChatMessageStructurePolicy.isRenderableStructuredEntry(child));
@@ -308,6 +309,11 @@ export class ChatMessageStructurePolicy {
 
   static isThinkingEntry(entry: ConversationUiMessageItem): boolean {
     return (entry.type || '').toLowerCase() === 'thinking' && (entry.content || '').trim().length > 0;
+  }
+
+  static isUserSteeringEntry(entry: ConversationUiMessageItem): boolean {
+    return (entry.type || '').toLowerCase() === 'user-steering' &&
+      ((entry.content || '').trim().length > 0 || (entry.images || []).length > 0);
   }
 
   static isTextEntry(entry: ConversationUiMessageItem): boolean {
@@ -345,10 +351,13 @@ export class ChatMessageStructurePolicy {
   private static copyItem(entry: ConversationUiMessageItem): ConversationUiMessageItem {
     return {
       type: entry.type,
+      steering_id: entry.steering_id,
+      round_index: entry.round_index,
       content: entry.content,
       tool: entry.tool,
       is_subagent: entry.is_subagent,
-      subItems: entry.subItems ? entry.subItems.slice() : []
+      subItems: entry.subItems ? entry.subItems.slice() : [],
+      images: entry.images ? entry.images.slice() : undefined
     };
   }
 
@@ -530,6 +539,9 @@ export class ChatMessageStructurePolicy {
 
   static structuredItemKey(entry: ConversationUiMessageItem, path: string): string {
     if (ChatMessageStructurePolicy.isThinkingEntry(entry)) return `${path}-thinking`;
+    if (ChatMessageStructurePolicy.isUserSteeringEntry(entry) && entry.steering_id) {
+      return `${path}-steering-${entry.steering_id}`;
+    }
     if (entry.tool && entry.tool.id) return `${path}-tool-${entry.tool.id}`;
     const content = entry.content || '';
     const childCount = entry.subItems ? entry.subItems.length : 0;

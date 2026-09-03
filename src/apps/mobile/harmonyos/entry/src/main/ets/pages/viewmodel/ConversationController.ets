@@ -134,6 +134,9 @@ export class ConversationController {
   async selectRemoteModel(modelId: string): Promise<void> { await this.transcript.selectRemoteModel(modelId); }
   async loadOlderRemoteMessages(): Promise<void> { await this.transcript.loadOlderRemoteMessages(); }
   async sendRemoteMessage(): Promise<void> { await this.transcript.sendRemoteMessage(); }
+  async buildRemotePlan(path: string, name: string): Promise<void> {
+    await this.transcript.buildRemotePlan(path, name);
+  }
   async stopRemoteTask(): Promise<void> { await this.transcript.stopRemoteTask(); }
   async renameRemoteSession(title: string): Promise<void> { await this.transcript.renameRemoteSession(title); }
   async copyRemoteMessage(text: string): Promise<void> { await this.transcript.copyRemoteMessage(text); }

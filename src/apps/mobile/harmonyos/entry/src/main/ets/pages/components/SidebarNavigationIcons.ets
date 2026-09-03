@@ -16,6 +16,10 @@ export struct SidebarDeviceIcon {
         iconHeight: this.iconSize,
         tint: this.tint
       })
+        .translate({
+          x: this.deviceOpticalOffsetX(),
+          y: this.deviceOpticalOffsetY()
+        })
     }
     .width(this.iconSize + 8)
     .height(this.iconSize + 4)
@@ -41,6 +45,27 @@ export struct SidebarDeviceIcon {
       return this.iconSize + 8;
     }
     return this.iconSize + 4;
+  }
+
+  // The laptop and server artwork has asymmetric transparent padding. Keep the
+  // row's layout slot stable and compensate only the visible glyph's center.
+  private deviceOpticalOffsetX(): number {
+    const normalizedName = this.deviceName.trim().toLowerCase();
+    if (normalizedName.includes('server') || normalizedName.includes('ecs') ||
+      normalizedName.includes('host')) {
+      return -3;
+    }
+    return 0;
+  }
+
+  private deviceOpticalOffsetY(): number {
+    const normalizedName = this.deviceName.trim().toLowerCase();
+    if (normalizedName.includes('macbook') || normalizedName.includes('laptop') ||
+      normalizedName.includes('notebook') || normalizedName.includes('server') ||
+      normalizedName.includes('ecs') || normalizedName.includes('host')) {
+      return 2;
+    }
+    return 0;
   }
 }
 

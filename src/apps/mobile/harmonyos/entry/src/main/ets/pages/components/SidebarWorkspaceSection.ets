@@ -46,12 +46,13 @@ export struct SidebarWorkspaceSection {
   @Param selectedSessionId: string = '';
   @Param runningSessionId: string = '';
   @Param query: string = '';
+  @Param supportsHarnessProfiles: boolean = false;
   @Param workspacePickerPlacement: SettingsPlacement =
     SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
-  @Event onCreateInWorkspace: (deviceId: string, path: string) => void =
-    (_deviceId: string, _path: string) => {};
+  @Event onCreateInWorkspace: (deviceId: string, path: string, agentType: string) => void =
+    (_deviceId: string, _path: string, _agentType: string) => {};
   @Event onOpenWorkspace: (deviceId: string, path: string) => void =
     (_deviceId: string, _path: string) => {};
   @Event onExpandWorkspace: (deviceId: string, path: string) => Promise<void> =
@@ -238,6 +239,7 @@ export struct SidebarWorkspaceSection {
         query: this.query,
         showHeader: false,
         isActive: this.isActiveDevice(entry.deviceId),
+        supportsHarnessProfiles: this.supportsHarnessProfiles,
         onRetry: () => {
           if (this.isDirectoryEntry(entry)) {
             this.onRetryDevice(entry.deviceId);
@@ -245,8 +247,8 @@ export struct SidebarWorkspaceSection {
         },
         onOpenSession: this.onOpenSession,
         onSessionActions: this.onSessionActions,
-        onCreateInWorkspace: (path: string) => {
-          this.onCreateInWorkspace(entry.deviceId, path);
+        onCreateInWorkspace: (path: string, agentType: string) => {
+          this.onCreateInWorkspace(entry.deviceId, path, agentType);
         },
         onOpenWorkspace: (path: string) => {
           this.onOpenWorkspace(entry.deviceId, path);

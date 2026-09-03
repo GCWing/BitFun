@@ -1876,6 +1876,15 @@ export default function transportAndGeneralChatUnitTest() {
         data_url: 'data:image/png;base64,abc',
         mime_type: 'image/png'
       }]), '{"cmd":"send_message","session_id":"s1","content":"look","agent_type":"code","image_contexts":[{"id":"img1","data_url":"data:image/png;base64,abc","mime_type":"image/png"}]}');
+      expectCommandJson(RemoteCommandFactory.steerTurn('s1', 'turn-1', 'continue', 'continue', [{
+        id: 'img1',
+        data_url: 'data:image/png;base64,abc',
+        mime_type: 'image/png'
+      }]), '{"cmd":"steer_turn","session_id":"s1","turn_id":"turn-1","content":"continue","display_content":"continue","image_contexts":[{"id":"img1","data_url":"data:image/png;base64,abc","mime_type":"image/png"}]}');
+      expectCommandJson(
+        RemoteCommandFactory.buildPlan('s1', '/repo/.bitfun/plans/mobile.plan.md', 'Mobile plan', 'code'),
+        '{"cmd":"build_plan","session_id":"s1","plan_file_path":"/repo/.bitfun/plans/mobile.plan.md","plan_name":"Mobile plan","agent_type":"code"}'
+      );
       expectCommandJson(RemoteCommandFactory.getSessionMessages('s1'), '{"cmd":"get_session_messages","session_id":"s1"}');
       expectCommandJson(RemoteCommandFactory.pollSession('s1', 7, 3, 2), '{"cmd":"poll_session","session_id":"s1","since_version":7,"known_msg_count":3,"known_model_catalog_version":2}');
     });

@@ -1,4 +1,4 @@
-import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
+import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, SteerTurnResponse, SteerTurnResult, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
 import { CloudAccountClient, CloudAccountRequestError, CloudAccountSession } from './CloudAccountClient';
@@ -292,6 +292,51 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     const response =
       await this.send<SendMessageResponse>(RemoteCommandFactory.sendMessage(sessionId, text, agentType, imageContexts));
     RemoteLogger.info(`send_message_images done session=${RemoteSessionManager.shortId(sessionId)} turn=${response.turn_id || ''} ms=${Date.now() - startedAt}`);
+    return response.turn_id || '';
+  }
+
+  async steerTurn(
+    sessionId: string,
+    turnId: string,
+    text: string,
+    displayContent: string,
+    imageContexts: RemoteImageContext[]
+  ): Promise<SteerTurnResult> {
+    const startedAt = Date.now();
+    RemoteLogger.info(
+      `steer_turn start session=${RemoteSessionManager.shortId(sessionId)} ` +
+        `turn=${RemoteSessionManager.shortId(turnId)} len=${text.length} images=${imageContexts.length}`
+    );
+    const response = await this.send<SteerTurnResponse>(
+      RemoteCommandFactory.steerTurn(sessionId, turnId, text, displayContent, imageContexts)
+    );
+    const result: SteerTurnResult = {
+      sessionId: response.session_id || sessionId,
+      turnId: response.turn_id || turnId,
+      steeringId: response.steering_id || ''
+    };
+    if (result.steeringId.length === 0) {
+      throw new Error('Remote host accepted steering without a steering id.');
+    }
+    RemoteLogger.info(
+      `steer_turn done session=${RemoteSessionManager.shortId(result.sessionId)} ` +
+        `turn=${RemoteSessionManager.shortId(result.turnId)} ms=${Date.now() - startedAt}`
+    );
+    return result;
+  }
+
+  async buildPlan(sessionId: string, planFilePath: string, planName: string, agentType: string): Promise<string> {
+    const startedAt = Date.now();
+    RemoteLogger.info(
+      `build_plan start session=${RemoteSessionManager.shortId(sessionId)} path_len=${planFilePath.length}`
+    );
+    const response = await this.send<SendMessageResponse>(
+      RemoteCommandFactory.buildPlan(sessionId, planFilePath, planName, agentType)
+    );
+    RemoteLogger.info(
+      `build_plan done session=${RemoteSessionManager.shortId(sessionId)} ` +
+        `turn=${response.turn_id || ''} ms=${Date.now() - startedAt}`
+    );
     return response.turn_id || '';
   }
 

@@ -368,6 +368,7 @@ impl RemoteDialogSubmissionPolicy {
 pub struct RemoteDialogSubmissionRequest<ImageContext> {
     pub session_id: String,
     pub content: String,
+    pub display_content: Option<String>,
     pub agent_type: Option<String>,
     pub image_contexts: Vec<ImageContext>,
     pub policy: RemoteDialogSubmissionPolicy,
@@ -401,11 +402,29 @@ impl RemoteDialogWorkspaceBinding {
 pub struct RemoteDialogResolvedSubmission<ImageContext> {
     pub session_id: String,
     pub content: String,
+    pub display_content: Option<String>,
     pub resolved_agent_type: String,
     pub binding_workspace: Option<RemoteDialogWorkspaceBinding>,
     pub image_contexts: Vec<ImageContext>,
     pub policy: RemoteDialogSubmissionPolicy,
     pub turn_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteDialogSteerRequest<ImageContext> {
+    pub session_id: String,
+    pub turn_id: String,
+    pub content: String,
+    pub display_content: Option<String>,
+    pub image_contexts: Vec<ImageContext>,
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteDialogSteerOutcome {
+    pub session_id: String,
+    pub turn_id: String,
+    pub steering_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -485,6 +504,7 @@ where
     let RemoteDialogSubmissionRequest {
         session_id,
         content,
+        display_content,
         agent_type,
         image_contexts,
         policy,
@@ -515,6 +535,7 @@ where
     host.submit_dialog(RemoteDialogResolvedSubmission {
         session_id,
         content,
+        display_content,
         resolved_agent_type,
         binding_workspace,
         image_contexts,
@@ -527,9 +548,15 @@ where
 pub const REMOTE_FILE_MAX_READ_BYTES: u64 = 30 * 1024 * 1024;
 pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
 pub const REMOTE_CAPABILITY_HARNESS_PROFILES_V1: &str = "harness_profiles_v1";
+pub const REMOTE_CAPABILITY_DIALOG_STEER_V1: &str = "dialog_steer_v1";
+pub const REMOTE_CAPABILITY_PLAN_BUILD_V1: &str = "plan_build_v1";
 
 fn remote_host_capabilities() -> Vec<String> {
-    vec![REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string()]
+    vec![
+        REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string(),
+        REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
+        REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
+    ]
 }
 
 pub fn resolve_remote_file_chunk_range(
@@ -856,6 +883,19 @@ pub fn remote_dialog_submit_response(
         }) => RemoteResponse::MessageSent {
             session_id,
             turn_id,
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_dialog_steer_response(
+    result: Result<RemoteDialogSteerOutcome, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(outcome) => RemoteResponse::SteeringAccepted {
+            session_id: outcome.session_id,
+            turn_id: outcome.turn_id,
+            steering_id: outcome.steering_id,
         },
         Err(message) => RemoteResponse::Error { message },
     }
@@ -1896,6 +1936,10 @@ pub struct ChatMessage {
 pub struct ChatMessageItem {
     #[serde(rename = "type")]
     pub item_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steering_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub round_index: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1946,6 +1990,7 @@ pub struct RemoteChatHistoryToolItem {
     pub id: String,
     pub name: String,
     pub call: RemoteChatHistoryToolCall,
+    pub result: Option<serde_json::Value>,
     pub has_result: bool,
     pub status: Option<String>,
     pub duration_ms: Option<u64>,
@@ -2013,6 +2058,8 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
                     round_idx,
                     item: ChatMessageItem {
                         item_type: "thinking".to_string(),
+                        steering_id: None,
+                        round_index: None,
                         content: Some(item.content.clone()),
                         tool: None,
                         is_subagent: None,
@@ -2032,6 +2079,8 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
                     round_idx,
                     item: ChatMessageItem {
                         item_type: "text".to_string(),
+                        steering_id: None,
+                        round_index: None,
                         content: Some(item.content.clone()),
                         tool: None,
                         is_subagent: None,
@@ -2064,6 +2113,11 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
                     } else {
                         None
                     },
+                    plan: project_remote_plan_tool(
+                        &item.name,
+                        Some(&item.call.input),
+                        item.result.as_ref(),
+                    ),
                 };
                 tools_flat.push(tool_status.clone());
                 ordered.push(OrderedEntry {
@@ -2072,6 +2126,8 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
                     round_idx,
                     item: ChatMessageItem {
                         item_type: "tool".to_string(),
+                        steering_id: None,
+                        round_index: None,
                         content: None,
                         tool: Some(tool_status),
                         is_subagent: None,
@@ -2189,6 +2245,16 @@ pub struct RemoteToolStatus {
     pub input_preview: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_input: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<RemotePlanTool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemotePlanTool {
+    pub file_path: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overview: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2256,9 +2322,32 @@ pub enum RemoteCommand {
     SendMessage {
         session_id: String,
         content: String,
+        #[serde(default)]
+        display_content: Option<String>,
         agent_type: Option<String>,
         images: Option<Vec<ImageAttachment>>,
         image_contexts: Option<Vec<RemoteImageContext>>,
+    },
+    BuildPlan {
+        session_id: String,
+        plan_file_path: String,
+        #[serde(default)]
+        plan_name: Option<String>,
+        #[serde(default)]
+        agent_type: Option<String>,
+    },
+    SteerTurn {
+        session_id: String,
+        turn_id: String,
+        content: String,
+        #[serde(default)]
+        display_content: Option<String>,
+        #[serde(default)]
+        images: Option<Vec<ImageAttachment>>,
+        #[serde(default)]
+        image_contexts: Option<Vec<RemoteImageContext>>,
+        #[serde(default)]
+        metadata: serde_json::Map<String, serde_json::Value>,
     },
     CancelTask {
         session_id: String,
@@ -2449,6 +2538,11 @@ pub enum RemoteResponse {
         session_id: String,
         turn_id: String,
     },
+    SteeringAccepted {
+        session_id: String,
+        turn_id: String,
+        steering_id: String,
+    },
     TaskCancelled {
         session_id: String,
     },
@@ -2605,6 +2699,11 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
         request: RemoteDialogSubmissionRequest<Self::ImageContext>,
     ) -> Result<RemoteDialogSubmitOutcome, String>;
 
+    async fn steer_dialog(
+        &self,
+        request: RemoteDialogSteerRequest<Self::ImageContext>,
+    ) -> Result<RemoteDialogSteerOutcome, String>;
+
     async fn cancel_task(&self, request: RemoteCancelTaskRequest) -> Result<(), String>;
 
     fn legacy_image_contexts(&self, images: Option<&[ImageAttachment]>) -> Vec<Self::ImageContext>;
@@ -2654,6 +2753,7 @@ where
         RemoteCommand::SendMessage {
             session_id,
             content,
+            display_content,
             agent_type,
             images,
             image_contexts,
@@ -2674,10 +2774,77 @@ where
                 host.submit_dialog(RemoteDialogSubmissionRequest {
                     session_id: session_id.clone(),
                     content: content.clone(),
+                    display_content: display_content.clone(),
                     agent_type: agent_type.clone(),
                     image_contexts: resolved_contexts,
                     policy: RemoteDialogSubmissionPolicy::for_source(source),
                     turn_id: None,
+                })
+                .await,
+            )
+        }
+
+        RemoteCommand::BuildPlan {
+            session_id,
+            plan_file_path,
+            plan_name,
+            agent_type,
+        } => {
+            let plan_file_path = plan_file_path.trim();
+            if session_id.trim().is_empty()
+                || !plan_file_path.to_ascii_lowercase().ends_with(".plan.md")
+                || plan_file_path.contains(['\n', '\r', '`'])
+            {
+                return RemoteResponse::Error {
+                    message: "Invalid plan file path.".to_string(),
+                };
+            }
+            info!("Remote build_plan: session={session_id}");
+            remote_dialog_submit_response(
+                host.submit_dialog(RemoteDialogSubmissionRequest {
+                    session_id: session_id.clone(),
+                    content: remote_plan_build_content(plan_file_path),
+                    display_content: Some(remote_plan_build_display(
+                        plan_name.as_deref(),
+                        plan_file_path,
+                    )),
+                    agent_type: agent_type.clone(),
+                    image_contexts: Vec::new(),
+                    policy: RemoteDialogSubmissionPolicy::for_source(source),
+                    turn_id: None,
+                })
+                .await,
+            )
+        }
+
+        RemoteCommand::SteerTurn {
+            session_id,
+            turn_id,
+            content,
+            display_content,
+            images,
+            image_contexts,
+            metadata,
+        } => {
+            let resolved_contexts = resolve_remote_execution_image_contexts(
+                images.as_ref().map(Vec::as_slice),
+                image_contexts
+                    .clone()
+                    .map(|contexts| host.explicit_image_contexts(contexts)),
+                |images| host.legacy_image_contexts(images),
+            );
+            info!(
+                "Remote steer_turn: session={session_id}, turn={turn_id}, image_contexts={}",
+                resolved_contexts.len()
+            );
+            remote_dialog_steer_response(
+                host.steer_dialog(RemoteDialogSteerRequest {
+                    session_id: session_id.clone(),
+                    turn_id: turn_id.clone(),
+                    content: content.clone(),
+                    display_content: display_content.clone(),
+                    image_contexts: resolved_contexts,
+                    metadata: metadata.clone(),
                 })
                 .await,
             )
@@ -2740,6 +2907,81 @@ pub fn make_slim_tool_params(params: &serde_json::Value) -> Option<String> {
         serde_json::Value::String(text) => Some(text.chars().take(200).collect()),
         _ => None,
     }
+}
+
+pub fn project_remote_plan_tool(
+    tool_name: &str,
+    input: Option<&serde_json::Value>,
+    result: Option<&serde_json::Value>,
+) -> Option<RemotePlanTool> {
+    let normalized_name = tool_name
+        .chars()
+        .filter(|character| !matches!(character, '_' | '-' | ' '))
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    let create_plan = normalized_name == "createplan";
+    let input_path = input.and_then(remote_plan_path_from_value);
+    let result_path = result.and_then(remote_plan_path_from_value);
+    let file_path = result_path.or(input_path).unwrap_or_default();
+    let write_plan = matches!(
+        normalized_name.as_str(),
+        "write" | "writefile" | "createfile"
+    ) && file_path.to_ascii_lowercase().ends_with(".plan.md");
+    if !create_plan && !write_plan {
+        return None;
+    }
+
+    let name = result
+        .and_then(|value| remote_json_string(value, &["name"]))
+        .or_else(|| input.and_then(|value| remote_json_string(value, &["name", "title"])))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| remote_plan_name_from_path(&file_path));
+    let overview = result
+        .and_then(|value| remote_json_string(value, &["overview"]))
+        .or_else(|| input.and_then(|value| remote_json_string(value, &["overview"])))
+        .filter(|value| !value.trim().is_empty());
+    Some(RemotePlanTool {
+        file_path,
+        name,
+        overview,
+    })
+}
+
+fn remote_plan_path_from_value(value: &serde_json::Value) -> Option<String> {
+    remote_json_string(value, &["plan_file_path", "file_path", "filePath", "path"])
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn remote_json_string(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    let object = value.as_object()?;
+    keys.iter()
+        .find_map(|key| object.get(*key).and_then(serde_json::Value::as_str))
+        .map(ToOwned::to_owned)
+}
+
+fn remote_plan_name_from_path(path: &str) -> String {
+    let normalized = path.replace('\\', "/");
+    let file_name = normalized.rsplit('/').next().unwrap_or_default();
+    file_name
+        .strip_suffix(".plan.md")
+        .or_else(|| file_name.strip_suffix(".md"))
+        .unwrap_or(file_name)
+        .to_string()
+}
+
+pub fn remote_plan_build_content(plan_file_path: &str) -> String {
+    format!(
+        "Implement the plan at `{plan_file_path}`.\n\nRead the plan file before making changes and treat it as the source of truth. Do not edit the plan file directly. Track progress with TodoWrite using the existing todo IDs from the plan frontmatter; do not rename or invent IDs. Start with the first pending todo and continue until all todos are completed."
+    )
+}
+
+pub fn remote_plan_build_display(plan_name: Option<&str>, plan_file_path: &str) -> String {
+    let name = plan_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| remote_plan_name_from_path(plan_file_path));
+    format!("Build Plan: {name}")
 }
 
 #[derive(Debug)]
@@ -2919,6 +3161,7 @@ impl RemoteSessionStateTracker {
         if already_pending {
             return;
         }
+        let plan = project_remote_plan_tool(&tool_name, tool_input.as_ref(), None);
         Self::upsert_active_tool(
             &mut state,
             &tool_id,
@@ -2926,6 +3169,7 @@ impl RemoteSessionStateTracker {
             "pending_confirmation",
             input_preview,
             tool_input,
+            plan,
             false,
         );
         state.session_state = "running".to_string();
@@ -3015,7 +3259,7 @@ impl RemoteSessionStateTracker {
     ) -> Option<usize> {
         for index in (0..items.len()).rev() {
             let item = &items[index];
-            if item.item_type == "tool" {
+            if item.item_type == "tool" || item.item_type == "user-steering" {
                 return None;
             }
             if item.item_type == target_type && &item.is_subagent == subagent_marker {
@@ -3032,6 +3276,7 @@ impl RemoteSessionStateTracker {
         status: &str,
         input_preview: Option<String>,
         tool_input: Option<serde_json::Value>,
+        plan: Option<RemotePlanTool>,
         is_subagent: bool,
     ) {
         let resolved_id = if tool_id.is_empty() {
@@ -3054,6 +3299,9 @@ impl RemoteSessionStateTracker {
             if tool_input.is_some() {
                 tool.tool_input = tool_input.clone();
             }
+            if plan.is_some() {
+                tool.plan = Self::merge_plan_tool(tool.plan.as_ref(), plan.clone());
+            }
         } else {
             let tool_status = RemoteToolStatus {
                 id: resolved_id.clone(),
@@ -3068,10 +3316,13 @@ impl RemoteSessionStateTracker {
                 ),
                 input_preview,
                 tool_input,
+                plan,
             };
             state.active_tools.push(tool_status.clone());
             state.active_items.push(ChatMessageItem {
                 item_type: "tool".to_string(),
+                steering_id: None,
+                round_index: None,
                 content: None,
                 tool: Some(tool_status),
                 is_subagent: subagent_marker,
@@ -3093,7 +3344,32 @@ impl RemoteSessionStateTracker {
                 if tool_input.is_some() {
                     tool.tool_input = tool_input;
                 }
+                if plan.is_some() {
+                    tool.plan = Self::merge_plan_tool(tool.plan.as_ref(), plan);
+                }
             }
+        }
+    }
+
+    fn merge_plan_tool(
+        existing: Option<&RemotePlanTool>,
+        incoming: Option<RemotePlanTool>,
+    ) -> Option<RemotePlanTool> {
+        match (existing, incoming) {
+            (Some(existing), Some(mut incoming)) => {
+                if incoming.file_path.is_empty() {
+                    incoming.file_path.clone_from(&existing.file_path);
+                }
+                if !existing.name.is_empty() {
+                    incoming.name.clone_from(&existing.name);
+                }
+                if incoming.overview.is_none() {
+                    incoming.overview.clone_from(&existing.overview);
+                }
+                Some(incoming)
+            }
+            (None, incoming) => incoming,
+            (Some(existing), None) => Some(existing.clone()),
         }
     }
 
@@ -3156,6 +3432,8 @@ impl RemoteSessionStateTracker {
                 } else {
                     state.active_items.push(ChatMessageItem {
                         item_type: "text".to_string(),
+                        steering_id: None,
+                        round_index: None,
                         content: Some(text.clone()),
                         tool: None,
                         is_subagent: subagent_marker,
@@ -3184,6 +3462,8 @@ impl RemoteSessionStateTracker {
                 } else {
                     state.active_items.push(ChatMessageItem {
                         item_type: "thinking".to_string(),
+                        steering_id: None,
+                        round_index: None,
                         content: Some(clean),
                         tool: None,
                         is_subagent: subagent_marker,
@@ -3232,12 +3512,14 @@ impl RemoteSessionStateTracker {
                                 "preparing",
                                 None,
                                 None,
+                                None,
                                 is_subagent,
                             );
                         }
                         "ConfirmationNeeded" => {
                             let params = effective_params.clone();
                             let input_preview = params.as_ref().and_then(make_slim_tool_params);
+                            let plan = project_remote_plan_tool(&tool_name, params.as_ref(), None);
                             Self::upsert_active_tool(
                                 &mut state,
                                 &tool_id,
@@ -3245,6 +3527,7 @@ impl RemoteSessionStateTracker {
                                 "pending_confirmation",
                                 input_preview,
                                 params,
+                                plan,
                                 is_subagent,
                             );
                         }
@@ -3259,6 +3542,7 @@ impl RemoteSessionStateTracker {
                             } else {
                                 None
                             };
+                            let plan = project_remote_plan_tool(&tool_name, params.as_ref(), None);
                             Self::upsert_active_tool(
                                 &mut state,
                                 &tool_id,
@@ -3266,6 +3550,7 @@ impl RemoteSessionStateTracker {
                                 "running",
                                 input_preview,
                                 tool_input,
+                                plan,
                                 is_subagent,
                             );
                             let _ = self.event_tx.send(TrackerEvent::ToolStarted {
@@ -3282,6 +3567,7 @@ impl RemoteSessionStateTracker {
                                 "confirmed",
                                 None,
                                 None,
+                                None,
                                 is_subagent,
                             );
                         }
@@ -3293,12 +3579,15 @@ impl RemoteSessionStateTracker {
                                 "rejected",
                                 None,
                                 None,
+                                None,
                                 is_subagent,
                             );
                         }
                         "Completed" | "Succeeded" => {
                             let duration =
                                 value.get("duration_ms").and_then(|value| value.as_u64());
+                            let plan =
+                                project_remote_plan_tool(&tool_name, None, value.get("result"));
                             if let Some(tool) = state.active_tools.iter_mut().rev().find(|tool| {
                                 (tool.id == tool_id
                                     || (allow_name_fallback && tool.name == tool_name))
@@ -3306,6 +3595,10 @@ impl RemoteSessionStateTracker {
                             }) {
                                 tool.status = "completed".to_string();
                                 tool.duration_ms = duration;
+                                if plan.is_some() {
+                                    tool.plan =
+                                        Self::merge_plan_tool(tool.plan.as_ref(), plan.clone());
+                                }
                             }
                             if let Some(item) = state.active_items.iter_mut().rev().find(|item| {
                                 item.item_type == "tool"
@@ -3318,6 +3611,10 @@ impl RemoteSessionStateTracker {
                                 if let Some(tool) = item.tool.as_mut() {
                                     tool.status = "completed".to_string();
                                     tool.duration_ms = duration;
+                                    if plan.is_some() {
+                                        tool.plan =
+                                            Self::merge_plan_tool(tool.plan.as_ref(), plan.clone());
+                                    }
                                 }
                             }
                             pending_tool_event = Some(TrackerEvent::ToolCompleted {
@@ -3389,6 +3686,29 @@ impl RemoteSessionStateTracker {
                         let _ = self.event_tx.send(event);
                     }
                 }
+            }
+            AE::UserSteeringInjected {
+                steering_id,
+                display_content,
+                round_index,
+                ..
+            } if is_direct => {
+                let mut state = self.state.write().unwrap();
+                if !state.active_items.iter().any(|item| {
+                    item.item_type == "user-steering"
+                        && item.steering_id.as_deref() == Some(steering_id.as_str())
+                }) {
+                    state.active_items.push(ChatMessageItem {
+                        item_type: "user-steering".to_string(),
+                        steering_id: Some(steering_id.clone()),
+                        round_index: Some(*round_index),
+                        content: Some(display_content.clone()),
+                        tool: None,
+                        is_subagent: None,
+                    });
+                }
+                drop(state);
+                self.bump_version();
             }
             AE::DialogTurnStarted { turn_id, .. } if is_direct => {
                 let mut state = self.state.write().unwrap();

@@ -21,6 +21,7 @@ import {
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
 import { RemoteSessionRow } from './RemoteSessionRow';
+import { HarnessProfileMenu } from './HarnessProfileMenu';
 import {
   SessionListInputs,
   SessionListProjection,
@@ -49,6 +50,7 @@ export struct RemoteSessionList {
   @Param showWorkspaceMetadata: boolean = false;
   @Param showUpdatedMetadata: boolean = false;
   @Param showStatusMetadata: boolean = false;
+  @Param supportsHarnessProfiles: boolean = false;
   @Event onCreate: () => void = () => {};
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onDeleteSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
@@ -326,16 +328,26 @@ export struct RemoteSessionList {
 
   @Builder
   private ProjectCreateMenu(path: string) {
-    Column({ space: 2 }) {
-      this.ProjectCreateMenuItem('Code', 'code', path)
-      this.ProjectCreateMenuItem('Cowork', 'Cowork', path)
+    if (this.supportsHarnessProfiles) {
+      HarnessProfileMenu({
+        includeCowork: true,
+        onSelect: (agentType: string) => {
+          this.createMenuPath = '';
+          this.onCreateInWorkspace(path, agentType);
+        }
+      })
+    } else {
+      Column({ space: 2 }) {
+        this.ProjectCreateMenuItem('Code', 'code', path)
+        this.ProjectCreateMenuItem('Cowork', 'Cowork', path)
+      }
+      .width(150)
+      .padding({ top: 8, bottom: 8 })
+      .backgroundColor(CARD)
+      .borderRadius(14)
+      .border({ width: 0.5, color: LINE })
+      .shadow({ radius: 20, color: SHADOW_SUBTLE, offsetY: 8 })
     }
-    .width(150)
-    .padding({ top: 8, bottom: 8 })
-    .backgroundColor(CARD)
-    .borderRadius(14)
-    .border({ width: 0.5, color: LINE })
-    .shadow({ radius: 20, color: SHADOW_SUBTLE, offsetY: 8 })
   }
 
   @Builder

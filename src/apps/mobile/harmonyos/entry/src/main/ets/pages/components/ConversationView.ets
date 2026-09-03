@@ -231,6 +231,9 @@ export struct ConversationView {
       onOpenFilePreview: (path: string, label: string) => {
         this.onOpenFilePreview(path, label);
       },
+      onBuildPlan: (path: string, name: string) => {
+        this.onBuildPlan(path, name);
+      },
       onDownloadFile: (path: string) => {
         this.onDownloadFile(path);
       }
@@ -517,6 +520,9 @@ export struct ConversationView {
   private onRetryMessage(text: string): void { this.dispatchValue(ConversationIntentType.RetryMessage, text); }
   private onOpenFilePreview(path: string, label: string): void {
     this.onIntent(ConversationIntents.openFilePreview(path, label));
+  }
+  private onBuildPlan(path: string, name: string): void {
+    this.onIntent(ConversationIntents.buildPlan(path, name));
   }
   private onSelectModel(modelId: string): void { this.dispatchValue(ConversationIntentType.SelectModel, modelId); }
   private onPickImages(): void { this.dispatchSimple(ConversationIntentType.PickImages); }

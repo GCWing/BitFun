@@ -16,14 +16,15 @@ use bitfun_services_integrations::remote_connect::{
     build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
     handle_remote_command, handle_remote_workspace_file_command, make_slim_tool_params,
     normalize_remote_model_selection, normalize_remote_session_model_id, project_remote_chat_user,
-    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
-    remote_answer_question_response, remote_assistant_list_response,
-    remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
+    project_remote_plan_tool, read_remote_workspace_file, read_remote_workspace_file_chunk,
+    read_remote_workspace_file_info, remote_answer_question_response,
+    remote_assistant_list_response, remote_assistant_updated_response,
+    remote_dialog_steer_response, remote_dialog_submit_outcome_from_scheduler,
     remote_dialog_submit_response, remote_file_chunk_response, remote_file_content_response,
     remote_file_display_name, remote_file_info_response, remote_initial_sync_response,
     remote_interaction_accepted_response, remote_messages_response,
     remote_model_catalog_poll_delta, remote_model_selection_needs_config,
-    remote_no_change_poll_response, remote_persisted_poll_response,
+    remote_no_change_poll_response, remote_persisted_poll_response, remote_plan_build_content,
     remote_recent_workspaces_response, remote_session_created_response,
     remote_session_deleted_response, remote_session_info, remote_session_list_response,
     remote_session_model_updated_response, remote_session_restore_target,
@@ -39,15 +40,16 @@ use bitfun_services_integrations::remote_connect::{
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost,
     RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
     RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
-    RemoteDialogWorkspaceBinding, RemoteImageContext, RemoteImageContextAdapter,
-    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelConfig,
-    RemoteModelFacts, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity, RemoteTerminalPrewarmRequest,
-    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
-    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
-    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
+    RemoteDialogSteerOutcome, RemoteDialogSteerRequest, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
+    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteRecentWorkspaceFacts,
+    RemoteResponse, RemoteSessionMetadata, RemoteSessionModelSelection, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity,
+    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, REMOTE_CAPABILITY_DIALOG_STEER_V1,
+    REMOTE_CAPABILITY_HARNESS_PROFILES_V1, REMOTE_CAPABILITY_PLAN_BUILD_V1,
     REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
@@ -595,6 +597,7 @@ fn remote_history_contract_turn(is_in_progress: bool) -> RemoteChatHistoryTurn {
                     id: "call-1".to_string(),
                     input: serde_json::json!({ "question": "confirm?" }),
                 },
+                result: None,
                 has_result: false,
                 status: Some("running".to_string()),
                 duration_ms: Some(25),
@@ -863,6 +866,7 @@ impl RemoteCancelRuntimeHost for RecordingCancelHost {
 struct RecordingCommandHost {
     events: Mutex<Vec<String>>,
     submitted_dialog: Mutex<Option<RemoteDialogSubmissionRequest<String>>>,
+    steered_dialog: Mutex<Option<RemoteDialogSteerRequest<String>>>,
     cancel_request: Mutex<Option<RemoteCancelTaskRequest>>,
     explicit_context_ids: Mutex<Vec<String>>,
     legacy_image_names: Mutex<Vec<String>>,
@@ -887,6 +891,14 @@ impl RecordingCommandHost {
             .unwrap()
             .clone()
             .expect("cancel requested")
+    }
+
+    fn steered_dialog(&self) -> RemoteDialogSteerRequest<String> {
+        self.steered_dialog
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("dialog steered")
     }
 }
 
@@ -960,6 +972,19 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
         })
     }
 
+    async fn steer_dialog(
+        &self,
+        request: RemoteDialogSteerRequest<Self::ImageContext>,
+    ) -> Result<RemoteDialogSteerOutcome, String> {
+        self.events.lock().unwrap().push("steer".to_string());
+        *self.steered_dialog.lock().unwrap() = Some(request.clone());
+        Ok(RemoteDialogSteerOutcome {
+            session_id: request.session_id,
+            turn_id: request.turn_id,
+            steering_id: "steering-command".to_string(),
+        })
+    }
+
     async fn cancel_task(&self, request: RemoteCancelTaskRequest) -> Result<(), String> {
         self.events.lock().unwrap().push("cancel".to_string());
         *self.cancel_request.lock().unwrap() = Some(request);
@@ -1001,6 +1026,7 @@ async fn remote_connect_command_owner_routes_send_message_and_prefers_explicit_i
         &RemoteCommand::SendMessage {
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
+            display_content: None,
             agent_type: Some("code".to_string()),
             images: Some(vec![ImageAttachment {
                 name: "legacy.png".to_string(),
@@ -1039,6 +1065,114 @@ async fn remote_connect_command_owner_routes_send_message_and_prefers_explicit_i
     assert_eq!(submitted.image_contexts, vec!["explicit:ctx-1".to_string()]);
     assert_eq!(submitted.policy.source, RemoteConnectSubmissionSource::Bot);
     assert!(submitted.turn_id.is_none());
+}
+
+#[tokio::test]
+async fn remote_connect_command_owner_builds_a_projected_plan_with_hidden_execution_copy() {
+    let host = RecordingCommandHost::default();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::BuildPlan {
+            session_id: "session-1".to_string(),
+            plan_file_path: "/repo/.bitfun/plans/mobile.plan.md".to_string(),
+            plan_name: Some("Mobile plan".to_string()),
+            agent_type: Some("code".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+
+    assert_eq!(
+        response,
+        RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-command".to_string()
+        }
+    );
+    let submitted = host.submitted_dialog();
+    assert_eq!(
+        submitted.content,
+        remote_plan_build_content("/repo/.bitfun/plans/mobile.plan.md")
+    );
+    assert_eq!(
+        submitted.display_content.as_deref(),
+        Some("Build Plan: Mobile plan")
+    );
+    assert!(submitted.image_contexts.is_empty());
+}
+
+#[test]
+fn remote_connect_plan_projection_covers_legacy_create_and_modern_write_tools() {
+    let legacy = project_remote_plan_tool(
+        "CreatePlan",
+        Some(&serde_json::json!({ "name": "Legacy plan" })),
+        Some(&serde_json::json!({
+            "plan_file_path": "/repo/.bitfun/plans/legacy.plan.md",
+            "overview": "Ship the mobile flow"
+        })),
+    )
+    .expect("legacy CreatePlan is projected");
+    assert_eq!(legacy.name, "Legacy plan");
+    assert_eq!(legacy.file_path, "/repo/.bitfun/plans/legacy.plan.md");
+
+    let modern = project_remote_plan_tool(
+        "Write",
+        Some(&serde_json::json!({
+            "file_path": "/repo/.bitfun/plans/modern.plan.md"
+        })),
+        None,
+    )
+    .expect("modern plan write is projected");
+    assert_eq!(modern.name, "modern");
+    assert!(project_remote_plan_tool(
+        "Write",
+        Some(&serde_json::json!({ "file_path": "/repo/README.md" })),
+        None,
+    )
+    .is_none());
+}
+
+#[tokio::test]
+async fn remote_connect_command_owner_routes_steering_without_starting_a_new_turn() {
+    let host = RecordingCommandHost::default();
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::SteerTurn {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-running".to_string(),
+            content: "change direction".to_string(),
+            display_content: Some("Change direction".to_string()),
+            images: None,
+            image_contexts: Some(vec![RemoteImageContext {
+                id: "ctx-steer".to_string(),
+                image_path: None,
+                data_url: Some("data:image/png;base64,aGVsbG8=".to_string()),
+                mime_type: "image/png".to_string(),
+                metadata: None,
+            }]),
+            metadata: serde_json::Map::from_iter([(
+                "source".to_string(),
+                serde_json::json!("harmony"),
+            )]),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+
+    assert_eq!(
+        response,
+        RemoteResponse::SteeringAccepted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-running".to_string(),
+            steering_id: "steering-command".to_string(),
+        }
+    );
+    assert_eq!(host.events(), vec!["steer"]);
+    let request = host.steered_dialog();
+    assert_eq!(request.content, "change direction");
+    assert_eq!(request.display_content.as_deref(), Some("Change direction"));
+    assert_eq!(request.image_contexts, vec!["explicit:ctx-steer"]);
+    assert_eq!(request.metadata["source"], "harmony");
 }
 
 #[tokio::test]
@@ -1125,6 +1259,7 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
         RemoteDialogSubmissionRequest {
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
+            display_content: None,
             agent_type: Some("code".to_string()),
             image_contexts: vec!["image-1".to_string()],
             policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
@@ -1190,6 +1325,7 @@ async fn remote_connect_dialog_runtime_preserves_remote_workspace_identity() {
         RemoteDialogSubmissionRequest {
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
+            display_content: None,
             agent_type: Some("code".to_string()),
             image_contexts: Vec::<String>::new(),
             policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
@@ -1235,6 +1371,7 @@ async fn remote_connect_dialog_runtime_preserves_explicit_turn_without_restore()
         RemoteDialogSubmissionRequest {
             session_id: "session-1".to_string(),
             content: "from bot".to_string(),
+            display_content: None,
             agent_type: Some("Cowork".to_string()),
             image_contexts: Vec::new(),
             policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Bot),
@@ -1301,6 +1438,7 @@ async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() 
         RemoteDialogSubmissionRequest {
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
+            display_content: None,
             agent_type: None,
             image_contexts: Vec::new(),
             policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
@@ -1686,6 +1824,19 @@ fn remote_connect_execution_response_helpers_preserve_wire_shape() {
     );
 
     assert_eq!(
+        remote_dialog_steer_response(Ok(RemoteDialogSteerOutcome {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            steering_id: "steering-1".to_string(),
+        })),
+        RemoteResponse::SteeringAccepted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            steering_id: "steering-1".to_string(),
+        }
+    );
+
+    assert_eq!(
         remote_task_cancel_response("session-1", Ok(())),
         RemoteResponse::TaskCancelled {
             session_id: "session-1".to_string(),
@@ -1735,7 +1886,11 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(info_json["remote_ssh_host"], "dev-host");
     assert_eq!(
         info_json["capabilities"],
-        serde_json::json!([REMOTE_CAPABILITY_HARNESS_PROFILES_V1])
+        serde_json::json!([
+            REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
+            REMOTE_CAPABILITY_DIALOG_STEER_V1,
+            REMOTE_CAPABILITY_PLAN_BUILD_V1
+        ])
     );
     let mut legacy_info_json = info_json.clone();
     legacy_info_json
@@ -1898,7 +2053,11 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     assert_eq!(initial_json["authenticated_user_id"], "user-1");
     assert_eq!(
         initial_json["capabilities"],
-        serde_json::json!([REMOTE_CAPABILITY_HARNESS_PROFILES_V1])
+        serde_json::json!([
+            REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
+            REMOTE_CAPABILITY_DIALOG_STEER_V1,
+            REMOTE_CAPABILITY_PLAN_BUILD_V1
+        ])
     );
     let mut legacy_initial_json = initial_json;
     legacy_initial_json
@@ -2012,10 +2171,13 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
             start_ms: Some(42),
             input_preview: Some("{\"cmd\":\"git status\"}".to_string()),
             tool_input: None,
+            plan: None,
         }]),
         thinking: None,
         items: Some(vec![ChatMessageItem {
             item_type: "tool".to_string(),
+            steering_id: None,
+            round_index: None,
             content: None,
             tool: None,
             is_subagent: Some(false),
@@ -2042,6 +2204,7 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     let command = RemoteCommand::SendMessage {
         session_id: "session-1".to_string(),
         content: "hello".to_string(),
+        display_content: None,
         agent_type: Some("code".to_string()),
         images: Some(vec![ImageAttachment {
             name: "clip.png".to_string(),
@@ -2193,10 +2356,13 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
             start_ms: Some(42),
             input_preview: Some("{\"path\":\"README.md\"}".to_string()),
             tool_input: None,
+            plan: None,
         }],
         round_index: 2,
         items: Some(vec![ChatMessageItem {
             item_type: "tool".to_string(),
+            steering_id: None,
+            round_index: None,
             content: None,
             tool: None,
             is_subagent: None,
@@ -2544,6 +2710,56 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
     assert_eq!(items[0].content.as_deref(), Some("plan"));
     assert_eq!(items[1].item_type, "text");
     assert_eq!(items[1].content.as_deref(), Some("answer"));
+}
+
+#[test]
+fn remote_connect_tracker_keeps_steering_between_assistant_text_segments() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        text: "before".to_string(),
+    });
+    tracker.handle_agentic_event(&AgenticEvent::UserSteeringInjected {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_index: 1,
+        steering_id: "steering-1".to_string(),
+        content: "raw direction".to_string(),
+        display_content: "New direction".to_string(),
+    });
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-2".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        text: "after".to_string(),
+    });
+
+    let items = tracker
+        .snapshot_active_turn()
+        .expect("active turn")
+        .items
+        .expect("ordered items");
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0].content.as_deref(), Some("before"));
+    assert_eq!(items[1].item_type, "user-steering");
+    assert_eq!(items[1].steering_id.as_deref(), Some("steering-1"));
+    assert_eq!(items[1].round_index, Some(1));
+    assert_eq!(items[1].content.as_deref(), Some("New direction"));
+    assert_eq!(items[2].content.as_deref(), Some("after"));
 }
 
 #[test]

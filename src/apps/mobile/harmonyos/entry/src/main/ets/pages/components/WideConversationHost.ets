@@ -1,4 +1,5 @@
 import { RemoteUiState } from '../../services/RemoteUiState';
+import { REMOTE_CAPABILITY_HARNESS_PROFILES_V1 } from '../../model/RemoteModels';
 import {
   AppRootPresentationActions,
   emptyAppRootPresentationActions
@@ -202,10 +203,12 @@ export struct WideConversationHost {
       selectedSessionId: this.wideSelectedSessionId(),
       runningSessionId: this.remotePageState.hasRunningActiveTurn() ?
         this.remotePageState.activeSession.sessionId : '',
+      supportsHarnessProfiles: this.remotePageState.supportsHostCapability(
+        REMOTE_CAPABILITY_HARNESS_PROFILES_V1),
       workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onRemoteHome.openSessionInPlace,
-      onCreateInWorkspace: (deviceId: string, path: string) => {
-        this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code', deviceId);
+      onCreateInWorkspace: (deviceId: string, path: string, agentType: string) => {
+        this.actions.onRemoteHome.createInWorkspaceInPlace(path, agentType, deviceId);
       },
       onOpenWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path, deviceId);

@@ -132,14 +132,49 @@ export class RemoteChatCache {
   }
 
   /**
-   * Brings the stored transcript in line with what the timeline now holds.
+   * Persists an authoritative transcript returned by `get_session_messages` or
+   * `message_snapshot`.
    *
-   * Appends when the stored rows are still a prefix of [persistedMessages] and
-   * rewrites the session otherwise — a poll tick adds a handful of messages to
-   * a transcript that can hold hundreds, and rewriting all of them every few
-   * hundred milliseconds is the one way this cache could cost more than it saves.
+   * Message ids and counts are ordering facts, not content revisions: a turn
+   * keeps the same assistant id while its final text, status and tool results
+   * become durable. Therefore a full snapshot always replaces the cached rows,
+   * even when its ids and length match what is already stored.
    */
-  async sync(sessionId: string, persistedMessages: ChatMessage[]): Promise<void> {
+  async replaceSnapshot(sessionId: string, persistedMessages: ChatMessage[]): Promise<void> {
+    const scope = this.scope(sessionId);
+    if (scope.length === 0) {
+      return;
+    }
+    const lastMessageId = persistedMessages.length > 0
+      ? persistedMessages[persistedMessages.length - 1].id
+      : '';
+    try {
+      await this.store.replaceMessages(
+        this.deviceKeyProvider(),
+        sessionId,
+        persistedMessages,
+        lastMessageId
+      );
+      await this.store.pruneSessions(this.deviceKeyProvider(), CACHED_SESSIONS_PER_DEVICE);
+      this.track(scope, persistedMessages.length, lastMessageId);
+      if (persistedMessages.length > 0) {
+        this.remember(scope, persistedMessages, lastMessageId);
+      } else {
+        this.evictResident(scope);
+      }
+    } catch (err) {
+      this.handleWriteFailure(scope, err);
+    }
+  }
+
+  /**
+   * Persists the timeline after an additive poll delta was merged into it.
+   *
+   * This path may append because the caller did not receive an authoritative
+   * replacement. A prefix mismatch still rewrites the session to avoid splicing
+   * two different histories together.
+   */
+  async syncIncremental(sessionId: string, persistedMessages: ChatMessage[]): Promise<void> {
     const scope = this.scope(sessionId);
     if (scope.length === 0 || persistedMessages.length === 0) {
       return;
@@ -173,13 +208,7 @@ export class RemoteChatCache {
       this.track(scope, persistedMessages.length, lastMessageId);
       this.remember(scope, persistedMessages, lastMessageId);
     } catch (err) {
-      // Dropping the cursor turns the next sync into a rewrite, which is the
-      // only safe assumption once a write outcome is unknown. The resident copy
-      // goes with it: what it holds was true of a store this write may have
-      // moved out from under it.
-      this.forgetCursor();
-      this.evictResident(scope);
-      RemoteLogger.error(`remote chat cache write failed: ${RemoteChatCache.reason(err)}`);
+      this.handleWriteFailure(scope, err);
     }
   }
 
@@ -259,6 +288,15 @@ export class RemoteChatCache {
   private evictResident(scope: string): void {
     this.resident.delete(scope);
     this.residentOrder = this.residentOrder.filter((entry: string): boolean => entry !== scope);
+  }
+
+  private handleWriteFailure(scope: string, err: Object): void {
+    // Dropping the cursor turns the next incremental sync into a rewrite, which
+    // is the only safe assumption once a write outcome is unknown. The resident
+    // copy goes with it because the store may have changed underneath it.
+    this.forgetCursor();
+    this.evictResident(scope);
+    RemoteLogger.error(`remote chat cache write failed: ${RemoteChatCache.reason(err)}`);
   }
 
   /** Cache key for a session, or '' when there is nothing safe to key on. */

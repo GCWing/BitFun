@@ -18,6 +18,14 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionModelUpdateRequest,
 };
 use bitfun_events::AgenticEvent;
+#[cfg(feature = "remote-connect")]
+use bitfun_runtime_ports::{
+    AgentDialogSteerRequest, AgentInputAttachment, AgentSubmissionSource,
+    AgentTurnCancellationRequest, DialogSteerOutcome, PermissionPolicyPreset,
+    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
+    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
+    ToolPermissionConfig,
+};
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionCreateRequest,
@@ -27,13 +35,6 @@ use bitfun_runtime_ports::{
     AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentUserShellCommandPort,
     AgentWorkspaceReferencePort, PortError, PortErrorKind, PortResult, SessionStoragePathRequest,
     SessionStorePort,
-};
-#[cfg(feature = "remote-connect")]
-use bitfun_runtime_ports::{
-    AgentInputAttachment, AgentSubmissionSource, AgentTurnCancellationRequest,
-    PermissionPolicyPreset, RemoteControlStatePort, RemoteControlStateRequest,
-    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
-    RuntimeServicePort, ToolPermissionConfig,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_services_integrations::remote_connect::{
@@ -46,15 +47,16 @@ use bitfun_services_integrations::remote_connect::{
     RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
     RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
-    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
-    RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
-    RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
-    RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSteerOutcome,
+    RemoteDialogSteerRequest, RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome,
+    RemoteDialogWorkspaceBinding, RemoteImageContext, RemoteInitialSyncRuntimeHost,
+    RemoteInteractionRuntimeHost, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode, RemotePollRuntimeHost,
+    RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteSessionModelSelection,
+    RemoteSessionRuntimeHost, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
+    RemoteWorkspaceUpdate,
 };
 #[cfg(feature = "remote-connect")]
 use log::{debug, info};
@@ -617,6 +619,10 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
                         id: item.tool_call.id.clone(),
                         input: item.effective_input().clone(),
                     },
+                    result: item
+                        .tool_result
+                        .as_ref()
+                        .map(|result| result.result.clone()),
                     has_result: item.tool_result.is_some(),
                     status: item.status.clone(),
                     duration_ms: item.duration_ms,
@@ -2220,6 +2226,39 @@ impl<'a> CoreRemoteDialogRuntimeHost<'a> {
             runtime,
         })
     }
+
+    pub(crate) async fn steer_dialog(
+        &self,
+        request: RemoteDialogSteerRequest<ImageContextData>,
+    ) -> Result<RemoteDialogSteerOutcome, String> {
+        let attachments = request
+            .image_contexts
+            .into_iter()
+            .map(agent_input_attachment_from_image_context)
+            .collect();
+        self.runtime
+            .steer_dialog_turn(AgentDialogSteerRequest {
+                session_id: request.session_id,
+                turn_id: request.turn_id,
+                content: request.content,
+                display_content: request.display_content,
+                attachments,
+                metadata: request.metadata,
+            })
+            .await
+            .map(|outcome| match outcome {
+                DialogSteerOutcome::Buffered {
+                    session_id,
+                    turn_id,
+                    steering_id,
+                } => RemoteDialogSteerOutcome {
+                    session_id,
+                    turn_id,
+                    steering_id,
+                },
+            })
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
+    }
 }
 
 #[cfg(feature = "remote-connect")]
@@ -2454,7 +2493,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 session_id: submission.session_id,
                 message: submission.content,
                 output_schema: None,
-                original_message: None,
+                original_message: submission.display_content,
                 turn_id: Some(submission.turn_id),
                 execution: Default::default(),
                 agent_type: submission.resolved_agent_type,

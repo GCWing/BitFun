@@ -67,6 +67,39 @@ export class RemoteCommandFactory {
     return command;
   }
 
+  static steerTurn(
+    sessionId: string,
+    turnId: string,
+    text: string,
+    displayContent: string,
+    imageContexts?: RemoteImageContext[]
+  ): RemoteCommand {
+    const command: RemoteCommand = {
+      cmd: 'steer_turn',
+      session_id: sessionId,
+      turn_id: turnId,
+      content: text,
+      display_content: displayContent
+    };
+    if (imageContexts && imageContexts.length > 0) {
+      command.image_contexts = imageContexts;
+    }
+    return command;
+  }
+
+  static buildPlan(sessionId: string, planFilePath: string, planName: string, agentType?: string): RemoteCommand {
+    const command: RemoteCommand = {
+      cmd: 'build_plan',
+      session_id: sessionId,
+      plan_file_path: planFilePath,
+      plan_name: planName
+    };
+    if (agentType && agentType.length > 0) {
+      command.agent_type = agentType;
+    }
+    return command;
+  }
+
   static getSessionMessages(sessionId: string): RemoteCommand {
     return {
       cmd: 'get_session_messages',

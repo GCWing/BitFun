@@ -1,16 +1,22 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
-import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
+import {
+  ConversationUiPlanTool,
+  ConversationUiQuestionAnswer,
+  ConversationUiToolStatus
+} from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ToolFileReference, ToolFileReferenceResolver } from '../policy/ToolFileReferenceResolver';
 import { ActivityGroupPolicy, ActivityRowPlan, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
 import { ToolCollapseGroup, ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
 import { ToolStatusPresentationPolicy } from '../policy/ToolStatusPresentationPolicy';
+import { PlanToolPolicy } from '../policy/PlanToolPolicy';
 import {
   CARD,
   FILE_LINK,
   INK,
   LINE,
   MUTED,
+  SHADOW_SUBTLE,
   SOFT,
   STATUS_DANGER,
   STATUS_SUCCESS,
@@ -73,6 +79,7 @@ export struct ToolStatusList {
     (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void =
     (_path: string, _label: string) => {};
+  @Event onBuildPlan: (path: string, name: string) => void = (_path: string, _name: string) => {};
   @Local expanded: boolean = false;
   @Local expandedToolKey: string = '';
 
@@ -84,11 +91,92 @@ export struct ToolStatusList {
         } else if (entry.thinking) {
           this.ThinkingRow(entry.thinking)
         } else if (entry.tool) {
-          this.ToolRow(entry.tool, index)
+          if (PlanToolPolicy.isPlanTool(entry.tool)) {
+            this.PlanCard(entry.tool)
+          } else {
+            this.ToolRow(entry.tool, index)
+          }
         }
       }, (entry: ToolRenderEntry) => entry.key)
     }
     .width('100%')
+  }
+
+  @Builder
+  PlanCard(tool: ConversationUiToolStatus) {
+    Column({ space: 12 }) {
+      Row({ space: 10 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          ToolGlyph({ kind: 'document', color: INK })
+        }
+        .width(32)
+        .height(32)
+        .backgroundColor(SOFT)
+        .borderRadius(9)
+        Column({ space: 2 }) {
+          Text(this.planDescriptor(tool).name)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(INK)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.planSubtitle(tool))
+            .fontSize(MobileDesignTypography.labelSmall.size)
+            .fontColor(MUTED)
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Row({ space: 8 }) {
+        Text(RemoteI18n.t('chat.planView'))
+          .fontSize(MobileDesignTypography.labelMedium.size)
+          .fontColor(this.planDescriptor(tool).file_path.length > 0 ? INK : MUTED)
+          .textAlign(TextAlign.Center)
+          .height(36)
+          .layoutWeight(1)
+          .padding({ left: 12, right: 12 })
+          .backgroundColor(SOFT)
+          .borderRadius(18)
+          .border({ width: 1, color: LINE })
+          .enabled(this.planDescriptor(tool).file_path.length > 0)
+          .onClick(() => {
+            const plan = this.planDescriptor(tool);
+            if (plan.file_path.length > 0) {
+              this.onOpenFilePreview(plan.file_path, plan.name);
+            }
+          })
+        Text(RemoteI18n.t('chat.planBuild'))
+          .fontSize(MobileDesignTypography.labelMedium.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.canStartPlanBuild(tool) ? CARD : MUTED)
+          .textAlign(TextAlign.Center)
+          .height(36)
+          .layoutWeight(1)
+          .padding({ left: 12, right: 12 })
+          .backgroundColor(this.canStartPlanBuild(tool) ? INK : SOFT)
+          .borderRadius(18)
+          .border({ width: 1, color: this.canStartPlanBuild(tool) ? INK : LINE })
+          .enabled(this.canStartPlanBuild(tool))
+          .onClick(() => {
+            const plan = this.planDescriptor(tool);
+            if (this.canStartPlanBuild(tool)) {
+              this.onBuildPlan(plan.file_path, plan.name);
+            }
+          })
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor(CARD)
+    .borderRadius(18)
+    .border({ width: 1, color: LINE })
+    .shadow({ radius: 12, color: SHADOW_SUBTLE, offsetY: 4 })
   }
 
   @Builder
@@ -830,6 +918,25 @@ export struct ToolStatusList {
 
   private questionInputJson(tool: ConversationUiToolStatus): string {
     return ToolStatusPresentationPolicy.questionInputJson(tool);
+  }
+
+  private planDescriptor(tool: ConversationUiToolStatus): ConversationUiPlanTool {
+    return PlanToolPolicy.descriptor(tool) || { file_path: '', name: 'Plan' };
+  }
+
+  private planSubtitle(tool: ConversationUiToolStatus): string {
+    const plan = this.planDescriptor(tool);
+    if ((plan.overview || '').trim().length > 0) {
+      return plan.overview || '';
+    }
+    if (plan.file_path.length > 0) {
+      return this.compactText(plan.file_path, 54);
+    }
+    return this.displayStatus(tool.status || 'pending');
+  }
+
+  private canStartPlanBuild(tool: ConversationUiToolStatus): boolean {
+    return !this.isBusy && PlanToolPolicy.canBuild(tool);
   }
 
   private toolKey(tool: ConversationUiToolStatus, index: number): string {

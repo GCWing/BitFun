@@ -126,6 +126,9 @@ export interface RemoteCommand {
   known_msg_count?: number;
   known_model_catalog_version?: number;
   turn_id?: string;
+  display_content?: string;
+  plan_file_path?: string;
+  plan_name?: string;
   tool_id?: string;
   model_id?: string;
   reason?: string;
@@ -290,6 +293,22 @@ export interface SendMessageResponse extends CommandStatusResponse {
   turn_id?: string;
 }
 
+export interface SteerTurnResponse extends CommandStatusResponse {
+  session_id?: string;
+  turn_id?: string;
+  steering_id?: string;
+}
+
+export interface SteerTurnResult {
+  sessionId: string;
+  turnId: string;
+  steeringId: string;
+}
+
+export const REMOTE_CAPABILITY_DIALOG_STEER_V1: string = 'dialog_steer_v1';
+export const REMOTE_CAPABILITY_PLAN_BUILD_V1: string = 'plan_build_v1';
+export const REMOTE_CAPABILITY_HARNESS_PROFILES_V1: string = 'harness_profiles_v1';
+
 export interface RemoteModelConfig {
   id: string;
   name: string;
@@ -360,6 +379,13 @@ export interface RemoteToolStatusResponse {
   result_preview?: string;
   error_preview?: string;
   exit_code?: number;
+  plan?: RemotePlanToolResponse;
+}
+
+export interface RemotePlanToolResponse {
+  file_path: string;
+  name: string;
+  overview?: string;
 }
 
 export interface RemoteQuestionAnswerPayload {
@@ -372,10 +398,13 @@ export interface RemoteQuestionAnswerPayload {
 
 export interface ChatMessageItemResponse {
   type?: string;
+  steering_id?: string;
+  round_index?: number;
   content?: string;
   tool?: RemoteToolStatusResponse;
   is_subagent?: boolean;
   subItems?: ChatMessageItemResponse[];
+  images?: ImageAttachment[];
 }
 
 export interface ImageAttachment {

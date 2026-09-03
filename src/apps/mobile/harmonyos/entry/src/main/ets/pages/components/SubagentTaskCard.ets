@@ -29,6 +29,7 @@ export struct SubagentTaskCard {
     (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void =
     (_path: string, _label: string) => {};
+  @Event onBuildPlan: (path: string, name: string) => void = (_path: string, _name: string) => {};
   @Local expanded: boolean = false;
 
   build() {
@@ -122,7 +123,8 @@ export struct SubagentTaskCard {
             onRejectTool: this.onRejectTool,
             onCancelTool: this.onCancelTool,
             onAnswerQuestion: this.onAnswerQuestion,
-            onOpenFilePreview: this.onOpenFilePreview
+            onOpenFilePreview: this.onOpenFilePreview,
+            onBuildPlan: this.onBuildPlan
           })
         } else if ((entry.content || '').trim().length > 0) {
           Column({ space: 3 }) {

@@ -1,4 +1,5 @@
 import { ConversationUiToolStatus } from '../state/ConversationUiModels';
+import { PlanToolPolicy } from './PlanToolPolicy';
 
 export class ToolCollapseGroup {
   readonly type: string;
@@ -16,7 +17,7 @@ export class ToolCollapsePolicy {
   static readonly MIN_SUMMARY_COUNT: number = 2;
 
   static shouldFoldIntoSummary(tool: ConversationUiToolStatus): boolean {
-    if (ToolCollapsePolicy.hasError(tool) ||
+    if (PlanToolPolicy.isPlanTool(tool) || ToolCollapsePolicy.hasError(tool) ||
       ToolCollapsePolicy.isPending(tool) ||
       ToolCollapsePolicy.isQuestion(tool) ||
       ToolCollapsePolicy.isRunning(tool)) {
