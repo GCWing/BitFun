@@ -2657,9 +2657,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     setRollbackDraft('');
   }, [rollbackBusy]);
 
-  // Rollback is the host-side mutation: it retires the later turns and restores
-  // the files they wrote. Editing is that same rollback followed by a normal
-  // send, which is how the desktop reruns an edited user message.
+  // Rollback is the host-side mutation: it retires the target turn and the ones
+  // after it, and restores the files they wrote. Editing is that same rollback
+  // followed by a normal send, which is how the desktop reruns an edited user
+  // message.
   const handleConfirmRollback = useCallback(async () => {
     if (!rollbackTarget || rollbackBusy) return;
     const { message, mode } = rollbackTarget;

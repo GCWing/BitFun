@@ -1244,10 +1244,10 @@ pub trait RemoteSessionRuntimeHost: Send + Sync {
         session_storage_dir: &Path,
         session_id: &str,
     ) -> Result<(Vec<ChatMessage>, bool), String>;
-    /// Roll the session back to `target_turn_id`, retiring later turns and
-    /// restoring the files those turns wrote. Hosts are expected to reuse the
-    /// same targeted-rollback path the desktop uses rather than hiding turns,
-    /// and to reject sessions whose workspace they do not own.
+    /// Roll the session back to `target_turn_id`, retiring that turn and the
+    /// ones after it and restoring the files those turns wrote. Hosts are
+    /// expected to reuse the same targeted-rollback path the desktop uses rather
+    /// than hiding turns, and to reject sessions whose workspace they do not own.
     async fn rollback_session_to_turn(
         &self,
         session_id: &str,
@@ -2289,9 +2289,11 @@ pub enum RemoteCommand {
     DeleteSession {
         session_id: String,
     },
-    /// Retire every turn after `target_turn_id` and restore the workspace files
-    /// that turn touched, matching the desktop targeted rollback. The client
-    /// reads both fields off the user `ChatMessage` it is targeting;
+    /// Retire `target_turn_id` and every turn after it, then restore the
+    /// workspace files those turns touched, matching the desktop targeted
+    /// rollback. The target turn is withdrawn too, and its prompt comes back as
+    /// `composer_text` so the client can offer it for editing. The client reads
+    /// both identity fields off the user `ChatMessage` it is targeting;
     /// `expected_storage_turn_index` is the stale-view guard, so omitting it
     /// only widens the race window and never changes which turn is addressed.
     RollbackSessionToTurn {
@@ -2488,8 +2490,9 @@ pub enum RemoteResponse {
     },
     SessionRolledBack {
         session_id: String,
-        /// Turns the host retired. The client truncates its transcript to the
-        /// rollback boundary instead of guessing from local indices.
+        /// Turns the host retired, including the target turn itself. Reported so
+        /// a client can tell the user what was withdrawn; the transcript itself
+        /// is repaired by the next poll's authoritative `message_snapshot`.
         retired_turn_ids: Vec<String>,
         restored_files: Vec<String>,
         /// Prompt text the desktop would have put back into its composer, so a
