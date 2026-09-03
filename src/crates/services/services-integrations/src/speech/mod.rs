@@ -148,7 +148,7 @@ impl SpeechService {
                 &store,
                 &manifest,
                 task_control.cancel.clone(),
-                |progress| {
+                |state, progress| {
                     let status = SpeechModelStatus {
                         model_id: manifest.id.clone(),
                         display_name: manifest.display_name.clone(),
@@ -156,7 +156,7 @@ impl SpeechService {
                         version: manifest.version.clone(),
                         description: manifest.description.clone(),
                         languages: manifest.languages.clone(),
-                        state: SpeechModelInstallState::Downloading,
+                        state,
                         installed_path: None,
                         installed_bytes: progress.downloaded_bytes,
                         expected_bytes: manifest.expected_bytes(),

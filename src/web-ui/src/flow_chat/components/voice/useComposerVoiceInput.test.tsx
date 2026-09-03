@@ -15,7 +15,16 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
   finishText: 'Transcribed request',
+  voiceInputSettings: {
+    enabled: true,
+    provider: 'local',
+    model_id: 'sensevoice-test-model',
+    default_language: 'auto',
+    max_recording_seconds: 60,
+    microphone_device_id: '',
+  },
   recorderStop: vi.fn(async () => undefined),
+  listModels: vi.fn(),
   finishInputSession: vi.fn(),
   cancelInputSession: vi.fn(async () => undefined),
   downloadModel: vi.fn(),
@@ -29,19 +38,7 @@ vi.mock('@/infrastructure/api', () => ({
   DEFAULT_SPEECH_SAMPLE_RATE: 16000,
   LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID: 'sensevoice-test-model',
   speechAPI: {
-    listModels: vi.fn(async () => ({
-      models: [{
-        modelId: 'sensevoice-test-model',
-        displayName: 'SenseVoice test',
-        provider: 'test',
-        version: 'test',
-        description: 'Test speech model',
-        languages: ['auto', 'en'],
-        state: 'installed',
-        installedBytes: 1,
-        expectedBytes: 1,
-      }],
-    })),
+    listModels: mocks.listModels,
     onModelStatusChanged: vi.fn((listener: (status: Record<string, unknown>) => void) => {
       mocks.modelStatusListener = listener;
       return () => undefined;
@@ -59,14 +56,7 @@ vi.mock('@/infrastructure/api', () => ({
 vi.mock('@/infrastructure/config/hooks', () => ({
   useAIExperienceSettings: () => ({
     settings: {
-      voice_input: {
-        enabled: true,
-        provider: 'local',
-        model_id: 'sensevoice-test-model',
-        default_language: 'auto',
-        max_recording_seconds: 60,
-        microphone_device_id: '',
-      },
+      voice_input: mocks.voiceInputSettings,
     },
     isLoading: false,
     error: null,
@@ -125,6 +115,34 @@ function Probe({ onController, ...options }: ProbeProps) {
   return null;
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function speechModel(
+  modelId: string,
+  state: 'installed' | 'not_installed',
+  expectedBytes = 1,
+) {
+  return {
+    modelId,
+    displayName: modelId === 'qwen-test-model' ? 'Qwen test' : 'SenseVoice test',
+    provider: 'test',
+    version: 'test',
+    description: 'Test speech model',
+    languages: ['auto', 'en'],
+    state,
+    installedBytes: state === 'installed' ? expectedBytes : 0,
+    expectedBytes,
+  };
+}
+
 describe('useComposerVoiceInput completion modes', () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -134,6 +152,18 @@ describe('useComposerVoiceInput completion modes', () => {
   let submitText: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
+    mocks.voiceInputSettings = {
+      enabled: true,
+      provider: 'local',
+      model_id: 'sensevoice-test-model',
+      default_language: 'auto',
+      max_recording_seconds: 60,
+      microphone_device_id: '',
+    };
+    mocks.listModels.mockReset();
+    mocks.listModels.mockImplementation(async () => ({
+      models: [speechModel('sensevoice-test-model', 'installed')],
+    }));
     mocks.finishText = 'Transcribed request';
     mocks.finishInputSession.mockImplementation(async () => ({
       text: mocks.finishText,
@@ -300,6 +330,107 @@ describe('useComposerVoiceInput completion modes', () => {
     });
 
     expect(mocks.downloadModel).toHaveBeenCalledWith('sensevoice-test-model');
+    expect(controller?.phase).toBe('recording');
+  });
+
+  it('dismisses a stale setup prompt when the selected model becomes installed', async () => {
+    await act(async () => {
+      mocks.modelStatusListener?.(speechModel(
+        'sensevoice-test-model',
+        'not_installed',
+        165 * 1024 * 1024,
+      ));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      controller?.toggle();
+      await Promise.resolve();
+    });
+    expect(controller?.phase).toBe('setup');
+
+    await act(async () => {
+      mocks.modelStatusListener?.(speechModel(
+        'sensevoice-test-model',
+        'installed',
+        165 * 1024 * 1024,
+      ));
+      await Promise.resolve();
+    });
+
+    expect(controller?.phase).toBe('idle');
+  });
+
+  it('ignores an old model query that completes after the selected model query', async () => {
+    mocks.listModels.mockImplementationOnce(async () => ({
+      models: [speechModel('qwen-test-model', 'installed', 838 * 1024 * 1024)],
+    }));
+    mocks.voiceInputSettings = {
+      ...mocks.voiceInputSettings,
+      model_id: 'qwen-test-model',
+    };
+    await act(async () => {
+      root.render(
+        <Probe
+          focusInputSoon={focusInputSoon}
+          insertText={insertText}
+          submitText={submitText}
+          onController={(next) => { controller = next; }}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const oldSenseVoiceQuery = createDeferred<{ models: ReturnType<typeof speechModel>[] }>();
+    const currentQwenQuery = createDeferred<{ models: ReturnType<typeof speechModel>[] }>();
+    mocks.listModels
+      .mockImplementationOnce(() => oldSenseVoiceQuery.promise)
+      .mockImplementationOnce(() => currentQwenQuery.promise);
+
+    mocks.voiceInputSettings = {
+      ...mocks.voiceInputSettings,
+      model_id: 'sensevoice-test-model',
+    };
+    await act(async () => {
+      root.render(
+        <Probe
+          focusInputSoon={focusInputSoon}
+          insertText={insertText}
+          submitText={submitText}
+          onController={(next) => { controller = next; }}
+        />,
+      );
+    });
+
+    mocks.voiceInputSettings = {
+      ...mocks.voiceInputSettings,
+      model_id: 'qwen-test-model',
+    };
+    await act(async () => {
+      root.render(
+        <Probe
+          focusInputSoon={focusInputSoon}
+          insertText={insertText}
+          submitText={submitText}
+          onController={(next) => { controller = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      currentQwenQuery.resolve({
+        models: [speechModel('qwen-test-model', 'installed', 838 * 1024 * 1024)],
+      });
+      await currentQwenQuery.promise;
+    });
+    await act(async () => {
+      oldSenseVoiceQuery.resolve({
+        models: [speechModel('sensevoice-test-model', 'not_installed', 165 * 1024 * 1024)],
+      });
+      await oldSenseVoiceQuery.promise;
+    });
+
+    await startRecording();
     expect(controller?.phase).toBe('recording');
   });
 });

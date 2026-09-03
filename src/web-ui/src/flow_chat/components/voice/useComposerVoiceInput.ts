@@ -22,6 +22,10 @@ const log = createLogger('ComposerVoiceInput');
 
 type VoiceInputPhase = 'idle' | 'setup' | 'downloading' | 'preparing' | 'recording' | 'transcribing';
 export type VoiceInputCompletionMode = 'transcribe' | 'send';
+interface SelectedModelCapability {
+  modelId: string;
+  status: SpeechModelStatus | null;
+}
 const STARTUP_AUDIO_BUFFER_LIMIT_SECONDS = 5;
 const RECORDING_CHUNK_DURATION_MS = 1000;
 const LOW_VOLUME_LEVEL_THRESHOLD = 0.002;
@@ -99,8 +103,7 @@ export function useComposerVoiceInput({
   const settings = aiExperienceSettings?.voice_input ?? null;
   const selectedProvider = settings?.provider === 'cloud' ? 'cloud' : 'local';
   const selectedModelId = settings?.model_id || DEFAULT_LOCAL_VOICE_MODEL_ID;
-  const [modelInstalled, setModelInstalled] = useState<boolean | null>(null);
-  const [selectedModelStatus, setSelectedModelStatus] = useState<SpeechModelStatus | null>(null);
+  const [modelCapability, setModelCapability] = useState<SelectedModelCapability | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [phase, setPhase] = useState<VoiceInputPhase>('idle');
   const [completionMode, setCompletionMode] = useState<VoiceInputCompletionMode | null>(null);
@@ -115,12 +118,23 @@ export function useComposerVoiceInput({
   const audioLevelFrameRef = useRef<number | null>(null);
   const activeRecordingIdRef = useRef(0);
   const activeInstallIdRef = useRef(0);
+  const capabilityRequestIdRef = useRef(0);
   const bufferedChunksRef = useRef<Array<{ pcm16Base64: string; seconds: number }>>([]);
   const bufferedSecondsRef = useRef(0);
   const cancelRecordingRef = useRef<(() => Promise<void>) | null>(null);
   const recordingLimitTimerRef = useRef<number | null>(null);
   const lowVolumeStartedAtRef = useRef<number | null>(null);
   const speechRuntimeSupported = isTauriRuntime();
+  const selectedModelCapability = selectedProvider === 'local'
+    && modelCapability?.modelId === selectedModelId
+    ? modelCapability
+    : null;
+  const selectedModelStatus = selectedModelCapability?.status ?? null;
+  const modelInstalled = selectedProvider !== 'local'
+    ? false
+    : selectedModelCapability === null
+      ? null
+      : selectedModelCapability.status?.state === 'installed';
 
   const clearRecordingLimitTimer = useCallback(() => {
     if (recordingLimitTimerRef.current !== null) {
@@ -137,27 +151,30 @@ export function useComposerVoiceInput({
   }, []);
 
   const refreshCapability = useCallback(async (): Promise<boolean | null> => {
+    const requestId = capabilityRequestIdRef.current + 1;
+    capabilityRequestIdRef.current = requestId;
     if (!speechRuntimeSupported) {
-      setModelInstalled(null);
-      setSelectedModelStatus(null);
+      setModelCapability(null);
       return null;
     }
     if (selectedProvider !== 'local') {
-      setModelInstalled(false);
-      setSelectedModelStatus(null);
+      setModelCapability(null);
       return false;
     }
     try {
       const modelResponse = await speechAPI.listModels();
       const status = modelResponse.models.find(model => model.modelId === selectedModelId) ?? null;
       const installed = status?.state === 'installed';
-      setSelectedModelStatus(status);
-      setModelInstalled(installed);
+      if (capabilityRequestIdRef.current !== requestId) {
+        return null;
+      }
+      setModelCapability({ modelId: selectedModelId, status });
       return installed;
     } catch (error) {
       log.warn('Failed to refresh voice input capability', { error });
-      setModelInstalled(null);
-      setSelectedModelStatus(null);
+      if (capabilityRequestIdRef.current === requestId) {
+        setModelCapability(null);
+      }
       return null;
     }
   }, [selectedModelId, selectedProvider, speechRuntimeSupported]);
@@ -167,29 +184,52 @@ export function useComposerVoiceInput({
       return undefined;
     }
     if (selectedProvider !== 'local') {
-      setModelInstalled(false);
-      setSelectedModelStatus(null);
+      capabilityRequestIdRef.current += 1;
+      setModelCapability(null);
       return undefined;
     }
     void refreshCapability();
     const removeModelListener = speechAPI.onModelStatusChanged(status => {
       if (status.modelId === selectedModelId) {
-        setSelectedModelStatus(status);
-        setModelInstalled(status.state === 'installed');
+        capabilityRequestIdRef.current += 1;
+        setModelCapability({ modelId: selectedModelId, status });
       }
     });
     const removeProgressListener = speechAPI.onModelProgress(event => {
       if (event.status.modelId === selectedModelId) {
-        setSelectedModelStatus(event.status);
+        capabilityRequestIdRef.current += 1;
+        setModelCapability({ modelId: selectedModelId, status: event.status });
         setDownloadProgress(Math.min(100, Math.max(0, event.status.progress?.percent ?? 0)));
       }
     });
 
     return () => {
+      capabilityRequestIdRef.current += 1;
       removeModelListener();
       removeProgressListener();
     };
   }, [refreshCapability, selectedModelId, selectedProvider, speechRuntimeSupported]);
+
+  useEffect(() => {
+    if (phase !== 'setup' || modelInstalled !== true) return;
+    setDownloadProgress(null);
+    setPhase('idle');
+  }, [modelInstalled, phase]);
+
+  const markSelectedModelMissing = useCallback(() => {
+    capabilityRequestIdRef.current += 1;
+    setModelCapability(current => ({
+      modelId: selectedModelId,
+      status: current?.modelId === selectedModelId && current.status
+        ? {
+            ...current.status,
+            state: 'not_installed',
+            installedBytes: 0,
+            progress: null,
+          }
+        : null,
+    }));
+  }, [selectedModelId]);
 
   useEffect(() => () => {
     activeRecordingIdRef.current += 1;
@@ -568,7 +608,7 @@ export function useComposerVoiceInput({
             });
           }
           if (isModelMissingError(error)) {
-            setModelInstalled(false);
+            markSelectedModelMissing();
             setDownloadProgress(null);
             setPhase('setup');
             return;
@@ -603,7 +643,7 @@ export function useComposerVoiceInput({
           });
       }
       if (isModelMissingError(error)) {
-        setModelInstalled(false);
+        markSelectedModelMissing();
         setDownloadProgress(null);
         setPhase('setup');
         return;
@@ -617,7 +657,7 @@ export function useComposerVoiceInput({
       setAudioLevel(0);
       setPhase('idle');
     }
-  }, [attachSession, enqueueChunk, modelInstalled, openVoiceInputSettings, refreshCapability, settings, speechRuntimeSupported, stopAndTranscribe, t, updateAudioLevel]);
+  }, [attachSession, enqueueChunk, markSelectedModelMissing, modelInstalled, openVoiceInputSettings, refreshCapability, settings, speechRuntimeSupported, stopAndTranscribe, t, updateAudioLevel]);
 
   const installAndStart = useCallback(async () => {
     if (selectedProvider !== 'local' || phase !== 'setup') return;
@@ -628,8 +668,8 @@ export function useComposerVoiceInput({
     try {
       const status = await speechAPI.downloadModel(selectedModelId);
       if (activeInstallIdRef.current !== installId) return;
-      setSelectedModelStatus(status);
-      setModelInstalled(status.state === 'installed');
+      capabilityRequestIdRef.current += 1;
+      setModelCapability({ modelId: selectedModelId, status });
       setDownloadProgress(status.state === 'installed' ? 100 : null);
       if (status.state !== 'installed') {
         setPhase('setup');
