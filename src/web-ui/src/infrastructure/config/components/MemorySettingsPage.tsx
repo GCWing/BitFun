@@ -170,7 +170,20 @@ const MemorySettingsPage: React.FC = () => {
     setSavingKey(key);
     setConfig(next);
     try {
-      await configManager.setConfig('memories', next);
+      const persisted = await configManager.updateConfig<Partial<MemoriesConfigShape>>(
+        'memories',
+        current => {
+          const latest = {
+            ...normalizeMemoriesConfig(current),
+            [key]: value,
+          };
+          if (!isValidMemoryWindowConfig(latest)) {
+            throw new Error(t('messages.rolloutAgeExceedsRetention'));
+          }
+          return latest;
+        },
+      );
+      setConfig(normalizeMemoriesConfig(persisted));
       notifySuccess(t('messages.saved'));
     } catch (error) {
       log.error('Failed to save memories config', { key, error });
@@ -191,7 +204,15 @@ const MemorySettingsPage: React.FC = () => {
     setSavingKey('generate_memories');
     setConfig(next);
     try {
-      await configManager.setConfig('memories', next);
+      const persisted = await configManager.updateConfig<Partial<MemoriesConfigShape>>(
+        'memories',
+        current => ({
+          ...normalizeMemoriesConfig(current),
+          generate_memories: enabled,
+          use_memories: enabled,
+        }),
+      );
+      setConfig(normalizeMemoriesConfig(persisted));
       notifySuccess(t('messages.saved'));
     } catch (error) {
       log.error('Failed to save memory enabled state', error);

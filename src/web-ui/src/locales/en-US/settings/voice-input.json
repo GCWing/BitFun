@@ -75,6 +75,7 @@
       "loadFailed": "Failed to load controller realtime voice settings",
       "saved": "Realtime voice settings saved",
       "saveFailed": "Failed to save realtime voice settings",
+      "required": "Enter an API key and voice before enabling realtime voice.",
       "unsaved": "You have unsaved realtime voice changes."
     },
     "call": {

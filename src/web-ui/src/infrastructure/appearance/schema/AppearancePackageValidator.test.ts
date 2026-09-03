@@ -129,6 +129,14 @@ describe('AppearancePackageValidator', () => {
           submenu: { base: { opacity: { kind: 'number', value: 1 } } },
         },
       },
+      'appearance-settings': {
+        parts: {
+          root: { base: { opacity: { kind: 'number', value: 1 } } },
+          palettePicker: { base: { opacity: { kind: 'number', value: 1 } } },
+          paletteSelect: { base: { opacity: { kind: 'number', value: 1 } } },
+          packageSelect: { base: { opacity: { kind: 'number', value: 1 } } },
+        },
+      },
     };
 
     const migrated = migrateAppearancePackage(legacy);
@@ -140,6 +148,10 @@ describe('AppearancePackageValidator', () => {
     expect(components['branch-quick-switch']?.parts.root?.contexts).toBeUndefined();
     expect(components['context-menu']?.parts.submenu).toBeUndefined();
     expect(components['context-menu']?.parts.root?.states).toBeUndefined();
+    expect(components['appearance-settings']?.parts.root).toBeDefined();
+    expect(components['appearance-settings']?.parts.palettePicker).toBeUndefined();
+    expect(components['appearance-settings']?.parts.paletteSelect).toBeUndefined();
+    expect(components['appearance-settings']?.parts.packageSelect).toBeUndefined();
     expect(appearancePackageValidator.validate(legacy, registry).valid).toBe(true);
   });
 

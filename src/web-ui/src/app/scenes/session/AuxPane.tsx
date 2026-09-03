@@ -139,6 +139,7 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
           onInteraction={handleInteraction}
           onBeforeClose={handleBeforeClose}
           terminalResizeSuspended={terminalResizeSuspended}
+          missionControlEnabled={false}
           emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}
         />
       </div>

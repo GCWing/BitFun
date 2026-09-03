@@ -1,11 +1,11 @@
 import { Button, Icon, IconButton, Input, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Save } from 'lucide-react';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { useSettingsDraft } from '@/infrastructure/config/settingsDraftRegistry';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotification } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
-import { ConfigLoadingState, ConfigMessage } from './common';
+import { ConfigActionBar, ConfigLoadingState, ConfigMessage, ConfigRetryState } from './common';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -154,14 +154,19 @@ const WebSearchSettingsPage: React.FC = () => {
   const { t } = useI18n('settings/web-search');
   const { success: notifySuccess, error: notifyError } = useNotification();
   const protocolRef = useRef<HTMLDivElement>(null);
+  const loadRequestIdRef = useRef(0);
+  const credentialStatusRequestIdRef = useRef(0);
+  const mutationBusyRef = useRef(false);
   const [config, setConfig] = useState<WebSearchConfig>(DEFAULT_CONFIG);
   const [savedConfig, setSavedConfig] = useState<WebSearchConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [credential, setCredential] = useState('');
   const [credentialConfigured, setCredentialConfigured] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [draftMessage, setDraftMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [operationMessage, setOperationMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const providerOptions = useMemo<SelectOption[]>(() => [
     { value: 'exa_mcp_free', label: t('providers.exaMcpFree') },
@@ -186,110 +191,164 @@ const WebSearchSettingsPage: React.FC = () => {
     || (selectedProvider === 'bitfun_search_http' && !['', 'none'].includes(httpConfig.auth.mode));
 
   const refreshCredentialStatus = useCallback(async (provider: string, required: boolean) => {
+    const requestId = ++credentialStatusRequestIdRef.current;
     if (!required) {
       setCredentialConfigured(false);
       return;
     }
     try {
       const status = await configAPI.getWebSearchCredentialStatus(provider);
-      setCredentialConfigured(status.configured);
+      if (requestId === credentialStatusRequestIdRef.current) {
+        setCredentialConfigured(status.configured);
+      }
     } catch (error) {
       log.error('Failed to load WebSearch credential status', { provider, error });
-      setCredentialConfigured(false);
+      if (requestId === credentialStatusRequestIdRef.current) {
+        setCredentialConfigured(false);
+      }
+    }
+  }, []);
+
+  const loadConfiguration = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const loaded = normalizeConfig(await configAPI.getConfig('ai.web_search'));
+      if (requestId === loadRequestIdRef.current) {
+        setConfig(loaded);
+        setSavedConfig(loaded);
+        setDraftMessage(null);
+        setOperationMessage(null);
+      }
+    } catch (error) {
+      log.error('Failed to load WebSearch settings', error);
+      if (requestId === loadRequestIdRef.current) {
+        setLoadFailed(true);
+      }
+    } finally {
+      if (requestId === loadRequestIdRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const loaded = normalizeConfig(await configAPI.getConfig('ai.web_search'));
-        if (!cancelled) {
-          setConfig(loaded);
-          setSavedConfig(loaded);
-          const provider = loaded.provider as ProviderId;
-          const requiresCredential = provider === 'exa_search_api'
-            || provider === 'tavily'
-            || (provider === 'bitfun_search_http'
-              && !['', 'none'].includes(loaded.providers.bitfun_search_http.auth.mode));
-          await refreshCredentialStatus(provider, requiresCredential);
-        }
-      } catch (error) {
-        log.error('Failed to load WebSearch settings', error);
-        if (!cancelled) {
-          setMessage({ type: 'error', text: t('messages.loadFailed') });
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
+    void loadConfiguration();
     return () => {
-      cancelled = true;
+      loadRequestIdRef.current += 1;
+      credentialStatusRequestIdRef.current += 1;
     };
-  }, [refreshCredentialStatus, t]);
+  }, [loadConfiguration]);
 
   useEffect(() => {
     void refreshCredentialStatus(selectedProvider, credentialRequired);
     setCredential('');
+    setDraftMessage(null);
   }, [credentialRequired, refreshCredentialStatus, selectedProvider]);
 
   const saveConfiguration = useCallback(async (showSuccess: boolean) => {
     await configAPI.setConfig('ai.web_search', config);
     setSavedConfig(config);
     if (showSuccess) {
-      setMessage(null);
+      setDraftMessage(null);
       notifySuccess(t('messages.saved'));
     }
   }, [config, notifySuccess, t]);
 
-  const handleSaveConfiguration = useCallback(async () => {
+  const handleSaveConfiguration = useCallback(async (): Promise<boolean> => {
+    if (mutationBusyRef.current) return false;
+    mutationBusyRef.current = true;
+    setOperationMessage(null);
     setSaving(true);
     try {
       await saveConfiguration(true);
       await refreshCredentialStatus(selectedProvider, credentialRequired);
+      return true;
     } catch (error) {
       log.error('Failed to save WebSearch settings', error);
-      setMessage({ type: 'error', text: t('messages.saveFailed') });
+      setDraftMessage({ type: 'error', text: t('messages.saveFailed') });
+      return false;
     } finally {
+      mutationBusyRef.current = false;
       setSaving(false);
     }
   }, [credentialRequired, refreshCredentialStatus, saveConfiguration, selectedProvider, t]);
 
-  const handleSaveCredential = useCallback(async () => {
+  const handleSaveCredential = useCallback(async (): Promise<boolean> => {
     if (!credential.trim()) {
-      setMessage({ type: 'error', text: t('messages.credentialRequired') });
-      return;
+      setDraftMessage({ type: 'error', text: t('messages.credentialRequired') });
+      return false;
     }
+    if (mutationBusyRef.current) return false;
+    mutationBusyRef.current = true;
+    setOperationMessage(null);
     setCredentialBusy(true);
+    let configurationSaved = false;
     try {
-      await saveConfiguration(false);
+      if (hasUnsavedChanges) {
+        await saveConfiguration(false);
+        configurationSaved = true;
+      }
       const status = await configAPI.saveWebSearchCredential(selectedProvider, credential);
       setCredential('');
       setCredentialConfigured(status.configured);
-      setMessage(null);
+      setDraftMessage(null);
       notifySuccess(t('messages.credentialSaved'));
+      return true;
     } catch (error) {
       log.error('Failed to save WebSearch credential', { provider: selectedProvider, error });
-      setMessage({ type: 'error', text: t('messages.credentialSaveFailed') });
+      setDraftMessage({
+        type: 'error',
+        text: t(configurationSaved
+          ? 'messages.credentialSaveFailedAfterConfigSaved'
+          : 'messages.credentialSaveFailed'),
+      });
+      return false;
     } finally {
+      mutationBusyRef.current = false;
       setCredentialBusy(false);
     }
-  }, [credential, notifySuccess, saveConfiguration, selectedProvider, t]);
+  }, [credential, hasUnsavedChanges, notifySuccess, saveConfiguration, selectedProvider, t]);
+
+  const draftDirty = hasUnsavedChanges || credential.trim().length > 0;
+  const mutationBusy = saving || credentialBusy;
+  const discardDraft = useCallback(() => {
+    setConfig(savedConfig);
+    setCredential('');
+    setDraftMessage(null);
+    setOperationMessage(null);
+  }, [savedConfig]);
+  const saveDraft = useCallback(async (): Promise<boolean> => (
+    credential.trim()
+      ? handleSaveCredential()
+      : handleSaveConfiguration()
+  ), [credential, handleSaveConfiguration, handleSaveCredential]);
+
+  useSettingsDraft({
+    id: 'web-search-settings',
+    pageId: 'tools.webSearch',
+    label: t('title'),
+    dirty: draftDirty,
+    saving: saving || credentialBusy,
+    save: saveDraft,
+    discard: discardDraft,
+  });
 
   const handleClearCredential = useCallback(async () => {
+    if (mutationBusyRef.current) return;
+    mutationBusyRef.current = true;
+    setOperationMessage(null);
     setCredentialBusy(true);
     try {
       const status = await configAPI.clearWebSearchCredential(selectedProvider);
       setCredentialConfigured(status.configured);
       setCredential('');
-      setMessage(null);
+      setDraftMessage(null);
       notifySuccess(t('messages.credentialCleared'));
     } catch (error) {
       log.error('Failed to clear WebSearch credential', { provider: selectedProvider, error });
-      setMessage({ type: 'error', text: t('messages.credentialClearFailed') });
+      setOperationMessage({ type: 'error', text: t('messages.credentialClearFailed') });
     } finally {
+      mutationBusyRef.current = false;
       setCredentialBusy(false);
     }
   }, [notifySuccess, selectedProvider, t]);
@@ -316,35 +375,54 @@ const WebSearchSettingsPage: React.FC = () => {
     return <ConfigLoadingState label={t('messages.loading')} />;
   }
 
+  if (loadFailed) {
+    return (
+      <ConfigPageLayout data-bf-component="config" data-bf-part="root">
+        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+        <ConfigPageContent>
+          <ConfigRetryState
+            message={t('messages.loadFailed')}
+            retryLabel={t('actions.retry')}
+            onRetry={() => void loadConfiguration()}
+            loading={loading}
+          />
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
+
   return (
     <ConfigPageLayout data-bf-component="config" data-bf-part="root">
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        extra={(
-          <Tooltip content={t('actions.saveConfiguration')} placement="bottom">
-            <IconButton
-              type="button"
-              size="sm"
-              variant={hasUnsavedChanges ? 'primary' : 'quiet'}
-              loading={saving}
-              aria-label={t('actions.saveConfiguration')}
-              icon={<Save />}
-              onClick={() => void handleSaveConfiguration()}
-            />
-          </Tooltip>
-        )}
       />
       <ConfigPageContent>
-        <ConfigMessage message={message} />
+        <ConfigMessage message={operationMessage} />
+        <ConfigActionBar
+          status={draftMessage?.type === 'error'
+            ? 'error'
+            : saving || credentialBusy
+              ? 'saving'
+              : draftDirty
+                ? 'unsaved'
+                : 'saved'}
+          statusMessage={draftMessage?.text}
+          saving={mutationBusy}
+          saveDisabled={!draftDirty}
+          discardDisabled={!draftDirty}
+          saveLabel={credential.trim() ? t('actions.saveCredential') : t('actions.saveConfiguration')}
+          onSave={() => void saveDraft()}
+          onDiscard={discardDraft}
+        />
         <ConfigPageSection
           title={t('sections.provider.title')}
           extra={(
             <Select
-              className="web-search-settings__provider-select"
               value={config.provider}
               options={providerOptions}
               size="sm"
+              disabled={mutationBusy}
               onValueChange={(value) => setConfig(previous => ({
                 ...previous,
                 provider: normalizeSelectValue(value),
@@ -360,11 +438,12 @@ const WebSearchSettingsPage: React.FC = () => {
             title={t('sections.http.title')}
             description={t('sections.http.description')}
           >
-            <ConfigPageRow label={t('fields.endpoint.label')} description={t('fields.endpoint.description')} balanced>
+            <ConfigPageRow label={t('fields.endpoint.label')} description={t('fields.endpoint.description')}>
               <Input
                 size="sm"
                 value={httpConfig.endpoint}
                 placeholder={t('fields.endpoint.placeholder')}
+                disabled={mutationBusy}
                 onChange={(event) => setConfig(previous => ({
                   ...previous,
                   providers: {
@@ -382,6 +461,7 @@ const WebSearchSettingsPage: React.FC = () => {
                 value={httpConfig.auth.mode || 'none'}
                 options={authOptions}
                 size="sm"
+                disabled={mutationBusy}
                 onValueChange={(value) => setConfig(previous => ({
                   ...previous,
                   providers: {
@@ -398,11 +478,12 @@ const WebSearchSettingsPage: React.FC = () => {
               />
             </ConfigPageRow>
             {httpConfig.auth.mode === 'header' ? (
-              <ConfigPageRow label={t('fields.headerName.label')} description={t('fields.headerName.description')} balanced>
+              <ConfigPageRow label={t('fields.headerName.label')} description={t('fields.headerName.description')}>
                 <Input
                   size="sm"
                   value={httpConfig.auth.headerName}
                   placeholder={t('fields.headerName.placeholder')}
+                  disabled={mutationBusy}
                   onChange={(event) => setConfig(previous => ({
                     ...previous,
                     providers: {
@@ -427,27 +508,23 @@ const WebSearchSettingsPage: React.FC = () => {
             <ConfigPageRow label={t('fields.credentialStatus.label')} description={t('fields.credentialStatus.description')} balanced>
               <div className="web-search-settings__credential-status">
                 <span>{credentialConfigured ? t('status.configured') : t('status.missing')}</span>
-                <Button size="sm" variant="outline" disabled={!credentialConfigured || credentialBusy} onClick={() => void handleClearCredential()}>
+                <Button size="sm" variant="outline" disabled={!credentialConfigured || mutationBusy} onClick={() => void handleClearCredential()}>
                   {t('actions.clearCredential')}
                 </Button>
               </div>
             </ConfigPageRow>
             <ConfigPageRow label={t('fields.credential.label')} description={t('fields.credential.description')} balanced>
-              <div className="web-search-settings__credential-field">
-                <Input
-                  type="password"
-                  size="sm"
-                  autoComplete="off"
-                  value={credential}
-                  placeholder={credentialConfigured
-                    ? t('fields.credential.replacePlaceholder')
-                    : t('fields.credential.placeholder')}
-                  onChange={(event) => setCredential(event.target.value)}
-                />
-                <Button size="sm" variant="fill" loading={credentialBusy} onClick={() => void handleSaveCredential()}>
-                  {t('actions.saveCredential')}
-                </Button>
-              </div>
+              <Input
+                type="password"
+                size="sm"
+                autoComplete="off"
+                value={credential}
+                disabled={mutationBusy}
+                placeholder={credentialConfigured
+                  ? t('fields.credential.replacePlaceholder')
+                  : t('fields.credential.placeholder')}
+                onChange={(event) => setCredential(event.target.value)}
+              />
             </ConfigPageRow>
           </ConfigPageSection>
         ) : null}

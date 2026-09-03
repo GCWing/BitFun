@@ -79,4 +79,12 @@
       min-height: 0;
     }
   }
+
+  &__draft-list {
+    display: grid;
+    gap: var(--bf-space-1);
+    margin: 0;
+    padding-inline-start: var(--bf-space-5);
+    color: var(--bf-color-content-secondary);
+  }
 }

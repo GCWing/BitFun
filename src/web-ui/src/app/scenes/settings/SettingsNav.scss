@@ -151,4 +151,12 @@
     white-space: nowrap;
     text-align: left;
   }
+
+  &__dirty-marker {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--bf-color-status-warning-content);
+  }
 }

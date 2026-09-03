@@ -25,8 +25,7 @@ export const runtimeSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = 
       values: [
         'pet',
         'session-workspace',
-        'execution-common',
-        'execution-advanced',
+        'execution',
         'browser-desktop-control',
       ],
     },

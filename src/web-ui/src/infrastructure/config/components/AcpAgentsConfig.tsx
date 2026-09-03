@@ -38,6 +38,7 @@ import { sshApi } from '@/features/ssh-remote/sshApi';
 import type { SavedConnection } from '@/features/ssh-remote/types';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { useSettingsDraft } from '@/infrastructure/config/settingsDraftRegistry';
 import './AcpAgentsConfig.scss';
 
 const log = createLogger('AcpAgentsConfig');
@@ -162,6 +163,7 @@ interface AcpAgentsConfigProps {
   viewId?: AcpConfigView;
   navigationRequestId?: number;
   onViewChange?: (view: AcpConfigView) => void;
+  settingsDraftEnabled?: boolean;
 }
 
 function normalizeAcpConfigView(viewId?: string): AcpConfigView {
@@ -466,6 +468,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
   viewId,
   navigationRequestId = 0,
   onViewChange,
+  settingsDraftEnabled = false,
 }) => {
   const { t } = useTranslation('settings/acp-agents');
   const { error: notifyError, info: notifyInfo, success: notifySuccess } = useNotification();
@@ -743,16 +746,6 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
     }
   }, [notifyError, refreshRequirementProbes, t]);
 
-  useEffect(() => {
-    if (!dirty && !jsonDirty) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty, jsonDirty]);
-
   const hideRemoteConnection = useCallback((connection: SavedConnection) => {
     const connectionName = connection.name || connection.id;
     setHiddenRemoteConnectionIds(prev => {
@@ -780,6 +773,16 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (settingsDraftEnabled || (!dirty && !jsonDirty)) return undefined;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty, jsonDirty, settingsDraftEnabled]);
 
   useEffect(() => {
     if (loading || activeView !== 'local' || localRequirementProbeStartedRef.current) return;
@@ -938,6 +941,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
     nextConfig = config,
     options: { mergeEnvDrafts?: boolean; successMessage?: string } = {}
   ): Promise<boolean> => {
+    if (savingConfigRef.current) return false;
     savingConfigRef.current = true;
     try {
       setSaving(true);
@@ -1002,11 +1006,11 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
     });
   };
 
-  const saveJsonConfig = async () => {
+  const saveJsonConfig = async (): Promise<boolean> => {
     try {
       const parsed = normalizeConfigValue(JSON.parse(jsonConfig));
       const saved = await saveConfig(parsed, { mergeEnvDrafts: false });
-      if (!saved) return;
+      if (!saved) return false;
       setConfig(parsed);
       setEnvDrafts(
         Object.fromEntries(
@@ -1017,12 +1021,35 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
         )
       );
       setJsonDirty(false);
+      return true;
     } catch (error) {
       notifyError(error instanceof Error ? error.message : String(error), {
         title: t('notifications.invalidJson'),
       });
+      return false;
     }
   };
+
+  const discardAcpDraft = useCallback(async () => {
+    if (activeView === 'json' && jsonDirty) {
+      setJsonConfig(jsonBaseline);
+      setJsonDirty(false);
+      return;
+    }
+    await loadConfig({ showLoading: false, refreshRequirements: false });
+  }, [activeView, jsonBaseline, jsonDirty, loadConfig]);
+
+  useSettingsDraft({
+    id: 'acp-agent-config',
+    pageId: 'tools.acp',
+    viewId: activeView === 'json' && jsonDirty ? 'json' : undefined,
+    label: activeView === 'json' && jsonDirty ? t('json.title') : t('title'),
+    dirty: dirty || jsonDirty,
+    saving,
+    save: () => activeView === 'json' ? saveJsonConfig() : saveConfig(),
+    discard: discardAcpDraft,
+    enabled: settingsDraftEnabled,
+  });
 
   const permissionOptions = useMemo(() => [
     { value: 'ask', label: t('permissionMode.ask') },
@@ -1220,13 +1247,16 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
   const handleViewChange = useCallback((value: string) => {
     if (value !== 'local' && value !== 'ssh' && value !== 'json') return;
     if (value === activeView) return;
-    if (activeView === 'json' && jsonDirty) {
+    if (!settingsDraftEnabled && activeView === 'json' && jsonDirty) {
       setPendingView(value);
       return;
     }
+    if (onViewChange) {
+      onViewChange(value);
+      return;
+    }
     activateView(value);
-    onViewChange?.(value);
-  }, [activateView, activeView, jsonDirty, onViewChange]);
+  }, [activateView, activeView, jsonDirty, onViewChange, settingsDraftEnabled]);
 
   const discardJsonChanges = useCallback(() => {
     const nextView = pendingView;
@@ -1249,12 +1279,12 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
     lastNavigationRequestIdRef.current = navigationRequestId;
     const requestedView = normalizeAcpConfigView(viewId);
     if (requestedView === activeView) return;
-    if (activeView === 'json' && jsonDirty) {
+    if (!settingsDraftEnabled && activeView === 'json' && jsonDirty) {
       setPendingView(requestedView);
       return;
     }
     activateView(requestedView);
-  }, [activeView, activateView, jsonDirty, navigationRequestId, viewId]);
+  }, [activeView, activateView, jsonDirty, navigationRequestId, settingsDraftEnabled, viewId]);
 
   if (loading || loadFailed) {
     return (
@@ -1301,7 +1331,12 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
         )}
       />
 
-      <ConfigPageContent data-bf-component="acp-agents-config" data-bf-part="content">
+      <ConfigPageContent
+        data-bf-component="acp-agents-config"
+        data-bf-part="content"
+        aria-busy={saving}
+        {...(saving ? { inert: '' } : {})}
+      >
         <TabGroup
           className="bitfun-acp-agents__tabs"
           data-bf-component="acp-agents-config"
@@ -1387,6 +1422,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                 }}
                 rows={16}
                 spellCheck={false}
+                disabled={saving}
               />
               <div
                 className="bitfun-acp-agents__json-actions"
@@ -2082,7 +2118,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
         </ConfigPageSectionStack>
       </ConfigPageContent>
       <ConfirmDialog
-        open={pendingView !== null}
+        open={!settingsDraftEnabled && pendingView !== null}
         onOpenChange={(open) => { if (!open) keepEditingJson(); }}
         onConfirm={discardJsonChanges}
         title={t('json.discardTitle')}

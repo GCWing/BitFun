@@ -4,6 +4,12 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
+import {
+  discardAndContinueSettingsNavigation,
+  getSettingsDraftSnapshot,
+  requestSettingsDraftExit,
+  resetSettingsDraftRegistryForTests,
+} from '@/infrastructure/config/settingsDraftRegistry';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -131,6 +137,7 @@ describe('GlobalPermissionRulesDialog', () => {
   };
 
   beforeEach(() => {
+    resetSettingsDraftRegistryForTests();
     mockReducedMotion(false);
     animateMock = vi.fn(() => ({
       cancel: vi.fn(),
@@ -150,6 +157,7 @@ describe('GlobalPermissionRulesDialog', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    resetSettingsDraftRegistryForTests();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
@@ -427,5 +435,26 @@ describe('GlobalPermissionRulesDialog', () => {
       vi.advanceTimersByTime(1);
     });
     expect(container.querySelectorAll('.global-permission-rules-dialog__rule-row')).toHaveLength(0);
+  });
+
+  it('publishes dialog edits to the shared close guard and discards before closing', async () => {
+    const onClose = vi.fn();
+    await renderDialog([], { onClose });
+    const addButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.includes('Add rule'),
+    );
+    await act(async () => {
+      addButton?.click();
+    });
+
+    expect(requestSettingsDraftExit(['global-permission-rules'], onClose)).toBe(false);
+    expect(getSettingsDraftSnapshot().pendingNavigation?.resourceLabels).toEqual([
+      'Global tool permission rules',
+    ]);
+
+    await act(async () => {
+      await discardAndContinueSettingsNavigation();
+    });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

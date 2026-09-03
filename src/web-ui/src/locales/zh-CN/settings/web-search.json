@@ -79,6 +79,7 @@
     }
   },
   "actions": {
+    "retry": "重新加载配置",
     "saveConfiguration": "保存配置",
     "saveCredential": "保存",
     "clearCredential": "清除",
@@ -92,6 +93,7 @@
     "credentialRequired": "请先输入凭据。",
     "credentialSaved": "凭据已保存到此设备。",
     "credentialSaveFailed": "保存设备凭据失败。",
+    "credentialSaveFailedAfterConfigSaved": "网页搜索配置已保存，但设备凭据保存失败。请重新输入凭据后重试。",
     "credentialCleared": "已从此设备清除凭据。",
     "credentialClearFailed": "清除设备凭据失败。",
     "protocolCopied": "协议已复制。",

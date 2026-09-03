@@ -16,7 +16,9 @@
   },
   "appearance": {
     "title": "Appearance",
-    "hint": "Interface language, current appearance, effects, and appearance package management",
+    "hint": "Interface language and appearance",
+    "interfaceTitle": "Interface",
+    "interfaceHint": "Choose the language used across BitFun.",
     "language": "Language",
     "appearances": "Appearances",
     "builtIn": "Built-in",

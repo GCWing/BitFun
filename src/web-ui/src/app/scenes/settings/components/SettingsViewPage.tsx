@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useMemo } from 'react';
 import { TabGroup } from '@bitfun/ui';
 import { useSettingsStore } from '../settingsStore';
 import type { SettingsPageProps, SettingsViewId } from '../settingsTypes';
@@ -19,12 +19,10 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
   defaultViewId,
   views,
   viewId,
-  navigationRequestId,
 }) => {
   const setActiveView = useSettingsStore((state) => state.setActiveView);
   const allowedViewIds = useMemo(() => new Set(views.map((view) => view.id)), [views]);
-  const requestedViewId = viewId && allowedViewIds.has(viewId) ? viewId : defaultViewId;
-  const [activeViewId, setActiveViewId] = useState<SettingsViewId>(requestedViewId);
+  const activeViewId = viewId && allowedViewIds.has(viewId) ? viewId : defaultViewId;
   const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
   const tabItems = views.map((view) => ({
     id: `settings-view-${view.id}-tab`,
@@ -33,14 +31,9 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
     value: view.id,
   }));
 
-  useEffect(() => {
-    setActiveViewId(requestedViewId);
-  }, [navigationRequestId, requestedViewId]);
-
   const handleChange = (nextViewId: string) => {
     if (!allowedViewIds.has(nextViewId as SettingsViewId)) return;
     const next = nextViewId as SettingsViewId;
-    setActiveViewId(next);
     setActiveView(next);
   };
 

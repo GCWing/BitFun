@@ -11,39 +11,61 @@ describe('global search ownership', () => {
     expect(source('src/app/components/NavPanel/MainNav.tsx')).not.toContain('NavSearchDialog');
   });
 
-  it('reuses the shared search content in the session right-panel empty state', () => {
+  it('reuses one design-system search presentation in the session right-panel empty state', () => {
     const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
+    const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
     const auxPane = source('src/app/scenes/session/AuxPane.tsx');
     const contentCanvas = source('src/app/components/panels/content-canvas/ContentCanvas.tsx');
+    const canvasShortcuts = source(
+      'src/app/components/panels/content-canvas/hooks/useKeyboardShortcuts.ts',
+    );
 
     expect(globalSearch).toContain('export const GlobalSearchContent');
     expect(globalSearch).toContain('variant="modal"');
     expect(auxPane).toContain('emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}');
+    expect(auxPane).toContain('missionControlEnabled={false}');
     expect(contentCanvas).toContain('<EmptyState onClose={disablePopOut ? undefined : collapsePanel}>');
+    expect(contentCanvas).toContain(
+      'onOpenMissionControl={missionControlEnabled ? handleOpenMissionControl : undefined}',
+    );
+    expect(contentCanvas).toMatch(/\{missionControlEnabled && \(\s*<MissionControl/);
+    expect(canvasShortcuts).toContain('enabled: enabled && missionControlEnabled');
+    expect(globalSearch).toContain('className="global-search__query global-search__query--system"');
+    expect(globalSearch).toContain('shortcut={query ? undefined : (');
+    expect(globalSearch).toContain('className={`global-search__scope global-search__scope--system');
+    expect(globalSearch).not.toContain('global-search__scope--native');
+    expect(globalSearch).toContain("if (itemVariant === 'action')");
+    expect(globalSearch).toContain('if (entity)');
+    expect(globalSearch).not.toContain("variant === 'modal' && itemVariant");
+    expect(globalSearch).not.toMatch(/variant === 'embedded'\s*\|\| Boolean\(parsedQuery\.query\)/);
+    expect(globalSearchStyles).toMatch(
+      /\.global-search--modal,\s*\.global-search--embedded\s*\{/,
+    );
+    expect(globalSearchStyles).toContain('padding: var(--bf-overlay-dialog-content-padding-lg)');
   });
 
-  it('routes modal action icon identities through canonical theme tokens', () => {
+  it('routes global-search action identities through canonical theme tokens in every host', () => {
     const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
     const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
     const actionCatalog = source('src/app/global-search/productActionCatalog.ts');
 
-    expect(globalSearch).toContain('const MODAL_ACTION_ICON_ROLES: Partial<Record<ProductActionId');
+    expect(globalSearch).toContain('const GLOBAL_SEARCH_ACTION_ICON_ROLES: Partial<Record<ProductActionId');
     expect(globalSearch).toContain("'session.new': 'new-session'");
     expect(globalSearch).toContain("'surface.browser.open': 'open-browser'");
     expect(globalSearch).toContain("'surface.terminal.open': 'open-terminal'");
     expect(globalSearch).toContain("'project.open': 'open-project'");
     expect(globalSearch).toContain("'project.new': 'new-project'");
     expect(globalSearch).toContain("'surface.files.open': 'open-files'");
-    expect(globalSearch).toContain('variant === \'modal\' && itemVariant === \'action\'');
+    expect(globalSearch).toContain("if (itemVariant === 'action')");
     expect(globalSearch).toContain('className="global-search__action-icon"');
-    expect(globalSearch).toContain('data-icon-role={modalActionIconRole}');
+    expect(globalSearch).toContain('data-icon-role={actionIconRole}');
     expect(actionCatalog).toMatch(/id: 'session\.new',[\s\S]*?icon: 'message-circle'/);
     expect(actionCatalog).toMatch(/id: 'project\.open',[\s\S]*?icon: 'folder'/);
     expect(actionCatalog).toMatch(/id: 'project\.new',[\s\S]*?icon: 'plus'/);
     expect(actionCatalog).not.toMatch(/'folder-open'|'folder-plus'/);
 
     expect(globalSearchStyles).toMatch(
-      /\.global-search--modal\s*\{[\s\S]*\.global-search__action-icon\s*\{/,
+      /\.global-search--modal,\s*\.global-search--embedded\s*\{[\s\S]*\.global-search__action-icon\s*\{/,
     );
     for (const role of [
       'new-session',

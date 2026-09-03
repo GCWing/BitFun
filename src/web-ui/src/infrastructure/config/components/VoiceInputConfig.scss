@@ -5,16 +5,6 @@
     gap: var(--bf-space-6);
   }
 
-  &__select,
-  &__device-select {
-    inline-size: min(220px, 100%);
-    max-inline-size: 220px;
-  }
-
-  &__credential-input {
-    width: min(360px, 100%);
-  }
-
   &__status-card {
     display: grid;
     grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -347,12 +337,6 @@
       width: 100%;
       min-width: 0;
       align-items: stretch;
-    }
-
-    &__device-select {
-      flex: 1 1 180px;
-      inline-size: auto;
-      max-inline-size: 220px;
     }
 
     &__recognition-feedback {

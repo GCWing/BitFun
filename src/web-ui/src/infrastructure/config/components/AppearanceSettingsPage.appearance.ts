@@ -4,9 +4,8 @@ export const appearanceSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor
   id: 'appearance-settings',
   parts: [
     { id: 'root' }, { id: 'content' }, { id: 'settings' },
-    { id: 'settingsContent' }, { id: 'language' }, { id: 'palettePicker' },
-    { id: 'paletteSelect' },
-    { id: 'packageSection' }, { id: 'packageSelect' }, { id: 'packagePreview' },
+    { id: 'settingsContent' }, { id: 'language' },
+    { id: 'packageSection' }, { id: 'packagePreview' }, { id: 'packageBuiltinTheme' },
     { id: 'packageActions' },
     { id: 'packageDiagnostics' }, { id: 'packageDiagnosticsHeader' },
     { id: 'packageDiagnosticsGroup' }, { id: 'packageDiagnosticIssue' },

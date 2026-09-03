@@ -12,6 +12,7 @@ const AcpSettingsPage: React.FC<SettingsPageProps> = ({
     <AcpAgentsConfig
       navigationRequestId={navigationRequestId}
       onViewChange={setActiveView}
+      settingsDraftEnabled
       viewId={viewId === 'ssh' || viewId === 'json' ? viewId : 'local'}
     />
   );

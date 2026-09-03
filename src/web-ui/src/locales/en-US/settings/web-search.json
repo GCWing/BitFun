@@ -79,6 +79,7 @@
     }
   },
   "actions": {
+    "retry": "Reload Configuration",
     "saveConfiguration": "Save configuration",
     "saveCredential": "Save",
     "clearCredential": "Clear",
@@ -92,6 +93,7 @@
     "credentialRequired": "Enter a credential before saving.",
     "credentialSaved": "Credential saved on this device.",
     "credentialSaveFailed": "Failed to save the device credential.",
+    "credentialSaveFailedAfterConfigSaved": "The Web Search configuration was saved, but the device credential was not. Enter it again and retry.",
     "credentialCleared": "Credential cleared from this device.",
     "credentialClearFailed": "Failed to clear the device credential.",
     "protocolCopied": "Protocol copied.",

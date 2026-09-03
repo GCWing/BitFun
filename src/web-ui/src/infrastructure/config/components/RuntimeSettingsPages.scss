@@ -103,9 +103,15 @@
     width: 100%;
     height: 150px;
     overflow: hidden;
+    border: 1px solid transparent;
     border-radius: var(--bf-radius-md);
     color: var(--bf-color-content-primary);
     background: var(--bf-color-action-quiet-hover);
+  }
+
+  &__pet-card:hover,
+  &__pet-card:focus-within {
+    border-color: var(--bf-color-border-default);
   }
 
   &__pet-card-select {
@@ -192,14 +198,8 @@
   }
 
   &__pet-card:hover &__pet-preview-sprite,
-  &__pet-card:focus-within &__pet-preview-sprite,
-  &__pet-preview-popover &__pet-preview-sprite {
+  &__pet-card:focus-within &__pet-preview-sprite {
     animation: bitfun-config-pet-preview 1.2s steps(6) infinite;
-  }
-
-  &__pet-preview-sprite--popover {
-    width: 102px;
-    height: 114px;
   }
 
   &__pet-selected-mark {
@@ -231,31 +231,6 @@
     pointer-events: auto;
   }
 
-  &__pet-preview-popover {
-    display: grid;
-    gap: var(--bf-space-2);
-    width: min(236px, calc(100vw - 48px));
-
-    > span {
-      overflow: hidden;
-      color: var(--bf-color-content-secondary);
-      font-size: var(--bf-type-label-sm-font-size);
-      line-height: var(--bf-type-meta-line-height);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  &__pet-preview-popover-image {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    aspect-ratio: 16 / 9;
-    overflow: hidden;
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-workbench);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

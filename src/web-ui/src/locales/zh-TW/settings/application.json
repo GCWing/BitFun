@@ -16,7 +16,9 @@
   },
   "appearance": {
     "title": "外觀",
-    "hint": "界面語言、目前外觀、動態效果與外觀包管理",
+    "hint": "介面語言與外觀",
+    "interfaceTitle": "介面",
+    "interfaceHint": "選擇 BitFun 介面的顯示語言。",
     "language": "語言",
     "appearances": "外觀",
     "builtIn": "內置",

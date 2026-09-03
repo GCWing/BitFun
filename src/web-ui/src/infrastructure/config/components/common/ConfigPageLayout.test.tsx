@@ -2,7 +2,15 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Input, Switch } from '@bitfun/ui';
+import {
+  Combobox,
+  Input,
+  MultiSelect,
+  NumberInput,
+  SearchField,
+  Select,
+  Switch,
+} from '@bitfun/ui';
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
@@ -115,6 +123,74 @@ describe('ConfigPageLayout', () => {
     expect(layout).not.toContain('> :where(span, div)');
   });
 
+  it('gives ordinary single-line settings fields one shared responsive width', () => {
+    const layout = readStyleFixture('ConfigPageLayout.scss');
+
+    act(() => {
+      root.render(
+        <>
+          <ConfigPageRow label="Language">
+            <Select options={[{ label: 'English', value: 'en' }]} value="en" />
+          </ConfigPageRow>
+          <ConfigPageRow label="Shell" balanced>
+            <Combobox options={[{ label: 'PowerShell', value: 'pwsh' }]} value="pwsh" />
+          </ConfigPageRow>
+          <ConfigPageRow label="Models">
+            <MultiSelect options={[{ label: 'Primary', value: 'primary' }]} value={['primary']} />
+          </ConfigPageRow>
+          <ConfigPageRow label="Workspace name">
+            <Input aria-label="Workspace name" />
+          </ConfigPageRow>
+          <ConfigPageRow label="Search">
+            <SearchField aria-label="Search" />
+          </ConfigPageRow>
+          <ConfigPageRow label="Timeout" balanced>
+            <div>
+              <NumberInput aria-label="Timeout" value={30} onValueChange={() => undefined} />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow label="Provider endpoint" wide>
+            <Input aria-label="Provider endpoint" />
+          </ConfigPageRow>
+        </>,
+      );
+    });
+
+    const rows = container.querySelectorAll<HTMLElement>('.bitfun-config-page-row');
+    const standardControlRules = layout.match(
+      /\/\/ Ordinary single-field rows[\s\S]*?(?=\.bitfun-config-page-section__extra)/,
+    )?.[0] ?? '';
+
+    expect(rows).toHaveLength(7);
+    expect(rows[1]?.classList.contains('bitfun-config-page-row--balanced')).toBe(true);
+    expect(rows[5]?.classList.contains('bitfun-config-page-row--balanced')).toBe(true);
+    expect(rows[6]?.classList.contains('bitfun-config-page-row--wide')).toBe(true);
+    expect(rows[1]?.style.gridTemplateColumns).toBe('');
+    expect(rows[6]?.style.gridTemplateColumns).toBe('');
+    expect(container.querySelector('[data-bf-component="select"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="combobox"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="multi-select"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="input"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="search-field"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="number-input"]')).not.toBeNull();
+    expect(standardControlRules).toContain('.bitfun-config-page-row--wide');
+    expect(standardControlRules).toContain(':only-child');
+    expect(standardControlRules).toContain("[data-bf-component='input']");
+    expect(standardControlRules).toContain("[data-bf-component='search-field']");
+    expect(standardControlRules).toContain("[data-bf-component='number-input']");
+    expect(standardControlRules).toContain("[data-bf-component='select']");
+    expect(standardControlRules).toContain("[data-bf-component='combobox']");
+    expect(standardControlRules).toContain("[data-bf-component='multi-select']");
+    expect(standardControlRules).not.toContain("[data-bf-component='textarea']");
+    expect(standardControlRules).toContain('var(--bf-overlay-menu-inline-size)');
+    expect(layout).toMatch(
+      /\.bitfun-config-page-section__extra > :where\([\s\S]*?max-inline-size:\s*var\(--bf-overlay-menu-inline-size\);/,
+    );
+    expect(layout).toMatch(
+      /@container config-panel \(max-width: 520px\)[\s\S]*?\.bitfun-config-page-section__extra > :where\([\s\S]*?inline-size:\s*100%;[\s\S]*?max-inline-size:\s*none;/,
+    );
+  });
+
   it('renders required state as structured label anatomy with the shared semantic color', () => {
     const layout = readStyleFixture('ConfigPageLayout.scss');
 
@@ -215,7 +291,10 @@ describe('ConfigPageLayout', () => {
 
     const row = container.querySelector('.bitfun-config-page-row');
     expect(row?.classList.contains('bitfun-config-page-row--no-control')).toBe(true);
-    expect((row as HTMLElement | null)?.style.gridTemplateColumns).toBe('minmax(0, 1fr)');
+    expect((row as HTMLElement | null)?.style.gridTemplateColumns).toBe('');
+    expect(readStyleFixture('ConfigPageLayout.scss')).toMatch(
+      /\.bitfun-config-page-row--no-control\s*{[\s\S]*?--row-grid-cols:\s*minmax\(0, 1fr\);/,
+    );
     expect(row?.querySelector('.bitfun-config-page-row__control')).toBeNull();
   });
 

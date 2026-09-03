@@ -13,7 +13,7 @@ describe('VoiceInputDiagnostics presentation', () => {
   it('refreshes microphones from the device dropdown without a separate refresh action', () => {
     const source = readSource('./VoiceInputDiagnostics.tsx');
     const deviceSelect = source.match(
-      /<Select[\s\S]*?className="voice-input-config__device-select"[\s\S]*?\/>/,
+      /<Select[\s\S]*?data-bf-part="deviceSelect"[\s\S]*?\/>/,
     )?.[0] ?? '';
 
     expect(deviceSelect).toContain('onPointerDown={() => void loadMicrophones()}');
@@ -35,10 +35,12 @@ describe('VoiceInputDiagnostics presentation', () => {
     const recognitionRow = source.match(
       /<ConfigPageRow\s+label=\{t\('diagnostics\.recognition\.label'\)\}[\s\S]*?<\/ConfigPageRow>/,
     )?.[0] ?? '';
-    const deviceSelectRules = [...styles.matchAll(/&__device-select\s*{([^}]*)}/g)]
-      .map(match => match[1]);
+    const microphoneRow = source.match(
+      /<ConfigPageRow[\s\S]*?label=\{t\('diagnostics\.microphone\.label'\)\}[\s\S]*?<\/ConfigPageRow>/,
+    )?.[0] ?? '';
 
-    expect(source.match(/className="voice-input-config__balanced-row"/g)).toHaveLength(2);
+    expect(source.match(/className="voice-input-config__balanced-row"/g)).toHaveLength(1);
+    expect(microphoneRow).not.toContain('voice-input-config__balanced-row');
     expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@bitfun\/ui';/);
     expect(source).toContain('className="voice-input-config__diagnostic-button"');
     expect(source).not.toContain('Activity');
@@ -63,10 +65,5 @@ describe('VoiceInputDiagnostics presentation', () => {
     expect(resultRule).toContain('font-weight: var(--bf-type-body-sm-font-weight)');
     expect(resultRule).not.toContain('border-left');
     expect(styles).toMatch(/prefers-reduced-motion:[\s\S]*?&?__waveform-bar|prefers-reduced-motion:[\s\S]*?\.voice-input-config__waveform-bar/);
-    expect(deviceSelectRules).toHaveLength(2);
-    expect(deviceSelectRules[0]).toContain('inline-size: min(220px, 100%)');
-    expect(deviceSelectRules[0]).toContain('max-inline-size: 220px');
-    expect(deviceSelectRules[1]).toContain('flex: 1 1 180px');
-    expect(deviceSelectRules[1]).toContain('max-inline-size: 220px');
   });
 });
