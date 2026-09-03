@@ -97,7 +97,7 @@ function buildPresentationRerunPayload(presentation: ComposerPresentation): {
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId, absoluteTurnIndex, turnStatus, steeringStatus }) => {
-    const { t } = useI18n('flow-chat');
+    const { t, formatDate } = useI18n('flow-chat');
     const {
       sessionId,
       activeSessionOverride,
@@ -122,6 +122,26 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
+    const sentTimestamp = typeof message?.timestamp === 'number'
+      && Number.isFinite(message.timestamp)
+      && message.timestamp > 0
+      ? message.timestamp
+      : null;
+    const sentTime = useMemo(() => sentTimestamp === null ? null : formatDate(sentTimestamp, {
+      hour: '2-digit',
+      minute: '2-digit',
+    }), [formatDate, sentTimestamp]);
+    const sentAtLabel = useMemo(() => sentTimestamp === null ? null : t('message.sentAt', {
+      time: formatDate(sentTimestamp, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+      }),
+    }), [formatDate, sentTimestamp, t]);
     const composerPresentation = useMemo(() => {
       const presentation = parseComposerPresentation(message?.metadata?.composerPresentation);
       return hasComposerPresentationReferences(presentation) ? presentation : null;
@@ -505,17 +525,18 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     }
     
     return (
-      <div
-        data-bf-component="user-message-item"
-        data-bf-part="root"
-        data-bf-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
-        ref={containerRef}
-        className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
-        data-testid="chat-user-message"
-        data-turn-id={turnId}
-        data-status={resolvedTurnStatus || ''}
-        data-failed={isFailed ? 'true' : 'false'}
-      >
+      <div className={`user-message-item-shell${sentTime ? ' user-message-item-shell--with-timestamp' : ''}`}>
+        <div
+          data-bf-component="user-message-item"
+          data-bf-part="root"
+          data-bf-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
+          ref={containerRef}
+          className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
+          data-testid="chat-user-message"
+          data-turn-id={turnId}
+          data-status={resolvedTurnStatus || ''}
+          data-failed={isFailed ? 'true' : 'false'}
+        >
         {isEditing ? (
           <UserMessageEditComposer
             value={editDraft}
@@ -664,20 +685,35 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
         )}
 
-        {lightboxImage && createPortal(
-          <div
-            className="user-message-item__lightbox"
-            onClick={() => setLightboxImage(null)}
+          {lightboxImage && createPortal(
+            <div
+              className="user-message-item__lightbox"
+              onClick={() => setLightboxImage(null)}
+              data-bf-component="user-message-item"
+              data-bf-part="lightbox"
+              data-bf-native-webview-occlusion
+            >
+              <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
+                <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
+              </button>
+              <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
+            </div>,
+            getAppearanceOverlayHost(),
+          )}
+        </div>
+
+        {sentTime && sentAtLabel && sentTimestamp !== null && (
+          <time
+            className="user-message-item__timestamp"
             data-bf-component="user-message-item"
-            data-bf-part="lightbox"
-            data-bf-native-webview-occlusion
+            data-bf-part="timestamp"
+            data-testid="chat-user-message-timestamp"
+            dateTime={new Date(sentTimestamp).toISOString()}
+            title={sentAtLabel}
+            aria-label={sentAtLabel}
           >
-            <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
-              <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
-            </button>
-            <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
-          </div>,
-          getAppearanceOverlayHost(),
+            {sentTime}
+          </time>
         )}
       </div>
     );

@@ -480,6 +480,7 @@
     "edit": "Edit Message",
     "delete": "Delete Message",
     "retry": "Retry",
+    "sentAt": "Sent at {{time}}",
     "clickToExpand": "Click to expand",
     "clickToCollapse": "Click to collapse",
     "fillToInput": "Fill to input",
