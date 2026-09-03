@@ -19,6 +19,15 @@ export const NATIVE_WEBVIEW_OCCLUSION_SELECTOR = [
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];
 
+// Webview labels are window-global in Tauri, while this hook can be mounted
+// once per cached editor tab. Keep allocation outside the hook so independent
+// panels cannot both start at `<prefix>-0`.
+let nextBrowserWebviewSequence = 0;
+
+export function allocateBrowserWebviewLabel(labelPrefix: string): string {
+  return `${labelPrefix}-${nextBrowserWebviewSequence++}`;
+}
+
 // #region agent log
 function writeBrowserWebviewDiagnostic(
   hypothesis: string,
@@ -190,7 +199,6 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const webviewRef = useRef<BrowserWebviewHandle | null>(null);
-  const webviewSequenceRef = useRef(0);
   const currentUrlRef = useRef<string>(startUrl);
   const resizeTimerRef = useRef<number | null>(null);
   const lastBoundsRef = useRef<WebviewBounds | null>(null);
@@ -361,7 +369,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         await new Promise((resolve) => window.setTimeout(resolve, delay));
       }
 
-      const label = `${labelPrefix}-${webviewSequenceRef.current++}`;
+      const label = allocateBrowserWebviewLabel(labelPrefix);
       webviewLabelRef.current = label;
       setWebviewLabel(label);
       try {

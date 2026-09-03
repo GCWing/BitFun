@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "31576ac07aa5a6ae4ff437630fb72d99a9097bba2e34815bf2786e31885d7647",
-  "commandCount": 658,
+  "commandCount": 660,
   "coverage": {
-    "commandCount": 658,
+    "commandCount": 660,
     "documentedCommandCount": 629,
-    "implementationCommandCount": 29,
-    "implementationDigest": "04b59d988f31c5d17d579235cec0da684e565a9aa464cd33d0ce831d7424a7dd"
+    "implementationCommandCount": 31,
+    "implementationDigest": "b93e50920109afc78b821c590d39f8e8eca90273ee22e804c64da393d0c5c498"
   },
   "commands": [
     {
@@ -4518,6 +4518,34 @@
       "sourceFile": "src/apps/desktop/src/lib.rs",
       "signature": "fn hide_main_window_after_close_request(app: tauri::AppHandle) -> Result<(), String>",
       "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "html_preview_create",
+      "moduleId": "html_preview",
+      "capabilityId": "feature.files-editor",
+      "capabilityIds": [
+        "feature.files-editor"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
+      "rustPath": "api::html_preview_api::html_preview_create",
+      "sourceFile": "src/apps/desktop/src/api/html_preview_api.rs",
+      "signature": "fn html_preview_create( app_state: tauri::State<'_, AppState>, request: HtmlPreviewCreateRequest, ) -> Result<HtmlPreviewCreateResponse, String>",
+      "remoteWorkspacePolicy": "RemoteRouted"
+    },
+    {
+      "id": "html_preview_release",
+      "moduleId": "html_preview",
+      "capabilityId": "feature.files-editor",
+      "capabilityIds": [
+        "feature.files-editor"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
+      "rustPath": "api::html_preview_api::html_preview_release",
+      "sourceFile": "src/apps/desktop/src/api/html_preview_api.rs",
+      "signature": "fn html_preview_release(request: HtmlPreviewReleaseRequest) -> Result<(), String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "i18n_get_config",

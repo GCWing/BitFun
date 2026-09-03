@@ -19,7 +19,8 @@ import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
 import { useAppearance } from '@/infrastructure/appearance';
 import { contextMenuController } from '@/shared/context-menu-system/core/ContextMenuController';
 import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
-import { createTab } from '@/shared/utils/tabUtils';
+import { createTab, openFileInBestTarget } from '@/shared/utils/tabUtils';
+import { isHtmlFilePath, openHtmlFileInExternalBrowser } from '@/shared/utils/htmlFilePreview';
 import { createLogger } from '@/shared/utils/logger';
 import type { LineRange } from '@/shared/editor/LineRange';
 import {
@@ -1046,9 +1047,57 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const handleLocalFileContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,
     filePath: string,
-    displayPath: string
+    displayPath: string,
+    fileName: string,
+    lineRange?: LineRange,
   ) => {
-    const items: MenuItem[] = [
+    const items: MenuItem[] = [];
+    const isHtmlFile = isHtmlFilePath(filePath) && canOpenInBuiltInBrowser(event.currentTarget);
+
+    if (isHtmlFile) {
+      const workspacePath = currentWorkspacePathRef.current || basePathRef.current;
+      const remoteConnectionId = remoteConnectionIdRef.current;
+      const openFileOptions = {
+        filePath,
+        fileName,
+        workspacePath,
+        remoteConnectionId,
+      };
+
+      items.push(
+        {
+          id: 'markdown-open-html-as-text',
+          label: i18nService.t('common:actions.open'),
+          icon: 'FileText',
+          onClick: () => openFileInBestTarget({
+            ...openFileOptions,
+            editorType: 'code-editor',
+            jumpToRange: lineRange,
+          }),
+        },
+        {
+          id: 'markdown-open-html-in-integrated-browser',
+          label: i18nService.t('common:file.openInIntegratedBrowser'),
+          icon: 'PanelRightOpen',
+          onClick: () => openFileInBestTarget({
+            ...openFileOptions,
+            editorType: 'html-preview',
+          }),
+        },
+        {
+          id: 'markdown-open-html-in-system-browser',
+          label: i18nService.t('common:file.openInSystemBrowser'),
+          icon: 'ExternalLink',
+          disabled: Boolean(remoteConnectionId),
+          onClick: () => {
+            if (remoteConnectionId) return;
+            void openHtmlFileInExternalBrowser(displayPath || filePath);
+          },
+        },
+      );
+    }
+
+    items.push(
       {
         id: 'markdown-open-in-explorer',
         label: translateMarkdownLabel('markdown.openInExplorer'),
@@ -1061,13 +1110,21 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
         icon: 'Copy',
         onClick: () => void handleCopyLink(displayPath || filePath),
       },
-    ];
+    );
 
     showLinkContextMenu(event, items, 'markdown-local-file-link', {
       filePath,
       displayPath,
     });
-  }, [handleRevealInExplorer, handleCopyLink, showLinkContextMenu]);
+  }, [
+    basePathRef,
+    canOpenInBuiltInBrowser,
+    currentWorkspacePathRef,
+    handleRevealInExplorer,
+    handleCopyLink,
+    remoteConnectionIdRef,
+    showLinkContextMenu,
+  ]);
 
   const handleWebLinkContextMenu = useCallback((event: React.MouseEvent<HTMLElement>, url: string) => {
     const targetElement = event.currentTarget;
@@ -1267,7 +1324,13 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
                 }
                 handleFileViewRequest(filePath, fileName, lineRange);
               }}
-              onContextMenu={(e) => handleLocalFileContextMenu(e, filePath, displayFilePath)}
+              onContextMenu={(e) => handleLocalFileContextMenu(
+                e,
+                filePath,
+                displayFilePath,
+                fileName,
+                lineRange,
+              )}
               type="button"
               style={{
                 cursor: 'pointer',

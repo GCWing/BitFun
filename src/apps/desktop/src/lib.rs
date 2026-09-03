@@ -1983,6 +1983,8 @@ pub async fn run() {
             api::browser_api::browser_webview_set_bounds,
             api::browser_api::browser_webview_set_agent_target_state,
             api::browser_api::browser_get_url,
+            api::html_preview_api::html_preview_create,
+            api::html_preview_api::html_preview_release,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,
             api::browser_control_api::browser_control_get_status,

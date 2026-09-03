@@ -34,7 +34,8 @@ export type PanelContentType =
   | 'terminal'
   | 'generative-widget'
   | 'bitfun-canvas'
-  | 'browser';
+  | 'browser'
+  | 'html-preview';
 
 export interface PanelContent {
   type: PanelContentType;

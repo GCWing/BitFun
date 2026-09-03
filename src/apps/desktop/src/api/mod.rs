@@ -28,6 +28,7 @@ pub mod external_hooks_api;
 pub mod external_sources_api;
 pub mod git_agent_api;
 pub mod git_api;
+pub mod html_preview_api;
 pub mod i18n_api;
 pub mod insights_api;
 pub mod mcp_api;

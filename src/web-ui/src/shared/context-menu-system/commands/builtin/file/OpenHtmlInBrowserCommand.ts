@@ -23,7 +23,7 @@ export class OpenHtmlInBrowserCommand extends BaseCommand {
     const t = i18nService.getT();
     super({
       id: 'file.open-html-in-browser',
-      label: t('common:file.openInBrowser'),
+      label: t('common:file.openInSystemBrowser'),
       description: t('common:file.openInBrowserDescription'),
       icon: 'ExternalLink',
       category: 'file'
