@@ -1,43 +1,44 @@
 /**
- * Global scrollbar styles - hover-to-show behavior.
+ * Global scrollbar styles.
  *
  * Design principles:
- * 1. All scrollbars are transparent by default and appear on hover.
+ * 1. Scrollbar thumbs stay visible while every track surface stays transparent.
  * 2. Consistent size, color, and interactions.
  * 3. Components inherit global styles without customization.
  * 4. Theme CSS variables adapt to different themes.
- *    - --bf-color-scrollbar-thumb: thumb color when container is hovered
+ *    - --bf-color-scrollbar-thumb: default thumb color
  *    - --bf-color-scrollbar-thumb-hover: thumb color on thumb hover
  */
 
-/* ==================== Scrollbar base size ==================== */
+/* ==================== WebKit / Chromium scrollbar chrome ==================== */
 *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
-}
-
-*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-*::-webkit-scrollbar-corner {
+/*
+ * Keep every non-thumb part transparent. Styling only the track is not enough:
+ * WebKit can still paint the scrollbar root or a track piece when the operating
+ * system is configured to always show scrollbars.
+ */
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-button,
+*::-webkit-resizer {
   background: transparent;
 }
 
-/* ==================== Scrollbar thumb - transparent by default ==================== */
+/* ==================== Scrollbar thumb - always visible ==================== */
 *::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: var(--bf-color-scrollbar-thumb);
   border-radius: 3px;
   transition: background 0.2s ease;
 }
 
-/* ==================== Show thumb on hover ==================== */
-*:hover::-webkit-scrollbar-thumb {
-  background: var(--bf-color-scrollbar-thumb);
-}
-
 /* Stronger thumb color on thumb hover */
-*:hover::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background: var(--bf-color-scrollbar-thumb-hover);
 }
 
@@ -46,12 +47,29 @@
   background: var(--bf-color-scrollbar-thumb);
 }
 
-/* ==================== Firefox scrollbar ==================== */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+/*
+ * Firefox, Chromium 121+, and Safari 26.2+ support the complete standard
+ * color/width pair. Keep both declarations together: Safari 18.x supports
+ * scrollbar-width but not scrollbar-color, and a non-auto width disables its
+ * legacy ::-webkit-scrollbar rendering before the track can be made transparent.
+ */
+@supports (scrollbar-color: transparent transparent) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+  }
 }
 
-*:hover {
-  scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+/*
+ * WebKit 286350@main documents that any non-default scrollbar-width makes the
+ * legacy pseudo-element styling ineffective. Override component-local `thin`
+ * declarations only in the Safari 18.x capability gap so the transparent
+ * WebKit scrollbar rules above remain active.
+ */
+@supports selector(::-webkit-scrollbar) {
+  @supports not (scrollbar-color: transparent transparent) {
+    * {
+      scrollbar-width: auto !important;
+    }
+  }
 }

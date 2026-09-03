@@ -77,4 +77,36 @@
     --bitfun-shadow-overlay: 0 4px 20px rgba(0, 0, 0, 0.12);
     }
   }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-track-piece,
+  *::-webkit-scrollbar-corner,
+  *::-webkit-scrollbar-button,
+  *::-webkit-resizer {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--bitfun-scrollbar-thumb);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--bitfun-scrollbar-thumb-hover);
+  }
+  @supports (scrollbar-color: transparent transparent) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--bitfun-scrollbar-thumb) transparent;
+    }
+  }
+  @supports selector(::-webkit-scrollbar) {
+    @supports not (scrollbar-color: transparent transparent) {
+      * {
+        scrollbar-width: auto !important;
+      }
+    }
+  }
 </style>

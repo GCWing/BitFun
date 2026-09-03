@@ -638,6 +638,9 @@ fn miniapp_compiler_preserves_head_injection_contract() {
 
     assert!(out.contains("<meta charset=\"utf-8\">"));
     assert!(out.contains("data-bf-appearance-mode=\"dark\""));
+    assert!(out.contains("*::-webkit-scrollbar-track-piece"));
+    assert!(out.contains("scrollbar-width: auto !important"));
+    assert!(out.contains("scrollbar-color: var(--bitfun-scrollbar-thumb) transparent"));
     assert!(out.contains("<script type=\"module\">"));
     assert!(out.contains("console.log('ready')"));
 }
