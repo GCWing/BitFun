@@ -81,6 +81,24 @@ export class DeviceDirectoryState {
     this.ensureWorkspace(deviceId, path).status = status;
   }
 
+  /**
+   * Drops disclosure and load facts produced by an older connection to one device.
+   *
+   * A fresh control-target handshake only contains the current workspace's
+   * sessions. Keeping a sibling workspace marked `ready` after that partial
+   * snapshot replaces the directory makes its next disclosure skip the RPC and
+   * render a false empty result. Other devices keep their independent state.
+   */
+  resetWorkspaceDirectory(deviceId: string): void {
+    const targetDeviceId = deviceId.trim();
+    if (targetDeviceId.length === 0) {
+      return;
+    }
+    this.workspaceDirectory = this.workspaceDirectory.filter((item: WorkspaceDirectoryState): boolean =>
+      item.deviceId !== targetDeviceId
+    );
+  }
+
   private findWorkspace(deviceId: string, path: string): WorkspaceDirectoryState | undefined {
     const targetDeviceId = deviceId.trim();
     const normalizedPath = DeviceDirectoryState.normalizeWorkspacePath(path);

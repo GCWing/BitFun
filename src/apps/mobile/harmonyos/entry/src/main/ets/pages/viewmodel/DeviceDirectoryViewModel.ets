@@ -146,6 +146,11 @@ export class DeviceDirectoryViewModel {
     if (!entry) {
       return;
     }
+    // A successful handshake starts a new directory generation even when the
+    // transport changed while the desktop id stayed the same (for example,
+    // scan-room -> account-device). The handshake replaces cross-workspace
+    // sessions below, so the old generation's `ready` flags cannot survive it.
+    this.state.resetWorkspaceDirectory(target);
     entry.workspaces = workspaces.slice();
     // The handshake is the authoritative snapshot for the incoming target.
     // Merging the row's old cache here makes any historical cross-device

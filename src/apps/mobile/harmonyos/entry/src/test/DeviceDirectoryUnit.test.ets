@@ -505,6 +505,40 @@ export default function deviceDirectoryUnitTest() {
       expect(state.find('desk-b')?.status).assertEqual('loading');
     });
 
+    it('invalidates workspace load state when the same device gets a fresh connection', 0, () => {
+      const state = new DeviceDirectoryState();
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => 'desk-a',
+        activeDeviceConnected: () => true
+      });
+      viewModel.syncDevices([
+        { deviceId: 'desk-a', deviceName: 'Alpha', online: true },
+        { deviceId: 'desk-b', deviceName: 'Beta', online: true }
+      ]);
+      state.setWorkspaceExpanded('desk-a', '/stale', true);
+      state.setWorkspaceStatus('desk-a', '/stale', 'ready');
+      state.setWorkspaceExpanded('desk-b', '/independent', true);
+      state.setWorkspaceStatus('desk-b', '/independent', 'ready');
+      viewModel.captureLive('desk-a', [workspace('/stale', 'Stale')], [
+        sessionIn('desk-a', '/stale', 'stale', 'Stale')
+      ]);
+
+      // Models the scan-room -> account-device transition: the physical
+      // desktop id is unchanged, while the new handshake only carries the
+      // current workspace snapshot.
+      viewModel.activateLive('desk-a', [workspace('/current', 'Current')], [
+        sessionIn('desk-a', '/current', 'fresh', 'Fresh')
+      ]);
+
+      expect(state.workspaceExpanded('desk-a', '/stale')).assertFalse();
+      expect(state.workspaceStatus('desk-a', '/stale')).assertEqual('idle');
+      expect(state.workspaceExpanded('desk-b', '/independent')).assertTrue();
+      expect(state.workspaceStatus('desk-b', '/independent')).assertEqual('ready');
+      expect(state.find('desk-a')?.sessions.length).assertEqual(1);
+      expect(state.find('desk-a')?.sessions[0].id).assertEqual('fresh');
+    });
+
     it('keeps an empty incoming catalog loading until the live request completes', 0, async () => {
       const source = new FakeAccountDeviceDirectory();
       const state = new DeviceDirectoryState();
