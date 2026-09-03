@@ -2685,7 +2685,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
               metadata: { name: img.name, source: 'remote' },
             }))
           : undefined;
-        await sessionMgr.sendMessage(sessionId, editedText, agentMode, imageContexts);
+        try {
+          await sessionMgr.sendMessage(sessionId, editedText, agentMode, imageContexts);
+        } catch (sendError) {
+          // The rollback already retired the turn this text came from, so the
+          // draft has nowhere to fall back to. Hand it to the composer instead
+          // of dropping it when the send is what failed.
+          if (isChatTargetCurrent(targetEpoch)) {
+            setInput(editedText);
+            setInputExpanded(true);
+          }
+          throw sendError;
+        }
         if (!isChatTargetCurrent(targetEpoch)) return;
       } else if (result.composer_text) {
         setInput(result.composer_text);

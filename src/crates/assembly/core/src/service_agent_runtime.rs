@@ -2773,6 +2773,28 @@ mod tests {
             .and_then(|source| source.split("fn remove_tracker").next())
             .expect("remote session delete");
         assert!(delete.contains("ensure_workspace_runtime_ownership"));
+
+        let rollback = remote_session_host
+            .split("async fn rollback_session_to_turn")
+            .nth(1)
+            .and_then(|source| source.split("async fn delete_session").next())
+            .expect("remote session rollback");
+        assert!(
+            rollback.contains("ensure_workspace_runtime_ownership"),
+            "remote rollback must pass the workspace ownership gate"
+        );
+        assert!(
+            rollback.contains("is_remote()"),
+            "remote rollback must refuse remote workspaces before touching the runtime"
+        );
+        assert!(
+            rollback.contains("AgentSessionRollbackToTurnRequest"),
+            "remote rollback must reuse the scheduled rollback transaction"
+        );
+        assert!(
+            rollback.contains("AgentSessionComposerUpdate::Replace"),
+            "remote rollback must hand the retired prompt back as composer text"
+        );
     }
 
     #[test]
