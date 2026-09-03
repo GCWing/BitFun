@@ -65,6 +65,12 @@ const ImageViewer = React.lazy(() =>
   }))
 );
 
+const PdfViewer = React.lazy(() =>
+  import('@/tools/editor/components/PdfViewer').then(module => ({
+    default: module.default,
+  }))
+);
+
 const DiffEditor = React.lazy(() =>
   import('@/tools/editor/components/DiffEditor').then(module => ({
     default: module.default,
@@ -389,6 +395,22 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 fileName={content.title}
                 workspacePath={workspacePath}
                 className="bitfun-flexible-panel__image-viewer"
+              />
+            )}
+          </div>
+        );
+      }
+
+      case 'pdf-viewer': {
+        const pdfViewerData = content.data || {};
+
+        return (
+          <div className="bitfun-flexible-panel__pdf-viewer-container" data-bf-component="flexible-panel" data-bf-part="pdf">
+            {renderLazyEditor(
+              <PdfViewer
+                filePath={pdfViewerData.filePath || ''}
+                fileName={content.title}
+                className="bitfun-flexible-panel__pdf-viewer"
               />
             )}
           </div>

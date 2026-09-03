@@ -177,6 +177,43 @@ impl FileOperationService {
         }
     }
 
+    /// Reads the exact file bytes without text or binary-content inference.
+    pub async fn read_file_bytes(&self, file_path: &str) -> FileSystemResult<Vec<u8>> {
+        let path = Path::new(file_path);
+
+        self.validate_file_access(path, false).await?;
+
+        if !path.exists() {
+            return Err(FileSystemError::service(format!(
+                "File does not exist: {}",
+                file_path
+            )));
+        }
+
+        if path.is_dir() {
+            return Err(FileSystemError::service(format!(
+                "Path is a directory: {}",
+                file_path
+            )));
+        }
+
+        let metadata = fs::metadata(path).await.map_err(|e| {
+            FileSystemError::service(format!("Failed to read file metadata: {}", e))
+        })?;
+        let file_size = metadata.len();
+        if file_size > self.max_file_size_mb * 1024 * 1024 {
+            return Err(FileSystemError::service(format!(
+                "File too large: {}MB (max: {}MB)",
+                file_size / (1024 * 1024),
+                self.max_file_size_mb
+            )));
+        }
+
+        fs::read(path)
+            .await
+            .map_err(|e| FileSystemError::service(format!("Failed to read file: {}", e)))
+    }
+
     /// SHA-256 (hex, lowercase) of `bytes` using the same normalization as the web editor sync check,
     /// or raw-byte hash when content is treated as binary (matches `read_file` heuristics).
     pub fn editor_sync_sha256_hex_from_raw_bytes(&self, bytes: &[u8]) -> String {
@@ -698,5 +735,25 @@ mod editor_sync_hash_tests {
             h,
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
         );
+    }
+
+    #[tokio::test]
+    async fn raw_byte_read_preserves_pdf_streams_after_a_printable_header() {
+        let file = tempfile::Builder::new()
+            .suffix(".pdf")
+            .tempfile()
+            .expect("create PDF fixture");
+        let mut bytes = b"%PDF-1.5\n".to_vec();
+        bytes.resize(600, b' ');
+        bytes.extend_from_slice(&[0xff, 0xfe, 0x80, 0x00, 0x01]);
+        std::fs::write(file.path(), &bytes).expect("write PDF fixture");
+
+        let service = FileOperationService::default();
+        let actual = service
+            .read_file_bytes(&file.path().to_string_lossy())
+            .await
+            .expect("read exact PDF bytes");
+
+        assert_eq!(actual, bytes);
     }
 }

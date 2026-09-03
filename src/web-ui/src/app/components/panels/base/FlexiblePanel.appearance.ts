@@ -16,6 +16,7 @@ export const flexiblePanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'text' },
     { id: 'viewer' },
     { id: 'image' },
+    { id: 'pdf' },
     { id: 'error' },
     { id: 'aiSession' },
     { id: 'sessionHeader' },

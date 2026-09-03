@@ -326,6 +326,14 @@ impl FileSystemService {
             .map_err(map_filesystem_error)
     }
 
+    /// Reads the exact file bytes without text or binary-content inference.
+    pub async fn read_file_bytes(&self, file_path: &str) -> BitFunResult<Vec<u8>> {
+        self.inner
+            .read_file_bytes(file_path)
+            .await
+            .map_err(map_filesystem_error)
+    }
+
     /// Writes a file.
     pub async fn write_file(
         &self,

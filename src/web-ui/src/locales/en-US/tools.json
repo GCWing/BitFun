@@ -106,6 +106,20 @@
       "exitFullscreen": "Exit fullscreen",
       "imageUrlEmpty": "Image URL is empty"
     },
+    "pdfViewer": {
+      "loading": "Loading PDF...",
+      "filePathEmpty": "File path is empty",
+      "loadFailedWithMessage": "Failed to load PDF: {{message}}",
+      "renderFailedWithMessage": "Failed to render PDF page: {{message}}",
+      "pageCount": "Page {{current}} of {{total}}",
+      "currentPage": "Current page",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "zoomOut": "Zoom out",
+      "zoomLevel": "Zoom level",
+      "zoomIn": "Zoom in",
+      "rotate90": "Rotate 90°"
+    },
     "meditor": {
       "placeholder": "Enter Markdown...",
       "toolbarPlaceholder": "Toolbar",

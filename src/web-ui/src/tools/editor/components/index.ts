@@ -16,6 +16,9 @@ export type { MarkdownEditorProps } from './MarkdownEditor';
 export { ImageViewer } from './ImageViewer';
 export type { ImageViewerProps } from './ImageViewer';
 
+export { PdfViewer } from './PdfViewer';
+export type { PdfViewerProps } from './PdfViewer';
+
 export { default as PlanViewer } from './PlanViewer';
 export type { PlanViewerProps } from './PlanViewer';
 

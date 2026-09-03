@@ -94,6 +94,9 @@ export type { MarkdownEditorProps } from './components/MarkdownEditor';
 export { default as ImageViewer } from './components/ImageViewer';
 export type { ImageViewerProps } from './components/ImageViewer';
 
+export { default as PdfViewer } from './components/PdfViewer';
+export type { PdfViewerProps } from './components/PdfViewer';
+
 export { default as PlanViewer } from './components/PlanViewer';
 export type { PlanViewerProps } from './components/PlanViewer';
 

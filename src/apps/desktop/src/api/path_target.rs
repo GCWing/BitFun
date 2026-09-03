@@ -278,18 +278,21 @@ pub async fn read_text_file(
         resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await?;
     match &target {
         DesktopPathTarget::Local { resolved_path, .. } => {
+            if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64")) {
+                let bytes = app_state
+                    .filesystem_service
+                    .read_file_bytes(&resolved_path.to_string_lossy())
+                    .await
+                    .map_err(|e| format!("Failed to read file content: {}", e))?;
+                return Ok(BASE64.encode(bytes));
+            }
+
             let result = app_state
                 .filesystem_service
                 .read_file(&resolved_path.to_string_lossy())
                 .await
                 .map_err(|e| format!("Failed to read file content: {}", e))?;
-            if encoding.is_some_and(|value| value.eq_ignore_ascii_case("base64"))
-                && !result.encoding.eq_ignore_ascii_case("base64")
-            {
-                Ok(BASE64.encode(result.content.as_bytes()))
-            } else {
-                Ok(result.content)
-            }
+            Ok(result.content)
         }
         DesktopPathTarget::Remote {
             requested_path,

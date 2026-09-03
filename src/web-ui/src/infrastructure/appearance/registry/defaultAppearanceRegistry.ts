@@ -167,6 +167,7 @@ import { globalPermissionRulesDialogAppearanceDescriptor } from '@/infrastructur
 import { mcpResourceBrowserAppearanceDescriptor } from '@/infrastructure/config/components/MCPResourceBrowser.appearance';
 import { editorStatusBarAppearanceDescriptor } from '@/tools/editor/components/EditorStatusBar.appearance';
 import { imageViewerAppearanceDescriptor } from '@/tools/editor/components/ImageViewer.appearance';
+import { pdfViewerAppearanceDescriptor } from '@/tools/editor/components/PdfViewer.appearance';
 import { branchQuickSwitchAppearanceDescriptor } from '@/tools/git/components/BranchQuickSwitch.appearance';
 import { workspaceListSectionAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceListSection.appearance';
 import { workspaceItemAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceItem.appearance';
@@ -416,6 +417,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(mcpResourceBrowserAppearanceDescriptor)
     .registerComponent(editorStatusBarAppearanceDescriptor)
     .registerComponent(imageViewerAppearanceDescriptor)
+    .registerComponent(pdfViewerAppearanceDescriptor)
     .registerComponent(branchQuickSwitchAppearanceDescriptor)
     .registerComponent(workspaceListSectionAppearanceDescriptor)
     .registerComponent(workspaceItemAppearanceDescriptor)

@@ -587,6 +587,30 @@
   }
 }
 
+// ==================== PDF Viewer Container ====================
+
+.bitfun-flexible-panel__pdf-viewer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: 100%;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: var(--bf-color-surface-tertiary);
+
+  .bitfun-flexible-panel__pdf-viewer {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+}
+
 // ==================== Panel CodeViewer Style ====================
 
 .bitfun-flexible-panel__panel-code-viewer {

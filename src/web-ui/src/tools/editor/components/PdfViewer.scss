@@ -1,0 +1,213 @@
+.bitfun-pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bf-color-content-primary);
+  background: var(--bf-color-surface-canvas);
+  font-family: var(--bf-type-body-sm-font-family);
+
+  &__toolbar {
+    flex-shrink: 0;
+  }
+
+  &__info {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  &__page-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bf-space-1);
+    flex-shrink: 0;
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-type-label-sm-font-size);
+    white-space: nowrap;
+  }
+
+  &__page-input {
+    width: 56px;
+
+    > input {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  &__page-total {
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__zoom-display {
+    width: 92px;
+    margin-inline-start: var(--bf-space-2);
+  }
+
+  &__container {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--bf-space-5);
+    background: var(--bf-color-surface-subtle);
+  }
+
+  &__pages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--bf-space-5);
+    width: max-content;
+    min-width: 100%;
+  }
+
+  &__page {
+    position: relative;
+    flex: 0 0 auto;
+    min-width: 1px;
+    min-height: 1px;
+    overflow: hidden;
+    background: var(--bf-color-content-on-dark);
+    box-shadow: var(--bf-shadow-lg);
+
+    canvas {
+      display: block;
+    }
+  }
+
+  &__text-layer {
+    /* typography-audit: allow -- PDF.js replaces this browser minimum-font measurement at runtime */
+    --min-font-size: 1;
+    --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --pdf-min-scale-inv: calc(1 / var(--min-font-size));
+
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    overflow: clip;
+    color: transparent;
+    line-height: var(--bf-type-modifier-leading-none-line-height);
+    text-align: initial;
+    text-size-adjust: none;
+    transform-origin: 0 0;
+    forced-color-adjust: none;
+
+    &[data-main-rotation='90'] {
+      transform: rotate(90deg) translateY(-100%);
+    }
+
+    &[data-main-rotation='180'] {
+      transform: rotate(180deg) translate(-100%, -100%);
+    }
+
+    &[data-main-rotation='270'] {
+      transform: rotate(270deg) translateX(-100%);
+    }
+
+    :is(span, br) {
+      position: absolute;
+      color: transparent;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+    }
+
+    > :not(.markedContent),
+    .markedContent span:not(.markedContent) {
+      z-index: 1;
+      --bf-pdf-glyph-height: 0;
+      --scale-x: 1;
+      --rotate: 0deg;
+
+      /* typography-audit: allow -- PDF.js computes each source glyph run's size and position at runtime */
+      font-size: calc(var(--text-scale-factor) * var(--bf-pdf-glyph-height));
+      transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--pdf-min-scale-inv));
+    }
+
+    .markedContent {
+      display: contents;
+    }
+
+    span[role='img'] {
+      cursor: default;
+      user-select: none;
+    }
+
+    ::selection {
+      background: color-mix(in srgb, var(--bf-color-accent-default), transparent 75%);
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+    }
+
+    br::-moz-selection {
+      background: transparent;
+    }
+
+    br::selection {
+      background: transparent;
+    }
+  }
+
+  &__status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bf-space-4);
+    width: 100%;
+    height: 100%;
+    min-height: 180px;
+    color: var(--bf-color-content-muted);
+    text-align: center;
+
+    p {
+      max-width: 640px;
+      margin: 0;
+      font-size: var(--bf-type-body-md-font-size);
+    }
+
+    &--error > p:first-child {
+      color: var(--bf-color-status-danger-content);
+    }
+  }
+
+  &__error-path {
+    overflow-wrap: anywhere;
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-type-label-sm-font-size);
+  }
+
+  &__spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--bf-color-field-border-hover);
+    border-top-color: var(--bf-color-accent-default);
+    border-radius: 50%;
+    animation: bitfun-pdf-viewer-spin 0.8s linear infinite;
+  }
+
+  @keyframes bitfun-pdf-viewer-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bitfun-pdf-viewer__spinner {
+      animation: none;
+    }
+  }
+}
+
+.hiddenCanvasElement {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  width: 0;
+  height: 0;
+}

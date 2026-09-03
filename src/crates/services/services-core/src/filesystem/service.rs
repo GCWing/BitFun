@@ -276,6 +276,11 @@ impl FileSystemService {
         self.file_operation_service.read_file(file_path).await
     }
 
+    /// Reads the exact file bytes without text or binary-content inference.
+    pub async fn read_file_bytes(&self, file_path: &str) -> FileSystemResult<Vec<u8>> {
+        self.file_operation_service.read_file_bytes(file_path).await
+    }
+
     /// Writes a file.
     pub async fn write_file(
         &self,
