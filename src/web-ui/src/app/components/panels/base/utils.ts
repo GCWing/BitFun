@@ -107,6 +107,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'html-preview': {
+    type: 'html-preview',
+    displayName: 'HTML Preview',
+    icon: catalogPanelIcon('browser'),
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
   'diff-code-editor': {
     type: 'diff-code-editor',
     displayName: 'Diff Editor',

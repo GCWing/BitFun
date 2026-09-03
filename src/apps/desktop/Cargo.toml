@@ -64,6 +64,7 @@ dirs = { workspace = true }
 dark-light = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
+mime_guess = { workspace = true }
 urlencoding = { workspace = true }
 reqwest = { workspace = true, features = ["http2", "json", "query", "rustls-no-provider", "stream"] }
 semver = { workspace = true }

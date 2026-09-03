@@ -110,6 +110,9 @@ const TerminalTabPanel = React.lazy(() =>
 const BrowserPanel = React.lazy(() =>
   import('@/app/scenes/browser/BrowserPanel')
 );
+const HtmlPreviewPanel = React.lazy(() =>
+  import('@/app/scenes/browser/HtmlPreviewPanel')
+);
 
 const GenerativeWidgetPanel = React.lazy(() =>
   import('@/tools/generative-widget/GenerativeWidgetPanel')
@@ -874,6 +877,18 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               isActive={isActive}
               initialUrl={content.data?.url}
               openRequestId={content.data?.openRequestId}
+            />
+          </React.Suspense>
+        );
+
+      case 'html-preview':
+        return (
+          <React.Suspense fallback={renderEditorLoading()}>
+            <HtmlPreviewPanel
+              isActive={isActive}
+              filePath={content.data?.filePath || ''}
+              workspacePath={content.data?.workspacePath || workspacePath || ''}
+              remoteConnectionId={content.data?.remoteConnectionId}
             />
           </React.Suspense>
         );

@@ -18,42 +18,12 @@
   &__address {
     flex: 1;
     min-width: 0;
-    height: 34px;
     display: flex;
     align-items: center;
     gap: var(--bf-space-2);
-    padding: 0 var(--bf-space-2);
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-canvas);
-    color: var(--bf-color-content-muted);
-    overflow: hidden;
 
     svg {
       flex-shrink: 0;
-    }
-
-    input {
-      flex: 1;
-      width: 0;
-      min-width: 0;
-      border: none;
-      outline: none;
-      box-shadow: none;
-      background: transparent;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-label-md-font-size);
-      appearance: none;
-      -webkit-appearance: none;
-      border-radius: 0;
-
-      &:focus,
-      &:focus-visible,
-      &:active {
-        outline: none;
-        box-shadow: none;
-        border: none;
-      }
     }
   }
 

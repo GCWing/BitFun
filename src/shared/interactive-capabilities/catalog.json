@@ -224,6 +224,10 @@
     "fileTransferPrimitives": [
       "export_local_file_to_path",
       "paste_files"
+    ],
+    "htmlPreview": [
+      "html_preview_create",
+      "html_preview_release"
     ]
   },
   "capabilities": [
@@ -9349,6 +9353,9 @@
     },
     "browser": {
       "capabilityId": "feature.browser"
+    },
+    "html_preview": {
+      "capabilityId": "feature.files-editor"
     },
     "announcement": {
       "capabilityId": "setting.application.general"

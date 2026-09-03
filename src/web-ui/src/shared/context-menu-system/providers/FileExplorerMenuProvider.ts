@@ -11,6 +11,7 @@ import { isRemoteWorkspace } from '../../../shared/types';
 import { addFileMentionToChat } from '@/shared/utils/chatContext';
 import { dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
+import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 
 const PASTE_SHORTCUT = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? 'Cmd+V' : 'Ctrl+V';
 
@@ -104,19 +105,44 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
     
     if (!isDirectory) {
+      const isHtmlFile = isHtmlFilePath(fileContext.filePath);
+
       items.push({
         id: 'file-open',
         label: i18nService.t('common:actions.open'),
         icon: 'FileText',
         onClick: () => {
+          if (isHtmlFile) {
+            openFileInBestTarget({
+              filePath: fileContext.filePath,
+              fileName: fileContext.fileName,
+              workspacePath: fileContext.workspacePath,
+              editorType: 'code-editor',
+            });
+            return;
+          }
+
           globalEventBus.emit('file:open', { path: fileContext.filePath });
         }
       });
 
-      if (isHtmlFilePath(fileContext.filePath)) {
+      if (isHtmlFile) {
+        items.push({
+          id: 'file-open-html-in-integrated-browser',
+          label: i18nService.t('common:file.openInIntegratedBrowser'),
+          icon: 'PanelRightOpen',
+          onClick: () => {
+            openFileInBestTarget({
+              filePath: fileContext.filePath,
+              fileName: fileContext.fileName,
+              workspacePath: fileContext.workspacePath,
+              editorType: 'html-preview',
+            });
+          }
+        });
         items.push({
           id: 'file-open-html-in-browser',
-          label: i18nService.t('common:file.openInBrowser'),
+          label: i18nService.t('common:file.openInSystemBrowser'),
           icon: 'ExternalLink',
           command: 'file.open-html-in-browser',
           disabled: localFileActionsDisabled,

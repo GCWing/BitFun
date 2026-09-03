@@ -611,6 +611,16 @@
   }
 }
 
+.bitfun-html-preview__loading,
+.bitfun-html-preview__error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bf-space-2);
+  height: 100%;
+  color: var(--bf-color-content-secondary);
+}
+
 // ==================== Panel CodeViewer Style ====================
 
 .bitfun-flexible-panel__panel-code-viewer {

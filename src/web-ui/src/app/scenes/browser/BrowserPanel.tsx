@@ -11,7 +11,6 @@ import { Icon, IconButton, Input } from '@bitfun/ui';
 import { AlertTriangle, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
-import { useSceneStore } from '@/app/stores/sceneStore';
 import { useContextStore } from '@/shared/context-system';
 import type { WebElementContext } from '@/shared/types/context';
 import { createInspectorScript, CANCEL_INSPECTOR_SCRIPT } from './browserInspectorScript';
@@ -40,8 +39,6 @@ export interface BrowserPanelProps {
 
 const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openRequestId }) => {
   const { t } = useTranslation('common');
-  const activeTabId = useSceneStore((s) => s.activeTabId);
-  const shouldShowWebview = isActive && activeTabId === 'session';
   const addContext = useContextStore((s) => s.addContext);
   const inspectorUnlistenRef = useRef<(() => void) | null>(null);
   const [isInspectorActive, setIsInspectorActive] = useState(false);
@@ -49,7 +46,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
   const browser = useEmbeddedBrowserWebview({
     defaultUrl: DEFAULT_URL,
     initialUrl,
-    isVisible: shouldShowWebview,
+    isVisible: isActive,
     labelPrefix: 'embedded-browser-panel-view',
     log,
     openRequestId,

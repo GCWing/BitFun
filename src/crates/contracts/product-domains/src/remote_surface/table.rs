@@ -380,6 +380,8 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("has_insights_data",                                          Routed,      ControllerLocal,  REFUSED),
     op("hide_agent_companion_desktop_pet",                           LocalOnly,   ControllerLocal,  REFUSED),
     op("hide_main_window_after_close_request",                       LocalOnly,   ControllerLocal,  REFUSED),
+    op("html_preview_create",                                        Routed,      ControllerLocal,  REFUSED),
+    op("html_preview_release",                                       Agnostic,    ControllerLocal,  REFUSED),
     op("i18n_get_config",                                            Agnostic,    ControllerLocal,  REFUSED),
     op("i18n_get_current_language",                                  Agnostic,    ControllerLocal,  REFUSED),
     op("i18n_get_supported_languages",                               Agnostic,    ControllerLocal,  REFUSED),
