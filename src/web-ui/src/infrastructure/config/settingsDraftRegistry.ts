@@ -304,6 +304,8 @@ export function useSettingsDraftSnapshot(): SettingsDraftSnapshot {
 export function useSettingsDraft(
   registration: SettingsDraftRegistration & { enabled?: boolean },
 ): void {
+  const registrationRef = useRef(registration);
+  registrationRef.current = registration;
   const callbacksRef = useRef({
     save: registration.save,
     discard: registration.discard,
@@ -314,8 +316,9 @@ export function useSettingsDraft(
   };
 
   useLayoutEffect(() => {
-    if (registration.enabled === false) return undefined;
-    const { enabled: _enabled, ...draft } = registration;
+    const currentRegistration = registrationRef.current;
+    if (currentRegistration.enabled === false) return undefined;
+    const { enabled: _enabled, ...draft } = currentRegistration;
     return registerSettingsDraft({
       ...draft,
       save: () => callbacksRef.current.save(),
