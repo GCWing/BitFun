@@ -33,6 +33,8 @@ vi.mock('react-i18next', () => ({
       'reasoningSelector.auto': 'Auto',
       'chatInput.permissionMode.ask.label': 'Ask',
       'strip.newWorktree': 'New Worktree',
+      'workspaceStrip.primaryAssistant': 'Primary assistant',
+      'workspaceStrip.personalAssistant': 'Personal assistant',
     } as Record<string, string>)[key] ?? options?.defaultValue ?? key,
   }),
 }));
@@ -243,10 +245,39 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
   it('switches the active workspace from the strip menu when several are open', async () => {
     mocks.useOptionalWorkspaceContext.mockReturnValue({
       openedWorkspacesList: [
-        { id: 'ws-1', name: 'BitFun', path: 'D:/workspace/BitFun' },
-        { id: 'ws-2', name: 'Other', path: 'D:/workspace/Other' },
+        {
+          id: 'ws-1',
+          name: 'BitFun',
+          rootPath: 'D:/workspace/BitFun',
+          workspaceKind: 'normal',
+        },
+        {
+          id: 'ws-2',
+          name: 'Other',
+          rootPath: 'D:/workspace/Other',
+          workspaceKind: 'normal',
+        },
+        {
+          id: 'ws-3',
+          name: 'Primary',
+          rootPath: 'D:/internal/assistants/ws-3',
+          workspaceKind: 'assistant',
+        },
+        {
+          id: 'ws-4',
+          name: 'Personal',
+          rootPath: 'D:/internal/assistants/ws-4',
+          workspaceKind: 'assistant',
+          assistantId: 'assistant-4',
+        },
       ],
-      activeWorkspace: { id: 'ws-1', name: 'BitFun', path: 'D:/workspace/BitFun' },
+      activeWorkspace: {
+        id: 'ws-1',
+        name: 'BitFun',
+        rootPath: 'D:/workspace/BitFun',
+        workspaceKind: 'normal',
+      },
+      primaryAssistantWorkspaceId: 'ws-3',
       setActiveWorkspace: mocks.setActiveWorkspace,
     });
 
@@ -275,6 +306,19 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(
       menu?.querySelector('[data-testid="chat-input-workspace-option-ws-1"]')?.getAttribute('aria-checked'),
     ).toBe('true');
+    expect(
+      menu?.querySelector('[data-testid="chat-input-workspace-option-ws-1"]')?.textContent,
+    ).toContain('D:/workspace/BitFun');
+    expect(
+      menu?.querySelector('[data-testid="chat-input-workspace-option-ws-2"]')?.textContent,
+    ).toContain('D:/workspace/Other');
+    expect(
+      menu?.querySelector('[data-testid="chat-input-workspace-option-ws-3"]')?.textContent,
+    ).toContain('Primary assistant');
+    expect(
+      menu?.querySelector('[data-testid="chat-input-workspace-option-ws-4"]')?.textContent,
+    ).toContain('Personal assistant');
+    expect(menu?.textContent).not.toContain('D:/internal/assistants/');
 
     const other = menu?.querySelector<HTMLButtonElement>(
       '[data-testid="chat-input-workspace-option-ws-2"]',

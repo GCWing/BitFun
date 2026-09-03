@@ -25,6 +25,7 @@ import {
   useOptionalWorkspaceContext,
 } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
+import { WorkspaceKind } from '@/shared/types';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
 import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
@@ -597,6 +598,21 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           >
             {switchableWorkspaces.map(workspace => {
               const isActive = workspace.id === workspaceContext.activeWorkspace?.id;
+              const workspaceName = getWorkspaceDisplayName(workspace);
+              const workspacePath = workspace.rootPath?.trim();
+              const isAssistantWorkspace = workspace.workspaceKind === WorkspaceKind.Assistant;
+              const isPrimaryAssistantWorkspace = (
+                isAssistantWorkspace
+                && (
+                  workspace.id === workspaceContext.primaryAssistantWorkspaceId
+                  || (!workspaceContext.primaryAssistantWorkspaceId && !workspace.assistantId)
+                )
+              );
+              const workspaceDetail = isAssistantWorkspace
+                ? t(isPrimaryAssistantWorkspace
+                    ? 'workspaceStrip.primaryAssistant'
+                    : 'workspaceStrip.personalAssistant')
+                : workspacePath;
               return (
                 <MenuItem
                   key={workspace.id}
@@ -606,6 +622,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   data-bf-part="workspaceOption"
                   data-bf-state={isActive ? 'active' : undefined}
                   data-testid={`chat-input-workspace-option-${workspace.id}`}
+                  aria-label={workspaceDetail
+                    ? `${workspaceName}, ${workspaceDetail}`
+                    : workspaceName}
+                  title={workspaceDetail || workspaceName}
                   metadata={isActive ? <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} aria-hidden /> : null}
                   onClick={event => {
                     event.stopPropagation();
@@ -615,7 +635,16 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                     }
                   }}
                 >
-                  {getWorkspaceDisplayName(workspace)}
+                  <span className="bitfun-chat-input-workspace-strip__workspace-option-copy">
+                    <span className="bitfun-chat-input-workspace-strip__workspace-option-name">
+                      {workspaceName}
+                    </span>
+                    {workspaceDetail ? (
+                      <span className="bitfun-chat-input-workspace-strip__workspace-option-detail">
+                        {workspaceDetail}
+                      </span>
+                    ) : null}
+                  </span>
                 </MenuItem>
               );
             })}

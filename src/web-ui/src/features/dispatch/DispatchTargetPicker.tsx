@@ -152,12 +152,6 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
       data-testid="dispatch-target-menu"
       autoFocusFirstItem
     >
-      <MenuSection title={t('chatInput.dispatch.menuLabel')}>
-        <div className="dispatch-target-picker__status">
-          {t('chatInput.dispatch.sessionScope')}
-        </div>
-      </MenuSection>
-      <MenuSeparator />
       <MenuSection title={t('chatInput.dispatch.localSection')}>
         <MenuItem
           role="menuitemradio"

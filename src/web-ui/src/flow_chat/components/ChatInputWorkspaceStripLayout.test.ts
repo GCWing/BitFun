@@ -73,8 +73,8 @@ describe('composer context track layout', () => {
     expect(branchPicker).toMatch(
       /branch-quick-switch__list \[data-bf-part='list'\] \{\n  gap: calc\(var\(--bf-space-1\) \/ 2\);/,
     );
-    expect(targetPicker).toContain(
-      '&__option-row {\n    min-height: var(--bf-control-height-md);\n  }',
+    expect(targetPicker).toMatch(
+      /&__option-row \{[\s\S]*?min-height: var\(--bf-control-height-md\);/,
     );
     expect(targetPicker).toMatch(
       /&__menu \{[\s\S]*?--bf-overlay-menu-section-gap: var\(--bf-space-1\);/,
@@ -87,6 +87,12 @@ describe('composer context track layout', () => {
     );
     expect(targetPicker).toMatch(
       /small \{[\s\S]*?font-size: var\(--bf-type-meta-font-size\);/,
+    );
+    expect(targetPicker).toMatch(
+      /\&\[data-bf-part='option'\] \{[\s\S]*?strong \{[\s\S]*?color: var\(--bf-color-content-secondary\);[\s\S]*?opacity: var\(--bf-opacity-focus\);/,
+    );
+    expect(targetPicker).toMatch(
+      /small \{[\s\S]*?color: var\(--bf-color-content-muted\);[\s\S]*?opacity: 0\.5;/,
     );
   });
 
@@ -236,6 +242,23 @@ describe('composer context track layout', () => {
     expect(component).toContain('data-testid="chat-input-workspace-trigger"');
     expect(component).toContain('data-testid="chat-input-workspace-menu"');
     expect(component).toContain('data-bf-part="workspaceOption"');
+    // Every entry carries one compact secondary detail line: repositories use
+    // their real path, while assistants expose their product role instead of
+    // leaking the internal assistant workspace directory.
+    expect(component).toContain('workspace.rootPath?.trim()');
+    expect(component).toContain('workspaceContext.primaryAssistantWorkspaceId');
+    expect(component).toContain("'workspaceStrip.primaryAssistant'");
+    expect(component).toContain("'workspaceStrip.personalAssistant'");
+    expect(component).toContain('__workspace-option-detail');
+    expect(stylesheet).toMatch(
+      /&__workspace-option-copy \{[\s\S]*?padding-block: calc\(var\(--bf-space-1\) \/ 2\);/,
+    );
+    expect(stylesheet).toMatch(
+      /&__workspace-option-detail \{[\s\S]*?color: var\(--bf-color-content-muted\);/,
+    );
+    expect(stylesheet).toMatch(
+      /&__workspace-option-detail \{[\s\S]*?opacity: 0\.5;/,
+    );
     // Segments part on a hairline rule, never on a slash: a slash claimed a
     // path that a host, a workspace and a branch do not form.
     expect(component).toContain('__divider');

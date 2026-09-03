@@ -174,6 +174,22 @@ describe('BranchQuickSwitch', () => {
     expect(input?.classList.contains('branch-quick-switch__input')).toBe(false);
   });
 
+  it('keeps the selected current branch readable instead of applying disabled colors', async () => {
+    await act(async () => {
+      root.render(<Harness onSwitchSuccess={vi.fn()} />);
+    });
+    await vi.waitFor(() => expect(
+      document.querySelector('[data-testid="branch-quick-switch-option-main"]'),
+    ).not.toBeNull());
+
+    const currentBranch = document.querySelector<HTMLButtonElement>(
+      '[data-testid="branch-quick-switch-option-main"]',
+    );
+    expect(currentBranch?.getAttribute('aria-selected')).toBe('true');
+    expect(currentBranch?.dataset.bfState).toBe('current');
+    expect(currentBranch?.disabled).toBe(false);
+  });
+
   it('checks out a selected branch and publishes the shared branch-change event', async () => {
     const onSwitchSuccess = vi.fn();
     mocks.checkoutBranch.mockResolvedValue({ success: true });

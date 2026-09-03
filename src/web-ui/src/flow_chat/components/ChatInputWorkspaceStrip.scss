@@ -480,6 +480,34 @@ $track-item-gap: 10px;
     z-index: var(--bf-layer-popover);
   }
 
+  &__workspace-option-copy {
+    display: flex;
+    overflow: hidden;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0;
+    padding-block: calc(var(--bf-space-1) / 2);
+  }
+
+  &__workspace-option-name,
+  &__workspace-option-detail {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__workspace-option-detail {
+    color: var(--bf-color-content-muted);
+    opacity: 0.5;
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
+  }
+
 }
 
 // Degradation is ordered by what a reader loses: prose first, then labels, and

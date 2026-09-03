@@ -74,6 +74,18 @@
 
   &__option-row {
     min-height: var(--bf-control-height-md);
+
+    // The two local execution modes keep matching title ink regardless of
+    // which row is selected. Every option detail shares the quieter treatment
+    // declared on `small` below.
+    &[data-bf-part='option'] {
+      .dispatch-target-picker__option-copy {
+        strong {
+          color: var(--bf-color-content-secondary);
+          opacity: var(--bf-opacity-focus);
+        }
+      }
+    }
   }
 
   &__option-copy {
@@ -99,6 +111,7 @@
 
     small {
       color: var(--bf-color-content-muted);
+      opacity: 0.5;
       font-family: var(--bf-type-meta-font-family);
       font-size: var(--bf-type-meta-font-size);
       font-weight: var(--bf-type-meta-font-weight);
