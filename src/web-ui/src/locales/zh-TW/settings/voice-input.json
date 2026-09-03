@@ -75,6 +75,7 @@
       "loadFailed": "載入控制端即時語音設定失敗",
       "saved": "即時語音設定已儲存",
       "saveFailed": "儲存即時語音設定失敗",
+      "required": "啟用即時語音前，請填寫 API Key 和語音角色。",
       "unsaved": "即時語音設定有尚未儲存的修改。"
     },
     "call": {

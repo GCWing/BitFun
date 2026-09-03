@@ -6,7 +6,6 @@
 
 import {
   Button,
-  ConfirmDialog,
   Icon,
   IconButton,
   Input,
@@ -35,6 +34,10 @@ import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { isTauriRuntime } from '@/infrastructure/runtime';
+import {
+  requestSettingsDraftExit,
+  useSettingsDraft,
+} from '@/infrastructure/config/settingsDraftRegistry';
 import {
   MCPAPI,
   MCPRemoteOAuthSessionSnapshot,
@@ -196,6 +199,7 @@ const McpToolsConfig: React.FC = () => {
   const [jsonLoading, setJsonLoading] = useState(true);
   const [jsonLoadFailed, setJsonLoadFailed] = useState(false);
   const [mcpSaving, setMcpSaving] = useState(false);
+  const mcpSavingRef = useRef(false);
   const [serverLifecycleActions, setServerLifecycleActions] = useState<
     Record<string, MCPServerLifecycleAction>
   >({});
@@ -211,7 +215,6 @@ const McpToolsConfig: React.FC = () => {
     column?: number;
     position?: number;
   } | null>(null);
-  const [discardJsonConfirmOpen, setDiscardJsonConfirmOpen] = useState(false);
 
   const jsonDirty = jsonConfig !== jsonSavedConfig;
   const jsonSyntaxValid = (() => {
@@ -518,28 +521,19 @@ const McpToolsConfig: React.FC = () => {
     return () => window.clearTimeout(handle);
   }, [jsonConfig, showJsonEditor]);
 
-  useEffect(() => {
-    if (!showJsonEditor || !jsonDirty) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [jsonDirty, showJsonEditor]);
+  const discardJsonChanges = useCallback(() => {
+    setJsonConfig(jsonSavedConfig);
+    setShowJsonEditor(false);
+  }, [jsonSavedConfig]);
 
   const requestCloseJsonEditor = () => {
-    if (jsonDirty) {
-      setDiscardJsonConfirmOpen(true);
-      return;
-    }
-    setShowJsonEditor(false);
+    requestSettingsDraftExit(['mcp-json-config'], () => setShowJsonEditor(false));
   };
 
-  const handleSaveJsonConfig = async () => {
+  const handleSaveJsonConfig = async (): Promise<boolean> => {
     const capabilityEpoch = currentCapabilityEpoch();
-    if (capabilityEpoch === null) return;
-    if (mcpSaving) return;
+    if (capabilityEpoch === null || mcpSavingRef.current) return false;
+    mcpSavingRef.current = true;
     setMcpSaving(true);
     try {
       let parsedConfig;
@@ -560,7 +554,7 @@ const McpToolsConfig: React.FC = () => {
         throw new Error('MCP configuration snapshot is unavailable; reload before saving');
       }
       await MCPAPI.saveMCPJsonConfig(jsonConfig, jsonConfigFingerprint);
-      if (!capabilityIsCurrent(capabilityEpoch)) return;
+      if (!capabilityIsCurrent(capabilityEpoch)) return false;
       notification.success(tMcp('messages.saveSuccess'), {
         title: tMcp('notifications.saveSuccess'),
         duration: 3000,
@@ -570,8 +564,9 @@ const McpToolsConfig: React.FC = () => {
       if (capabilityIsCurrent(capabilityEpoch)) {
         await loadJsonConfig();
       }
+      return true;
     } catch (error) {
-      if (!capabilityIsCurrent(capabilityEpoch)) return;
+      if (!capabilityIsCurrent(capabilityEpoch)) return false;
       const errorInfo = classifyError(error, tMcp('actions.saveConfig'));
       let fullMessage = errorInfo.message;
       if (errorInfo.suggestions?.length) {
@@ -585,10 +580,22 @@ const McpToolsConfig: React.FC = () => {
         title: errorInfo.title,
         duration: errorInfo.duration,
       });
+      return false;
     } finally {
+      mcpSavingRef.current = false;
       setMcpSaving(false);
     }
   };
+
+  useSettingsDraft({
+    id: 'mcp-json-config',
+    pageId: 'tools.mcp',
+    label: tMcp('jsonEditor.title'),
+    dirty: showJsonEditor && jsonDirty,
+    saving: mcpSaving,
+    save: handleSaveJsonConfig,
+    discard: discardJsonChanges,
+  });
 
   const handleJsonEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== 'Tab') return;
@@ -1482,6 +1489,7 @@ const McpToolsConfig: React.FC = () => {
                 data-bf-component="mcp-tools-config"
                 data-bf-part="jsonTextarea"
                 spellCheck={false}
+                disabled={mcpSaving}
                 invalid={Boolean(jsonLintError)}
                 errorMessage={
                   jsonLintError
@@ -1663,19 +1671,6 @@ const McpToolsConfig: React.FC = () => {
         )}
               </DialogBody>
       </Dialog>
-      <ConfirmDialog
-        open={discardJsonConfirmOpen}
-        onOpenChange={(open) => { if (!open) setDiscardJsonConfirmOpen(false); }}
-        onConfirm={() => {
-          setDiscardJsonConfirmOpen(false);
-          setJsonConfig(jsonSavedConfig);
-          setShowJsonEditor(false);
-        }}
-        title={tMcp('jsonEditor.discardTitle')}
-        message={tMcp('jsonEditor.discardMessage')}
-        confirmText={tMcp('jsonEditor.discardConfirm')}
-        type="warning"
-      />
     </ConfigPageLayout>
   );
 };

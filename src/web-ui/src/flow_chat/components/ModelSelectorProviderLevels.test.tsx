@@ -211,7 +211,7 @@ describe('ModelSelector provider levels', () => {
     vi.clearAllMocks();
   });
 
-  it('opens with model and reasoning settings, omits speed, and can restore defaults', async () => {
+  it('opens with model and reasoning settings while omitting speed and reset actions', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
       config: {
         agentType: 'agentic',
@@ -248,8 +248,11 @@ describe('ModelSelector provider levels', () => {
     expect(settings?.querySelector(
       '[data-testid="chat-model-selector-settings-reasoning"]',
     )?.textContent).toContain('reasoningSelector.levels.high');
-    expect(settings?.querySelectorAll('button[role="menuitem"]')).toHaveLength(3);
+    expect(settings?.querySelectorAll('button[role="menuitem"]')).toHaveLength(2);
     expect(settings?.textContent).not.toContain('modelSelector.fastMode');
+    expect(settings?.querySelector(
+      '[data-testid="chat-model-selector-settings-reset"]',
+    )).toBeNull();
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="chat-model-selector-btn"]',
     );
@@ -265,19 +268,6 @@ describe('ModelSelector provider levels', () => {
       container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]'),
     ).toBeNull();
 
-    await act(async () => {
-      settings?.querySelector<HTMLButtonElement>(
-        '[data-testid="chat-model-selector-settings-reset"]',
-      )?.click();
-      await Promise.resolve();
-    });
-
-    expect(configManager.setConfig).toHaveBeenCalledWith(
-      'ai.agent_model_defaults.mode',
-      'primary',
-    );
-    expect(flowChatStoreMocks.store.updateSessionReasoningPreset)
-      .toHaveBeenCalledWith('session-a', undefined);
   });
 
   it('opens the reasoning presets from the settings summary', async () => {

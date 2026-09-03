@@ -21,6 +21,7 @@ interface ReasoningConfigPanelProps {
   requestFormatLabel?: string;
   onCancel: () => void;
   onApply: (value: ReasoningConfigApplyResult) => void;
+  onDraftChange?: (value: ReasoningConfigApplyResult) => void;
 }
 
 export interface ReasoningConfigApplyResult {
@@ -37,11 +38,18 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
   requestFormatLabel,
   onCancel,
   onApply,
+  onDraftChange,
 }) => {
   const { t } = useTranslation('settings/models');
   const [draft, setDraft] = useState(() => cloneReasoningConfig(value));
   const [editorInvalid, setEditorInvalid] = useState(false);
   const projectionRequestId = useRef(0);
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
+  const projectionRequestRef = useRef(projectionRequest);
+  projectionRequestRef.current = projectionRequest;
+  const projectionRequestKey = JSON.stringify(projectionRequest);
+  const fallbackGeneratedProjection = projectionRequest ? undefined : generatedProjection;
   const projectionBindingKey = JSON.stringify({
     projectionRequest,
     catalog: draft.catalog,
@@ -58,17 +66,26 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
     : undefined;
 
   useEffect(() => {
-    if (!projectionRequest) {
+    onDraftChangeRef.current?.({
+      reasoning: draft,
+      projectionCatalog: draft.catalog ?? { source: 'auto' },
+      projection: activeGeneratedProjection,
+    });
+  }, [activeGeneratedProjection, draft]);
+
+  useEffect(() => {
+    const currentProjectionRequest = projectionRequestRef.current;
+    if (!currentProjectionRequest) {
       setResolvedProjection({
         bindingKey: projectionBindingKey,
-        projection: generatedProjection,
+        projection: fallbackGeneratedProjection,
       });
       return;
     }
 
     const requestId = ++projectionRequestId.current;
     void aiApi.projectReasoningCatalog({
-      ...projectionRequest,
+      ...currentProjectionRequest,
       reasoning: draft,
     }).then((projection) => {
       if (projectionRequestId.current !== requestId) return;
@@ -83,7 +100,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
         projectionRequestId.current += 1;
       }
     };
-  }, [draft, generatedProjection, projectionBindingKey, projectionRequest]);
+  }, [draft, fallbackGeneratedProjection, projectionBindingKey, projectionRequestKey]);
 
   const generatedPresetIds = useMemo(() => (
     activeGeneratedProjection?.presets

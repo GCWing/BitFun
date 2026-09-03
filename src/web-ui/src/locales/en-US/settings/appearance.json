@@ -1,9 +1,9 @@
 {
   "title": "Appearance",
-  "subtitle": "Interface language, visual appearance, appearance packages, and global font size",
+  "subtitle": "Interface language, appearance, and global font size",
   "package": {
-    "title": "Appearance packages",
-    "description": "Choose an appearance package from the list; hover the thumbnail for a larger preview. Packages stay on this device.",
+    "title": "Appearance",
+    "description": "Choose a built-in theme inside the BitFun default card, or select another installed skin shown alongside it. Hover a thumbnail for a larger preview; assets stay on this device.",
     "import": "Import package",
     "importSuccess": "Imported {{name}}",
     "importFailed": "Could not import the appearance package. Review the issue details.",
@@ -16,7 +16,8 @@
     "deleteSuccess": "Deleted {{name}}",
     "deleteFailed": "Could not delete appearance package: {{error}}",
     "nativeName": "BitFun default",
-    "nativeDescription": "Use the selected built-in appearance.",
+    "nativeDescription": "Choose from the built-in themes.",
+    "builtinTheme": "Built-in theme",
     "unknownAuthor": "Unknown author",
     "empty": "No imported appearance packages yet.",
     "missingSelection": "The selected appearance {{id}} is not installed on this device. Install it from Skin Market to restore your shared selection.",

@@ -1,9 +1,14 @@
  
 
-import { Button, ConfirmDialog, NumberInput, Select, Switch } from '@bitfun/ui';
+import { NumberInput, Select, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
+import {
+  ConfigFieldStatus,
+  ConfigLoadingState,
+  ConfigMessage,
+  ConfigRetryState,
+} from '@/infrastructure/config/components/common';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
@@ -19,8 +24,6 @@ import './EditorConfig.scss';
 
 const log = createLogger('EditorConfig');
 
-
-const AUTO_SAVE_DELAY = 500;
 
 export type EditorConfigProps = Record<string, never>;
 
@@ -190,6 +193,43 @@ function convertToCamelCase(config: Record<string, any>): EditorConfigPartial {
   return result;
 }
 
+function reconcileEditorPatch(
+  current: EditorConfigType,
+  persisted: EditorConfigType,
+  attempted: EditorConfigPartial,
+): EditorConfigType {
+  const next = { ...current } as Record<string, unknown>;
+  const currentRecord = current as unknown as Record<string, unknown>;
+  const persistedRecord = persisted as unknown as Record<string, unknown>;
+  const attemptedRecord = attempted as unknown as Record<string, unknown>;
+
+  for (const key of Object.keys(attemptedRecord)) {
+    const attemptedValue = attemptedRecord[key];
+    const currentValue = currentRecord[key];
+    if (
+      attemptedValue !== null
+      && typeof attemptedValue === 'object'
+      && currentValue !== null
+      && typeof currentValue === 'object'
+    ) {
+      const currentNested = currentValue as Record<string, unknown>;
+      const persistedNested = persistedRecord[key] as Record<string, unknown> | undefined;
+      const attemptedNested = attemptedValue as Record<string, unknown>;
+      const nextNested = { ...currentNested };
+      for (const nestedKey of Object.keys(attemptedNested)) {
+        if (Object.is(currentNested[nestedKey], attemptedNested[nestedKey])) {
+          nextNested[nestedKey] = persistedNested?.[nestedKey];
+        }
+      }
+      next[key] = nextNested;
+    } else if (Object.is(currentValue, attemptedValue)) {
+      next[key] = persistedRecord[key];
+    }
+  }
+
+  return next as unknown as EditorConfigType;
+}
+
 const EditorConfig: React.FC<EditorConfigProps> = () => {
   const { t } = useTranslation('settings/editor');
   
@@ -214,17 +254,15 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   
   
-  const isInitialLoadRef = useRef(true);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configRef = useRef<EditorConfigType>(config);
+  const persistedConfigRef = useRef<EditorConfigType>(config);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingSaveCountRef = useRef(0);
   const latestSaveRevisionRef = useRef(0);
-  const skipNextAutoSaveRef = useRef(false);
+  const saveBurstFailedRef = useRef(false);
   
   
   useEffect(() => {
@@ -236,16 +274,14 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
     try {
       setIsLoading(true);
       setLoadFailed(false);
-      isInitialLoadRef.current = true;
       const backendConfig = await configManager.getConfig<Record<string, any>>('editor');
       if (backendConfig) {
         const camelCaseConfig = convertToCamelCase(backendConfig);
-        setConfig({ ...DEFAULT_EDITOR_CONFIG, ...camelCaseConfig });
+        const nextConfig = { ...DEFAULT_EDITOR_CONFIG, ...camelCaseConfig };
+        configRef.current = nextConfig;
+        persistedConfigRef.current = nextConfig;
+        setConfig(nextConfig);
       }
-      
-      setTimeout(() => {
-        isInitialLoadRef.current = false;
-      }, 100);
     } catch (error) {
       log.error('Failed to load config', error);
       setLoadFailed(true);
@@ -260,20 +296,57 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
 
   
   const doSave = useCallback((
-    configToSave: EditorConfigType,
+    patch: EditorConfigPartial,
     successMessage = t('messages.saveSuccess'),
   ): Promise<boolean> => {
     const revision = ++latestSaveRevisionRef.current;
+    if (pendingSaveCountRef.current === 0) {
+      saveBurstFailedRef.current = false;
+      setStatusMessage(null);
+    }
     pendingSaveCountRef.current += 1;
     setIsSaving(true);
     setStatusMessage(null);
 
     const operation = saveQueueRef.current.then(async () => {
       try {
-        const snakeCaseConfig = convertToSnakeCase(configToSave);
-        await configManager.setConfig('editor', snakeCaseConfig);
-        globalEventBus.emit('editor:config:changed', snakeCaseConfig);
-        if (revision === latestSaveRevisionRef.current) {
+        const snakeCasePatch = convertToSnakeCase(patch);
+        const persisted = await configManager.updateConfig<Record<string, any>>(
+          'editor',
+          current => ({
+            ...current,
+            ...snakeCasePatch,
+            ...(snakeCasePatch.minimap ? {
+              minimap: {
+                ...(current.minimap && typeof current.minimap === 'object' ? current.minimap : {}),
+                ...snakeCasePatch.minimap,
+              },
+            } : {}),
+          }),
+        );
+        const persistedPatch = convertToCamelCase(persisted);
+        const nextPersistedConfig = {
+          ...persistedConfigRef.current,
+          ...patch,
+          ...persistedPatch,
+          ...(patch.minimap ? {
+            minimap: {
+              ...persistedConfigRef.current.minimap,
+              ...patch.minimap,
+              ...persistedPatch.minimap,
+            },
+          } : {}),
+        };
+        persistedConfigRef.current = nextPersistedConfig;
+        const reconciled = reconcileEditorPatch(
+          configRef.current,
+          nextPersistedConfig,
+          patch,
+        );
+        configRef.current = reconciled;
+        setConfig(reconciled);
+        globalEventBus.emit('editor:config:changed', persisted);
+        if (revision === latestSaveRevisionRef.current && !saveBurstFailedRef.current) {
           setStatusMessage({ type: 'success', text: successMessage });
           setTimeout(() => setStatusMessage(current => (
             current?.type === 'success' ? null : current
@@ -282,12 +355,18 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
         return true;
       } catch (error) {
         log.error('Failed to save config', error);
-        if (revision === latestSaveRevisionRef.current) {
-          setStatusMessage({
-            type: 'error',
-            text: `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error)),
-          });
-        }
+        saveBurstFailedRef.current = true;
+        const reconciled = reconcileEditorPatch(
+          configRef.current,
+          persistedConfigRef.current,
+          patch,
+        );
+        configRef.current = reconciled;
+        setConfig(reconciled);
+        setStatusMessage({
+          type: 'error',
+          text: `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error)),
+        });
         return false;
       } finally {
         pendingSaveCountRef.current -= 1;
@@ -298,64 +377,31 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
     return operation;
   }, [t]);
 
-  
-  useEffect(() => {
-    
-    if (isInitialLoadRef.current || isLoading) {
-      return;
-    }
-
-    if (skipNextAutoSaveRef.current) {
-      skipNextAutoSaveRef.current = false;
-      return;
-    }
-
-    
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-
-    
-    autoSaveTimerRef.current = setTimeout(() => {
-      doSave(configRef.current);
-    }, AUTO_SAVE_DELAY);
-
-    
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, [config, isLoading, doSave]);
-
-  const resetConfig = useCallback(async () => {
-    setResetConfirmOpen(false);
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    const defaults = { ...DEFAULT_EDITOR_CONFIG };
-    skipNextAutoSaveRef.current = true;
-    setConfig(defaults);
-    await doSave(defaults, t('messages.resetDone'));
-  }, [doSave, t]);
-
   const updateConfig = useCallback(<K extends keyof EditorConfigType>(
     key: K,
     value: EditorConfigType[K]
   ) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
+    const next = { ...configRef.current, [key]: value };
+    configRef.current = next;
+    setConfig(next);
+    void doSave({ [key]: value } as EditorConfigPartial);
     if (statusMessage?.type === 'success') {
       setStatusMessage(null);
     }
-  }, [statusMessage]);
+  }, [doSave, statusMessage]);
 
   const updateMinimapConfig = useCallback((key: keyof EditorConfigType['minimap'], value: any) => {
-    setConfig(prev => ({
-      ...prev,
+    const next = {
+      ...configRef.current,
       minimap: {
-        ...prev.minimap,
+        ...configRef.current.minimap,
         [key]: value
       }
-    }));
-  }, []);
+    };
+    configRef.current = next;
+    setConfig(next);
+    void doSave({ minimap: next.minimap });
+  }, [doSave]);
 
   if (isLoading || loadFailed) {
     return (
@@ -384,19 +430,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        extra={(
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setResetConfirmOpen(true)}
-            loading={isSaving}
-            disabled={isSaving}
-            data-bf-component="editor-config"
-            data-bf-part="actions"
-          >
-            {t('actions.reset')}
-          </Button>
-        )}
+        extra={isSaving || statusMessage ? (
+          <ConfigFieldStatus
+            status={isSaving
+              ? 'saving'
+              : statusMessage?.type === 'error'
+                ? 'error'
+                : 'saved'}
+            message={statusMessage?.text}
+          />
+        ) : undefined}
       />
 
       <ConfigPageContent className="bitfun-editor-config__content" data-bf-component="editor-config" data-bf-part="content">
@@ -597,15 +640,6 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
 
         <ConfigMessage message={statusMessage} />
       </ConfigPageContent>
-      <ConfirmDialog
-        open={resetConfirmOpen}
-        onOpenChange={(open) => { if (!open && !isSaving) setResetConfirmOpen(false); }}
-        onConfirm={() => void resetConfig()}
-        title={t('messages.resetTitle')}
-        message={t('messages.confirmReset')}
-        confirmText={t('messages.resetAction')}
-        type="warning"
-      />
     </ConfigPageLayout>
   );
 };

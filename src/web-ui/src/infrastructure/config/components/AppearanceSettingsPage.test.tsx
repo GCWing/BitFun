@@ -13,9 +13,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@bitfun/ui', async (importOriginal) => ({
   ...await importOriginal<typeof import('@bitfun/ui')>(),
-  Combobox: ({ triggerTestId }: { triggerTestId?: string }) => (
-    <button type="button" data-testid={triggerTestId} />
-  ),
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   FormSection: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => <section {...props}>{children}</section>,
   FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
@@ -67,18 +64,19 @@ vi.mock('./AppearancePackageConfigSection', () => ({
 }));
 
 describe('AppearanceSettingsPage', () => {
-  it('keeps appearance controls in the option panel and package management in its own section', () => {
+  it('keeps language in the interface section and delegates appearance selection to the card gallery', () => {
     document.body.innerHTML = renderToStaticMarkup(<AppearanceSettingsPage />);
 
-    const appearanceSection = document.querySelector(
+    const interfaceSection = document.querySelector(
       '[data-testid="appearance-settings-section"] .bitfun-config-page-section',
     );
-    const packageSelect = document.querySelector('[data-testid="appearance-package-select"]');
     const packageManagement = document.querySelector('[data-testid="appearance-package-config"]');
 
-    expect(appearanceSection).not.toBeNull();
-    expect(packageSelect?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
-    expect(packageSelect?.closest('.appearance-settings__package-row')).not.toBeNull();
+    expect(interfaceSection).not.toBeNull();
+    expect(document.querySelector('[data-testid="appearance-language-select"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="appearance-palette-select"]')).toBeNull();
+    expect(document.querySelector('[data-testid="appearance-package-select"]')).toBeNull();
     expect(packageManagement?.closest('.bitfun-config-page-section')).toBeNull();
+    expect(packageManagement?.closest('.appearance-settings__content')).not.toBeNull();
   });
 });

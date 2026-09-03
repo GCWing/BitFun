@@ -211,6 +211,7 @@ export class ChatTimelineProjector {
         !item.tool &&
         item.is_subagent !== true &&
         type !== 'thinking' &&
+        type !== 'user-steering' &&
         type !== 'tool' &&
         type !== 'subagent' &&
         type !== 'agent') {

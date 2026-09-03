@@ -19,9 +19,9 @@ use bitfun_services_integrations::remote_connect::{
     handle_remote_command, handle_remote_interaction_command, handle_remote_poll_command,
     handle_remote_session_command, handle_remote_workspace_command,
     handle_remote_workspace_file_command, submit_remote_dialog, RemoteCancelTaskRequest,
-    RemoteCommandRuntimeHost, RemoteConnectSubmissionSource, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteSessionTrackerRegistry,
+    RemoteCommandRuntimeHost, RemoteConnectSubmissionSource, RemoteDialogSteerOutcome,
+    RemoteDialogSteerRequest, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
+    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteSessionTrackerRegistry,
 };
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
@@ -129,6 +129,7 @@ impl RemoteExecutionDispatcher {
             RemoteDialogSubmissionRequest {
                 session_id: session_id.to_string(),
                 content,
+                display_content: None,
                 agent_type: agent_type.map(ToOwned::to_owned),
                 image_contexts,
                 policy: RemoteDialogSubmissionPolicy::for_source(source),
@@ -274,6 +275,14 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
     ) -> std::result::Result<RemoteDialogSubmitOutcome, String> {
         let host = CoreServiceAgentRuntime::remote_dialog_host(self.dispatcher)?;
         submit_remote_dialog(&host, request).await
+    }
+
+    async fn steer_dialog(
+        &self,
+        request: RemoteDialogSteerRequest<Self::ImageContext>,
+    ) -> std::result::Result<RemoteDialogSteerOutcome, String> {
+        let host = CoreServiceAgentRuntime::remote_dialog_host(self.dispatcher)?;
+        host.steer_dialog(request).await
     }
 
     async fn cancel_task(
@@ -550,6 +559,7 @@ mod tests {
         let command = RemoteCommand::SendMessage {
             session_id: "session-1".to_string(),
             content: "hello".to_string(),
+            display_content: None,
             agent_type: Some("code".to_string()),
             images: Some(vec![ImageAttachment {
                 name: "clip.png".to_string(),
@@ -622,10 +632,13 @@ mod tests {
                 start_ms: Some(42),
                 input_preview: Some("{\"path\":\"README.md\"}".to_string()),
                 tool_input: None,
+                plan: None,
             }],
             round_index: 2,
             items: Some(vec![ChatMessageItem {
                 item_type: "tool".to_string(),
+                steering_id: None,
+                round_index: None,
                 content: None,
                 tool: None,
                 is_subagent: None,

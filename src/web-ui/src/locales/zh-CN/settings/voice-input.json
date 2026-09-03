@@ -75,6 +75,7 @@
       "loadFailed": "加载控制端实时语音设置失败",
       "saved": "实时语音设置已保存",
       "saveFailed": "保存实时语音设置失败",
+      "required": "启用实时语音前，请填写 API Key 和语音角色。",
       "unsaved": "实时语音配置有尚未保存的修改。"
     },
     "call": {

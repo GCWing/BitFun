@@ -14,7 +14,8 @@
     inline-size: var(--bf-overlay-menu-inline-size);
     max-inline-size: 100%;
     max-block-size: var(--bf-overlay-menu-max-block-size);
-    padding: var(--bf-overlay-menu-surface-padding);
+    padding-block: var(--bf-overlay-menu-surface-padding);
+    padding-inline: var(--bf-overlay-menu-surface-padding) 0;
     border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
     border-radius: var(--bf-overlay-menu-surface-radius);
     color: var(--bf-color-action-neutral-content);
@@ -46,6 +47,8 @@
     gap: calc(var(--bf-space-1) / 2);
     /* Keep item focus rings inside the scroll viewport on every edge. */
     padding: var(--bf-focus-width);
+    /* Keep the content inset while the viewport scrollbar reaches the surface edge. */
+    padding-inline-end: calc(var(--bf-overlay-menu-surface-padding) + var(--bf-focus-width));
   }
 
   .section,

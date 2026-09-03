@@ -105,19 +105,12 @@
     "trimAutoWhitespace": "自动删除行尾空格",
     "trimAutoWhitespaceDesc": "保存时移除行尾多余的空格"
   },
-  "actions": {
-    "reset": "恢复默认"
-  },
   "messages": {
     "loading": "加载中...",
     "loadFailed": "加载配置失败",
     "loadFailedLocked": "无法读取编辑器设置。为避免用默认值覆盖现有配置，当前页面已锁定。",
     "retry": "重新加载",
     "saveSuccess": "配置已保存，已打开的编辑器会自动更新",
-    "saveFailed": "保存配置失败",
-    "confirmReset": "确定要重置编辑器配置为默认值吗？",
-    "resetTitle": "重置编辑器设置？",
-    "resetAction": "恢复默认值",
-    "resetDone": "默认值已保存，已打开的编辑器会自动更新"
+    "saveFailed": "保存配置失败"
   }
 }

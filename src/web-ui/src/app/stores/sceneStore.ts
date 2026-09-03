@@ -30,6 +30,10 @@ import {
   type InteractionMotion,
 } from '@/shared/utils/motionPreference';
 import type { SceneTab, SceneTabId } from '../components/SceneBar/types';
+import {
+  abandonSettingsDraftsForContextSwitch,
+  requestAllSettingsDraftsExit,
+} from '@/infrastructure/config/settingsDraftRegistry';
 
 function getSceneDefOrMiniapp(id: SceneTabId) {
   const d = getSceneDef(id);
@@ -128,52 +132,60 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   navigationSequence: 0,
 
   openScene: (id) => {
-    const state = get();
-    const { activeTabId } = state;
-    const navigationMotion = getInteractionMotion();
+    const performOpen = () => {
+      const state = get();
+      const { activeTabId } = state;
+      const navigationMotion = getInteractionMotion();
 
-    // Already active — re-sync left nav in case user navigated back to MainNav
-    if (id === activeTabId) {
-      const navSceneId = resolveNavSceneId(id);
-      const navStore = useNavSceneStore.getState();
-      if (navSceneId && (!navStore.showSceneNav || navStore.navSceneId !== navSceneId)) {
-        navStore.openNavScene(navSceneId);
+      // Already active — re-sync left nav in case user navigated back to MainNav
+      if (id === activeTabId) {
+        const navSceneId = resolveNavSceneId(id);
+        const navStore = useNavSceneStore.getState();
+        if (navSceneId && (!navStore.showSceneNav || navStore.navSceneId !== navSceneId)) {
+          navStore.openNavScene(navSceneId);
+        }
+        return;
       }
-      return;
-    }
 
-    const isAlreadyOpen = state.openTabs.some(tab => tab.id === id);
-    const def = getSceneDef(id);
-    const isMiniappTab = typeof id === 'string' && id.startsWith('miniapp:');
-    if (!isAlreadyOpen && !def && !isMiniappTab) return;
+      const isAlreadyOpen = state.openTabs.some(tab => tab.id === id);
+      const def = getSceneDef(id);
+      const isMiniappTab = typeof id === 'string' && id.startsWith('miniapp:');
+      if (!isAlreadyOpen && !def && !isMiniappTab) return;
 
-    const { openTabs, navHistory, navCursor } = state;
+      const { openTabs, navHistory, navCursor } = state;
 
-    const histUpdate = pushHistory(navHistory, navCursor, id);
+      const histUpdate = pushHistory(navHistory, navCursor, id);
 
-    // Already open → just activate
-    if (openTabs.some(tab => tab.id === id)) {
-      const activatedAt = Date.now();
+      // Already open → just activate
+      if (openTabs.some(tab => tab.id === id)) {
+        const activatedAt = Date.now();
+        set({
+          activeTabId: id,
+          openTabs: orderPinnedTabsFirst(openTabs.map(tab =>
+            tab.id === id ? { ...tab, lastUsed: activatedAt } : tab
+          )),
+          navigationMotion,
+          navigationSequence: state.navigationSequence + 1,
+          ...histUpdate,
+        });
+        return;
+      }
+
+      const next = [...openTabs, buildSceneTab(id, Date.now())];
       set({
+        openTabs: orderPinnedTabsFirst(next),
         activeTabId: id,
-        openTabs: orderPinnedTabsFirst(openTabs.map(tab =>
-          tab.id === id ? { ...tab, lastUsed: activatedAt } : tab
-        )),
         navigationMotion,
         navigationSequence: state.navigationSequence + 1,
         ...histUpdate,
       });
+    };
+
+    if (get().activeTabId === 'settings' && id !== 'settings') {
+      requestAllSettingsDraftsExit(performOpen);
       return;
     }
-
-    const next = [...openTabs, buildSceneTab(id, Date.now())];
-    set({
-      openTabs: orderPinnedTabsFirst(next),
-      activeTabId: id,
-      navigationMotion,
-      navigationSequence: state.navigationSequence + 1,
-      ...histUpdate,
-    });
+    performOpen();
   },
 
   activateScene: (id) => {
@@ -181,81 +193,117 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   },
 
   closeScene: (id) => {
-    const state = get();
-    const { openTabs, activeTabId, navHistory, navCursor } = state;
-    if (!openTabs.some(tab => tab.id === id) || !isClosableScene(id)) return;
+    const performClose = () => {
+      const state = get();
+      const { openTabs, activeTabId, navHistory, navCursor } = state;
+      if (!openTabs.some(tab => tab.id === id) || !isClosableScene(id)) return;
 
-    const nextTabs = openTabs.filter(t => t.id !== id);
-    if (nextTabs.length === 0) {
+      const nextTabs = openTabs.filter(t => t.id !== id);
+      if (nextTabs.length === 0) {
+        set({
+          openTabs: [],
+          activeTabId: null,
+          navHistory: [],
+          navCursor: -1,
+          navigationMotion: getInteractionMotion(),
+          navigationSequence: state.navigationSequence + 1,
+        });
+        return;
+      }
+
+      const fallbackTabId = [...nextTabs].sort((a, b) => b.lastUsed - a.lastUsed)[0].id;
+      const newActiveId = id === activeTabId
+        ? fallbackTabId
+        : activeTabId && nextTabs.some(tab => tab.id === activeTabId)
+          ? activeTabId
+          : fallbackTabId;
+
+      const histUpdate = removeFromHistory(navHistory, navCursor, id, newActiveId);
       set({
-        openTabs: [],
-        activeTabId: null,
-        navHistory: [],
-        navCursor: -1,
+        openTabs: orderPinnedTabsFirst(nextTabs),
+        activeTabId: newActiveId,
         navigationMotion: getInteractionMotion(),
         navigationSequence: state.navigationSequence + 1,
+        ...histUpdate,
       });
+    };
+
+    if (id === 'settings') {
+      const settingsWasActive = get().activeTabId === 'settings';
+      const closedImmediately = requestAllSettingsDraftsExit(performClose);
+      if (!closedImmediately && !settingsWasActive) {
+        get().openScene('settings');
+      }
       return;
     }
-
-    const fallbackTabId = [...nextTabs].sort((a, b) => b.lastUsed - a.lastUsed)[0].id;
-    const newActiveId = id === activeTabId
-      ? fallbackTabId
-      : activeTabId && nextTabs.some(tab => tab.id === activeTabId)
-        ? activeTabId
-        : fallbackTabId;
-
-    const histUpdate = removeFromHistory(navHistory, navCursor, id, newActiveId);
-    set({
-      openTabs: orderPinnedTabsFirst(nextTabs),
-      activeTabId: newActiveId,
-      navigationMotion: getInteractionMotion(),
-      navigationSequence: state.navigationSequence + 1,
-      ...histUpdate,
-    });
+    performClose();
   },
 
   goBack: () => {
-    const state = get();
-    const { navHistory, navCursor, openTabs } = state;
-    for (let i = navCursor - 1; i >= 0; i--) {
-      const targetId = navHistory[i];
-      if (openTabs.some(t => t.id === targetId)) {
-        set(state => ({
-          navCursor: i,
-          activeTabId: targetId,
-          navigationMotion: getInteractionMotion(),
-          navigationSequence: state.navigationSequence + 1,
-          openTabs: state.openTabs.map(t =>
-            t.id === targetId ? { ...t, lastUsed: Date.now() } : t
-          ),
-        }));
-        return;
+    const performBack = () => {
+      const state = get();
+      const { navHistory, navCursor, openTabs } = state;
+      for (let i = navCursor - 1; i >= 0; i--) {
+        const targetId = navHistory[i];
+        if (openTabs.some(t => t.id === targetId)) {
+          set(current => ({
+            navCursor: i,
+            activeTabId: targetId,
+            navigationMotion: getInteractionMotion(),
+            navigationSequence: current.navigationSequence + 1,
+            openTabs: current.openTabs.map(t =>
+              t.id === targetId ? { ...t, lastUsed: Date.now() } : t
+            ),
+          }));
+          return;
+        }
       }
+    };
+    const state = get();
+    const targetId = state.navHistory
+      .slice(0, state.navCursor)
+      .reverse()
+      .find(id => state.openTabs.some(tab => tab.id === id));
+    if (state.activeTabId === 'settings' && targetId && targetId !== 'settings') {
+      requestAllSettingsDraftsExit(performBack);
+      return;
     }
+    performBack();
   },
 
   goForward: () => {
-    const state = get();
-    const { navHistory, navCursor, openTabs } = state;
-    for (let i = navCursor + 1; i < navHistory.length; i++) {
-      const targetId = navHistory[i];
-      if (openTabs.some(t => t.id === targetId)) {
-        set(state => ({
-          navCursor: i,
-          activeTabId: targetId,
-          navigationMotion: getInteractionMotion(),
-          navigationSequence: state.navigationSequence + 1,
-          openTabs: state.openTabs.map(t =>
-            t.id === targetId ? { ...t, lastUsed: Date.now() } : t
-          ),
-        }));
-        return;
+    const performForward = () => {
+      const state = get();
+      const { navHistory, navCursor, openTabs } = state;
+      for (let i = navCursor + 1; i < navHistory.length; i++) {
+        const targetId = navHistory[i];
+        if (openTabs.some(t => t.id === targetId)) {
+          set(current => ({
+            navCursor: i,
+            activeTabId: targetId,
+            navigationMotion: getInteractionMotion(),
+            navigationSequence: current.navigationSequence + 1,
+            openTabs: current.openTabs.map(t =>
+              t.id === targetId ? { ...t, lastUsed: Date.now() } : t
+            ),
+          }));
+          return;
+        }
       }
+    };
+    const state = get();
+    const targetId = state.navHistory
+      .slice(state.navCursor + 1)
+      .find(id => state.openTabs.some(tab => tab.id === id));
+    if (state.activeTabId === 'settings' && targetId && targetId !== 'settings') {
+      requestAllSettingsDraftsExit(performForward);
+      return;
     }
+    performForward();
   },
 
   resetForPeerSwitch: () => {
+    abandonSettingsDraftsForContextSwitch();
     const state = get();
     const tabs = buildDefaultTabs();
     const activeTabId = tabs[0]?.id ?? null;

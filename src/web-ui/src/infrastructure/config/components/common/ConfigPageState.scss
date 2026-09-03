@@ -28,3 +28,61 @@
   margin-bottom: 0;
 }
 
+.bitfun-config-field-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bf-space-2);
+  min-width: 0;
+  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--bf-type-label-sm-line-height);
+
+  &[data-bf-status='error'] {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  &[data-bf-status='saved'] {
+    color: var(--bf-color-status-success-content);
+  }
+
+  &__marker {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: currentColor;
+  }
+}
+
+.bitfun-config-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bf-space-4);
+  min-height: 40px;
+  padding: var(--bf-space-2) 0;
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--bf-space-2);
+    flex: 0 0 auto;
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-config-action-bar {
+    align-items: stretch;
+    flex-direction: column;
+
+    &__actions {
+      width: 100%;
+
+      > [data-bf-component='button'] {
+        flex: 1 1 0;
+      }
+    }
+  }
+}
+

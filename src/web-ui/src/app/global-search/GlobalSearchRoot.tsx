@@ -94,7 +94,7 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   network: Network,
 };
 
-type ModalActionIconRole =
+type GlobalSearchActionIconRole =
   | 'new-session'
   | 'open-browser'
   | 'open-terminal'
@@ -106,7 +106,7 @@ type ModalActionIconRole =
  * Global Search uses color to distinguish its six primary actions. Role names
  * keep the mapping stable without leaking the current hues into product data.
  */
-const MODAL_ACTION_ICON_ROLES: Partial<Record<ProductActionId, ModalActionIconRole>> = {
+const GLOBAL_SEARCH_ACTION_ICON_ROLES: Partial<Record<ProductActionId, GlobalSearchActionIconRole>> = {
   'session.new': 'new-session',
   'surface.browser.open': 'open-browser',
   'surface.terminal.open': 'open-terminal',
@@ -367,55 +367,14 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
         onKeyDownCapture={handleRootKeyDownCapture}
       >
         <header className="global-search__header">
-          {variant === 'modal' ? (
-            <div
-              className="global-search__query-system-shell"
-              data-bf-component="global-search"
-              data-bf-part="query"
-            >
-              <SearchField
-                ref={inputRef}
-                className="global-search__query global-search__query--system"
-                value={query}
-                onValueChange={(nextQuery) => {
-                  setQuery(nextQuery);
-                  setDrilldownGroup(null);
-                }}
-                onKeyDown={handleInputKeyDown}
-                onCompositionStart={() => {
-                  inputCompositionActiveRef.current = true;
-                }}
-                onCompositionEnd={() => {
-                  inputCompositionActiveRef.current = false;
-                }}
-                onClear={query ? () => {
-                  setQuery('');
-                  setDrilldownGroup(null);
-                  inputRef.current?.focus();
-                } : undefined}
-                clearLabel={query ? tCommon('nav.search.clear') : undefined}
-                leadingIcon={<Icon name="search" size="lg" />}
-                shortcut={query ? undefined : (
-                  <KeyHint icon={searchShortcutHint.modifier}>
-                    {searchShortcutHint.key}
-                  </KeyHint>
-                )}
-                size="md"
-                placeholder={tCommon('nav.search.inputPlaceholder')}
-                aria-label={tCommon('nav.search.inputLabel')}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded="true"
-                aria-controls={resultsId}
-                aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
-                maxLength={SEARCH_QUERY_MAX_LENGTH}
-                autoFocus={autoFocus}
-              />
-            </div>
-          ) : (
+          <div
+            className="global-search__query-system-shell"
+            data-bf-component="global-search"
+            data-bf-part="query"
+          >
             <SearchField
               ref={inputRef}
-              className="global-search__query"
+              className="global-search__query global-search__query--system"
               value={query}
               onValueChange={(nextQuery) => {
                 setQuery(nextQuery);
@@ -435,6 +394,12 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               } : undefined}
               clearLabel={query ? tCommon('nav.search.clear') : undefined}
               leadingIcon={<Icon name="search" size="lg" />}
+              shortcut={query ? undefined : (
+                <KeyHint icon={searchShortcutHint.modifier}>
+                  {searchShortcutHint.key}
+                </KeyHint>
+              )}
+              size="md"
               placeholder={tCommon('nav.search.inputPlaceholder')}
               aria-label={tCommon('nav.search.inputLabel')}
               role="combobox"
@@ -445,45 +410,28 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               maxLength={SEARCH_QUERY_MAX_LENGTH}
               autoFocus={autoFocus}
             />
-          )}
+          </div>
 
           <div className="global-search__scope-bar" data-bf-component="global-search" data-bf-part="scopeBar">
             <div className="global-search__scopes">
               {(['all', 'actions', 'content'] as const).map((candidate) => {
                 const selected = effectiveScope === candidate;
                 return (
-                  variant === 'modal' ? (
-                    <Button
-                      key={candidate}
-                      size="sm"
-                      variant={selected ? 'fill' : 'outline'}
-                      className={`global-search__scope global-search__scope--system${selected ? ' is-selected' : ''}`}
-                      aria-pressed={selected}
-                      disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
-                      onClick={() => {
-                        setScope(candidate);
-                        setDrilldownGroup(null);
-                        inputRef.current?.focus();
-                      }}
-                    >
-                      {tCommon(`nav.search.scopes.${candidate}`)}
-                    </Button>
-                  ) : (
-                    <button
-                      key={candidate}
-                      type="button"
-                      className={`global-search__scope global-search__scope--native${selected ? ' is-selected' : ''}`}
-                      aria-pressed={selected}
-                      disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
-                      onClick={() => {
-                        setScope(candidate);
-                        setDrilldownGroup(null);
-                        inputRef.current?.focus();
-                      }}
-                    >
-                      {tCommon(`nav.search.scopes.${candidate}`)}
-                    </button>
-                  )
+                  <Button
+                    key={candidate}
+                    size="sm"
+                    variant={selected ? 'fill' : 'outline'}
+                    className={`global-search__scope global-search__scope--system${selected ? ' is-selected' : ''}`}
+                    aria-pressed={selected}
+                    disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
+                    onClick={() => {
+                      setScope(candidate);
+                      setDrilldownGroup(null);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    {tCommon(`nav.search.scopes.${candidate}`)}
+                  </Button>
                 );
               })}
             </div>
@@ -578,8 +526,8 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     const selected = item.id === activeId;
                     const itemVariant = resultVariant(item.group);
                     const entity = itemVariant === 'entity';
-                    const modalActionIconRole = item.target.kind === 'action'
-                      ? MODAL_ACTION_ICON_ROLES[item.target.actionId]
+                    const actionIconRole = item.target.kind === 'action'
+                      ? GLOBAL_SEARCH_ACTION_ICON_ROLES[item.target.actionId]
                       : undefined;
                     const resultCopy = (
                       <span className="global-search__result-copy">
@@ -593,7 +541,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       </span>
                     );
 
-                    if (variant === 'modal' && itemVariant === 'action') {
+                    if (itemVariant === 'action') {
                       return (
                         <ActionCard
                           key={item.id}
@@ -608,7 +556,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                           leading={(
                             <span
                               className="global-search__action-icon"
-                              data-icon-role={modalActionIconRole}
+                              data-icon-role={actionIconRole}
                               aria-hidden="true"
                             >
                               <ItemIcon size={20} strokeWidth={1.75} />
@@ -625,7 +573,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       );
                     }
 
-                    if (variant === 'modal' && entity) {
+                    if (entity) {
                       return (
                         <ActionCard
                           key={item.id}
@@ -664,20 +612,11 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         data-bf-state={selected ? 'selected' : undefined}
                       >
                         <span className="global-search__result-icon" aria-hidden="true">
-                          <ItemIcon
-                            size={itemVariant === 'standard' ? 16 : 20}
-                            strokeWidth={itemVariant === 'action' ? 1.75 : 1.65}
-                          />
+                          <ItemIcon size={16} strokeWidth={1.65} />
                         </span>
                         {resultCopy}
                         {item.context ? (
                           <span className="global-search__result-context">{item.context}</span>
-                        ) : null}
-                        {entity ? (
-                          <span className="global-search__result-tools" aria-hidden="true">
-                            <Icon name="pin" size="sm" />
-                            <Icon name="more" size="md" />
-                          </span>
                         ) : null}
                       </button>
                     );
@@ -688,8 +627,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
           })}
         </ScrollArea>
 
-        {(variant === 'embedded'
-          || Boolean(parsedQuery.query)
+        {(Boolean(parsedQuery.query)
           || Boolean(drilldownGroup)
           || snapshot.diagnostics.length > 0) ? (
         <footer className="global-search__footer" data-bf-component="global-search" data-bf-part="footer">

@@ -25,6 +25,7 @@ import { ConversationMessageRenderPolicy } from '../main/ets/pages/policy/Conver
 import { ToolCollapsePolicy } from '../main/ets/pages/policy/ToolCollapsePolicy';
 import { ChatMessageStructurePolicy } from '../main/ets/pages/policy/ChatMessageStructurePolicy';
 import { ToolStatusPresentationPolicy } from '../main/ets/pages/policy/ToolStatusPresentationPolicy';
+import { PlanToolPolicy } from '../main/ets/pages/policy/PlanToolPolicy';
 import {
   ConversationUiMessage,
   ConversationUiMessageItem,
@@ -43,6 +44,7 @@ import { RemoteCompactHomePolicy } from '../main/ets/pages/policy/RemoteCompactH
 import { AccountDeviceSelectionPolicy } from '../main/ets/pages/policy/AccountDeviceSelectionPolicy';
 import { SidebarConnectionActionPolicy } from '../main/ets/pages/policy/SidebarConnectionActionPolicy';
 import { SidebarDeviceProjectionPolicy } from '../main/ets/pages/policy/SidebarDeviceProjectionPolicy';
+import { HarnessProfilePolicy } from '../main/ets/pages/policy/HarnessProfilePolicy';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 import {
   ConnectScanDecisionPolicy,
@@ -50,6 +52,14 @@ import {
 } from '../main/ets/services/ConnectScanDecisionPolicy';
 
 export default function conversationPresentationUnitTest() {
+  describe('HarnessProfilePolicy', () => {
+    it('maps mobile execution levels to canonical host Agents', 0, () => {
+      expect(HarnessProfilePolicy.agentType('minimal')).assertEqual('minimal');
+      expect(HarnessProfilePolicy.agentType('standard')).assertEqual('agentic');
+      expect(HarnessProfilePolicy.agentType('ultimate')).assertEqual('Ultra');
+    });
+  });
+
   describe('Local conversation empty home', () => {
     it('keeps local chat on a blank timeline instead of suggestion chips', 0, () => {
       const projection = ConversationViewState.project(
@@ -315,6 +325,19 @@ export default function conversationPresentationUnitTest() {
       ])).assertTrue();
     });
 
+    it('renders steering as a stable inline user entry instead of assistant text', 0, () => {
+      const steering: ConversationUiMessageItem = {
+        type: 'user-steering',
+        steering_id: 'steering-1',
+        content: 'Use the second approach'
+      };
+      expect(ChatMessageStructurePolicy.isUserSteeringEntry(steering)).assertTrue();
+      expect(ChatMessageStructurePolicy.isTextEntry(steering)).assertFalse();
+      expect(ChatMessageStructurePolicy.requiresStructuredRendering([steering])).assertTrue();
+      expect(ChatMessageStructurePolicy.structuredItemKey(steering, 'item-1'))
+        .assertEqual('item-1-steering-steering-1');
+    });
+
     it('peels a trailing composite reply onto a stable streaming markdown leaf', 0, () => {
       const items: ConversationUiMessageItem[] = [
         { type: 'thinking', content: 'Inspect' },
@@ -442,6 +465,24 @@ export default function conversationPresentationUnitTest() {
       ]);
       expect(groups.length).assertEqual(1);
       expect(groups[0].type).assertEqual('tool');
+    });
+
+    it('keeps plan cards out of collapsed tool summaries', 0, () => {
+      const planTool: ConversationUiToolStatus = {
+        id: 'plan-1',
+        name: 'Write',
+        status: 'completed',
+        input_preview: '{"file_path":"/repo/.bitfun/plans/mobile.plan.md"}'
+      };
+      const groups = ToolCollapsePolicy.collapsedGroups([
+        toolStatus('1', 'Read', 'completed'),
+        planTool,
+        toolStatus('2', 'Grep', 'completed')
+      ]);
+      expect(groups.length).assertEqual(3);
+      expect(groups[1].tools[0].name).assertEqual('Write');
+      expect(PlanToolPolicy.descriptor(planTool)?.file_path || '').assertEqual('/repo/.bitfun/plans/mobile.plan.md');
+      expect(PlanToolPolicy.canBuild(planTool)).assertTrue();
     });
 
     it('does not fold running, failed, or blocking tools into the summary', 0, () => {

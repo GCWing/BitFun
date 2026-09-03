@@ -12,7 +12,7 @@ import { Menu, MenuItem, MenuSection, MenuSeparator, OverflowText } from '@bitfu
 import React, { useState, useEffect, useId, useRef, useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { RotateCcw, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -997,8 +997,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     presetDisplayLabel(preset, orderedReasoningPresets, t)
   ));
   const hasNativeReasoningSettings = Boolean(sessionId && orderedReasoningPresets.length > 0);
-  const nativeSettingsAreDefault = currentNativeModelId === 'primary' && !selectedReasoningPreset;
-
   useEffect(() => {
     if (
       !targetIsSubagent
@@ -1020,10 +1018,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       : undefined;
   }, [defaultModels, modelCatalog]);
   
-  const handleSelectModel = useCallback(async (
-    modelId: string,
-    options?: { resetReasoning?: boolean },
-  ) => {
+  const handleSelectModel = useCallback(async (modelId: string) => {
     if (disabled || loading || reasoningLoading) return;
 
     if (
@@ -1045,9 +1040,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const previousReasoningPreset = sessionId
       ? store.getState().sessions.get(sessionId)?.config.reasoningPreset
       : undefined;
-    const nextReasoningPreset = options?.resetReasoning
-      ? undefined
-      : recentPresetForModel(modelId);
+    const nextReasoningPreset = recentPresetForModel(modelId);
     let sessionModelWrittenOptimistically = false;
 
     try {
@@ -1144,17 +1137,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     sessionId,
     t,
     targetIsSubagent,
-  ]);
-
-  const handleResetNativeSettings = useCallback(() => {
-    if (nativeSettingsAreDefault || disabled || loading || reasoningLoading) return;
-    void handleSelectModel('primary', { resetReasoning: true });
-  }, [
-    disabled,
-    handleSelectModel,
-    loading,
-    nativeSettingsAreDefault,
-    reasoningLoading,
   ]);
 
   const handleSelectReasoningPreset = useCallback(async (presetId: string | null) => {
@@ -1936,17 +1918,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 </MenuItem>
               )}
 
-              <MenuSeparator />
-
-              <MenuItem
-                className="bitfun-model-selector__settings-item bitfun-model-selector__settings-reset"
-                data-testid="chat-model-selector-settings-reset"
-                disabled={nativeSettingsAreDefault || disabled || loading || reasoningLoading}
-                onClick={handleResetNativeSettings}
-                shortcut={<RotateCcw size={14} />}
-              >
-                {t('modelSelector.resetToDefaults')}
-              </MenuItem>
             </MenuSection>
           </Menu>,
           getAppearanceOverlayHost()

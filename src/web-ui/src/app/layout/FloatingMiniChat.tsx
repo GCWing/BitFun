@@ -11,7 +11,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Phone } from 'lucide-react';
 
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
@@ -595,7 +595,7 @@ export const FloatingMiniChat: React.FC = () => {
               data-bf-part="voiceModeIcon"
               aria-hidden="true"
             >
-              <Icon name="mic" size="lg" style={{ width: 14, height: 14 }} />
+              <Phone size={14} />
             </span>
           ) : isMiniAppBubbleIsolated ? (
             <div
@@ -698,7 +698,7 @@ export const FloatingMiniChat: React.FC = () => {
             ) : isVoiceMode ? (
               <Icon name="side-chat" size="sm" aria-hidden="true" />
             ) : (
-              <Icon name="mic" size="lg" style={{ width: 15, height: 15 }} aria-hidden="true" />
+              <Phone size={15} aria-hidden="true" />
             )}
             <span>
               {tVoice(isVoiceMode

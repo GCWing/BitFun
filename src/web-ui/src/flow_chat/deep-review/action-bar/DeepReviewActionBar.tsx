@@ -300,7 +300,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
   const handleOpenReviewSettings = useCallback(() => {
     useSettingsStore.getState().openDestination({
       pageId: 'tools.execution',
-      viewId: 'advanced',
     });
     useSceneStore.getState().openScene('settings');
   }, []);

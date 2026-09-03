@@ -1,22 +1,21 @@
 .notification-container {
+  --notification-stack-max-height: calc(100vh - 120px);
+  --notification-visual-gutter: var(--bf-space-8);
+
   position: fixed;
   bottom: 60px;
   left: 16px;
   right: auto;
   z-index: var(--bf-layer-notification);
   display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
   pointer-events: none;
-
-  > * {
-    pointer-events: auto;
-  }
 
   &__presence {
     display: grid;
     grid-template-rows: 1fr;
-    overflow: hidden;
+    // The item owns its opacity/transform exit. Clipping this layout track
+    // would cut off the card's elevation shadow in every steady state.
+    overflow: visible;
     transition: grid-template-rows 140ms cubic-bezier(0.23, 1, 0.32, 1);
 
     > * {
@@ -30,11 +29,27 @@
   }
 
   
-  max-height: calc(100vh - 120px);
+  max-height: var(--notification-stack-max-height);
 }
 
 .notification-container__viewport {
-  max-height: inherit;
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--bf-space-2);
+  max-height: calc(
+    var(--notification-stack-max-height)
+    + var(--notification-visual-gutter)
+    + var(--notification-visual-gutter)
+  );
+  margin: calc(0px - var(--notification-visual-gutter));
+  padding: var(--notification-visual-gutter);
+  pointer-events: none;
+
+  // Reserve paint space inside the scrollport while letting empty shadow
+  // gutters pass pointer input through to the product underneath.
+  > :not(.notification-container__presence--exiting) {
+    pointer-events: auto;
+  }
 }
 
 

@@ -267,16 +267,15 @@ function migrateLegacyRendererDefinitions(value: unknown): Record<string, unknow
 
 const LEGACY_RUNTIME_VIEW_IDS: Readonly<Record<string, readonly string[]>> = {
   personalization: ['pet', 'session-workspace'],
-  execution: ['execution-common', 'execution-advanced'],
+  'execution-common': ['execution'],
+  'execution-advanced': ['execution'],
   'device-control': ['browser-desktop-control'],
   'execution-control': [
-    'execution-common',
-    'execution-advanced',
+    'execution',
     'browser-desktop-control',
   ],
   permissions: [
-    'execution-common',
-    'execution-advanced',
+    'execution',
     'browser-desktop-control',
   ],
 };
@@ -287,11 +286,15 @@ const RETIRED_APPEARANCE_SETTINGS_PARTS = new Set([
   'packageCardBody',
   'packageActiveIndicator',
   'packageEmpty',
+  'palettePicker',
+  'paletteSelect',
+  'packageSelect',
 ]);
 
 const RETIRED_COMPONENT_SURFACE_IDS = new Set(['button', 'card', 'switch', 'select']);
 
 const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  'appearance-settings': RETIRED_APPEARANCE_SETTINGS_PARTS,
   'assistant-card': new Set(['configure', 'newSession']),
   'branch-quick-switch': new Set(['list', 'item', 'itemName']),
   'canvas-tab-overflow': new Set(['list', 'menu', 'missionControl', 'divider', 'item', 'itemClose']),
@@ -300,7 +303,7 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'context-list': new Set(['clear']),
   'copy-output-button': new Set(['action', 'icon', 'text']),
   'create-agent-page': new Set(['back']),
-  'editor-config': new Set(['saving']),
+  'editor-config': new Set(['saving', 'actions']),
   'font-preference': new Set(['resetButton', 'levelGroup', 'levelButton']),
   'git-diff-view': new Set(['typeSwitcher', 'typeOption']),
   'git-nav': new Set(['sections']),
@@ -391,12 +394,15 @@ function migrateRuntimePartRule(value: unknown): unknown {
 
 function migrateRuntimeSurface(value: unknown): unknown {
   if (!isRecord(value) || !isRecord(value.parts)) return value;
-  return {
-    ...value,
-    parts: Object.fromEntries(
-      Object.entries(value.parts).map(([partId, rule]) => [partId, migrateRuntimePartRule(rule)]),
-    ),
-  };
+  let changed = false;
+  const parts = Object.fromEntries(
+    Object.entries(value.parts).map(([partId, rule]) => {
+      const migratedRule = migrateRuntimePartRule(rule);
+      if (migratedRule !== rule) changed = true;
+      return [partId, migratedRule];
+    }),
+  );
+  return changed ? { ...value, parts } : value;
 }
 
 function migrateAppearanceSettingsSurface(value: unknown): unknown {
@@ -526,6 +532,14 @@ export function migrateAppearancePackage(input: Record<string, unknown>): Record
       }
       delete components[legacyId];
       changed = true;
+    }
+
+    if ('runtime-settings' in components) {
+      const runtimeSettings = migrateRuntimeSurface(components['runtime-settings']);
+      if (runtimeSettings !== components['runtime-settings']) {
+        components['runtime-settings'] = runtimeSettings;
+        changed = true;
+      }
     }
 
     for (const retiredSurfaceId of RETIRED_COMPONENT_SURFACE_IDS) {

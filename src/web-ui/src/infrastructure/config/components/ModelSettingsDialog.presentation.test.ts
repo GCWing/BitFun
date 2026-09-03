@@ -27,7 +27,11 @@ describe('ModelSettingsPage dialog presentation', () => {
     expect(editorDialog).toContain('size="xl"');
     expect(editorDialog).not.toContain('size="2xl"');
     expect(editorDialog).toContain('<DialogFooter appearance="floating">');
-    expect(editorDialog).toContain('<Button variant="secondary" onClick={requestCloseEditingModal}>');
+    expect(editorDialog).toContain(
+      '<Button variant="secondary" onClick={requestCloseEditingModal} disabled={isEditorSaving}>',
+    );
+    expect(editorDialog).toContain('<DialogClose disabled={isEditorSaving} />');
+    expect(editorDialog).toContain('loading={isEditorSaving}');
     expect(editingForm.match(/fieldSurface="default"/g)).toHaveLength(2);
     expect(editorDialog).not.toContain('bitfun-model-settings__editor-dialog-footer');
     expect(editorDialog).not.toContain('bitfun-model-settings__editor-dialog-cancel');

@@ -2,7 +2,7 @@
 
 /**
  * Runs the independent pre-bundle build pipelines in parallel:
- *   - build:web            (type-check + vite build + monaco asset verify)
+ *   - build:web            (type-check + Vite build + revision manifest + asset verification)
  *   - prepare:mobile-web   (mobile-web install/build with mtime short-circuit)
  *   - prepare:dsh-profile  (the DeepSeek Harness bridge official desktop:build ships)
  *

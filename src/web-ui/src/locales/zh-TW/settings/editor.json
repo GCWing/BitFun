@@ -105,19 +105,12 @@
     "trimAutoWhitespace": "自動刪除行尾空格",
     "trimAutoWhitespaceDesc": "儲存時移除行尾多餘的空格"
   },
-  "actions": {
-    "reset": "恢復預設"
-  },
   "messages": {
     "loading": "載入中...",
     "loadFailed": "載入設定失敗",
     "loadFailedLocked": "無法讀取編輯器設定。為避免用預設值覆蓋現有設定，目前頁面已鎖定。",
     "retry": "重新載入",
     "saveSuccess": "設定已儲存，已開啟的編輯器會自動更新",
-    "saveFailed": "儲存設定失敗",
-    "confirmReset": "確定要重設編輯器設定為默認值嗎？",
-    "resetTitle": "重設編輯器設定？",
-    "resetAction": "恢復預設值",
-    "resetDone": "預設值已儲存，已開啟的編輯器會自動更新"
+    "saveFailed": "儲存設定失敗"
   }
 }

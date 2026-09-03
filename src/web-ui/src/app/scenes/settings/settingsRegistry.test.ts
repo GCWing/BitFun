@@ -31,20 +31,21 @@ describe('settings information architecture', () => {
     expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'ai.memory')?.categoryId).toBe('ai');
     expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'application.pet')?.categoryId).toBe('application');
     expect(SETTINGS_PAGE_MANIFESTS.some((page) => page.id.includes('review'))).toBe(false);
-    expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.execution')?.views
-      ?.find((view) => view.id === 'advanced')?.searchPhrases)
+    expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.execution')?.searchPhrases)
       .toContainEqual({ namespace: 'settings/review-capacity', key: 'capacity.title' });
   });
 
-  it('groups execution into common and advanced views, with browser and desktop control in one page', () => {
+  it('keeps execution and permissions on one page, with browser and desktop control in one page', () => {
     const execution = SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.execution');
     const control = SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'tools.desktop-control');
 
     expect(SETTINGS_PAGE_MANIFESTS.some((page) => page.id === 'tools.device-control')).toBe(false);
     expect(SETTINGS_PAGE_MANIFESTS.some((page) => page.id === 'tools.browser-control')).toBe(false);
-    expect(execution?.views?.map((view) => view.id)).toEqual(['common', 'advanced']);
-    expect(execution?.views?.find((view) => view.id === 'common')?.searchPhrases)
+    expect(execution?.views).toBeUndefined();
+    expect(execution?.searchPhrases)
       .toContainEqual({ namespace: 'settings/runtime', key: 'permissionPolicy.sectionTitle' });
+    expect(execution?.searchPhrases)
+      .toContainEqual({ namespace: 'settings/runtime', key: 'toolExecution.sectionTitle' });
     expect(control?.labelKey).toBe('navigation.pages.browserDesktopControl.label');
     expect(control?.searchPhrases)
       .toContainEqual({ namespace: 'settings/runtime', key: 'computerUse.sectionTitle' });
@@ -52,10 +53,7 @@ describe('settings information architecture', () => {
       .toContainEqual({ namespace: 'settings/runtime', key: 'browserControl.sectionTitle' });
     expect(resolveSettingsDestination('tools.device-control')).toEqual({ pageId: 'tools.desktop-control' });
     expect(resolveSettingsDestination('tools.browser-control')).toEqual({ pageId: 'tools.desktop-control' });
-    expect(resolveSettingsDestination('review')).toEqual({
-      pageId: 'tools.execution',
-      viewId: 'advanced',
-    });
+    expect(resolveSettingsDestination('review')).toEqual({ pageId: 'tools.execution' });
   });
 
   it('normalizes the retired browser-control page at the store boundary', () => {

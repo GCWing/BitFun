@@ -154,8 +154,15 @@
   align-items: flex-start;
 }
 
+.bitfun-config-page-row--balanced {
+  --row-grid-cols: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.bitfun-config-page-row--wide {
+  --row-grid-cols: minmax(0, 2fr) minmax(0, 8fr);
+}
+
 .bitfun-config-page-row--multiline {
-  --row-grid-cols: 1fr;
   gap: var(--bf-space-2);
 
   .bitfun-config-page-row__control {
@@ -163,6 +170,13 @@
     align-items: stretch;
     justify-self: stretch;
   }
+}
+
+.bitfun-config-page-row--multiline:not(
+  .bitfun-config-page-row--balanced,
+  .bitfun-config-page-row--wide
+) {
+  --row-grid-cols: 1fr;
 }
 
 .bitfun-config-page-row--no-control {
@@ -177,6 +191,52 @@
   }
 }
 
+// Ordinary single-field rows share one measure across settings pages. Wide,
+// multiline, and composite controls keep their explicit contextual layout.
+.bitfun-config-page-row:not(
+  .bitfun-config-page-row--multiline,
+  .bitfun-config-page-row--wide
+):has(
+  > .bitfun-config-page-row__control > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='number-input'],
+    [data-bf-component='select'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select']
+  ):only-child
+),
+.bitfun-config-page-row:not(
+  .bitfun-config-page-row--multiline,
+  .bitfun-config-page-row--wide
+):has(
+  > .bitfun-config-page-row__control > div:only-child > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='number-input'],
+    [data-bf-component='select'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select']
+  ):only-child
+) {
+  --row-grid-cols: minmax(0, 1fr) minmax(
+    0,
+    var(--bf-overlay-menu-inline-size)
+  );
+}
+
+.bitfun-config-page-section__extra > :where(
+  [data-bf-component='input'],
+  [data-bf-component='search-field'],
+  [data-bf-component='number-input'],
+  [data-bf-component='select'],
+  [data-bf-component='combobox'],
+  [data-bf-component='multi-select']
+) {
+  flex: 0 1 var(--bf-overlay-menu-inline-size);
+  inline-size: min(100%, var(--bf-overlay-menu-inline-size));
+  max-inline-size: var(--bf-overlay-menu-inline-size);
+}
 
 .bitfun-config-page-row__meta {
   min-width: 0;
@@ -312,6 +372,19 @@
   .bitfun-config-page-row__control {
     width: 100%;
     justify-self: stretch;
+  }
+
+  .bitfun-config-page-section__extra > :where(
+    [data-bf-component='input'],
+    [data-bf-component='search-field'],
+    [data-bf-component='number-input'],
+    [data-bf-component='select'],
+    [data-bf-component='combobox'],
+    [data-bf-component='multi-select']
+  ) {
+    flex-basis: 100%;
+    inline-size: 100%;
+    max-inline-size: none;
   }
 }
 

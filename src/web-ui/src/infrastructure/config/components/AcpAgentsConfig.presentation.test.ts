@@ -46,7 +46,7 @@ describe('ACP Agent settings presentation', () => {
     expect(stylesheet).not.toContain('@keyframes bitfun-acp-spin');
   });
 
-  it('separates local, SSH, and advanced JSON views with guarded JSON changes', () => {
+  it('separates local, SSH, and advanced JSON views with scoped draft guards', () => {
     const source = readSource('./AcpAgentsConfig.tsx');
     const appearance = readSource('./AcpAgentsConfig.appearance.ts');
 
@@ -56,7 +56,13 @@ describe('ACP Agent settings presentation', () => {
     expect(source).toContain("activeView === 'json'");
     expect(source).toContain("activeView !== 'ssh'");
     expect(source).toContain('jsonDirty');
+    expect(source).toContain('useSettingsDraft({');
+    expect(source).toContain("viewId: activeView === 'json' && jsonDirty ? 'json' : undefined");
+    expect(source).toContain('enabled: settingsDraftEnabled');
+    expect(source).toContain("if (!settingsDraftEnabled && activeView === 'json' && jsonDirty)");
     expect(source).toContain('discardJsonChanges');
+    expect(source).toContain("open={!settingsDraftEnabled && pendingView !== null}");
+    expect(source).toContain("window.addEventListener('beforeunload', handleBeforeUnload)");
     expect(appearance).toContain("values: ['local', 'ssh', 'json']");
   });
 

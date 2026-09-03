@@ -25,6 +25,10 @@ import React, {
 } from 'react';
 import { Save, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import {
+  requestSettingsDraftExit,
+  useSettingsDraft,
+} from '@/infrastructure/config/settingsDraftRegistry';
 
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
@@ -339,23 +343,39 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
     setDraftRules(savedRules.map(toDraftRule));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!rulesValid || isSaving) {
-      return;
+      return false;
     }
     const session = dialogSessionRef.current;
-    if (await onSave(permissionRules) && session === dialogSessionRef.current) {
+    const saved = await onSave(permissionRules);
+    if (saved && session === dialogSessionRef.current) {
       setSavedRules(permissionRules);
     }
+    return saved;
   };
+
+  const requestClose = useCallback(() => {
+    if (isSaving) return;
+    requestSettingsDraftExit(['global-permission-rules'], onClose);
+  }, [isSaving, onClose]);
+
+  useSettingsDraft({
+    id: 'global-permission-rules',
+    pageId: 'tools.execution',
+    label: t('permissionPolicy.globalRulesDialogTitle'),
+    dirty: isOpen && rulesDirty,
+    saving: isSaving,
+    save: handleSave,
+    discard: handleDiscard,
+  });
 
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(nextOpen) => {
         if (!nextOpen && !isSaving) {
-          invalidatePendingRuleWork();
-          onClose();
+          requestClose();
         }
       }}
       size="xl"
@@ -364,7 +384,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
         <DialogHeading>
           <DialogTitle>{t('permissionPolicy.globalRulesDialogTitle')}</DialogTitle>
         </DialogHeading>
-        <DialogClose />
+        <DialogClose disabled={isSaving} />
       </DialogHeader>
       <DialogBody>
         <div className="global-permission-rules-dialog__modal">

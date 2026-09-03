@@ -424,7 +424,7 @@ export struct ComposerBar {
                 src: $r('app.media.gpt_composer_send_arrow'),
                 iconWidth: 16,
                 iconHeight: 18,
-                tint: CARD
+                tint: this.primaryActionForegroundColor()
               })
             }
           }
@@ -755,14 +755,18 @@ export struct ComposerBar {
 
   private shouldShowActiveActionSurface(): boolean {
     const action = this.primaryAction();
-    return this.sendTransitionActive || action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Stop;
+    return this.sendTransitionActive || action === ComposerPrimaryAction.Send ||
+      action === ComposerPrimaryAction.SendBlocked || action === ComposerPrimaryAction.Stop;
   }
 
   private shouldShowStopGlyph(): boolean {
-    return this.sendTransitionActive || this.primaryAction() === ComposerPrimaryAction.Stop;
+    return this.primaryAction() === ComposerPrimaryAction.Stop;
   }
 
   private activeActionSurfaceColor(): ResourceColor {
+    if (this.primaryAction() === ComposerPrimaryAction.SendBlocked) {
+      return SOFT;
+    }
     return this.primaryActionPressed || this.sendTransitionActive ? MUTED : INK;
   }
 

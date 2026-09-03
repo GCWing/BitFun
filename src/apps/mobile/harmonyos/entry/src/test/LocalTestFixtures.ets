@@ -123,6 +123,7 @@ import {
   ReadFileResult,
   RemoteSession,
   SelectedImageAttachment,
+  SteerTurnResult,
   SessionListResult,
   SessionMessagesResult,
   SessionSummary,
@@ -888,6 +889,8 @@ export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
   messageRequests: string[] = [];
   messageResolvers: Array<(result: SessionMessagesResult) => void> = [];
   sendRequests: string[] = [];
+  buildPlanRequests: string[] = [];
+  steerRequests: string[] = [];
   cancelRequests: string[] = [];
   renameRequests: string[] = [];
   turnId: string = 'turn-1';
@@ -939,6 +942,32 @@ export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
     this.sendRequests.push(`images:${sessionId}:${text}:${agentType}:${imageContexts.length}`);
     if (this.shouldFailSend) {
       throw new Error('Expected send failure.');
+    }
+    return this.turnId;
+  }
+
+  async steerTurn(
+    sessionId: string,
+    turnId: string,
+    text: string,
+    displayContent: string,
+    imageContexts: RemoteImageContext[]
+  ): Promise<SteerTurnResult> {
+    this.steerRequests.push(`${sessionId}:${turnId}:${text}:${displayContent}:${imageContexts.length}`);
+    if (this.shouldFailSend) {
+      throw new Error('Expected steer failure.');
+    }
+    return {
+      sessionId,
+      turnId,
+      steeringId: 'steering-1'
+    };
+  }
+
+  async buildPlan(sessionId: string, planFilePath: string, planName: string, agentType: string): Promise<string> {
+    this.buildPlanRequests.push(`${sessionId}:${planFilePath}:${planName}:${agentType}`);
+    if (this.shouldFailSend) {
+      throw new Error('Expected plan build failure.');
     }
     return this.turnId;
   }

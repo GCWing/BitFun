@@ -2722,15 +2722,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, [caps.submissionOptionsLocked, caps.targetModelSelection, effectiveTargetSession, t]);
 
-  const handleHidePermissionModeControl = useCallback(async () => {
-    try {
-      await configManager.setConfig('app.flow_chat.show_permission_mode_control', false);
-    } catch (error) {
-      log.error('Failed to hide permission mode control', error);
-      notificationService.error(t('chatInput.permissionMode.hideControlFailed'));
-    }
-  }, [t]);
-
   React.useEffect(() => {
     if (!slashCommandState.isActive || slashCommandState.kind !== 'all' || derivedState?.isProcessing) {
       return;
@@ -5790,7 +5781,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               options: DISPATCH_PERMISSION_MODES,
               scopeLabel: t('chatInput.dispatch.sessionScope'),
               onChange: handleDispatchPermissionModeChange,
-              onHide: handleHidePermissionModeControl,
             }
           : {
               mode: permissionMode,
@@ -5811,7 +5801,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onOpenDefaultSettings: isAcpTargetSession
                 ? undefined
                 : handleOpenPermissionDefaultSettings,
-              onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
             }
         : undefined}
       usageReport={

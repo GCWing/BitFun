@@ -79,6 +79,7 @@
     }
   },
   "actions": {
+    "retry": "重新載入設定",
     "saveConfiguration": "儲存設定",
     "saveCredential": "儲存",
     "clearCredential": "清除",
@@ -92,6 +93,7 @@
     "credentialRequired": "請先輸入憑據。",
     "credentialSaved": "憑據已儲存到此裝置。",
     "credentialSaveFailed": "儲存裝置憑據失敗。",
+    "credentialSaveFailedAfterConfigSaved": "網頁搜尋設定已儲存，但裝置憑據儲存失敗。請重新輸入憑據後重試。",
     "credentialCleared": "已從此裝置清除憑據。",
     "credentialClearFailed": "清除裝置憑據失敗。",
     "protocolCopied": "協定已複製。",

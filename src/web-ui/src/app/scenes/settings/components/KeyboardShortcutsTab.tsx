@@ -15,7 +15,14 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { useI18n } from '@/infrastructure/i18n';
-import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent, ConfigPageSection } from '@/infrastructure/config/components/common';
+import {
+  ConfigFieldStatus,
+  ConfigPageLayout,
+  ConfigPageHeader,
+  ConfigPageContent,
+  ConfigPageSection,
+} from '@/infrastructure/config/components/common';
+import { useSettingsDraft } from '@/infrastructure/config/settingsDraftRegistry';
 import {
   shortcutManager,
   parseStoredKeybindings,
@@ -309,6 +316,7 @@ const KeyboardShortcutsTab: React.FC = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const recordingRef = useRef<string | null>(null);
+  const saveInFlightRef = useRef(false);
   recordingRef.current = recordingId;
 
   // Live registrations from ShortcutManager (effects may register after first paint).
@@ -403,9 +411,11 @@ const KeyboardShortcutsTab: React.FC = () => {
 
   // Apply all pending changes
   const handleApply = useCallback(async () => {
+    if (saveInFlightRef.current) return false;
     if (hasBlockingConflicts) {
-      return;
+      return false;
     }
+    saveInFlightRef.current = true;
     setSaving(true);
     setSaveError(null);
     try {
@@ -444,10 +454,13 @@ const KeyboardShortcutsTab: React.FC = () => {
       shortcutManager.loadUserOverrides(merged);
       setPendingChanges({});
       refreshRegistrations();
+      return true;
     } catch (err) {
       log.error('Failed to save keybindings', err);
       setSaveError(t('keyboard.saveError'));
+      return false;
     } finally {
+      saveInFlightRef.current = false;
       setSaving(false);
     }
   }, [hasBlockingConflicts, pendingChanges, refreshRegistrations, t]);
@@ -594,6 +607,21 @@ const KeyboardShortcutsTab: React.FC = () => {
     filteredByScope('git').length > 0;
 
   const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+  const discardPendingChanges = useCallback(() => {
+    setPendingChanges({});
+    setRecordingId(null);
+    setSaveError(null);
+  }, []);
+
+  useSettingsDraft({
+    id: 'keyboard-shortcuts',
+    pageId: 'application.shortcuts',
+    label: t('keyboard.title'),
+    dirty: hasPendingChanges,
+    saving,
+    save: handleApply,
+    discard: discardPendingChanges,
+  });
 
   return (
     <ConfigPageLayout data-bf-component="keyboard-shortcuts" data-bf-part="root">
@@ -621,6 +649,12 @@ const KeyboardShortcutsTab: React.FC = () => {
             onClear={searchQuery ? () => setSearchQuery('') : undefined}
           />
           <div className="kb-shortcuts__actions" data-bf-component="keyboard-shortcuts" data-bf-part="actions">
+            {hasPendingChanges || saving || saveError ? (
+              <ConfigFieldStatus
+                status={saveError ? 'error' : saving ? 'saving' : 'unsaved'}
+                message={saveError}
+              />
+            ) : null}
             {hasPendingChanges && (
               <Button
                 variant="fill"
@@ -641,10 +675,6 @@ const KeyboardShortcutsTab: React.FC = () => {
             </Button>
           </div>
         </div>
-
-        {saveError && (
-          <div role="alert" className="kb-shortcuts__error" data-bf-component="keyboard-shortcuts" data-bf-part="error">{saveError}</div>
-        )}
 
         {hasBlockingConflicts && (
           <div role="alert" className="kb-shortcuts__error" data-bf-component="keyboard-shortcuts" data-bf-part="error">

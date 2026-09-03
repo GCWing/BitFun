@@ -33,6 +33,7 @@ $ins-sm: 8px;
 $ins-md: 14px;
 $ins-lg: 22px;
 $ins-xl: 40px;
+$ins-content-max: 1080px;
 
 // Radius
 $ins-r:    8px;
@@ -74,13 +75,20 @@ $ins-r-lg: 12px;
 }
 
 // ============================================================
-// List view - constrained width, centered
+// List view - full-width scroll viewport with centered content
 // ============================================================
 
 .insights-scene:not(.insights-scene--report) {
-  max-width: 1080px;
-  margin: 0 auto;
+  --insights-list-inline-inset: #{$ins-lg};
+
   width: 100%;
+}
+
+.insights-scene__header,
+.insights-scene__history-inner {
+  width: min(100%, $ins-content-max);
+  margin-inline: auto;
+  box-sizing: border-box;
 }
 
 // List header
@@ -217,8 +225,13 @@ $ins-r-lg: 12px;
   display: flex;
   align-items: center;
   gap: $ins-sm;
-  margin: $ins-sm $ins-lg 0;
+  width: min(
+    calc(100% - 2 * var(--insights-list-inline-inset)),
+    calc(#{$ins-content-max} - 2 * var(--insights-list-inline-inset))
+  );
+  margin: $ins-sm auto 0;
   padding: 5px $ins-md;
+  box-sizing: border-box;
   background: $ins-red-bg;
   border-radius: $ins-r-sm;
   font-size: var(--bf-type-label-md-font-size);
@@ -228,8 +241,13 @@ $ins-r-lg: 12px;
 }
 
 .insights-generation {
-  margin: 0 $ins-lg $ins-md;
+  width: min(
+    calc(100% - 2 * var(--insights-list-inline-inset)),
+    calc(#{$ins-content-max} - 2 * var(--insights-list-inline-inset))
+  );
+  margin: 0 auto $ins-md;
   padding: $ins-md;
+  box-sizing: border-box;
   border: 1px solid $ins-border;
   border-radius: $ins-r;
   background: $ins-surface;
@@ -365,9 +383,13 @@ $ins-r-lg: 12px;
 // History list
 
 .insights-scene__history {
-  padding: $ins-xs $ins-lg $ins-lg;
   flex: 1;
   min-height: 0;
+}
+
+.insights-scene__history-inner {
+  min-height: 100%;
+  padding: $ins-xs $ins-lg $ins-lg;
 }
 
 .insights-scene__history-header {
@@ -610,16 +632,17 @@ $ins-r-lg: 12px;
 }
 
 @media (max-width: 520px) {
+  .insights-scene:not(.insights-scene--report) {
+    --insights-list-inline-inset: #{$ins-md};
+  }
+
   .insights-scene__header,
-  .insights-scene__history {
+  .insights-scene__history-inner {
     padding-left: $ins-md;
     padding-right: $ins-md;
   }
 
   .insights-generation {
-    margin-left: $ins-md;
-    margin-right: $ins-md;
-
     &__status { grid-template-columns: 32px minmax(0, 1fr); }
     &__status-icon { width: 32px; height: 32px; }
     &__elapsed { grid-column: 2; }

@@ -236,28 +236,13 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
     descriptionKey: 'navigation.pages.execution.description',
     keywords: ['permission', 'approval', 'tool', 'timeout', 'parallel', 'review', 'json repair'],
     namespaces: ['settings', 'settings/runtime', 'settings/agentic-tools', 'settings/review-capacity', 'settings/models'],
-    searchPhrases: [],
-    views: [
-      {
-        id: 'common',
-        labelKey: 'navigation.views.common',
-        keywords: ['permission', 'approval', 'global rules'],
-        searchPhrases: [
-          phrase('settings/runtime', 'permissionPolicy.sectionTitle'),
-          phrase('settings/runtime', 'permissionPolicy.globalRules'),
-        ],
-      },
-      {
-        id: 'advanced',
-        labelKey: 'navigation.views.advanced',
-        keywords: ['timeout', 'parallel', 'review', 'deferred loading', 'json repair'],
-        searchPhrases: [
-          phrase('settings/runtime', 'toolExecution.sectionTitle'),
-          phrase('settings/runtime', 'deferredToolLoading.sectionTitle'),
-          phrase('settings/review-capacity', 'capacity.title'),
-          phrase('settings/models', 'toolArgumentJsonRepair.title'),
-        ],
-      },
+    searchPhrases: [
+      phrase('settings/runtime', 'permissionPolicy.sectionTitle'),
+      phrase('settings/runtime', 'permissionPolicy.globalRules'),
+      phrase('settings/runtime', 'toolExecution.sectionTitle'),
+      phrase('settings/runtime', 'deferredToolLoading.sectionTitle'),
+      phrase('settings/review-capacity', 'capacity.title'),
+      phrase('settings/models', 'toolArgumentJsonRepair.title'),
     ],
     load: () => import('./pages/ExecutionSettingsPage'),
   }),

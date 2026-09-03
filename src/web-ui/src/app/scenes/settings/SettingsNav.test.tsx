@@ -38,6 +38,10 @@ vi.mock('@/shared/utils/motionPreference', () => ({
 
 import SettingsNav from './SettingsNav';
 import { useSettingsStore } from './settingsStore';
+import {
+  registerSettingsDraft,
+  resetSettingsDraftRegistryForTests,
+} from '@/infrastructure/config/settingsDraftRegistry';
 
 describe('SettingsNav shared component composition', () => {
   let container: HTMLDivElement;
@@ -45,6 +49,7 @@ describe('SettingsNav shared component composition', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    resetSettingsDraftRegistryForTests();
     useSettingsStore.setState(useSettingsStore.getInitialState());
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -55,6 +60,7 @@ describe('SettingsNav shared component composition', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    resetSettingsDraftRegistryForTests();
     vi.useRealTimers();
   });
 
@@ -133,5 +139,23 @@ describe('SettingsNav shared component composition', () => {
     expect(input.value).toBe('');
     expect(container.querySelectorAll('[data-testid="settings-nav-page"]')).toHaveLength(3);
     expect(container.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it('marks only pages that currently own an unsaved draft', () => {
+    act(() => {
+      registerSettingsDraft({
+        id: 'model-proxy',
+        pageId: 'ai.models',
+        label: 'Proxy',
+        dirty: true,
+        save: vi.fn(),
+        discard: vi.fn(),
+      });
+    });
+
+    const models = container.querySelector('[data-settings-page="ai.models"]');
+    const general = container.querySelector('[data-settings-page="application.general"]');
+    expect(models?.querySelector('[data-bf-part="dirtyMarker"]')).not.toBeNull();
+    expect(general?.querySelector('[data-bf-part="dirtyMarker"]')).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ import {
   SearchField,
 } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { useSettingsDraftSnapshot } from '@/infrastructure/config/settingsDraftRegistry';
 import { getInteractionMotion } from '@/shared/utils/motionPreference';
 import {
   SETTINGS_CATEGORIES,
@@ -124,6 +125,7 @@ const SettingsNav: React.FC = () => {
   const { t: tComponents } = useI18n('components');
   const activePageId = useSettingsStore((state) => state.activePageId);
   const activeViewId = useSettingsStore((state) => state.activeViewId);
+  const { resources: draftResources } = useSettingsDraftSnapshot();
   const openDestination = useSettingsStore((state) => state.openDestination);
   const searchQuery = useSettingsStore((state) => state.searchQuery);
   const setSearchQuery = useSettingsStore((state) => state.setSearchQuery);
@@ -144,6 +146,21 @@ const SettingsNav: React.FC = () => {
     return query ? searchIndex.filter((row) => row.haystack.includes(query)) : [];
   }, [searchIndex, searchQuery]);
   const isSearchMode = draftQuery.trim().length > 0;
+  const dirtyPageIds = useMemo(() => new Set(
+    draftResources.filter(resource => resource.dirty).map(resource => resource.pageId),
+  ), [draftResources]);
+
+  const dirtyMarker = useCallback((pageId: SettingsPageId) => (
+    dirtyPageIds.has(pageId) ? (
+      <span
+        className="bitfun-settings-nav__dirty-marker"
+        data-bf-component="settings-nav"
+        data-bf-part="dirtyMarker"
+        title={t('changeGuard.unsavedPage')}
+        aria-label={t('changeGuard.unsavedPage')}
+      />
+    ) : null
+  ), [dirtyPageIds, t]);
 
   useEffect(() => {
     setHighlightedIndex((current) => {
@@ -298,6 +315,7 @@ const SettingsNav: React.FC = () => {
                       {highlightFirstMatch(row.description, searchQuery)}
                     </span>
                   </span>
+                  {dirtyMarker(row.destination.pageId)}
                 </NavigationPanelItem>
               );
             })}
@@ -339,6 +357,7 @@ const SettingsNav: React.FC = () => {
               onFocus={() => preload(page.id)}
             >
               <span className="bitfun-settings-nav__item-label">{t(page.labelKey)}</span>
+              {dirtyMarker(page.id)}
             </NavigationPanelItem>
           ))}
           </div>

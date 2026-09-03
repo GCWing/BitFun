@@ -57,6 +57,8 @@ describe('SettingsNav typography and layout ownership', () => {
     expect(header.getPropertyValue('flex-direction')).toBe('column');
     expect(header.getPropertyValue('gap')).toBe('var(--bf-layout-navigation-panel-content-gap)');
     expect(header.getPropertyValue('padding')).toBe('0px');
+    expect(root.getPropertyValue('padding-inline-end')).toBe('0px');
+    expect(header.getPropertyValue('padding-inline-end')).toBe('var(--bf-space-2)');
   });
 
   it('resolves shared navigation text against the current chrome instead of secondary action ink', () => {
@@ -69,6 +71,7 @@ describe('SettingsNav typography and layout ownership', () => {
     const content = declarations('.bitfun-settings-nav__content');
     const item = declarations('.bitfun-settings-nav__item');
     expect(content.getPropertyValue('padding')).toBe('0px');
+    expect(content.getPropertyValue('padding-inline-end')).toBe('var(--bf-space-2)');
     expect(content.getPropertyValue('gap')).toBe('');
     expect(item.getPropertyValue('padding-inline-start')).toBe(
       'calc(var(--bf-layout-navigation-panel-item-padding-inline) + 30px)',

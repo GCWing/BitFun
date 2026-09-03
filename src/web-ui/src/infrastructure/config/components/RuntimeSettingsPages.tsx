@@ -17,7 +17,12 @@ import {
 } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
+import {
+  ConfigLoadingState,
+  ConfigMessage,
+  ConfigRefreshButton,
+  ConfigRetryState,
+} from '@/infrastructure/config/components/common';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -47,7 +52,7 @@ import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import SessionTitleConfig from './SessionTitleConfig';
 import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
-import { ask, open } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import './RuntimeSettingsPages.scss';
@@ -131,17 +136,13 @@ export type RuntimeSettingsPageKind =
   | 'execution'
   | 'browser-desktop-control';
 
-export type ExecutionSettingsView = 'common' | 'advanced';
-
 interface RuntimeSettingsPageProps {
   page: RuntimeSettingsPageKind;
-  executionView?: ExecutionSettingsView;
   isActive?: boolean;
 }
 
 const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   page,
-  executionView = 'common',
   isActive = true,
 }) => {
   const { t } = useTranslation('settings/runtime');
@@ -153,6 +154,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const hasLoadedPageDataRef = useRef(false);
+  const toolPermissionSaveInFlightRef = useRef(false);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [companionPets, setCompanionPets] = useState<AgentCompanionPetPackage[]>([]);
   const [companionPetImporting, setCompanionPetImporting] = useState(false);
@@ -377,6 +379,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     nextConfig: ToolPermissionConfig,
     previousConfig: ToolPermissionConfig,
   ): Promise<boolean> => {
+    if (toolPermissionSaveInFlightRef.current) return false;
+    toolPermissionSaveInFlightRef.current = true;
     setToolPermissionConfig(nextConfig);
     setPermissionConfigSaving(true);
     try {
@@ -389,6 +393,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
       notificationService.error(t('messages.saveFailed'));
       return false;
     } finally {
+      toolPermissionSaveInFlightRef.current = false;
       setPermissionConfigSaving(false);
     }
   };
@@ -513,10 +518,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     event.preventDefault();
     event.stopPropagation();
     if (!IS_TAURI_DESKTOP || pet.source !== 'user' || !settings) return;
-    const confirmed = await ask(t('features.pet.deleteConfirmBody'), {
-      title: t('features.pet.deleteConfirmTitle'),
-      kind: 'warning',
-    });
+    const confirmed = await confirmDanger(
+      t('features.pet.deleteConfirmTitle'),
+      t('features.pet.deleteConfirmBody'),
+      { confirmText: t('features.pet.delete') },
+    );
     if (!confirmed) return;
     setCompanionPetDeletingPath(pet.packagePath);
     try {
@@ -909,11 +915,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
       : page;
   const pageTitle = tNavigation(`navigation.pages.${pageCopyKey}.label`);
   const pageSubtitle = tNavigation(`navigation.pages.${pageCopyKey}.description`);
-  const appearanceView = page === 'execution'
-    ? `execution-${executionView}`
-    : page;
-  const showsExecutionCommon = page === 'execution' && executionView === 'common';
-  const showsExecutionAdvanced = page === 'execution' && executionView === 'advanced';
+  const appearanceView = page;
+  const showsExecutionSettings = page === 'execution';
 
   const requiresExperienceSettings = page === 'pet' || page === 'session-workspace';
   if (loadError) {
@@ -1027,57 +1030,40 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                     data-bf-part="petOption"
                     data-bf-state={isSelected ? 'selected' : undefined}
                   >
-                    <Tooltip
-                      placement="top"
-                      delay={180}
+                    <button
+                      type="button"
+                      className="bitfun-runtime-settings__pet-card-select"
+                      data-bf-component="runtime-settings"
+                      data-bf-part="petTrigger"
+                      data-bf-state={isSelected ? 'selected' : undefined}
+                      role="radio"
+                      aria-checked={isSelected}
+                      aria-label={label}
                       disabled={isDisabled}
-                      content={(
-                        <div className="bitfun-runtime-settings__pet-preview-popover">
-                          <div className="bitfun-runtime-settings__pet-preview-popover-image" aria-hidden>
-                            <span
-                              className="bitfun-runtime-settings__pet-preview-sprite bitfun-runtime-settings__pet-preview-sprite--popover"
-                              style={previewStyle}
-                            />
-                          </div>
-                          <span>{label}</span>
-                        </div>
-                      )}
+                      onClick={() => void handleCompanionPetChange(pet.packagePath)}
                     >
-                      <button
-                        type="button"
-                        className="bitfun-runtime-settings__pet-card-select"
-                        data-bf-component="runtime-settings"
-                        data-bf-part="petTrigger"
-                        data-bf-state={isSelected ? 'selected' : undefined}
-                        role="radio"
-                        aria-checked={isSelected}
-                        aria-label={label}
-                        disabled={isDisabled}
-                        onClick={() => void handleCompanionPetChange(pet.packagePath)}
-                      >
-                        <span className="bitfun-runtime-settings__pet-card-preview" aria-hidden>
-                          <span
-                            className="bitfun-runtime-settings__pet-preview-sprite"
-                            style={previewStyle}
-                          />
-                          {isSelected && (
-                            <span className="bitfun-runtime-settings__pet-selected-mark">
-                              <Icon name="check-line" size="xs" />
-                            </span>
-                          )}
-                        </span>
+                      <span className="bitfun-runtime-settings__pet-card-preview" aria-hidden>
                         <span
-                          className="bitfun-runtime-settings__pet-card-body"
-                          data-bf-component="runtime-settings"
-                          data-bf-part="petOptionMain"
-                        >
-                          <strong>{label}</strong>
-                          <span data-bf-component="runtime-settings" data-bf-part="petGroup">
-                            {sourceLabel}
+                          className="bitfun-runtime-settings__pet-preview-sprite"
+                          style={previewStyle}
+                        />
+                        {isSelected && (
+                          <span className="bitfun-runtime-settings__pet-selected-mark">
+                            <Icon name="check-line" size="xs" />
                           </span>
+                        )}
+                      </span>
+                      <span
+                        className="bitfun-runtime-settings__pet-card-body"
+                        data-bf-component="runtime-settings"
+                        data-bf-part="petOptionMain"
+                      >
+                        <strong>{label}</strong>
+                        <span data-bf-component="runtime-settings" data-bf-part="petGroup">
+                          {sourceLabel}
                         </span>
-                      </button>
-                    </Tooltip>
+                      </span>
+                    </button>
                     {isUserPet && IS_TAURI_DESKTOP && (
                       <Tooltip content={t('features.pet.delete')}>
                         <IconButton
@@ -1125,7 +1111,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           </>
         ) : null}
 
-        {showsExecutionCommon ? (
+        {showsExecutionSettings ? (
           <>
 
         <ConfigPageSection
@@ -1194,12 +1180,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           onSave={handleSaveGlobalPermissionRules}
           onClose={() => setIsGlobalPermissionRulesDialogOpen(false)}
         />
-
-          </>
-        ) : null}
-
-        {showsExecutionAdvanced ? (
-          <>
 
         {/* ── Tool execution behavior ────────────────────────────── */}
         <ConfigPageSection
@@ -1316,6 +1296,14 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           description={
             IS_TAURI_DESKTOP ? t('computerUse.sectionDescription') : t('computerUse.desktopOnly')
           }
+          extra={IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
+            <ConfigRefreshButton
+              tooltip={t('computerUse.refreshStatus')}
+              loading={computerUseStatusLoading}
+              disabled={computerUseBusy}
+              onClick={() => void refreshComputerUseStatus()}
+            />
+          ) : undefined}
         >
           {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
             <>
@@ -1352,20 +1340,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                     gap: 8,
                   }}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
-                      {computerUseAccessLabel}
-                    </span>
-                    <Tooltip content={t('computerUse.refreshStatus')}>
-                      <IconButton
-                        type="button"
-                        size="sm"
-                        aria-label={t('computerUse.refreshStatus')}
-                        disabled={computerUseBusy || computerUseStatusLoading}
-                        onClick={() => void refreshComputerUseStatus()}
-                        icon={<Icon name="refresh" size="sm" />}
-                      />
-                    </Tooltip>
+                  <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
+                    {computerUseAccessLabel}
                   </span>
                   {platform === 'macos' && (
                     <Button
@@ -1399,20 +1375,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                     gap: 8,
                   }}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
-                      {computerUseScreenLabel}
-                    </span>
-                    <Tooltip content={t('computerUse.refreshStatus')}>
-                      <IconButton
-                        type="button"
-                        size="sm"
-                        aria-label={t('computerUse.refreshStatus')}
-                        disabled={computerUseBusy || computerUseStatusLoading}
-                        onClick={() => void refreshComputerUseStatus()}
-                        icon={<Icon name="refresh" size="sm" />}
-                      />
-                    </Tooltip>
+                  <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
+                    {computerUseScreenLabel}
                   </span>
                   {platform === 'macos' && (
                     <Button
@@ -1478,7 +1442,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 label={t('browserControl.preferredBrowser')}
                 description={t('browserControl.preferredBrowserDesc')}
                 align="center"
-                balanced
               >
                 <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
                   <Select
@@ -1691,12 +1654,8 @@ export function SessionWorkspaceSettingsPage(): React.ReactElement {
   return <RuntimeSettingsPage page="session-workspace" />;
 }
 
-export function ExecutionCommonSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="execution" executionView="common" />;
-}
-
-export function ExecutionAdvancedSettingsPage(): React.ReactElement {
-  return <RuntimeSettingsPage page="execution" executionView="advanced" />;
+export function ExecutionSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="execution" />;
 }
 
 export function BrowserDesktopControlSettingsPage(): React.ReactElement {

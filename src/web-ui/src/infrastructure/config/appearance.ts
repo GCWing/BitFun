@@ -32,6 +32,8 @@ export const configAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'loadingState' },
     { id: 'retryState' },
     { id: 'message' },
+    { id: 'fieldStatus', propertyProfile: 'paint', visualRole: 'content' },
+    { id: 'actionBar', propertyProfile: 'layout', visualRole: 'toolbar' },
     { id: 'pageHeaderInner' },
     { id: 'pageHeaderInfo' },
     { id: 'pageHeaderTitle' },
@@ -41,5 +43,6 @@ export const configAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   facets: [
     { id: 'align', attribute: 'data-bf-align', values: ['start', 'center'] },
     { id: 'layout', attribute: 'data-bf-layout', values: ['default', 'multiline', 'wide', 'balanced'] },
+    { id: 'status', attribute: 'data-bf-status', values: ['unsaved', 'saving', 'saved', 'error'] },
   ],
 };

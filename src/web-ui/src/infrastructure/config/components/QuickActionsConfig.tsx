@@ -35,6 +35,10 @@ import {
 } from '../services/quickActionLocalization';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  requestSettingsDraftExit,
+  useSettingsDraft,
+} from '@/infrastructure/config/settingsDraftRegistry';
 import './QuickActionsConfig.scss';
 
 const log = createLogger('QuickActionsConfig');
@@ -56,7 +60,7 @@ interface ActionFormModalProps {
   /** undefined = create mode, QuickAction = edit mode */
   target: QuickAction | undefined;
   onClose: () => void;
-  onSubmit: (label: string, prompt: string) => void;
+  onSubmit: (label: string, prompt: string) => Promise<boolean>;
   saving: boolean;
   t: TranslationFn;
 }
@@ -65,7 +69,6 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
   const [label, setLabel] = useState('');
   const [prompt, setPrompt] = useState('');
   const [initialValues, setInitialValues] = useState({ label: '', prompt: '' });
-  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const labelInputRef = useRef<HTMLInputElement>(null);
 
   // Sync form when target changes or modal opens.
@@ -79,7 +82,6 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
     setLabel(nextValues.label);
     setPrompt(nextValues.prompt);
     setInitialValues(nextValues);
-    setDiscardConfirmOpen(false);
     // Delay focus so the modal animation completes first.
     const focusTimer = window.setTimeout(() => labelInputRef.current?.focus(), 80);
     return () => window.clearTimeout(focusTimer);
@@ -87,39 +89,40 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
 
   const canSubmit = label.trim().length > 0 && prompt.trim().length > 0;
   const dirty = label !== initialValues.label || prompt !== initialValues.prompt;
+  const isEdit = !!target;
 
-  useEffect(() => {
-    if (!isOpen || !dirty) return undefined;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty, isOpen]);
+  const discardDraft = useCallback(() => {
+    setLabel(initialValues.label);
+    setPrompt(initialValues.prompt);
+  }, [initialValues]);
+
+  useSettingsDraft({
+    id: 'quick-action-editor',
+    pageId: 'tools.automation',
+    viewId: 'quick-actions',
+    label: isEdit ? t('modal.editTitle') : t('modal.addTitle'),
+    dirty,
+    saving,
+    save: () => canSubmit && onSubmit(label.trim(), prompt.trim()),
+    discard: discardDraft,
+    enabled: isOpen,
+  });
 
   const requestClose = () => {
     if (saving) return;
-    if (dirty) {
-      setDiscardConfirmOpen(true);
-      return;
-    }
-    onClose();
+    requestSettingsDraftExit(['quick-action-editor'], onClose);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape' && !saving) { requestClose(); return; }
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && canSubmit && !saving) {
       e.preventDefault();
-      onSubmit(label.trim(), prompt.trim());
+      void onSubmit(label.trim(), prompt.trim());
     }
   };
 
-  const isEdit = !!target;
-
   return (
-    <>
-      <Dialog
+    <Dialog
         open={isOpen}
         onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}
         size="md"
@@ -178,7 +181,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
           <Button
             variant="fill"
             size="sm"
-            onClick={() => onSubmit(label.trim(), prompt.trim())}
+            onClick={() => void onSubmit(label.trim(), prompt.trim())}
             disabled={!canSubmit || saving}
             loading={saving}
             leadingIcon={<Icon name="check-line" size="sm" />}
@@ -189,20 +192,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
         </div>
       </div>
           </DialogBody>
-      </Dialog>
-      <ConfirmDialog
-        open={discardConfirmOpen}
-        onOpenChange={() => setDiscardConfirmOpen(false)}
-        onConfirm={() => {
-          setDiscardConfirmOpen(false);
-          onClose();
-        }}
-        title={t('modal.discardTitle')}
-        message={t('modal.discardMessage')}
-        confirmText={t('modal.discardConfirm')}
-        type="warning"
-      />
-    </>
+    </Dialog>
   );
 };
 
@@ -342,7 +332,7 @@ const QuickActionsConfig: React.FC = () => {
     if (saved) setDeleteTarget(null);
   }, [actions, deleteTarget, persist]);
 
-  const handleModalSubmit = useCallback(async (label: string, prompt: string) => {
+  const handleModalSubmit = useCallback(async (label: string, prompt: string): Promise<boolean> => {
     let saved = false;
     if (modalTarget === null) {
       // Create mode
@@ -359,6 +349,7 @@ const QuickActionsConfig: React.FC = () => {
       saved = await persist(actions.map(a => a.id === modalTarget.id ? { ...a, ...normalizedText } : a));
     }
     if (saved) setModalTarget(undefined);
+    return saved;
   }, [actions, modalTarget, persist, t]);
 
   if (loading || loadFailed) {

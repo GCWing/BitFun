@@ -95,43 +95,6 @@
     gap: 4px;
   }
 
-  &__scope--native {
-    min-height: 28px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: var(--bf-radius-pill);
-    background: transparent;
-    color: var(--bf-color-content-muted);
-    font: inherit;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    cursor: pointer;
-
-    &:hover:not(:disabled) {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-primary);
-    }
-
-    &.is-selected {
-      background: linear-gradient(
-        135deg,
-        var(--bf-color-content-secondary),
-        var(--bf-color-content-primary)
-      );
-      color: var(--bf-color-surface-scene);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
-      outline-offset: 2px;
-    }
-
-    &:disabled:not(.is-selected) {
-      opacity: 0.42;
-      cursor: default;
-    }
-  }
-
   &__results {
     flex: 1;
     min-height: 220px;
@@ -441,36 +404,12 @@
 }
 
 .global-search--embedded {
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
   min-height: 0;
+  padding: var(--bf-overlay-dialog-content-padding-lg);
   container-type: inline-size;
-
-  .global-search__header {
-    padding: 12px 12px 8px;
-  }
-
-  .global-search__results {
-    min-height: 0;
-    padding: 4px 12px 10px;
-  }
-
-  .global-search__group--actions .global-search__group-items {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-
-  .global-search__footer {
-    padding-inline: 12px;
-  }
-}
-
-@container (max-width: 420px) {
-  .global-search--embedded {
-    .global-search__result-context,
-    .global-search__result-tools {
-      display: none;
-    }
-  }
 }
 
 .bitfun-nav-panel__search-trigger {
@@ -654,10 +593,10 @@
   }
 }
 
-// The modal presentation follows the independent design-system contract. The
-// embedded presentation above intentionally keeps its compact product layout;
-// identity tones remain theme-aware through the existing Appearance palette.
-.global-search--modal {
+// Modal and embedded hosts share one design-system presentation. Their host
+// variants only control lifecycle and responsive layout behavior.
+.global-search--modal,
+.global-search--embedded {
   --global-search-surface: var(--bf-color-surface-raised);
   --global-search-raised-surface: var(--bf-color-action-neutral-surface);
 
@@ -840,8 +779,8 @@
     gap: var(--bf-space-2);
   }
 
-  // Action identities belong to Global Search. ActionCard, the product action
-  // catalog, and embedded search remain neutral.
+  // Action identities belong to Global Search rather than the product action
+  // catalog, so every host presents the same semantic identity.
   .global-search__action-icon {
     display: inline-flex;
     color: inherit;
@@ -1021,6 +960,67 @@
     .global-search__footer {
       flex-basis: var(--bf-control-height-sm);
       min-height: var(--bf-control-height-sm);
+    }
+  }
+}
+
+/*
+ * DialogBody provides the modal's content inset. Its nested results viewport
+ * must still reach the surface's inline-end edge, so transfer only that inset
+ * to the viewport's content-bearing regions.
+ */
+.global-search-modal-content {
+  --global-search-modal-inline-end-inset: var(--bf-overlay-dialog-content-padding-lg);
+
+  padding-inline-end: 0;
+}
+
+.global-search--modal {
+  > .global-search__header,
+  > .global-search__results,
+  > .global-search__footer {
+    padding-inline-end: var(--global-search-modal-inline-end-inset);
+  }
+}
+
+@media (max-width: 980px) {
+  .global-search-modal-content {
+    --global-search-modal-inline-end-inset: var(--bf-space-4);
+  }
+}
+
+@media (max-width: 700px) {
+  .global-search-modal-content {
+    --global-search-modal-inline-end-inset: var(--bf-space-3);
+  }
+}
+
+@container (max-width: 700px) {
+  .global-search--embedded {
+    .global-search__group--actions .global-search__group-items {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}
+
+@container (max-width: 420px) {
+  .global-search--embedded {
+    .global-search__results[data-search-state='default'][data-search-view='overview'] {
+      display: block;
+    }
+
+    .global-search__group + .global-search__group {
+      margin-top: var(--bf-space-6) !important;
+    }
+
+    .global-search__group--actions .global-search__group-items {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .global-search__result-context,
+    .global-search__result-tools,
+    .global-search__footer-keys {
+      display: none;
     }
   }
 }
