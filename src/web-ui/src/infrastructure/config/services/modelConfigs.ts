@@ -41,6 +41,44 @@ export function getProviderGroupKey(config: ProviderConfigLike): string {
     || `${config.name ?? ''}:${config.model_name ?? ''}`;
 }
 
+/** Count exact model-id references in persisted selector/config structures. */
+export function countModelConfigReferences(
+  value: unknown,
+  modelIds: ReadonlySet<string>,
+): number {
+  if (typeof value === 'string') return modelIds.has(value) ? 1 : 0;
+  if (Array.isArray(value)) {
+    return value.reduce<number>(
+      (count, entry) => count + countModelConfigReferences(entry, modelIds),
+      0,
+    );
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (count, entry) => count + countModelConfigReferences(entry, modelIds),
+      0,
+    );
+  }
+  return 0;
+}
+
+/** Remove one configured provider instance and every model owned by it. */
+export function removeProviderModelConfigs<T extends ProviderConfigLike>(
+  configs: readonly T[],
+  providerGroupKey: string,
+): { remaining: T[]; removed: T[] } {
+  const remaining: T[] = [];
+  const removed: T[] = [];
+  configs.forEach((config) => {
+    if (getProviderGroupKey(config) === providerGroupKey) {
+      removed.push(config);
+    } else {
+      remaining.push(config);
+    }
+  });
+  return { remaining, removed };
+}
+
 function inferProviderTemplate(config: ProviderConfigLike): ProviderTemplate | undefined {
   const matchedCatalogItem = matchProviderCatalogItemByBaseUrl(config.base_url);
   // Safe module-level forward reference: PROVIDER_TEMPLATES is initialized before this runs.

@@ -456,6 +456,7 @@
     "cancel": "取消",
     "edit": "编辑",
     "delete": "删除",
+    "deleteProvider": "删除服务商",
     "test": "测试连接",
     "newConfig": "新建配置",
     "addModel": "添加模型",
@@ -467,10 +468,27 @@
     "message": "将删除模型“{{name}}”。当前有 {{count}} 处设置显式引用此模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。",
     "confirm": "删除模型"
   },
-  "discardChanges": {
-    "title": "放弃未保存的修改？",
-    "message": "模型或服务商配置中的草稿尚未保存。关闭后这些修改将丢失。",
-    "confirm": "放弃修改"
+  "providerDeleteConfirm": {
+    "title": "删除服务商？",
+    "message": "将删除服务商“{{name}}”及其 {{modelCount}} 个模型配置。当前有 {{referenceCount}} 处设置显式引用这些模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。关联的订阅账号不会退出登录。",
+    "messageWithDraft": "将删除服务商“{{name}}”及其 {{modelCount}} 个模型配置，同时丢弃该服务商尚未保存的编辑草稿。当前有 {{referenceCount}} 处设置显式引用这些模型；这些引用不会自动改为其他模型，相关功能可能回退或不可用。关联的订阅账号不会退出登录。",
+    "confirm": "删除服务商"
+  },
+  "draftClose": {
+    "title": "保留这次编辑草稿？",
+    "message": "这些修改尚未写入模型配置。保留草稿不会触发连接测试，再次打开此编辑器时可以继续。",
+    "keepAndClose": "保留草稿并关闭",
+    "discard": "放弃修改",
+    "continueEditing": "继续编辑",
+    "discardDraft": "放弃草稿",
+    "retainedHint": "模型编辑草稿已保留，尚未写入正式配置。"
+  },
+  "draftConflict": {
+    "title": "先处理未完成的模型草稿",
+    "message": "打开另一个模型或服务商前，请继续处理当前草稿，或放弃草稿后打开所选配置。",
+    "continueDraft": "继续当前草稿",
+    "discardAndContinue": "放弃草稿并继续",
+    "cancel": "取消"
   },
   "empty": {
     "noModels": "暂无模型配置",
@@ -493,10 +511,14 @@
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
     "deleteSuccess": "模型配置已删除",
+    "providerDeleteFailed": "删除服务商失败",
+    "providerDeleteSuccess": "服务商及其模型配置已删除",
     "referenceCheckFailed": "无法确认此模型是否仍被其他设置引用，已取消删除",
+    "providerReferenceCheckFailed": "无法确认该服务商的模型是否仍被其他设置引用，已取消删除",
     "loadFailed": "加载AI配置失败",
     "testSuccess": "测试成功",
     "testFailed": "测试失败",
+    "testUnsupportedOnHost": "配置已保存，当前 CLI 设备不支持模型连接测试",
     "errorDetails": "详细错误",
     "connectionTestMessages": {
       "toolCallsNotDetected": "本次测试未检测到工具调用，因此暂时无法验证工具调用能力。",
