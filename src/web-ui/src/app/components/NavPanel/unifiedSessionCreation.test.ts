@@ -35,6 +35,7 @@ describe('unified project session creation', () => {
     expect(helloLauncher).toContain('<ChatPane');
     expect(helloLauncher).toContain('data-testid="hello-realtime-voice-mode-switch"');
     expect(helloLauncher).toContain('onClick={isVoiceMode ? endVoiceCall : startVoiceCall}');
+    expect(helloLauncher).toContain('<Phone size={15} aria-hidden="true" />');
     expect(helloLauncher).toContain('<RealtimeVoiceCallPanel />');
     expect(helloLauncher).toContain('<LauncherButton');
     expect(helloLauncher).toContain('leadingIcon={<Icon name="mic" />}');

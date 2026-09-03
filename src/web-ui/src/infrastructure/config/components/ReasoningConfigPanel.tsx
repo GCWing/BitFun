@@ -46,6 +46,8 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
   const projectionRequestId = useRef(0);
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
+  const projectionRequestRef = useRef(projectionRequest);
+  projectionRequestRef.current = projectionRequest;
   const projectionRequestKey = JSON.stringify(projectionRequest);
   const fallbackGeneratedProjection = projectionRequest ? undefined : generatedProjection;
   const projectionBindingKey = JSON.stringify({
@@ -72,7 +74,8 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
   }, [activeGeneratedProjection, draft]);
 
   useEffect(() => {
-    if (!projectionRequest) {
+    const currentProjectionRequest = projectionRequestRef.current;
+    if (!currentProjectionRequest) {
       setResolvedProjection({
         bindingKey: projectionBindingKey,
         projection: fallbackGeneratedProjection,
@@ -82,7 +85,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
 
     const requestId = ++projectionRequestId.current;
     void aiApi.projectReasoningCatalog({
-      ...projectionRequest,
+      ...currentProjectionRequest,
       reasoning: draft,
     }).then((projection) => {
       if (projectionRequestId.current !== requestId) return;

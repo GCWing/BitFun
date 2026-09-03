@@ -396,7 +396,7 @@ $panel-height: 680px;
   flex: 0 0 auto;
   padding: var(--bf-space-2);
   border-top: 1px solid var(--bf-color-border-subtle);
-  background: color-mix(in srgb, var(--bf-color-surface-subtle) 78%, transparent);
+  background: transparent;
 }
 
 .bitfun-fmc__mode-switch-button {
@@ -407,9 +407,9 @@ $panel-height: 680px;
   justify-content: center;
   gap: var(--bf-space-2);
   padding: var(--bf-space-2) var(--bf-space-3);
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 0;
   border-radius: var(--bf-radius-base);
-  background: var(--bf-color-action-quiet-hover);
+  background: transparent;
   color: var(--bf-color-content-secondary);
   font: inherit;
   font-size: var(--bf-type-label-sm-font-size);
@@ -418,13 +418,23 @@ $panel-height: 680px;
   cursor: pointer;
   transition:
     background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
-  &:hover:not(:disabled) {
-    border-color: var(--bf-color-field-border-hover);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) {
+      background: var(--bf-color-action-quiet-hover);
+      color: var(--bf-color-content-primary);
+    }
+
+    &.is-voice:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--bf-color-status-success-content) 13%, transparent);
+    }
+  }
+
+  &:active:not(:disabled) {
     background: var(--bf-color-action-neutral-surface-hover);
-    color: var(--bf-color-content-primary);
+    transform: scale(0.985);
   }
 
   &:focus-visible {
@@ -438,7 +448,6 @@ $panel-height: 680px;
   }
 
   &.is-voice {
-    border-color: color-mix(in srgb, var(--bf-color-status-success-content) 26%, transparent);
     background: color-mix(in srgb, var(--bf-color-status-success-content) 9%, transparent);
     color: var(--bf-color-content-primary);
   }
@@ -648,5 +657,9 @@ $panel-height: 680px;
 
   .bitfun-fmc__mode-switch-spinner {
     animation: none;
+  }
+
+  .bitfun-fmc__mode-switch-button:active:not(:disabled) {
+    transform: none;
   }
 }
