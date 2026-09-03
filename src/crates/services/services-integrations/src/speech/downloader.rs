@@ -1,7 +1,7 @@
 use super::model_store::{validate_relative_archive_path, SpeechModelStore};
 use super::types::{
-    SpeechModelArtifact, SpeechModelArtifactKind, SpeechModelManifest, SpeechModelProgress,
-    SpeechModelStatus,
+    SpeechModelArtifact, SpeechModelArtifactKind, SpeechModelInstallState, SpeechModelManifest,
+    SpeechModelProgress, SpeechModelStatus,
 };
 use super::{BitFunError, BitFunResult};
 use bzip2::read::BzDecoder;
@@ -23,7 +23,7 @@ pub(super) async fn download_and_install_model<F>(
     on_progress: F,
 ) -> BitFunResult<SpeechModelStatus>
 where
-    F: Fn(SpeechModelProgress) + Send + Sync,
+    F: Fn(SpeechModelInstallState, SpeechModelProgress) + Send + Sync,
 {
     let client = crate::reqwest_client_builder()
         .connect_timeout(Duration::from_secs(15))
@@ -33,6 +33,9 @@ where
     let total_bytes = manifest.expected_bytes();
     let mut completed_bytes = 0u64;
     let mut downloaded_artifacts = Vec::with_capacity(manifest.artifacts.len());
+    let report_download_progress = |progress| {
+        on_progress(SpeechModelInstallState::Downloading, progress);
+    };
 
     for artifact in &manifest.artifacts {
         let artifact_path = ensure_artifact_downloaded(
@@ -43,19 +46,21 @@ where
             completed_bytes,
             total_bytes,
             cancel.clone(),
-            &on_progress,
+            &report_download_progress,
         )
         .await?;
         completed_bytes = completed_bytes.saturating_add(artifact.size_bytes);
         downloaded_artifacts.push((artifact.clone(), artifact_path));
     }
 
-    on_progress(SpeechModelProgress {
+    let completed_progress = SpeechModelProgress {
         model_id: manifest.id.clone(),
         downloaded_bytes: total_bytes,
         total_bytes,
         percent: 100.0,
-    });
+    };
+    report_download_progress(completed_progress.clone());
+    on_progress(SpeechModelInstallState::Verifying, completed_progress);
     install_artifacts(store, manifest, &downloaded_artifacts).await?;
     store.status_for_manifest(manifest).await
 }
@@ -310,6 +315,8 @@ async fn install_artifacts_into_staging(
     }
 
     let payload_dir = find_payload_dir(staging, &manifest.required_files).await?;
+    store.write_install_record(manifest, &payload_dir).await?;
+
     if final_dir.exists() {
         fs::remove_dir_all(&final_dir).await?;
     }
@@ -323,7 +330,6 @@ async fn install_artifacts_into_staging(
         }
     }
 
-    store.write_install_record(manifest, final_dir).await?;
     Ok(())
 }
 
@@ -379,4 +385,82 @@ fn has_required_files_at(path: &Path, required_files: &[String]) -> bool {
     required_files
         .iter()
         .all(|relative| path.join(relative).is_file())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::speech::model_catalog::sensevoice_small_int8_manifest;
+    use std::sync::Mutex;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn completed_download_enters_verifying_before_model_is_published() {
+        let root = tempdir().unwrap();
+        let paths = super::super::SpeechStoragePaths::new(
+            root.path().join("models"),
+            root.path().join("downloads"),
+            root.path().join("input"),
+        );
+        let store = SpeechModelStore::new(paths);
+        let mut manifest = sensevoice_small_int8_manifest();
+        manifest.id = "install-phase-test".to_string();
+        manifest.version = "test-version".to_string();
+        manifest.required_files.clear();
+        manifest.artifacts.clear();
+        let final_dir = store.model_dir(&manifest);
+        let observed_states = Mutex::new(Vec::new());
+
+        let status =
+            download_and_install_model(&store, &manifest, CancellationToken::new(), |state, _| {
+                if state == SpeechModelInstallState::Verifying {
+                    assert!(!final_dir.exists());
+                }
+                observed_states.lock().unwrap().push(state);
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            *observed_states.lock().unwrap(),
+            vec![
+                SpeechModelInstallState::Downloading,
+                SpeechModelInstallState::Verifying,
+            ]
+        );
+        assert_eq!(status.state, SpeechModelInstallState::Installed);
+        assert!(final_dir.join("bitfun-model-install.json").is_file());
+    }
+
+    #[tokio::test]
+    async fn failed_install_record_write_does_not_publish_model_files() {
+        let root = tempdir().unwrap();
+        let paths = super::super::SpeechStoragePaths::new(
+            root.path().join("models"),
+            root.path().join("downloads"),
+            root.path().join("input"),
+        );
+        let store = SpeechModelStore::new(paths);
+        let mut manifest = sensevoice_small_int8_manifest();
+        manifest.id = "staged-install-test".to_string();
+        manifest.version = "test-version".to_string();
+        manifest.required_files = vec!["model.onnx".to_string()];
+        manifest.artifacts.clear();
+
+        let final_dir = store.model_dir(&manifest);
+        let staging = final_dir.parent().unwrap().join(".installing-test");
+        fs::create_dir_all(staging.join("bitfun-model-install.json"))
+            .await
+            .unwrap();
+        fs::write(staging.join("model.onnx"), b"model-data")
+            .await
+            .unwrap();
+
+        let result =
+            install_artifacts_into_staging(&store, &manifest, &[], &staging, &final_dir).await;
+
+        assert!(result.is_err());
+        assert!(!final_dir.exists());
+        assert!(staging.join("model.onnx").is_file());
+    }
 }
