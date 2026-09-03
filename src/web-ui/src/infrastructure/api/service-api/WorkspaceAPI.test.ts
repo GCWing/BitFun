@@ -226,4 +226,18 @@ describe('WorkspaceAPI', () => {
       command === 'start_search_filenames_stream'
     ))).toBe(false);
   });
+
+  it('resolves browser-dropped file paths through a structured host request', async () => {
+    invokeMock.mockResolvedValueOnce(['C:\\drop\\report.pdf']);
+
+    await expect(workspaceAPI.resolveBrowserDroppedFilePaths('drop-token', 1)).resolves.toEqual([
+      'C:\\drop\\report.pdf',
+    ]);
+    expect(invokeMock).toHaveBeenCalledWith('resolve_browser_dropped_file_paths', {
+      request: {
+        token: 'drop-token',
+        fileCount: 1,
+      },
+    });
+  });
 });

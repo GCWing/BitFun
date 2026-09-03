@@ -1481,8 +1481,8 @@
         },
         {
           "id": "attachments",
-          "titleZh": "在 Desktop 本地会话中粘贴本机文件、文件夹与图片，或在支持本机路径拖放的平台拖入",
-          "titleEn": "Paste local files, folders, and images in Desktop local sessions, or drop them where native path drop is available",
+          "titleZh": "在 Desktop 本地会话中粘贴或拖入本机文件、文件夹与图片",
+          "titleEn": "Paste or drop local files, folders, and images into Desktop local sessions",
           "control": {
             "kind": "open",
             "reasonCode": "visualSelection",
@@ -1491,9 +1491,11 @@
           },
           "evidence": [
             "command:get_clipboard_files",
+            "command:resolve_browser_dropped_file_paths",
             "command:upload_image_contexts",
             "source:src/web-ui/src/flow_chat/utils/externalFileIntake.ts#buildExternalFileContexts",
             "source:src/web-ui/src/flow_chat/utils/externalFileIntake.test.ts#buildExternalFileContexts",
+            "source:src/web-ui/src/infrastructure/files/resolveBrowserDroppedFilePaths.ts#resolveBrowserDroppedFilePaths",
             "source:src/web-ui/src/infrastructure/files/useLocalFileDrop.ts#useLocalFileDrop"
           ]
         },
@@ -9409,6 +9411,9 @@
       "capabilityId": "feature.ai-assistant"
     },
     "clipboard_file": {
+      "capabilityId": "feature.files-editor"
+    },
+    "browser_file_drop": {
       "capabilityId": "feature.files-editor"
     },
     "sleep_prevention": {

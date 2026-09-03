@@ -213,6 +213,7 @@ import type { SessionPermissionMode } from '@/infrastructure/api/service-api/Age
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { useLocalFileDrop } from '@/infrastructure/files/useLocalFileDrop';
+import { resolveBrowserDroppedFilePaths } from '@/infrastructure/files/resolveBrowserDroppedFilePaths';
 import {
   buildExternalFileContexts,
   partitionExternalDropFiles,
@@ -4730,10 +4731,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleHtmlExternalFilesDrop = useCallback((files: File[]) => {
     const request = captureExternalFileIntakeRequest();
     return enqueueExternalFileIntake(request, async () => {
-      const { paths, fallbackImages, hasUnavailableFiles } = partitionExternalDropFiles(
+      const dropPayload = partitionExternalDropFiles(
         files,
         request.availability.supported,
       );
+      let paths = dropPayload.paths;
+      let fallbackImages = dropPayload.fallbackImages;
+      let hasUnavailableFiles = dropPayload.hasUnavailableFiles;
+
+      if (request.availability.supported && paths.length !== files.length && files.length > 0) {
+        try {
+          const resolvedPaths = await resolveBrowserDroppedFilePaths(files);
+          if (resolvedPaths.length === files.length && resolvedPaths.every(Boolean)) {
+            paths = resolvedPaths;
+            fallbackImages = [];
+            hasUnavailableFiles = false;
+          } else {
+            log.warn('Browser drop path resolution returned an incomplete result', {
+              expectedCount: files.length,
+              resolvedCount: resolvedPaths.length,
+            });
+          }
+        } catch (error) {
+          log.warn('Failed to resolve browser-dropped file paths', error);
+        }
+      }
 
       if (request.availability.supported && paths.length > 0) {
         await addExternalPaths(request, 'drop', paths);
