@@ -13,6 +13,7 @@ export interface ContextDropZoneProps {
   children?: React.ReactNode;
   className?: string;
   onContextAdded?: (context: ContextItem) => void;
+  onExternalFilesDrop?: (files: File[]) => void;
   disabled?: boolean;
 }
 
@@ -21,6 +22,7 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   children,
   className = '',
   onContextAdded,
+  onExternalFilesDrop,
   disabled = false,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -105,7 +107,7 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     dragCounterRef.current++;
     if (Array.from(e.dataTransfer.types).includes('Files')) {
       setIsDragOver(true);
-      setCanAccept(!disabled);
+      setCanAccept(!disabled && Boolean(onExternalFilesDrop));
       return;
     }
     
@@ -119,14 +121,14 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
         dragManager.handleDragEnter(dropTargetRef.current, e.nativeEvent);
       }
     }
-  }, [disabled]);
+  }, [disabled, onExternalFilesDrop]);
   
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (Array.from(e.dataTransfer.types).includes('Files')) {
-      e.dataTransfer.dropEffect = disabled ? 'none' : 'copy';
+      e.dataTransfer.dropEffect = disabled || !onExternalFilesDrop ? 'none' : 'copy';
       return;
     }
     
@@ -137,7 +139,7 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     } else {
       e.dataTransfer.dropEffect = 'none';
     }
-  }, [disabled]);
+  }, [disabled, onExternalFilesDrop]);
   
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -166,10 +168,13 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     setCanAccept(false);
 
     if (Array.from(e.dataTransfer.types).includes('Files')) {
+      if (!disabled && onExternalFilesDrop) {
+        onExternalFilesDrop(Array.from(e.dataTransfer.files));
+      }
       return;
     }
     dragManager.handleDrop(dropTargetRef.current, e.nativeEvent);
-  }, []);
+  }, [disabled, onExternalFilesDrop]);
   
   return (
     <div

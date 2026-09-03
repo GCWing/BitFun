@@ -550,6 +550,7 @@
     "imagePasteFailed": "Image paste failed",
     "externalFiles": {
       "clipboardPathsUnavailable": "The clipboard reported files, but their local paths could not be read.",
+      "dropPathsUnavailable": "This file drop did not expose local paths. Copy the files and paste them into the composer instead.",
       "partialFailure": "Added {{added}} item(s); {{failed}} item(s) were unavailable or unsupported.",
       "unsupported": {
         "web": "This web session cannot reference local files. Use a Desktop local session.",

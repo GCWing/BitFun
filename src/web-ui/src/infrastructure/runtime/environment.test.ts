@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isTauriRuntime, supportsNativeWindowControls } from './environment';
+import {
+  isTauriRuntime,
+  isWindowsDesktopRuntime,
+  supportsNativeWindowControls,
+} from './environment';
 
 const setTauriInternals = (value: unknown) => {
   vi.stubGlobal('window', {
@@ -39,5 +43,17 @@ describe('runtime environment', () => {
 
     expect(isTauriRuntime()).toBe(true);
     expect(supportsNativeWindowControls()).toBe(true);
+  });
+
+  it('detects Windows only for a complete Tauri desktop runtime', () => {
+    vi.stubGlobal('navigator', { platform: 'Win32', userAgent: 'Windows' });
+    vi.stubGlobal('window', {});
+    expect(isWindowsDesktopRuntime()).toBe(false);
+
+    setTauriInternals({
+      invoke: vi.fn(),
+      metadata: { currentWindow: { label: 'main' } },
+    });
+    expect(isWindowsDesktopRuntime()).toBe(true);
   });
 });

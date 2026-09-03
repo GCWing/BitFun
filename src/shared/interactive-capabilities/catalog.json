@@ -1481,8 +1481,8 @@
         },
         {
           "id": "attachments",
-          "titleZh": "在 Desktop 本地会话中粘贴或拖放本机文件、文件夹与图片作为上下文",
-          "titleEn": "Paste or drop local files, folders, and images as context in Desktop local sessions",
+          "titleZh": "在 Desktop 本地会话中粘贴本机文件、文件夹与图片，或在支持本机路径拖放的平台拖入",
+          "titleEn": "Paste local files, folders, and images in Desktop local sessions, or drop them where native path drop is available",
           "control": {
             "kind": "open",
             "reasonCode": "visualSelection",

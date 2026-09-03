@@ -550,6 +550,7 @@
     "imagePasteFailed": "圖片粘貼失敗",
     "externalFiles": {
       "clipboardPathsUnavailable": "剪貼簿中包含檔案，但無法讀取其本機路徑。",
+      "dropPathsUnavailable": "此次拖放未提供本機路徑，請複製這些檔案後貼到輸入框。",
       "partialFailure": "已新增 {{added}} 項；另有 {{failed}} 項已失效或不受支援。",
       "unsupported": {
         "web": "Web 工作階段無法引用本機檔案，請使用 Desktop 本機工作階段。",

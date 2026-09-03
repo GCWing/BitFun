@@ -90,6 +90,11 @@ export type RichTextInputElement = HTMLDivElement & {
   closeInlineTrigger?: () => void;
 };
 
+export interface ClipboardFilePaste {
+  fallbackImages: File[];
+  hasNonImageFiles: boolean;
+}
+
 export interface RichTextInputProps
   extends Omit<
     React.HTMLAttributes<HTMLDivElement>,
@@ -98,7 +103,7 @@ export interface RichTextInputProps
   value: string;
   onChange: (value: string, contexts: ContextItem[]) => void;
   onLargePaste?: (text: string) => string | null;
-  onPasteFiles?: () => void;
+  onPasteFiles?: (paste: ClipboardFilePaste) => void | Promise<void>;
   pendingLargePastes?: Record<string, string>;
   onUpdateLargePaste?: (placeholder: string, text: string) => string;
   onRemoveLargePaste?: (placeholder: string) => void;
@@ -1045,27 +1050,30 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
     
-    // Detect image paste
     const items = Array.from(e.clipboardData.items);
-    const imageItem = items.find(item => item.type.startsWith('image/'));
-    
-    if (imageItem) {
-      // Dispatch image paste event for parent handling
-      const file = imageItem.getAsFile();
-      if (file && internalRef.current) {
-        const customEvent = new CustomEvent('imagePaste', { 
-          detail: { file },
-          bubbles: true 
-        });
-        internalRef.current.dispatchEvent(customEvent);
-      }
-      return;
-    }
-
     const containsFiles = items.some(item => item.kind === 'file')
       || Array.from(e.clipboardData.types ?? []).includes('Files');
     if (containsFiles) {
-      onPasteFiles?.();
+      const fallbackImages = items
+        .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter((file): file is File => Boolean(file));
+      const hasNonImageFiles = items.some(
+        item => item.kind === 'file' && !item.type.startsWith('image/'),
+      );
+
+      if (onPasteFiles) {
+        void onPasteFiles({ fallbackImages, hasNonImageFiles });
+      } else {
+        // Preserve the standalone editor fallback when no host owns native
+        // clipboard path resolution.
+        for (const file of fallbackImages) {
+          internalRef.current?.dispatchEvent(new CustomEvent('imagePaste', {
+            detail: { file },
+            bubbles: true,
+          }));
+        }
+      }
       return;
     }
     

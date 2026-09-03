@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "f80d1d53259473a5eacccf43137d7d5339ffa93510dacb3104c9d5f8f10b07f7",
+  "digest": "e710a51d176e7dc9bbccddaa1a9eeac3d928d3204e85a001144aeb70fe2f588a",
   "ownerDigest": "2ced30785fbed3c5a80085cb8d04cc1ba2604650ae45619134a350e5e4ed7914",
   "searchAcceptance": [
     {
@@ -19899,8 +19899,8 @@
         },
         {
           "id": "attachments",
-          "titleZh": "在 Desktop 本地会话中粘贴或拖放本机文件、文件夹与图片作为上下文",
-          "titleEn": "Paste or drop local files, folders, and images as context in Desktop local sessions",
+          "titleZh": "在 Desktop 本地会话中粘贴本机文件、文件夹与图片，或在支持本机路径拖放的平台拖入",
+          "titleEn": "Paste local files, folders, and images in Desktop local sessions, or drop them where native path drop is available",
           "control": {
             "kind": "open",
             "reasonCode": "visualSelection",
@@ -19997,8 +19997,8 @@
         "Review file history and snapshots, then roll back a session or selected turn",
         "仅在当前语言提供器实际支持时显示格式化、定义与类型跳转、引用、重命名、快速修复和符号导航",
         "Show formatting, definition and type navigation, references, rename, quick fixes, and symbol navigation only when supported by the active language provider",
-        "在 Desktop 本地会话中粘贴或拖放本机文件、文件夹与图片作为上下文",
-        "Paste or drop local files, folders, and images as context in Desktop local sessions",
+        "在 Desktop 本地会话中粘贴本机文件、文件夹与图片，或在支持本机路径拖放的平台拖入",
+        "Paste local files, folders, and images in Desktop local sessions, or drop them where native path drop is available",
         "查看并分析工作区或会话中的图片",
         "View and analyze images from the workspace or session context",
         "打开项目文件",

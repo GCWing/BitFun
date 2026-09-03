@@ -172,7 +172,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     });
   }
 
-  it('prioritizes image bytes over generic clipboard file intake', async () => {
+  it('routes images and non-image files through one path-aware clipboard intake', async () => {
     const onPasteFiles = vi.fn();
     const imageFile = { name: 'image.png', type: 'image/png' } as File;
     await act(async () => {
@@ -198,8 +198,11 @@ describeWithJsdom('RichTextInput external sync', () => {
       types: ['Files'],
     });
 
-    expect(imagePaste).toHaveBeenCalledOnce();
-    expect(onPasteFiles).not.toHaveBeenCalled();
+    expect(imagePaste).not.toHaveBeenCalled();
+    expect(onPasteFiles).toHaveBeenCalledWith({
+      fallbackImages: [imageFile],
+      hasNonImageFiles: true,
+    });
   });
 
   it('routes one or multiple non-image files without falling back to text', async () => {
@@ -227,7 +230,10 @@ describeWithJsdom('RichTextInput external sync', () => {
       text: 'file names must not be inserted',
     });
 
-    expect(onPasteFiles).toHaveBeenCalledOnce();
+    expect(onPasteFiles).toHaveBeenCalledWith({
+      fallbackImages: [],
+      hasNonImageFiles: true,
+    });
     expect(onLargePaste).not.toHaveBeenCalled();
     expect(editor.textContent).toBe('');
   });

@@ -1,5 +1,6 @@
 import type { FileMetadata } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import type { ContextItem, DirectoryContext, FileContext, ImageContext } from '@/shared/types/context';
+import { repositoryPathKey } from '@/shared/utils/pathUtils';
 import { getMimeTypeFromFilename, isImageFile } from './imageUtils';
 
 export type ExternalFileSource = 'drop' | 'clipboard';
@@ -41,6 +42,12 @@ export interface ExternalFileIntakeResult {
   duplicateCount: number;
 }
 
+export interface ExternalFileDropPayload {
+  paths: string[];
+  fallbackImages: File[];
+  hasUnavailableFiles: boolean;
+}
+
 export function resolveExternalFileIntakeAvailability(
   environment: ExternalFileIntakeEnvironment,
 ): ExternalFileIntakeAvailability {
@@ -52,8 +59,7 @@ export function resolveExternalFileIntakeAvailability(
 }
 
 export function normalizeExternalFilePath(path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
-  return /^[a-z]:\//i.test(normalized) ? normalized.toLowerCase() : normalized;
+  return repositoryPathKey(path);
 }
 
 export function getContextLocalPath(context: ContextItem): string | undefined {
@@ -63,8 +69,36 @@ export function getContextLocalPath(context: ContextItem): string | undefined {
   return undefined;
 }
 
+export function partitionExternalDropFiles(
+  files: File[],
+  acceptLocalPaths: boolean,
+): ExternalFileDropPayload {
+  const filePath = (file: File) => (file as File & { path?: string }).path?.trim() ?? '';
+  const paths = files.map(filePath).filter(Boolean);
+  const pathSet = new Set(paths);
+  return {
+    paths,
+    fallbackImages: files.filter(file => (
+      file.type.startsWith('image/')
+      && (!acceptLocalPaths || !pathSet.has(filePath(file)))
+    )),
+    hasUnavailableFiles: files.length === 0 || files.some(file => (
+      !file.type.startsWith('image/') && !pathSet.has(filePath(file))
+    )),
+  };
+}
+
+function normalizeExternalPathSpelling(path: string): string {
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(path) || /^[\\/]{2}/.test(path);
+  let normalized = isWindowsPath ? path.replace(/\\/g, '/') : path;
+  while (normalized.length > 1 && normalized.endsWith('/') && !normalized.endsWith(':/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
 function getPathName(path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalized = normalizeExternalPathSpelling(path);
   return normalized.split('/').pop() || normalized;
 }
 
@@ -109,11 +143,22 @@ function createPathContext(
     };
   }
 
-  const normalizedWorkspace = workspacePath?.replace(/\\/g, '/').replace(/\/+$/, '');
-  const normalizedPath = path.replace(/\\/g, '/');
-  const relativePath = normalizedWorkspace
-    && normalizedPath.toLowerCase().startsWith(`${normalizedWorkspace.toLowerCase()}/`)
-    ? normalizedPath.slice(normalizedWorkspace.length + 1)
+  const normalizedWorkspace = workspacePath
+    ? normalizeExternalPathSpelling(workspacePath)
+    : undefined;
+  const normalizedPath = normalizeExternalPathSpelling(path);
+  const workspaceKey = normalizedWorkspace
+    ? normalizeExternalFilePath(normalizedWorkspace)
+    : undefined;
+  const pathKey = normalizeExternalFilePath(normalizedPath);
+  const workspacePrefix = workspaceKey
+    ? (workspaceKey.endsWith('/') ? workspaceKey : `${workspaceKey}/`)
+    : undefined;
+  const relativeStart = normalizedWorkspace
+    ? normalizedWorkspace.length + (normalizedWorkspace.endsWith('/') ? 0 : 1)
+    : 0;
+  const relativePath = workspacePrefix && pathKey.startsWith(workspacePrefix)
+    ? normalizedPath.slice(relativeStart)
     : undefined;
   return {
     id,

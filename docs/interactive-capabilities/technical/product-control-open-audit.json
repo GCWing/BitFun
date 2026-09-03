@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "f80d1d53259473a5eacccf43137d7d5339ffa93510dacb3104c9d5f8f10b07f7",
+  "catalogDigest": "e710a51d176e7dc9bbccddaa1a9eeac3d928d3204e85a001144aeb70fe2f588a",
   "count": 212,
   "reasonCounts": {
     "externalAuth": 4,
@@ -703,8 +703,8 @@
     {
       "capabilityId": "feature.files-editor",
       "itemId": "attachments",
-      "titleZh": "在 Desktop 本地会话中粘贴或拖放本机文件、文件夹与图片作为上下文",
-      "titleEn": "Paste or drop local files, folders, and images as context in Desktop local sessions",
+      "titleZh": "在 Desktop 本地会话中粘贴本机文件、文件夹与图片，或在支持本机路径拖放的平台拖入",
+      "titleEn": "Paste local files, folders, and images in Desktop local sessions, or drop them where native path drop is available",
       "reasonCode": "visualSelection",
       "reasonZh": "该流程需要用户选择或提供本地附件；Agent 可读取已经进入会话的文件，但不会自行声称完成了用户侧拖放或剪贴板选择。",
       "reasonEn": "This flow requires the user to select or provide local attachments; the Agent can read files already in context without pretending it performed the user's drag, drop, or clipboard selection.",

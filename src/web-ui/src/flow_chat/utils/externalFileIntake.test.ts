@@ -4,6 +4,7 @@ import type { ContextItem } from '@/shared/types/context';
 import {
   buildExternalFileContexts,
   normalizeExternalFilePath,
+  partitionExternalDropFiles,
   resolveExternalFileIntakeAvailability,
 } from './externalFileIntake';
 
@@ -48,14 +49,77 @@ describe('external file intake availability', () => {
   });
 });
 
+describe('external browser drop fallback', () => {
+  const droppedFile = (name: string, type: string, path?: string) => ({ name, type, path }) as File;
+
+  it('uses exposed paths and keeps only pathless images as byte fallbacks', () => {
+    const pathImage = droppedFile('photo.png', 'image/png', 'C:\\tmp\\photo.png');
+    const pathlessImage = droppedFile('capture.png', 'image/png');
+    const pathlessDocument = droppedFile('report.pdf', 'application/pdf');
+
+    expect(partitionExternalDropFiles(
+      [pathImage, pathlessImage, pathlessDocument],
+      true,
+    )).toEqual({
+      paths: ['C:\\tmp\\photo.png'],
+      fallbackImages: [pathlessImage],
+      hasUnavailableFiles: true,
+    });
+  });
+
+  it('uses image bytes instead of controller paths on unsupported data planes', () => {
+    const image = droppedFile('photo.png', 'image/png', '/tmp/photo.png');
+    const document = droppedFile('report.pdf', 'application/pdf', '/tmp/report.pdf');
+
+    expect(partitionExternalDropFiles([image, document], false)).toEqual({
+      paths: ['/tmp/photo.png', '/tmp/report.pdf'],
+      fallbackImages: [image],
+      hasUnavailableFiles: false,
+    });
+  });
+});
+
 describe('buildExternalFileContexts', () => {
   it('normalizes POSIX and Windows paths for deduplication', async () => {
     expect(normalizeExternalFilePath('C:\\Users\\Me\\file.txt')).toBe('c:/users/me/file.txt');
     expect(normalizeExternalFilePath('/tmp/file.txt/')).toBe('/tmp/file.txt');
+    expect(normalizeExternalFilePath('/')).toBe('/');
+    expect(normalizeExternalFilePath('C:\\')).toBe('c:/');
+    expect(normalizeExternalFilePath('\\\\Server\\Share\\File.txt')).toBe('//server/share/file.txt');
 
     const result = await build(['C:\\Users\\Me\\file.txt', 'c:/users/me/file.txt']);
     expect(result.contexts).toHaveLength(1);
     expect(result.duplicateCount).toBe(1);
+  });
+
+  it('keeps case-distinct POSIX siblings outside the workspace', async () => {
+    const result = await buildExternalFileContexts({
+      source: 'drop',
+      paths: ['/srv/repo/report.md'],
+      existingContexts: [],
+      workspacePath: '/srv/Repo',
+      maxImageCount: 2,
+      loadMetadata: async () => metadata(false),
+    });
+
+    expect(result.contexts[0]).toMatchObject({
+      type: 'file',
+      filePath: '/srv/repo/report.md',
+      relativePath: undefined,
+    });
+  });
+
+  it('computes Windows relative paths case-insensitively', async () => {
+    const result = await buildExternalFileContexts({
+      source: 'drop',
+      paths: ['c:\\Work\\Repo\\docs\\report.md'],
+      existingContexts: [],
+      workspacePath: 'C:\\WORK\\REPO',
+      maxImageCount: 2,
+      loadMetadata: async () => metadata(false),
+    });
+
+    expect(result.contexts[0]).toMatchObject({ relativePath: 'docs/report.md' });
   });
 
   it('classifies files, directories, images, and preserves input order', async () => {
