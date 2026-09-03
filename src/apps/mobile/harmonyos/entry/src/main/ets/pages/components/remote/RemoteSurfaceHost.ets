@@ -1,6 +1,6 @@
 import { MobileDesignTypography } from '../../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../../i18n/RemoteI18n';
-import { RemoteSession } from '../../../model/RemoteModels';
+import { REMOTE_CAPABILITY_HARNESS_PROFILES_V1, RemoteSession } from '../../../model/RemoteModels';
 import { RemoteLogger } from '../../../services/RemoteLogger';
 import { RemoteUiState } from '../../../services/RemoteUiState';
 import { RemotePageState } from '../../state/RemotePageState';
@@ -15,6 +15,7 @@ import { RemoteSessionList } from '../RemoteSessionList';
 import { RemoteSessionLoadingView } from '../RemoteSessionLoadingView';
 import { SidebarToggleButton } from '../SidebarToggleButton';
 import { SessionActionPresentation } from '../SessionActionSurface';
+import { HarnessProfileMenu } from '../HarnessProfileMenu';
 import {
   SettingsPlacement,
   SettingsPlacementPolicy,
@@ -63,6 +64,7 @@ export struct RemoteSurfaceHost {
   @Event onOpenSidebar: () => void = () => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Event onCloseSettings: () => void = () => {};
+  @Local showCreateModeMenu: boolean = false;
 
   // The wide layout keeps the master pane inside a routed destination, so a
   // mount here while switching sessions means the navigation stack was torn
@@ -109,6 +111,7 @@ export struct RemoteSurfaceHost {
           showWorkspaceMetadata: this.presentationState.showWorkspaceMetadata,
           showUpdatedMetadata: this.presentationState.showUpdatedMetadata,
           showStatusMetadata: this.presentationState.showStatusMetadata,
+          supportsHarnessProfiles: this.supportsHarnessProfiles(),
           hasMoreSessions: this.remotePageState.hasMoreSessions,
           isBusy: this.remotePageState.conversation.isBusy || this.remotePageState.isLoadingSessions,
           // A pending id means a row was tapped, whether or not the open is slow
@@ -252,7 +255,23 @@ export struct RemoteSurfaceHost {
           .width(148).height(46).fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium)
           .fontColor(CONTENT_ON_ACTION).backgroundColor(PRIMARY_ACTION)
           .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
-          .onClick(() => this.createSession('code'))
+          .bindPopup(this.showCreateModeMenu, {
+            builder: () => {
+              this.CreateModeMenu()
+            },
+            placement: Placement.Top,
+            popupColor: CARD,
+            enableArrow: false,
+            autoCancel: true,
+            mask: true,
+            targetSpace: 8,
+            onStateChange: (event) => {
+              if (!event.isVisible) {
+                this.showCreateModeMenu = false;
+              }
+            }
+          })
+          .onClick(() => this.requestCreateSession())
       }
     }
     .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
@@ -347,6 +366,28 @@ export struct RemoteSurfaceHost {
 
   private createAssistantSession(): void {
     this.createSession('code');
+  }
+
+  @Builder
+  private CreateModeMenu() {
+    HarnessProfileMenu({
+      onSelect: (agentType: string) => {
+        this.showCreateModeMenu = false;
+        this.createSession(agentType);
+      }
+    })
+  }
+
+  private requestCreateSession(): void {
+    if (this.supportsHarnessProfiles()) {
+      this.showCreateModeMenu = true;
+      return;
+    }
+    this.createSession('code');
+  }
+
+  private supportsHarnessProfiles(): boolean {
+    return this.remotePageState.supportsHostCapability(REMOTE_CAPABILITY_HARNESS_PROFILES_V1);
   }
 
   /**

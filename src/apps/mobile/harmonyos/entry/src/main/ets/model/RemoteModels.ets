@@ -307,6 +307,7 @@ export interface SteerTurnResult {
 
 export const REMOTE_CAPABILITY_DIALOG_STEER_V1: string = 'dialog_steer_v1';
 export const REMOTE_CAPABILITY_PLAN_BUILD_V1: string = 'plan_build_v1';
+export const REMOTE_CAPABILITY_HARNESS_PROFILES_V1: string = 'harness_profiles_v1';
 
 export interface RemoteModelConfig {
   id: string;

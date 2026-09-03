@@ -13,6 +13,7 @@ import {
 } from '../policy/SessionListProjection';
 import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
+import { HarnessProfileMenu } from './HarnessProfileMenu';
 import {
   INK,
   MUTED,
@@ -40,16 +41,19 @@ struct SidebarWorkspaceGroup {
   @Param bodyIndent: number = 10;
   @Param expanded: boolean = false;
   @Param loadStatus: WorkspaceDirectoryStatus = 'idle';
+  @Param supportsHarnessProfiles: boolean = false;
   @Event onOpenWorkspace: (path: string) => void = (_path: string) => {};
   @Event onExpandWorkspace: (path: string) => Promise<void> = async (_path: string) => {};
   @Event onExpandedChange: (path: string, expanded: boolean) => void =
     (_path: string, _expanded: boolean) => {};
   @Event onLoadStatusChange: (path: string, status: WorkspaceDirectoryStatus) => void =
     (_path: string, _status: WorkspaceDirectoryStatus) => {};
-  @Event onCreateInWorkspace: (path: string) => void = (_path: string) => {};
+  @Event onCreateInWorkspace: (path: string, agentType: string) => void =
+    (_path: string, _agentType: string) => {};
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Local visibleSessionCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
+  @Local showCreateMenu: boolean = false;
 
   @Monitor('sessions')
   onSessionsChanged(): void {
@@ -133,8 +137,28 @@ struct SidebarWorkspaceGroup {
       .width(30)
       .height(40)
       .accessibilityText(RemoteI18n.t('sidebar.newInWorkspace'))
+      .bindPopup(this.showCreateMenu, {
+        builder: () => {
+          this.CreateModeMenu()
+        },
+        placement: Placement.Top,
+        popupColor: TRANSPARENT,
+        enableArrow: false,
+        autoCancel: true,
+        mask: false,
+        targetSpace: 6,
+        onStateChange: (event) => {
+          if (!event.isVisible) {
+            this.showCreateMenu = false;
+          }
+        }
+      })
       .onClick(() => {
-        this.onCreateInWorkspace(this.path);
+        if (this.supportsHarnessProfiles) {
+          this.showCreateMenu = !this.showCreateMenu;
+        } else {
+          this.onCreateInWorkspace(this.path, 'code');
+        }
       })
     }
     .width('100%')
@@ -142,6 +166,16 @@ struct SidebarWorkspaceGroup {
     .padding({ left: Math.max(0, this.bodyIndent - 4), right: 6 })
     .alignItems(VerticalAlign.Center)
     .borderRadius(10)
+  }
+
+  @Builder
+  private CreateModeMenu() {
+    HarnessProfileMenu({
+      onSelect: (agentType: string) => {
+        this.showCreateMenu = false;
+        this.onCreateInWorkspace(this.path, agentType);
+      }
+    })
   }
 
   @Builder
@@ -316,11 +350,13 @@ export struct SidebarDeviceGroup {
   @Param query: string = '';
   @Param showHeader: boolean = false;
   @Param isActive: boolean = false;
+  @Param supportsHarnessProfiles: boolean = false;
   @Event onToggle: () => void = () => {};
   @Event onRetry: () => void = () => {};
   @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
-  @Event onCreateInWorkspace: (path: string) => void = (_path: string) => {};
+  @Event onCreateInWorkspace: (path: string, agentType: string) => void =
+    (_path: string, _agentType: string) => {};
   @Event onOpenWorkspace: (path: string) => void = (_path: string) => {};
   @Event onExpandWorkspace: (path: string) => Promise<void> = async (_path: string) => {};
   @Event onWorkspaceExpandedChange: (path: string, expanded: boolean) => void =
@@ -357,6 +393,7 @@ export struct SidebarDeviceGroup {
               runningSessionId: this.runningSessionId,
               currentWorkspace: this.isCurrentWorkspace(entry.path),
               activeDevice: this.isActive,
+              supportsHarnessProfiles: this.supportsHarnessProfiles,
               bodyIndent: this.bodyIndent(),
               expanded: this.directoryState.workspaceExpanded(this.device.deviceId, entry.path),
               loadStatus: this.sessionsFor(entry.path).length > 0 ?

@@ -12,6 +12,7 @@ import {
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
+import { REMOTE_CAPABILITY_HARNESS_PROFILES_V1 } from '../../model/RemoteModels';
 import { AppSidebar } from './AppSidebar';
 import { ConnectView } from './ConnectView';
 import { RemoteControlSettingsSheet } from './RemoteControlSettingsSheet';
@@ -79,11 +80,13 @@ export struct AppSidebarSurface {
         this.remotePageState.desktopName,
       selectedSessionId: this.remoteSelectedSessionId(),
       runningSessionId: this.remoteRunningSessionId(),
+      supportsHarnessProfiles: this.remotePageState.supportsHostCapability(
+        REMOTE_CAPABILITY_HARNESS_PROFILES_V1),
       workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onSidebar.openSession,
-      onCreateInWorkspace: (deviceId: string, path: string) => {
+      onCreateInWorkspace: (deviceId: string, path: string, agentType: string) => {
         this.actions.onSidebar.close();
-        this.actions.onRemoteHome.createInWorkspace(path, 'code', deviceId);
+        this.actions.onRemoteHome.createInWorkspace(path, agentType, deviceId);
       },
       onOpenWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path, deviceId);

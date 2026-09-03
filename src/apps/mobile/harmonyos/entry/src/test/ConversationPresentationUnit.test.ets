@@ -44,6 +44,7 @@ import { RemoteCompactHomePolicy } from '../main/ets/pages/policy/RemoteCompactH
 import { AccountDeviceSelectionPolicy } from '../main/ets/pages/policy/AccountDeviceSelectionPolicy';
 import { SidebarConnectionActionPolicy } from '../main/ets/pages/policy/SidebarConnectionActionPolicy';
 import { SidebarDeviceProjectionPolicy } from '../main/ets/pages/policy/SidebarDeviceProjectionPolicy';
+import { HarnessProfilePolicy } from '../main/ets/pages/policy/HarnessProfilePolicy';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 import {
   ConnectScanDecisionPolicy,
@@ -51,6 +52,14 @@ import {
 } from '../main/ets/services/ConnectScanDecisionPolicy';
 
 export default function conversationPresentationUnitTest() {
+  describe('HarnessProfilePolicy', () => {
+    it('maps mobile execution levels to canonical host Agents', 0, () => {
+      expect(HarnessProfilePolicy.agentType('minimal')).assertEqual('minimal');
+      expect(HarnessProfilePolicy.agentType('standard')).assertEqual('agentic');
+      expect(HarnessProfilePolicy.agentType('ultimate')).assertEqual('Ultra');
+    });
+  });
+
   describe('Local conversation empty home', () => {
     it('keeps local chat on a blank timeline instead of suggestion chips', 0, () => {
       const projection = ConversationViewState.project(
