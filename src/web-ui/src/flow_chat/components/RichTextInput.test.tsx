@@ -67,6 +67,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     vi.stubGlobal('Selection', window.Selection);
     vi.stubGlobal('NodeFilter', window.NodeFilter);
     vi.stubGlobal('Event', window.Event);
+    vi.stubGlobal('CustomEvent', window.CustomEvent);
     vi.stubGlobal('InputEvent', window.InputEvent);
     vi.stubGlobal('getSelection', window.getSelection.bind(window));
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -133,6 +134,21 @@ describeWithJsdom('RichTextInput external sync', () => {
     return editor as HTMLDivElement;
   }
 
+  function paste(
+    editor: HTMLDivElement,
+    options: { items?: Array<{ kind: string; type: string; getAsFile: () => File | null }>; types?: string[]; text?: string },
+  ) {
+    const event = new window.Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: {
+        items: options.items ?? [],
+        types: options.types ?? [],
+        getData: (type: string) => type === 'text/plain' ? options.text ?? '' : '',
+      },
+    });
+    editor.dispatchEvent(event);
+  }
+
   function setCaret(editor: HTMLDivElement, offset: number) {
     const selection = window.getSelection();
     const range = document.createRange();
@@ -155,6 +171,95 @@ describeWithJsdom('RichTextInput external sync', () => {
       editor.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
   }
+
+  it('routes images and non-image files through one path-aware clipboard intake', async () => {
+    const onPasteFiles = vi.fn();
+    const imageFile = { name: 'image.png', type: 'image/png' } as File;
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onPasteFiles={onPasteFiles}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />,
+      );
+    });
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    const imagePaste = vi.fn();
+    editor.addEventListener('imagePaste', imagePaste);
+
+    paste(editor, {
+      items: [
+        { kind: 'file', type: 'image/png', getAsFile: () => imageFile },
+        { kind: 'file', type: 'application/pdf', getAsFile: () => null },
+      ],
+      types: ['Files'],
+    });
+
+    expect(imagePaste).not.toHaveBeenCalled();
+    expect(onPasteFiles).toHaveBeenCalledWith({
+      fallbackImages: [imageFile],
+      hasNonImageFiles: true,
+    });
+  });
+
+  it('routes one or multiple non-image files without falling back to text', async () => {
+    const onPasteFiles = vi.fn();
+    const onLargePaste = vi.fn();
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onPasteFiles={onPasteFiles}
+          onLargePaste={onLargePaste}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />,
+      );
+    });
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    paste(editor, {
+      items: [
+        { kind: 'file', type: 'application/pdf', getAsFile: () => null },
+        { kind: 'file', type: 'text/csv', getAsFile: () => null },
+      ],
+      types: ['Files', 'text/plain'],
+      text: 'file names must not be inserted',
+    });
+
+    expect(onPasteFiles).toHaveBeenCalledWith({
+      fallbackImages: [],
+      hasNonImageFiles: true,
+    });
+    expect(onLargePaste).not.toHaveBeenCalled();
+    expect(editor.textContent).toBe('');
+  });
+
+  it('keeps plain text and large text paste behavior', async () => {
+    const onLargePaste = vi.fn((text: string) => text.length > 10 ? '[Pasted Content]' : null);
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onLargePaste={onLargePaste}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />,
+      );
+    });
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    setCaret(editor, 0);
+    paste(editor, { types: ['text/plain'], text: 'short' });
+    expect(editor.textContent).toContain('short');
+
+    setCaret(editor, editor.firstChild?.textContent?.length ?? 0);
+    paste(editor, { types: ['text/plain'], text: 'long text content' });
+    expect(editor.querySelector('[data-large-paste-placeholder]')).toBeTruthy();
+  });
 
   it('keeps the existing DOM node when parent echoes local input', async () => {
     const harnessRef = createRef<HarnessHandle>();
@@ -243,6 +348,164 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(reviewPill?.getAttribute('data-bf-context-type')).toBe('additional-mode-reference');
     expect(reviewPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
     expect(reviewPill?.textContent).toContain('Review');
+  });
+
+  it('removes a context capsule with one Backspace from its trailing separator', async () => {
+    const fileContext: ContextItem = {
+      id: 'external-file-1',
+      type: 'file',
+      filePath: '/tmp/report.pdf',
+      fileName: 'report.pdf',
+      timestamp: 1,
+    };
+    const inputRef = createRef<RichTextInputElement>();
+    const onRemoveContext = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          ref={inputRef}
+          value=""
+          onChange={() => {}}
+          contexts={[fileContext]}
+          onRemoveContext={onRemoveContext}
+        />
+      );
+    });
+    await act(async () => {
+      inputRef.current?.insertTag?.(fileContext);
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    const tag = editor.querySelector('[data-context-id="external-file-1"]');
+    const separator = tag?.nextSibling;
+    expect(separator?.textContent).toBe(' ');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(separator!, 1);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    await act(async () => {
+      editor.dispatchEvent(new window.KeyboardEvent('keydown', {
+        key: 'Backspace',
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    expect(onRemoveContext).toHaveBeenCalledOnce();
+    expect(onRemoveContext).toHaveBeenCalledWith(fileContext.id);
+  });
+
+  it('treats equivalent text and editor boundaries as one caret on Backspace', async () => {
+    const fileContext: ContextItem = {
+      id: 'external-file-equivalent-caret',
+      type: 'file',
+      filePath: '/tmp/equivalent-caret.pdf',
+      fileName: 'equivalent-caret.pdf',
+      timestamp: 1,
+    };
+    const inputRef = createRef<RichTextInputElement>();
+    const onRemoveContext = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          ref={inputRef}
+          value=""
+          onChange={() => {}}
+          contexts={[fileContext]}
+          onRemoveContext={onRemoveContext}
+        />
+      );
+    });
+    await act(async () => {
+      inputRef.current?.insertTag?.(fileContext);
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    const separator = editor.querySelector('[data-context-id="external-file-equivalent-caret"]')?.nextSibling;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(separator!, 1);
+    range.setEnd(editor, editor.childNodes.length);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    expect(selection?.getRangeAt(0).collapsed).toBe(false);
+
+    await act(async () => {
+      editor.dispatchEvent(new window.KeyboardEvent('keydown', {
+        key: 'Backspace',
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    expect(onRemoveContext).toHaveBeenCalledOnce();
+    expect(onRemoveContext).toHaveBeenCalledWith(fileContext.id);
+  });
+
+  it('keeps the caret at a removed middle context capsule', async () => {
+    const fileContexts: ContextItem[] = [1, 2, 3].map(index => ({
+      id: `external-file-${index}`,
+      type: 'file',
+      filePath: `/tmp/report-${index}.pdf`,
+      fileName: `report-${index}.pdf`,
+      timestamp: index,
+    }));
+    const inputRef = createRef<RichTextInputElement>();
+    const onRemoveContext = vi.fn();
+    const renderContexts = async (contexts: ContextItem[]) => {
+      await act(async () => {
+        root.render(
+          <RichTextInput
+            ref={inputRef}
+            value=""
+            onChange={() => {}}
+            contexts={contexts}
+            onRemoveContext={onRemoveContext}
+          />
+        );
+      });
+    };
+
+    await renderContexts(fileContexts);
+    await act(async () => {
+      fileContexts.forEach(context => inputRef.current?.insertTag?.(context));
+    });
+
+    const editor = container.querySelector('.rich-text-input') as HTMLDivElement;
+    const secondTag = editor.querySelector('[data-context-id="external-file-2"]');
+    const secondSeparator = secondTag?.nextSibling;
+    expect(secondSeparator?.textContent).toBe(' ');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(editor, Array.prototype.indexOf.call(editor.childNodes, secondSeparator) + 1);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    await act(async () => {
+      editor.dispatchEvent(new window.KeyboardEvent('keydown', {
+        key: 'Backspace',
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    expect(onRemoveContext).toHaveBeenCalledWith('external-file-2');
+    expect(selection?.getRangeAt(0).startContainer).toBe(editor);
+    expect(selection?.getRangeAt(0).startOffset).toBe(2);
+
+    await renderContexts([fileContexts[0], fileContexts[2]]);
+    expect(editor.querySelector('[data-context-id="external-file-2"]')).toBeNull();
+    const caretRange = selection?.getRangeAt(0);
+    expect(caretRange?.startContainer).toBe(editor);
+    expect(caretRange?.startOffset).toBe(2);
+    expect(editor.childNodes.item(1).textContent).toBe(' ');
+    expect((editor.childNodes.item(2) as HTMLElement).dataset.contextId).toBe('external-file-3');
   });
 
   it('serializes and restores session reference capsules without parsing their labels', async () => {

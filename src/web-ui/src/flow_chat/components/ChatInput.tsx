@@ -12,6 +12,7 @@ import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import {
   RichTextInput,
+  type ClipboardFilePaste,
   type InlineTriggerState,
   type MentionState,
   type RichTextInputElement,
@@ -110,7 +111,7 @@ import {
 import { chatInputSessionSubscriptionKey } from '../utils/chatInputSessionSubscription';
 import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import { findWorkspaceForSession } from '../utils/workspaceScope';
-import { isTauriRuntime } from '@/infrastructure/runtime';
+import { isTauriRuntime, isWindowsDesktopRuntime } from '@/infrastructure/runtime';
 import { Tooltip } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
@@ -210,6 +211,14 @@ import {
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
+import { useLocalFileDrop } from '@/infrastructure/files/useLocalFileDrop';
+import {
+  buildExternalFileContexts,
+  partitionExternalDropFiles,
+  resolveExternalFileIntakeAvailability,
+  type ExternalFileSource,
+} from '../utils/externalFileIntake';
 import { selectInterruptedTurnRecovery } from '../utils/interruptedTurnRecovery';
 import {
   chatInputPermissionMode,
@@ -458,6 +467,13 @@ function renderMcpPromptMessages(messages: MCPPromptMessage[]): string {
 
 type BoostSubmenuId = 'harness' | 'additional-modes' | 'skills';
 
+interface ExternalFileIntakeRequest {
+  availability: ReturnType<typeof resolveExternalFileIntakeAvailability>;
+  sessionId: string | null;
+  surfaceEpoch: number;
+  targetKey: string;
+}
+
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
   isSceneActive = true,
@@ -482,6 +498,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const richTextInputRef = useRef<RichTextInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const externalFileDropTargetRef = useRef<HTMLDivElement>(null);
   const mentionAnchorRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const boostTriggerRef = useRef<HTMLSpanElement>(null);
@@ -492,12 +509,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
   const [pendingLargePastes, setPendingLargePastes] = useState<PendingLargePasteMap>({});
+  const externalFileIntakeQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const externalFileIntakeTargetKeyRef = useRef('');
+  const chatInputMountedRef = useRef(false);
   const composerMutationRevisionsRef = useRef(new Map<string, number>());
   const isRestoringSessionDraftRef = useRef(false);
   const sessionConflictRetryBaselinesRef = useRef(new Map<string, number>());
   const reviewLaunchPendingRef = useRef(false);
   const largePasteCountersRef = useRef<Record<number, number>>({});
   const undoImageStackRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    chatInputMountedRef.current = true;
+    return () => {
+      chatInputMountedRef.current = false;
+    };
+  }, []);
   
   // History navigation state
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -3022,45 +3049,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setResolvedModeSkillsRequestVersion(version => version + 1);
   }, []);
 
-  useEffect(() => {
-    const handleImagePaste = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ file: File }>;
-      const file = customEvent.detail?.file;
-      
-      if (!file) return;
-
-      if (currentImageCount >= CHAT_INPUT_CONFIG.image.maxCount) {
-        notificationService.warning(t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }), { duration: 3000 });
-        return;
-      }
-      
-      try {
-        const imageContext = await createImageContextFromClipboard(file);
-
-        addContext(imageContext);
-        undoImageStackRef.current.push(imageContext.id);
-
-      } catch (error) {
-        log.error('Failed to process clipboard image', { fileName: file.name, error });
-        notificationService.error(
-          `${t('input.imagePasteFailed')}: ${error instanceof Error ? error.message : t('error.unknown')}`,
-          { duration: 3000 }
-        );
-      }
-    };
-    
-    const inputElement = richTextInputRef.current;
-    if (inputElement) {
-      inputElement.addEventListener('imagePaste', handleImagePaste);
-    }
-    
-    return () => {
-      if (inputElement) {
-        inputElement.removeEventListener('imagePaste', handleImagePaste);
-      }
-    };
-  }, [addContext, currentImageCount, t]);
-
   React.useEffect(() => {
     if (!effectiveTargetSessionId || !sessionBoundWorkspacePath) {
       return;
@@ -4528,6 +4516,277 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const isInterruptedTurnRecoveryInFlight =
     interruptedTurnRecoveryGate.isSessionInFlight(effectiveTargetSessionId);
 
+  const externalFileAvailability = resolveExternalFileIntakeAvailability({
+    desktopRuntime: isTauriRuntime(),
+    remoteWorkspace: Boolean(sessionBoundRemoteConnectionId)
+      || isRemoteWorkspaceSession(effectiveTargetSession, mentionWorkspace),
+    peerDevice: isPeerDeviceModeActive(),
+    detachedDispatch: Boolean(effectiveTargetSession?.config.dispatchJobId)
+      || isNonLocalDispatchTarget(effectiveTargetSession?.config.dispatchTarget),
+  });
+  const externalFileIntakeTargetKey = JSON.stringify([
+    deviceSurfaceScope.epoch,
+    effectiveTargetSessionId ?? '',
+    registration?.registrationId ?? '',
+    sessionBoundWorkspacePath,
+    sessionBoundRemoteConnectionId ?? '',
+    externalFileAvailability.supported ? 'supported' : externalFileAvailability.reason,
+    effectiveTargetSession?.config.dispatchJobId ?? '',
+    effectiveTargetSession?.config.dispatchTarget ?? null,
+  ]);
+  externalFileIntakeTargetKeyRef.current = externalFileIntakeTargetKey;
+
+  const captureExternalFileIntakeRequest = useCallback((): ExternalFileIntakeRequest => ({
+    availability: externalFileAvailability,
+    sessionId: effectiveTargetSessionId,
+    surfaceEpoch: deviceSurfaceScope.epoch,
+    targetKey: externalFileIntakeTargetKey,
+  }), [
+    deviceSurfaceScope.epoch,
+    effectiveTargetSessionId,
+    externalFileAvailability,
+    externalFileIntakeTargetKey,
+  ]);
+
+  const isExternalFileIntakeRequestCurrent = useCallback((request: ExternalFileIntakeRequest) => (
+    chatInputMountedRef.current
+    && effectiveTargetSessionIdRef.current === request.sessionId
+    && getActiveSurfaceScope().epoch === request.surfaceEpoch
+    && externalFileIntakeTargetKeyRef.current === request.targetKey
+  ), []);
+
+  const enqueueExternalFileIntake = useCallback((
+    request: ExternalFileIntakeRequest,
+    operation: () => Promise<void>,
+  ): Promise<void> => {
+    const queued = externalFileIntakeQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isExternalFileIntakeRequestCurrent(request)) return;
+        await operation();
+      })
+      .catch((error) => {
+        log.error('External file intake failed', error);
+      });
+    externalFileIntakeQueueRef.current = queued;
+    return queued;
+  }, [isExternalFileIntakeRequestCurrent]);
+
+  const addClipboardImageFiles = useCallback(async (
+    request: ExternalFileIntakeRequest,
+    files: File[],
+  ) => {
+    let limitReached = false;
+    for (const file of files) {
+      if (!isExternalFileIntakeRequestCurrent(request)) return;
+      const imageCount = useContextStore.getState().contexts
+        .filter(context => context.type === 'image')
+        .length;
+      if (imageCount >= CHAT_INPUT_CONFIG.image.maxCount) {
+        limitReached = true;
+        continue;
+      }
+
+      try {
+        const imageContext = await createImageContextFromClipboard(file);
+        if (!isExternalFileIntakeRequestCurrent(request)) return;
+        const latestImageCount = useContextStore.getState().contexts
+          .filter(context => context.type === 'image')
+          .length;
+        if (latestImageCount >= CHAT_INPUT_CONFIG.image.maxCount) {
+          limitReached = true;
+          continue;
+        }
+        addContext(imageContext);
+        undoImageStackRef.current.push(imageContext.id);
+      } catch (error) {
+        log.error('Failed to process clipboard image', { fileName: file.name, error });
+        notificationService.error(
+          `${t('input.imagePasteFailed')}: ${error instanceof Error ? error.message : t('error.unknown')}`,
+          { duration: 3000 },
+        );
+      }
+    }
+
+    if (limitReached && isExternalFileIntakeRequestCurrent(request)) {
+      notificationService.warning(
+        t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }),
+        { duration: 3000 },
+      );
+    }
+  }, [addContext, isExternalFileIntakeRequestCurrent, t]);
+
+  const addExternalPaths = useCallback(async (
+    request: ExternalFileIntakeRequest,
+    source: ExternalFileSource,
+    paths: string[],
+  ) => {
+    if (!request.availability.supported) {
+      notificationService.warning(
+        t(`input.externalFiles.unsupported.${request.availability.reason}`),
+        { duration: 4000 },
+      );
+      return;
+    }
+    if (paths.length === 0) {
+      notificationService.error(
+        t(source === 'clipboard'
+          ? 'input.externalFiles.clipboardPathsUnavailable'
+          : 'input.externalFiles.dropPathsUnavailable'),
+        { duration: 4000 },
+      );
+      return;
+    }
+
+    const result = await buildExternalFileContexts({
+      source,
+      paths,
+      existingContexts: useContextStore.getState().contexts,
+      workspacePath: sessionBoundWorkspacePath || undefined,
+      maxImageCount: CHAT_INPUT_CONFIG.image.maxCount,
+      loadMetadata: pathToInspect => workspaceAPI.getFileMetadata(pathToInspect),
+    });
+    if (!isExternalFileIntakeRequestCurrent(request)) return;
+
+    for (const context of result.contexts) {
+      addContext(context);
+      if (context.type !== 'image') {
+        richTextInputRef.current?.insertTag?.(context);
+      }
+    }
+
+    if (result.failures.length > 0) {
+      const imageLimitCount = result.failures.filter(failure => failure.reason === 'image-limit').length;
+      notificationService.warning(
+        imageLimitCount === result.failures.length
+          ? t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount })
+          : t('input.externalFiles.partialFailure', {
+              failed: result.failures.length,
+              added: result.contexts.length,
+            }),
+        { duration: 4000 },
+      );
+    }
+  }, [
+    addContext,
+    isExternalFileIntakeRequestCurrent,
+    sessionBoundWorkspacePath,
+    t,
+  ]);
+
+  const intakeExternalPaths = useCallback((
+    source: ExternalFileSource,
+    paths: string[],
+  ) => {
+    const request = captureExternalFileIntakeRequest();
+    return enqueueExternalFileIntake(
+      request,
+      () => addExternalPaths(request, source, paths),
+    );
+  }, [addExternalPaths, captureExternalFileIntakeRequest, enqueueExternalFileIntake]);
+
+  const handleClipboardFiles = useCallback((paste: ClipboardFilePaste) => {
+    const request = captureExternalFileIntakeRequest();
+    return enqueueExternalFileIntake(request, async () => {
+      if (!request.availability.supported) {
+        await addClipboardImageFiles(request, paste.fallbackImages);
+        if (paste.hasNonImageFiles || paste.fallbackImages.length === 0) {
+          notificationService.warning(
+            t(`input.externalFiles.unsupported.${request.availability.reason}`),
+            { duration: 4000 },
+          );
+        }
+        return;
+      }
+
+      try {
+        const { files } = await workspaceAPI.getClipboardFiles();
+        if (!isExternalFileIntakeRequestCurrent(request)) return;
+        if (files.length > 0) {
+          await addExternalPaths(request, 'clipboard', files);
+          return;
+        }
+      } catch (error) {
+        log.error('Failed to read clipboard file paths', error);
+      }
+
+      await addClipboardImageFiles(request, paste.fallbackImages);
+      if (paste.hasNonImageFiles || paste.fallbackImages.length === 0) {
+        notificationService.error(
+          t('input.externalFiles.clipboardPathsUnavailable'),
+          { duration: 4000 },
+        );
+      }
+    });
+  }, [
+    addClipboardImageFiles,
+    addExternalPaths,
+    captureExternalFileIntakeRequest,
+    enqueueExternalFileIntake,
+    isExternalFileIntakeRequestCurrent,
+    t,
+  ]);
+
+  const handleHtmlExternalFilesDrop = useCallback((files: File[]) => {
+    const request = captureExternalFileIntakeRequest();
+    return enqueueExternalFileIntake(request, async () => {
+      const { paths, fallbackImages, hasUnavailableFiles } = partitionExternalDropFiles(
+        files,
+        request.availability.supported,
+      );
+
+      if (request.availability.supported && paths.length > 0) {
+        await addExternalPaths(request, 'drop', paths);
+      }
+
+      await addClipboardImageFiles(request, fallbackImages);
+
+      if (!isExternalFileIntakeRequestCurrent(request)) return;
+      if (!request.availability.supported && (hasUnavailableFiles || paths.length > 0)) {
+        notificationService.warning(
+          t(`input.externalFiles.unsupported.${request.availability.reason}`),
+          { duration: 4000 },
+        );
+      } else if (request.availability.supported && hasUnavailableFiles) {
+        notificationService.warning(
+          t('input.externalFiles.dropPathsUnavailable'),
+          { duration: 4000 },
+        );
+      }
+    });
+  }, [
+    addClipboardImageFiles,
+    addExternalPaths,
+    captureExternalFileIntakeRequest,
+    enqueueExternalFileIntake,
+    isExternalFileIntakeRequestCurrent,
+    t,
+  ]);
+
+  useEffect(() => {
+    const inputElement = richTextInputRef.current;
+    if (!inputElement) return;
+    const handleImagePaste = (event: Event) => {
+      const file = (event as CustomEvent<{ file?: File }>).detail?.file;
+      if (!file) return;
+      const request = captureExternalFileIntakeRequest();
+      void enqueueExternalFileIntake(
+        request,
+        () => addClipboardImageFiles(request, [file]),
+      );
+    };
+    inputElement.addEventListener('imagePaste', handleImagePaste);
+    return () => inputElement.removeEventListener('imagePaste', handleImagePaste);
+  }, [addClipboardImageFiles, captureExternalFileIntakeRequest, enqueueExternalFileIntake]);
+
+  useLocalFileDrop({
+    targetRef: externalFileDropTargetRef,
+    enabled: !isWindowsDesktopRuntime()
+      && !caps.transferInFlight
+      && !isInterruptedTurnRecoveryInFlight,
+    onDropPaths: paths => intakeExternalPaths('drop', paths),
+  });
+
   const handleRecoverInterruptedTurn = useCallback(async () => {
     const candidate = interruptedTurnRecovery;
     if (!candidate || !interruptedTurnRecoveryGate.tryBegin(candidate)) return;
@@ -5576,6 +5835,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         acceptedTypes={['file', 'directory', 'image', 'code-snippet', 'mermaid-diagram']}
         className="bitfun-chat-input-drop-zone"
         disabled={isInterruptedTurnRecoveryInFlight}
+        onExternalFilesDrop={
+          isWindowsDesktopRuntime() && !caps.transferInFlight
+            ? files => { void handleHtmlExternalFilesDrop(files); }
+            : undefined
+        }
         onContextAdded={(context) => {
           if (context.type === 'image' && currentImageCount >= CHAT_INPUT_CONFIG.image.maxCount) {
             notificationService.warning(t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }), { duration: 3000 });
@@ -5626,7 +5890,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onRespondBatch={respondPermissionBatch}
             />
           ) : null}
-          <div className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
+          <div ref={externalFileDropTargetRef} className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
             <ChatComposer
               className="bitfun-chat-input__composer"
               contextBar={workspaceStrip}
@@ -5734,6 +5998,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 value={inputState.value}
                 onChange={handleInputChange}
                 onLargePaste={createLargePastePlaceholder}
+                onPasteFiles={handleClipboardFiles}
                 pendingLargePastes={pendingLargePastes}
                 onUpdateLargePaste={updateLargePaste}
                 onRemoveLargePaste={removeLargePaste}

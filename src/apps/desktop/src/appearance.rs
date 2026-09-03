@@ -600,8 +600,16 @@ pub fn create_main_window(
             }
         });
 
-    // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
-    builder = builder.disable_drag_drop_handler();
+    // On Windows, Tauri's native file-drop handler replaces WebView2's OLE drop
+    // target and disables every HTML5 drag/drop interaction in the page. Keep
+    // the browser handler there; the frontend accepts any paths WebView2 exposes
+    // and otherwise fails loudly without breaking tabs, workspaces, or editor
+    // drag/drop. WKWebView/WebKitGTK do not have that conflict, so their native
+    // handler remains enabled and supplies absolute filesystem paths.
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.disable_drag_drop_handler();
+    }
 
     // The Desktop host arms each exact Creative preview/rollback transition.
     // Page-driven navigations remain blocked, including in development where

@@ -548,6 +548,17 @@
     "addImage": "新增圖片",
     "maxImagesWarning": "最多隻能選擇{{count}}張圖片",
     "imagePasteFailed": "圖片粘貼失敗",
+    "externalFiles": {
+      "clipboardPathsUnavailable": "剪貼簿中包含檔案，但無法讀取其本機路徑。",
+      "dropPathsUnavailable": "此次拖放未提供本機路徑，請複製這些檔案後貼到輸入框。",
+      "partialFailure": "已新增 {{added}} 項；另有 {{failed}} 項已失效或不受支援。",
+      "unsupported": {
+        "web": "Web 工作階段無法引用本機檔案，請使用 Desktop 本機工作階段。",
+        "remote-workspace": "遠端工作區無法引用此裝置上的本機檔案。",
+        "peer-device": "Peer Device 工作階段無法引用控制端裝置上的檔案。",
+        "detached-dispatch": "Detached 任務不能依賴提交裝置上的本機檔案。"
+      }
+    },
     "removeImage": "移除圖片",
     "largePastePlaceholder": "[已粘貼內容 {{count}} 字符]",
     "largePasteOpen": "檢視和編輯{{placeholder}}",

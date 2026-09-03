@@ -30,3 +30,11 @@ export const isMacOSDesktopRuntime = (): boolean =>
   typeof navigator !== 'undefined' &&
   typeof navigator.platform === 'string' &&
   navigator.platform.toUpperCase().includes('MAC');
+
+export const isWindowsDesktopRuntime = (): boolean =>
+  supportsNativeWindowControls() &&
+  typeof navigator !== 'undefined' &&
+  (
+    (typeof navigator.userAgent === 'string' && navigator.userAgent.toUpperCase().includes('WINDOWS'))
+    || (typeof navigator.platform === 'string' && navigator.platform.toUpperCase().includes('WIN'))
+  );
