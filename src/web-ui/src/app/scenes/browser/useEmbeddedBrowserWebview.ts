@@ -15,6 +15,7 @@ export const NATIVE_WEBVIEW_OCCLUSION_SELECTOR = [
   "[data-bf-component='dialog'][data-bf-part='overlay']",
   "[data-bf-component='sheet'][data-bf-part='overlay']",
   '.canvas-mission-control',
+  "[data-bf-product-component='context-menu'][data-bf-product-part='root']",
 ].join(', ');
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];
@@ -26,6 +27,16 @@ let nextBrowserWebviewSequence = 0;
 
 export function allocateBrowserWebviewLabel(labelPrefix: string): string {
   return `${labelPrefix}-${nextBrowserWebviewSequence++}`;
+}
+
+export function rectanglesIntersect(
+  first: Pick<DOMRectReadOnly, 'left' | 'top' | 'right' | 'bottom'>,
+  second: Pick<DOMRectReadOnly, 'left' | 'top' | 'right' | 'bottom'>,
+): boolean {
+  return second.right > first.left
+    && second.left < first.right
+    && second.bottom > first.top
+    && second.top < first.bottom;
 }
 
 // #region agent log
@@ -553,8 +564,21 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
 
     let hiddenByOverlay = false;
     const checkOverlays = () => {
-      const overlay = document.querySelector<HTMLElement>(NATIVE_WEBVIEW_OCCLUSION_SELECTOR);
-      const hasOverlay = overlay !== null;
+      const viewport = viewportRef.current;
+      const viewportRect = viewport?.getBoundingClientRect();
+      const hasUsableViewport = Boolean(viewportRect && viewportRect.width > 0 && viewportRect.height > 0);
+      // Do not change the current visibility decision while the browser panel
+      // itself is temporarily unmeasurable (for example during a layout swap).
+      if (!hasUsableViewport || !viewportRect) return;
+      const hasIntersection = (overlay: HTMLElement): boolean => {
+        const overlayRect = overlay.getBoundingClientRect();
+        return overlayRect.width > 0
+          && overlayRect.height > 0
+          && rectanglesIntersect(viewportRect, overlayRect);
+      };
+      const overlay = Array.from(document.querySelectorAll<HTMLElement>(NATIVE_WEBVIEW_OCCLUSION_SELECTOR))
+        .find(candidate => hasIntersection(candidate));
+      const hasOverlay = overlay !== undefined;
       // #region agent log
       if (overlay) {
         const style = window.getComputedStyle(overlay);
