@@ -93,3 +93,10 @@ test("Menu reserves space inside its scroll viewport for focus rings on all edge
   assert.match(scrollStyles, /data-bf-orientation="vertical"\]\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto/);
   assert.doesNotMatch(styles, /overflow[^:]*:\s*visible/);
 });
+
+test("Menu keeps its scrollbar on the surface edge without changing the content inset", async () => {
+  const styles = await readFile(new URL("../src/components/Menu/Menu.module.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.root\s*\{[^}]*padding-inline:\s*var\(--bf-overlay-menu-surface-padding\) 0/);
+  assert.match(styles, /\.list\s*\{[^}]*padding-inline-end:\s*calc\(var\(--bf-overlay-menu-surface-padding\) \+ var\(--bf-focus-width\)\)/);
+});

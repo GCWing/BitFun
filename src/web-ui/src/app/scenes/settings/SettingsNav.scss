@@ -19,6 +19,9 @@
   max-inline-size: none;
   height: 100%;
   padding: var(--bf-space-2);
+  // Preserve the content inset on descendants so the scroll viewport itself
+  // can own the panel's inline-end edge.
+  padding-inline-end: 0;
   box-sizing: border-box;
   overflow: hidden;
   line-height: var(--bf-type-meta-line-height);
@@ -28,11 +31,13 @@
     flex-direction: column;
     gap: var(--bf-layout-navigation-panel-content-gap);
     padding: 0;
+    padding-inline-end: var(--bf-space-2);
   }
 
   // The panel owns section spacing; the scene supplies only its outer inset.
   &__content {
     padding: 0;
+    padding-inline-end: var(--bf-space-2);
   }
 
   // ── Header: title (back/forward lives in NavBar) ──────

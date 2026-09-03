@@ -1,11 +1,13 @@
 .bitfun-create-branch-dialog {
-  padding: var(--bf-space-5);
+  padding-block: var(--bf-space-5);
+  padding-inline: var(--bf-space-5) 0;
   min-width: 520px;
   max-width: 600px;
   max-height: 90vh;
 
   &__scroll {
     max-height: inherit;
+    padding-inline-end: var(--bf-space-5);
   }
 
   &__header {

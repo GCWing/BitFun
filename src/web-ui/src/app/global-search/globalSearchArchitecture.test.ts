@@ -74,6 +74,17 @@ describe('global search ownership', () => {
     );
   });
 
+  it('keeps the modal results scrollbar on the dialog edge while preserving content inset', () => {
+    const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
+
+    expect(globalSearchStyles).toMatch(
+      /\.global-search-modal-content\s*\{[^}]*padding-inline-end:\s*0;/,
+    );
+    expect(globalSearchStyles).toMatch(
+      /> \.global-search__results,[\s\S]*?padding-inline-end:\s*var\(--global-search-modal-inline-end-inset\);/,
+    );
+  });
+
   it('keeps browser and terminal capabilities on the shared product activator without footer shortcuts', () => {
     const footer = source('src/app/components/NavPanel/components/PersistentFooterActions.tsx');
     const activator = source('src/app/global-search/productActionActivator.ts');

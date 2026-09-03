@@ -38,6 +38,21 @@ describe('Skills scene presentation', () => {
     expect(stylesheet).toContain('font-size: var(--bf-type-flow-section-title-font-size);');
   });
 
+  it('keeps the suite scrollbar on the scene edge without moving its content', () => {
+    const stylesheet = readSibling('./SkillsScene.scss');
+    const suiteStart = stylesheet.indexOf('.skills-suite {');
+    const suiteEnd = stylesheet.indexOf('\n}', suiteStart);
+    const suite = stylesheet.slice(suiteStart, suiteEnd);
+    const sectionsStart = stylesheet.indexOf('.skills-suite__sections {');
+    const sectionsEnd = stylesheet.indexOf('\n}', sectionsStart);
+    const sections = stylesheet.slice(sectionsStart, sectionsEnd);
+
+    expect(suite).toContain('padding-inline: 24px 0;');
+    expect(sections).toContain(
+      'padding-inline-end: calc(var(--skills-suite-inline-end-inset) + 4px);',
+    );
+  });
+
   it('keeps row navigation and destructive actions as separate compact targets', () => {
     const source = readSibling('./SkillsScene.tsx');
     const stylesheet = readSibling('./SkillsScene.scss');

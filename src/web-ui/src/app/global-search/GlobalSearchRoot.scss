@@ -1024,3 +1024,34 @@
     }
   }
 }
+
+/*
+ * DialogBody provides the modal's content inset. Its nested results viewport
+ * must still reach the surface's inline-end edge, so transfer only that inset
+ * to the viewport's content-bearing regions.
+ */
+.global-search-modal-content {
+  --global-search-modal-inline-end-inset: var(--bf-overlay-dialog-content-padding-lg);
+
+  padding-inline-end: 0;
+}
+
+.global-search--modal {
+  > .global-search__header,
+  > .global-search__results,
+  > .global-search__footer {
+    padding-inline-end: var(--global-search-modal-inline-end-inset);
+  }
+}
+
+@media (max-width: 980px) {
+  .global-search-modal-content {
+    --global-search-modal-inline-end-inset: var(--bf-space-4);
+  }
+}
+
+@media (max-width: 700px) {
+  .global-search-modal-content {
+    --global-search-modal-inline-end-inset: var(--bf-space-3);
+  }
+}

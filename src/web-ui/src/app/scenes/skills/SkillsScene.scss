@@ -291,13 +291,23 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 // ── Suite Page ───────────────────────────────────────────────────────────────
 
 .skills-suite {
+  --skills-suite-inline-end-inset: 24px;
+
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px 24px 18px;
+  padding-block: 20px 18px;
+  padding-inline: 24px 0;
   overflow: hidden;
+}
+
+.skills-suite__hero,
+.skills-suite__mode-toolbar,
+.skills-suite__loading,
+.skills-suite > .skills-main__empty {
+  margin-inline-end: var(--skills-suite-inline-end-inset);
 }
 
 .skills-suite__hero {
@@ -460,7 +470,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding-right: 4px;
+  padding-inline-end: calc(var(--skills-suite-inline-end-inset) + 4px);
 }
 
 .skills-suite__section {
@@ -1284,7 +1294,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   }
 
   .skills-suite {
-    padding: 14px 16px 16px;
+    --skills-suite-inline-end-inset: 16px;
+
+    padding-block: 14px 16px;
+    padding-inline: 16px 0;
   }
 
   .skills-suite__hero {
