@@ -548,6 +548,16 @@
     "addImage": "Add image",
     "maxImagesWarning": "Maximum {{count}} images allowed",
     "imagePasteFailed": "Image paste failed",
+    "externalFiles": {
+      "clipboardPathsUnavailable": "The clipboard reported files, but their local paths could not be read.",
+      "partialFailure": "Added {{added}} item(s); {{failed}} item(s) were unavailable or unsupported.",
+      "unsupported": {
+        "web": "This web session cannot reference local files. Use a Desktop local session.",
+        "remote-workspace": "This remote workspace cannot reference files from this device.",
+        "peer-device": "A peer-device session cannot reference files from the controller device.",
+        "detached-dispatch": "A detached task cannot depend on files from the submitting device."
+      }
+    },
     "removeImage": "Remove image",
     "largePastePlaceholder": "[Pasted Content {{count}} chars]",
     "largePasteOpen": "View and edit {{placeholder}}",

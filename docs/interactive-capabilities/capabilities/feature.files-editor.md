@@ -35,8 +35,8 @@ Browse, search, and edit project files while inspecting diffs, language-aware ed
   - Review file history and snapshots, then roll back a session or selected turn
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 仅在当前语言提供器实际支持时显示格式化、定义与类型跳转、引用、重命名、快速修复和符号导航
   - Show formatting, definition and type navigation, references, rename, quick fixes, and symbol navigation only when supported by the active language provider
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 粘贴、拖放或上传文件与图片作为会话上下文
-  - Paste, drop, or upload files and images as session context
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在 Desktop 本地会话中粘贴或拖放本机文件、文件夹与图片作为上下文
+  - Paste or drop local files, folders, and images as context in Desktop local sessions
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `view_image` / `analyze_image` · 查看并分析工作区或会话中的图片
   - View and analyze images from the workspace or session context
 

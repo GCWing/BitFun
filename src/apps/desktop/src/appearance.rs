@@ -594,8 +594,8 @@ pub fn create_main_window(
             }
         });
 
-    // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
-    builder = builder.disable_drag_drop_handler();
+    // Keep Tauri's native drag-drop handler enabled so external filesystem drops
+    // reach the frontend with their host paths.
 
     // The Desktop host arms each exact Creative preview/rollback transition.
     // Page-driven navigations remain blocked, including in development where

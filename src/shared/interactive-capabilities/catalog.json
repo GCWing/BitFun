@@ -220,6 +220,10 @@
       "set_macos_edit_menu_mode",
       "set_main_window_transient_geometry",
       "startup_window_control"
+    ],
+    "fileTransferPrimitives": [
+      "export_local_file_to_path",
+      "paste_files"
     ]
   },
   "capabilities": [
@@ -1477,8 +1481,8 @@
         },
         {
           "id": "attachments",
-          "titleZh": "粘贴、拖放或上传文件与图片作为会话上下文",
-          "titleEn": "Paste, drop, or upload files and images as session context",
+          "titleZh": "在 Desktop 本地会话中粘贴或拖放本机文件、文件夹与图片作为上下文",
+          "titleEn": "Paste or drop local files, folders, and images as context in Desktop local sessions",
           "control": {
             "kind": "open",
             "reasonCode": "visualSelection",
@@ -1487,9 +1491,10 @@
           },
           "evidence": [
             "command:get_clipboard_files",
-            "command:paste_files",
             "command:upload_image_contexts",
-            "command:export_local_file_to_path"
+            "source:src/web-ui/src/flow_chat/utils/externalFileIntake.ts#buildExternalFileContexts",
+            "source:src/web-ui/src/flow_chat/utils/externalFileIntake.test.ts#buildExternalFileContexts",
+            "source:src/web-ui/src/infrastructure/files/useLocalFileDrop.ts#useLocalFileDrop"
           ]
         },
         {

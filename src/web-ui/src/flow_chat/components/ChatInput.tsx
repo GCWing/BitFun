@@ -210,6 +210,13 @@ import {
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
+import { useLocalFileDrop } from '@/infrastructure/files/useLocalFileDrop';
+import {
+  buildExternalFileContexts,
+  resolveExternalFileIntakeAvailability,
+  type ExternalFileSource,
+} from '../utils/externalFileIntake';
 import { selectInterruptedTurnRecovery } from '../utils/interruptedTurnRecovery';
 import {
   chatInputPermissionMode,
@@ -482,6 +489,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const richTextInputRef = useRef<RichTextInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const externalFileDropTargetRef = useRef<HTMLDivElement>(null);
   const mentionAnchorRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const boostTriggerRef = useRef<HTMLSpanElement>(null);
@@ -4537,6 +4545,89 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const isInterruptedTurnRecoveryInFlight =
     interruptedTurnRecoveryGate.isSessionInFlight(effectiveTargetSessionId);
 
+  const getExternalFileAvailability = useCallback(
+    () => resolveExternalFileIntakeAvailability({
+      desktopRuntime: isTauriRuntime(),
+      remoteWorkspace: isRemoteWorkspaceSession(effectiveTargetSession, mentionWorkspace),
+      peerDevice: isPeerDeviceModeActive(),
+      detachedDispatch: Boolean(
+        effectiveTargetSession?.config.dispatchJobId
+        || effectiveTargetSession?.config.dispatchTarget,
+      ),
+    }),
+    [effectiveTargetSession, mentionWorkspace],
+  );
+
+  const intakeExternalPaths = useCallback(async (
+    source: ExternalFileSource,
+    paths: string[],
+  ) => {
+    const availability = getExternalFileAvailability();
+    if (!availability.supported) {
+      notificationService.warning(t(`input.externalFiles.unsupported.${availability.reason}`), { duration: 4000 });
+      return;
+    }
+    if (paths.length === 0) {
+      notificationService.error(t('input.externalFiles.clipboardPathsUnavailable'), { duration: 4000 });
+      return;
+    }
+
+    const result = await buildExternalFileContexts({
+      source,
+      paths,
+      existingContexts: contextsRef.current,
+      workspacePath: sessionBoundWorkspacePath || undefined,
+      maxImageCount: CHAT_INPUT_CONFIG.image.maxCount,
+      loadMetadata: pathToInspect => workspaceAPI.getFileMetadata(pathToInspect),
+    });
+
+    for (const context of result.contexts) {
+      addContext(context);
+      if (context.type !== 'image') {
+        richTextInputRef.current?.insertTag?.(context);
+      }
+    }
+
+    if (result.failures.length > 0) {
+      const imageLimitCount = result.failures.filter(failure => failure.reason === 'image-limit').length;
+      notificationService.warning(
+        imageLimitCount === result.failures.length
+          ? t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount })
+          : t('input.externalFiles.partialFailure', {
+              failed: result.failures.length,
+              added: result.contexts.length,
+            }),
+        { duration: 4000 },
+      );
+    }
+  }, [
+    addContext,
+    getExternalFileAvailability,
+    sessionBoundWorkspacePath,
+    t,
+  ]);
+
+  const handleClipboardFiles = useCallback(async () => {
+    const availability = getExternalFileAvailability();
+    if (!availability.supported) {
+      notificationService.warning(t(`input.externalFiles.unsupported.${availability.reason}`), { duration: 4000 });
+      return;
+    }
+    try {
+      const { files } = await workspaceAPI.getClipboardFiles();
+      await intakeExternalPaths('clipboard', files);
+    } catch (error) {
+      log.error('Failed to read clipboard file paths', error);
+      notificationService.error(t('input.externalFiles.clipboardPathsUnavailable'), { duration: 4000 });
+    }
+  }, [getExternalFileAvailability, intakeExternalPaths, t]);
+
+  useLocalFileDrop({
+    targetRef: externalFileDropTargetRef,
+    enabled: !caps.transferInFlight && !isInterruptedTurnRecoveryInFlight,
+    onDropPaths: paths => intakeExternalPaths('drop', paths),
+  });
+
   const handleRecoverInterruptedTurn = useCallback(async () => {
     const candidate = interruptedTurnRecovery;
     if (!candidate || !interruptedTurnRecoveryGate.tryBegin(candidate)) return;
@@ -5637,7 +5728,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onRespondBatch={respondPermissionBatch}
             />
           ) : null}
-          <div className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
+          <div ref={externalFileDropTargetRef} className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
             <ChatComposer
               className="bitfun-chat-input__composer"
               contextBar={workspaceStrip}
@@ -5745,6 +5836,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 value={inputState.value}
                 onChange={handleInputChange}
                 onLargePaste={createLargePastePlaceholder}
+                onPasteFiles={handleClipboardFiles}
                 pendingLargePastes={pendingLargePastes}
                 onUpdateLargePaste={updateLargePaste}
                 onRemoveLargePaste={removeLargePaste}

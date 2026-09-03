@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "e8dc3602d8f9d885d74da7bb2120f695699fb595adc9ec80a006f9c1c3c9a091",
+  "catalogDigest": "f80d1d53259473a5eacccf43137d7d5339ffa93510dacb3104c9d5f8f10b07f7",
   "commandCount": 657,
   "coverage": {
     "commandCount": 657,
-    "documentedCommandCount": 630,
-    "implementationCommandCount": 27,
-    "implementationDigest": "4d3b2e8145a6a97b622fdb78cf1c25275881328eb7ccbc3c92ae95bf798cb190"
+    "documentedCommandCount": 628,
+    "implementationCommandCount": 29,
+    "implementationDigest": "04b59d988f31c5d17d579235cec0da684e565a9aa464cd33d0ce831d7424a7dd"
   },
   "commands": [
     {
@@ -2465,14 +2465,12 @@
     {
       "id": "export_local_file_to_path",
       "moduleId": "commands",
-      "capabilityId": "feature.files-editor",
+      "capabilityId": "feature.projects",
       "capabilityIds": [
-        "feature.files-editor"
+        "feature.projects"
       ],
-      "documentedItemIds": [
-        "feature.files-editor:attachments"
-      ],
-      "visibility": "documented",
+      "documentedItemIds": [],
+      "visibility": "implementation",
       "rustPath": "export_local_file_to_path",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn export_local_file_to_path(request: ExportLocalFileRequest) -> Result<(), String>",
@@ -6391,10 +6389,8 @@
       "capabilityIds": [
         "feature.files-editor"
       ],
-      "documentedItemIds": [
-        "feature.files-editor:attachments"
-      ],
-      "visibility": "documented",
+      "documentedItemIds": [],
+      "visibility": "implementation",
       "rustPath": "paste_files",
       "sourceFile": "src/apps/desktop/src/api/clipboard_file_api.rs",
       "signature": "fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesResponse, String>",

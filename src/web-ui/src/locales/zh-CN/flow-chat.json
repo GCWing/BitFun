@@ -548,6 +548,16 @@
     "addImage": "添加图片",
     "maxImagesWarning": "最多只能选择{{count}}张图片",
     "imagePasteFailed": "图片粘贴失败",
+    "externalFiles": {
+      "clipboardPathsUnavailable": "剪贴板中包含文件，但无法读取其本机路径。",
+      "partialFailure": "已添加 {{added}} 项；另有 {{failed}} 项已失效或不受支持。",
+      "unsupported": {
+        "web": "Web 会话无法引用本机文件，请使用 Desktop 本地会话。",
+        "remote-workspace": "远程工作区无法引用此设备上的本机文件。",
+        "peer-device": "Peer Device 会话无法引用控制端设备上的文件。",
+        "detached-dispatch": "Detached 任务不能依赖提交设备上的本机文件。"
+      }
+    },
     "removeImage": "移除图片",
     "largePastePlaceholder": "[已粘贴内容 {{count}} 字符]",
     "largePasteOpen": "查看和编辑{{placeholder}}",

@@ -101,8 +101,13 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     dragCounterRef.current++;
+    if (Array.from(e.dataTransfer.types).includes('Files')) {
+      setIsDragOver(true);
+      setCanAccept(!disabled);
+      return;
+    }
     
     if (dragCounterRef.current === 1) {
       
@@ -114,12 +119,16 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
         dragManager.handleDragEnter(dropTargetRef.current, e.nativeEvent);
       }
     }
-  }, []);
+  }, [disabled]);
   
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
+    if (Array.from(e.dataTransfer.types).includes('Files')) {
+      e.dataTransfer.dropEffect = disabled ? 'none' : 'copy';
+      return;
+    }
     
     const payload = dragManager.getCurrentPayload();
     if (payload && dropTargetRef.current.canAccept(payload)) {
@@ -128,11 +137,12 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     } else {
       e.dataTransfer.dropEffect = 'none';
     }
-  }, []);
+  }, [disabled]);
   
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const containsExternalFiles = Array.from(e.dataTransfer.types).includes('Files');
     
     dragCounterRef.current--;
     
@@ -140,7 +150,9 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
       
       setIsDragOver(false);
       setCanAccept(false);
-      dragManager.handleDragLeave(dropTargetRef.current, e.nativeEvent);
+      if (!containsExternalFiles) {
+        dragManager.handleDragLeave(dropTargetRef.current, e.nativeEvent);
+      }
     }
   }, []);
   
@@ -152,7 +164,10 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     dragCounterRef.current = 0;
     setIsDragOver(false);
     setCanAccept(false);
-    
+
+    if (Array.from(e.dataTransfer.types).includes('Files')) {
+      return;
+    }
     dragManager.handleDrop(dropTargetRef.current, e.nativeEvent);
   }, []);
   

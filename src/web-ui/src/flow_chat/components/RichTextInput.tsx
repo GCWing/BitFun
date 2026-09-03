@@ -39,6 +39,31 @@ const SESSION_REFERENCE_BADGE_ICON = renderToStaticMarkup(
 const EMPTY_PENDING_LARGE_PASTES: Record<string, string> = Object.freeze({});
 const LARGE_PASTE_CARET_ANCHOR = '\u200B';
 
+function getEditorBoundaryOffset(editor: HTMLElement, container: Node, offset: number): number | null {
+  if (container === editor) {
+    return offset >= 0 && offset <= editor.childNodes.length ? offset : null;
+  }
+  if (container.parentNode !== editor || container.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
+  const childIndex = Array.prototype.indexOf.call(editor.childNodes, container) as number;
+  if (childIndex < 0) return null;
+  if (offset === 0) return childIndex;
+  if (offset === (container.textContent?.length ?? 0)) return childIndex + 1;
+  return null;
+}
+
+function normalizeEquivalentCaretRange(editor: HTMLElement, range: Range): Range {
+  if (range.collapsed) return range;
+  const startOffset = getEditorBoundaryOffset(editor, range.startContainer, range.startOffset);
+  const endOffset = getEditorBoundaryOffset(editor, range.endContainer, range.endOffset);
+  if (startOffset === null || startOffset !== endOffset) return range;
+  const caretRange = editor.ownerDocument.createRange();
+  caretRange.setStart(editor, startOffset);
+  caretRange.collapse(true);
+  return caretRange;
+}
+
 /** @ mention state */
 export interface MentionState {
   isActive: boolean;
@@ -73,6 +98,7 @@ export interface RichTextInputProps
   value: string;
   onChange: (value: string, contexts: ContextItem[]) => void;
   onLargePaste?: (text: string) => string | null;
+  onPasteFiles?: () => void;
   pendingLargePastes?: Record<string, string>;
   onUpdateLargePaste?: (placeholder: string, text: string) => string;
   onRemoveLargePaste?: (placeholder: string) => void;
@@ -191,6 +217,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   value,
   onChange,
   onLargePaste,
+  onPasteFiles,
   pendingLargePastes = EMPTY_PENDING_LARGE_PASTES,
   onUpdateLargePaste,
   onRemoveLargePaste,
@@ -1034,6 +1061,13 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       }
       return;
     }
+
+    const containsFiles = items.some(item => item.kind === 'file')
+      || Array.from(e.clipboardData.types ?? []).includes('Files');
+    if (containsFiles) {
+      onPasteFiles?.();
+      return;
+    }
     
     // Plain text paste - close active triggers so pasted marker characters do not immediately reopen pickers
     closeMention();
@@ -1074,7 +1108,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
-  }, [closeInlineTrigger, closeMention, createLargePasteElement, handleInput, internalRef, onLargePaste]);
+  }, [closeInlineTrigger, closeMention, createLargePasteElement, handleInput, internalRef, onLargePaste, onPasteFiles]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -1083,24 +1117,48 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     if (!composing && e.key === 'Backspace' && internalRef.current) {
       const selection = window.getSelection();
       if (selection) {
-        const range = selection.getRangeAt(0);
-        
+        let range = selection.getRangeAt(0);
+        const normalizedRange = normalizeEquivalentCaretRange(internalRef.current, range);
+        if (normalizedRange !== range) {
+          selection.removeAllRanges();
+          selection.addRange(normalizedRange);
+          range = normalizedRange;
+        }
+
         if (range.collapsed) {
-          const isAtLargePasteCaretAnchor = range.startContainer.nodeType === Node.TEXT_NODE
-            && range.startContainer.textContent === LARGE_PASTE_CARET_ANCHOR
-            && range.startOffset === LARGE_PASTE_CARET_ANCHOR.length;
-          const previousSibling = isAtLargePasteCaretAnchor || range.startOffset === 0
-            ? range.startContainer.previousSibling
-            : null;
-          const tokenElement = previousSibling instanceof HTMLElement && previousSibling.hasAttribute('data-tag-format')
-            ? previousSibling
+          const isTokenSeparator = (node: Node | null): node is Text => node?.nodeType === Node.TEXT_NODE
+            && (node.textContent === ' ' || node.textContent === LARGE_PASTE_CARET_ANCHOR);
+          let nodeBeforeCaret: Node | null = null;
+          if (range.startContainer.nodeType === Node.TEXT_NODE) {
+            const isAtTrailingTokenSeparator = isTokenSeparator(range.startContainer)
+              && range.startOffset === (range.startContainer.textContent?.length ?? 0);
+            if (isAtTrailingTokenSeparator || range.startOffset === 0) {
+              nodeBeforeCaret = range.startContainer.previousSibling;
+            }
+          } else if (range.startContainer.nodeType === Node.ELEMENT_NODE && range.startOffset > 0) {
+            const childBeforeCaret = range.startContainer.childNodes.item(range.startOffset - 1);
+            nodeBeforeCaret = isTokenSeparator(childBeforeCaret)
+              ? childBeforeCaret.previousSibling
+              : childBeforeCaret;
+          }
+          const tokenElement = nodeBeforeCaret instanceof HTMLElement && nodeBeforeCaret.hasAttribute('data-tag-format')
+            ? nodeBeforeCaret
             : null;
           if (tokenElement) {
             e.preventDefault();
             const contextId = tokenElement.dataset.contextId;
             const largePastePlaceholder = tokenElement.dataset.largePastePlaceholder;
             if (contextId) {
+              const parent = tokenElement.parentNode;
+              const tokenIndex = parent
+                ? Array.prototype.indexOf.call(parent.childNodes, tokenElement) as number
+                : -1;
+              removeInlineTokenElement(tokenElement);
+              if (parent?.isConnected && tokenIndex >= 0) {
+                selection.collapse(parent, Math.min(tokenIndex, parent.childNodes.length));
+              }
               onRemoveContext(contextId);
+              handleInput();
             } else {
               const previousCaretAnchor = largePastePlaceholder
                 && tokenElement.previousSibling?.nodeType === Node.TEXT_NODE
