@@ -14,6 +14,7 @@ describe('Skills scene presentation', () => {
     const source = readSibling('./SkillsScene.tsx');
 
     expect(source).toContain('{installedFiltered.map((skill, index) => (');
+    expect(source).toContain('<ScrollArea\n                        className="skills-main__grid"');
     expect(source).not.toContain('INSTALLED_PAGE_SIZE');
     expect(source).not.toContain('skills-installed__pagination');
   });
