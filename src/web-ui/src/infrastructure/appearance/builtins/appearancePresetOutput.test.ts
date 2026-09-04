@@ -197,6 +197,37 @@ describe('builtin appearance preset output', () => {
     });
   });
 
+  it('keeps settings row hover feedback separated from dark scene surfaces', () => {
+    const darkAppearance = builtinAppearancePalettes.find(
+      appearance => appearance.id === 'openbitfun-dark',
+    );
+    const tokens = getBuiltinAppearanceThemeTokens('openbitfun-dark');
+
+    expect(tokens).toMatchObject({
+      '--openbitfun-color-surface-scene': '#1c1c1f',
+      '--openbitfun-color-surface-tertiary': '#0e0e10',
+      '--openbitfun-color-action-quiet-hover': 'rgba(255, 255, 255, 0.06)',
+      '--openbitfun-color-action-neutral-surface': 'rgba(255, 255, 255, 0.1)',
+      '--openbitfun-component-config-page-row-hover-background': 'rgba(255, 255, 255, 0.1)',
+    });
+
+    expect(tokens['--openbitfun-component-config-page-row-hover-background'])
+      .toBe(darkAppearance?.colors.element.base);
+    expect(tokens['--openbitfun-component-config-page-row-hover-background'])
+      .not.toBe(darkAppearance?.colors.element.soft);
+
+    for (const appearance of builtinAppearancePalettes.filter(
+      entry => entry.type === 'dark' && !entry.components?.configPage?.rowHover,
+    )) {
+      expect(
+        getBuiltinAppearanceThemeTokens(appearance.id)[
+          '--openbitfun-component-config-page-row-hover-background'
+        ],
+        appearance.id,
+      ).toBe(appearance.colors.element.base);
+    }
+  });
+
   it('keeps monochrome content readable while projecting inverse structural chrome', () => {
     const monochrome = builtinAppearancePalettes.find(
       appearance => appearance.id === 'openbitfun-monochrome',
@@ -324,47 +355,47 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "50d3928d5d563c0a24663862668fe172e24266182ead5fb8052b5d7fe272a8ec",
+          "hash": "1fe3b2d75f26bcc2f5ba7a060798ccd4893ab0e6a243e4dbcbd1ea20b3774b05",
           "id": "openbitfun-light",
           "type": "light",
         },
         {
-          "hash": "7bb69b925ebe3be3a161e74cb615763685996d1cd0a29e31bfc0e1760ae2890c",
+          "hash": "3a0a60eabad8363abaded31051a4e5a7aaeb5a22ee12fbd81f81c6f2e1ed44a9",
           "id": "openbitfun-monochrome",
           "type": "light",
         },
         {
-          "hash": "1e318b55bb667a5f0dd042c02189c907e367b73ef01c4733e9d2c2828b47f2c2",
+          "hash": "af8895255a3a21481063077505cf70d60c13105fbc446d8c6860a86041bd1e47",
           "id": "openbitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "a07c7a8671a46dce4210c116f64a7953f78c1ebec3c86f45f8766844db15054c",
+          "hash": "bc97870416ab67aa59fa362f75b4f5bf3397112ea3d7c3ed7ec340cd031d70cb",
           "id": "openbitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "a50b8c195173166c247ca75b97eaaea3d59eb698741e12289d72cc8493359761",
+          "hash": "326680e416018b02899682a3903b6a17e81099e50553386bf018f22d21c8a13e",
           "id": "openbitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "c1e0a46d859aa191c8c4b753ccf2867a91832babecc33a49634f82fb1631f0bc",
+          "hash": "8b4f1e1437d1105c0033ec2ac7a3191e318ca0329521933a2bbe7f9aad715345",
           "id": "openbitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "17449840509547a810f8cfd85823ea62e162352018a1857c86d68650fd6d028e",
+          "hash": "661f9bbd92c166cd3e18d931fa2072547223abbe2a39b03be81d3cdfea147b95",
           "id": "openbitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "9ec2b937bc9c21caa8482c4d9008b38786f74afdef00b4e6949886f50f5e0b86",
+          "hash": "e06490cefa484ce9765e0ac199440f9d9ccedf05f3b5d35acd47ce3fd9a02257",
           "id": "openbitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "d3a84aafd59824a6b3716e5560034e4b5901068aa9af8e07f891c6543d0dcf58",
+          "hash": "e6647f3450dba47be1059bea47c06bbc6463461636079e85b73446ae9a8afcb4",
           "id": "openbitfun-tokyo-night",
           "type": "dark",
         },

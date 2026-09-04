@@ -236,6 +236,12 @@ function createAppearanceOwnedTokens(
     600: colors.accent[600],
   };
   const configPage = palette.components?.configPage;
+  // On the default dark palette, the quiet hover tint composites over the
+  // tertiary section surface to almost exactly the surrounding scene color.
+  // Use the stronger neutral layer for dark settings rows so hover feedback
+  // remains visually contained by the section instead of appearing as a gap.
+  const configPageRowHover = configPage?.rowHover
+    ?? (palette.type === 'dark' ? colors.element.base : colors.element.soft);
   return {
     ...themeValuesToCssTokens(createThemeTokenValues(palette)),
     '--openbitfun-component-config-page-section-background': configPage?.section.background ?? colors.background.tertiary,
@@ -244,7 +250,7 @@ function createAppearanceOwnedTokens(
     '--openbitfun-component-config-page-section-shadow': configPage?.section.shadow
       ?? `inset 0 1px 0 ${OVERLAY_WHITE_04}`,
     '--openbitfun-component-config-page-divider': configPage?.divider ?? colors.border.subtle,
-    '--openbitfun-component-config-page-row-hover-background': configPage?.rowHover ?? colors.element.soft,
+    '--openbitfun-component-config-page-row-hover-background': configPageRowHover,
     '--openbitfun-component-scene-viewport-border-width': palette.layout?.sceneViewportBorder === false ? '0' : '1px',
     '--openbitfun-component-badge-padding-block': '2px',
     '--openbitfun-domain-context-compression': purple[500],

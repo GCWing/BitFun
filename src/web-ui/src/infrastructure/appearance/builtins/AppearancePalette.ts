@@ -158,6 +158,7 @@ export interface ConfigPageConfig {
     shadow: string;
   };
   divider: ColorValue;
+  /** Must remain distinguishable from both the section surface and its surrounding scene. */
   rowHover: ColorValue;
 }
 
