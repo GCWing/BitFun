@@ -10,26 +10,31 @@ function readSibling(filename: string): string {
 }
 
 describe('Nursery gallery presentation', () => {
-  it('uses the curated assistant artwork without loading the unused source pack', () => {
+  it('does not render decorative assistant artwork', () => {
     const source = readSibling('./NurseryGallery.tsx');
 
-    expect(source).toContain('src="/assets/assistant/defaults-illustration.webp"');
-    expect(source).toContain('src="/assets/assistant/gallery-companion.webp"');
-    expect(source).not.toContain('/panda_1.png');
-    expect(source).not.toContain('/panda_wink.png');
+    expect(source).not.toContain('defaults-illustration.webp');
+    expect(source).not.toContain('gallery-companion.webp');
+    expect(source).not.toContain('nursery-defaults__artwork');
+    expect(source).not.toContain('nursery-gallery__companion');
   });
 
-  it('keeps the gallery surface white and collapses the decorative column responsively', () => {
+  it('uses theme-aware surface and content tokens throughout the gallery', () => {
     const stylesheet = readSibling('./NurseryView.scss');
+    const galleryStart = stylesheet.indexOf('.nursery-gallery {');
+    const galleryEnd = stylesheet.indexOf('// ── Sub-page chrome', galleryStart);
+    const gallerySection = stylesheet.slice(galleryStart, galleryEnd);
 
-    expect(stylesheet).toMatch(
-      /\.nursery-gallery \{\s+background: var\(--bf-color-content-on-dark\);/,
+    expect(gallerySection).toMatch(
+      /\.nursery-gallery \{\s+background: var\(--bf-color-surface-scene\);/,
     );
-    expect(stylesheet).toContain('.nursery-gallery__assistant-showcase--with-companion');
-    expect(stylesheet).toContain('grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));');
-    expect(stylesheet).toMatch(
-      /@media \(max-width: 1100px\)[\s\S]*\.nursery-gallery__companion \{\s+display: none;/,
-    );
+    expect(gallerySection).toContain('background: var(--bf-color-surface-raised);');
+    expect(gallerySection).toContain('color: var(--bf-color-content-primary);');
+    expect(gallerySection).toContain('color: var(--bf-color-content-muted);');
+    expect(gallerySection).toContain('border: 1px solid var(--bf-color-border-subtle);');
+    expect(gallerySection).not.toContain('--bf-color-content-on-dark');
+    expect(gallerySection).not.toContain('--bf-color-content-on-light');
+    expect(gallerySection).not.toContain('--bf-color-overlay-scrim');
   });
 
   it('uses a compact layered pill for the default configuration action', () => {
@@ -69,7 +74,7 @@ describe('Nursery gallery presentation', () => {
     expect(cardSection).toContain('padding: var(--bf-space-3) 14px;');
     expect(cardSection).toContain('min-height: 52px;');
     expect(cardSection).toContain('&__session-actions {');
-    expect(cardSection).toContain('border-top: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);');
+    expect(cardSection).toContain('border-top: 1px solid var(--bf-color-border-subtle);');
     expect(cardSection).not.toContain('min-height: clamp(310px, 23.8vw, 366px);');
     expect(cardSection).not.toContain('height: 100%;');
     expect(cardSection).not.toContain('--assistant-card-action-bg');

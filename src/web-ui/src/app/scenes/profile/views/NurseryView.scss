@@ -9,11 +9,11 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 // ── Gallery overview ───────────────────────────────────────────────────────
 
 .nursery-gallery {
-  background: var(--bf-color-content-on-dark);
-  color: var(--bf-color-content-on-light);
+  background: var(--bf-color-surface-scene);
+  color: var(--bf-color-content-primary);
 
   .gallery-layout__body {
-    background: var(--bf-color-content-on-dark);
+    background: var(--bf-color-surface-scene);
   }
 
   .gallery-page-header,
@@ -28,13 +28,13 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: flex-start;
     padding-top: clamp(22px, 2.4vw, 30px);
     padding-bottom: clamp(18px, 2vw, 24px);
-    background: var(--bf-color-content-on-dark);
+    background: var(--bf-color-surface-scene);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 
     &__title {
       margin-bottom: var(--bf-space-2);
-      color: var(--bf-color-content-on-light);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-type-heading-display-font-size);
       font-weight: var(--bf-type-label-selected-font-weight);
       line-height: var(--bf-type-display-sm-line-height);
@@ -42,7 +42,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     }
 
     &__subtitle {
-      color: var(--bf-color-overlay-scrim);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-type-label-md-font-size);
     }
 
@@ -61,7 +61,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     gap: var(--bf-space-4);
 
     &__title {
-      color: var(--bf-color-content-on-light);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-type-flow-section-title-font-size);
       font-weight: var(--bf-type-label-selected-font-weight);
       letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
@@ -69,7 +69,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   .gallery-zone__subtitle {
-    color: var(--bf-color-overlay-scrim);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-label-md-font-size);
   }
 
@@ -78,8 +78,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     height: 24px;
     padding: 0 var(--bf-space-3);
     border: 0;
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-    color: var(--bf-color-content-on-light);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-label-sm-font-size);
     font-weight: var(--bf-type-label-sm-font-weight);
   }
@@ -90,7 +90,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     gap: var(--bf-space-2);
 
     svg {
-      color: color-mix(in srgb, var(--bf-color-accent-secondary) 66%, color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent));
+      color: var(--bf-color-accent-secondary);
     }
   }
 
@@ -105,39 +105,16 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   &__skeleton .gallery-skeleton-card {
-    border-color: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-  }
-
-  &__assistant-showcase {
-    min-width: 0;
-
-    &--with-companion {
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(180px, 0.52fr);
-      align-items: end;
-      gap: clamp(18px, 2vw, 28px);
-    }
-  }
-
-  &__companion {
-    display: block;
-    width: min(100%, 260px);
-    height: auto;
-    align-self: end;
-    justify-self: center;
-    margin-bottom: 2px;
-    pointer-events: none;
-    user-select: none;
-    -webkit-user-drag: none;
+    border-color: var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-subtle);
   }
 
   &__empty {
     min-height: 180px;
-    border: 1px dashed color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+    border: 1px dashed var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-lg);
-    background: var(--bf-color-content-on-dark);
-    color: var(--bf-color-overlay-scrim);
+    background: var(--bf-color-surface-tertiary);
+    color: var(--bf-color-content-muted);
 
     > span {
       display: flex;
@@ -148,13 +125,13 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     }
 
     strong {
-      color: var(--bf-color-content-on-light);
+      color: var(--bf-color-content-primary);
       font-size: var(--bf-type-label-md-font-size);
       font-weight: var(--bf-type-label-selected-font-weight);
     }
 
     small {
-      color: var(--bf-color-overlay-scrim);
+      color: var(--bf-color-content-muted);
       font-size: var(--bf-type-label-sm-font-size);
       line-height: var(--bf-type-body-lg-line-height);
     }
@@ -165,40 +142,18 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
 .nursery-defaults {
   display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(190px, 230px);
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 230px);
   align-items: center;
   gap: clamp(20px, 2vw, 28px);
   min-width: 0;
-  min-height: clamp(176px, 14vw, 196px);
-  padding: var(--bf-space-3) clamp(20px, 2vw, 28px) var(--bf-space-3) var(--bf-space-4);
+  min-height: 148px;
+  padding: var(--bf-space-5) clamp(20px, 2vw, 28px);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-content-on-dark);
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+  background: var(--bf-color-surface-raised);
+  box-shadow: var(--bf-shadow-sm);
   animation: nursery-card-in 0.22s var(--bf-motion-easing-decelerate) both;
-
-  &__artwork {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-width: 0;
-    height: clamp(150px, 12vw, 172px);
-    pointer-events: none;
-    user-select: none;
-  }
-
-  &__artwork-image {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    object-position: center;
-    pointer-events: none;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
 
   &__content {
     display: flex;
@@ -217,7 +172,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__title {
     margin: 0;
-    color: var(--bf-color-content-on-light);
+    color: var(--bf-color-content-primary);
     font-size: var(--bf-type-flow-section-title-font-size);
     font-weight: var(--bf-type-label-selected-font-weight);
     line-height: var(--bf-type-label-md-line-height);
@@ -230,8 +185,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     padding: 0 var(--bf-space-2);
     border-radius: var(--bf-radius-pill);
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-    color: var(--bf-color-overlay-scrim);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
@@ -239,7 +194,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__subtitle {
     margin: 0;
-    color: var(--bf-color-overlay-scrim);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-label-md-font-size);
     line-height: var(--bf-type-body-lg-line-height);
   }
@@ -257,18 +212,18 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    color: var(--bf-color-overlay-scrim);
+    color: var(--bf-color-content-muted);
     font-size: var(--bf-type-label-sm-font-size);
     font-weight: var(--bf-type-label-sm-font-weight);
     white-space: nowrap;
 
     svg {
-      color: var(--bf-color-overlay-scrim);
+      color: var(--bf-color-content-muted);
     }
 
     & + & {
       padding-left: var(--bf-space-4);
-      border-left: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+      border-left: 1px solid var(--bf-color-border-subtle);
     }
 
     &--error,
@@ -281,7 +236,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     width: 72px;
     height: 16px;
     border-radius: var(--bf-radius-sm);
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+    background: var(--bf-color-action-neutral-surface);
     animation: nursery-skeleton-pulse 1.2s ease-in-out infinite;
 
     &:last-child {
@@ -306,15 +261,9 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     border: 0;
     border-radius: var(--bf-radius-pill);
     appearance: none;
-    background: color-mix(
-      in srgb,
-      var(--bf-color-content-on-dark) 96%,
-      color-mix(in srgb, var(--bf-color-accent-secondary) 8%, transparent)
-    );
-    color: var(--bf-color-content-on-light);
-    box-shadow:
-      0 7px 18px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
-      8px 0 24px color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent) 22%, transparent);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-primary);
+    box-shadow: var(--bf-shadow-base);
     font-family: var(--bf-type-body-sm-font-family);
     font-size: var(--bf-type-label-md-font-size);
     font-weight: var(--bf-type-label-sm-font-weight);
@@ -337,11 +286,11 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
       margin-right: var(--bf-space-3);
       margin-left: -4px;
       border-radius: var(--bf-radius-pill);
-      background: var(--bf-color-content-on-dark);
-      color: var(--bf-color-content-on-light);
+      background: var(--bf-color-surface-raised);
+      color: var(--bf-color-content-secondary);
       box-shadow:
-        0 5px 14px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent),
-        0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent) 34%, transparent);
+        var(--bf-shadow-xs),
+        0 0 0 2px var(--bf-color-accent-secondary-border);
       transition:
         background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
         color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -358,14 +307,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     .nursery-defaults__action-chevron {
       margin-left: auto;
-      color: var(--bf-color-overlay-scrim);
+      color: var(--bf-color-content-muted);
       transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     }
 
     &:hover:not(:disabled),
     &:active:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-      color: var(--bf-color-content-on-light);
+      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--bf-color-content-primary);
     }
 
     &:focus-visible {
@@ -397,13 +346,13 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
       mask-image: radial-gradient(
         ellipse 30px 43px at -5px 50%,
         transparent 0 65%,
-        var(--bf-color-content-on-light) 68% 82%,
+        var(--bf-color-content-primary) 68% 82%,
         transparent 85%
       );
       -webkit-mask-image: radial-gradient(
         ellipse 30px 43px at -5px 50%,
         transparent 0 65%,
-        var(--bf-color-content-on-light) 68% 82%,
+        var(--bf-color-content-primary) 68% 82%,
         transparent 85%
       );
     }
@@ -419,10 +368,10 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   min-height: 168px;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+  border: 1px solid var(--bf-color-border-subtle);
   border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-content-on-dark);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+  background: var(--bf-color-surface-raised);
+  box-shadow: var(--bf-shadow-xs);
   animation: nursery-card-in 0.22s var(--bf-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(40ms);
   transition:
@@ -431,13 +380,13 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &:hover {
-    border-color: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
-    box-shadow: 0 8px 20px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+    border-color: var(--bf-color-border-default);
+    box-shadow: var(--bf-shadow-sm);
     transform: translateY(-1px);
   }
 
   &:focus-within {
-    border-color: color-mix(in srgb, var(--bf-color-accent-default) 48%, color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent));
+    border-color: color-mix(in srgb, var(--bf-color-accent-default) 48%, var(--bf-color-border-subtle));
   }
 
   &--busy {
@@ -519,7 +468,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     min-width: 0;
     font-size: var(--bf-type-body-lg-font-size);
     font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-on-light);
+    color: var(--bf-color-content-primary);
     line-height: var(--bf-type-body-sm-line-height);
     white-space: nowrap;
     overflow: hidden;
@@ -536,14 +485,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     flex-shrink: 0;
     align-self: flex-start;
     margin-left: auto;
-    color: var(--bf-color-overlay-scrim);
+    color: var(--bf-color-content-muted);
     transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
   &__vibe {
     display: -webkit-box;
     max-width: 100%;
-    color: var(--bf-color-overlay-scrim);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-label-sm-font-size);
     font-weight: var(--bf-type-body-sm-font-weight);
     line-height: var(--bf-type-body-lg-line-height);
@@ -553,7 +502,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     -webkit-line-clamp: 1;
 
     &--empty {
-      color: var(--bf-color-overlay-scrim);
+      color: var(--bf-color-content-muted);
     }
   }
 
@@ -567,8 +516,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     padding: 2px 6px;
     flex-shrink: 0;
     border-radius: var(--bf-radius-sm);
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-    color: var(--bf-color-overlay-scrim);
+    background: var(--bf-color-action-neutral-surface);
+    color: var(--bf-color-content-secondary);
     font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-type-label-sm-font-weight);
     line-height: var(--bf-type-modifier-leading-dense-line-height);
@@ -583,8 +532,8 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     justify-content: space-between;
     gap: 10px;
     padding: var(--bf-space-2) var(--bf-space-3);
-    border-top: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
-    background: var(--bf-color-content-on-dark);
+    border-top: 1px solid var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-raised);
   }
 
   &__session-actions {
@@ -594,7 +543,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     align-items: center;
     gap: var(--bf-space-1);
     padding-left: 10px;
-    border-left: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+    border-left: 1px solid var(--bf-color-border-subtle);
   }
 
   &__footer-actions {
@@ -1196,37 +1145,20 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 // ── Responsive ────────────────────────────────────────────────────────────
 
 @media (max-width: 1100px) {
-  .nursery-gallery__assistant-showcase--with-companion {
-    display: block;
-  }
-
-  .nursery-gallery__companion {
-    display: none;
-  }
-
   .nursery-defaults {
-    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-    gap: var(--bf-space-4);
-
     &__action {
       width: min(100%, 230px);
-      grid-column: 2;
-      justify-self: start;
     }
   }
 }
 
 @media (max-width: 820px) {
   .nursery-defaults {
-    grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
-
-    &__artwork {
-      height: 140px;
-    }
+    grid-template-columns: 1fr;
 
     &__action {
-      width: 100%;
-      grid-column: 1 / -1;
+      grid-column: 1;
+      justify-self: start;
     }
   }
 }
@@ -1274,18 +1206,14 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
   }
 
   .nursery-defaults {
-    grid-template-columns: 120px minmax(0, 1fr);
-    gap: var(--bf-space-3);
+    grid-template-columns: 1fr;
+    gap: var(--bf-space-4);
     min-height: 0;
-    padding: var(--bf-space-3);
-
-    &__artwork {
-      height: 112px;
-    }
+    padding: var(--bf-space-4);
 
     &__action {
       width: 100%;
-      grid-column: 1 / -1;
+      grid-column: 1;
     }
   }
 
@@ -1315,20 +1243,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     .gallery-zone__header {
       gap: var(--bf-space-2);
-    }
-  }
-
-  .nursery-defaults {
-    grid-template-columns: 1fr;
-
-    &__artwork {
-      width: min(100%, 180px);
-      height: 140px;
-      margin: 0 auto;
-    }
-
-    &__action {
-      grid-column: 1;
     }
   }
 
