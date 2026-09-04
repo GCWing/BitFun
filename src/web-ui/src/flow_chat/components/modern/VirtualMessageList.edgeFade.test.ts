@@ -20,6 +20,12 @@ describe('FlowChat transcript edge fade', () => {
     expect(component).toContain(
       "'--_flow-chat-input-overlay-inset': `${inputOverlayInsetPx}px`",
     );
+    expect(component).toContain(
+      "data-scroll-at-start={isAtScrollStart ? 'true' : 'false'}",
+    );
+    expect(component).toContain(
+      'const FLOWCHAT_SCROLL_START_THRESHOLD_PX = 1;',
+    );
     expect(stylesheet).toContain('-webkit-mask-image: linear-gradient(');
     expect(stylesheet).toContain('mask-image: linear-gradient(');
     const maskGradients = [
@@ -30,7 +36,7 @@ describe('FlowChat transcript edge fade', () => {
 
     expect(maskGradients).toHaveLength(2);
     for (const gradient of maskGradients) {
-      expect(gradient).toContain('transparent 0,');
+      expect(gradient).toContain('var(--_flow-chat-top-mask-start),');
       expect(gradient).toContain(
         'var(--bf-color-content-on-light) var(--bf-space-12),',
       );
@@ -40,6 +46,15 @@ describe('FlowChat transcript edge fade', () => {
     );
     expect(stylesheet).toContain(
       'transparent calc(100% - var(--_flow-chat-input-overlay-inset))',
+    );
+    expect(stylesheet).toContain(
+      "&__scroller[data-scroll-at-start='true']",
+    );
+    expect(stylesheet).toContain(
+      "--_flow-chat-top-mask-start: var(--bf-color-content-on-light) 0;",
+    );
+    expect(stylesheet).toContain(
+      '--_flow-chat-top-mask-start: transparent 0;',
     );
     expect(stylesheet).not.toContain('backdrop-filter');
   });

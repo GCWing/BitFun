@@ -31,6 +31,7 @@
    * the viewport anchor is the only one.
    */
   &__scroller {
+    --_flow-chat-top-mask-start: transparent 0;
     width: 100%;
     height: 100%;
     position: relative;
@@ -47,7 +48,7 @@
     // every other row fade together without intercepting interaction.
     -webkit-mask-image: linear-gradient(
       to bottom,
-      transparent 0,
+      var(--_flow-chat-top-mask-start),
       var(--bf-color-content-on-light) var(--bf-space-12),
       var(--bf-color-content-on-light) calc(
         100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
@@ -57,7 +58,7 @@
     );
     mask-image: linear-gradient(
       to bottom,
-      transparent 0,
+      var(--_flow-chat-top-mask-start),
       var(--bf-color-content-on-light) var(--bf-space-12),
       var(--bf-color-content-on-light) calc(
         100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
@@ -69,6 +70,12 @@
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;
     mask-size: 100% 100%;
+  }
+
+  // At the actual scroll start there is no content entering from above, so
+  // show the first pixels immediately instead of keeping a phantom top fade.
+  &__scroller[data-scroll-at-start='true'] {
+    --_flow-chat-top-mask-start: var(--bf-color-content-on-light) 0;
   }
 
   /*

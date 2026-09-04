@@ -101,6 +101,12 @@ const OPEN_REVEAL_QUIET_FRAMES = 2;
 /** Hard cap so the transcript is always revealed, settled or not. */
 const OPEN_REVEAL_MAX_FRAMES = 40;
 /**
+ * Treat sub-pixel scroll offsets as the scroll start. WebView2 and inertial
+ * scrolling can leave a tiny positive value after the viewport reaches the
+ * top, which would otherwise make the edge fade flicker back on.
+ */
+const FLOWCHAT_SCROLL_START_THRESHOLD_PX = 1;
+/**
  * Resize callbacks over which a viewport resting at the end is re-aligned after
  * the scroller's own box changes.
  *
@@ -410,6 +416,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
   const [viewportWidthPx, setViewportWidthPx] = useState(0);
+  const [isAtScrollStart, setIsAtScrollStart] = useState(true);
   /** Last scroller box the resize observer saw, to tell it apart from a content change. */
   const observedViewportBoxRef = useRef<{ width: number; height: number } | null>(null);
   /** Native minimization withdraws the scroller without unmounting the session. */
@@ -1403,6 +1410,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     setIsAtBottom(atTail);
   }, [getFollowTargetScrollTop, isFollowCorrectingViewport, readContentEndScrollTop]);
 
+  const updateIsAtScrollStart = useCallback(() => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return;
+    const nextIsAtScrollStart = scroller.scrollTop <= FLOWCHAT_SCROLL_START_THRESHOLD_PX;
+    setIsAtScrollStart(previous => (
+      previous === nextIsAtScrollStart ? previous : nextIsAtScrollStart
+    ));
+  }, []);
+
   /*
    * The band's lower edge is whatever the follow rule owns, so it moves when
    * ownership changes — and that can happen with the viewport perfectly still.
@@ -1516,6 +1532,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * the drag transfers ownership to the reader and preserves where it ends.
        */
       if (isScrollbarPressRef.current) notifyUserScrollIntent();
+      updateIsAtScrollStart();
       updateIsAtBottom();
       handleScroll();
       /*
@@ -1574,6 +1591,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     publishViewportSnapshot,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
+    updateIsAtScrollStart,
     updateIsAtBottom,
     viewportAnchor,
     viewportOwner,
@@ -1619,6 +1637,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         }
         return;
       }
+      updateIsAtScrollStart();
       const isResumingSuspendedViewport = isViewportSuspendedRef.current;
       if (isResumingSuspendedViewport) {
         traceViewport({
@@ -1714,6 +1733,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scheduleViewportSnapshot,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
+    updateIsAtScrollStart,
     updateIsAtBottom,
     viewportAnchor,
     viewportOwner,
@@ -2377,11 +2397,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       if (isUsableFlowChatViewportRect(initialViewportBox)) {
         setViewportHeightPx(initialViewportBox.height);
         setViewportWidthPx(initialViewportBox.width);
+        updateIsAtScrollStart();
         // Seed the box so the observer's first callback is not read as a resize.
         observedViewportBoxRef.current = initialViewportBox;
       }
     }
-  }, []);
+  }, [updateIsAtScrollStart]);
 
   const scrollToPhysicalBottom = useCallback(() => {
     setNavigatedTurn(null);
@@ -2506,6 +2527,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         className="virtual-message-list__scroller"
         data-flowchat-scroller="true"
         data-testid="flowchat-scroller"
+        data-scroll-at-start={isAtScrollStart ? 'true' : 'false'}
         style={{
           '--_flow-chat-input-overlay-inset': `${inputOverlayInsetPx}px`,
         } as React.CSSProperties}
