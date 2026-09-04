@@ -80,7 +80,7 @@ describe('navigation icon integration', () => {
     expect(assistantMarkup).not.toContain('SessionGroupAssistant');
 
     expect(workspaceMarkup).toContain('workspaceIsRemote');
-    expect(workspaceMarkup).toContain('<Network size={16} />');
+    expect(workspaceMarkup).toContain('<Server size={14} strokeWidth={1.6} />');
     expect(workspaceMarkup).toContain('<Icon name="folder" size="sm" />');
     expect(workspaceMarkup).not.toContain('SessionGroup');
   });

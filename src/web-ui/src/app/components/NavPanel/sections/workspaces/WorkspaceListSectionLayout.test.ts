@@ -235,7 +235,7 @@ describe('WorkspaceListSection layout styles', () => {
     const stylesheet = readWorkspaceListStylesheet();
 
     expect(itemSource).toContain('<Icon name="user" size="sm" />');
-    expect(itemSource).toContain('<Network size={16} />');
+    expect(itemSource).toContain('<Server size={14} strokeWidth={1.6} />');
     expect(itemSource).toContain('<Icon name="folder" size="sm" />');
     expect(itemSource).not.toContain('SessionGroup');
     expect(listSource).not.toContain('nav.sessions.viewMenu.grouping.all');

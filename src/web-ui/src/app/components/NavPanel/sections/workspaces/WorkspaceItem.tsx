@@ -16,7 +16,7 @@ import {
 } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, FolderSearch, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
+import { FolderOpen, FolderSearch, RotateCcw, FileText, ListChecks, ShieldCheck, Network, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { InputDialog } from '@/app/components/InputDialog';
@@ -1146,7 +1146,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           <span className="bitfun-nav-panel__workspace-item-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
             <span className="bitfun-nav-panel__workspace-item-icon-default">
               {workspaceIsRemote ? (
-                <Network size={16} />
+                <Server size={14} strokeWidth={1.6} />
               ) : (
                 <Icon name="folder" size="sm" />
               )}
