@@ -64,10 +64,10 @@ test("SearchField exposes a labeled clear action without hiding it from assistiv
   assert.match(markup, /aria-label="Clear search"/);
   assert.match(markup, /data-bf-component="icon-button"/);
   assert.match(markup, /data-bf-shape="circle"/);
-  assert.match(markup, /data-size="sm"/);
+  assert.match(markup, /data-size="xs"/);
 });
 
-test("SearchField keeps its clear action visually embedded and preserves input focus", async () => {
+test("SearchField keeps its clear action inset, background-free, and focus-preserving", async () => {
   const source = await readFile(
     new URL("../src/components/SearchField/SearchField.tsx", import.meta.url),
     "utf8",
@@ -80,7 +80,7 @@ test("SearchField keeps its clear action visually embedded and preserves input f
   assert.match(source, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
   assert.match(
     styles,
-    /\.root \.clear\s*\{[^}]*--_icon-button-background:\s*var\(--bf-color-field-background\)[^}]*background:\s*var\(--bf-color-field-background\)/s,
+    /\.root \.clear\s*\{[^}]*--_icon-button-background:\s*transparent[^}]*--_icon-button-background-hover:\s*transparent[^}]*--_icon-button-background-active:\s*transparent[^}]*background:\s*transparent/s,
   );
 });
 

@@ -10,13 +10,12 @@
   }
 
   .root .clear {
-    --_icon-button-background: var(--bf-color-field-background);
+    /* The clear action is already composited inside Input's field surface. */
+    --_icon-button-background: transparent;
+    --_icon-button-background-hover: transparent;
+    --_icon-button-background-active: transparent;
 
-    background: var(--bf-color-field-background);
-  }
-
-  .root .field:hover:not([data-disabled="true"]) .clear {
-    --_icon-button-background: var(--bf-color-field-background-hover);
+    background: transparent;
   }
 
   .root .field:not([data-invalid="true"]):focus-within {

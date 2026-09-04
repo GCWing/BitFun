@@ -47,7 +47,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
           onClick={onClear}
           onMouseDown={(event) => event.preventDefault()}
           shape="circle"
-          size="sm"
+          size="xs"
           variant="quiet"
         />
       )
