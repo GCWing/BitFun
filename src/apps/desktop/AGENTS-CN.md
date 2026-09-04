@@ -47,12 +47,27 @@ pnpm run prepare:dsh-profile   # 可选：本地 DeepSeek Harness 会话
 
 | 命令 | 使用场景 |
 |---|---|
-| `pnpm run desktop:build:fast` | Debug 构建，不打包；手动测试时编译最快 |
+| `pnpm run desktop:build:fast` | Debug 构建，不打包；用于编译验证。产物连 dev server 时 IPC 会被拒，见下方两种语义说明 |
 | `pnpm run desktop:build:release-fast` | 类 Release 构建，降低 LTO；需要 release 行为但无法等待完整 LTO 时使用 |
 | `pnpm run desktop:build:nsis:fast` | Windows 安装器，使用 `release-fast` profile；快速验证安装器 |
 
 需要完整断点调试信息时设置 `CARGO_PROFILE_DEV_DEBUG=2`。默认 dev profile 保留行号信息，
 同时减少 PDB 体积。
+
+### Debug 二进制有两种语义；desktop:build:fast 的产物连 dev server 时 IPC 全被拒
+
+`target/debug/bitfun-desktop.exe` 因构建方式不同有两种 tauri 语义：
+
+- `cargo build -p bitfun-desktop`（`desktop:preview:debug` 内部重建也用这个）：tauri dev 语义（`DEP_TAURI_DEV=true`），dev server origin `http://localhost:1422` 被信任，IPC 正常。
+- `desktop:build:fast` 执行 `tauri build`，会启用 `custom-protocol`：tauri production 语义，同一 origin 被视为 remote URL，ACL 拒绝所有 app 命令和 `plugin-log`。
+
+Debug 构建总是导航到 `devUrl`（启动日志 `url_kind=external`），所以 `desktop:build:fast` 的产物 + dev server 会呈现"界面完整渲染但所有 invoke 被拒"：`... not allowed. Plugin not found` 错误弹窗、会话列表加载失败、小应用列表为空（加载错误被吞成空列表）、会话日志目录里 `webview.log` 为 0 字节。不带 dev server 直接启动则表现为 `ERR_CONNECTION_REFUSED`。
+
+`desktop:preview:debug` 按二进制 mtime 是否新于 tracked inputs 决定复用——`desktop:build:fast` 的产物同样会被复用。跑过 `desktop:build:fast` 之后，必须先 `cargo build -p bitfun-desktop`（或 `pnpm run desktop:preview:debug -- --force-rebuild`）再启动 preview，否则会复用坏二进制。
+
+诊断捷径：UI 正常渲染 + `config/logs/<session>/` 下 `webview.log` 为 0 字节 = IPC 被 ACL 拒绝，是构建语义问题，不是数据问题；`BITFUN_USER_ROOT` 下的数据不受影响。
+
+另外：内置 miniapp 资源（例如 `bitfun-loopx` 的 `ui.js`/`worker.js`）通过 `include_str!` 内嵌进 `bitfun-product-domains`，改资源会连带重编 product-domains → assembly-core → desktop 链路，增量构建耗时几分钟属于正常。exe 自身报 `os error 5` 表示有实例仍在运行、exe 被锁定，见下方 GC 竞争一节。
 
 ## Target 缓存 GC
 

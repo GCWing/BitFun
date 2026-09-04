@@ -104,6 +104,7 @@ const COPY = {
     factsReceipt: '结算回执',
     factsModel: '模型',
     factsArtifacts: '产出物',
+    techDetailsTitle: '技术详情',
     factsArtifactNone: '本轮暂无文件变更',
     errorTitle: '错误',
     gateKindPublish: '发布审批',
@@ -116,6 +117,30 @@ const COPY = {
     decisionResume: '恢复重试',
     decisionCardGateHint: '请在下方审批面板中批准或拒绝该请求。',
     decisionCardRecoveryHint: '本段工作已结束，但结算未能确认持久进展；可恢复重试一次，结论详情见下方最新进展。',
+    summaryVerdictNeedsFix: '🛠️ 需要修复',
+    summaryVerdictAlreadyFixedUpstream: '✅ 上游已修复',
+    summaryVerdictWontFix: '🚫 无需修复',
+    summaryVerdictNeedsInfo: '❓ 信息不足',
+    summaryReproductionReproduced: '🔁 已复现',
+    summaryReproductionNotReproduced: '🔁 未复现',
+    summaryReproductionNotApplicable: '🔁 不适用',
+    summarySegmentEvidence: '调查取证',
+    summarySegmentRouteDecision: '方案决策',
+    summarySegmentImplementation: '实现修复',
+    summarySegmentValidation: '验证',
+    summarySegmentDelivery: '交付',
+    summaryCompletedTitle: '本段完成',
+    summaryDecisionTitle: '已定方案',
+    summaryRejectedTitle: '已否决选项',
+    summaryNextStep: '下一步',
+    summaryBlockers: '阻塞',
+    summaryTechReceipts: '技术回执',
+    summaryPendingGate: '⏸️ 等你批准后继续（见上方审批面板）',
+    recoveryReasonHostRestart: '中断原因：应用异常关闭导致执行中断',
+    recoveryReasonExecutionFailure: '中断原因：执行过程失败',
+    recoveryReasonSettlementUnverified: '中断原因：结算未能确认持久进展（写入已验证，花费回执缺失）',
+    recoveryReasonRepositoryPaused: '中断原因：同仓库其他任务失败后暂停队列',
+    recoveryReasonManualRestore: '中断原因：手动恢复的归档任务',
     outputTool: '工具',
     outputModel: '模型',
     outputText: '输出',
@@ -198,11 +223,6 @@ const COPY = {
     openInGithub: '在 GitHub 中打开',
     currentWork: '当前',
     outcomeUpdated: '{duration}前更新',
-    stageWorkspace: '工作区',
-    stageAnalysis: '分析与方案',
-    stageImplementation: '实施',
-    stageValidation: '结果核验',
-    stageSettlement: '完成',
     stagePending: '待开始',
     stageActive: '进行中',
     stageComplete: '已完成',
@@ -442,6 +462,7 @@ const COPY = {
     factsReceipt: 'Settlement receipt',
     factsModel: 'Model',
     factsArtifacts: 'Artifacts',
+    techDetailsTitle: 'Technical details',
     factsArtifactNone: 'No file changes in this turn yet',
     errorTitle: 'Error',
     gateKindPublish: 'Publish approval',
@@ -454,6 +475,30 @@ const COPY = {
     decisionResume: 'Resume retry',
     decisionCardGateHint: 'Approve or reject the request in the approval panel below.',
     decisionCardRecoveryHint: 'This segment finished but settlement could not validate durable progress. You can retry recovery once; see the summary below for the conclusion.',
+    summaryVerdictNeedsFix: '🛠️ Needs fix',
+    summaryVerdictAlreadyFixedUpstream: '✅ Already fixed upstream',
+    summaryVerdictWontFix: '🚫 Won\'t fix',
+    summaryVerdictNeedsInfo: '❓ Needs info',
+    summaryReproductionReproduced: '🔁 Reproduced',
+    summaryReproductionNotReproduced: '🔁 Not reproduced',
+    summaryReproductionNotApplicable: '🔁 Not applicable',
+    summarySegmentEvidence: 'Evidence',
+    summarySegmentRouteDecision: 'Route decision',
+    summarySegmentImplementation: 'Implementation',
+    summarySegmentValidation: 'Validation',
+    summarySegmentDelivery: 'Delivery',
+    summaryCompletedTitle: 'This segment',
+    summaryDecisionTitle: 'Decided',
+    summaryRejectedTitle: 'Rejected options',
+    summaryNextStep: 'Next step',
+    summaryBlockers: 'Blockers',
+    summaryTechReceipts: 'Technical receipts',
+    summaryPendingGate: '⏸️ Waiting for your approval (see the approval panel above)',
+    recoveryReasonHostRestart: 'Interrupted by an abnormal app shutdown',
+    recoveryReasonExecutionFailure: 'Interrupted by an execution failure',
+    recoveryReasonSettlementUnverified: 'Interrupted because settlement could not validate durable progress (writeback verified, quota spend receipt missing)',
+    recoveryReasonRepositoryPaused: 'Interrupted because the repository queue paused after another task failed',
+    recoveryReasonManualRestore: 'Interrupted because an archived task was manually restored',
     outputTool: 'Tool',
     outputModel: 'Model',
     outputText: 'Output',
@@ -536,11 +581,6 @@ const COPY = {
     openInGithub: 'Open in GitHub',
     currentWork: 'Current',
     outcomeUpdated: 'Updated {duration} ago',
-    stageWorkspace: 'Worktree',
-    stageAnalysis: 'Analysis and plan',
-    stageImplementation: 'Implementation',
-    stageValidation: 'Outcome validation',
-    stageSettlement: 'Finish',
     stagePending: 'Pending',
     stageActive: 'Active',
     stageComplete: 'Complete',
@@ -984,11 +1024,15 @@ function taskPhaseLabel(task) {
 
 /// The LoopX frontier-todo projection marks the PR-lifecycle monitoring
 /// phase. It is display-only; the LoopX registry stays authoritative.
+/// Mirrors the Rust classifier `is_loopx_monitor_action` (policy.rs): the
+/// `_monitor` suffix family plus the `issue_fix_track_*` merge-readiness
+/// trackers. Keep both sides in sync.
 function isMonitorTodo(task) {
   const todo = task && task.currentTodo;
   if (!todo) return false;
   if (String(todo.taskClass || '') === 'continuous_monitor') return true;
-  return /^issue_fix_pr_state_.+_monitor$/.test(String(todo.actionKind || ''));
+  const kind = String(todo.actionKind || '');
+  return /_monitor$/.test(kind) || kind.startsWith('issue_fix_track_');
 }
 
 function monitorNextCheckLabel(task) {
@@ -2385,46 +2429,6 @@ function taskProgressEvidence(task) {
   };
 }
 
-function progressStageStatus(task, evidence) {
-  if (isResolvedUpstream(task)) {
-    return [
-      ['stageWorkspace', 'complete'],
-      ['stageAnalysis', 'complete'],
-      ['stageImplementation', 'complete'],
-      ['stageValidation', 'complete'],
-      ['stageSettlement', 'complete'],
-    ];
-  }
-  const hasSummary = Boolean(task.lastAgentSummary);
-  const afterAgent = hasSummary || evidence.validated || evidence.settled
-    || ['validating_progress', 'settling_turn', 'recovering', 'finished'].includes(task.phase);
-  const workspace = task.workspacePath
-    ? 'complete'
-    : (task.phase === 'preparing_workspace' ? 'active' : (task.error ? 'blocked' : 'pending'));
-  const analysis = hasSummary
-    ? 'complete'
-    : (evidence.analysisCount > 0
-    ? (afterAgent || evidence.changes > 0 ? 'complete' : 'active')
-    : (task.phase === 'agent_running' ? 'active' : 'pending'));
-  const implementation = evidence.changes > 0
-    ? (afterAgent ? 'complete' : 'active')
-    : 'pending';
-  const validation = evidence.validated || evidence.settled
-    ? 'complete'
-    : (['validating_progress', 'settling_turn'].includes(task.phase) ? 'active' : 'pending');
-  let settlement = 'pending';
-  if (task.state === 'completed') settlement = 'complete';
-  else if (task.state === 'recovery_required' || task.state === 'failed') settlement = 'blocked';
-  else if (task.phase === 'settling_turn' || task.state === 'waiting_for_user') settlement = 'active';
-  return [
-    ['stageWorkspace', workspace],
-    ['stageAnalysis', analysis],
-    ['stageImplementation', implementation],
-    ['stageValidation', validation],
-    ['stageSettlement', settlement],
-  ];
-}
-
 function currentProgressHeading(task, evidence) {
   if (isResolvedUpstream(task)) return text('progressResolvedUpstream');
   if (task.state === 'completed') return text('progressCompleted');
@@ -2538,9 +2542,22 @@ function renderIssueStatus(task) {
   heading.textContent = text(waiting ? 'decisionCardTitle' : 'decisionCardTitleRecovery');
   const body = document.createElement('p');
   body.className = 'issue-decision-card__message';
-  body.textContent = String(task.pendingGateMessage || '').trim()
+  const recoveryHint = String(task.pendingGateMessage || '').trim()
     || text(waiting ? 'decisionCardGateHint' : 'decisionCardRecoveryHint');
+  body.textContent = recoveryHint;
   card.append(heading, body);
+  const reasonKey = !waiting && task.recoveryReason
+    ? `recoveryReason${String(task.recoveryReason).split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`
+    : null;
+  if (reasonKey) {
+    const reason = document.createElement('p');
+    reason.className = 'issue-decision-card__message';
+    const table = COPY[localeId()] || COPY['en-US'];
+    const reasonText = table[reasonKey] || COPY['en-US'][reasonKey] || '';
+    if (reasonText) reason.textContent = reasonText;
+    else reason.hidden = true;
+    card.append(reason);
+  }
   const actions = document.createElement('div');
   actions.className = 'issue-decision-card__actions';
   if (recovery) {
@@ -2549,9 +2566,154 @@ function renderIssueStatus(task) {
   card.append(actions);
 }
 
+function summaryEnumLabel(prefix, value) {
+  const key = `${prefix}${String(value || '').split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`;
+  const table = COPY[localeId()] || COPY['en-US'];
+  return table[key] || fallbackCopy(key);
+}
+
+function fallbackCopy(key) {
+  return COPY['en-US'][key] || '';
+}
+
+function stripSummaryBlock(raw) {
+  return String(raw || '')
+    .replace(/```loopx_summary_v1[\s\S]*?```/g, '')
+    .trim();
+}
+
+function renderStructuredBrief(container, s, raw, task) {
+  container.replaceChildren();
+  const badges = document.createElement('div');
+  badges.className = 'summary-badges';
+  const verdict = document.createElement('span');
+  verdict.className = 'summary-badge';
+  verdict.textContent = summaryEnumLabel('summaryVerdict', s.issue_verdict) || s.issue_verdict;
+  badges.append(verdict);
+  if (s.issue_verdict === 'already_fixed_upstream' && s.fixed_by) {
+    const fixed = document.createElement('a');
+    fixed.className = 'summary-badge summary-badge--link';
+    fixed.href = s.fixed_by;
+    fixed.target = '_blank';
+    fixed.rel = 'noreferrer';
+    fixed.textContent = s.fixed_by;
+    badges.append(fixed);
+  }
+  if (s.reproduction && s.reproduction !== 'not_applicable') {
+    // Only reproduced / not-reproduced carry signal for the reader;
+    // `not_applicable` (monitoring or analysis segments) adds no information
+    // and rendered as a badge it reads as duplicated noise.
+    const reproduction = document.createElement('span');
+    reproduction.className = 'summary-badge';
+    reproduction.textContent = summaryEnumLabel('summaryReproduction', s.reproduction) || s.reproduction;
+    badges.append(reproduction);
+  }
+  container.append(badges);
+
+  if (task && task.state === 'waiting_for_user') {
+    const pending = document.createElement('p');
+    pending.className = 'summary-pending';
+    pending.textContent = text('summaryPendingGate');
+    container.append(pending);
+  }
+
+  if (Array.isArray(s.completed) && s.completed.length) {
+    const section = document.createElement('div');
+    section.className = 'summary-section';
+    const title = document.createElement('strong');
+    const kind = s.segment_kind ? `（${summaryEnumLabel('summarySegment', s.segment_kind)}）` : '';
+    title.textContent = `📋 ${text('summaryCompletedTitle')}${kind}`;
+    section.append(title);
+    const list = document.createElement('ul');
+    s.completed.forEach((item) => {
+      const li = document.createElement('li');
+      li.textContent = String(item);
+      list.append(li);
+    });
+    section.append(list);
+    container.append(section);
+  }
+
+  const decision = s.decision && typeof s.decision === 'object' ? s.decision : null;
+  if (decision && decision.route) {
+    const section = document.createElement('div');
+    section.className = 'summary-section';
+    const title = document.createElement('strong');
+    title.textContent = `📌 ${text('summaryDecisionTitle')}`;
+    section.append(title);
+    const route = document.createElement('p');
+    route.textContent = decision.route + (decision.reason ? `（${decision.reason}）` : '');
+    section.append(route);
+    if (Array.isArray(decision.rejected) && decision.rejected.length) {
+      const rejected = document.createElement('details');
+      rejected.className = 'summary-rejected';
+      const summaryLine = document.createElement('summary');
+      summaryLine.textContent = text('summaryRejectedTitle');
+      rejected.append(summaryLine);
+      decision.rejected.forEach((item) => {
+        const line = document.createElement('div');
+        line.textContent = `✗ ${item.route}${item.why ? `：${item.why}` : ''}`;
+        rejected.append(line);
+      });
+      section.append(rejected);
+    }
+    container.append(section);
+  }
+
+  if (s.next_step) {
+    const section = document.createElement('div');
+    section.className = 'summary-section';
+    const title = document.createElement('strong');
+    title.textContent = `⏭️ ${text('summaryNextStep')}`;
+    section.append(title);
+    const body = document.createElement('p');
+    body.textContent = String(s.next_step);
+    section.append(body);
+    container.append(section);
+  }
+
+  if (Array.isArray(s.blockers) && s.blockers.length) {
+    const section = document.createElement('div');
+    section.className = 'summary-section';
+    const title = document.createElement('strong');
+    title.textContent = `⚠️ ${text('summaryBlockers')}`;
+    section.append(title);
+    const list = document.createElement('ul');
+    s.blockers.forEach((item) => {
+      const li = document.createElement('li');
+      li.textContent = String(item);
+      list.append(li);
+    });
+    section.append(list);
+    container.append(section);
+  }
+
+  const receiptSource = stripSummaryBlock(raw);
+  if (receiptSource) {
+    const receipts = document.createElement('details');
+    receipts.className = 'summary-receipts';
+    const summaryLine = document.createElement('summary');
+    summaryLine.textContent = text('summaryTechReceipts');
+    receipts.append(summaryLine);
+    const body = document.createElement('pre');
+    body.className = 'summary-receipts__body';
+    body.textContent = receiptSource;
+    receipts.append(body);
+    container.append(receipts);
+  }
+}
+
 function renderIssueBrief(task) {
   const summary = String(task.lastAgentSummary || '').trim();
-  if (summary) {
+  const structured = task.structuredSummary && typeof task.structuredSummary === 'object'
+    ? task.structuredSummary
+    : null;
+  if (structured) {
+    renderStructuredBrief(view.issueSummary, structured, summary, task);
+    view.issueSummaryMeta.textContent = task.lastAgentSummaryAt
+      ? text('outcomeUpdated', { duration: relativeLabel(task.lastAgentSummaryAt) })
+      : '';
+  } else if (summary) {
     renderMarkdown(view.issueSummary, summary, itemUrl(task.identity && task.identity.item));
     view.issueSummaryMeta.textContent = task.lastAgentSummaryAt
       ? text('outcomeUpdated', { duration: relativeLabel(task.lastAgentSummaryAt) })
@@ -3611,10 +3773,26 @@ function openRepositoryResumeDialog() {
     showNotice(text('resumeTargetMissing'), 'error');
     return;
   }
+  const table = COPY[localeId()] || COPY['en-US'];
+  const fallback = COPY['en-US'];
+  const reasons = [];
+  target.tasks.forEach((task) => {
+    if (!task.recoveryReason) return;
+    const key = `recoveryReason${String(task.recoveryReason).split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`;
+    const label = table[key] || fallback[key];
+    if (label && !reasons.includes(label)) reasons.push(label);
+  });
   view.repositoryResumeMessage.textContent = text('resumeRepositoryMessage', {
     repository: repositoryLabel(target.repository),
     value: target.tasks.length,
   });
+  if (reasons.length) {
+    const reasonLine = document.createElement('small');
+    reasonLine.className = 'dialog-reasons';
+    const separator = localeId().startsWith('zh') ? '；' : '; ';
+    reasonLine.textContent = reasons.join(separator);
+    view.repositoryResumeMessage.append(document.createElement('br'), reasonLine);
+  }
   view.repositoryResumeDialog.showModal();
 }
 

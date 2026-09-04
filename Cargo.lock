@@ -1381,6 +1381,7 @@ dependencies = [
  "hex",
  "hmac",
  "log",
+ "regex",
  "serde",
  "serde_json",
  "sha2",

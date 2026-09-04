@@ -18,6 +18,16 @@ const GOAL_RECONCILE_DEADLINE_MS: i64 = 30_000;
 /// LoopX 0.5.1 exposes only cadence labels for the outer-controller profile,
 /// so the host supplies the concrete wait interval for waiting goals.
 const WAIT_RESCHEDULE_FALLBACK_MS: u64 = 60_000;
+/// Minimum spacing between consecutive monitor-class re-check turns for one
+/// goal. The pinned LoopX v0.5.1 envelope carries no numeric monitor_wait
+/// cadence, so a freshly created successor tracking todo is immediately
+/// `RunNow`; without this floor the host would drive back-to-back re-check
+/// turns that re-verify an external state that cannot have changed. The
+/// anchor is the goal's last durable settlement time, not a new host counter.
+/// Matches the documented upstream monitor_wait host floor (15 minutes);
+/// numeric scheduler hints from a newer pin still take priority through the
+/// `Wait` branch's `scheduler_hint_ms` path.
+const MONITOR_COMPAT_INTERVAL_MS: u64 = 15 * 60 * 1000;
 /// Backoff before re-driving after a retryable turn-build conflict.
 const TURN_CONFLICT_RETRY_MS: u64 = 5_000;
 
@@ -893,10 +903,7 @@ impl LoopxController {
             if request.action == LoopxActionKind::Resume
                 && matches!(
                     task.state,
-                    LoopxTaskState::Preparing
-                        | LoopxTaskState::Queued
-                        | LoopxTaskState::Running
-                        | LoopxTaskState::RetryWait
+                    LoopxTaskState::Preparing | LoopxTaskState::Queued | LoopxTaskState::Running
                 )
             {
                 return Ok(LoopxActionResponse {
@@ -1164,11 +1171,13 @@ impl LoopxController {
             .filter(|value| !value.is_empty())
         {
             let bounded = bounded_agent_summary(summary);
+            let structured = parse_structured_summary(Some(summary));
             self.mutate_task(&task.task_id, None, |current, _| {
                 if current.generation != task.generation {
                     return;
                 }
                 current.last_agent_summary = Some(bounded);
+                current.structured_summary = structured;
                 current.last_agent_summary_at = Some(now_ms());
                 current.revision = current.revision.saturating_add(1);
             })
@@ -1779,6 +1788,47 @@ impl LoopxController {
                     // silent, nothing forged, worktree and evidence kept).
                     return Ok(());
                 }
+                if let Some(todo) = inspected.selected_todo.as_ref() {
+                    if is_loopx_monitor_action(&todo.action_kind) {
+                        if let Some(hold_ms) =
+                            monitor_recheck_hold_ms(task.settlement.settled_at, now_ms())
+                        {
+                            // v0.5.1 compatibility cadence: the monitor todo
+                            // is projected RunNow, but the external state it
+                            // watches was verified by the turn that just
+                            // settled. Park the re-check (yielding the
+                            // repository slot to queued sibling issues) and
+                            // re-drive after the remaining interval.
+                            let message = format!(
+                                "LoopX monitor re-check held back by the host compatibility cadence; next re-check in {} seconds",
+                                hold_ms / 1000
+                            );
+                            log::info!(
+                                "LoopX monitor recheck held: task_id={} goal={} action={} hold_ms={}",
+                                task_id,
+                                inspected.goal_id,
+                                todo.action_kind,
+                                hold_ms,
+                            );
+                            let updated = self
+                                .transition_task(
+                                    &task_id,
+                                    task.generation,
+                                    LoopxTaskState::Queued,
+                                    LoopxPhase::Queued,
+                                    &message,
+                                )
+                                .await?;
+                            self.schedule_next_for_repository(
+                                &updated.identity.item.repository.canonical_id(),
+                                Some(&task_id),
+                            )
+                            .await;
+                            self.enqueue_task(task_id, Duration::from_millis(hold_ms))?;
+                            return Ok(());
+                        }
+                    }
+                }
                 let progress = BufferedProgress::default();
                 let built = self
                     .cli
@@ -2058,6 +2108,7 @@ impl LoopxController {
                 task.pending_gate_message = None;
                 task.pending_gate_action_kind = None;
                 task.error = None;
+                task.recovery_reason = None;
                 runtime.operation_id = format!("resume-{}-{}", task.task_id, task.generation);
                 runtime.session_id = None;
                 runtime.agent_turn_id = None;
@@ -2127,6 +2178,7 @@ impl LoopxController {
                 task.phase = LoopxPhase::Recovering;
                 task.current_turn_id = None;
                 task.error = None;
+                task.recovery_reason = None;
                 task.updated_at = now;
                 runtime.operation_id = format!("resume-{}-{}", task.task_id, task.generation);
                 runtime.session_id = None;
@@ -2214,7 +2266,6 @@ impl LoopxController {
                     LoopxTaskState::Preparing
                         | LoopxTaskState::Queued
                         | LoopxTaskState::Running
-                        | LoopxTaskState::RetryWait
                         | LoopxTaskState::Cancelling
                 ) {
                     task.state = LoopxTaskState::Cancelling;
@@ -2581,6 +2632,11 @@ impl LoopxController {
             .mutate_task(&task.task_id, None, |task, runtime| {
                 task.state = final_state;
                 task.phase = phase;
+                task.recovery_reason = if final_state == LoopxTaskState::RecoveryRequired {
+                    Some("settlement_unverified".to_string())
+                } else {
+                    None
+                };
                 task.goal_state = post_settlement_goal
                     .as_ref()
                     .map(|goal| goal.state)
@@ -2614,6 +2670,17 @@ impl LoopxController {
                     runtime.durable_compensation_pending = true;
                     runtime.pending_host_note = Some(LOOPX_DURABLE_COMPENSATION_NOTE.to_string());
                 }
+                // A settled turn proves the quota contract works again; the
+                // one-shot compensation allowance must re-arm for a future
+                // unrelated NoDurableProgress episode.
+                if matches!(
+                    settlement.status,
+                    LoopxCliSettlementStatus::Settled
+                        | LoopxCliSettlementStatus::AlreadySettled
+                        | LoopxCliSettlementStatus::GoalCompleted
+                ) {
+                    runtime.durable_compensation_pending = false;
+                }
                 runtime.expected_durable_revision = Some(
                     post_settlement_goal
                         .as_ref()
@@ -2630,7 +2697,7 @@ impl LoopxController {
             updated.phase,
             settlement.status
         );
-        let mut yielded_repository = false;
+        let mut yielded_repository;
         if agent_status == LoopxAgentTurnStatus::Failed {
             let reason = failure_summary.unwrap_or("Agent turn failed");
             self.append_task_event(&updated, LoopxEventKind::StateChanged, reason, true)
@@ -2709,7 +2776,11 @@ impl LoopxController {
                         ),
                         LoopxTaskState::RecoveryRequired => (
                             LoopxEventKind::StateChanged,
-                            "LoopX turn requires recovery after settlement",
+                            if settlement.status == LoopxCliSettlementStatus::RetryRequired {
+                                "LoopX writeback validated but the quota spend settlement is missing; resume retries the turn with the current quota contract"
+                            } else {
+                                "LoopX turn requires recovery after settlement"
+                            },
                             true,
                         ),
                         _ => (
@@ -2722,51 +2793,68 @@ impl LoopxController {
                 self.append_task_event(&updated, kind, message, important)
                     .await?;
             }
-            yielded_repository = self
-                .schedule_next_for_repository(
-                    &updated.identity.item.repository.canonical_id(),
-                    Some(&updated.task_id),
-                )
-                .await;
-            if yielded_repository {
-                self.suppress_pending_task_rerun(&updated.task_id).await;
-            } else if matches!(
+            if sticky_continue_after_settlement(
                 final_state,
-                LoopxTaskState::RecoveryRequired | LoopxTaskState::WaitingForUser
+                post_settlement_goal.as_ref().map(|goal| goal.run_decision),
+                post_settlement_goal
+                    .as_ref()
+                    .and_then(|goal| goal.selected_todo.as_ref())
+                    .map(|todo| todo.action_kind.as_str()),
             ) {
-                // Nothing queued could take the freed slot. Surface what the
-                // remaining repository tasks are stuck in so a stalled line
-                // shows up in the log instead of silent idling.
-                let stalled: Vec<String> = {
-                    let state = self.state.read().await;
-                    state
-                        .tasks
-                        .iter()
-                        .filter(|task| {
-                            task.task_id != updated.task_id
-                                && task.identity.item.repository.canonical_id()
-                                    == updated.identity.item.repository.canonical_id()
-                                && !matches!(
-                                    task.state,
-                                    LoopxTaskState::Completed
-                                        | LoopxTaskState::Archived
-                                        | LoopxTaskState::Stopped
-                                )
-                        })
-                        .map(|task| format!("{} {:?}", task.task_id, task.state))
-                        .collect()
-                };
-                log::warn!(
-                    "LoopX repository queue stalled after parking task {}: remaining non-terminal tasks {:?}",
-                    updated.task_id,
-                    stalled
-                );
+                // Depth-first repository lane: the segment settled cleanly and
+                // the Goal is still runnable (RunNow), so the same task keeps
+                // the repository slot and continues with its next bounded
+                // segment instead of yielding to the next queued issue. The
+                // slot is intentionally not released here; reserve_repository
+                // accepts the same owner on the next drive.
+                self.enqueue_task(updated.task_id.clone(), Duration::ZERO)?;
+            } else {
+                yielded_repository = self
+                    .schedule_next_for_repository(
+                        &updated.identity.item.repository.canonical_id(),
+                        Some(&updated.task_id),
+                    )
+                    .await;
+                if yielded_repository {
+                    self.suppress_pending_task_rerun(&updated.task_id).await;
+                } else if matches!(
+                    final_state,
+                    LoopxTaskState::RecoveryRequired | LoopxTaskState::WaitingForUser
+                ) {
+                    // Nothing queued could take the freed slot. Surface what the
+                    // remaining repository tasks are stuck in so a stalled line
+                    // shows up in the log instead of silent idling.
+                    let stalled: Vec<String> = {
+                        let state = self.state.read().await;
+                        state
+                            .tasks
+                            .iter()
+                            .filter(|task| {
+                                task.task_id != updated.task_id
+                                    && task.identity.item.repository.canonical_id()
+                                        == updated.identity.item.repository.canonical_id()
+                                    && !matches!(
+                                        task.state,
+                                        LoopxTaskState::Completed
+                                            | LoopxTaskState::Archived
+                                            | LoopxTaskState::Stopped
+                                    )
+                            })
+                            .map(|task| format!("{} {:?}", task.task_id, task.state))
+                            .collect()
+                    };
+                    log::warn!(
+                        "LoopX repository queue stalled after parking task {}: remaining non-terminal tasks {:?}",
+                        updated.task_id,
+                        stalled
+                    );
+                }
+                if should_requeue_after_settlement(final_state, yielded_repository) {
+                    let task_id = task.task_id.clone();
+                    let delay = settlement.scheduler_hint_ms.unwrap_or(0);
+                    self.enqueue_task(task_id, Duration::from_millis(delay))?;
+                }
             }
-        }
-        if should_requeue_after_settlement(final_state, yielded_repository) {
-            let task_id = task.task_id.clone();
-            let delay = settlement.scheduler_hint_ms.unwrap_or(0);
-            self.enqueue_task(task_id, Duration::from_millis(delay))?;
         }
         Ok(())
     }
@@ -2840,6 +2928,7 @@ impl LoopxController {
             task.state = LoopxTaskState::RecoveryRequired;
             task.phase = LoopxPhase::Recovering;
             task.error = Some(message.clone());
+            task.recovery_reason = Some("repository_paused".to_string());
             task.current_turn_id = None;
             task.deadline_at = None;
             task.revision = task.revision.saturating_add(1);
@@ -3344,6 +3433,11 @@ impl LoopxController {
             .mutate_task(task_id, Some(request_id), |task, _| {
                 task.state = state;
                 task.phase = phase;
+                task.recovery_reason = if state == LoopxTaskState::RecoveryRequired {
+                    Some("manual_restore".to_string())
+                } else {
+                    None
+                };
                 if state != LoopxTaskState::WaitingForUser {
                     task.pending_gate_id = None;
                     task.pending_gate_message = None;
@@ -3400,6 +3494,7 @@ impl LoopxController {
                 task.pending_gate_message = None;
                 task.pending_gate_action_kind = None;
                 task.error = Some(error.clone());
+                task.recovery_reason = Some("execution_failure".to_string());
                 task.deadline_at = None;
                 task.revision = task.revision.saturating_add(1);
             })
@@ -3710,13 +3805,8 @@ fn bound_workspace_missing(task: &LoopxTaskSnapshot) -> bool {
 }
 
 fn is_repository_recovery_candidate(task: &LoopxTaskSnapshot, repository_id: &str) -> bool {
-    task.identity.item.repository.canonical_id() == repository_id
-        && matches!(
-            task.state,
-            LoopxTaskState::Stopped | LoopxTaskState::Failed | LoopxTaskState::RecoveryRequired
-        )
+    decide_repository_recovery_candidate(task, repository_id)
 }
-
 fn task_state_after_settlement(
     agent_status: LoopxAgentTurnStatus,
     settlement_status: LoopxCliSettlementStatus,
@@ -3807,6 +3897,48 @@ fn phase_after_settlement(state: LoopxTaskState) -> LoopxPhase {
 
 fn should_requeue_after_settlement(final_state: LoopxTaskState, yielded_repository: bool) -> bool {
     final_state == LoopxTaskState::Queued && !yielded_repository
+}
+
+/// Depth-first repository lane: after a cleanly settled segment, the same task
+/// keeps the slot and continues while its Goal is still runnable. Yield to the
+/// next queued issue only when the Goal actually paused (user gate, cadence
+/// wait, terminal, recovery) or the post-settlement inspection failed to
+/// project a decision — a re-drive re-inspects and parks at the gate, so
+/// treating an unknown decision as runnable is self-correcting. A monitor-
+/// class successor always yields: it waits on an external event the agent
+/// cannot advance, so holding the slot would starve sibling issues while the
+/// drive-time compatibility cadence spaces the re-checks.
+fn sticky_continue_after_settlement(
+    final_state: LoopxTaskState,
+    post_settlement_run_decision: Option<LoopxCliRunDecision>,
+    post_settlement_selected_action: Option<&str>,
+) -> bool {
+    if final_state != LoopxTaskState::Queued {
+        return false;
+    }
+    if post_settlement_selected_action.is_some_and(is_loopx_monitor_action) {
+        return false;
+    }
+    match post_settlement_run_decision {
+        None => true,
+        Some(decision) => matches!(decision, LoopxCliRunDecision::RunNow),
+    }
+}
+
+/// v0.5.1 compatibility cadence for monitor-class re-checks: when the goal's
+/// last durable settlement happened less than [`MONITOR_COMPAT_INTERVAL_MS`]
+/// ago, hold the re-check back for the remaining interval. `None` means run
+/// now (no settlement anchor yet — e.g. a resumed or fresh goal — or the
+/// interval already elapsed). The anchor is durable settlement evidence, not
+/// a host-side convergence counter.
+fn monitor_recheck_hold_ms(settled_at: Option<i64>, now: i64) -> Option<u64> {
+    let settled_at = settled_at?;
+    let elapsed = now.saturating_sub(settled_at);
+    if elapsed < MONITOR_COMPAT_INTERVAL_MS as i64 {
+        Some((MONITOR_COMPAT_INTERVAL_MS as i64 - elapsed).max(0) as u64)
+    } else {
+        None
+    }
 }
 
 fn goal_id_for(identity: &LoopxTaskIdentity) -> String {
@@ -4045,6 +4177,101 @@ mod tests {
             LoopxTaskState::Completed,
             false,
         ));
+    }
+
+    #[test]
+    fn depth_first_sticky_continues_only_for_runnable_goals() {
+        // Cleanly settled + still runnable: keep the slot, continue deep.
+        assert!(sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            Some(LoopxCliRunDecision::RunNow),
+            Some("issue_fix_collect_candidate_evidence"),
+        ));
+        // Unknown post-settlement decision (inspection failed): continue — the
+        // re-drive re-inspects and parks at a gate, so this is self-correcting.
+        assert!(sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            None,
+            None,
+        ));
+        // Cadence wait: yield the slot to the next queued issue.
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            Some(LoopxCliRunDecision::Wait),
+            None,
+        ));
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            Some(LoopxCliRunDecision::WaitingForUser),
+            None,
+        ));
+        // Terminal or parked states always yield.
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::Completed,
+            Some(LoopxCliRunDecision::RunNow),
+            None,
+        ));
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::RecoveryRequired,
+            Some(LoopxCliRunDecision::RunNow),
+            None,
+        ));
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::WaitingForUser,
+            None,
+            None,
+        ));
+    }
+
+    #[test]
+    fn depth_first_sticky_yields_monitor_successors_even_when_runnable() {
+        // v0.5.1 projects a freshly created successor tracking todo RunNow
+        // immediately; the sticky lane must not let it hold the repository
+        // slot. It yields and the drive-time compatibility cadence spaces the
+        // re-checks.
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            Some(LoopxCliRunDecision::RunNow),
+            Some("issue_fix_track_pr_merge_readiness"),
+        ));
+        assert!(!sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            None,
+            Some("issue_fix_pr_state_open_monitor"),
+        ));
+        // Real work successors still keep the slot and continue deep.
+        assert!(sticky_continue_after_settlement(
+            LoopxTaskState::Queued,
+            Some(LoopxCliRunDecision::RunNow),
+            Some("issue_fix_implementation"),
+        ));
+    }
+
+    #[test]
+    fn monitor_recheck_hold_anchors_on_last_settlement() {
+        let now = 10_000_000_i64;
+        // No settlement anchor (fresh or resumed goal): run now.
+        assert_eq!(monitor_recheck_hold_ms(None, now), None);
+        // Settled 3 seconds ago: hold back the remaining interval.
+        assert_eq!(
+            monitor_recheck_hold_ms(Some(now - 3_000), now),
+            Some(MONITOR_COMPAT_INTERVAL_MS - 3_000)
+        );
+        // Exactly one interval old (or older): run now.
+        assert_eq!(
+            monitor_recheck_hold_ms(Some(now - MONITOR_COMPAT_INTERVAL_MS as i64), now),
+            None
+        );
+        assert_eq!(
+            monitor_recheck_hold_ms(Some(now - 60 * MONITOR_COMPAT_INTERVAL_MS as i64), now),
+            None
+        );
+        // Clock skew (settlement timestamp in the future): hold the full
+        // interval instead of spinning.
+        assert_eq!(
+            monitor_recheck_hold_ms(Some(now + 5_000), now),
+            Some(MONITOR_COMPAT_INTERVAL_MS)
+        );
     }
 
     #[test]

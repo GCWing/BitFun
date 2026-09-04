@@ -108,6 +108,7 @@ impl LoopxPersistedState {
             task.state = restarted;
             task.phase = if restarted == LoopxTaskState::RecoveryRequired {
                 recovery_required = recovery_required.saturating_add(1);
+                task.recovery_reason = Some("host_restart".to_string());
                 LoopxPhase::Recovering
             } else if restarted == LoopxTaskState::Queued {
                 requeued = requeued.saturating_add(1);
@@ -297,10 +298,15 @@ mod tests {
 
         let loaded = store.load().await.expect("load").expect("state");
         assert_eq!(loaded.tasks[0].state, LoopxTaskState::RecoveryRequired);
+        assert_eq!(
+            loaded.tasks[0].recovery_reason.as_deref(),
+            Some("host_restart")
+        );
         assert_eq!(loaded.tasks[0].revision, 4);
         assert_eq!(loaded.tasks[1].state, LoopxTaskState::Queued);
         assert_eq!(loaded.tasks[1].phase, LoopxPhase::Queued);
         assert_eq!(loaded.tasks[1].retry_at, None);
+        assert_eq!(loaded.tasks[1].recovery_reason, None);
         assert_eq!(loaded.tasks[1].revision, 6);
         assert_eq!(loaded.events[0].kind, LoopxEventKind::SnapshotInvalidated);
     }

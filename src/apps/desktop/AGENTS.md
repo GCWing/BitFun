@@ -56,12 +56,27 @@ pnpm run prepare:dsh-profile   # optional: local DeepSeek Harness sessions
 
 | Command | When to use |
 |---|---|
-| `pnpm run desktop:build:fast` | Debug build without bundling; fastest compile for manual testing |
+| `pnpm run desktop:build:fast` | Debug build without bundling; for compile verification. Its binary breaks IPC against the dev server — see the two-semantics note below |
 | `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
 | `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
 
 Set `CARGO_PROFILE_DEV_DEBUG=2` when full breakpoint debug information is
 required. The default dev profile keeps line tables while reducing PDB size.
+
+### Debug binaries have two semantics; a `desktop:build:fast` binary breaks IPC against the dev server
+
+`target/debug/bitfun-desktop.exe` can be built with two different tauri semantics:
+
+- `cargo build -p bitfun-desktop` (also what `desktop:preview:debug` builds internally): tauri dev semantics (`DEP_TAURI_DEV=true`). The dev server origin `http://localhost:1422` is trusted; IPC works.
+- `desktop:build:fast` runs `tauri build`, which enables `custom-protocol`: tauri production semantics. The same origin is treated as a remote URL and the ACL denies every app command and `plugin-log`.
+
+Debug builds always navigate to `devUrl` (startup log `url_kind=external`), so running a `desktop:build:fast` binary against the dev server renders a fully working UI where every invoke is rejected: `... not allowed. Plugin not found` error toasts, session list failures, an empty miniapp catalog (the load error is swallowed into an empty list), and a 0-byte `webview.log` in the session log dir. Launching such a binary without the dev server shows `ERR_CONNECTION_REFUSED` instead.
+
+`desktop:preview:debug` reuses the existing binary whenever its mtime is newer than the tracked inputs — including a leftover `desktop:build:fast` binary. After running `desktop:build:fast`, run `cargo build -p bitfun-desktop` (or `pnpm run desktop:preview:debug -- --force-rebuild`) before the preview, or the broken binary is reused.
+
+Diagnosis shortcut: rendered UI + 0-byte `webview.log` under `config/logs/<session>/` means IPC was denied by the ACL — a build-semantics problem, not a data problem. Data under `BITFUN_USER_ROOT` is unaffected.
+
+Also note: builtin miniapp assets (for example the `bitfun-loopx` `ui.js`/`worker.js`) are embedded via `include_str!` into `bitfun-product-domains`, so asset edits recompile the product-domains → assembly-core → desktop chain; several minutes for an incremental build is normal. `os error 5` on the exe itself means an instance is still running and locks it; see the GC-race section below.
 
 ## Target cache GC
 

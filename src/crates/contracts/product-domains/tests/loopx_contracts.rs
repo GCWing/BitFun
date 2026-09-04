@@ -1,11 +1,13 @@
 #![cfg(feature = "miniapp")]
 
 use bitfun_product_domains::miniapp::loopx::{
-    build_intake_fingerprint, decide_action_status, decide_events_page_status, decide_task_dedup,
-    decide_task_restart, decide_task_transition, derive_environment_status,
-    intake_scope_is_pregrantable, parse_loopx_intake, project_host_task_from_goal,
-    task_state_after_restart, LoopxActionKind, LoopxActionRequest, LoopxActionStatus,
-    LoopxAgentFinishRequest, LoopxAgentPort, LoopxAgentStartRequest, LoopxCliAnswerGateRequest,
+    build_intake_fingerprint, decide_action_status, decide_events_page_status,
+    decide_repository_recovery_candidate, decide_task_dedup, decide_task_restart,
+    decide_task_transition, derive_environment_status, intake_scope_is_pregrantable,
+    is_loopx_monitor_action, parse_loopx_intake, parse_structured_summary,
+    project_host_task_from_goal, task_state_after_restart, task_summary_resolves_upstream,
+    LoopxActionKind, LoopxActionRequest, LoopxActionStatus, LoopxAgentFinishRequest,
+    LoopxAgentPort, LoopxAgentStartRequest, LoopxCliAnswerGateRequest, LoopxCliBuildTurnResult,
     LoopxCliGateDecision, LoopxCliGoalSnapshot, LoopxCliGoalState, LoopxCliHandshakeRequest,
     LoopxCliPort, LoopxCoreEnvironmentFacts, LoopxCreateTaskRequest, LoopxDedupDecision,
     LoopxEnvironmentFact, LoopxEnvironmentFactStatus, LoopxEnvironmentStatus,
@@ -13,8 +15,9 @@ use bitfun_product_domains::miniapp::loopx::{
     LoopxIntakePreview, LoopxIntakeTarget, LoopxIssueKey, LoopxItemKind,
     LoopxOptionalEnvironmentFacts, LoopxPermissionScope, LoopxPhase, LoopxRemoteItemState,
     LoopxRepositoryKey, LoopxResolveIntakeRequest, LoopxRestartDecision, LoopxSnapshot,
-    LoopxTaskIdentity, LoopxTaskState, LoopxTransitionDecision, LoopxWorkspacePort,
-    LoopxWorkspacePrepareRequest, LOOPX_CLI_SCHEMA_VERSION, LOOPX_PINNED_VERSION,
+    LoopxTaskIdentity, LoopxTaskSnapshot, LoopxTaskState, LoopxTransitionDecision,
+    LoopxWorkspacePort, LoopxWorkspacePrepareRequest, LOOPX_CLI_SCHEMA_VERSION,
+    LOOPX_PINNED_VERSION,
 };
 
 fn issue(owner: &str, repository: &str, number: u64) -> LoopxIssueKey {
@@ -603,4 +606,132 @@ impl EnumString for bitfun_product_domains::miniapp::loopx::LoopxExecutionSuppor
             .unwrap()
             .to_string()
     }
+}
+
+#[test]
+fn resolved_upstream_summaries_are_detected_in_both_locales() {
+    assert!(task_summary_resolves_upstream(Some(
+        "Issue covered-upstream by #618 (merged 2026-08-25); no follow-up required."
+    )));
+    assert!(task_summary_resolves_upstream(Some(
+        "原始故障路径在 v2.0.3 中已消失，不开 PR，无需继续修复。"
+    )));
+    assert!(!task_summary_resolves_upstream(Some(
+        "Candidate evidence collected; implementation requires parent write approval."
+    )));
+    assert!(!task_summary_resolves_upstream(Some("  ")));
+    assert!(!task_summary_resolves_upstream(None));
+}
+
+#[test]
+fn repository_recovery_candidates_exclude_resolved_upstream_tasks() {
+    let repository = "github.com/owner/repo";
+    let mut task = LoopxTaskSnapshot {
+        task_id: "task-1".to_string(),
+        identity: LoopxTaskIdentity {
+            item: issue("owner", "repo", 515),
+            attempt: 1,
+            title: "t".to_string(),
+            description: String::new(),
+            state: LoopxRemoteItemState::Open,
+            labels: Vec::new(),
+        },
+        state: LoopxTaskState::RecoveryRequired,
+        ..LoopxTaskSnapshot::default()
+    };
+    assert!(decide_repository_recovery_candidate(&task, repository));
+
+    task.last_agent_summary =
+        Some("Issue covered_upstream by #618; no follow-up required.".to_string());
+    assert!(!decide_repository_recovery_candidate(&task, repository));
+
+    task.state = LoopxTaskState::Running;
+    task.last_agent_summary = None;
+    assert!(!decide_repository_recovery_candidate(&task, repository));
+
+    task.state = LoopxTaskState::RecoveryRequired;
+    assert!(!decide_repository_recovery_candidate(
+        &task,
+        "github.com/owner/other"
+    ));
+}
+
+#[test]
+fn recovery_reason_survives_a_persist_round_trip() {
+    let mut task = LoopxTaskSnapshot {
+        task_id: "task-1".to_string(),
+        state: LoopxTaskState::RecoveryRequired,
+        recovery_reason: Some("settlement_unverified".to_string()),
+        ..LoopxTaskSnapshot::default()
+    };
+    let json = serde_json::to_string(&task).expect("serialize");
+    assert!(json.contains("recoveryReason"));
+    let parsed: LoopxTaskSnapshot = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(
+        parsed.recovery_reason.as_deref(),
+        Some("settlement_unverified")
+    );
+
+    // Legacy payloads without the field deserialize with a None reason.
+    task.recovery_reason = None;
+    let legacy = serde_json::to_string(&LoopxTaskSnapshot {
+        task_id: "legacy".to_string(),
+        state: LoopxTaskState::Failed,
+        ..LoopxTaskSnapshot::default()
+    })
+    .expect("serialize legacy");
+    let parsed_legacy: LoopxTaskSnapshot =
+        serde_json::from_str(&legacy).expect("deserialize legacy");
+    assert_eq!(parsed_legacy.recovery_reason, None);
+}
+
+#[test]
+fn structured_summary_parses_valid_block_and_rejects_contract_violations() {
+    let valid = "本段完成。\n\n```loopx_summary_v1\n{\"issue_verdict\":\"needs_fix\",\"reproduction\":\"reproduced\",\"reproduction_evidence\":\"evidence/rep.md\",\"segment_kind\":\"evidence\",\"completed\":[\"收集完成\"],\"next_step\":\"实现修复\"}\n```\n";
+    let parsed = parse_structured_summary(Some(valid)).expect("valid block parses");
+    assert_eq!(
+        parsed.get("issue_verdict").and_then(|v| v.as_str()),
+        Some("needs_fix")
+    );
+
+    // already_fixed_upstream without fixed_by is a contract violation.
+    let missing_link = "```loopx_summary_v1\n{\"issue_verdict\":\"already_fixed_upstream\"}\n```";
+    assert_eq!(parse_structured_summary(Some(missing_link)), None);
+
+    // wont_fix without a reason is rejected.
+    let missing_reason = "```loopx_summary_v1\n{\"issue_verdict\":\"wont_fix\"}\n```";
+    assert_eq!(parse_structured_summary(Some(missing_reason)), None);
+
+    // reproduced without evidence is rejected.
+    let missing_evidence = "```loopx_summary_v1\n{\"issue_verdict\":\"needs_fix\",\"reproduction\":\"reproduced\"}\n```";
+    assert_eq!(parse_structured_summary(Some(missing_evidence)), None);
+
+    // Unknown enum values are rejected.
+    let unknown = "```loopx_summary_v1\n{\"issue_verdict\":\"maybe\",\"fixed_by\":\"x\"}\n```";
+    assert_eq!(parse_structured_summary(Some(unknown)), None);
+
+    // No block at all falls back to None.
+    assert_eq!(parse_structured_summary(Some("plain text only")), None);
+    assert_eq!(parse_structured_summary(None), None);
+}
+
+#[test]
+fn monitor_action_classification_covers_track_and_monitor_kinds() {
+    // The pinned v0.5.1 issue-fix workflow emits the merge-readiness tracker
+    // as `issue_fix_track_pr_merge_readiness`; the older watch family uses the
+    // `_monitor` suffix. Both are monitor-class for the host compatibility
+    // cadence and the UI "PR monitor waiting" projection.
+    assert!(is_loopx_monitor_action(
+        "issue_fix_track_pr_merge_readiness"
+    ));
+    assert!(is_loopx_monitor_action("issue_fix_pr_state_open_monitor"));
+    assert!(is_loopx_monitor_action("continuous_monitor"));
+    // Real work segments never classify as monitor-class.
+    assert!(!is_loopx_monitor_action(
+        "issue_fix_collect_candidate_evidence"
+    ));
+    assert!(!is_loopx_monitor_action("issue_fix_reuse_existing_pr"));
+    assert!(!is_loopx_monitor_action("issue_fix_implementation"));
+    assert!(!is_loopx_monitor_action(""));
+    assert!(!is_loopx_monitor_action("   "));
 }

@@ -300,6 +300,7 @@ mod tests {
     fn completed_tool_projects_small_result_facts() {
         let event = ToolEventData::Completed {
             identity: ToolEventIdentity::direct("tool-1", "Grep"),
+            params: None,
             result: serde_json::json!({ "total_matches": 12, "file_count": 3 }),
             result_for_assistant: None,
             image_attachments: None,

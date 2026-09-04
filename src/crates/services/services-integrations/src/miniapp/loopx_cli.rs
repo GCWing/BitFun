@@ -2635,6 +2635,31 @@ fn agent_shell_value(value: &str) -> String {
     }
 }
 
+const AGENT_SUMMARY_CONTRACT: &str = r#"End your final response with a fenced block holding exactly this JSON shape; it is the human-readable report of this segment. Fill human-facing values as plain self-contained sentences: never use internal codes or identifiers there (candidate numbers like C-1, todo ids, turn keys, effect ids, contract field names). Approval and gate state never goes into this block; the host approval card is the only surface for it. Omit optional fields that do not apply:
+
+```loopx_summary_v1
+{
+  "issue_verdict": "needs_fix | already_fixed_upstream | wont_fix | needs_info",
+  "fixed_by": "link to the upstream fix (required only when already_fixed_upstream)",
+  "wont_fix_reason": "duplicate_of:<#issue> | by_design | invalid (required only when wont_fix)",
+  "missing_info": ["what is missing"],
+  "reproduction": "reproduced | not_reproduced | not_applicable",
+  "reproduction_evidence": "link or path (required only when reproduced)",
+  "segment_kind": "evidence | route_decision | implementation | validation | delivery",
+  "completed": ["up to three plain sentences, each self-contained"],
+  "artifacts": ["links to evidence or outputs"],
+  "decision": {
+    "route": "the chosen approach as one complete plain sentence (no codes)",
+    "reason": "why this one",
+    "rejected": [ { "route": "...", "why": "..." } ]
+  },
+  "blockers": ["only obstacles you observed; approval matters never go here"],
+  "next_step": "one plain sentence that follows from the decision and completed items"
+}
+```
+
+Conditional rules: already_fixed_upstream requires fixed_by; wont_fix requires wont_fix_reason; needs_info requires a non-empty missing_info; reproduced requires reproduction_evidence. next_step must not introduce facts that are not in decision or completed. When a user gate is pending, skip decision and next_step — the host approval card carries it."#;
+
 fn render_agent_reentry_instruction(
     packet: &Value,
     command: &VerifiedLoopxCommand,
@@ -2702,8 +2727,53 @@ fn render_agent_reentry_instruction(
         ),
         None => format!("--turn-instance-id {}", agent_shell_value(turn_id)),
     };
+    // The typed quota guard resolves the scheduler execution context from the
+    // invocation flags. Without an explicit declaration the context is missing
+    // (`repair_scheduler_execution_context`, "no quota spend for scheduler
+    // context repair") and every spend is rejected fail-closed even when the
+    // durable writeback validated. The host's own quota guard declares
+    // `--runtime-profile outer_controller` for the same goal; the agent's spend
+    // must declare exactly the same boundary.
+    let goal_id_arg = format!(
+        "--goal-id {}",
+        agent_shell_value(
+            envelope
+                .get("goal_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        )
+    );
+    let agent_id_arg = format!(
+        "--agent-id {}",
+        agent_shell_value(
+            envelope
+                .get("agent_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        )
+    );
+    let spend_command = match binding {
+        Some(SettlementBinding::Todo { todo_id }) => format!(
+            "{cli_prefix} quota spend-slot {goal_id_arg} --slots 1 --source heartbeat --execute --todo-id {} --turn-instance-id {} {agent_id_arg} --runtime-profile outer_controller",
+            agent_shell_value(todo_id),
+            agent_shell_value(turn_id),
+        ),
+        Some(SettlementBinding::AutonomousReplan { obligation_id }) => format!(
+            "{cli_prefix} quota spend-slot {goal_id_arg} --slots 1 --source heartbeat --execute --replan-obligation-id {} --turn-instance-id {} {agent_id_arg} --runtime-profile outer_controller",
+            agent_shell_value(obligation_id),
+            agent_shell_value(turn_id),
+        ),
+        None => String::new(),
+    };
+    let spend_instruction = if spend_command.is_empty() {
+        "This turn has no settlement binding; do not spend quota.".to_string()
+    } else {
+        format!(
+            "After the writeback validates, run this exact quota spend command once:\n`{spend_command}`\nRun it verbatim: do not add, remove, or reorder flags, and do not substitute the todo or turn ids. If it returns a typed rejection naming `repair_scheduler_execution_context` or an advanced guard, stop and report the rejection verbatim; do not retry with modified arguments."
+        )
+    };
     Ok(format!(
-        "You are the BitFun Agent executing one bounded LoopX-controlled work segment.\n\nLoopX CLI prefix for this task: `{cli_prefix}`\nThe BitFun runner already evaluated this turn's fresh quota guard. Do not run another scheduler or create another worktree.\n\nFollow the JSON contract below as the source of truth:\n<loopx_turn_contract>\n{contract_json}\n</loopx_turn_contract>\n\nClaim the selected executable todo before write-capable work. Execute only the selected action in the current worktree. Validate the real postcondition with tools; a prose claim is not evidence. Then use the LoopX CLI prefix to complete, update, block, or defer the selected todo and create a successor only when concrete follow-up remains. Run the contract's refresh-state writeback with these exact identity flags: `{binding_flags}`. Spend quota only after validated durable writeback, using the same identity binding. BitFun owns wake, cancellation, UI projection, and scheduler application."
+        "You are the BitFun Agent executing one bounded LoopX-controlled work segment.\n\nLoopX CLI prefix for this task: `{cli_prefix}`\nThe BitFun runner already evaluated this turn's fresh quota guard. Do not run another scheduler or create another worktree.\n\nFollow the JSON contract below as the source of truth:\n<loopx_turn_contract>\n{contract_json}\n</loopx_turn_contract>\n\nClaim the selected executable todo before write-capable work. Execute only the selected action in the current worktree. Validate the real postcondition with tools; a prose claim is not evidence. Then use the LoopX CLI prefix to complete, update, block, or defer the selected todo and create a successor only when concrete follow-up remains. Run the contract's refresh-state writeback with these exact identity flags: `{binding_flags}`. {spend_instruction} BitFun owns wake, cancellation, UI projection, and scheduler application.\n\n{AGENT_SUMMARY_CONTRACT}"
     ))
 }
 
@@ -3177,6 +3247,15 @@ mod custom_runner_contract_tests {
         assert!(instruction.contains("Claim the selected executable todo"));
         assert!(instruction.contains("Approve publication"));
         assert!(instruction.contains("a prose claim is not evidence"));
+        // The typed quota spend command must carry the scheduler execution
+        // context declaration; without it every spend is rejected fail-closed
+        // (`repair_scheduler_execution_context`).
+        assert!(instruction.contains("quota spend-slot"));
+        assert!(instruction.contains("--goal-id"));
+        assert!(instruction.contains("goal-1"));
+        assert!(instruction.contains("--source heartbeat --execute"));
+        assert!(instruction.contains("--runtime-profile outer_controller"));
+        assert!(instruction.contains("--turn-instance-id"));
 
         let guard = quota_guard_args("goal-1", "agent-1", Some(&binding), "turn-1");
         assert!(guard.windows(2).any(|pair| pair == ["--todo-id", "todo-1"]));

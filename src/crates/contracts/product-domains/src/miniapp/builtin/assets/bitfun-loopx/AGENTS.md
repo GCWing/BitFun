@@ -92,13 +92,18 @@ re-entry instruction 必须稳定且轻量，不得缓存 todo 列表、cadence�
   Codex 专用 onboarding 分支，不代表 BitFun 模拟 Codex App。
 - scheduler hint 有数值时按数值调度；当前 outer-controller packet 只有 cadence label 时，
   使用代码中明确的兼容间隔。只有 packet 要求 ACK 时才按 packet 的 exact argv ACK。
-- PR 生命周期监控（`continuous_monitor` / `issue_fix_pr_state_*_monitor` todo）
-  由 LoopX packet 驱动、agent 在轮内执行；宿主不调用 `issue-fix pr-lifecycle`，
-  也不压缩 maintainer correction。宿主只把 turn plan envelope 的 selected todo
-  投影为任务快照 `currentTodo`（有界、非权威、Goal 终局清除），UI 据此区分
-  「PR 监控等待中」。当前 pin `v0.5.1` 不返回数值调度 hint（60s 兼容间隔）；
-  上游 ≥v0.5.x 的 monitor_wait 数值 cadence（[15,30,60] 分钟，宿主下限 15 分钟）
-  在升级 pin 后经既有 `scheduler_hint_ms` 路径自动生效。
+- PR 生命周期监控（`continuous_monitor` / `issue_fix_pr_state_*_monitor` /
+  `issue_fix_track_*` todo）由 LoopX packet 驱动、agent 在轮内执行；宿主不调用
+  `issue-fix pr-lifecycle`，也不压缩 maintainer correction。宿主只把 turn plan
+  envelope 的 selected todo 投影为任务快照 `currentTodo`（有界、非权威、Goal
+  终局清除），UI 据此区分「PR 监控等待中」。当前 pin `v0.5.1` 不返回数值调度
+  hint（60s 兼容间隔）；上游 ≥v0.5.x 的 monitor_wait 数值 cadence（[15,30,60] 分钟，
+  宿主下限 15 分钟）在升级 pin 后经既有 `scheduler_hint_ms` 路径自动生效。
+- v0.5.1 下 monitor 类 todo（`*_monitor` 与 `issue_fix_track_*`，见 policy.rs
+  `is_loopx_monitor_action`）即使投影 `RunNow`，宿主也按 15 分钟兼容下限把
+  re-check 驻留排队（锚点是该 goal 上一次 durable settlement 时间，不是新增宿主
+  收敛计数），期间让出 repository slot 给同仓库排队 issue；深度优先 sticky 续跑
+  对 monitor successor 不适用。该分类与 UI `isMonitorTodo` 镜像，修改需双侧同步。
 - runner 重启从 LoopX registry、host task snapshot 和 workspace readback 恢复，不能 replay
   transcript 重建控制状态。结果不确定时保留数据并进入 recovery，不自动重试外部副作用。
 
@@ -144,6 +149,26 @@ controller、environment DTO 或 UI。
   validator，以及 retry/resume/replay 不重复产生 effect 的证明。
 - persisted DTO 新字段必须有默认值；旧字段/旧 action 要宽容读取并明确降级，不能通过删除
   registry、task snapshot 或 worktree 来“修复”升级问题。
+
+## 设计原则：单一事实源，非必要不新增（用户要求，不可违背）
+
+新增任何功能、字段、按钮、面板之前，先确认现有实现是否已覆盖同一需求；能复用或派生的必须复用或派生。
+
+- **同一事实只允许在一个位置表达和展示**。不同按钮实现相似功能、不同位置显示同一任务状态，
+  必然产生联动同步负担，是 bug 的稳定来源：状态变化时两处必然失同步，或允许用户/模型在
+  两处选出矛盾组合。
+- **能从既有字段推导的信息不重复存储、不重复选择**，由消费端派生展示。新增字段前先过
+  "能否从现有字段推导或合并"检查；推导关系存在的两个字段必须合并为一个枚举，
+  支撑证据改为条件必填，由 schema 校验而非模型或用户自觉。
+- 实例（结构化汇报模板设计中的教训）：并列的 `issue_verdict`（要不要修）与
+  `upstream_status`（上游是否已修复）存在推导关系（"上游已修复"⟺"无需我方修复"），
+  必须合并为单枚举 + 条件必填的 `fixed_by` 链接，而不是让模型在两个字段里各选一次。
+- **人读字段禁止内部代号**。候选编号（C-1/C-2）、todo id、turn key、效果 id、字段名
+  （durable_writeback 之类）不得出现在结论/进展/决策/下一步等给人读的字段里；必须展开为
+  指代内容的普通句子（"在 dsh-plugin-desktop 内补兼容层"，而不是 "C-1"）。代号与机器
+  收据只存在于折叠的技术回执和 artifacts 链接里。
+- **可操作入口只保留一处**。批准/拒绝等按钮只存在于宿主投影的审批卡；汇报区严格只读，
+  需要人决策时只做文字指引（"见上方审批面板"），不渲染第二个按钮。
 
 ## 最高优先级：快速反馈迭代（用户要求，不可违背）
 

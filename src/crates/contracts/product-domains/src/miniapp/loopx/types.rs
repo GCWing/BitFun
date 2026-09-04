@@ -412,6 +412,14 @@ pub struct LoopxTaskSnapshot {
     /// that have not produced a final response yet.
     pub last_agent_summary: Option<String>,
     pub last_agent_summary_at: Option<i64>,
+    /// Parsed `loopx_summary_v1` block extracted from the latest agent summary.
+    /// None for legacy tasks or when the agent produced no valid block; the UI
+    /// falls back to the raw text in that case.
+    pub structured_summary: Option<serde_json::Value>,
+    /// Why the task currently needs recovery (host_restart, execution_failure,
+    /// settlement_unverified, repository_paused, manual_restore). Absent for
+    /// legacy records and for tasks that are not in RecoveryRequired.
+    pub recovery_reason: Option<String>,
     pub deadline_at: Option<i64>,
     pub retry_at: Option<i64>,
     pub error: Option<String>,
