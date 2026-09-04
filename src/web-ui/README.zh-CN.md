@@ -1,10 +1,10 @@
-# BitFun Web UI
+# OpenBitFun Web UI
 
 中文 | [English](./README.md)
 
 ## 概述
 
-本目录是 BitFun 的 **Web UI**（React + TypeScript）。同一份前端代码会被复用在：
+本目录是 OpenBitFun 的 **Web UI**（React + TypeScript）。同一份前端代码会被复用在：
 
 - **Desktop**：通过 **Tauri** 加载运行
 - **Server/Web**：构建为静态资源，由后端提供访问

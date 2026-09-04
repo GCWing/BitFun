@@ -436,7 +436,7 @@ impl ChatView {
         &mut self,
         session_id: &str,
         text: String,
-        workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
+        workspace_references: Vec<openbitfun_agent_runtime::sdk::AgentWorkspaceReference>,
     ) -> ComposerDraft {
         let restored = self.submitted_drafts.undo_with_mode(session_id, &text);
         let (mut draft, mode) =
@@ -531,7 +531,7 @@ impl ChatView {
 
     pub(crate) fn set_workspace_reference_results(
         &mut self,
-        entries: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReferenceSearchEntry>,
+        entries: Vec<openbitfun_agent_runtime::sdk::AgentWorkspaceReferenceSearchEntry>,
     ) {
         self.workspace_reference_popup.set_results(entries);
     }
@@ -560,7 +560,7 @@ impl ChatView {
             return false;
         };
         if drill_directory
-            && entry.kind == bitfun_agent_runtime::sdk::AgentWorkspaceReferenceKind::Directory
+            && entry.kind == openbitfun_agent_runtime::sdk::AgentWorkspaceReferenceKind::Directory
         {
             let replacement = format!("@{}/", entry.path);
             self.replace_workspace_reference_token(&query, &replacement, None, false);
@@ -576,7 +576,7 @@ impl ChatView {
         &mut self,
         query: &WorkspaceReferenceQuery,
         replacement: &str,
-        reference: Option<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
+        reference: Option<openbitfun_agent_runtime::sdk::AgentWorkspaceReference>,
         trailing_space: bool,
     ) {
         let removed = query.token_end.saturating_sub(query.token_start);

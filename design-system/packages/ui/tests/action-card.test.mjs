@@ -22,12 +22,12 @@ test("ActionCard keeps its native trigger and sibling actions independent", () =
   const triggerEnd = markup.indexOf("</button>");
   const siblingAction = markup.indexOf("<button", markup.indexOf("<button") + 1);
 
-  assert.match(markup, /data-bf-component="action-card"/);
+  assert.match(markup, /data-openbitfun-component="action-card"/);
   assert.match(markup, /data-selected="true"/);
   assert.match(markup, /data-size="md"/);
-  assert.match(markup, /data-bf-part="leading"/);
-  assert.match(markup, /data-bf-part="title">New session<\/span>/);
-  assert.match(markup, /data-bf-part="description">Start a conversation<\/span>/);
+  assert.match(markup, /data-openbitfun-part="leading"/);
+  assert.match(markup, /data-openbitfun-part="title">New session<\/span>/);
+  assert.match(markup, /data-openbitfun-part="description">Start a conversation<\/span>/);
   assert.equal((markup.match(/<button/g) ?? []).length, 3);
   assert.ok(triggerEnd < siblingAction);
 });
@@ -47,9 +47,9 @@ test("ActionCard disables its trigger and sibling actions as one contract", () =
 test("ActionCard styles use public action-card and semantic tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-control-action-card-sm-min-block-size/);
-  assert.match(styles, /--bf-control-action-card-leading-size/);
-  assert.match(styles, /--bf-color-action-neutral-surface-hover/);
-  assert.match(styles, /--bf-color-selection-surface/);
-  assert.match(styles, /--bf-color-focus-ring/);
+  assert.match(styles, /--openbitfun-control-action-card-sm-min-block-size/);
+  assert.match(styles, /--openbitfun-control-action-card-leading-size/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface-hover/);
+  assert.match(styles, /--openbitfun-color-selection-surface/);
+  assert.match(styles, /--openbitfun-color-focus-ring/);
 });

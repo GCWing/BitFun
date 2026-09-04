@@ -5,9 +5,9 @@ export const canvasTabOverflowAppearanceDescriptor: AppearanceSurfaceDescriptor 
     { id: 'root' }, { id: 'trigger' }, { id: 'badge' }, { id: 'itemTitle' },
   ],
   states: [
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'dirty', selector: { kind: 'self', suffix: '[data-bf-state~="dirty"]' } },
-    { id: 'deleted', selector: { kind: 'self', suffix: '[data-bf-state~="deleted"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'dirty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="dirty"]' } },
+    { id: 'deleted', selector: { kind: 'self', suffix: '[data-openbitfun-state~="deleted"]' } },
   ],
 };

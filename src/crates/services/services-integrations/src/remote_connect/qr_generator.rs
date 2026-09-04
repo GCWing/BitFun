@@ -89,7 +89,7 @@ mod tests {
             room_id: "room_123".to_string(),
             url: "https://relay.example.com".to_string(),
             device_id: "device_123".to_string(),
-            device_name: "BitFun Desktop".to_string(),
+            device_name: "OpenBitFun Desktop".to_string(),
             public_key: "public_key_value".to_string(),
             version: 1,
         };
@@ -105,7 +105,7 @@ mod tests {
             room_id: "room_123".to_string(),
             url: "https://relay.example.com".to_string(),
             device_id: "device_123".to_string(),
-            device_name: "BitFun Desktop".to_string(),
+            device_name: "OpenBitFun Desktop".to_string(),
             public_key: "public_key_value".to_string(),
             version: 1,
         };

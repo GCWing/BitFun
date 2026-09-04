@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { FileIcon } from 'lucide-react';
 import type { FileContext, ValidationResult, RenderOptions } from '../../../types/context';
@@ -103,21 +103,21 @@ export class FileCardRenderer implements ContextCardRenderer<'file'> {
     const { compact = false, interactive = true } = options || {};
     
     return (
-      <div className={`bitfun-context-card bitfun-context-card--file ${compact ? 'bitfun-context-card--compact' : ''}`}>
-        <div className="bitfun-context-card__icon">
+      <div className={`openbitfun-context-card openbitfun-context-card--file ${compact ? 'openbitfun-context-card--compact' : ''}`}>
+        <div className="openbitfun-context-card__icon">
           <FileIcon size={compact ? 16 : 20} />
         </div>
         
-        <div className="bitfun-context-card__content">
-          <div className="bitfun-context-card__title">
+        <div className="openbitfun-context-card__content">
+          <div className="openbitfun-context-card__title">
             {context.fileName}
           </div>
           
           {!compact && (
-            <div className="bitfun-context-card__subtitle">
+            <div className="openbitfun-context-card__subtitle">
               {context.relativePath || context.filePath}
               {context.fileSize && (
-                <span className="bitfun-context-card__meta">
+                <span className="openbitfun-context-card__meta">
                   {' • '}{this.formatFileSize(context.fileSize)}
                 </span>
               )}
@@ -126,7 +126,7 @@ export class FileCardRenderer implements ContextCardRenderer<'file'> {
         </div>
         
         {interactive && (
-          <div className="bitfun-context-card__actions">
+          <div className="openbitfun-context-card__actions">
             {this.renderValidationIndicator(context)}
           </div>
         )}
@@ -144,8 +144,8 @@ export class FileCardRenderer implements ContextCardRenderer<'file'> {
     
     
     return (
-      <div className="bitfun-context-card__status">
-        <Icon name="check-circle" size="md" className="bitfun-context-card__status-icon--success" />
+      <div className="openbitfun-context-card__status">
+        <Icon name="check-circle" size="md" className="openbitfun-context-card__status-icon--success" />
       </div>
     );
   }

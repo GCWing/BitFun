@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::agents::{
+use openbitfun_agent_runtime::agents::{
     builtin_agent_definition_specs, default_model_id_for_builtin_agent,
     is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
     mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
@@ -9,7 +9,7 @@ use bitfun_agent_runtime::agents::{
     SubagentStateReason, SubagentVisibilityPolicy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
     SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
 };
-use bitfun_agent_runtime::deep_review::canonical_review_worker_agent_type;
+use openbitfun_agent_runtime::deep_review::canonical_review_worker_agent_type;
 
 #[test]
 fn visibility_policy_supports_public_restricted_hidden_and_denied_parents() {

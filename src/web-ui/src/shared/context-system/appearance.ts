@@ -18,10 +18,10 @@ export const contextListAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'dropZone' },
   ],
   states: [
-    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
-    { id: 'valid', selector: { kind: 'self', suffix: '[data-bf-state~="valid"]' } },
-    { id: 'invalid', selector: { kind: 'self', suffix: '[data-bf-state~="invalid"]' } },
-    { id: 'dragOver', selector: { kind: 'self', suffix: '[data-bf-state~="drag-over"]' } },
-    { id: 'canAccept', selector: { kind: 'self', suffix: '[data-bf-state~="can-accept"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } },
+    { id: 'valid', selector: { kind: 'self', suffix: '[data-openbitfun-state~="valid"]' } },
+    { id: 'invalid', selector: { kind: 'self', suffix: '[data-openbitfun-state~="invalid"]' } },
+    { id: 'dragOver', selector: { kind: 'self', suffix: '[data-openbitfun-state~="drag-over"]' } },
+    { id: 'canAccept', selector: { kind: 'self', suffix: '[data-openbitfun-state~="can-accept"]' } },
   ],
 };

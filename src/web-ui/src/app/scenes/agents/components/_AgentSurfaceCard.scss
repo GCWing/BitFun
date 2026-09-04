@@ -4,32 +4,32 @@
   width: 100%;
   min-width: 0;
   height: 148px;
-  border: 1px solid var(--bf-color-border-default);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-raised);
-  box-shadow: var(--bf-shadow-xs);
+  border: 1px solid var(--openbitfun-color-border-default);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-raised);
+  box-shadow: var(--openbitfun-shadow-xs);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  animation: agent-surface-card-in 0.28s var(--bf-motion-easing-decelerate) both;
+  animation: agent-surface-card-in 0.28s var(--openbitfun-motion-easing-decelerate) both;
   @include surface-stagger.animation-delay(60ms);
   transition:
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate),
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
     transform: translateY(-1px);
-    border-color: var(--bf-color-field-border-hover);
-    background: var(--bf-color-surface-subtle);
-    box-shadow: var(--bf-shadow-sm);
+    border-color: var(--openbitfun-color-field-border-hover);
+    background: var(--openbitfun-color-surface-subtle);
+    box-shadow: var(--openbitfun-shadow-sm);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-color-content-primary);
+    outline: 2px solid var(--openbitfun-color-content-primary);
     outline-offset: 2px;
   }
 }
@@ -37,8 +37,8 @@
 @mixin agent-surface-footer() {
   box-sizing: border-box;
   min-height: 34px;
-  border-radius: var(--bf-radius-base);
-  background: var(--bf-color-surface-subtle);
+  border-radius: var(--openbitfun-radius-base);
+  background: var(--openbitfun-color-surface-subtle);
   overflow: hidden;
   position: relative;
   z-index: 1;
@@ -52,7 +52,7 @@
   height: 68px;
   background-image: radial-gradient(
     circle,
-    var(--bf-color-border-default) 0 1px,
+    var(--openbitfun-color-border-default) 0 1px,
     transparent 1.25px
   );
   background-position: center top;

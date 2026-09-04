@@ -1,4 +1,4 @@
-//! Full-viewport BitFun account panel (Login / Sync choice / Account status).
+//! Full-viewport OpenBitFun account panel (Login / Sync choice / Account status).
 //!
 //! Opened by `/login`. When already logged in, shows account info and sync
 //! progress instead of the credential form.
@@ -13,7 +13,7 @@ use ratatui::{
 };
 
 use crate::ui::theme::{StyleKind, Theme};
-use bitfun_product_domains::account::{
+use openbitfun_product_domains::account::{
     AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
 };
 
@@ -456,7 +456,7 @@ impl LoginFormState {
         let outer = Block::default()
             .borders(Borders::ALL)
             .border_style(theme.style(StyleKind::Primary))
-            .title(" BitFun Account Login ")
+            .title(" OpenBitFun Account Login ")
             .title_alignment(Alignment::Center);
         let inner = outer.inner(area);
         frame.render_widget(outer, area);
@@ -605,7 +605,7 @@ impl LoginFormState {
         let outer = Block::default()
             .borders(Borders::ALL)
             .border_style(theme.style(StyleKind::Primary))
-            .title(" BitFun Account ")
+            .title(" OpenBitFun Account ")
             .title_alignment(Alignment::Center);
         let inner = outer.inner(area);
         frame.render_widget(outer, area);

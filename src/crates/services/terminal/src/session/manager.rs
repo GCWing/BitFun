@@ -1631,8 +1631,8 @@ mod tests {
 
     #[test]
     fn stream_output_delta_returns_utf8_suffix_without_cutting_chars() {
-        let mut last_sent_output = "你好！我是 Bitfun，".to_string();
-        let output = "你好！我是 Bitfun，可以帮助你完成软件工程任务。".to_string();
+        let mut last_sent_output = "你好！我是 OpenBitFun，".to_string();
+        let output = "你好！我是 OpenBitFun，可以帮助你完成软件工程任务。".to_string();
 
         let delta = compute_stream_output_delta(&mut last_sent_output, &output);
 
@@ -1643,7 +1643,7 @@ mod tests {
     #[test]
     fn stream_output_delta_resets_when_previous_snapshot_is_not_prefix() {
         let mut last_sent_output = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx".to_string();
-        let output = "你好！我是 Bitfun，可以帮助你完成软件工程任务。有什么我可以帮你的吗？";
+        let output = "你好！我是 OpenBitFun，可以帮助你完成软件工程任务。有什么我可以帮你的吗？";
 
         let delta = compute_stream_output_delta(&mut last_sent_output, output);
 

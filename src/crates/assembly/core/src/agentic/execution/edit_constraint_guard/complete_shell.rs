@@ -1,7 +1,7 @@
 //! Complete ExecCommand preflight. Interactive stdin and Git retain their legacy
 //! entry points; they are not assumed to contain complete shell source.
 use super::*;
-use bitfun_runtime_ports::WorkspacePathKind;
+use openbitfun_runtime_ports::WorkspacePathKind;
 use tool_runtime::shell_analysis::{analyze, AnalysisStatus, FileOperation, Span};
 
 pub(super) fn active_state(context: &ToolUseContext) -> Option<EditConstraintState> {
@@ -267,7 +267,7 @@ fn reject(
 mod tests {
     use super::*;
     use crate::agentic::WorkspaceBinding;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         ToolRuntimeHandles, WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry,
         WorkspaceFileSystem, WorkspaceServices, WorkspaceShell,
     };

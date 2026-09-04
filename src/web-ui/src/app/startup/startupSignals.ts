@@ -1,1 +1,1 @@
-export const STARTUP_OVERLAY_HIDDEN_EVENT = 'bitfun:startup-overlay-hidden';
+export const STARTUP_OVERLAY_HIDDEN_EVENT = 'openbitfun:startup-overlay-hidden';

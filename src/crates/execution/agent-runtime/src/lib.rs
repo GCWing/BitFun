@@ -1,7 +1,7 @@
 //! Agent runtime owner contracts.
 //!
 //! This crate owns runtime decisions that can be built and tested without
-//! depending on `bitfun-core` concrete session or scheduler lifecycle.
+//! depending on `openbitfun-core` concrete session or scheduler lifecycle.
 
 #[cfg(feature = "agent-runtime")]
 pub mod agents;

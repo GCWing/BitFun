@@ -1,9 +1,9 @@
-//! PageDeploy tool — deploy a saved BitFun Page version to production.
+//! PageDeploy tool — deploy a saved OpenBitFun Page version to production.
 
 use crate::agentic::tools::account_login_capability::account_login_available;
 use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolUseContext};
 use crate::agentic::tools::page_deploy_host::invoke_page_deploy;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -27,11 +27,11 @@ impl Tool for PageDeployTool {
         "PageDeploy"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(
-            r#"Switch the production pointer of an existing BitFun Page to a previously saved version_id (rollback or promote a prior version).
+            r#"Switch the production pointer of an existing OpenBitFun Page to a previously saved version_id (rollback or promote a prior version).
 
-Requires a logged-in BitFun account. This tool is only available after account login. To create or update page content and publish, use PagePublish instead. Existing versions can also be reviewed from the Pages scene.
+Requires a logged-in OpenBitFun account. This tool is only available after account login. To create or update page content and publish, use PagePublish instead. Existing versions can also be reviewed from the Pages scene.
 
 Input: slug (page path id), version_id (immutable saved version from a prior PagePublish). Returns absolute `url` plus url_path / deployed_version_id. Public links can be shared directly. Private and relay links must be opened or copied through the Pages scene/tool card so the browser receives a scoped one-time access handoff.
 
@@ -43,7 +43,7 @@ Preview a version at /p/{username}/{slug}/@v/{version_id}."#
     }
 
     fn short_description(&self) -> String {
-        "Deploy a saved BitFun Page version to production.".to_string()
+        "Deploy a saved OpenBitFun Page version to production.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -72,7 +72,7 @@ Preview a version at /p/{username}/{slug}/@v/{version_id}."#
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let slug = input
             .get("slug")
             .and_then(Value::as_str)
@@ -117,10 +117,10 @@ Preview a version at /p/{username}/{slug}/@v/{version_id}."#
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if !account_login_available() {
-            return Err(BitFunError::tool(
-                "PageDeploy requires a logged-in BitFun account".to_string(),
+            return Err(OpenBitFunError::tool(
+                "PageDeploy requires a logged-in OpenBitFun account".to_string(),
             ));
         }
 
@@ -129,19 +129,19 @@ Preview a version at /p/{username}/{slug}/@v/{version_id}."#
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .ok_or_else(|| BitFunError::tool("slug is required".to_string()))?
+            .ok_or_else(|| OpenBitFunError::tool("slug is required".to_string()))?
             .to_string();
         let version_id = input
             .get("version_id")
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .ok_or_else(|| BitFunError::tool("version_id is required".to_string()))?
+            .ok_or_else(|| OpenBitFunError::tool("version_id is required".to_string()))?
             .to_string();
 
         let result = invoke_page_deploy(slug.clone(), version_id.clone())
             .await
-            .map_err(BitFunError::tool)?;
+            .map_err(OpenBitFunError::tool)?;
 
         let url = result
             .get("url")
@@ -171,15 +171,15 @@ fn deploy_result_for_assistant(
 ) -> String {
     if visibility != "public" {
         return format!(
-            "Deployed BitFun Page '{slug}' version '{version_id}' with {visibility} visibility. Open or copy it from the Pages scene/tool card so BitFun can create a scoped browser-access link; do not share the raw Page URL."
+            "Deployed OpenBitFun Page '{slug}' version '{version_id}' with {visibility} visibility. Open or copy it from the Pages scene/tool card so OpenBitFun can create a scoped browser-access link; do not share the raw Page URL."
         );
     }
     // Trailing space after URL keeps chat linkifiers from eating the next char.
     if url.is_empty() {
-        format!("Deployed public BitFun Page '{slug}' version '{version_id}' to production.")
+        format!("Deployed public OpenBitFun Page '{slug}' version '{version_id}' to production.")
     } else {
         format!(
-            "Deployed public BitFun Page '{slug}' version '{version_id}'. Production URL: {url} \n\
+            "Deployed public OpenBitFun Page '{slug}' version '{version_id}'. Production URL: {url} \n\
              Share this full absolute URL with the user, and keep a trailing space after the URL."
         )
     }
@@ -205,7 +205,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: Default::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 

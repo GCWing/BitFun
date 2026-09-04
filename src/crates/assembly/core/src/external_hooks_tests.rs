@@ -2,10 +2,10 @@ use crate::external_hooks::{
     external_hook_catalog_snapshot, resolve_hook_project_topology,
     WorkspaceExternalHookCatalogService,
 };
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookProviderIdentity, ExternalHookProviderSnapshot, ExternalHookSourceProvider,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, ExternalSourceOperationErrorCode,
     ExternalSourceProviderError,
 };

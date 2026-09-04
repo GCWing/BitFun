@@ -8,11 +8,11 @@ import { openWorkspace } from '../helpers/workspace-helper';
 import { saveElementScreenshot, saveStepScreenshot } from '../helpers/screenshot-utils';
 
 const NAV_ENTRY_SELECTORS = [
-  '.bitfun-nav-panel__item',
-  '.bitfun-nav-panel__workspace-item-name-btn',
-  '.bitfun-nav-panel__inline-item',
-  '.bitfun-nav-panel__workspace-create-main',
-  '.bitfun-nav-panel__miniapp-entry',
+  '.openbitfun-nav-panel__item',
+  '.openbitfun-nav-panel__workspace-item-name-btn',
+  '.openbitfun-nav-panel__inline-item',
+  '.openbitfun-nav-panel__workspace-create-main',
+  '.openbitfun-nav-panel__miniapp-entry',
 ];
 
 async function getNavigationEntries() {
@@ -53,7 +53,7 @@ describe('L0 Navigation Panel', () => {
       await browser.pause(1000);
 
       // Use the correct selector from NavPanel.tsx
-      const navPanel = await $('.bitfun-nav-panel');
+      const navPanel = await $('.openbitfun-nav-panel');
       const navExists = await navPanel.isExisting();
 
       console.log('[L0] Navigation panel found:', navExists);
@@ -78,7 +78,7 @@ describe('L0 Navigation Panel', () => {
       expect(hasWorkspace).toBe(true);
 
       // Use correct selector from MainNav.tsx
-      const sections = await $('.bitfun-nav-panel__sections');
+      const sections = await $('.openbitfun-nav-panel__sections');
       const sectionsExist = await sections.isExisting();
 
       console.log('[L0] Navigation sections found:', sectionsExist);
@@ -91,11 +91,11 @@ describe('L0 Navigation Panel', () => {
       }
       expect(hasWorkspace).toBe(true);
 
-      const assistantGroups = await browser.$$('.bitfun-nav-panel__assistant-item');
+      const assistantGroups = await browser.$$('.openbitfun-nav-panel__assistant-item');
       expect(assistantGroups.length).toBeGreaterThan(0);
 
       for (const assistantGroup of assistantGroups) {
-        expect(await assistantGroup.$('.bitfun-nav-panel__assistant-item-badge').isExisting()).toBe(false);
+        expect(await assistantGroup.$('.openbitfun-nav-panel__assistant-item-badge').isExisting()).toBe(false);
       }
 
       await saveStepScreenshot('l0-navigation-assistants-without-primary-badge');
@@ -149,7 +149,7 @@ describe('L0 Navigation Panel', () => {
       expect(await viewToggle.getAttribute('aria-pressed')).toBe('true');
       expect(await viewToggle.$('svg[data-session-view-icon="all"]').isDisplayed()).toBe(true);
       expect(await viewToggle.$('svg[data-session-view-icon="grouped"]').isExisting()).toBe(false);
-      expect(await $('.bitfun-nav-panel__workspace-all-sessions-header').isExisting()).toBe(false);
+      expect(await $('.openbitfun-nav-panel__workspace-all-sessions-header').isExisting()).toBe(false);
       await saveElementScreenshot(
         '[data-testid="nav-workspace-session-view-toggle"]',
         'l0-session-view-all-icon',
@@ -170,8 +170,8 @@ describe('L0 Navigation Panel', () => {
       await activeGroup.waitForDisplayed({ timeout: 10000 });
 
       const groupIcon = await activeGroup.$(
-        '[data-bf-part="icon"] [data-bf-component="icon"], '
-        + '[data-bf-part="icon"] svg.lucide-network',
+        '[data-openbitfun-part="icon"] [data-openbitfun-component="icon"], '
+        + '[data-openbitfun-part="icon"] svg.lucide-network',
       );
       await groupIcon.waitForDisplayed({ timeout: 10000 });
       await saveElementScreenshot(
@@ -243,9 +243,9 @@ describe('L0 Navigation Panel', () => {
       expect(hasWorkspace).toBe(true);
 
       const activeGroup = await $('[data-testid="nav-workspace-item"][data-workspace-active="true"]');
-      const groupLabel = await activeGroup.$('[data-bf-part="label"]');
+      const groupLabel = await activeGroup.$('[data-openbitfun-part="label"]');
       const sessionLabel = await activeGroup.$(
-        '[data-testid="nav-session-item"][data-session-level="0"] .bitfun-nav-panel__inline-item-label',
+        '[data-testid="nav-session-item"][data-session-level="0"] .openbitfun-nav-panel__inline-item-label',
       );
       await groupLabel.waitForDisplayed({ timeout: 10000 });
       await sessionLabel.waitForDisplayed({ timeout: 10000 });
@@ -285,9 +285,9 @@ describe('L0 Navigation Panel', () => {
         const session = group?.querySelector<HTMLElement>(
           '[data-testid="nav-session-item"][data-session-active="true"]',
         );
-        const groupLabel = card?.querySelector<HTMLElement>('[data-bf-part="label"]');
+        const groupLabel = card?.querySelector<HTMLElement>('[data-openbitfun-part="label"]');
         const sessionLabel = session?.querySelector<HTMLElement>(
-          '.bitfun-nav-panel__inline-item-label',
+          '.openbitfun-nav-panel__inline-item-label',
         );
 
         if (!card || !session || !groupLabel || !sessionLabel) {
@@ -297,7 +297,7 @@ describe('L0 Navigation Panel', () => {
         const cardRect = card.getBoundingClientRect();
         const sessionRect = session.getBoundingClientRect();
         const selectedBackgroundProbe = document.createElement('span');
-        selectedBackgroundProbe.style.backgroundColor = 'var(--bf-color-action-quiet-hover)';
+        selectedBackgroundProbe.style.backgroundColor = 'var(--openbitfun-color-action-quiet-hover)';
         session.append(selectedBackgroundProbe);
         const selectedBackground = window.getComputedStyle(selectedBackgroundProbe).backgroundColor;
         selectedBackgroundProbe.remove();
@@ -350,7 +350,7 @@ describe('L0 Navigation Panel', () => {
         const parent = document.querySelector<HTMLElement>('[data-testid="agent-skill-entry"]');
         const parentLabel = parent?.querySelector<HTMLElement>(':scope > span:last-child');
         const childIcons = Array.from(document.querySelectorAll<HTMLElement>(
-          '[data-testid="agent-skill-tabs"] .bitfun-nav-panel__top-action-icon-slot > svg, [data-testid="agent-skill-tabs"] .bitfun-nav-panel__top-action-icon-slot > [data-bf-component="icon"]',
+          '[data-testid="agent-skill-tabs"] .openbitfun-nav-panel__top-action-icon-slot > svg, [data-testid="agent-skill-tabs"] .openbitfun-nav-panel__top-action-icon-slot > [data-openbitfun-component="icon"]',
         ));
         if (!parentLabel || childIcons.length === 0) {
           return null;
@@ -380,7 +380,7 @@ describe('L0 Navigation Panel', () => {
 
       const assistantManager = await $('[data-testid="nav-assistant-manager"]');
       const taskBoard = await $('[data-testid="nav-todos-btn"]');
-      const miniApps = await $('.bitfun-nav-panel__miniapp-entry');
+      const miniApps = await $('.openbitfun-nav-panel__miniapp-entry');
       await assistantManager.waitForDisplayed({ timeout: 10000 });
       await taskBoard.waitForDisplayed({ timeout: 10000 });
       await miniApps.waitForDisplayed({ timeout: 10000 });
@@ -388,12 +388,12 @@ describe('L0 Navigation Panel', () => {
       expect(await assistantManager.getLocation('y')).toBeLessThan(await taskBoard.getLocation('y'));
       expect(await taskBoard.getLocation('y')).toBeLessThan(await miniApps.getLocation('y'));
       expect(['任务看板', 'Task Board', '任務看板']).toContain((await taskBoard.getText()).trim());
-      expect(await $('[data-bf-part="footer"] [data-testid="nav-todos-btn"]').isExisting()).toBe(false);
+      expect(await $('[data-openbitfun-part="footer"] [data-testid="nav-todos-btn"]').isExisting()).toBe(false);
 
       await taskBoard.click();
       const todosScene = await $('[data-testid="todos-scene"]');
       await todosScene.waitForDisplayed({ timeout: 10000 });
-      const taskBoardTitle = await todosScene.$('.bf-todos__title');
+      const taskBoardTitle = await todosScene.$('.openbitfun-todos__title');
       expect(await taskBoard.getAttribute('aria-pressed')).toBe('true');
       expect(await todosScene.isDisplayed()).toBe(true);
       expect(['任务看板', 'Task Board', '任務看板']).toContain((await taskBoardTitle.getText()).trim());
@@ -411,8 +411,8 @@ describe('L0 Navigation Panel', () => {
       expect(await assistantManager.getLocation('y')).toBeLessThan(await taskBoard.getLocation('y'));
 
       await assistantManager.click();
-      const assistantScene = await $('[data-bf-scene="assistant"][data-bf-part="root"]');
-      const assistantGallery = await $('[data-bf-component="nursery-gallery"][data-bf-part="root"]');
+      const assistantScene = await $('[data-openbitfun-scene="assistant"][data-openbitfun-part="root"]');
+      const assistantGallery = await $('[data-openbitfun-component="nursery-gallery"][data-openbitfun-part="root"]');
       await assistantScene.waitForDisplayed({ timeout: 10000 });
       await assistantGallery.waitForDisplayed({ timeout: 10000 });
       expect(await assistantScene.isDisplayed()).toBe(true);
@@ -452,7 +452,7 @@ describe('L0 Navigation Panel', () => {
       expect(['洞察', 'Insights'].some(label => menuText.includes(label))).toBe(false);
       await saveStepScreenshot('l0-navigation-settings-utility-list');
 
-      const backdrop = await $('.bitfun-nav-panel__footer-backdrop');
+      const backdrop = await $('.openbitfun-nav-panel__footer-backdrop');
       await backdrop.click();
       await backdrop.waitForExist({ reverse: true, timeout: 2000 });
     });
@@ -464,11 +464,11 @@ describe('L0 Navigation Panel', () => {
       expect(hasWorkspace).toBe(true);
 
       const dividerLayout = await browser.execute(() => {
-        const panel = document.querySelector<HTMLElement>('.bitfun-nav-panel');
-        const sections = document.querySelector<HTMLElement>('.bitfun-nav-panel__sections');
-        const topActions = document.querySelector<HTMLElement>('.bitfun-nav-panel__top-actions');
-        const stickyHeader = document.querySelector<HTMLElement>('.bitfun-nav-panel__sticky-section-header');
-        const footer = document.querySelector<HTMLElement>('.bitfun-nav-panel__footer');
+        const panel = document.querySelector<HTMLElement>('.openbitfun-nav-panel');
+        const sections = document.querySelector<HTMLElement>('.openbitfun-nav-panel__sections');
+        const topActions = document.querySelector<HTMLElement>('.openbitfun-nav-panel__top-actions');
+        const stickyHeader = document.querySelector<HTMLElement>('.openbitfun-nav-panel__sticky-section-header');
+        const footer = document.querySelector<HTMLElement>('.openbitfun-nav-panel__footer');
         if (!panel || !sections || !topActions || !stickyHeader || !footer) {
           return null;
         }
@@ -525,11 +525,11 @@ describe('L0 Navigation Panel', () => {
       expect(hasWorkspace).toBe(true);
 
       const boundaryLayout = await browser.execute(() => {
-        const navArea = document.querySelector<HTMLElement>('.bitfun-workspace-body__nav-area');
-        const panel = document.querySelector<HTMLElement>('.bitfun-nav-panel');
-        const sections = document.querySelector<HTMLElement>('.bitfun-nav-panel__sections');
-        const divider = document.querySelector<HTMLElement>('.bitfun-workspace-body__nav-divider');
-        const sceneViewport = document.querySelector<HTMLElement>('.bitfun-scene-viewport');
+        const navArea = document.querySelector<HTMLElement>('.openbitfun-workspace-body__nav-area');
+        const panel = document.querySelector<HTMLElement>('.openbitfun-nav-panel');
+        const sections = document.querySelector<HTMLElement>('.openbitfun-nav-panel__sections');
+        const divider = document.querySelector<HTMLElement>('.openbitfun-workspace-body__nav-divider');
+        const sceneViewport = document.querySelector<HTMLElement>('.openbitfun-scene-viewport');
         if (!navArea || !panel || !sections || !divider || !sceneViewport) {
           return null;
         }

@@ -4,7 +4,7 @@
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
-pub use bitfun_product_domains::agent_catalog::SubagentSummary;
+pub use openbitfun_product_domains::agent_catalog::SubagentSummary;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "rpc", derive(JsonRpcRequest))]

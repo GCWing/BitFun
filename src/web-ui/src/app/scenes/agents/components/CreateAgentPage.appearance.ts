@@ -11,8 +11,8 @@ export const createAgentPageAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'contextPreview' }, { id: 'prompt' },
   ],
   states: [
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
   ],
 };

@@ -55,9 +55,9 @@ describe('Runtime settings information architecture', () => {
     const source = readSource('./RuntimeSettingsPages.tsx');
     const styles = readSource('./RuntimeSettingsPages.scss');
 
-    expect(source).toContain('className="bitfun-runtime-settings__pet-gallery"');
+    expect(source).toContain('className="openbitfun-runtime-settings__pet-gallery"');
     expect(source).toContain('data-testid="companion-pet-card"');
-    expect(source).toContain('bitfun-runtime-settings__pet-selected-mark');
+    expect(source).toContain('openbitfun-runtime-settings__pet-selected-mark');
     expect(source).toContain('bodySurface={false}');
     expect(source).toContain('const hasLoadedPageDataRef = useRef(false);');
     expect(source).toContain('const reloadCompanionPets = useCallback(async () => {');
@@ -67,16 +67,16 @@ describe('Runtime settings information architecture', () => {
     expect(source).not.toContain('companionPetsLoading');
     expect(source).not.toContain('features.pet.refresh');
     expect(source).not.toContain('companionPetListExpanded');
-    expect(source).not.toContain('bitfun-runtime-settings__pet-expand-button');
-    expect(source).not.toContain('bitfun-runtime-settings__pet-preview-popover');
+    expect(source).not.toContain('openbitfun-runtime-settings__pet-expand-button');
+    expect(source).not.toContain('openbitfun-runtime-settings__pet-preview-popover');
     expect(source).not.toContain('aria-expanded=');
     expect(styles).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
     expect(styles).toContain('&__pet-card-preview');
     expect(styles).toContain('&__pet-selected-mark');
     expect(styles).toContain('border: 1px solid transparent;');
-    expect(styles).toContain('&__pet-card:hover,\n  &__pet-card:focus-within {\n    border-color: var(--bf-color-border-default);');
+    expect(styles).toContain('&__pet-card:hover,\n  &__pet-card:focus-within {\n    border-color: var(--openbitfun-color-border-default);');
     expect(styles).not.toContain('&__pet-preview-popover');
-    expect(styles).toContain(":root[data-bf-appearance-mode='light'] &");
+    expect(styles).toContain(":root[data-openbitfun-appearance-mode='light'] &");
   });
 
   it('uses the app confirmation owner before deleting an imported pet', () => {
@@ -91,11 +91,11 @@ describe('Runtime settings information architecture', () => {
     const source = readSource('./RuntimeSettingsPages.tsx');
     const styles = readSource('./RuntimeSettingsPages.scss');
 
-    expect(source).toContain('className="bitfun-runtime-settings__platform-note-icon"');
-    expect(source).toContain('className="bitfun-runtime-settings__platform-note-copy"');
+    expect(source).toContain('className="openbitfun-runtime-settings__platform-note-icon"');
+    expect(source).toContain('className="openbitfun-runtime-settings__platform-note-copy"');
     expect(source).not.toContain("padding: '8px 0 4px'");
-    expect(styles).toContain('padding: var(--bf-space-3) var(--bf-space-5);');
-    expect(styles).toContain('border-top: 1px solid var(--bf-component-config-page-divider);');
-    expect(styles).toContain('padding-inline: var(--bf-space-4);');
+    expect(styles).toContain('padding: var(--openbitfun-space-3) var(--openbitfun-space-5);');
+    expect(styles).toContain('border-top: 1px solid var(--openbitfun-component-config-page-divider);');
+    expect(styles).toContain('padding-inline: var(--openbitfun-space-4);');
   });
 });

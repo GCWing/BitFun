@@ -73,7 +73,7 @@ describe('extractVoiceTaskSummary', () => {
 
   it('provides a stable fallback when the task has no final text', () => {
     expect(extractVoiceTaskSummary(sessionWithItems([])))
-      .toBe('BitFun completed the task without a text response.');
+      .toBe('OpenBitFun completed the task without a text response.');
   });
 
   it('extracts only completed public text while a task is running', () => {
@@ -196,20 +196,20 @@ describe('voice task conclusion', () => {
     const conclusion = summarizeVoiceTaskConclusion([
       '我已经通读了项目的 README.md 和 README.zh-CN.md（项目自述是最权威的定位来源），下面是整理好的介绍。',
       '',
-      '## BitFun 项目介绍',
+      '## OpenBitFun 项目介绍',
       '',
-      'BitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。',
+      'OpenBitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。',
       '它支持编码、办公和桌面执行（包括浏览器、终端与文件系统）。',
-      'BitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。',
+      'OpenBitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。',
     ].join('\n'));
 
     expect(conclusion).toBe(
-      'BitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。'
+      'OpenBitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。'
       + '它支持编码、办公和桌面执行包括浏览器、终端与文件系统。',
     );
     expect(conclusion).not.toMatch(/[()（）]/);
     expect(conclusion).not.toContain('README.md');
-    expect(conclusion.match(/BitFun 是一个桌面 AI Agent/g)).toHaveLength(1);
+    expect(conclusion.match(/OpenBitFun 是一个桌面 AI Agent/g)).toHaveLength(1);
   });
 
   it('returns an empty conclusion when no final public text exists', () => {

@@ -1,12 +1,12 @@
 [package]
-name = "bitfun-page-function-runtime"
-version = "0.2.19"
-authors = ["BitFun Team"]
+name = "openbitfun-page-function-runtime"
+version = "1.0.0"
+authors = ["OpenBitFun Team"]
 edition = "2021"
-description = "Embedded JS Page Function runtime for BitFun Pages (rquickjs)"
+description = "Embedded JS Page Function runtime for OpenBitFun Pages (rquickjs)"
 
 [lib]
-name = "bitfun_page_function_runtime"
+name = "openbitfun_page_function_runtime"
 path = "src/lib.rs"
 
 [dependencies]

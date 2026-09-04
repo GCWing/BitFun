@@ -1,10 +1,10 @@
-# BitFun 简体中文语言包
+# OpenBitFun 简体中文语言包
 # Chinese Simplified (zh-CN) Fluent Translation File
 
 # ==================== 通用 ====================
 app-version = 版本 { $version }
 loading = 加载中...
-welcome = 欢迎使用 BitFun
+welcome = 欢迎使用 OpenBitFun
 
 # ==================== 操作 ====================
 action-confirm = 确认

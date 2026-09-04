@@ -1,28 +1,28 @@
 .miniapp-detail-dialog {
   inline-size: min(1120px, 100%);
   max-inline-size: min(1120px, 100%);
-  max-block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
+  max-block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
 }
 
 .miniapp-detail-dialog__header {
   min-block-size: 64px;
   align-items: center;
-  padding: 0 var(--bf-space-6);
+  padding: 0 var(--openbitfun-space-6);
 }
 
 .miniapp-detail-dialog__heading {
   flex-direction: row;
   align-items: center;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 }
 
 .miniapp-detail-dialog__title {
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-heading-section-font-family);
-  font-size: var(--bf-type-heading-section-font-size);
-  font-weight: var(--bf-type-heading-section-font-weight);
-  line-height: var(--bf-type-heading-section-line-height);
-  letter-spacing: var(--bf-type-heading-section-letter-spacing);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-heading-section-font-family);
+  font-size: var(--openbitfun-type-heading-section-font-size);
+  font-weight: var(--openbitfun-type-heading-section-font-weight);
+  line-height: var(--openbitfun-type-heading-section-line-height);
+  letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
 }
 
 .miniapp-detail-dialog__body {
@@ -33,7 +33,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 
   &__source-badge,
   &__version,
@@ -41,28 +41,28 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-pill);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
     white-space: nowrap;
   }
 
   &__source-badge {
     min-height: 28px;
-    padding: 0 var(--bf-space-3);
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-label-sm-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-label-sm-line-height);
-    letter-spacing: var(--bf-type-label-sm-letter-spacing);
+    padding: 0 var(--openbitfun-space-3);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-label-sm-font-family);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    line-height: var(--openbitfun-type-label-sm-line-height);
+    letter-spacing: var(--openbitfun-type-label-sm-letter-spacing);
   }
 
   &__hero {
     display: grid;
     grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
     align-items: center;
-    gap: clamp(var(--bf-space-6), 5vw, 64px);
+    gap: clamp(var(--openbitfun-space-6), 5vw, 64px);
     padding: 44px 56px 38px;
   }
 
@@ -74,10 +74,10 @@
     width: clamp(180px, 20vw, 224px);
     aspect-ratio: 1;
     justify-self: center;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-surface-subtle);
-    box-shadow: var(--bf-shadow-xs);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-surface-subtle);
+    box-shadow: var(--openbitfun-shadow-xs);
   }
 
   &__icon {
@@ -86,10 +86,10 @@
     justify-content: center;
     width: 58%;
     aspect-ratio: 1;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-surface-raised);
-    color: var(--bf-color-content-primary);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-surface-raised);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__activity-dot {
@@ -99,100 +99,100 @@
     width: 14px;
     height: 14px;
     box-sizing: border-box;
-    border: 3px solid var(--bf-color-surface-raised);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-status-success-content);
-    box-shadow: var(--bf-shadow-xs);
+    border: 3px solid var(--openbitfun-color-surface-raised);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-status-success-content);
+    box-shadow: var(--openbitfun-shadow-xs);
   }
 
   &__summary {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    gap: var(--bf-space-4);
+    gap: var(--openbitfun-space-4);
   }
 
   &__identity {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   &__name {
     margin: 0;
-    color: var(--bf-color-content-primary);
-    font-family: var(--bf-type-display-sm-font-family);
-    font-size: var(--bf-type-display-sm-font-size);
-    font-weight: var(--bf-type-display-sm-font-weight);
-    letter-spacing: var(--bf-type-display-sm-letter-spacing);
-    line-height: var(--bf-type-display-sm-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-display-sm-font-family);
+    font-size: var(--openbitfun-type-display-sm-font-size);
+    font-weight: var(--openbitfun-type-display-sm-font-weight);
+    letter-spacing: var(--openbitfun-type-display-sm-letter-spacing);
+    line-height: var(--openbitfun-type-display-sm-line-height);
   }
 
   &__version {
     min-height: 34px;
-    padding: 0 var(--bf-space-3);
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    padding: 0 var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   }
 
   &__description {
     max-width: 720px;
     margin: 0;
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-body-md-font-family);
-    font-size: var(--bf-type-body-md-font-size);
-    font-weight: var(--bf-type-body-md-font-weight);
-    line-height: var(--bf-type-body-md-line-height);
-    letter-spacing: var(--bf-type-body-md-letter-spacing);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-body-md-font-family);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-body-md-font-weight);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    letter-spacing: var(--openbitfun-type-body-md-letter-spacing);
   }
 
   &__tags {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__tag {
     min-height: 30px;
-    padding: 0 var(--bf-space-3);
+    padding: 0 var(--openbitfun-space-3);
     background: transparent;
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   }
 
   &__highlights {
     display: grid;
     grid-template-columns: 150px minmax(0, 1fr);
     align-items: center;
-    gap: var(--bf-space-5);
+    gap: var(--openbitfun-space-5);
     padding: 34px 56px;
-    border-top: 1px solid var(--bf-color-border-subtle);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__section-title {
     margin: 0;
-    color: var(--bf-color-content-primary);
-    font-family: var(--bf-type-heading-section-font-family);
-    font-size: var(--bf-type-heading-section-font-size);
-    font-weight: var(--bf-type-heading-section-font-weight);
-    line-height: var(--bf-type-heading-section-line-height);
-    letter-spacing: var(--bf-type-heading-section-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-heading-section-font-family);
+    font-size: var(--openbitfun-type-heading-section-font-size);
+    font-weight: var(--openbitfun-type-heading-section-font-weight);
+    line-height: var(--openbitfun-type-heading-section-line-height);
+    letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
   }
 
   &__highlight-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--bf-space-4);
+    gap: var(--openbitfun-space-4);
     min-width: 0;
   }
 
@@ -200,37 +200,37 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     min-width: 0;
     min-height: 88px;
-    padding: var(--bf-space-4);
+    padding: var(--openbitfun-space-4);
     box-sizing: border-box;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-lg);
-    background: var(--bf-color-surface-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-lg);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__highlight-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__highlight-copy {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
 
     strong {
       overflow: hidden;
-      color: var(--bf-color-content-primary);
-      font-family: var(--bf-type-heading-card-font-family);
-      font-size: var(--bf-type-heading-card-font-size);
-      font-weight: var(--bf-type-heading-card-font-weight);
-      line-height: var(--bf-type-heading-card-line-height);
-      letter-spacing: var(--bf-type-heading-card-letter-spacing);
+      color: var(--openbitfun-color-content-primary);
+      font-family: var(--openbitfun-type-heading-card-font-family);
+      font-size: var(--openbitfun-type-heading-card-font-size);
+      font-weight: var(--openbitfun-type-heading-card-font-weight);
+      line-height: var(--openbitfun-type-heading-card-line-height);
+      letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -238,12 +238,12 @@
     span {
       display: -webkit-box;
       overflow: hidden;
-      color: var(--bf-color-content-muted);
-      font-family: var(--bf-type-support-font-family);
-      font-size: var(--bf-type-support-font-size);
-      font-weight: var(--bf-type-support-font-weight);
-      line-height: var(--bf-type-support-line-height);
-      letter-spacing: var(--bf-type-support-letter-spacing);
+      color: var(--openbitfun-color-content-muted);
+      font-family: var(--openbitfun-type-support-font-family);
+      font-size: var(--openbitfun-type-support-font-size);
+      font-weight: var(--openbitfun-type-support-font-weight);
+      line-height: var(--openbitfun-type-support-line-height);
+      letter-spacing: var(--openbitfun-type-support-letter-spacing);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -253,27 +253,27 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-5);
+    gap: var(--openbitfun-space-5);
     min-height: 84px;
-    padding: var(--bf-space-4) 56px;
+    padding: var(--openbitfun-space-4) 56px;
     box-sizing: border-box;
-    border-top: 1px solid var(--bf-color-border-subtle);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__status {
     display: flex;
     align-items: center;
     min-width: 0;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
 
     svg,
-    [data-bf-component='icon'] {
+    [data-openbitfun-component='icon'] {
       flex-shrink: 0;
     }
   }
@@ -282,7 +282,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     flex-shrink: 0;
   }
 
@@ -292,8 +292,8 @@
   .miniapp-detail-modal {
     &__hero {
       grid-template-columns: 160px minmax(0, 1fr);
-      gap: var(--bf-space-6);
-      padding-inline: var(--bf-space-6);
+      gap: var(--openbitfun-space-6);
+      padding-inline: var(--openbitfun-space-6);
     }
 
     &__icon-stage {
@@ -303,11 +303,11 @@
     &__highlights {
       grid-template-columns: 1fr;
       align-items: start;
-      padding-inline: var(--bf-space-6);
+      padding-inline: var(--openbitfun-space-6);
     }
 
     &__footer {
-      padding-inline: var(--bf-space-6);
+      padding-inline: var(--openbitfun-space-6);
     }
   }
 }
@@ -319,14 +319,14 @@
   }
 
   .miniapp-detail-dialog__header {
-    padding-inline: var(--bf-space-4);
+    padding-inline: var(--openbitfun-space-4);
   }
 
   .miniapp-detail-modal {
     &__hero {
       grid-template-columns: 1fr;
       justify-items: start;
-      padding: var(--bf-space-6) var(--bf-space-4);
+      padding: var(--openbitfun-space-6) var(--openbitfun-space-4);
     }
 
     &__icon-stage {
@@ -336,18 +336,18 @@
 
     &__icon {
       svg,
-      [data-bf-component='icon'] {
+      [data-openbitfun-component='icon'] {
         width: 48px;
         height: 48px;
       }
     }
 
     &__name {
-      font-size: var(--bf-type-heading-display-font-size);
+      font-size: var(--openbitfun-type-heading-display-font-size);
     }
 
     &__highlights {
-      padding: var(--bf-space-6) var(--bf-space-4);
+      padding: var(--openbitfun-space-6) var(--openbitfun-space-4);
     }
 
     &__highlight-grid {
@@ -357,7 +357,7 @@
     &__footer {
       align-items: stretch;
       flex-direction: column;
-      padding: var(--bf-space-4);
+      padding: var(--openbitfun-space-4);
     }
 
     &__actions {

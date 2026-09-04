@@ -59,13 +59,13 @@ describe('permission request notification policy', () => {
 
   it('uses generic copy without accepting request details', () => {
     const t = (key: string, options?: Record<string, unknown>) => {
-      if (key === 'notify.permissionRequestTitle') return 'BitFun requires approval';
+      if (key === 'notify.permissionRequestTitle') return 'OpenBitFun requires approval';
       if (key === 'notify.permissionRequestBody') return 'An action is waiting for your approval.';
       return `${options?.count} actions are waiting for your approval.`;
     };
 
     expect(buildPermissionRequestNotificationCopy({ requestCount: 2, t })).toEqual({
-      title: 'BitFun requires approval',
+      title: 'OpenBitFun requires approval',
       body: '2 actions are waiting for your approval.',
     });
   });

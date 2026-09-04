@@ -1,35 +1,35 @@
-@layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;
+@layer openbitfun.tokens.system, openbitfun.tokens.theme, openbitfun.reset, openbitfun.base, openbitfun.components, openbitfun.overrides;
 
-@layer bf.reset {
-  [data-bf-design-system-root],
-  [data-bf-design-system-root] *,
-  [data-bf-design-system-root] *::before,
-  [data-bf-design-system-root] *::after {
+@layer openbitfun.reset {
+  [data-openbitfun-design-system-root],
+  [data-openbitfun-design-system-root] *,
+  [data-openbitfun-design-system-root] *::before,
+  [data-openbitfun-design-system-root] *::after {
     box-sizing: border-box;
   }
 
-  [data-bf-design-system-root] button,
-  [data-bf-design-system-root] input,
-  [data-bf-design-system-root] textarea,
-  [data-bf-design-system-root] select {
+  [data-openbitfun-design-system-root] button,
+  [data-openbitfun-design-system-root] input,
+  [data-openbitfun-design-system-root] textarea,
+  [data-openbitfun-design-system-root] select {
     font: inherit;
   }
 }
 
-@layer bf.base {
-  [data-bf-design-system-root] select option,
-  [data-bf-design-system-root] select optgroup {
-    color: var(--bf-color-content-primary);
-    background-color: var(--bf-color-surface-panel);
+@layer openbitfun.base {
+  [data-openbitfun-design-system-root] select option,
+  [data-openbitfun-design-system-root] select optgroup {
+    color: var(--openbitfun-color-content-primary);
+    background-color: var(--openbitfun-color-surface-panel);
   }
 
-  [data-bf-design-system-root] select option:disabled {
-    color: var(--bf-color-content-disabled);
+  [data-openbitfun-design-system-root] select option:disabled {
+    color: var(--openbitfun-color-content-disabled);
   }
 
   @media (forced-colors: active) {
-    [data-bf-design-system-root] select option,
-    [data-bf-design-system-root] select optgroup {
+    [data-openbitfun-design-system-root] select option,
+    [data-openbitfun-design-system-root] select optgroup {
       color: FieldText;
       background-color: Field;
     }

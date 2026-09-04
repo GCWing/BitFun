@@ -1,23 +1,23 @@
 [package]
-name = "bitfun-server"
+name = "openbitfun-server"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun Server - Web-based AI Code Assistant"
+description = "OpenBitFun Server - Web-based AI Code Assistant"
 
 [[bin]]
-name = "bitfun-server"
+name = "openbitfun-server"
 path = "src/main.rs"
 
 [dependencies]
-bitfun-core = { path = "../../crates/assembly/core", features = ["product-full"] }
+openbitfun-core = { path = "../../crates/assembly/core", features = ["product-full"] }
 
 # App-server surface: an in-process JSON-RPC server/client pair over an
 # in-memory channel transport. The websocket handler routes agent kernel RPCs
 # through this client so agent interfaces uniformly go through app-server.
-bitfun-app-server = { path = "../../crates/interfaces/app-server" }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-events = { path = "../../crates/contracts/events" }
+openbitfun-app-server = { path = "../../crates/interfaces/app-server" }
+openbitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
+openbitfun-events = { path = "../../crates/contracts/events" }
 
 agent-client-protocol = { workspace = true }
 

@@ -907,7 +907,7 @@ mod tests {
             "cmd must be on PATH on Windows hosts"
         );
         assert!(!path_command_exists(
-            "definitely-not-a-real-binary-bitfun-xyz"
+            "definitely-not-a-real-binary-openbitfun-xyz"
         ));
     }
 
@@ -958,7 +958,7 @@ mod tests {
     fn missing_file_reports_not_found_before_spawn() {
         let err = LocalSystemProvider::new()
             .open_file(
-                "__bitfun_missing_file_for_local_system_provider_test__",
+                "__openbitfun_missing_file_for_local_system_provider_test__",
                 None,
             )
             .expect_err("missing file must be rejected before spawning an opener");
@@ -979,9 +979,9 @@ mod tests {
     #[tokio::test]
     async fn shell_script_executes_and_captures_stdout() {
         let script = if cfg!(target_os = "windows") {
-            "Write-Output 'hello-bitfun'"
+            "Write-Output 'hello-openbitfun'"
         } else {
-            "echo hello-bitfun"
+            "echo hello-openbitfun"
         };
         let outcome = LocalSystemProvider::new()
             .run_script(RunScriptRequest {
@@ -997,15 +997,15 @@ mod tests {
             "shell run_script stderr={}",
             outcome.stderr
         );
-        assert!(outcome.stdout.contains("hello-bitfun"));
+        assert!(outcome.stdout.contains("hello-openbitfun"));
     }
 
     #[tokio::test]
     async fn zero_timeout_means_wait_without_timeout() {
         let script = if cfg!(target_os = "windows") {
-            "Write-Output 'zero-timeout-bitfun'"
+            "Write-Output 'zero-timeout-openbitfun'"
         } else {
-            "echo zero-timeout-bitfun"
+            "echo zero-timeout-openbitfun"
         };
         let outcome = LocalSystemProvider::new()
             .run_script(RunScriptRequest {
@@ -1017,6 +1017,6 @@ mod tests {
             .await
             .expect("timeout_ms=0 should wait without timeout");
         assert!(outcome.success);
-        assert!(outcome.stdout.contains("zero-timeout-bitfun"));
+        assert!(outcome.stdout.contains("zero-timeout-openbitfun"));
     }
 }

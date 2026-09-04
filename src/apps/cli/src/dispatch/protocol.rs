@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
-use bitfun_core::AIModelCatalog;
+use openbitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
+use openbitfun_core::AIModelCatalog;
 
 // The wire contract (version, capability names, attachment shape and
 // limits) has one source of truth shared with the controller side.
-pub(crate) use bitfun_services_core::dispatch_contract::{
+pub(crate) use openbitfun_services_core::dispatch_contract::{
     validate_dispatch_attachments, DispatchAttachment, DISPATCH_PROTOCOL_VERSION,
 };
 
@@ -43,6 +43,8 @@ pub(crate) struct DispatchWorkspaceProbe {
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DispatchProbeResponse {
+    pub(crate) product_id: String,
+    pub(crate) data_namespace: String,
     pub(crate) protocol_version: u32,
     pub(crate) cli_version: String,
     pub(crate) os: String,

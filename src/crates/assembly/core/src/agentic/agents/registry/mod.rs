@@ -239,10 +239,10 @@ impl AgentRegistry {
     }
 }
 
-impl bitfun_agent_runtime::sdk::RuntimeAgentRegistry for AgentRegistry {
+impl openbitfun_agent_runtime::sdk::RuntimeAgentRegistry for AgentRegistry {
     fn agent_ids(
         &self,
-        query: bitfun_agent_runtime::sdk::RuntimeAgentRegistryQuery<'_>,
+        query: openbitfun_agent_runtime::sdk::RuntimeAgentRegistryQuery<'_>,
     ) -> Vec<String> {
         let mut ids = self.read_agents().keys().cloned().collect::<Vec<_>>();
         if let Some(workspace_root) = query.workspace_root {
@@ -257,7 +257,7 @@ impl bitfun_agent_runtime::sdk::RuntimeAgentRegistry for AgentRegistry {
 }
 
 struct GlobalAgentRegistry {
-    profile: Option<bitfun_product_capabilities::DeliveryProfile>,
+    profile: Option<openbitfun_product_capabilities::DeliveryProfile>,
     registry: Arc<AgentRegistry>,
 }
 
@@ -265,7 +265,7 @@ struct GlobalAgentRegistry {
 static GLOBAL_AGENT_REGISTRY: OnceLock<GlobalAgentRegistry> = OnceLock::new();
 
 pub(crate) fn initialize_global_agent_registry_for_profile(
-    profile: bitfun_product_capabilities::DeliveryProfile,
+    profile: openbitfun_product_capabilities::DeliveryProfile,
 ) -> Result<Arc<AgentRegistry>, String> {
     if let Some(global) = GLOBAL_AGENT_REGISTRY.get() {
         return if global.profile == Some(profile) {
@@ -309,7 +309,7 @@ pub fn get_agent_registry() -> Arc<AgentRegistry> {
             debug!("Initializing global agent registry");
             GlobalAgentRegistry {
                 #[cfg(feature = "product-full")]
-                profile: Some(bitfun_product_capabilities::DeliveryProfile::ProductFull),
+                profile: Some(openbitfun_product_capabilities::DeliveryProfile::ProductFull),
                 #[cfg(not(feature = "product-full"))]
                 profile: None,
                 registry: Arc::new(AgentRegistry::new()),

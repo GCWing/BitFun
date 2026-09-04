@@ -2,7 +2,7 @@
 /** Git commit graph view (branch graph). */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button, Icon, SearchField, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, SearchField, ScrollArea } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -249,8 +249,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   if (loading) {
     return (
-      <div className={`git-graph-view git-graph-view--loading ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="loading">
-        <div className="git-graph-view__loading" data-bf-component="git-tool" data-bf-part="graphStatus">
+      <div className={`git-graph-view git-graph-view--loading ${className}`} data-openbitfun-component="git-tool" data-openbitfun-part="graphRoot" data-openbitfun-state="loading">
+        <div className="git-graph-view__loading" data-openbitfun-component="git-tool" data-openbitfun-part="graphStatus">
           <div className="git-graph-view__spinner" />
           <p>{t('graph.loading')}</p>
         </div>
@@ -260,8 +260,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   if (error) {
     return (
-      <div className={`git-graph-view git-graph-view--error ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="error">
-        <div className="git-graph-view__error" data-bf-component="git-tool" data-bf-part="graphStatus">
+      <div className={`git-graph-view git-graph-view--error ${className}`} data-openbitfun-component="git-tool" data-openbitfun-part="graphRoot" data-openbitfun-state="error">
+        <div className="git-graph-view__error" data-openbitfun-component="git-tool" data-openbitfun-part="graphStatus">
           <p>{t('graph.loadFailedWithMessage', { error })}</p>
           <Button variant="fill" size="sm" onClick={loadGraphData}>
             {t('common.retry')}
@@ -273,8 +273,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
   if (!graphData || graphData.nodes.length === 0) {
     return (
-      <div className={`git-graph-view git-graph-view--empty ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot" data-bf-state="empty">
-        <div className="git-graph-view__empty" data-bf-component="git-tool" data-bf-part="graphStatus">
+      <div className={`git-graph-view git-graph-view--empty ${className}`} data-openbitfun-component="git-tool" data-openbitfun-part="graphRoot" data-openbitfun-state="empty">
+        <div className="git-graph-view__empty" data-openbitfun-component="git-tool" data-openbitfun-part="graphStatus">
           <p>{t('graph.empty')}</p>
         </div>
       </div>
@@ -285,8 +285,8 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   const totalHeight = graphData.nodes.length * viewConfig.rowHeight!;
 
   return (
-    <div className={`git-graph-view ${className}`} data-bf-component="git-tool" data-bf-part="graphRoot">
-      <div className="git-graph-view__header" data-bf-component="git-tool" data-bf-part="graphHeader">
+    <div className={`git-graph-view ${className}`} data-openbitfun-component="git-tool" data-openbitfun-part="graphRoot">
+      <div className="git-graph-view__header" data-openbitfun-component="git-tool" data-openbitfun-part="graphHeader">
         <div className="git-graph-view__header-left">
           <h3>{t('graph.title')}</h3>
           {graphData.currentBranch && (
@@ -357,15 +357,15 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
       <ScrollArea 
         className="git-graph-view__content" 
         ref={containerRef}
-        data-bf-component="git-tool"
-        data-bf-part="graphContent"
+        data-openbitfun-component="git-tool"
+        data-openbitfun-part="graphContent"
       >
         <div style={{ height: totalHeight, width: graphWidth, position: 'relative' }}>
           <canvas
             ref={canvasRef}
             className="git-graph-view__canvas-full"
-            data-bf-component="git-tool"
-            data-bf-part="graphCanvas"
+            data-openbitfun-component="git-tool"
+            data-openbitfun-part="graphCanvas"
             style={{ 
               width: graphWidth,
               height: totalHeight,
@@ -453,7 +453,7 @@ function drawNodeWithInfo(
   const centerY = y + rowHeight / 2;
   const resolveLaneColor = (lane: number) => ensureMinimumContrast(
     resolveCanvasColor(colors[lane % colors.length]),
-    resolveCanvasColor('var(--bf-color-surface-canvas)'),
+    resolveCanvasColor('var(--openbitfun-color-surface-canvas)'),
     GIT_GRAPH_LANE_MIN_CONTRAST
   );
   const color = resolveLaneColor(node.lane);
@@ -540,7 +540,7 @@ function drawNodeWithInfo(
   
 
   if (state.isSelected) {
-    ctx.strokeStyle = resolveCanvasColor('var(--bf-color-content-on-dark)');
+    ctx.strokeStyle = resolveCanvasColor('var(--openbitfun-color-content-on-dark)');
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, centerY, nodeSize + 1.5, 0, Math.PI * 2);
@@ -604,7 +604,7 @@ function drawNodeWithInfo(
             ? APPEARANCE_DOMAIN_TOKENS.gitGraphLane[2]
             : APPEARANCE_DOMAIN_TOKENS.gitGraphLane[3]
       ),
-      resolveCanvasColor('var(--bf-color-content-on-dark)'),
+      resolveCanvasColor('var(--openbitfun-color-content-on-dark)'),
       GIT_GRAPH_LANE_MIN_CONTRAST
     );
     const text = displayName;
@@ -625,7 +625,7 @@ function drawNodeWithInfo(
 
     if (ref.isCurrent) {
       ctx.save();
-      ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-on-dark)');
+      ctx.fillStyle = resolveCanvasColor('var(--openbitfun-color-content-on-dark)');
       ctx.beginPath();
       ctx.arc(refX + refWidth - 4, centerY - refHeight / 2 + 4, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -634,7 +634,7 @@ function drawNodeWithInfo(
     
 
     ctx.save();
-    ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-on-dark)');
+    ctx.fillStyle = resolveCanvasColor('var(--openbitfun-color-content-on-dark)');
     ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -651,7 +651,7 @@ function drawNodeWithInfo(
   ctx.save();
   
 
-  ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-primary)');
+  ctx.fillStyle = resolveCanvasColor('var(--openbitfun-color-content-primary)');
   ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -672,7 +672,7 @@ function drawNodeWithInfo(
   const metaX = textX + ctx.measureText(displayText).width + 20;
 
 
-  ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-muted)');
+  ctx.fillStyle = resolveCanvasColor('var(--openbitfun-color-content-muted)');
   ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   
   let authorName = node.authorName;
@@ -692,7 +692,7 @@ function drawNodeWithInfo(
   const hashX = metaX + ctx.measureText(metaText).width + 16;
   const hashText = node.hash.substring(0, 7);
   
-  ctx.fillStyle = resolveCanvasColor('var(--bf-color-content-disabled)');
+  ctx.fillStyle = resolveCanvasColor('var(--openbitfun-color-content-disabled)');
   ctx.font = '11px "SF Mono", "Monaco", "Courier New", monospace';
   ctx.fillText(hashText, hashX, centerY);
   

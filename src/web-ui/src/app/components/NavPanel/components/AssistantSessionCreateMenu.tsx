@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 ;
-import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -85,16 +85,16 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
   return (
     <div
       ref={anchorRef}
-      className={`bitfun-nav-panel__assistant-session-actions${menuOpen ? ' is-open' : ''}`}
-      data-bf-component="nav-panel"
-      data-bf-part="assistantSessionActions"
-      data-bf-state={menuOpen ? 'open' : undefined}
+      className={`openbitfun-nav-panel__assistant-session-actions${menuOpen ? ' is-open' : ''}`}
+      data-openbitfun-component="nav-panel"
+      data-openbitfun-part="assistantSessionActions"
+      data-openbitfun-state={menuOpen ? 'open' : undefined}
     >
-      <div className={`bitfun-nav-panel__assistant-session-split-button${menuOpen ? ' is-active' : ''}`}>
+      <div className={`openbitfun-nav-panel__assistant-session-split-button${menuOpen ? ' is-active' : ''}`}>
         <Tooltip content={createPrimaryLabel} placement="right" followCursor>
           <button
             type="button"
-            className="bitfun-nav-panel__assistant-session-split-main"
+            className="openbitfun-nav-panel__assistant-session-split-main"
             aria-label={createPrimaryLabel}
             onClick={() => {
               closeMenu();
@@ -108,7 +108,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
         <Tooltip content={chooseAssistantLabel} placement="right" followCursor disabled={menuOpen}>
           <button
             type="button"
-            className="bitfun-nav-panel__assistant-session-split-toggle"
+            className="openbitfun-nav-panel__assistant-session-split-toggle"
             aria-label={chooseAssistantLabel}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
@@ -124,7 +124,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
       {menuOpen ? createPortal(
         <Menu
           ref={menuRef}
-          className="bitfun-nav-panel__assistant-session-menu"
+          className="openbitfun-nav-panel__assistant-session-menu"
           aria-label={chooseAssistantLabel}
           data-testid="nav-assistant-session-menu"
           style={{
@@ -146,7 +146,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
                 }}
                 data-testid={`nav-assistant-session-menu-item-${workspace.id}`}
               >
-                <span className="bitfun-nav-panel__assistant-session-menu-name">{assistantName}</span>
+                <span className="openbitfun-nav-panel__assistant-session-menu-name">{assistantName}</span>
               </MenuItem>
             );
           })}

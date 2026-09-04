@@ -32,7 +32,7 @@ interface FrontendNavigationMarker {
 }
 
 type StartupTraceWindow = Window & typeof globalThis & {
-  __BITFUN_STARTUP_TRACE__?: {
+  __OPENBITFUN_STARTUP_TRACE__?: {
     snapshot?: () => unknown;
   };
 };
@@ -48,7 +48,7 @@ async function readFrontendNavigationMarker(): Promise<FrontendNavigationMarker 
   return browser.execute(() => {
     try {
       const startupTraceWindow = window as unknown as StartupTraceWindow;
-      const snapshot = startupTraceWindow.__BITFUN_STARTUP_TRACE__?.snapshot?.();
+      const snapshot = startupTraceWindow.__OPENBITFUN_STARTUP_TRACE__?.snapshot?.();
       const traceSnapshot = snapshot && typeof snapshot === 'object'
         ? snapshot as StartupTraceSnapshotLike
         : null;
@@ -88,7 +88,7 @@ async function waitForPostReloadShellReady(projectName: string, workspacePath: s
     try {
       return browser.execute((expectedProjectName: string) => {
         const startupTraceWindow = window as unknown as StartupTraceWindow;
-        const snapshot = startupTraceWindow.__BITFUN_STARTUP_TRACE__?.snapshot?.();
+        const snapshot = startupTraceWindow.__OPENBITFUN_STARTUP_TRACE__?.snapshot?.();
         const traceSnapshot = snapshot && typeof snapshot === 'object'
           ? snapshot as StartupTraceSnapshotLike
           : null;
@@ -96,8 +96,8 @@ async function waitForPostReloadShellReady(projectName: string, workspacePath: s
         const interactiveShellReady = phases.some((event: { phase?: string }) =>
           event.phase === 'interactive_shell_ready'
         );
-        const startupOverlayGone = document.getElementById('bitfun-startup-overlay') === null;
-        const labels = Array.from(document.querySelectorAll('.bitfun-nav-panel__workspace-item-label'))
+        const startupOverlayGone = document.getElementById('openbitfun-startup-overlay') === null;
+        const labels = Array.from(document.querySelectorAll('.openbitfun-nav-panel__workspace-item-label'))
           .map(element => element.textContent?.trim() || '')
           .filter(Boolean);
         const targetWorkspaceVisible = labels.some(label => label.includes(expectedProjectName));
@@ -157,7 +157,7 @@ export async function getWorkspaceState(): Promise<WorkspaceState> {
       const openedWorkspaces = await invoke('get_opened_workspaces', { request: {} }) as Array<{
         rootPath?: string;
       }>;
-      const workspaceLabels = Array.from(document.querySelectorAll('.bitfun-nav-panel__workspace-item-label'))
+      const workspaceLabels = Array.from(document.querySelectorAll('.openbitfun-nav-panel__workspace-item-label'))
         .map(element => element.textContent?.trim() || '')
         .filter(Boolean);
 
@@ -171,7 +171,7 @@ export async function getWorkspaceState(): Promise<WorkspaceState> {
     const { globalStateAPI } = await import('/src/shared/types/global-state.ts');
     const currentWorkspace = await globalStateAPI.getCurrentWorkspace();
     const openedWorkspaces = await globalStateAPI.getOpenedWorkspaces();
-    const workspaceLabels = Array.from(document.querySelectorAll('.bitfun-nav-panel__workspace-item-label'))
+    const workspaceLabels = Array.from(document.querySelectorAll('.openbitfun-nav-panel__workspace-item-label'))
       .map(element => element.textContent?.trim() || '')
       .filter(Boolean);
 
@@ -248,7 +248,7 @@ export async function ensureCodeSessionOpen(): Promise<void> {
   }
 
   const selectors = [
-    '.bitfun-nav-panel__workspace-create-main--split-left',
+    '.openbitfun-nav-panel__workspace-create-main--split-left',
     '[data-testid="chat-input-send-btn"]',
   ];
 

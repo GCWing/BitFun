@@ -16,7 +16,7 @@ const crossBoundaryRoots = [
   path.join(repoRoot, 'tests', 'e2e', 'helpers'),
   path.join(repoRoot, 'src', 'crates', 'contracts', 'product-domains', 'src', 'miniapp'),
   path.join(repoRoot, 'src', 'crates', 'services', 'services-integrations', 'src', 'canvas'),
-  path.join(repoRoot, 'src', 'crates', 'assembly', 'core', 'builtin_skills', 'bitfun-canvas'),
+  path.join(repoRoot, 'src', 'crates', 'assembly', 'core', 'builtin_skills', 'openbitfun-canvas'),
   path.join(repoRoot, 'src', 'crates', 'assembly', 'core', 'builtin_skills', 'miniapp-dev'),
 ];
 const failures = [];
@@ -52,7 +52,7 @@ const retiredFinalStateContracts = [
   ['generate-startup-theme-bootstrap', /generate-startup-theme-bootstrap/],
   ['startup_theme_bootstrap', /startup_theme_bootstrap/],
   ['STARTUP_THEME_BOOTSTRAP', /STARTUP_THEME_BOOTSTRAP/],
-  ['__BITFUN_BOOTSTRAP_THEME', /__BITFUN_BOOTSTRAP_THEME/],
+  ['__OPENBITFUN_BOOTSTRAP_THEME', /__OPENBITFUN_BOOTSTRAP_THEME/],
   ['prepare_theme', /prepare_theme/],
   ['prepareThemeDurationMs', /prepareThemeDurationMs/],
   ['theme-switching', /theme-switching/],
@@ -330,15 +330,15 @@ function analyzeStyledOwnerContract(file, source, visualClassIds) {
 
   const visit = node => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const productSurface = jsxLiteralAttribute(node, 'data-bf-product-component');
-      const surface = jsxLiteralAttribute(node, 'data-bf-component')
+      const productSurface = jsxLiteralAttribute(node, 'data-openbitfun-product-component');
+      const surface = jsxLiteralAttribute(node, 'data-openbitfun-component')
         ?? productSurface
-        ?? jsxLiteralAttribute(node, 'data-bf-scene');
+        ?? jsxLiteralAttribute(node, 'data-openbitfun-scene');
       const part = productSurface
-        ? jsxLiteralAttribute(node, 'data-bf-product-part')
-        : jsxLiteralAttribute(node, 'data-bf-part');
-      const standardPart = jsxLiteralAttribute(node, 'data-bf-part');
-      const productPart = jsxLiteralAttribute(node, 'data-bf-product-part');
+        ? jsxLiteralAttribute(node, 'data-openbitfun-product-part')
+        : jsxLiteralAttribute(node, 'data-openbitfun-part');
+      const standardPart = jsxLiteralAttribute(node, 'data-openbitfun-part');
+      const productPart = jsxLiteralAttribute(node, 'data-openbitfun-product-part');
       if (standardPart) declaredPartIds.add(standardPart);
       if (productPart) declaredPartIds.add(productPart);
       if (intrinsicName(node)) {
@@ -440,8 +440,8 @@ for (const [file, source] of productionCodeSources) {
       states,
       facets,
       kind: registeredAsScene ? 'scene' : 'component',
-      componentAttribute: body.match(/\bcomponentAttribute:\s*['"](data-bf-(?:component|product-component))['"]/)?.[1]
-        ?? 'data-bf-component',
+      componentAttribute: body.match(/\bcomponentAttribute:\s*['"](data-openbitfun-(?:component|product-component))['"]/)?.[1]
+        ?? 'data-openbitfun-component',
     });
   }
 }
@@ -470,18 +470,18 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const visit = node => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const component = jsxAttribute(node, 'data-bf-component');
-      const productComponent = jsxAttribute(node, 'data-bf-product-component');
-      const scene = jsxAttribute(node, 'data-bf-scene');
-      const part = jsxAttribute(node, 'data-bf-part');
-      const productPart = jsxAttribute(node, 'data-bf-product-part');
+      const component = jsxAttribute(node, 'data-openbitfun-component');
+      const productComponent = jsxAttribute(node, 'data-openbitfun-product-component');
+      const scene = jsxAttribute(node, 'data-openbitfun-scene');
+      const part = jsxAttribute(node, 'data-openbitfun-part');
+      const productPart = jsxAttribute(node, 'data-openbitfun-product-part');
       const location = ast.getLineAndCharacterOfPosition(node.getStart(ast));
       const sourceLocation = `${relative(file)}:${location.line + 1}`;
       const surfaceAttributeCount = Number(component.present) + Number(scene.present);
 
       if (strictContractOwnership) {
         if (surfaceAttributeCount > 1) {
-          failures.push(`${sourceLocation}: DOM node cannot declare both data-bf-component and data-bf-scene`);
+          failures.push(`${sourceLocation}: DOM node cannot declare both data-openbitfun-component and data-openbitfun-scene`);
         }
         if (surfaceAttributeCount !== Number(part.present)) {
           failures.push(`${sourceLocation}: Appearance surface and part attributes must be declared together on the same DOM node`);
@@ -490,26 +490,26 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
           failures.push(`${sourceLocation}: Product Appearance surface and part attributes must be declared together on the same DOM node`);
         }
         if (component.present && component.value === null) {
-          failures.push(`${sourceLocation}: data-bf-component must use a string literal`);
+          failures.push(`${sourceLocation}: data-openbitfun-component must use a string literal`);
         }
         if (productComponent.present && productComponent.value === null) {
-          failures.push(`${sourceLocation}: data-bf-product-component must use a string literal`);
+          failures.push(`${sourceLocation}: data-openbitfun-product-component must use a string literal`);
         }
         if (scene.present && scene.value === null) {
-          failures.push(`${sourceLocation}: data-bf-scene must use a string literal`);
+          failures.push(`${sourceLocation}: data-openbitfun-scene must use a string literal`);
         }
         if (part.present && part.value === null) {
-          failures.push(`${sourceLocation}: data-bf-part must use a string literal`);
+          failures.push(`${sourceLocation}: data-openbitfun-part must use a string literal`);
         }
         if (productPart.present && productPart.value === null) {
-          failures.push(`${sourceLocation}: data-bf-product-part must use a string literal`);
+          failures.push(`${sourceLocation}: data-openbitfun-product-part must use a string literal`);
         }
       }
 
       const contracts = [
-        { surface: component, part, kind: 'component', attribute: 'data-bf-component' },
-        { surface: productComponent, part: productPart, kind: 'component', attribute: 'data-bf-product-component' },
-        { surface: scene, part, kind: 'scene', attribute: 'data-bf-scene' },
+        { surface: component, part, kind: 'component', attribute: 'data-openbitfun-component' },
+        { surface: productComponent, part: productPart, kind: 'component', attribute: 'data-openbitfun-product-component' },
+        { surface: scene, part, kind: 'scene', attribute: 'data-openbitfun-scene' },
       ];
       for (const contract of contracts) {
         const surfaceId = contract.surface.value;
@@ -525,7 +525,7 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
           continue;
         }
         const expectedAttribute = descriptor.kind === 'scene'
-          ? 'data-bf-scene'
+          ? 'data-openbitfun-scene'
           : descriptor.componentAttribute;
         if (contract.attribute !== expectedAttribute) {
           if (strictContractOwnership) {
@@ -542,7 +542,7 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
         } else {
           domSurfaceParts.get(surfaceId)?.add(contract.part.value);
         }
-        const stateAttribute = jsxAttributeStringLiterals(node, 'data-bf-state');
+        const stateAttribute = jsxAttributeStringLiterals(node, 'data-openbitfun-state');
         if (stateAttribute.present && stateAttribute.dynamic) {
           domSurfaceDynamicStates.add(surfaceId);
         }
@@ -551,7 +551,7 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
         stateValues.forEach(stateId => {
           domSurfaceStates.get(surfaceId)?.add(stateId);
           const knownStateTokens = descriptor.states.map(candidate => (
-            candidate.suffix?.match(/\[data-bf-state~=["']([^"']+)["']\]/)?.[1] ?? candidate.id
+            candidate.suffix?.match(/\[data-openbitfun-state~=["']([^"']+)["']\]/)?.[1] ?? candidate.id
           ));
           if (!knownStateTokens.includes(stateId)) {
             failures.push(`${sourceLocation}: unknown Appearance state ${surfaceId}.${stateId}`);
@@ -576,7 +576,7 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
   };
   visit(ast);
 
-  const dynamicContractPattern = /\b([A-Za-z_$][\w$]*)\.dataset\.bfComponent\s*=\s*['"]([^'"]+)['"]\s*;[\s\S]{0,240}?\b\1\.dataset\.bfPart\s*=\s*['"]([^'"]+)['"]\s*;/g;
+  const dynamicContractPattern = /\b([A-Za-z_$][\w$]*)\.dataset\.openbitfunComponent\s*=\s*['"]([^'"]+)['"]\s*;[\s\S]{0,240}?\b\1\.dataset\.openbitfunPart\s*=\s*['"]([^'"]+)['"]\s*;/g;
   for (const match of source.matchAll(dynamicContractPattern)) {
     const surfaceId = match[2];
     const partId = match[3];
@@ -615,7 +615,7 @@ for (const descriptor of descriptors) {
     }
   }
   for (const state of descriptor.states) {
-    const stateToken = state.suffix?.match(/\[data-bf-state~=["']([^"']+)["']\]/)?.[1];
+    const stateToken = state.suffix?.match(/\[data-openbitfun-state~=["']([^"']+)["']\]/)?.[1];
     if (state.kind === 'ancestorPart' && state.part && !descriptor.parts.includes(state.part)) {
       failures.push(`${relative(descriptor.file)}: state ${descriptor.id}.${state.id} references unknown ancestor part ${state.part}`);
     }
@@ -641,18 +641,18 @@ for (const sceneFile of walk(sceneRoot).filter(file => file.endsWith('Scene.tsx'
     failures.push(`${relative(sceneFile)}: top-level Scene must own colocated appearance.ts`);
     continue;
   }
-  const sceneIds = literalAttributes(sources.get(sceneFile) ?? '', 'data-bf-scene');
+  const sceneIds = literalAttributes(sources.get(sceneFile) ?? '', 'data-openbitfun-scene');
   const colocatedDescriptorIds = new Set(descriptors.filter(item => item.file === appearanceFile).map(item => item.id));
   if (sceneIds.size === 0) {
-    failures.push(`${relative(sceneFile)}: top-level Scene must expose a literal data-bf-scene root contract`);
+    failures.push(`${relative(sceneFile)}: top-level Scene must expose a literal data-openbitfun-scene root contract`);
   } else if (![...sceneIds].some(id => colocatedDescriptorIds.has(id))) {
-    failures.push(`${relative(sceneFile)}: no data-bf-scene value matches a descriptor in colocated appearance.ts`);
+    failures.push(`${relative(sceneFile)}: no data-openbitfun-scene value matches a descriptor in colocated appearance.ts`);
   }
 }
 
 const visualEntryPoints = new Set([
   'main.tsx',
-  'tools/bitfun-canvas/runtime/entry.tsx',
+  'tools/openbitfun-canvas/runtime/entry.tsx',
 ]);
 const styledProductionTsx = productionCodeSources.filter(([file, source]) => {
   if (!file.endsWith('.tsx')) return false;
@@ -683,18 +683,18 @@ const flowChatToolCardFile = path.join(
 const flowChatToolCardSource = fs.existsSync(flowChatToolCardFile)
   ? fs.readFileSync(flowChatToolCardFile, 'utf8')
   : '';
-if (!flowChatToolCardSource.includes('data-bf-component="flow-chat-tool-card"')
-  || !flowChatToolCardSource.includes('data-bf-part="root"')
-  || !flowChatToolCardSource.includes('data-bf-part="surface"')
-  || !flowChatToolCardSource.includes('data-bf-part="summary"')
+if (!flowChatToolCardSource.includes('data-openbitfun-component="flow-chat-tool-card"')
+  || !flowChatToolCardSource.includes('data-openbitfun-part="root"')
+  || !flowChatToolCardSource.includes('data-openbitfun-part="surface"')
+  || !flowChatToolCardSource.includes('data-openbitfun-part="summary"')
   || !flowChatToolCardSource.includes('part: "error" | "expanded"')
-  || !flowChatToolCardSource.includes('data-bf-part={part}')) {
-  failures.push('@bitfun/ui FlowChat tool cards must project the shared multi-part Appearance contract');
+  || !flowChatToolCardSource.includes('data-openbitfun-part={part}')) {
+  failures.push('@openbitfun/ui FlowChat tool cards must project the shared multi-part Appearance contract');
 }
 const configPageLayoutSource = sources.get(path.join(sourceRoot, 'infrastructure', 'config', 'components', 'common', 'ConfigPageLayout.tsx')) ?? '';
 if (!configPageLayoutSource.includes('...props')
-  || !configPageLayoutSource.includes('data-bf-component="config"')
-  || !configPageLayoutSource.includes('data-bf-part="root"')) {
+  || !configPageLayoutSource.includes('data-openbitfun-component="config"')
+  || !configPageLayoutSource.includes('data-openbitfun-part="root"')) {
   failures.push('ConfigPageLayout must forward caller Appearance attributes to its real config root');
 }
 
@@ -773,8 +773,8 @@ if (/\bfetch\s*\(/.test(compilerSource) || /127\.0\.0\.1:7469|#region agent log/
 }
 
 for (const [file, source] of productionSources) {
-  if (source.includes('data-bf-kind')) {
-    failures.push(`${relative(file)}: data-bf-kind is forbidden; use a dedicated surface, semantic part, facet, or state`);
+  if (source.includes('data-openbitfun-kind')) {
+    failures.push(`${relative(file)}: data-openbitfun-kind is forbidden; use a dedicated surface, semantic part, facet, or state`);
   }
   const normalizedFile = relative(file).replaceAll('\\', '/');
   if (/appearance(?:[-_.]?(?:v\d+|new|legacy))/i.test(normalizedFile)
@@ -782,7 +782,7 @@ for (const [file, source] of productionSources) {
     failures.push(`${relative(file)}: versioned or transitional Appearance naming is forbidden`);
   }
   if (/\.(?:css|scss)$/.test(file) && /prefers-color-scheme/.test(source)) {
-    failures.push(`${relative(file)}: production styles must follow data-bf-appearance-mode instead of OS color-scheme media queries`);
+    failures.push(`${relative(file)}: production styles must follow data-openbitfun-appearance-mode instead of OS color-scheme media queries`);
   }
   if (source.includes('createPortal(') && !source.includes('getAppearanceOverlayHost')) {
     failures.push(`${relative(file)}: createPortal must target getAppearanceOverlayHost()`);
@@ -793,7 +793,7 @@ for (const [file, source] of productionSources) {
   if (/\bThemeService\b|\bthemeService\b|\buseTheme\b|\buseThemeStore\b|ThemeAppearanceBridge/.test(source)) {
     failures.push(`${relative(file)}: legacy Theme runtime reference is forbidden`);
   }
-  if (/data-theme(?:-type)?|data-bf-theme(?!-scope(?=$|[="'\]\s]))|bitfun\/request-theme|themeChange|onThemeChange/.test(source)) {
+  if (/data-theme(?:-type)?|data-openbitfun-theme(?!-scope(?=$|[="'\]\s]))|openbitfun\/request-theme|themeChange|onThemeChange/.test(source)) {
     failures.push(`${relative(file)}: legacy Theme DOM or bridge contract is forbidden`);
   }
   if (/--(?:color|border|element|git-color|scrollbar|shadow|blur|size|opacity|motion|easing|font|line-height|btn|flowchat|scene)-/.test(source)) {
@@ -818,10 +818,10 @@ for (const [file, source] of productionSources) {
 const crossBoundaryForbiddenContracts = [
   ['hostTheme', /\bhostTheme\b/],
   ['CanvasHostTheme', /\bCanvasHostTheme\b/],
-  ['bitfun-canvas-theme', /bitfun-canvas-theme/],
+  ['openbitfun-canvas-theme', /openbitfun-canvas-theme/],
   ['onThemeChange', /\bonThemeChange\b/],
   ['data-theme-type', /data-theme-type/],
-  ['bitfun/request-theme', /bitfun\/request-theme/],
+  ['openbitfun/request-theme', /openbitfun\/request-theme/],
   ['ThemeService', /\bThemeService\b/],
   ['SkinService', /\bSkinService\b/],
   ['tools/editor/themes', /tools[\\/]editor[\\/]themes/],

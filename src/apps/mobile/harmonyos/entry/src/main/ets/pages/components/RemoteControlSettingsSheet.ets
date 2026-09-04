@@ -4,7 +4,7 @@ import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT, STATUS_DANGER } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
-import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
+import { OpenBitFunAccountLoginPage } from './OpenBitFunAccountLoginPage';
 import { AccountProfilePanel } from './AccountProfilePanel';
 import { SheetCloseHeader } from './SheetCloseHeader';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
@@ -111,7 +111,7 @@ export struct RemoteControlSettingsSheet {
     Row({ space: 12 }) {
       DefaultAccountAvatar({ avatarSize: 34 })
       Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.profile') :
-        RemoteI18n.t('sidebar.signInBitFunAccount'))
+        RemoteI18n.t('sidebar.signInOpenBitFunAccount'))
         .fontSize(MobileDesignTypography.headlineSmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
@@ -432,7 +432,7 @@ export struct RemoteControlSettingsSheet {
 
   @Builder
   private LoginPage() {
-    BitFunAccountLoginPage({
+    OpenBitFunAccountLoginPage({
       cloudLogin: this.cloudLogin,
       onClose: (): void => this.leaveAccountPage(),
       onLoginSuccess: (): void => {

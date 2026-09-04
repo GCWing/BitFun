@@ -85,7 +85,7 @@ fn render_memory_read_path_reminder(memory_root: &Path, memory_summary: &str) ->
     format!(
         r#"## Memory
 
-You have access to a local BitFun memory folder with guidance from prior runs. Use it when it is likely to help with the current request.
+You have access to a local OpenBitFun memory folder with guidance from prior runs. Use it when it is likely to help with the current request.
 
 Decision boundary:
 - Skip memory only when the request is clearly self-contained and does not need workspace history, prior decisions, or user preferences.
@@ -110,9 +110,9 @@ Tool access:
 - If file/search tools are unavailable, rely only on MEMORY_SUMMARY and say when a useful deeper lookup could not be performed.
 
 Memory citation requirements:
-- If any memory files beyond the injected MEMORY_SUMMARY were used, append exactly one <bitfun-mem-citation> block as the very last content of the final reply.
+- If any memory files beyond the injected MEMORY_SUMMARY were used, append exactly one <openbitfun-mem-citation> block as the very last content of the final reply.
 - Use this structure:
-<bitfun-mem-citation>
+<openbitfun-mem-citation>
 <citation_entries>
 MEMORY.md:10-12|note=[short reason]
 rollout_summaries/example.md:3-4|note=[short reason]
@@ -120,7 +120,7 @@ rollout_summaries/example.md:3-4|note=[short reason]
 <rollout_ids>
 rollout-or-session-id
 </rollout_ids>
-</bitfun-mem-citation>
+</openbitfun-mem-citation>
 - citation_entries paths must be relative to the memory root.
 - Use tight, non-blank line ranges.
 - Include rollout_ids only when the referenced memory file exposes stable rollout or session ids.
@@ -167,7 +167,7 @@ mod tests {
         assert!(reminder.contains("MEMORY.md is the searchable registry"));
         assert!(reminder.contains("extensions/ad_hoc/notes"));
         assert!(reminder.contains("Use the normal Write tool"));
-        assert!(reminder.contains("<bitfun-mem-citation>"));
+        assert!(reminder.contains("<openbitfun-mem-citation>"));
         assert!(reminder.contains("Memory summary body"));
         assert!(reminder.contains(&memory_root.display().to_string()));
     }

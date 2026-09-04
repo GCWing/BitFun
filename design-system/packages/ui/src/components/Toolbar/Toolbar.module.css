@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .leading,
   .center,
@@ -13,9 +13,9 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    column-gap: var(--bf-layout-toolbar-content-gap);
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-raised);
+    column-gap: var(--openbitfun-layout-toolbar-content-gap);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-raised);
   }
 
   .root[data-has-center="true"] {
@@ -27,21 +27,21 @@
   }
 
   .root[data-bordered="true"] {
-    border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-block-end: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .root[data-size="sm"] {
-    min-block-size: var(--bf-layout-toolbar-sm-height);
-    padding-block: var(--bf-layout-toolbar-sm-padding-block);
-    padding-inline: var(--bf-layout-toolbar-sm-padding-inline);
+    min-block-size: var(--openbitfun-layout-toolbar-sm-height);
+    padding-block: var(--openbitfun-layout-toolbar-sm-padding-block);
+    padding-inline: var(--openbitfun-layout-toolbar-sm-padding-inline);
   }
 
   .root[data-size="md"] {
-    min-block-size: var(--bf-layout-toolbar-md-height);
-    padding-block-start: var(--bf-layout-toolbar-md-padding-block-start);
-    padding-block-end: var(--bf-layout-toolbar-md-padding-block-end);
-    padding-inline-start: var(--bf-layout-toolbar-md-padding-inline-start);
-    padding-inline-end: var(--bf-layout-toolbar-md-padding-inline-end);
+    min-block-size: var(--openbitfun-layout-toolbar-md-height);
+    padding-block-start: var(--openbitfun-layout-toolbar-md-padding-block-start);
+    padding-block-end: var(--openbitfun-layout-toolbar-md-padding-block-end);
+    padding-inline-start: var(--openbitfun-layout-toolbar-md-padding-inline-start);
+    padding-inline-end: var(--openbitfun-layout-toolbar-md-padding-inline-end);
   }
 
   .leading,
@@ -68,7 +68,7 @@
     mask-image: linear-gradient(
       to right,
       currentColor 0,
-      currentColor calc(100% - var(--bf-layout-toolbar-overflow-fade-extent)),
+      currentColor calc(100% - var(--openbitfun-layout-toolbar-overflow-fade-extent)),
       transparent 100%
     );
     scrollbar-width: none;
@@ -103,24 +103,24 @@
   }
 
   .group[data-gap="sm"] {
-    gap: var(--bf-layout-toolbar-group-gap-sm);
+    gap: var(--openbitfun-layout-toolbar-group-gap-sm);
   }
 
   .group[data-gap="md"] {
-    gap: var(--bf-layout-toolbar-group-gap-md);
+    gap: var(--openbitfun-layout-toolbar-group-gap-md);
   }
 
 
   .separator {
-    inline-size: var(--bf-border-width-default);
-    block-size: var(--bf-layout-toolbar-separator-block-size);
-    flex: 0 0 var(--bf-border-width-default);
-    background: var(--bf-color-border-subtle);
+    inline-size: var(--openbitfun-border-width-default);
+    block-size: var(--openbitfun-layout-toolbar-separator-block-size);
+    flex: 0 0 var(--openbitfun-border-width-default);
+    background: var(--openbitfun-color-border-subtle);
   }
 
   .badge {
-    min-inline-size: var(--bf-layout-toolbar-badge-size);
-    min-block-size: var(--bf-layout-toolbar-badge-size);
+    min-inline-size: var(--openbitfun-layout-toolbar-badge-size);
+    min-block-size: var(--openbitfun-layout-toolbar-badge-size);
   }
 
   @media (forced-colors: active) {

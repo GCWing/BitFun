@@ -1,10 +1,10 @@
 //! Persistence for subscription-account credentials.
 //!
 //! OAuth tokens and API keys are stored outside the metadata JSON. macOS uses
-//! a prompt-free encrypted file vault in BitFun's application data directory;
+//! a prompt-free encrypted file vault in OpenBitFun's application data directory;
 //! Windows and Linux continue to use their native credential stores.
 //!
-//! Path: `{dirs::config_dir()}/bitfun/data/subscription_auth.json`.
+//! Path: `{dirs::config_dir()}/openbitfun/data/subscription_auth.json`.
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use std::time::Duration;
 const STORE_VERSION: u8 = 2;
 const CLEANUP_JOURNAL_VERSION: u8 = 1;
 #[cfg(not(target_os = "macos"))]
-const KEYRING_SERVICE: &str = "openbitfun.bitfun.subscription-auth.v1";
+const KEYRING_SERVICE: &str = "openbitfun.subscription-auth.v1";
 const STORE_FILE_LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const PROVIDER_REFRESH_LOCK_TIMEOUT: Duration = Duration::from_secs(40);
 const STORE_FILE_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
@@ -63,8 +63,8 @@ enum CredentialMetadata {
         metadata: Option<serde_json::Value>,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         needs_reauthentication: bool,
-        /// Unique namespace for this committed set of vault chunks. `None`
-        /// denotes the legacy single-password entry keyed by provider.
+        /// Unique namespace for this committed set of vault chunks. Current
+        /// writers always set this; an absent value requires reauthentication.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         secret_set_id: Option<String>,
         #[serde(default, skip_serializing_if = "is_zero")]
@@ -185,9 +185,7 @@ impl CredentialMetadata {
                 key_parts,
                 ..
             } => secret_entry_names(provider, set_id, "api-key", *key_parts).collect(),
-            // The old secure-vault representation used one password entry
-            // named exactly after the provider.
-            _ => vec![provider.to_string()],
+            _ => Vec::new(),
         }
     }
 }
@@ -230,7 +228,7 @@ struct SecureStoreFile {
     /// Monotonic provider epochs, retained even after an account is removed.
     ///
     /// The retained entry is a tombstone: an authorization or token refresh
-    /// that began in another BitFun process before logout must not be able to
+    /// that began in another OpenBitFun process before logout must not be able to
     /// publish its stale credential after logout has completed.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     provider_revisions: HashMap<String, u64>,
@@ -278,12 +276,6 @@ impl std::error::Error for VaultUnavailableError {}
 
 fn vault_unavailable(message: impl Into<String>) -> anyhow::Error {
     VaultUnavailableError(message.into()).into()
-}
-
-fn is_vault_unavailable(error: &anyhow::Error) -> bool {
-    error
-        .chain()
-        .any(|cause| cause.downcast_ref::<VaultUnavailableError>().is_some())
 }
 
 /// Result used by account discovery so a missing/locked vault entry is visible
@@ -574,7 +566,7 @@ async fn acquire_store_file_lock_with_timeout(
                 if tokio::time::Instant::now() >= deadline {
                     let _ = fs2::FileExt::unlock(&file);
                     return Err(anyhow!(
-                        "timed out waiting for subscription credential transaction lock {}; another BitFun process may be updating credentials",
+                        "timed out waiting for subscription credential transaction lock {}; another OpenBitFun process may be updating credentials",
                         lock_path.display()
                     ));
                 }
@@ -587,7 +579,7 @@ async fn acquire_store_file_lock_with_timeout(
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
                 if remaining.is_zero() {
                     return Err(anyhow!(
-                        "timed out waiting for subscription credential transaction lock {}; another BitFun process may be updating credentials",
+                        "timed out waiting for subscription credential transaction lock {}; another OpenBitFun process may be updating credentials",
                         lock_path.display()
                     ));
                 }
@@ -607,7 +599,7 @@ async fn acquire_store_file_lock_with_timeout(
 
 async fn acquire_store_transaction() -> Result<(PathBuf, StoreTransactionGuard)> {
     // Lock order is process mutex first, OS file lock second everywhere. The
-    // unlocked helpers below prevent recursive acquisition during migration.
+    // unlocked helpers below prevent recursive acquisition during mutations.
     let process_lock = store_operation_lock().lock().await;
     let path = store_path()?;
     let file_lock = acquire_store_file_lock_with_timeout(&path, STORE_FILE_LOCK_TIMEOUT).await?;
@@ -620,7 +612,7 @@ async fn acquire_store_transaction() -> Result<(PathBuf, StoreTransactionGuard)>
     ))
 }
 
-/// Serializes rotating-token refreshes for one provider across BitFun
+/// Serializes rotating-token refreshes for one provider across OpenBitFun
 /// processes. The caller must reload the credential after acquiring the lease.
 pub(crate) async fn acquire_provider_refresh_lease(provider: &str) -> Result<ProviderRefreshLease> {
     if provider.is_empty()
@@ -818,7 +810,7 @@ fn store_path() -> Result<PathBuf> {
     }
     let base = dirs::config_dir().ok_or_else(|| anyhow!("system config directory unavailable"))?;
     Ok(base
-        .join("bitfun")
+        .join(openbitfun_core_types::product_identity::data_namespace())
         .join("data")
         .join("subscription_auth.json"))
 }
@@ -835,10 +827,9 @@ async fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
     Ok((!bytes.is_empty()).then_some(bytes))
 }
 
-/// Recover the old metadata index if the process stopped after rotating the
-/// destination but before moving the new temp file into place. If the new file
-/// is already present, scrub the stale backup instead; it can contain legacy
-/// plaintext credentials from a migration.
+/// Recover the previous metadata index if the process stopped after rotating
+/// the destination but before moving the new temp file into place. If the new
+/// file is already present, scrub the stale backup instead.
 #[cfg(windows)]
 async fn restore_windows_backup_if_needed(path: &Path) -> Result<()> {
     if path.exists() {
@@ -953,9 +944,9 @@ fn open_native_keyring_entry(entry_name: &str) -> std::result::Result<keyring_co
 #[cfg(target_os = "macos")]
 fn macos_credential_vault(
     metadata_path: &Path,
-) -> bitfun_services_core::credential_vault::CredentialVault {
+) -> openbitfun_services_core::credential_vault::CredentialVault {
     let parent = metadata_path.parent().unwrap_or_else(|| Path::new("."));
-    bitfun_services_core::credential_vault::CredentialVault::new(
+    openbitfun_services_core::credential_vault::CredentialVault::new(
         parent.join(".subscription_auth_vault.key"),
         parent.join("subscription_auth_vault.json"),
     )
@@ -1001,51 +992,6 @@ async fn get_secret_bytes(entry_name: &str) -> Result<Option<Vec<u8>>> {
         })
         .await
         .context("join system credential read task")?
-        .map_err(vault_unavailable)
-    }
-}
-
-/// Reads the v1 combined JSON entry. It was written through the password API,
-/// which uses a platform-specific text encoding on Windows, so it cannot be
-/// safely read through `get_secret` there.
-async fn get_legacy_password(provider: &str) -> Result<Option<String>> {
-    if let Some(path) = overridden_store_path() {
-        if test_vault_is_unavailable(&path) {
-            return Err(vault_unavailable("subscription test vault unavailable"));
-        }
-        return test_secrets()
-            .lock()
-            .map_err(|_| anyhow!("subscription test vault lock poisoned"))
-            .map(|vault| {
-                vault
-                    .get(&path)
-                    .and_then(|items| items.get(provider))
-                    .and_then(|bytes| String::from_utf8(bytes.clone()).ok())
-            });
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        return get_secret_bytes(provider)
-            .await
-            .map(|secret| secret.and_then(|bytes| String::from_utf8(bytes).ok()));
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let provider = provider.to_string();
-        tokio::task::spawn_blocking(move || {
-            let _guard = native_keyring_lock()
-                .lock()
-                .map_err(|_| "subscription keyring lock poisoned".to_string())?;
-            let entry = open_native_keyring_entry(&provider)?;
-            match entry.get_password() {
-                Ok(secret) => Ok(Some(secret)),
-                Err(keyring_core::Error::NoEntry) => Ok(None),
-                Err(err) => Err(format!("read legacy system credential entry: {err}")),
-            }
-        })
-        .await
-        .context("join legacy system credential read task")?
         .map_err(vault_unavailable)
     }
 }
@@ -1215,21 +1161,7 @@ async fn read_secret_material(
         } => Ok(read_chunked_field(provider, set_id, "api-key", *key_parts)
             .await?
             .map(|key| SecretMaterial::Api { key })),
-        // Backward-compatible read of the original combined JSON password.
-        _ => {
-            let Some(secret) = get_legacy_password(provider).await? else {
-                return Ok(None);
-            };
-            match serde_json::from_str(&secret) {
-                Ok(material) => Ok(Some(material)),
-                Err(error) => {
-                    log::warn!(
-                        "legacy subscription credential vault entry is invalid for provider {provider}: {error}"
-                    );
-                    Ok(None)
-                }
-            }
-        }
+        _ => Ok(None),
     }
 }
 
@@ -1384,80 +1316,8 @@ async fn write_secure_file(path: &Path, file: &SecureStoreFile) -> Result<()> {
     write_atomic(path, &bytes).await
 }
 
-async fn migrate_legacy_store(path: &Path, legacy: Store) -> Result<LoadState> {
-    let mut secure = SecureStoreFile {
-        version: STORE_VERSION,
-        accounts: HashMap::new(),
-        provider_revisions: HashMap::new(),
-    };
-
-    for (provider, credential) in &legacy {
-        secure.accounts.insert(
-            provider.clone(),
-            CredentialMetadata::from_credential(credential),
-        );
-    }
-    let new_entries = secure.active_vault_entries();
-    // Commit cleanup intent before the first vault write so a process stop can
-    // never strand partially-written migration chunks.
-    schedule_cleanup(path, new_entries.iter().cloned()).await?;
-
-    for (provider, credential) in &legacy {
-        let metadata = secure
-            .accounts
-            .get(provider)
-            .expect("legacy migration metadata exists");
-        if let Err(error) = write_secret_material(provider, metadata, credential).await {
-            if let Err(cleanup_error) = reconcile_cleanup_journal(path, &HashSet::new()).await {
-                log::warn!(
-                    "cleanup after interrupted subscription credential migration remains pending: {cleanup_error:#}"
-                );
-            }
-
-            // A temporarily unavailable credential vault must not turn
-            // a retryable migration into permanent credential loss. Leave the
-            // legacy file untouched and retry after the vault is available.
-            if is_vault_unavailable(&error) {
-                log::warn!(
-                    "subscription credential vault migration deferred because the vault is unavailable: {error:#}"
-                );
-                return Ok(LoadState {
-                    credentials: Store::new(),
-                    requires_reauthentication: HashSet::new(),
-                    vault_unavailable: legacy.keys().cloned().collect(),
-                    provider_revisions: HashMap::new(),
-                });
-            }
-            return Err(error.context("migrate subscription credential to the credential vault"));
-        }
-    }
-
-    if let Err(error) = write_secure_file(path, &secure).await {
-        if let Err(cleanup_error) = reconcile_cleanup_journal(path, &HashSet::new()).await {
-            log::warn!(
-                "cleanup after failed subscription credential metadata migration remains pending: {cleanup_error:#}"
-            );
-        }
-        return Err(error);
-    }
-    if let Err(error) = reconcile_cleanup_journal(path, &new_entries).await {
-        // The entries are active after this commit. A later load can safely
-        // remove their journal markers without deleting the credential.
-        log::warn!(
-            "finalize subscription credential migration cleanup journal failed; retrying later: {error:#}"
-        );
-    }
-    log::info!("subscription credentials migrated to the credential vault");
-    Ok(LoadState {
-        credentials: legacy,
-        requires_reauthentication: HashSet::new(),
-        vault_unavailable: HashSet::new(),
-        provider_revisions: HashMap::new(),
-    })
-}
-
-/// Loads credentials plus vault availability state. Legacy plaintext files are
-/// migrated in place and immediately rewritten without secret fields.
+/// Loads credentials plus vault availability state from the canonical metadata
+/// and chunked-vault representation.
 async fn load_with_state_unlocked(path: &Path) -> Result<LoadState> {
     let Some(bytes) = read_bytes(path).await? else {
         if let Err(error) = reconcile_cleanup_journal(path, &HashSet::new()).await {
@@ -1473,13 +1333,7 @@ async fn load_with_state_unlocked(path: &Path) -> Result<LoadState> {
         });
     };
 
-    let secure = match parse_secure_file(&bytes, path) {
-        Ok(file) => file,
-        Err(secure_error) => match serde_json::from_slice::<Store>(&bytes) {
-            Ok(legacy) => return migrate_legacy_store(path, legacy).await,
-            Err(_) => return Err(secure_error),
-        },
-    };
+    let secure = parse_secure_file(&bytes, path)?;
 
     let active_entries = secure.active_vault_entries();
     let provider_revisions = secure.provider_revisions.clone();
@@ -1523,8 +1377,8 @@ async fn load_with_state_unlocked(path: &Path) -> Result<LoadState> {
     })
 }
 
-/// Serializes discovery with migrations and metadata mutations so callers
-/// never observe or race a partially rewritten credential index.
+/// Serializes discovery with metadata mutations so callers never observe or
+/// race a partially rewritten credential index.
 pub(crate) async fn load_with_state() -> Result<LoadState> {
     let (path, _transaction) = acquire_store_transaction().await?;
     load_with_state_unlocked(&path).await
@@ -1591,7 +1445,7 @@ async fn upsert_internal(
     expected_revision: Option<u64>,
 ) -> Result<ConditionalCommitOutcome> {
     let (path, _transaction) = acquire_store_transaction().await?;
-    // Trigger one-time migration before modifying an older file.
+    // Reconcile pending vault cleanup before modifying the metadata index.
     let _ = load_with_state_unlocked(&path).await?;
     let mut file = read_secure_file(&path).await?;
     let current_revision = file.provider_revision(provider);
@@ -1804,16 +1658,16 @@ pub(crate) async fn replace_metadata_file_windows(tmp: &Path, path: &Path) -> Re
 mod file_lock_tests {
     use super::*;
 
-    const LOCK_CHILD_METADATA_ENV: &str = "BITFUN_SUBAUTH_LOCK_CHILD_METADATA";
-    const LOCK_CHILD_STARTED_ENV: &str = "BITFUN_SUBAUTH_LOCK_CHILD_STARTED";
-    const LOCK_CHILD_OBSERVED_ENV: &str = "BITFUN_SUBAUTH_LOCK_CHILD_OBSERVED";
+    const LOCK_CHILD_METADATA_ENV: &str = "OPENBITFUN_SUBAUTH_LOCK_CHILD_METADATA";
+    const LOCK_CHILD_STARTED_ENV: &str = "OPENBITFUN_SUBAUTH_LOCK_CHILD_STARTED";
+    const LOCK_CHILD_OBSERVED_ENV: &str = "OPENBITFUN_SUBAUTH_LOCK_CHILD_OBSERVED";
     const CROSS_PROCESS_TEST_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
     const CROSS_PROCESS_TEST_PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
 
     fn temporary_metadata_path(label: &str) -> PathBuf {
         std::env::temp_dir()
             .join(format!(
-                "bitfun-subauth-lock-{label}-{}",
+                "openbitfun-subauth-lock-{label}-{}",
                 uuid::Uuid::new_v4()
             ))
             .join("subscription_auth.json")
@@ -1970,7 +1824,7 @@ mod file_lock_tests {
         )
         .await
         .expect("stage cleanup intent before vault write and metadata commit");
-        let mut child = bitfun_services_core::process_manager::create_command(
+        let mut child = openbitfun_services_core::process_manager::create_command(
             std::env::current_exe().expect("test binary"),
         )
         .arg("--exact")

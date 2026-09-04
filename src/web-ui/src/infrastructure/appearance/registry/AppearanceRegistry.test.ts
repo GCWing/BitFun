@@ -6,8 +6,8 @@ describe('AppearanceRegistry', () => {
     const descriptor = {
       id: 'test-surface',
       parts: [{ id: 'root', allowedProperties: ['color'] as const }],
-      facets: [{ id: 'size', attribute: 'data-bf-size' as const, values: ['small', 'large'] }],
-      states: [{ id: 'active', selector: { kind: 'self' as const, suffix: '[data-bf-state~="active"]' } }],
+      facets: [{ id: 'size', attribute: 'data-openbitfun-size' as const, values: ['small', 'large'] }],
+      states: [{ id: 'active', selector: { kind: 'self' as const, suffix: '[data-openbitfun-state~="active"]' } }],
     };
     const registry = new AppearanceRegistry().registerComponent(descriptor).freeze();
     const registered = registry.getComponent('test-surface')!;

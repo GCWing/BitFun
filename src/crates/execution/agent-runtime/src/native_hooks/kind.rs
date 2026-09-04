@@ -3,7 +3,7 @@
 use super::settings::AgentHookEvent;
 use std::fmt;
 
-/// The Codex lifecycle events plus BitFun/OpenCode execution categories.
+/// The Codex lifecycle events plus OpenBitFun/OpenCode execution categories.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RuntimeHookKind {

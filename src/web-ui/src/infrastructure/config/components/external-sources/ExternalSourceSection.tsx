@@ -37,20 +37,20 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
         return (
           <React.Fragment key={group.key}>
             <ConfigPageRow
-              className="bitfun-external-sources-config__source-group"
+              className="openbitfun-external-sources-config__source-group"
               label={group.displayName}
               description={(
-                <div className="bitfun-external-sources-config__source-description" data-bf-component="external-sources-config" data-bf-part="sourceGroup">
-                  <span className="bitfun-external-sources-config__source-origin" data-bf-component="external-sources-config" data-bf-part="sourceDescription">
+                <div className="openbitfun-external-sources-config__source-description" data-openbitfun-component="external-sources-config" data-openbitfun-part="sourceGroup">
+                  <span className="openbitfun-external-sources-config__source-origin" data-openbitfun-component="external-sources-config" data-openbitfun-part="sourceDescription">
                     <span
-                      className="bitfun-external-sources-config__source-location"
+                      className="openbitfun-external-sources-config__source-location"
                       title={group.location}
                       translate="no"
                     >
                       {group.location}
                     </span>
                     <span aria-hidden="true">·</span>
-                    <span className="bitfun-external-sources-config__source-scopes">
+                    <span className="openbitfun-external-sources-config__source-scopes">
                       {group.scopes.map((scope, index) => (
                         <React.Fragment key={scope}>
                           {index > 0 ? <span aria-hidden="true"> + </span> : null}
@@ -64,13 +64,13 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
                   {SOURCE_COUNT_LABELS.some(
                     ([capability]) => group.counts[capability] > 0,
                   ) ? (
-                    <span className="bitfun-external-sources-config__source-counts">
+                    <span className="openbitfun-external-sources-config__source-counts">
                       {SOURCE_COUNT_LABELS.map(([capability, label]) => {
                         const count = group.counts[capability];
                         return count > 0 ? (
                           <span
                             key={capability}
-                            className="bitfun-external-sources-config__source-count"
+                            className="openbitfun-external-sources-config__source-count"
                           >
                             {t(label, { count })}
                           </span>
@@ -86,9 +86,9 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
             </ConfigPageRow>
             {userDiagnostics.length > 0 ? (
               <details
-                className="bitfun-external-sources-config__notice"
-                data-bf-component="external-sources-config"
-                data-bf-part="notice"
+                className="openbitfun-external-sources-config__notice"
+                data-openbitfun-component="external-sources-config"
+                data-openbitfun-part="notice"
                 data-external-attention="true"
                 data-external-ecosystem={group.ecosystemId}
               >
@@ -98,7 +98,7 @@ export const ExternalSourceSection: React.FC<ExternalSourceSectionProps> = ({
                     count: userDiagnostics.length,
                   })}
                 </summary>
-                <ul className="bitfun-external-sources-config__diagnostics" data-bf-component="external-sources-config" data-bf-part="diagnostics">
+                <ul className="openbitfun-external-sources-config__diagnostics" data-openbitfun-component="external-sources-config" data-openbitfun-part="diagnostics">
                   {userDiagnostics.map((diagnostic) => (
                     <li key={externalSourceDiagnosticKey(diagnostic)}>
                       <span>{t(`diagnostics.category.${sourceDiagnosticCategory(diagnostic.code)}`)}</span>

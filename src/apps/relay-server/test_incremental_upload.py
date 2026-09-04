@@ -133,9 +133,9 @@ async def run_tests():
     room2 = f"test_incr_{ts}_2"
 
     # Test data
-    file1_content = "<html><body>Hello BitFun Test</body></html>"
+    file1_content = "<html><body>Hello OpenBitFun Test</body></html>"
     file2_content = "body { margin: 0; background: #1a1a2e; }"
-    file3_content = "console.log('BitFun incremental upload test');"
+    file3_content = "console.log('OpenBitFun incremental upload test');"
 
     file1_b64 = b64enc(file1_content)
     file2_b64 = b64enc(file2_content)

@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "@bitfun/theme-bitfun/default.css";
-import "@bitfun/ui/styles.css";
+import "@openbitfun/theme-openbitfun/default.css";
+import "@openbitfun/ui/styles.css";
 import { App } from "./App";
 import { I18nProvider } from "./i18n";
 import "./styles.css";

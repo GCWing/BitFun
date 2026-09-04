@@ -1,8 +1,8 @@
-use bitfun_product_domains::canvas::types::{
+use openbitfun_product_domains::canvas::types::{
     CanvasDiagnostic, CanvasDiagnosticCategory, CanvasDiagnosticSeverity,
 };
 #[cfg(feature = "canvas-runtime")]
-use bitfun_product_domains::canvas::{
+use openbitfun_product_domains::canvas::{
     canvas_appearance_token_group_allows as generated_appearance_token_group_allows,
     canvas_sdk_component_props as generated_component_props, CANVAS_SDK_COMMON_PROPS,
 };
@@ -95,7 +95,7 @@ impl CanvasSdkContractVisitor<'_> {
                 severity: CanvasDiagnosticSeverity::Error,
                 category: CanvasDiagnosticCategory::TypeScript,
                 message: format!(
-                    "`{}` is not a valid prop for `{}` in bitfun/canvas",
+                    "`{}` is not a valid prop for `{}` in openbitfun/canvas",
                     prop, component
                 ),
                 code: Some("canvas.sdk.invalid_prop".to_string()),
@@ -229,6 +229,6 @@ fn sdk_invalid_prop_fix(component: &str, prop: &str) -> &'static str {
     match (component, prop) {
         ("Pill", "label") => "Put the label inside the Pill children, e.g. <Pill>Label</Pill>.",
         ("Table", "columns") => "Use <Table headers={...} rows={...} />; the Canvas SDK does not support a columns prop.",
-        _ => "Use props declared by the bitfun/canvas SDK for this component.",
+        _ => "Use props declared by the openbitfun/canvas SDK for this component.",
     }
 }

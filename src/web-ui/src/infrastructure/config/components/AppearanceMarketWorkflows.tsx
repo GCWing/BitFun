@@ -1,4 +1,4 @@
-import { Button, Field, Icon, Input, Select, ScrollArea, Textarea } from '@bitfun/ui';
+import { Button, Field, Icon, Input, Select, ScrollArea, Textarea } from '@openbitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Inbox, ShieldCheck } from 'lucide-react';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
@@ -45,7 +45,7 @@ interface ManualSubmissionDraft {
   licenseValue: string;
   changelog: string;
   repositoryUrl: string;
-  minBitfunVersion: string;
+  minOpenBitFunVersion: string;
 }
 
 function createManualSubmissionDraft(): ManualSubmissionDraft {
@@ -56,7 +56,7 @@ function createManualSubmissionDraft(): ManualSubmissionDraft {
     licenseValue: '',
     changelog: '',
     repositoryUrl: '',
-    minBitfunVersion: getVersionInfo().version,
+    minOpenBitFunVersion: getVersionInfo().version,
   };
 }
 
@@ -183,7 +183,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
       const submission = await appearanceMarketAPI.submitPackage({
         packagePath: manualDraft.packagePath,
         slug: manualDraft.slug.trim() || undefined,
-        minBitfunVersion: manualDraft.minBitfunVersion.trim() || undefined,
+        minOpenBitFunVersion: manualDraft.minOpenBitFunVersion.trim() || undefined,
         changelog: manualDraft.changelog.trim() || undefined,
         license: manualDraft.licenseKind === 'spdx'
           ? { spdxExpression: licenseValue }
@@ -210,8 +210,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
   const renderManualSubmit = () => manualSubmitOpen && (
     <form
       className="appearance-market__manual-submit"
-      data-bf-component="appearance-settings"
-      data-bf-part="marketManualSubmit"
+      data-openbitfun-component="appearance-settings"
+      data-openbitfun-part="marketManualSubmit"
       onSubmit={event => void submitPackage(event)}
     >
       <div className="appearance-market__manual-submit-heading">
@@ -289,10 +289,10 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           required
         >
           <Input
-            value={manualDraft.minBitfunVersion}
+            value={manualDraft.minOpenBitFunVersion}
             onChange={event => setManualDraft(current => ({
               ...current,
-              minBitfunVersion: event.target.value,
+              minOpenBitFunVersion: event.target.value,
             }))}
           />
         </Field>
@@ -379,8 +379,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
     return (
       <section
         className="appearance-market__workflow"
-        data-bf-component="appearance-settings"
-        data-bf-part="marketWorkflow"
+        data-openbitfun-component="appearance-settings"
+        data-openbitfun-part="marketWorkflow"
         aria-labelledby="appearance-market-submissions-title"
       >
         <header className="appearance-market__workflow-heading">
@@ -419,15 +419,15 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
             ) : (
               <div
                 className="appearance-market__submission-list"
-                data-bf-component="appearance-settings"
-                data-bf-part="marketSubmissionList"
+                data-openbitfun-component="appearance-settings"
+                data-openbitfun-part="marketSubmissionList"
               >
                 {submissions.map(submission => (
                   <article
                     key={submission.submissionId}
                     className="appearance-market__submission"
-                    data-bf-component="appearance-settings"
-                    data-bf-part="marketSubmission"
+                    data-openbitfun-component="appearance-settings"
+                    data-openbitfun-part="marketSubmission"
                   >
                     <div className="appearance-market__submission-preview">
                       {submission.previewUrl
@@ -483,8 +483,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
   return (
     <section
       className="appearance-market__workflow"
-      data-bf-component="appearance-settings"
-      data-bf-part="marketWorkflow"
+      data-openbitfun-component="appearance-settings"
+      data-openbitfun-part="marketWorkflow"
       aria-labelledby="appearance-market-review-title"
     >
       <header className="appearance-market__workflow-heading">
@@ -508,13 +508,13 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
       ) : (
         <div
           className="appearance-market__review-layout"
-          data-bf-component="appearance-settings"
-          data-bf-part="marketReviewLayout"
+          data-openbitfun-component="appearance-settings"
+          data-openbitfun-part="marketReviewLayout"
         >
           <ScrollArea
             className="appearance-market__review-queue"
-            data-bf-component="appearance-settings"
-            data-bf-part="marketReviewQueue"
+            data-openbitfun-component="appearance-settings"
+            data-openbitfun-part="marketReviewQueue"
           >
             {reviewQueue.map(submission => (
               <button
@@ -532,8 +532,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           </ScrollArea>
           <ScrollArea
             className="appearance-market__review-detail"
-            data-bf-component="appearance-settings"
-            data-bf-part="marketReviewDetail"
+            data-openbitfun-component="appearance-settings"
+            data-openbitfun-part="marketReviewDetail"
           >
             {detailLoading || !reviewDetail ? (
               <p className="appearance-market__loading">{t('package.market.review.detailLoading')}</p>
@@ -557,7 +557,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 <dl className="appearance-market__facts">
                   <div><dt>{t('package.market.review.package')}</dt><dd>{reviewDetail.submission.packageId}</dd></div>
                   <div><dt>{t('package.market.review.version')}</dt><dd>{reviewDetail.submission.packageVersion}</dd></div>
-                  <div><dt>{t('package.market.minimumVersion')}</dt><dd>{reviewDetail.submission.minBitfunVersion}</dd></div>
+                  <div><dt>{t('package.market.minimumVersion')}</dt><dd>{reviewDetail.submission.minOpenBitFunVersion}</dd></div>
                   <div><dt>{t('package.market.license')}</dt><dd>{reviewDetail.submission.license.spdxExpression || t('package.market.customLicense')}</dd></div>
                 </dl>
                 {reviewDetail.submission.requiredCapabilities.length > 0 && (
@@ -585,8 +585,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 )}
                 <div
                   className="appearance-market__review-actions"
-                  data-bf-component="appearance-settings"
-                  data-bf-part="marketReviewActions"
+                  data-openbitfun-component="appearance-settings"
+                  data-openbitfun-part="marketReviewActions"
                 >
                   <Textarea
                     label={t('package.market.review.reason')}

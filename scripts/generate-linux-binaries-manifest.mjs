@@ -78,8 +78,8 @@ const manifest = {
       key,
       {
         target,
-        cli: asset(`bitfun-cli-${version}-${target}.tar.gz`),
-        relay: asset(`bitfun-relay-server-${target}.tar.gz`),
+        cli: asset(`openbitfun-cli-${version}-${target}.tar.gz`),
+        relay: asset(`openbitfun-relay-server-${target}.tar.gz`),
       },
     ])
   ),

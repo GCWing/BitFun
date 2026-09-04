@@ -1,4 +1,4 @@
-use crate::agent::BitfunAppRuntime;
+use crate::agent::OpenBitFunAppRuntime;
 use crate::management::AppManagementService;
 use crate::role::AppClient;
 use crate::schema::{
@@ -6,12 +6,12 @@ use crate::schema::{
     PermissionEventNotification, ResyncDirective, SessionEventNotification,
 };
 use agent_client_protocol::{ConnectionTo, Result};
-use bitfun_agent_runtime::sdk::PermissionRequestEvent;
-use bitfun_app_server_protocol::external_source::ExternalSourceEventNotification;
+use openbitfun_agent_runtime::sdk::PermissionRequestEvent;
+use openbitfun_app_server_protocol::external_source::ExternalSourceEventNotification;
 use std::sync::Arc;
 
 pub(super) async fn run(
-    runtime: Arc<BitfunAppRuntime>,
+    runtime: Arc<OpenBitFunAppRuntime>,
     management: Option<Arc<AppManagementService>>,
     cx: ConnectionTo<AppClient>,
     event_state: Arc<crate::server::ConnectionEventState>,
@@ -19,7 +19,7 @@ pub(super) async fn run(
 ) -> Result<()> {
     let mut rx = runtime.event_source().subscribe();
     let mut permission_rx = runtime.runtime().subscribe_permission_requests().ok();
-    let mut config_rx = bitfun_core::service::config::subscribe_config_updates();
+    let mut config_rx = openbitfun_core::service::config::subscribe_config_updates();
     let mut external_source_rx = management
         .as_ref()
         .map(|management| management.subscribe_external_source_updates());
@@ -47,7 +47,7 @@ pub(super) async fn run(
                     std::future::pending::<
                         Option<
                             Result<
-                                bitfun_core::service::config::ConfigUpdateEvent,
+                                openbitfun_core::service::config::ConfigUpdateEvent,
                                 tokio::sync::broadcast::error::RecvError,
                             >,
                         >,
@@ -61,7 +61,7 @@ pub(super) async fn run(
                 Some(receiver) => Some(receiver.recv().await),
                 None => {
                     std::future::pending::<Option<Result<
-                        (String, bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot),
+                        (String, openbitfun_product_domains::external_sources::ExternalSourcePublicSnapshot),
                         tokio::sync::broadcast::error::RecvError,
                     >>>()
                     .await

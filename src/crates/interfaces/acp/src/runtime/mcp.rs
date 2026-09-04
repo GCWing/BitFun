@@ -3,16 +3,16 @@ use std::sync::Arc;
 
 use agent_client_protocol::schema::{McpServer, McpServerSse, McpServerStdio};
 use agent_client_protocol::{Error, Result};
-use bitfun_core::service::config::get_global_config_service;
-use bitfun_core::service::mcp::{
+use openbitfun_core::service::config::get_global_config_service;
+use openbitfun_core::service::mcp::{
     get_global_mcp_service, set_global_mcp_service, ConfigLocation, MCPServerConfig,
     MCPServerManager, MCPServerTransport, MCPServerType, MCPService,
 };
 use sha2::{Digest, Sha256};
 
-use super::BitfunAcpRuntime;
+use super::OpenBitFunAcpRuntime;
 
-impl BitfunAcpRuntime {
+impl OpenBitFunAcpRuntime {
     pub(super) fn validate_mcp_servers(&self, servers: &[McpServer]) -> Result<()> {
         let configs = acp_mcp_server_configs("validation", servers.iter().cloned())?;
         ensure_unique_server_ids(&configs)
@@ -115,9 +115,9 @@ async fn mcp_server_manager() -> Result<Arc<MCPServerManager>> {
 
     let config_service = get_global_config_service()
         .await
-        .map_err(BitfunAcpRuntime::internal_error)?;
+        .map_err(OpenBitFunAcpRuntime::internal_error)?;
     let service =
-        Arc::new(MCPService::new(config_service).map_err(BitfunAcpRuntime::internal_error)?);
+        Arc::new(MCPService::new(config_service).map_err(OpenBitFunAcpRuntime::internal_error)?);
     set_global_mcp_service(service.clone());
     Ok(service.server_manager())
 }

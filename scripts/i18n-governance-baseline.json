@@ -19,7 +19,7 @@
         "agents.code": 0,
         "agents.cowork": 0,
         "agents.default": 2,
-        "connectionMethods.bitfunServer": 0,
+        "connectionMethods.openbitfunServer": 0,
         "connectionMethods.lan": 0,
         "features.codeAgent": 1,
         "features.deepReview": 0,

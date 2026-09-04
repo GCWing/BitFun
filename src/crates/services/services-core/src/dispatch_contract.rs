@@ -7,10 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const DISPATCH_PROTOCOL_VERSION: u32 = 5;
+pub const DISPATCH_PROTOCOL_VERSION: u32 = 6;
 
-/// Capabilities every v5 target advertises unconditionally.
+/// Capabilities every v6 target advertises unconditionally.
 pub const DISPATCH_BASE_TARGET_CAPABILITIES: &[&str] = &[
+    "product_identity",
     "persistent_jobs",
     "cursor_events",
     "workspace_serialization",

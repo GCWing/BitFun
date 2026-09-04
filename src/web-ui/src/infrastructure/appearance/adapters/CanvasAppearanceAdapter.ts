@@ -7,8 +7,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export class CanvasAppearanceAdapter implements AppearanceRendererAdapter<'bitfun-canvas'> {
-  readonly id = 'bitfun-canvas';
+export class CanvasAppearanceAdapter implements AppearanceRendererAdapter<'openbitfun-canvas'> {
+  readonly id = 'openbitfun-canvas';
   private settings: CanvasAppearanceSettings | null = null;
   private listeners = new Set<() => void>();
 

@@ -108,7 +108,7 @@
   },
   "market": {
     "title": "MiniApp Market",
-    "subtitle": "Browse human-reviewed mini apps that run in BitFun's strict sandbox.",
+    "subtitle": "Browse human-reviewed mini apps that run in OpenBitFun's strict sandbox.",
     "catalog": "Catalog",
     "sortLabel": "Sort by",
     "search": "Search the market…",
@@ -117,10 +117,10 @@
     "account": {
       "menuLabel": "GitHub account @{{login}}",
       "githubAccount": "GitHub market account",
-      "dialogTitle": "Sign in to BitFun Market",
+      "dialogTitle": "Sign in to OpenBitFun Market",
       "dialogHeading": "Continue with GitHub",
       "dialogDescription": "MiniApp Market and Skin Market share this account. Authorization opens in your browser, while credentials stay in the desktop system vault.",
-      "waiting": "Finish authorization in the browser. BitFun will update automatically.",
+      "waiting": "Finish authorization in the browser. OpenBitFun will update automatically.",
       "cancel": "Cancel",
       "continue": "Open GitHub",
       "authorizing": "Waiting for GitHub…"
@@ -214,7 +214,7 @@
     },
     "confirmUpdate": {
       "title": "Update “{{name}}”?",
-      "overwrite": "Local edits will be replaced after BitFun creates a snapshot.",
+      "overwrite": "Local edits will be replaced after OpenBitFun creates a snapshot.",
       "addedPermissions": "New or expanded permissions (confirmation required): {{permissions}}",
       "removedPermissions": "Removed permissions: {{permissions}}",
       "noAddedPermissions": "This update does not add permissions.",
@@ -237,7 +237,7 @@
     "import": {
       "action": "Import .bfminiapp",
       "choose": "Choose a .bfminiapp file",
-      "packageFile": "BitFun MiniApp package",
+      "packageFile": "OpenBitFun MiniApp package",
       "invalid": "Package validation failed: {{error}}",
       "confirmTitle": "Import “{{name}}”?",
       "confirmMessage": "{{description}}\n\nPermissions: {{permissions}}\n\nSHA-256: {{sha256}}",
@@ -261,7 +261,7 @@
       "name": "Public name",
       "description": "Public description",
       "category": "Category",
-      "minVersion": "Minimum BitFun version",
+      "minVersion": "Minimum OpenBitFun version",
       "tags": "Tags",
       "tagsHint": "Comma separated; at most 10.",
       "changelog": "Release notes",

@@ -1,14 +1,14 @@
 # 外部 AI 工作内容发现、导入与持续兼容设计
 
-本文定义 BitFun 如何发现、展示和消费 OpenCode、Codex、Claude Code 等外部 AI 应用留下的工作内容。OpenCode
+本文定义 OpenBitFun 如何发现、展示和消费 OpenCode、Codex、Claude Code 等外部 AI 应用留下的工作内容。OpenCode
 是第一条完整兼容来源；其他生态只在有稳定格式和真实消费方时接入。各生态的解析、加载顺序和运行语义仍由对应
-适配器负责，本文不建立跨生态通用配置格式或脚本 SDK。BitFun 自身能力如何通过 MCP、Skill、Plugin、Hook、
+适配器负责，本文不建立跨生态通用配置格式或脚本 SDK。OpenBitFun 自身能力如何通过 MCP、Skill、Plugin、Hook、
 SDK 或 Server 输出到外部宿主，以及内部能力组合、状态、事件和并发边界，见
 [`capability-runtime-integration-design.md`](capability-runtime-integration-design.md)；两条方向共用适用的身份事实和能力归属模块，
 但不共用一个大一统 adapter 或状态模型。Settings 和 TUI 只能把本文的来源与 integration policy 事实压缩为简短概览；
 审批、冲突和可执行能力状态继续由 Tool、Agent、MCP、Hook 等真实 owner 负责。
 
-本文同时记录当前可用端到端能力与目标架构。当前 BitFun 已具备通用外部来源目录、四条能力专属发现通道，并由
+本文同时记录当前可用端到端能力与目标架构。当前 OpenBitFun 已具备通用外部来源目录、四条能力专属发现通道，并由
 `ExternalSourceControlPlane` 负责 provider-neutral 调度、generation fencing 和故障隔离；`assembly/core` 的
 `WorkspaceExternalSourceService` 负责产品级策略、偏好、聚合和运行装配，`contracts/product-domains` 提供版本化控制事实、固定动作与错误语义，
 Desktop、交互式 TUI 和 Peer Host 只显示宿主所需状态，不再各自派生另一套状态机。App Server 已注册 external-source schema 与 handler；Embedded TUI 注入 management owner 后可以调用，通用 Server `/ws` 当前没有注入绑定可信工作区的 management owner，因此请求会得到类型化 `unsupported`，不能把通用 Server 只读投影列为已交付。OpenCode Prompt Command
@@ -25,7 +25,7 @@ MCP 安全子集，以及 Codex Subagent、MCP 安全子集；三种生态使用
 但各自在 sibling adapter 内保留原生来源与覆盖语义。完整 TypeScript/Bun、包依赖、package plugin 执行、
 Codex/Claude Code 运行时适配和外部 Subagent 续接仍属于后续阶段；Claude Code Agent 定义可按同一静态安全子集进入主选择器，
 Codex role 仍仅作为 Subagent，不能因来源被识别就宣称宿主运行时兼容。OpenCode、Claude Code 与 Codex 的本地 Hook 脱敏目录
-已作为独立只读切片接入；在此之上，Claude Code 与 Codex 的同步 command 子集可经精确命令审阅复制为 BitFun 管理的
+已作为独立只读切片接入；在此之上，Claude Code 与 Codex 的同步 command 子集可经精确命令审阅复制为 OpenBitFun 管理的
 原生 Hook 层，仍由唯一 `AgentHookEngine` 执行。OpenCode handler、非 command/异步 handler 和未审阅声明仍不可执行。
 独立的 MCP C0a 快照导入复用上述来源与现有 MCP 配置 owner：Desktop 和根 CLI 可预览 OpenCode、Claude Code
 与 Codex 中语义等价的安全声明，并在用户显式确认后原子写入 disabled 原生条目。凭据/header/env/cwd 迁移、
@@ -55,16 +55,16 @@ Codex 的 legacy `name` 是上游忽略的展示字段，不进入导入结果�
 因此仍会阻断 C0a 导入。`enabled_tools`、`disabled_tools`、approval、environment/scopes/OAuth 与并行调用等运行敏感字段
 仍按不支持处理，不能因静态发现成功而丢弃语义后导入。
 Codex 未显式声明 cwd 时，其兼容运行投影仍会把当前 workspace 作为 effective cwd；现有原生快照格式不会保留这项隐式
-语义，因此 workspace 场景的 local 声明返回“需要设置”，不能以“没有 cwd 字段”为由导入后继承 BitFun 进程目录。
+语义，因此 workspace 场景的 local 声明返回“需要设置”，不能以“没有 cwd 字段”为由导入后继承 OpenBitFun 进程目录。
 
 native ID 优先使用外部 logical name，再使用稳定生态后缀和最小可用数字后缀；超长名称使用 bounded digest，已有条目
 永不覆盖。plan fingerprint 同时绑定脱敏 plan、私有投影和当前原生 MCP 配置摘要。apply 会重新发现并重建 plan；来源或
 目标内容变化时返回刷新后的脱敏 plan，且不写入；fingerprint 不绑定 coordinator refresh generation，因此内容未变的刷新
 不会让 plan stale。配置 service 通过同一 JSON key 的 compare-and-set mutation lane
-一次提交全部选中条目或全部不提交，并在 `_bitfunImport` 中只保留 source-qualified candidate ID 与 behavior version。
+一次提交全部选中条目或全部不提交，并在 `_openbitfunImport` 中只保留 source-qualified candidate ID 与 behavior version。
 普通 MCP 编辑保留这段 provenance，删除条目时随条目一并移除。
 
-根 CLI 的 `bitfun mcp import` 默认只预览，`--apply` 导入全部 eligible 项；重复 `--candidate` 可缩小集合，单一选择可用
+根 CLI 的 `openbitfun mcp import` 默认只预览，`--apply` 导入全部 eligible 项；重复 `--candidate` 可缩小集合，单一选择可用
 `--native-id` 指定目标 ID，`--format json` 输出 versioned plan/result。当前没有 TUI/Mobile/Server/Peer/Remote/ACP/SDK
 写入口、导入 journal、tombstone、undo、外部应用回写或插件安装/激活策略；导入后仍由既有 MCP manager 完成复核、编辑、
 启用和删除。
@@ -76,9 +76,9 @@ stale，界面替换为服务端返回的新 plan，并只保留“旧选择与�
 
 ## 1. 产品判断与竞品启示
 
-竞品事实与 BitFun 的产品判断分开记录：
+竞品事实与 OpenBitFun 的产品判断分开记录：
 
-| 产品 | 已验证的交互 | 对 BitFun 的启示 |
+| 产品 | 已验证的交互 | 对 OpenBitFun 的启示 |
 |---|---|---|
 | [Codex 从其他智能体导入](https://learn.chatgpt.com/docs/import.md) | 设置中同时检测用户级与所选项目级内容，支持全部导入或自定义选择；插件和连接需要后续设置时显示状态卡 | 先给用户完整资产清单和使用范围，再把需要授权的内容留在非阻塞的后续任务中。 |
 | [Cursor 从 VS Code 迁移](https://docs.cursor.com/get-started/migrate-from-vs-code) | 一键迁移扩展、主题、设置和快捷键 | 对来源高度相似、风险可控的内容提供低摩擦默认路径，不要求逐项理解内部格式。 |
@@ -86,8 +86,8 @@ stale，界面替换为服务端返回的新 plan，并只保留“旧选择与�
 | [Claude Code 导入 Claude Desktop MCP](https://docs.anthropic.com/en/docs/claude-code/mcp) | 命令启动后交互选择 MCP Server，并可在导入后通过列表验证 | 高副作用连接适合选择性启用和可验证完成状态，不能因为识别成功就宣称可用。 |
 | [OpenCode 配置](https://opencode.ai/docs/config/) | 用户级、项目级、环境指定和目录资产按固定顺序实时成为运行输入 | 对已有 OpenCode 项目应保留持续关联，不把一次性复制作为可用前提。 |
 
-因此 BitFun 不照搬单一竞品。默认路径采用“持续兼容来源”，吸收 OpenCode 的实时性和 Skills 的低摩擦发现；
-设置中同时提供类似 Codex 的统一来源清单、选择和完成状态；“显式导入”只作为用户希望把外部内容转成 BitFun
+因此 OpenBitFun 不照搬单一竞品。默认路径采用“持续兼容来源”，吸收 OpenCode 的实时性和 Skills 的低摩擦发现；
+设置中同时提供类似 Codex 的统一来源清单、选择和完成状态；“显式导入”只作为用户希望把外部内容转成 OpenBitFun
 原生配置时的可选快照操作。
 
 ## 2. 目标与非目标
@@ -153,7 +153,7 @@ stale，界面替换为服务端返回的新 plan，并只保留“旧选择与�
 | 内容 | 配置、Rules、Agents、Skills、Commands、MCP、Hooks、插件、工具等类别与数量。 |
 | 状态 | 已发现、已应用、可用、需确认、更新中、沿用上一版本、部分受限、暂时过期、已移除/已停用或不可用。 |
 | 变化 | 最近成功读取时间、候选摘要、已应用摘要、权限或能力变化。 |
-| 操作 | 查看详情、应用/启用、按项目或执行域抑制/恢复兼容来源、进入/退出 Safe Mode、停用插件执行、撤销显式导入、重新加载、低风险/代码更新改为先询问、显式导入为 BitFun 配置。 |
+| 操作 | 查看详情、应用/启用、按项目或执行域抑制/恢复兼容来源、进入/退出 Safe Mode、停用插件执行、撤销显式导入、重新加载、低风险/代码更新改为先询问、显式导入为 OpenBitFun 配置。 |
 
 默认视图只展示用户需要处理的事项和聚合结果；文件级诊断、字段来源、依赖和执行身份进入详情。来源删除或更新
 失败不要求用户阅读日志才能理解结果。
@@ -169,18 +169,18 @@ GUI 和 TUI 都通过同一个 `SetSafeMode` 动作请求该变化，Peer Host �
 
 | 方式 | 适用场景 | 来源变化后 | 写入边界 |
 |---|---|---|---|
-| 持续兼容来源（默认） | 继续使用外部应用维护的用户/项目内容 | 重新解析候选，按风险和用户策略自动切换或等待确认 | 不写 BitFun 配置，不写回外部文件。 |
-| 通用配置显式导入（可选） | 用户希望把受支持的非执行配置交给 BitFun 独立维护 | 只提示外部来源有变化，用户选择是否重新导入 | 只写用户选定的 BitFun 配置层，支持字段级预览和撤销。 |
+| 持续兼容来源（默认） | 继续使用外部应用维护的用户/项目内容 | 重新解析候选，按风险和用户策略自动切换或等待确认 | 不写 OpenBitFun 配置，不写回外部文件。 |
+| 通用配置显式导入（可选） | 用户希望把受支持的非执行配置交给 OpenBitFun 独立维护 | 只提示外部来源有变化，用户选择是否重新导入 | 只写用户选定的 OpenBitFun 配置层，支持字段级预览和撤销。 |
 | 命令 Hook 审阅导入（C0） | 用户希望让受支持的 Claude Code/Codex 命令 Hook 由现有原生 Hook owner 执行 | 只标记可更新，用户重新审阅并应用后才改变执行 | 只写产品私有托管快照；按来源整体更新、启停、移除或损坏重置，不提供字段级撤销。 |
 
-显式导入完成后，已选字段由 BitFun 原生配置拥有，不再同时叠加外部值；未导入内容仍可继续作为兼容来源。
+显式导入完成后，已选字段由 OpenBitFun 原生配置拥有，不再同时叠加外部值；未导入内容仍可继续作为兼容来源。
 插件和 Tool 不通过配置复制获得执行资格。Claude Code/Codex command Hook 只通过下节的独立审阅快照路径进入既有
 原生 Hook owner，不复用通用配置导入或插件 Runtime。
 
 ### 3.4 Hook 脱敏目录与审阅导入
 
 Hook 首先以独立、只读的 `ExternalHookCatalogSnapshotV1` 脱敏展示。Desktop 的 **Agent Hooks** 设置页和交互式 TUI
-统一 `/hooks` 同时展示 BitFun 原生层、外部来源和已导入快照；旧 `/hooks_external`、`/hooks-external` 仅保留为别名，
+统一 `/hooks` 同时展示 OpenBitFun 原生层、外部来源和已导入快照；旧 `/hooks_external`、`/hooks-external` 仅保留为别名，
 不再形成第二套产品心智或状态 owner。Claude Code/Codex 的受支持同步 command handler 只有在用户查看精确命令、
 依赖和跳过原因并确认计划指纹后，才复制到用户或工作区私有快照；导入、更新、启停和删除都不修改来源文件。
 OpenCode 与不受支持的 handler 仍停留在脱敏目录。
@@ -194,7 +194,7 @@ OpenCode 与不受支持的 handler 仍停留在脱敏目录。
 | Codex | 用户与按持久 `project_root_markers` 有界的项目祖先 `hooks.json`、`config.toml`；linked worktree 映射到主 checkout 对应目录 | 目录展示固定 schema 的事件与 handler 类型；受支持的同步 command、Windows override、timeout、status 和安全文件依赖可进入精确审阅计划 | 不猜测插件、托管层、会话注入、state/feature 合并或 trust-gated 项目激活；依赖这些未观察语义的声明不导入。 |
 
 只有语义完全一致的 `PreToolUse`/`PostToolUse` 和 OpenCode `tool.execute.before`/`tool.execute.after` 分别映射到
-BitFun 已有 `ToolBefore`/`ToolAfter` 契约。其他原生事件仍可见，但标为 `native_only`；静态分析不能安全确定的注册
+OpenBitFun 已有 `ToolBefore`/`ToolAfter` 契约。其他原生事件仍可见，但标为 `native_only`；静态分析不能安全确定的注册
 标为 `opaque`，不得猜测映射。目录 DTO 只包含 provider 身份与稳定 adapter 顺序、来源、使用范围、脱敏位置、matcher 摘要、
 handler 类型、原生激活状态、覆盖后的显示状态和固定诊断，不包含 handler body、命令、prompt、URL、环境变量、凭据
 或任意执行 payload。`content_version` 仅内容摘要化这些已脱敏语义事实，原始文件字节和敏感正文不进入版本值。
@@ -240,7 +240,7 @@ provider 失败事实，避免在空目录界面中伪装成“成功但没有�
 | L3 任意第三方代码 | JS/TS Tool、服务插件、动态 Hook/TUI 入口、动态 import | 默认发现但不 import；只有能在执行前完整枚举命令与依赖、并由既有归属模块承担执行的窄切片可经独立设计和精确审阅启用。不能承诺动态 import 前已知全部贡献。 |
 
 LSP 是明确的退役边界，不参与 L2 升级：Claude Code、OpenCode 或其他来源中的 LSP 字段只能作为 L0 来源事实或
-`unsupported` 诊断保留。BitFun LSP Runtime 已退役，adapter 不得导入、应用或执行这些声明，不得为其创建产品 DTO、
+`unsupported` 诊断保留。OpenBitFun LSP Runtime 已退役，adapter 不得导入、应用或执行这些声明，不得为其创建产品 DTO、
 启动进程，也不得在 Remote 不支持时回退到控制端本机。
 
 OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；激活仍需确认实际模型、工具、执行域和来源关系。
@@ -259,16 +259,16 @@ Peer Host、Web 设置页、交互式 TUI、主 Session 和 fresh child session 
 型号目录。生产代码把外部模型名视为不透明引用，不按名称片段推断质量、速度、推理能力、成本或等价型号，也不在 Product
 Domain、Assembly 或 UI 中维护跨厂商替换表。生态 adapter 只解释自身已验证的语法，并提交以下来源无关的模型请求：
 
-- `Default`：来源没有指定模型，调用时继承当前 Session 已选择的模型，不查询同名 BitFun Agent 的默认项；
+- `Default`：来源没有指定模型，调用时继承当前 Session 已选择的模型，不查询同名 OpenBitFun Agent 的默认项；
 - `Inherit`：来源规范显式声明继承当前 Session 模型；运行语义与 `Default` 相同，但保留不同的来源意图，不能由通用模块根据字符串猜测；
 - `Reference`：保留 adapter 已解析的可选 provider 提示和原始模型引用，模型名保持不透明。
 
 来源还可以在模型请求之外声明一个可选 profile 意图，但只支持两个有明确消费点的形态：
 
 - `NamedVariant`：保留 OpenCode `variant` 的不透明名称。variant 的请求 options 由模型/provider 定义，不能推断成推理强度；
-  OpenCode 自身也只在 Agent 模型与实际模型一致且该模型声明了同名 variant 时应用。BitFun 不导入其 provider 模型目录，
+  OpenCode 自身也只在 Agent 模型与实际模型一致且该模型声明了同名 variant 时应用。OpenBitFun 不导入其 provider 模型目录，
   因此仅在 Agent 显式声明模型时保留 variant，未声明模型时与 OpenCode 一样视为不生效；保留的 variant 不参与自动匹配，
-  用户必须显式绑定到一个现有 BitFun 模型配置或选择器；
+  用户必须显式绑定到一个现有 OpenBitFun 模型配置或选择器；
 - `ReasoningEffort`：保留 Claude Code `effort`、Codex 角色 `model_reasoning_effort` 或
   `default_subagent_reasoning_effort`。它同样要求显式绑定：配置中存在同名 `reasoning_effort` 并不能证明所选 provider、
   协议和模型会把该值发送到请求，因此 Product Assembly 不建立第二套运行时能力判断。
@@ -283,7 +283,7 @@ profile 只是选择现有配置时的来源意图，不是新的模型配置 ow
 
 1. 在当前执行域的已启用模型中按配置 ID，或按 provider 提示与 `model_name`，查找唯一精确匹配；
 2. 精确匹配不存在时，读取用户对该外部模型引用保存的显式绑定；
-3. 绑定目标可以是当前 BitFun `primary`、`fast` 选择器，或一个具体的已配置模型 ID；选择器仍在审批前解析为唯一
+3. 绑定目标可以是当前 OpenBitFun `primary`、`fast` 选择器，或一个具体的已配置模型 ID；选择器仍在审批前解析为唯一
    具体配置，不能把字符串原样带到执行入口；
 4. 没有绑定、匹配歧义或绑定目标不可用时进入 `model_binding_required` 或对应的不可用状态，不自动回退。
 
@@ -332,15 +332,15 @@ Plugin Host Runtime、已退役的 LSP Runtime，以及通用动态模型路由�
 先询问，除非用户或组织明确允许该来源自动更新。用户始终可以改为“每次代码更新先询问”。
 
 动态工具和 Hook 可能只有在 module import 后才可知。新 Host 必须在旧进程树确认退出后加载，并先返回真实贡献差异；
-新增受 BitFun 归属模块管理的工具、Hook 或界面贡献需要确认时，停止新 Host、显示差异并等待处理。由于 import 已可能
+新增受 OpenBitFun 归属模块管理的工具、Hook 或界面贡献需要确认时，停止新 Host、显示差异并等待处理。由于 import 已可能
 在用户确认的运行条件内产生文件、网络或进程副作用，产品不能把后置确认描述成能够撤销这些副作用。只有保存了完整、
 校验通过的旧版本文件时，才可以按同一停机顺序重新启动旧版本。
 
 ### 4.3 当前声明式适配范围
 
 本节只记录已经进入产品链路的能力，不把目标设计当成完成状态。OpenCode 是跨生态交互的首要基线：自定义命令继续
-使用普通 `/name`，候选列表显示来源；跨 provider 或与 BitFun 原生命令同名时由共享来源管理模块保存版本化选择，不增加
-`/builtin:`、`/external:` 或生态前缀。管理入口使用 OpenCode 当前的单数 `/agent` 和 `/mcp`，分别保留 BitFun 既有
+使用普通 `/name`，候选列表显示来源；跨 provider 或与 OpenBitFun 原生命令同名时由共享来源管理模块保存版本化选择，不增加
+`/builtin:`、`/external:` 或生态前缀。管理入口使用 OpenCode 当前的单数 `/agent` 和 `/mcp`，分别保留 OpenBitFun 既有
 `/agents`、`/mcps` 作为兼容别名，不为 Claude Code 或 Codex 增加平行命令。Claude Code 与 Codex 的原生覆盖只在各自 adapter 内计算，不能提升为跨生态
 数值优先级。上游语义以 OpenCode [Commands](https://opencode.ai/docs/commands/)、[Agents](https://opencode.ai/docs/agents/)
 和 [MCP](https://opencode.ai/docs/mcp-servers/)，Claude Code [Commands](https://code.claude.com/docs/en/commands)、
@@ -360,9 +360,9 @@ Plugin Host Runtime、已退役的 LSP Runtime，以及通用动态模型路由�
 | Rules / Instructions | 用户级 `AGENTS.md`/Claude fallback 与本地 `instructions` 文件、glob；项目级本地文件、glob | 用户与项目 `CLAUDE.md`、项目导入及 `.claude/rules/**/*.md`；带 `paths` 的规则延迟生效 | 用户与项目 `AGENTS.md` | 无条件来源按既有 user → workspace 顺序进入启动上下文；Claude path-scoped rule 仅在 `Read` 成功返回且工作区相对路径命中后追加到当前会话历史。条件内容在压缩时丢弃，之后需再次命中读取才恢复；不增加 watcher、UI、Plugin Host Runtime 或第二套 Rules owner。Remote 只发现远端工作区来源，不回退控制端用户目录。 |
 | Prompt Command | JSON/JSONC、Markdown 的 prompt、本地文本文件与经审阅 shell 上下文子集 | legacy `commands/**/*.md` 的同一子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；`!shell` 在展示精确计划并重新校验后仅把 stdout 加入 Prompt，参数相关计划不可记住。Claude `allowed-tools` 只校验宿主格式，不授予预批准；动态/绝对/越界文件、指定 Agent/模型等整体受限；Remote 不回退本机执行。 |
 | Agent | 用户/项目声明的安全子集与 `primary/subagent/all` role | 用户/项目 `agents/**/*.md` 的主 Agent/Subagent 共用安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层的 Subagent 子集 | prompt、描述、继承/不透明模型引用、OpenCode 不透明 variant、Claude/Codex reasoning effort 和可表达工具请求进入既有归属模块；OpenCode/Claude 按 role 投影主选择器或 Task，Codex 保持 Subagent。无 profile 的显式模型引用可唯一精确匹配，variant/effort profile 必须由用户绑定到现有配置后才可激活。来源请求、profile、实际模型和解析方式在 Web/TUI 可见。权限、私有 MCP/Hook、reasoning summary/verbosity、采样、并发等没有对应实现的字段仍会阻止或降级。 |
-| MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
+| MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 OpenBitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
 | Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
-| Skill | 由现有 Skill 加载模块发现 `.opencode` 标准根及 OpenCode 本地配置根 | 由现有 Skill 加载模块发现 `.claude` 标准根；目录名是调用身份，描述可回退正文首段，`when_to_use` 合入索引，声明参数可做纯文本命名展开 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根；`.codex` 缺少 `name` 时回退目录名 | OpenCode V1 `skills.paths`/当前本地字符串数组只经 `bitfun-core/external_sources` 组合边界投影根目录，递归、加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责；URL 不加载。 |
+| Skill | 由现有 Skill 加载模块发现 `.opencode` 标准根及 OpenCode 本地配置根 | 由现有 Skill 加载模块发现 `.claude` 标准根；目录名是调用身份，描述可回退正文首段，`when_to_use` 合入索引，声明参数可做纯文本命名展开 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根；`.codex` 缺少 `name` 时回退目录名 | OpenCode V1 `skills.paths`/当前本地字符串数组只经 `openbitfun-core/external_sources` 组合边界投影根目录，递归、加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责；URL 不加载。 |
 | Hook | 静态目录 | 脱敏目录；同步 command 子集可审阅导入 | 脱敏目录；同步 command 子集可审阅导入 | 仅复制到私有原生快照并由 `AgentHookEngine` 执行；OpenCode、非 command、异步、未知或依赖未观察激活语义的 handler 不导入。 |
 
 生态原生语义由各 adapter 以契约测试固定，不抽象成全局优先级：
@@ -374,15 +374,15 @@ Plugin Host Runtime、已退役的 LSP Runtime，以及通用动态模型路由�
   展开 `$ARGUMENTS`、`$ARGUMENTS[N]` 和 `$N` 纯文本参数，并允许原模板中的静态 workspace 相对 `@file`；
   `!shell` 使用 `shell: bash|powershell`（缺省为 bash）的必需 shell 语义并进入共享审批与 Terminal 执行链；`powershell` 按 `pwsh`、Windows PowerShell 的顺序选择，候选均不可用时拒绝执行而不回退其他 shell。
   `allowed-tools` 接受 Claude Code 的字符串或字符串列表格式，但只作为非权威权限提示：adapter 校验后不投影到公共命令契约、
-  不进入命令行为版本，也不授予任何 BitFun 工具预批准；非法类型会使该文件失效。动态/绝对/越界文件引用和改变 Agent、模型、
+  不进入命令行为版本，也不授予任何 OpenBitFun 工具预批准；非法类型会使该文件失效。动态/绝对/越界文件引用和改变 Agent、模型、
   Hook 或工具禁用策略的字段仍整体阻止激活。
 - Skill Registry 继续拥有所有根的发现、覆盖、显式加载与刷新，只用既有稳定 source slot 在内部选择格式方言，不向用户
   暴露主选择器，也不按路径字符串临时猜测。`.claude` Skill 的调用名固定为目录名；`description` 缺失时取正文首个
   非空段落，并与可选 `when_to_use` 合并为最多 1536 个 Unicode 字符的模型索引说明。`arguments` 可为以空白分隔的名称
   字符串或字符串列表；名称按参数顺序绑定并由现有纯文本参数展开器处理，缺失命名参数展开为空，既有缺失位置参数仍保留
-  占位符。`.codex` Skill 只增加上游已有的目录名 fallback，`description` 仍必填；`.agents`、`.opencode`、`.bitfun` 和
+  占位符。`.codex` Skill 只增加上游已有的目录名 fallback，`description` 仍必填；`.agents`、`.opencode`、`.openbitfun` 和
   `.cursor` 的严格格式不变。本地与 Remote 发现及实际加载必须使用同一方言映射，避免目录显示可用而执行时重新解析失败。
-- Claude Skill 的 `allowed-tools` 同样不能授予 BitFun 工具预批准，因此安全降级为无额外权限；`effort` 只作为 reasoning profile 参与
+- Claude Skill 的 `allowed-tools` 同样不能授予 OpenBitFun 工具预批准，因此安全降级为无额外权限；`effort` 只作为 reasoning profile 参与
   现有显式模型绑定，不成为请求级 override；`context`/`fork`、`agent`、`model`、`hooks`、`paths`、`shell`、
   `runtime` 等会改变执行行为而当前没有等价 owner 的字段阻止加载。Claude runtime 变量与动态
   shell 注入也不执行。此切片不增加插件 Skill、祖先活动目录、文件 watcher、URL 来源或另一条 reload 命令。
@@ -393,8 +393,8 @@ Plugin Host Runtime、已退役的 LSP Runtime，以及通用动态模型路由�
   reasoning profile 参与现有显式模型绑定；reasoning summary/verbosity、权限、私有 MCP/Hook、并发等没有对应
   实现的字段仍阻止激活。Codex MCP 按原生层级逐字段
   覆盖；任一未被用户显式停用的必需 `config.toml` 层读取或解析失败时，本次 MCP/Subagent provider 发现整体失败并交由
-  coordinator 的规则处理：保留上一有效结果，并阻止继续激活后续项目层；`required` 只诊断，不能使 BitFun 启动或聊天失败。
-- 同一 provider 先完成原生覆盖，再把一个 effective candidate 交给产品管理模块；跨 provider 或 BitFun-native 同名才生成
+  coordinator 的规则处理：保留上一有效结果，并阻止继续激活后续项目层；`required` 只诊断，不能使 OpenBitFun 启动或聊天失败。
+- 同一 provider 先完成原生覆盖，再把一个 effective candidate 交给产品管理模块；跨 provider 或 OpenBitFun-native 同名才生成
   用户冲突。选择绑定参与者与行为版本，仅展示变化不重问，候选删除或不可用不静默回退。
 
 该矩阵不是“除 Runtime 外全部兼容”的声明。Rules/Instructions、References、模型/Provider 配置、Formatter、
@@ -551,7 +551,7 @@ sequenceDiagram
 | 部分 | 负责 | 不能承担 |
 |---|---|---|
 | 外部来源目录 | 聚合来源身份、使用范围、资产清单、用户处理偏好和可读状态 | 解释所有生态格式、保存凭据、授予脚本权限或管理 worker。 |
-| 生态发现与解析适配器 | 发现本生态标准来源，保留真实优先级、格式、参数展开和诊断，并通过能力专属 provider 输出 | 写 BitFun 配置、依赖兄弟生态 adapter、执行其他生态语义或创建跨生态最低公分母。 |
+| 生态发现与解析适配器 | 发现本生态标准来源，保留真实优先级、格式、参数展开和诊断，并通过能力专属 provider 输出 | 写 OpenBitFun 配置、依赖兄弟生态 adapter、执行其他生态语义或创建跨生态最低公分母。 |
 | 能力专属 provider 契约 | 用来源限定身份交付 Command、Tool、Subagent 等类型明确的定义与调用/展开结果 | 携带任意数据的通用资产对象，或让一种能力的新增字段污染其他能力。 |
 | Hook provider 与目录协调器 | 聚合三个生态的脱敏声明并隔离 provider 失败；对 Claude Code/Codex 所选来源执行版本守卫的私有 command 准备 | 执行 handler、选择脚本运行时、授予 OpenCode 执行权限，或把未导入的静态映射宣称为运行时兼容。 |
 | 文件观察服务 | 提供可订阅、去抖的文件变化事实 | 解释生态路径、决定优先级、提交业务状态。 |
@@ -623,7 +623,7 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 1. 建立共享来源目录、`ExternalSourceControlPlane`、开放生态 ID 和 Prompt Command 专属契约；用第二个 fake adapter 证明
    provider 更新、失败和删除彼此隔离。
 2. 发现 OpenCode 当前支持的用户全局和项目 Command 来源，建立来源限定身份、生态内覆盖关系和聚合清单；
-   OpenCode 自身定义的项目/用户优先级仍由 adapter 解释，跨 provider 或与 BitFun 本地 Command 的同名冲突进入待选择状态。
+   OpenCode 自身定义的项目/用户优先级仍由 adapter 解释，跨 provider 或与 OpenBitFun 本地 Command 的同名冲突进入待选择状态。
 3. 支持 `$ARGUMENTS` 与位置参数的 Prompt Command 在用户显式选择或输入时展开并提交；发现本身不向会话发送内容。
 4. 模板内静态 workspace 相对 `@file` 经有界 UTF-8 读取后原子装配；`!shell` 必须展示包含工作目录、解析后的绝对 shell 路径和精确命令的
    当前计划，后端重新发现并校验完整指纹后才以不加载 profile 的隔离式 argv 执行，且只把 stdout 加入 Prompt。动态/绝对/越界文件引用、`{env:...}`、
@@ -675,33 +675,33 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    改写可执行文件、参数、工作目录或网络目标，本阶段只允许 `{env:NAME}` 出现在显式 environment 或 Header 值中；其他
    位置明确标记不支持。展开后再次执行大小、HTTPS 与契约校验。
 2. MCP coordinator 与 Command、Tool、Subagent 平行，负责 provider 隔离、last-success、稳定删除和 watcher roots；
-   审批、同名冲突和 BitFun 原生优先级由产品组装层决定，具体进程、连接、工具注册和回收仍由 MCP 归属模块负责。
+   审批、同名冲突和 OpenBitFun 原生优先级由产品组装层决定，具体进程、连接、工具注册和回收仍由 MCP 归属模块负责。
 3. 首次启用或命令、参数、工作目录、环境声明、URL origin、Header 名、认证方式等行为变化后重新确认；拒绝在行为变化前不重复
    提示。MCP 的公开 `content_version`/`behavior_version` 使用 host 私有且本机持久化的 key 生成 HMAC-SHA256
    不透明版本：敏感配置变化仍使旧审批失效，但公开 DTO 不能成为低熵凭据的离线枚举 oracle；key 不进入日志、IPC 或
    public snapshot。首次升级到该版本或 key 丢失后，已有 MCP 审批需要一次重新确认；正常重启不改变版本。同名候选未选择时
-   保留 BitFun 当前实现，不把显示顺序当成用户决定，也不在外部失效时静默切换。
+   保留 OpenBitFun 当前实现，不把显示顺序当成用户决定，也不在外部失效时静默切换。
 4. Desktop 在“外部 AI 应用”设置页显示安全摘要、状态、审批和冲突；交互式 TUI 以行业通用的 `/mcp` 为主要入口并保留 `/mcps` 兼容别名，在同一列表中用来源
-   标签区分 BitFun 与外部候选，不新增 `external-*` 命令。两端使用同一 MCP 当前版本、偏好版本和操作接口。
+   标签区分 OpenBitFun 与外部候选，不新增 `external-*` 命令。两端使用同一 MCP 当前版本、偏好版本和操作接口。
 5. 已确认候选按规范化 workspace 建立独立运行实例；工具包装器同时校验当前 workspace route。Remote 归属模块未实现前，
-   返回“不支持”且不回退本机。同名冲突选择外部候选时，只在当前 workspace 隐藏对应 BitFun 原生工具，不停止其他 workspace 的原生实例。
+   返回“不支持”且不回退本机。同名冲突选择外部候选时，只在当前 workspace 隐藏对应 OpenBitFun 原生工具，不停止其他 workspace 的原生实例。
 6. 更新、停用、空闲回收或稳定删除先撤下 workspace route 和新工具入口，再有界等待在途连接释放；慢启动在发布连接、
    工具和目录前再次检查撤销标记，不能在撤销后重新发布。第三方启动、握手和回收在后台有界执行，不要求全量重启
-   MCP 或 BitFun，也不中断无关 session。
+   MCP 或 OpenBitFun，也不中断无关 session。
 7. 产品快照区分“正在启动”“已启用”“暂时不可用”。后台启动失败会触发快照更新；暂时不可用的候选仍可由用户停用，
    当前恢复入口是先停用该服务器，修复来源配置或认证后再启用；普通刷新不会自动重试失败进程，避免持续拉起故障或恶意
    扩展。删除项的一次性用户通知/有界墓碑尚未实现，当前行会在稳定重扫后消失；该展示增强
    留待后续 PR，不能改变“先撤 route、禁止新调用”的运行语义。
-8. 外部本地进程不继承 BitFun 的完整父进程环境，只保留启动所需的系统基线和配置显式声明的变量；这仍不是 OS
+8. 外部本地进程不继承 OpenBitFun 的完整父进程环境，只保留启动所需的系统基线和配置显式声明的变量；这仍不是 OS
    沙箱，进程继续拥有当前用户的文件、网络和子进程权限。OpenCode V1 标量 `timeout`、Codex 启动/工具 timeout 与
    Claude Code 单服务器执行 timeout 已映射为统一的启动、目录读取、执行阶段事实；Codex `startup_timeout_sec` 同时约束
    初始化和首次工具目录请求，`tool_timeout_sec` 只约束工具执行。只有来源显式声明时才覆盖现有运行行为；当前使用每次请求的
    硬期限，不因 progress 重置，超时只停止
-   BitFun 的当前等待，不承诺服务端工作已经取消，也不触发自动重放或重启。Remote 执行域、OpenCode OAuth client 配置、SSE、OpenCode V2 分阶段 timeout
+   OpenBitFun 的当前等待，不承诺服务端工作已经取消，也不触发自动重放或重启。Remote 执行域、OpenCode OAuth client 配置、SSE、OpenCode V2 分阶段 timeout
    配置格式、Agent 范围和通用凭据归属模块明确延后。
 9. 本阶段只把外部 MCP 的 Tool 目录接入 Agent Tool 归属模块。通用 Resource/Prompt/MCP App Desktop 接口不接受无工作区
    上下文的外部 runtime id；外部服务器发起的 roots、sampling 和 elicitation 请求也一律拒绝，防止跨工作区读取或借用
-   BitFun 宿主能力。后续若接入这些能力，必须先补独立契约、工作区路由与权限交互，不能复用全局连接绕过当前边界。
+   OpenBitFun 宿主能力。后续若接入这些能力，必须先补独立契约、工作区路由与权限交互，不能复用全局连接绕过当前边界。
 
 独立 Hook 切片不依赖 Plugin Runtime 阶段：
 

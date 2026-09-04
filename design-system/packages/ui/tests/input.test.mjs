@@ -28,9 +28,9 @@ test("Input keeps native input semantics and independent content slots", () => {
     }),
   );
 
-  assert.match(markup, /data-bf-component="input"/);
-  assert.match(markup, /data-bf-part="leading"/);
-  assert.match(markup, /data-bf-part="trailing"/);
+  assert.match(markup, /data-openbitfun-component="input"/);
+  assert.match(markup, /data-openbitfun-part="leading"/);
+  assert.match(markup, /data-openbitfun-part="trailing"/);
   assert.match(markup, /aria-label="Project name"/);
   assert.match(markup, /placeholder="Name"/);
   assert.match(markup, /type="text"/);
@@ -53,12 +53,12 @@ test("Input exposes invalid, disabled, and size independently", () => {
 test("Input styles consume semantic field and status tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-color-field-background/);
-  assert.match(styles, /--bf-color-field-border-focus/);
-  assert.match(styles, /--bf-color-content-muted/);
-  assert.match(styles, /--bf-color-status-danger-border/);
-  assert.match(styles, /--bf-control-height-sm/);
-  assert.match(styles, /caret-color:var\(--bf-color-accent-default\)/);
+  assert.match(styles, /--openbitfun-color-field-background/);
+  assert.match(styles, /--openbitfun-color-field-border-focus/);
+  assert.match(styles, /--openbitfun-color-content-muted/);
+  assert.match(styles, /--openbitfun-color-status-danger-border/);
+  assert.match(styles, /--openbitfun-control-height-sm/);
+  assert.match(styles, /caret-color:var\(--openbitfun-color-accent-default\)/);
   assert.doesNotMatch(
     styles,
     /\.field\[data-disabled=(?:"true"|true)\]\{[^}]*opacity:/,

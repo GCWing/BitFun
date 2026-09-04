@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use bitfun_core::agentic::tools::product_runtime::build_all_tools_info;
+use openbitfun_core::agentic::tools::product_runtime::build_all_tools_info;
 
 /// Read-only tool catalog for the Agents / Assistant Defaults UI.
 ///

@@ -4,7 +4,7 @@ use crate::service::config::agent_profile_project_store::{
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, AgentSubagentOverrideConfig};
-use crate::util::errors::BitFunResult;
+use crate::util::errors::OpenBitFunResult;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -35,7 +35,7 @@ pub(super) async fn get_subagent_overrides() -> AgentSubagentOverrideConfig {
 
 pub(super) async fn load_project_subagent_overrides_local(
     workspace_root: &Path,
-) -> BitFunResult<AgentSubagentOverrideConfig> {
+) -> OpenBitFunResult<AgentSubagentOverrideConfig> {
     let document = load_project_agent_profiles_document_local(workspace_root).await?;
     Ok(document
         .keys()
@@ -52,7 +52,7 @@ pub(super) async fn load_project_subagent_overrides_local(
 pub(super) async fn save_project_subagent_overrides_local(
     workspace_root: &Path,
     overrides: &AgentSubagentOverrideConfig,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let mut document = load_project_agent_profiles_document_local(workspace_root).await?;
 
     let existing_profile_ids: Vec<String> = document.keys().cloned().collect();

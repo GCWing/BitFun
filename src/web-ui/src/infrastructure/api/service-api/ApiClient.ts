@@ -42,7 +42,7 @@ function responseEstimateMaxBytes(command: string): number | undefined {
 }
 
 function shouldEstimateApiPayloadBytes(): boolean {
-  return globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true;
+  return globalThis.__OPENBITFUN_PERF_TRACE_ENABLED__ === true;
 }
 
 function transportErrorMessage(error: unknown): string {

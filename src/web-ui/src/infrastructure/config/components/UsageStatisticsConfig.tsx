@@ -21,7 +21,7 @@ import {
   ConfigRefreshButton,
 } from './common';
 import './UsageStatisticsConfig.scss';
-import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@openbitfun/ui';
 import {
   formatCacheHitRate,
   formatTokenCount,
@@ -34,22 +34,22 @@ import {
 // ---------------------------------------------------------------------------
 
 const SERIES_COLORS = {
-  input: 'var(--bf-color-accent-default)',
-  output: 'var(--bf-color-status-success-content)',
-  cacheRead: 'var(--bf-color-status-info-content)',
-  cacheHitRate: 'var(--bf-color-accent-secondary)',
+  input: 'var(--openbitfun-color-accent-default)',
+  output: 'var(--openbitfun-color-status-success-content)',
+  cacheRead: 'var(--openbitfun-color-status-info-content)',
+  cacheHitRate: 'var(--openbitfun-color-accent-secondary)',
 } as const;
 
 const DONUT_PALETTE = [
-  'var(--bf-color-accent-default)',
-  'var(--bf-color-accent-secondary)',
-  'var(--bf-color-status-info-content)',
-  'var(--bf-color-status-success-content)',
-  'var(--bf-color-status-warning-content)',
-  'var(--bf-color-accent-default)',
-  'var(--bf-color-status-danger-content)',
-  'var(--bf-color-action-secondary-pressed)',
-  'color-mix(in srgb, var(--bf-color-accent-secondary) 15%, transparent)',
+  'var(--openbitfun-color-accent-default)',
+  'var(--openbitfun-color-accent-secondary)',
+  'var(--openbitfun-color-status-info-content)',
+  'var(--openbitfun-color-status-success-content)',
+  'var(--openbitfun-color-status-warning-content)',
+  'var(--openbitfun-color-accent-default)',
+  'var(--openbitfun-color-status-danger-content)',
+  'var(--openbitfun-color-action-secondary-pressed)',
+  'color-mix(in srgb, var(--openbitfun-color-accent-secondary) 15%, transparent)',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ const DonutChart: React.FC<{
   let cumulative = 0;
 
   return (
-    <div className="bitfun-usage-stats__donut">
+    <div className="openbitfun-usage-stats__donut">
       <svg
         viewBox="0 0 140 140"
         role="img"
@@ -164,7 +164,7 @@ const DonutChart: React.FC<{
           cy="70"
           r={radius}
           fill="none"
-          stroke="var(--bf-color-action-quiet-hover)"
+          stroke="var(--openbitfun-color-action-quiet-hover)"
           strokeWidth="16"
         />
         {entries.map((entry, index) => {
@@ -198,7 +198,7 @@ const DonutChart: React.FC<{
             cy="70"
             r={radius}
             fill="none"
-            stroke="var(--bf-color-action-quiet-hover)"
+            stroke="var(--openbitfun-color-action-quiet-hover)"
             strokeWidth="16"
           />
         )}
@@ -206,7 +206,7 @@ const DonutChart: React.FC<{
           x="70"
           y="66"
           textAnchor="middle"
-          className="bitfun-usage-stats__donut-total"
+          className="openbitfun-usage-stats__donut-total"
         >
           {formattedTotal}
         </text>
@@ -214,7 +214,7 @@ const DonutChart: React.FC<{
           x="70"
           y="82"
           textAnchor="middle"
-          className="bitfun-usage-stats__donut-unit"
+          className="openbitfun-usage-stats__donut-unit"
         >
           {t('chart.tokensUnit')}
         </text>
@@ -251,15 +251,15 @@ const DistributionPanel: React.FC<{
 
   return (
     <section
-      className="bitfun-usage-stats__distribution"
+      className="openbitfun-usage-stats__distribution"
       aria-labelledby={titleId}
     >
-      <h4 id={titleId} className="bitfun-usage-stats__distribution-title">{title}</h4>
-      <div className="bitfun-usage-stats__panel-body">
+      <h4 id={titleId} className="openbitfun-usage-stats__distribution-title">{title}</h4>
+      <div className="openbitfun-usage-stats__panel-body">
         <DonutChart kind={kind} entries={entries} />
-        <ScrollArea className="bitfun-usage-stats__table-scroll">
-          <table className="bitfun-usage-stats__table">
-            <caption className="bitfun-sr-only">
+        <ScrollArea className="openbitfun-usage-stats__table-scroll">
+          <table className="openbitfun-usage-stats__table">
+            <caption className="openbitfun-sr-only">
               {t('table.caption', { dimension: title })}
             </caption>
             <thead>
@@ -275,18 +275,18 @@ const DistributionPanel: React.FC<{
                 return (
                   <tr key={entry.key} title={entryTitle(display)}>
                     <th scope="row">
-                      <span className="bitfun-usage-stats__table-name">
+                      <span className="openbitfun-usage-stats__table-name">
                         <span
                           aria-hidden="true"
-                          className="bitfun-usage-stats__table-swatch"
+                          className="openbitfun-usage-stats__table-swatch"
                           style={{ background: DONUT_PALETTE[index % DONUT_PALETTE.length] }}
                         />
-                        <span className="bitfun-usage-stats__entry-copy">
-                          <span className="bitfun-usage-stats__entry-primary">
+                        <span className="openbitfun-usage-stats__entry-copy">
+                          <span className="openbitfun-usage-stats__entry-primary">
                             {display.primary}
                           </span>
                           {display.secondary && (
-                            <span className="bitfun-usage-stats__entry-secondary">
+                            <span className="openbitfun-usage-stats__entry-secondary">
                               {display.secondary}
                             </span>
                           )}
@@ -315,7 +315,7 @@ const ModelCacheHitRateList: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ 
 
   return (
     <ScrollArea
-      className="bitfun-usage-stats__hit-rate-list"
+      className="openbitfun-usage-stats__hit-rate-list"
       role="list"
     >
       {entries.map((entry, index) => {
@@ -327,35 +327,35 @@ const ModelCacheHitRateList: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ 
         const color = DONUT_PALETTE[index % DONUT_PALETTE.length];
         return (
           <div
-            className="bitfun-usage-stats__hit-rate-row"
+            className="openbitfun-usage-stats__hit-rate-row"
             key={entry.key}
             title={entryTitle(display)}
             role="listitem"
           >
-            <span className="bitfun-usage-stats__hit-rate-name">
+            <span className="openbitfun-usage-stats__hit-rate-name">
               <span
                 aria-hidden="true"
-                className="bitfun-usage-stats__table-swatch"
+                className="openbitfun-usage-stats__table-swatch"
                 style={{ background: color }}
               />
-              <span className="bitfun-usage-stats__entry-copy">
-                <span className="bitfun-usage-stats__entry-primary">
+              <span className="openbitfun-usage-stats__entry-copy">
+                <span className="openbitfun-usage-stats__entry-primary">
                   {display.primary}
                 </span>
                 {display.secondary && (
-                  <span className="bitfun-usage-stats__entry-secondary">
+                  <span className="openbitfun-usage-stats__entry-secondary">
                     {display.secondary}
                   </span>
                 )}
               </span>
             </span>
-            <div className="bitfun-usage-stats__hit-rate-track" aria-hidden="true">
+            <div className="openbitfun-usage-stats__hit-rate-track" aria-hidden="true">
               <div
-                className="bitfun-usage-stats__hit-rate-fill"
+                className="openbitfun-usage-stats__hit-rate-fill"
                 style={{ width: `${pct}%`, background: color }}
               />
             </div>
-            <span className="bitfun-usage-stats__hit-rate-value">
+            <span className="openbitfun-usage-stats__hit-rate-value">
               {formatHitRate(entry.cacheHitRate, formatNumber)}
             </span>
           </div>
@@ -497,10 +497,10 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
   ] : [];
 
   return (
-    <div className="bitfun-usage-stats__trend">
+    <div className="openbitfun-usage-stats__trend">
       <svg
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-        className="bitfun-usage-stats__trend-svg"
+        className="openbitfun-usage-stats__trend-svg"
         role="img"
         aria-labelledby={`${titleId} ${descriptionId}`}
         onPointerLeave={() => setHoverIndex(null)}
@@ -519,12 +519,12 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 y1={y}
                 x2={CHART_WIDTH - PAD_RIGHT}
                 y2={y}
-                className="bitfun-usage-stats__trend-grid"
+                className="openbitfun-usage-stats__trend-grid"
               />
-              <text x={PAD_LEFT - 8} y={y + 4} textAnchor="end" className="bitfun-usage-stats__trend-axis">
+              <text x={PAD_LEFT - 8} y={y + 4} textAnchor="end" className="openbitfun-usage-stats__trend-axis">
                 {formatTokens(value, formatNumber)}
               </text>
-              <text x={CHART_WIDTH - PAD_RIGHT + 8} y={y + 4} className="bitfun-usage-stats__trend-axis">
+              <text x={CHART_WIDTH - PAD_RIGHT + 8} y={y + 4} className="openbitfun-usage-stats__trend-axis">
                 {rate}%
               </text>
             </g>
@@ -538,7 +538,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
             x={xFor(index)}
             y={CHART_HEIGHT - 8}
             textAnchor="middle"
-            className="bitfun-usage-stats__trend-axis"
+            className="openbitfun-usage-stats__trend-axis"
           >
             {formatBucketLabel(points[index].bucket, granularity, timeZone, formatDate)}
           </text>
@@ -606,7 +606,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               y1={PAD_TOP}
               x2={xFor(hoverIndex)}
               y2={PAD_TOP + plotHeight}
-              className="bitfun-usage-stats__trend-cursor"
+              className="openbitfun-usage-stats__trend-cursor"
             />
             {/* Hover markers: one dot per series so small values stay visible
                 where a zero-baseline token axis would otherwise flatten them
@@ -618,7 +618,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 cy={yFor(hovered[series.key])}
                 r="3.5"
                 fill={series.color}
-                stroke="var(--bf-color-action-quiet-hover)"
+                stroke="var(--openbitfun-color-action-quiet-hover)"
                 strokeWidth="1"
               />
             ))}
@@ -628,11 +628,11 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 cy={rateFor(hoveredHitRate)}
                 r="3.5"
                 fill={SERIES_COLORS.cacheHitRate}
-                stroke="var(--bf-color-action-quiet-hover)"
+                stroke="var(--openbitfun-color-action-quiet-hover)"
                 strokeWidth="1"
               />
             )}
-            <g className="bitfun-usage-stats__trend-tooltip">
+            <g className="openbitfun-usage-stats__trend-tooltip">
               <rect
                 x={Math.min(Math.max(xFor(hoverIndex) - 92, PAD_LEFT), CHART_WIDTH - PAD_RIGHT - 184)}
                 y={PAD_TOP}
@@ -643,7 +643,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               <text
                 x={Math.min(Math.max(xFor(hoverIndex) - 80, PAD_LEFT + 12), CHART_WIDTH - PAD_RIGHT - 172)}
                 y={PAD_TOP + 16}
-                className="bitfun-usage-stats__trend-tooltip-title"
+                className="openbitfun-usage-stats__trend-tooltip-title"
               >
                 {formatBucketLabel(hovered.bucket, granularity, timeZone, formatDate)}
               </text>
@@ -652,7 +652,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                   key={row.label}
                   x={Math.min(Math.max(xFor(hoverIndex) - 80, PAD_LEFT + 12), CHART_WIDTH - PAD_RIGHT - 172)}
                   y={PAD_TOP + 34 + index * 14}
-                  className="bitfun-usage-stats__trend-tooltip-row"
+                  className="openbitfun-usage-stats__trend-tooltip-row"
                 >
                   <tspan fill={row.color}>● </tspan>
                   {row.label}: {row.value}
@@ -663,7 +663,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
         )}
       </svg>
 
-      <div className="bitfun-usage-stats__trend-legend">
+      <div className="openbitfun-usage-stats__trend-legend">
         {[
           ...TREND_SERIES.map((series) => ({
             label: t(series.legendKey),
@@ -672,10 +672,10 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
           })),
           { label: t('trend.legend.cacheHitRate'), color: SERIES_COLORS.cacheHitRate, dashed: true },
         ].map((item) => (
-          <span key={item.label} className="bitfun-usage-stats__trend-legend-item">
+          <span key={item.label} className="openbitfun-usage-stats__trend-legend-item">
             <span
               aria-hidden="true"
-              className="bitfun-usage-stats__trend-legend-swatch"
+              className="openbitfun-usage-stats__trend-legend-swatch"
               style={{
                 background: item.color,
                 ...(item.dashed
@@ -688,7 +688,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
         ))}
       </div>
 
-      <table className="bitfun-sr-only">
+      <table className="openbitfun-sr-only">
         <caption>{t('trend.dataTableCaption')}</caption>
         <thead>
           <tr>
@@ -834,9 +834,9 @@ const UsageStatisticsConfig: React.FC = () => {
 
   return (
     <ConfigPageLayout
-      className="bitfun-usage-stats"
-      data-bf-component="usage-statistics-config"
-      data-bf-part="root"
+      className="openbitfun-usage-stats"
+      data-openbitfun-component="usage-statistics-config"
+      data-openbitfun-part="root"
     >
       <ConfigPageHeader
         title={t('title')}
@@ -858,18 +858,18 @@ const UsageStatisticsConfig: React.FC = () => {
                 disabled={loading}
               />
             )}
-            data-bf-component="usage-statistics-config"
-            data-bf-part="overview"
+            data-openbitfun-component="usage-statistics-config"
+            data-openbitfun-part="overview"
           >
             <div
-              className="bitfun-usage-stats__filters"
-              data-bf-component="usage-statistics-config"
-              data-bf-part="filters"
+              className="openbitfun-usage-stats__filters"
+              data-openbitfun-component="usage-statistics-config"
+              data-openbitfun-part="filters"
             >
-              <div className="bitfun-usage-stats__filter-field">
-                <span className="bitfun-usage-stats__filter-label">{t('timeRange.label')}</span>
+              <div className="openbitfun-usage-stats__filter-field">
+                <span className="openbitfun-usage-stats__filter-label">{t('timeRange.label')}</span>
                 <Select
-                  className="bitfun-usage-stats__filter-select"
+                  className="openbitfun-usage-stats__filter-select"
                   size="sm"
                   value={timeRange}
                   options={TIME_RANGE_OPTIONS.map((option) => ({
@@ -881,10 +881,10 @@ const UsageStatisticsConfig: React.FC = () => {
                   disabled={loading}
                 />
               </div>
-              <div className="bitfun-usage-stats__filter-field">
-                <span className="bitfun-usage-stats__filter-label">{t('granularity.label')}</span>
+              <div className="openbitfun-usage-stats__filter-field">
+                <span className="openbitfun-usage-stats__filter-label">{t('granularity.label')}</span>
                 <Select
-                  className="bitfun-usage-stats__filter-select"
+                  className="openbitfun-usage-stats__filter-select"
                   size="sm"
                   value={granularity}
                   options={GRANULARITY_OPTIONS.map((option) => ({
@@ -896,11 +896,11 @@ const UsageStatisticsConfig: React.FC = () => {
                   disabled={loading}
                 />
               </div>
-              <div className="bitfun-usage-stats__filter-field bitfun-usage-stats__filter-field--query">
-                <span className="bitfun-usage-stats__filter-label">{t('filter.inputLabel')}</span>
-                <div className="bitfun-usage-stats__filter-query">
+              <div className="openbitfun-usage-stats__filter-field openbitfun-usage-stats__filter-field--query">
+                <span className="openbitfun-usage-stats__filter-label">{t('filter.inputLabel')}</span>
+                <div className="openbitfun-usage-stats__filter-query">
                   <Select
-                    className="bitfun-usage-stats__filter-kind"
+                    className="openbitfun-usage-stats__filter-kind"
                     size="sm"
                     value={filterKind}
                     options={FILTER_KIND_OPTIONS.map((option) => ({
@@ -912,7 +912,7 @@ const UsageStatisticsConfig: React.FC = () => {
                     disabled={loading}
                   />
                   <Input
-                    className="bitfun-usage-stats__filter-input"
+                    className="openbitfun-usage-stats__filter-input"
                     value={filterInput}
                     onChange={(event) => setFilterInput(event.target.value)}
                     placeholder={t('filter.placeholder')}
@@ -940,7 +940,7 @@ const UsageStatisticsConfig: React.FC = () => {
             </div>
 
             <ConfigMessage
-              className="bitfun-usage-stats__message"
+              className="openbitfun-usage-stats__message"
               message={message}
             />
 
@@ -948,9 +948,9 @@ const UsageStatisticsConfig: React.FC = () => {
               <ConfigLoadingState label={t('loading')} />
             ) : empty ? (
               <div
-                className="bitfun-usage-stats__empty"
-                data-bf-component="usage-statistics-config"
-                data-bf-part="empty"
+                className="openbitfun-usage-stats__empty"
+                data-openbitfun-component="usage-statistics-config"
+                data-openbitfun-part="empty"
               >
                 <BarChart3 size={26} aria-hidden />
                 <div>
@@ -960,17 +960,17 @@ const UsageStatisticsConfig: React.FC = () => {
               </div>
             ) : stats ? (
               <div
-                className="bitfun-usage-stats__summary"
-                data-bf-component="usage-statistics-config"
-                data-bf-part="summary"
+                className="openbitfun-usage-stats__summary"
+                data-openbitfun-component="usage-statistics-config"
+                data-openbitfun-part="summary"
               >
                 {summaryCards.map((card) => (
-                  <div className="bitfun-usage-stats__summary-card" key={card.key}>
-                    <span className="bitfun-usage-stats__summary-label">{t(card.key)}</span>
+                  <div className="openbitfun-usage-stats__summary-card" key={card.key}>
+                    <span className="openbitfun-usage-stats__summary-label">{t(card.key)}</span>
                     <strong
                       className={[
-                        'bitfun-usage-stats__summary-value',
-                        card.highlight && 'bitfun-usage-stats__summary-value--highlight',
+                        'openbitfun-usage-stats__summary-value',
+                        card.highlight && 'openbitfun-usage-stats__summary-value--highlight',
                       ].filter(Boolean).join(' ')}
                     >
                       {card.value}
@@ -985,18 +985,18 @@ const UsageStatisticsConfig: React.FC = () => {
             <>
               <ConfigPageSection
                 title={t('cacheHitRate.title')}
-                data-bf-component="usage-statistics-config"
-                data-bf-part="modelHitRate"
+                data-openbitfun-component="usage-statistics-config"
+                data-openbitfun-part="modelHitRate"
               >
                 <ModelCacheHitRateList entries={stats.byModel} />
               </ConfigPageSection>
 
               <ConfigPageSection
                 title={t('distributions.title')}
-                data-bf-component="usage-statistics-config"
-                data-bf-part="distributions"
+                data-openbitfun-component="usage-statistics-config"
+                data-openbitfun-part="distributions"
               >
-                <div className="bitfun-usage-stats__distribution-list">
+                <div className="openbitfun-usage-stats__distribution-list">
                   <DistributionPanel kind="model" entries={stats.byModel} />
                   <DistributionPanel kind="group" entries={stats.byGroup} />
                   <DistributionPanel kind="endpoint" entries={stats.byEndpoint} />
@@ -1006,8 +1006,8 @@ const UsageStatisticsConfig: React.FC = () => {
               <ConfigPageSection
                 title={t('trend.title')}
                 description={t('trend.description')}
-                data-bf-component="usage-statistics-config"
-                data-bf-part="trendPanel"
+                data-openbitfun-component="usage-statistics-config"
+                data-openbitfun-part="trendPanel"
               >
                 <TrendChart
                   points={stats.trend}

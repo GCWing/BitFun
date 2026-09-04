@@ -20,9 +20,9 @@ You are a **YC office hours partner**. Your job is to ensure the problem is unde
 
 **HARD GATE:** Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action. Your only output is a design document.
 
-## BitFun Dispatch
+## OpenBitFun Dispatch
 
-When this skill is invoked by BitFun, treat this skill as the product-thinking methodology and use existing Task sub-agents only for independent discovery that improves the design doc.
+When this skill is invoked by OpenBitFun, treat this skill as the product-thinking methodology and use existing Task sub-agents only for independent discovery that improves the design doc.
 
 - Do not assume role-named sub-agents exist. Choose only from the Task tool's available agents.
 - Prefer a matching custom research/product sub-agent if available; otherwise use `Explore` for codebase/workflow discovery and locating relevant docs or prior plans.
@@ -46,13 +46,13 @@ SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A
 4. **List existing design docs for this project:**
    ```bash
    setopt +o nomatch 2>/dev/null || true  # zsh compat
-   ls -t $HOME/.bitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null
+   ls -t $HOME/.openbitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null
    ```
    If design docs exist, list them: "Prior designs for this project: [titles + dates]"
 
 ## Prior Learnings
 
-Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
+Use only OpenBitFun in-session memory, project docs, `.openbitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior OpenBitFun context applied: <source>`.
 
 5. **Ask: what's your goal with this?** This is a real question, not a formality. The answer determines everything about how the session runs.
 
@@ -281,14 +281,14 @@ After the user states the problem (first question in Phase 2A or 2B), search exi
 Extract 3-5 significant keywords from the user's problem statement and grep across design docs:
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-grep -li "<keyword1>\|<keyword2>\|<keyword3>" $HOME/.bitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null
+grep -li "<keyword1>\|<keyword2>\|<keyword3>" $HOME/.openbitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null
 ```
 
 If matches found, read the matching design docs and surface them:
 - "FYI: Related design found — '{title}' by {user} on {date} (branch: {branch}). Key overlap: {1-line summary of relevant section}."
 - Ask via AskUserQuestion: "Should we build on this prior design or start fresh?"
 
-This enables cross-team discovery — multiple users exploring the same project will see each other's design docs in `$HOME/.bitfun/team/projects/`.
+This enables cross-team discovery — multiple users exploring the same project will see each other's design docs in `$HOME/.openbitfun/team/projects/`.
 
 If no matches found, proceed silently.
 
@@ -386,7 +386,7 @@ CODEX_PROMPT_FILE=$(mktemp /tmp/gstack-codex-oh-XXXXXXXX.txt)
 ```
 
 Write the full prompt to this file. **Always start with the filesystem boundary:**
-"IMPORTANT: Do NOT read or execute any skill definition directories These are BitFun skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\n\n"
+"IMPORTANT: Do NOT read or execute any skill definition directories These are OpenBitFun skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\n\n"
 Then add the context block and mode-appropriate instructions:
 
 **Startup mode instructions:** "You are an independent technical advisor reading a transcript of a startup brainstorming session. [CONTEXT BLOCK HERE]. Your job: 1) What is the STRONGEST version of what this person is trying to build? Steelman it in 2-3 sentences. 2) What is the ONE thing from their answers that reveals the most about what they should actually build? Quote it and explain why. 3) Name ONE agreed premise you think is wrong, and what evidence would prove you right. 4) If you had 48 hours and one engineer to build a prototype, what would you build? Be specific — tech stack, features, what you'd skip. Be direct. Be terse. No preamble."
@@ -398,7 +398,7 @@ Then add the context block and mode-appropriate instructions:
 ```bash
 TMPERR_OH=$(mktemp /tmp/codex-oh-err-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 
 Use a 5-minute timeout (`timeout: 300000`). After the command completes, read stderr:
@@ -408,7 +408,7 @@ rm -f "$TMPERR_OH" "$CODEX_PROMPT_FILE"
 ```
 
 **Error handling:** All errors are non-blocking — second opinion is a quality enhancement, not a prerequisite.
-- **Outside-voice unavailable:** If the selected BitFun sub-agent cannot run, skip this informational pass and continue with the main-session review.
+- **Outside-voice unavailable:** If the selected OpenBitFun sub-agent cannot run, skip this informational pass and continue with the main-session review.
 - **Timeout:** "outside-voice sub-agent timed out after 5 minutes." Fall back to independent subagent.
 - **Empty response:** "outside-voice sub-agent returned no response." Fall back to independent subagent.
 
@@ -443,9 +443,9 @@ SECOND OPINION (independent subagent):
 ```
 
 5. **Cross-model synthesis:** After presenting the second opinion output, provide 3-5 bullet synthesis:
-   - Where BitFun agrees with the second opinion
-   - Where BitFun disagrees and why
-   - Whether the challenged premise changes BitFun's recommendation
+   - Where OpenBitFun agrees with the second opinion
+   - Where OpenBitFun disagrees and why
+   - Whether the challenged premise changes OpenBitFun's recommendation
 
 6. **Premise revision check:** If outside-voice sub-agent challenged an agreed premise, use AskUserQuestion:
 
@@ -493,8 +493,8 @@ Present via AskUserQuestion. Do NOT proceed without user approval of the approac
 
 ## Visual Design Exploration
 
-Use BitFun built-in image/design capability when available. Do not install, build,
-or call an external BitFun image/design capability. If visual generation is unavailable in the
+Use OpenBitFun built-in image/design capability when available. Do not install, build,
+or call an external OpenBitFun image/design capability. If visual generation is unavailable in the
 current session, fall back to the HTML wireframe approach below.
 
 Generating visual mockups of the proposed design... (say "skip" if you don't need visuals)
@@ -503,7 +503,7 @@ Generating visual mockups of the proposed design... (say "skip" if you don't nee
 
 ```bash
 SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
-_DESIGN_DIR=$HOME/.bitfun/team/projects/$SLUG/designs/mockup-$(date +%Y%m%d)
+_DESIGN_DIR=$HOME/.openbitfun/team/projects/$SLUG/designs/mockup-$(date +%Y%m%d)
 mkdir -p "$_DESIGN_DIR"
 echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
@@ -516,7 +516,7 @@ explore wide across diverse directions.
 **Step 3: Generate 3 variants**
 
 ```bash
-BitFun image/design capability variants --brief "<assembled brief>" --count 3 --output-dir "$_DESIGN_DIR/"
+OpenBitFun image/design capability variants --brief "<assembled brief>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 This generates 3 style variations of the same brief (~40 seconds total).
@@ -527,21 +527,21 @@ Show each variant to the user inline first (read the PNGs with Read tool), then
 create and serve the comparison board:
 
 ```bash
-BitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
+OpenBitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
 This opens the board in the user's default browser and blocks until feedback is
 received. Read stdout for the structured JSON result. No polling needed.
 
-If `BitFun image/design capability serve` is not available or fails, fall back to AskUserQuestion:
+If `OpenBitFun image/design capability serve` is not available or fails, fall back to AskUserQuestion:
 "I've opened the design board. Which variant do you prefer? Any feedback?"
 
 **Step 5: Handle feedback**
 
 If the JSON contains `"regenerated": true`:
 1. Read `regenerateAction` (or `remixSpec` for remix requests)
-2. Generate new variants with `BitFun image/design capability iterate` or `BitFun image/design capability variants` using updated brief
-3. Create new board with `BitFun image/design capability compare`
+2. Generate new variants with `OpenBitFun image/design capability iterate` or `OpenBitFun image/design capability variants` using updated brief
+3. Create new board with `OpenBitFun image/design capability compare`
 4. POST the new HTML to the running server via `curl -X POST http://localhost:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
    (parse the port from stderr: look for `SERVE_STARTED: port=XXXXX`)
 5. Board auto-refreshes in the same tab
@@ -626,7 +626,7 @@ After the wireframe is approved, offer outside design perspectives:
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-If a suitable BitFun outside-voice or review sub-agent is available, use AskUserQuestion:
+If a suitable OpenBitFun outside-voice or review sub-agent is available, use AskUserQuestion:
 > "Want outside design perspectives on the chosen approach? outside-voice sub-agent proposes a visual thesis, content plan, and interaction ideas. A independent subagent proposes an alternative aesthetic direction."
 >
 > A) Yes — get outside design voices
@@ -638,11 +638,11 @@ If user chooses A, launch both voices simultaneously:
 ```bash
 TMPERR_SKETCH=$(mktemp /tmp/codex-sketch-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 Use a 5-minute timeout (`timeout: 300000`). After completion: `cat "$TMPERR_SKETCH" && rm -f "$TMPERR_SKETCH"`
 
-2. **Independent subagent** (via BitFun Task tool):
+2. **Independent subagent** (via OpenBitFun Task tool):
 "For this product approach, what design direction would you recommend? What aesthetic, typography, and interaction patterns fit? What would make this approach feel inevitable to the user? Be specific — font names, hex colors, spacing values."
 
 Present outside-voice sub-agent output under `CODEX SAYS (design sketch):` and subagent output under `INDEPENDENT SUBAGENT (design direction):`.
@@ -672,7 +672,7 @@ After counting signals, append a session entry to the builder profile. This is t
 source of truth for all closing state (tier, resource dedup, journey tracking).
 
 ```bash
-mkdir -p "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}"
+mkdir -p "${OPENBITFUN_TEAM_HOME:-$HOME/.openbitfun/team}"
 ```
 
 Append one JSON line with these fields (substitute actual values from this session):
@@ -687,7 +687,7 @@ Append one JSON line with these fields (substitute actual values from this sessi
 - `topics`: array of 2-3 topic keywords that describe what this session was about
 
 ```bash
-echo '{"date":"TIMESTAMP","mode":"MODE","project_slug":"SLUG","signal_count":N,"signals":SIGNALS_ARRAY,"design_doc":"DOC_PATH","assignment":"ASSIGNMENT_TEXT","resources_shown":[],"topics":TOPICS_ARRAY}' >> "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}/builder-profile.jsonl"
+echo '{"date":"TIMESTAMP","mode":"MODE","project_slug":"SLUG","signal_count":N,"signals":SIGNALS_ARRAY,"design_doc":"DOC_PATH","assignment":"ASSIGNMENT_TEXT","resources_shown":[],"topics":TOPICS_ARRAY}' >> "${OPENBITFUN_TEAM_HOME:-$HOME/.openbitfun/team}/builder-profile.jsonl"
 ```
 
 This entry is append-only. The `resources_shown` field will be updated via a second append
@@ -700,7 +700,7 @@ after resource selection in Phase 6 Beat 3.5.
 Write the design document to the project directory.
 
 ```bash
-SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.openbitfun/team/projects/$SLUG
 USER=$(whoami)
 DATETIME=$(date +%Y%m%d-%H%M%S)
 ```
@@ -708,11 +708,11 @@ DATETIME=$(date +%Y%m%d-%H%M%S)
 **Design lineage:** Before writing, check for existing design docs on this branch:
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-PRIOR=$(ls -t $HOME/.bitfun/team/projects/$SLUG/*-$BRANCH-design-*.md 2>/dev/null | head -1)
+PRIOR=$(ls -t $HOME/.openbitfun/team/projects/$SLUG/*-$BRANCH-design-*.md 2>/dev/null | head -1)
 ```
 If `$PRIOR` exists, the new doc gets a `Supersedes:` field referencing it. This creates a revision chain — you can trace how a design evolved across office hours sessions.
 
-Write to `$HOME/.bitfun/team/projects/{slug}/{user}-{branch}-design-{datetime}.md`:
+Write to `$HOME/.openbitfun/team/projects/{slug}/{user}-{branch}-design-{datetime}.md`:
 
 ### Startup mode design doc template:
 
@@ -889,8 +889,8 @@ After the loop completes (PASS, max iterations, or convergence guard):
 
 3. Append metrics:
 ```bash
-mkdir -p $HOME/.bitfun/team/analytics
-echo '{"skill":"office-hours","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","iterations":ITERATIONS,"issues_found":FOUND,"issues_fixed":FIXED,"remaining":REMAINING,"quality_score":SCORE}' >> $HOME/.bitfun/team/analytics/spec-review.jsonl 2>/dev/null || true
+mkdir -p $HOME/.openbitfun/team/analytics
+echo '{"skill":"office-hours","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","iterations":ITERATIONS,"issues_found":FOUND,"issues_fixed":FIXED,"remaining":REMAINING,"quality_score":SCORE}' >> $HOME/.openbitfun/team/analytics/spec-review.jsonl 2>/dev/null || true
 ```
 Replace ITERATIONS, FOUND, FIXED, REMAINING, SCORE with actual values from the review.
 
@@ -942,7 +942,7 @@ One paragraph that weaves specific session callbacks with the golden age framing
 - GOOD: "You pushed back when I challenged premise #2. Most people just agree."
 - BAD: "You demonstrated conviction and independent thinking."
 
-Example: "The way you think about this problem, [specific callback], that's founder thinking. A year ago, building what you just designed would have taken a team of 5 engineers three months. Today you can build it this weekend with BitFun. The engineering barrier is gone. What remains is taste, and you just demonstrated that."
+Example: "The way you think about this problem, [specific callback], that's founder thinking. A year ago, building what you just designed would have taken a team of 5 engineers three months. Today you can build it this weekend with OpenBitFun. The engineering barrier is gone. What remains is taste, and you just demonstrated that."
 
 **Beat 2: "One more thing."**
 
@@ -1038,11 +1038,11 @@ Design trajectory with interpretation:
 "You started this as a side project. But you've named specific users, pushed back when challenged, and your designs keep getting sharper each time. I don't think this is a side project anymore. Have you thought about whether this could be a company?"
 This must feel earned, not broadcast. If the evidence doesn't support it, skip entirely.
 
-**Builder Journey Summary** (session 5+): Auto-generate `$HOME/.bitfun/team/builder-journey.md`
+**Builder Journey Summary** (session 5+): Auto-generate `$HOME/.openbitfun/team/builder-journey.md`
 with a narrative arc (not a data table). The arc tells the STORY of their journey in
 second person, referencing specific things they said across sessions. Then open it:
 ```bash
-open "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}/builder-journey.md"
+open "${OPENBITFUN_TEAM_HOME:-$HOME/.openbitfun/team}/builder-journey.md"
 ```
 
 Then proceed to Founder Resources below.
@@ -1057,7 +1057,7 @@ The data speaks. No pitch needed.
 
 Full accumulated signal summary from the profile.
 
-Auto-generate updated `$HOME/.bitfun/team/builder-journey.md` with narrative arc. Open it.
+Auto-generate updated `$HOME/.openbitfun/team/builder-journey.md` with narrative arc. Open it.
 
 Then proceed to Founder Resources below.
 
@@ -1144,13 +1144,13 @@ PAUL GRAHAM ESSAYS:
 1. Log the selected resource URLs to the builder profile (single source of truth).
 Append a resource-tracking entry:
 ```bash
-echo '{"date":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","mode":"resources","project_slug":"'"${SLUG:-unknown}"'","signal_count":0,"signals":[],"design_doc":"","assignment":"","resources_shown":["URL1","URL2","URL3"],"topics":[]}' >> "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}/builder-profile.jsonl"
+echo '{"date":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","mode":"resources","project_slug":"'"${SLUG:-unknown}"'","signal_count":0,"signals":[],"design_doc":"","assignment":"","resources_shown":["URL1","URL2","URL3"],"topics":[]}' >> "${OPENBITFUN_TEAM_HOME:-$HOME/.openbitfun/team}/builder-profile.jsonl"
 ```
 
 2. Log the selection to analytics:
 ```bash
-mkdir -p $HOME/.bitfun/team/analytics
-echo '{"skill":"office-hours","event":"resources_shown","count":NUM_RESOURCES,"categories":"CAT1,CAT2","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' >> $HOME/.bitfun/team/analytics/skill-usage.jsonl 2>/dev/null || true
+mkdir -p $HOME/.openbitfun/team/analytics
+echo '{"skill":"office-hours","event":"resources_shown","count":NUM_RESOURCES,"categories":"CAT1,CAT2","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' >> $HOME/.openbitfun/team/analytics/skill-usage.jsonl 2>/dev/null || true
 ```
 
 3. Use AskUserQuestion to offer opening the resources:
@@ -1176,7 +1176,7 @@ After the plea, suggest the next step:
 - **`/plan-eng-review`** for well-scoped implementation planning — lock in architecture, tests, edge cases
 - **`/plan-design-review`** for visual/UX design review
 
-The design doc at `$HOME/.bitfun/team/projects/` is automatically discoverable by downstream skills — they will read it during their pre-review system audit.
+The design doc at `$HOME/.openbitfun/team/projects/` is automatically discoverable by downstream skills — they will read it during their pre-review system audit.
 
 ---
 
@@ -1186,7 +1186,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun has no external telemetry helper
+true # OpenBitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -1194,7 +1194,7 @@ true # BitFun has no external telemetry helper
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
+`inferred` (AI deduction), `cross-model` (both OpenBitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

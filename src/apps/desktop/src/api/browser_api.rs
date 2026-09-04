@@ -3,13 +3,13 @@
 //! Browser webviews are created as native child webviews by this desktop
 //! adapter so stream-specific initialization can run before page scripts.
 
-use bitfun_core::agentic::tools::browser_control::BuiltInBrowserTarget;
+use openbitfun_core::agentic::tools::browser_control::BuiltInBrowserTarget;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
-const VIDEO_DECODER_MODE_ENV: &str = "BITFUN_BROWSER_VIDEO_DECODER_MODE";
+const VIDEO_DECODER_MODE_ENV: &str = "OPENBITFUN_BROWSER_VIDEO_DECODER_MODE";
 
 fn video_decoder_compatibility_script() -> String {
     let mode =
@@ -22,10 +22,10 @@ fn video_decoder_compatibility_script() -> String {
     let script = format!(
         r#"
 const isWebView2 = Boolean(window.chrome && window.chrome.webview);
-const isBitFunDocument = location.protocol === 'tauri:'
+const isOpenBitFunDocument = location.protocol === 'tauri:'
   || location.hostname === 'tauri.localhost'
   || (location.hostname === 'localhost' && location.port === '1422');
-if (isWebView2 && !isBitFunDocument) {{
+if (isWebView2 && !isOpenBitFunDocument) {{
   const decoderMode = {mode_json};
   if (decoderMode && typeof VideoDecoder === 'function') {{
     const originalConfigure = VideoDecoder.prototype.configure;

@@ -14,7 +14,8 @@ import {
 import { useMobileStore } from '../services/store';
 import { createRemoteCacheScope, remoteCache } from '../services/RemoteCache';
 import { useTheme } from '../theme';
-import logoIcon from '../assets/Logo-ICON.png';
+import logoMarkDark from '../assets/openbitfun-mark-dark.png';
+import logoMarkLight from '../assets/openbitfun-mark-light.png';
 import {
   isDelegatedIdentityChangedError,
   type RelayHttpClient,
@@ -54,7 +55,7 @@ type CompactDevice = {
   room_route?: boolean;
 };
 
-const COMPACT_PAIRED_ROOM_DEVICE_ID = '__bitfun_paired_room__';
+const COMPACT_PAIRED_ROOM_DEVICE_ID = '__openbitfun_paired_room__';
 
 function compactSelectedDeviceIdForClient(client?: RelayHttpClient): string | null {
   if (!client) return null;
@@ -322,6 +323,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     resetForDeviceSwitch,
   } = useMobileStore();
   const { isDark, toggleTheme } = useTheme();
+  const logoMark = isDark ? logoMarkLight : logoMarkDark;
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1558,7 +1560,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     return (
       <div className="harmony-sidebar">
         <header className="harmony-sidebar__header">
-          <h1>BitFun</h1>
+          <h1>OpenBitFun</h1>
           <button
             type="button"
             className="harmony-sidebar__round-action"
@@ -2015,9 +2017,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     <div className="session-list">
       <div className="session-list__header">
         <div className="session-list__header-brand">
-          <img src={logoIcon} alt="BitFun" className="session-list__logo" />
+          <img src={logoMark} alt="OpenBitFun" className="session-list__logo" />
           <div className="session-list__header-copy">
-            <h1>BitFun</h1>
+            <h1>OpenBitFun</h1>
             {authenticatedUserLabel && (
               <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />

@@ -1,5 +1,5 @@
 use crate::tool_call_accumulator::ToolCallCompletion;
-use bitfun_core_types::{ModelResponseReplayItem, ReasoningContentKind};
+use openbitfun_core_types::{ModelResponseReplayItem, ReasoningContentKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;

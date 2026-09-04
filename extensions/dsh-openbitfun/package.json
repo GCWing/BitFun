@@ -1,0 +1,23 @@
+{
+  "name": "dsh-openbitfun",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin bundle exposing the OpenBitFun Agent SDK Host as dsh tools",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

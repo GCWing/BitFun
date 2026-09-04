@@ -8,7 +8,7 @@ FROM debian:trixie-slim AS payload
 
 ARG TARGETARCH
 WORKDIR /payload
-COPY bitfun-relay-server-*.tar.gz /tmp/relay/
+COPY openbitfun-relay-server-*.tar.gz /tmp/relay/
 
 RUN set -eux; \
     case "${TARGETARCH}" in \
@@ -16,10 +16,10 @@ RUN set -eux; \
       arm64) target=aarch64-unknown-linux-gnu ;; \
       *) echo "Unsupported Relay image architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    archive="/tmp/relay/bitfun-relay-server-${target}.tar.gz"; \
+    archive="/tmp/relay/openbitfun-relay-server-${target}.tar.gz"; \
     test -f "${archive}"; \
     tar -xzf "${archive}" --strip-components=1; \
-    test -x bitfun-relay-server; \
+    test -x openbitfun-relay-server; \
     test -x relay-admin; \
     test -f static/index.html
 
@@ -27,10 +27,10 @@ FROM debian:trixie-slim
 
 ARG VERSION
 ARG REVISION
-LABEL org.opencontainers.image.title="BitFun Relay Server" \
-      org.opencontainers.image.description="Self-hosted relay server for BitFun" \
-      org.opencontainers.image.source="https://github.com/GCWing/BitFun" \
-      org.opencontainers.image.url="https://github.com/GCWing/BitFun" \
+LABEL org.opencontainers.image.title="OpenBitFun Relay Server" \
+      org.opencontainers.image.description="Self-hosted relay server for OpenBitFun" \
+      org.opencontainers.image.source="https://github.com/GCWing/OpenBitFun" \
+      org.opencontainers.image.url="https://github.com/GCWing/OpenBitFun" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.licenses="MIT"
@@ -42,13 +42,13 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=payload /payload/bitfun-relay-server /payload/relay-admin /app/
+COPY --from=payload /payload/openbitfun-relay-server /payload/relay-admin /app/
 COPY --from=payload /payload/static /app/static
 
 RUN set -eu; \
-    chmod 755 /app/bitfun-relay-server /app/relay-admin; \
+    chmod 755 /app/openbitfun-relay-server /app/relay-admin; \
     mkdir -p /app/data /app/room-web; \
-    for bin in /app/bitfun-relay-server /app/relay-admin; do \
+    for bin in /app/openbitfun-relay-server /app/relay-admin; do \
       out="$(ldd "$bin" 2>&1)"; \
       printf '%s\n' "$out"; \
       case "$out" in \
@@ -61,4 +61,4 @@ EXPOSE 9700
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${RELAY_PORT:-9700}/health" || exit 1
 
-CMD ["/app/bitfun-relay-server"]
+CMD ["/app/openbitfun-relay-server"]

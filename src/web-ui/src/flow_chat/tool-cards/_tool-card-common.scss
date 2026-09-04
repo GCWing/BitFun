@@ -6,9 +6,9 @@
 .tool-display-compact {
   display: flex;
   align-items: center;
-  gap: var(--bf-control-flow-chat-control-gap);
-  font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-type-flow-body-line-height);
+  gap: var(--openbitfun-control-flow-chat-control-gap);
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  line-height: var(--openbitfun-type-flow-body-line-height);
   position: relative;
 }
 
@@ -19,7 +19,7 @@
 }
 
 .tool-action {
-  font-weight: var(--bf-type-label-sm-font-weight);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
   white-space: nowrap;
 }
 

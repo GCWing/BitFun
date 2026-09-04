@@ -28,11 +28,11 @@ vi.mock('../../store/FlowChatStore', () => ({
   },
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => {
+vi.mock('@openbitfun/ui', async importOriginal => {
   const ReactModule = await import('react');
 
   return {
-    ...await importOriginal<typeof import('@bitfun/ui')>(),
+    ...await importOriginal<typeof import('@openbitfun/ui')>(),
     Spinner: () => <span data-testid="dot-matrix-loader" />,
     IconButton: ReactModule.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
       tooltip?: string;
@@ -85,7 +85,7 @@ describe('SessionTreePopover', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     vi.restoreAllMocks();
   });
 
@@ -110,7 +110,7 @@ describe('SessionTreePopover', () => {
     });
 
     const panel = document.querySelector<HTMLElement>('.session-tree-popover__panel');
-    expect(panel?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(panel?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(panel?.style.visibility).toBe('visible');
     const actionButton = panel?.querySelector<HTMLButtonElement>(
       '[aria-label="flowChatHeader.agentTreeActions"]',
@@ -177,12 +177,12 @@ describe('SessionTreePopover', () => {
     subagentNodes.forEach((node) => {
       const sessionId = node.dataset.sessionId!;
       const avatar = node.querySelector<HTMLElement>(
-        '[data-bf-component="subagent-avatar"]',
+        '[data-openbitfun-component="subagent-avatar"]',
       )!;
       const presentation = resolveSubagentAvatarPresentation(sessionId);
 
-      expect(avatar.dataset.bfAvatarId).toBe(presentation.avatarId);
-      expect(avatar.dataset.bfAvatarColorId).toBe(presentation.colorId);
+      expect(avatar.dataset.openbitfunAvatarId).toBe(presentation.avatarId);
+      expect(avatar.dataset.openbitfunAvatarColorId).toBe(presentation.colorId);
     });
 
     expect(subagentNodes).toHaveLength(3);

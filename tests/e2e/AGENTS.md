@@ -8,7 +8,7 @@ This file applies to `tests/e2e`. Use the top-level `AGENTS.md` for repository-w
 
 ## What matters here
 
-Desktop E2E tests built with WebDriverIO plus BitFun's embedded WebDriver.
+Desktop E2E tests built with WebDriverIO plus OpenBitFun's embedded WebDriver.
 
 Levels from `E2E-TESTING-GUIDE.md`:
 
@@ -26,7 +26,7 @@ Core rules:
 ## Commands
 
 ```bash
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 pnpm --dir tests/e2e install
 pnpm --dir tests/e2e run test:l0
 pnpm --dir tests/e2e run test:l0:all

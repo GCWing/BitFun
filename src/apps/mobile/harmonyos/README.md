@@ -1,7 +1,7 @@
-# BitFun HarmonyOS
+# OpenBitFun HarmonyOS
 
-Native HarmonyOS client for BitFun. The application provides general chat and
-remote control of BitFun desktop sessions on phone and tablet devices.
+Native HarmonyOS client for OpenBitFun. The application provides general chat and
+remote control of OpenBitFun desktop sessions on phone and tablet devices.
 
 ## Project Layout
 

@@ -7,7 +7,7 @@ export const subagentProjectionAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'container' }, { id: 'content' },
   ],
   states: [
-    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-bf-state~="collapsed"]' } },
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="collapsed"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

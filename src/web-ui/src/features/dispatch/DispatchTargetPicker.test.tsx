@@ -7,8 +7,8 @@ import { DispatchTargetPicker } from './DispatchTargetPicker';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -79,7 +79,7 @@ describe('DispatchTargetPicker overlay', () => {
 
   afterEach(() => {
     act(() => root.unmount());
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     container.remove();
     vi.restoreAllMocks();
   });
@@ -102,7 +102,7 @@ describe('DispatchTargetPicker overlay', () => {
     await act(async () => trigger?.click());
 
     const menu = document.querySelector<HTMLElement>('[data-testid="dispatch-target-menu"]');
-    expect(menu?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(menu?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(menu?.style.visibility).toBe('visible');
     expect(menu?.style.left).toBe('240px');
     expect(menu?.style.top).toBe('293px');

@@ -1,24 +1,26 @@
 //! Server-owned translations between behavior-light wire DTOs and runtime or
 //! service-owner types.
 
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     AgentRunHandle, AgentRunRequest, AgentSessionRestoreRequest, AgentSessionRestoreResult,
     DialogSubmitOutcome, SessionSelector,
 };
-use bitfun_agent_runtime::session_state::{ProcessingPhase, SessionState};
-use bitfun_app_server_protocol::agent::{
+use openbitfun_agent_runtime::session_state::{ProcessingPhase, SessionState};
+use openbitfun_app_server_protocol::agent::{
     RunMessage, RunResponse, RunSessionSpec, SubmitDialogTurnBody, SubmitDialogTurnResponse,
 };
-use bitfun_app_server_protocol::config::AgentProfileView;
-use bitfun_app_server_protocol::event::ConfigUpdate;
-use bitfun_app_server_protocol::git::{
+use openbitfun_app_server_protocol::config::AgentProfileView;
+use openbitfun_app_server_protocol::event::ConfigUpdate;
+use openbitfun_app_server_protocol::git::{
     GitBranch, GitBranchStats, GitFileStatus, GitLinesChanged, GitStatus, GitTrustReport,
     GitTrustState,
 };
-use bitfun_app_server_protocol::session::{
+use openbitfun_app_server_protocol::session::{
     RestoreSessionMessage, RestoreSessionResponse, SessionProcessingPhase, SessionRuntimeState,
 };
-use bitfun_runtime_ports::{AgentDialogTurnRequest, AgentSubmissionSource, DialogSubmissionPolicy};
+use openbitfun_runtime_ports::{
+    AgentDialogTurnRequest, AgentSubmissionSource, DialogSubmissionPolicy,
+};
 
 pub(super) fn submit_dialog_turn_request(body: SubmitDialogTurnBody) -> AgentDialogTurnRequest {
     body.to_request(DialogSubmissionPolicy::for_source(
@@ -124,7 +126,7 @@ fn session_processing_phase(value: ProcessingPhase) -> SessionProcessingPhase {
 }
 
 pub(super) fn agent_profile_view(
-    value: bitfun_core::service::config::AgentProfileView,
+    value: openbitfun_core::service::config::AgentProfileView,
 ) -> AgentProfileView {
     AgentProfileView {
         profile_id: value.profile_id,
@@ -136,12 +138,12 @@ pub(super) fn agent_profile_view(
 }
 
 pub(super) fn model_config(
-    value: bitfun_core::service::config::AIModelConfig,
+    value: openbitfun_core::service::config::AIModelConfig,
 ) -> Result<serde_json::Value, serde_json::Error> {
     serde_json::to_value(value)
 }
 
-pub(super) fn git_status(value: bitfun_core::service::git::GitStatus) -> GitStatus {
+pub(super) fn git_status(value: openbitfun_core::service::git::GitStatus) -> GitStatus {
     GitStatus {
         staged: value.staged.into_iter().map(git_file_status).collect(),
         unstaged: value.unstaged.into_iter().map(git_file_status).collect(),
@@ -153,7 +155,9 @@ pub(super) fn git_status(value: bitfun_core::service::git::GitStatus) -> GitStat
     }
 }
 
-pub(super) fn git_trust_report(value: bitfun_core::service::git::GitTrustReport) -> GitTrustReport {
+pub(super) fn git_trust_report(
+    value: openbitfun_core::service::git::GitTrustReport,
+) -> GitTrustReport {
     GitTrustReport {
         state: git_trust_state(value.state),
         repository_path: value.repository_path,
@@ -162,15 +166,17 @@ pub(super) fn git_trust_report(value: bitfun_core::service::git::GitTrustReport)
     }
 }
 
-fn git_trust_state(value: bitfun_core::service::git::GitTrustState) -> GitTrustState {
+fn git_trust_state(value: openbitfun_core::service::git::GitTrustState) -> GitTrustState {
     match value {
-        bitfun_core::service::git::GitTrustState::Trusted => GitTrustState::Trusted,
-        bitfun_core::service::git::GitTrustState::TrustRequired => GitTrustState::TrustRequired,
-        bitfun_core::service::git::GitTrustState::NotARepository => GitTrustState::NotARepository,
+        openbitfun_core::service::git::GitTrustState::Trusted => GitTrustState::Trusted,
+        openbitfun_core::service::git::GitTrustState::TrustRequired => GitTrustState::TrustRequired,
+        openbitfun_core::service::git::GitTrustState::NotARepository => {
+            GitTrustState::NotARepository
+        }
     }
 }
 
-fn git_file_status(value: bitfun_core::service::git::GitFileStatus) -> GitFileStatus {
+fn git_file_status(value: openbitfun_core::service::git::GitFileStatus) -> GitFileStatus {
     GitFileStatus {
         path: value.path,
         status: value.status,
@@ -179,7 +185,7 @@ fn git_file_status(value: bitfun_core::service::git::GitFileStatus) -> GitFileSt
     }
 }
 
-pub(super) fn git_branch(value: bitfun_core::service::git::GitBranch) -> GitBranch {
+pub(super) fn git_branch(value: openbitfun_core::service::git::GitBranch) -> GitBranch {
     GitBranch {
         name: value.name,
         current: value.current,
@@ -216,9 +222,9 @@ pub(super) fn git_branch(value: bitfun_core::service::git::GitBranch) -> GitBran
 }
 
 pub(super) fn config_update(
-    value: bitfun_core::service::config::ConfigUpdateEvent,
+    value: openbitfun_core::service::config::ConfigUpdateEvent,
 ) -> ConfigUpdate {
-    use bitfun_core::service::config::ConfigUpdateEvent;
+    use openbitfun_core::service::config::ConfigUpdateEvent;
 
     match value {
         ConfigUpdateEvent::ModelConfigurationUpdated => ConfigUpdate::ModelConfigurationUpdated,
@@ -269,9 +275,9 @@ pub(super) fn config_update(
 
 #[cfg(test)]
 mod tests {
-    use bitfun_app_server_protocol::agent::SubmitDialogTurnBody;
-    use bitfun_app_server_protocol::session::{SessionProcessingPhase, SessionRuntimeState};
-    use bitfun_runtime_ports::{AgentDialogTurnExecution, AgentSubmissionSource};
+    use openbitfun_app_server_protocol::agent::SubmitDialogTurnBody;
+    use openbitfun_app_server_protocol::session::{SessionProcessingPhase, SessionRuntimeState};
+    use openbitfun_runtime_ports::{AgentDialogTurnExecution, AgentSubmissionSource};
 
     #[test]
     fn missing_dialog_policy_defaults_only_at_the_server_boundary() {
@@ -301,9 +307,9 @@ mod tests {
     #[test]
     fn runtime_session_state_maps_without_changing_wire_phase_names() {
         let state = super::session_state(
-            bitfun_agent_runtime::session_state::SessionState::Processing {
+            openbitfun_agent_runtime::session_state::SessionState::Processing {
                 current_turn_id: "turn-1".to_string(),
-                phase: bitfun_agent_runtime::session_state::ProcessingPhase::ToolCalling,
+                phase: openbitfun_agent_runtime::session_state::ProcessingPhase::ToolCalling,
             },
         );
 
@@ -318,7 +324,7 @@ mod tests {
 
     #[test]
     fn legacy_model_config_wire_document_is_the_owner_serialization() {
-        let owner = bitfun_core::service::config::AIModelConfig::default();
+        let owner = openbitfun_core::service::config::AIModelConfig::default();
         let expected = serde_json::to_value(&owner).expect("owner config should serialize");
 
         assert_eq!(

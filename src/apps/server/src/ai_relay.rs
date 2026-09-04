@@ -1,20 +1,20 @@
 //! AI Relay - Lightweight HTTP proxy for AI API requests
 //!
-//! When running BitFun Server on a remote machine that cannot directly access
+//! When running OpenBitFun Server on a remote machine that cannot directly access
 //! AI APIs (due to network restrictions), AI Relay acts as a local proxy:
 //!
 //! ```text
 //! Remote Server                    Local Machine
 //! ┌─────────────┐    SSH Tunnel    ┌─────────────┐
-//! │ BitFun      │ ───────────────► │ AI Relay    │ ──► AI API
+//! │ OpenBitFun      │ ───────────────► │ AI Relay    │ ──► AI API
 //! │ Server      │   ssh -R 9090:   │ :9090       │     (OpenAI, etc.)
 //! └─────────────┘                  └─────────────┘
 //! ```
 //!
 //! Usage:
-//! 1. Start AI Relay on local machine: `bitfun-server --ai-relay --port 9090`
+//! 1. Start AI Relay on local machine: `openbitfun-server --ai-relay --port 9090`
 //! 2. SSH to remote with reverse tunnel: `ssh -R 9090:localhost:9090 user@remote`
-//! 3. Configure remote BitFun to use proxy: `proxy_url = "http://localhost:9090"`
+//! 3. Configure remote OpenBitFun to use proxy: `proxy_url = "http://localhost:9090"`
 
 use axum::{
     body::Body,

@@ -95,7 +95,7 @@ export function useFlowChatToolActions() {
         return;
       }
 
-      log.warn('Ignoring legacy BitFun tool confirmation without a permission request id', { toolId });
+      log.warn('Ignoring legacy OpenBitFun tool confirmation without a permission request id', { toolId });
     } catch (error) {
       log.error('Tool confirmation failed', error);
       notificationService.error(`Tool confirmation failed: ${error}`);
@@ -135,7 +135,7 @@ export function useFlowChatToolActions() {
         return;
       }
 
-      log.warn('Ignoring legacy BitFun tool rejection without a permission request id', { toolId });
+      log.warn('Ignoring legacy OpenBitFun tool rejection without a permission request id', { toolId });
     } catch (error) {
       log.error('Tool rejection failed', error);
       notificationService.error(`Tool rejection failed: ${error}`);

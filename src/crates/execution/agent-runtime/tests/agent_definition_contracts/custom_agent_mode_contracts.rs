@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::custom_agent::{
+use openbitfun_agent_runtime::custom_agent::{
     custom_agent_possible_dirs, custom_agent_read_markdown_file, custom_agent_read_markdown_str,
     custom_agent_review_writable_tools, custom_agent_save_markdown_file,
     default_custom_agent_tools, default_custom_agent_user_context_policy,
@@ -7,7 +7,7 @@ use bitfun_agent_runtime::custom_agent::{
     CustomAgentModelFallback, CustomAgentValidationContext, ParsedCustomAgentDefinition,
     DEFAULT_CUSTOM_MODE_MODEL, DEFAULT_CUSTOM_MODE_READONLY,
 };
-use bitfun_agent_runtime::prompt::UserContextPolicy;
+use openbitfun_agent_runtime::prompt::UserContextPolicy;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -113,7 +113,7 @@ fn custom_mode_rejects_review_flag() {
 
 #[test]
 fn custom_mode_markdown_save_omits_default_fields() {
-    let dir = TestTempDir::new("bitfun-runtime-custom-mode-defaults");
+    let dir = TestTempDir::new("openbitfun-runtime-custom-mode-defaults");
     let path = dir.join("planner.md");
     let definition = build_mode_definition(BuildModeDefinitionInput(
         Some("PlannerPlus"),
@@ -147,7 +147,7 @@ fn custom_mode_markdown_save_omits_default_fields() {
 
 #[test]
 fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
-    let dir = TestTempDir::new("bitfun-runtime-custom-mode-custom");
+    let dir = TestTempDir::new("openbitfun-runtime-custom-mode-custom");
     let path = dir.join("planner.md");
     let policy = UserContextPolicy::empty().with_workspace_instructions();
     let definition = build_mode_definition(BuildModeDefinitionInput(
@@ -181,7 +181,7 @@ fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
 
 #[test]
 fn custom_mode_markdown_save_round_trips_empty_custom_policy() {
-    let dir = TestTempDir::new("bitfun-runtime-custom-mode-empty-policy");
+    let dir = TestTempDir::new("openbitfun-runtime-custom-mode-empty-policy");
     let path = dir.join("planner.md");
     let policy = UserContextPolicy::empty();
     let definition = build_mode_definition(BuildModeDefinitionInput(
@@ -232,9 +232,9 @@ Act as a focused project specialist.
 
 #[test]
 fn custom_mode_discovery_rejects_project_scoped_modes_without_dropping_valid_agents() {
-    let workspace = TestTempDir::new("bitfun-runtime-custom-mode-workspace");
-    let user_root = TestTempDir::new("bitfun-runtime-custom-mode-user");
-    let project_agents_dir = workspace.path.join(".bitfun").join("agents");
+    let workspace = TestTempDir::new("openbitfun-runtime-custom-mode-workspace");
+    let user_root = TestTempDir::new("openbitfun-runtime-custom-mode-user");
+    let project_agents_dir = workspace.path.join(".openbitfun").join("agents");
     let user_agents_dir = user_root.path.join("agents");
     fs::create_dir_all(&project_agents_dir).expect("project agents dir should be created");
     fs::create_dir_all(&user_agents_dir).expect("user agents dir should be created");
@@ -257,7 +257,7 @@ fn custom_mode_discovery_rejects_project_scoped_modes_without_dropping_valid_age
 
     let report = load_custom_agent_definitions(&CustomAgentDiscoveryRoots {
         workspace_root: Some(workspace.path.clone()),
-        bitfun_user_agents_dir: Some(user_agents_dir),
+        openbitfun_user_agents_dir: Some(user_agents_dir),
         home_dir: None,
     });
 
@@ -369,22 +369,23 @@ fn custom_agent_validation_forces_review_subagents_to_readonly_tools() {
 }
 
 #[test]
-fn custom_agent_discovery_ignores_non_bitfun_agent_dirs() {
-    let workspace = TestTempDir::new("bitfun-runtime-custom-agent-workspace");
-    let user_root = TestTempDir::new("bitfun-runtime-custom-agent-user");
-    let home = TestTempDir::new("bitfun-runtime-custom-agent-home");
-    let project_bitfun = workspace.path.join(".bitfun").join("agents");
+fn custom_agent_discovery_ignores_non_openbitfun_agent_dirs() {
+    let workspace = TestTempDir::new("openbitfun-runtime-custom-agent-workspace");
+    let user_root = TestTempDir::new("openbitfun-runtime-custom-agent-user");
+    let home = TestTempDir::new("openbitfun-runtime-custom-agent-home");
+    let project_openbitfun = workspace.path.join(".openbitfun").join("agents");
     let project_claude = workspace.path.join(".claude").join("agents");
     let user_agents = user_root.path.join("agents");
     let home_claude = home.path.join(".claude").join("agents");
-    fs::create_dir_all(&project_bitfun).expect("project bitfun agents dir should be created");
+    fs::create_dir_all(&project_openbitfun)
+        .expect("project openbitfun agents dir should be created");
     fs::create_dir_all(&project_claude).expect("project claude agents dir should be created");
     fs::create_dir_all(&user_agents).expect("user agents dir should be created");
     fs::create_dir_all(&home_claude).expect("home claude agents dir should be created");
 
     write_subagent(
-        &project_bitfun.join("project-bitfun.md"),
-        "BitfunProject",
+        &project_openbitfun.join("project-openbitfun.md"),
+        "OpenBitFunProject",
         CustomAgentLevel::Project,
     );
     write_subagent(
@@ -393,8 +394,8 @@ fn custom_agent_discovery_ignores_non_bitfun_agent_dirs() {
         CustomAgentLevel::Project,
     );
     write_subagent(
-        &user_agents.join("user-bitfun.md"),
-        "BitfunUser",
+        &user_agents.join("user-openbitfun.md"),
+        "OpenBitFunUser",
         CustomAgentLevel::User,
     );
     write_subagent(
@@ -405,7 +406,7 @@ fn custom_agent_discovery_ignores_non_bitfun_agent_dirs() {
 
     let roots = CustomAgentDiscoveryRoots {
         workspace_root: Some(workspace.path.clone()),
-        bitfun_user_agents_dir: Some(user_agents.clone()),
+        openbitfun_user_agents_dir: Some(user_agents.clone()),
         home_dir: Some(home.path.clone()),
     };
 
@@ -414,7 +415,7 @@ fn custom_agent_discovery_ignores_non_bitfun_agent_dirs() {
             .iter()
             .map(|entry| entry.path.as_path())
             .collect::<Vec<_>>(),
-        vec![project_bitfun.as_path(), user_agents.as_path()]
+        vec![project_openbitfun.as_path(), user_agents.as_path()]
     );
 
     let report = load_custom_agent_definitions(&roots);
@@ -425,7 +426,7 @@ fn custom_agent_discovery_ignores_non_bitfun_agent_dirs() {
             .iter()
             .map(|loaded| loaded.definition.id.as_str())
             .collect::<Vec<_>>(),
-        vec!["BitfunProject", "BitfunUser"]
+        vec!["OpenBitFunProject", "OpenBitFunUser"]
     );
     assert!(report.errors.is_empty());
 }

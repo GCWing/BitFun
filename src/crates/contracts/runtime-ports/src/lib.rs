@@ -2,12 +2,12 @@
 //! concrete implementations.
 //!
 //! This crate intentionally contains only DTOs and traits. It must not depend
-//! on concrete managers, platform adapters, `bitfun-core`, or app crates.
+//! on concrete managers, platform adapters, `openbitfun-core`, or app crates.
 
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "agent-api")]
-pub use bitfun_core_types::{
+pub use openbitfun_core_types::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
     SessionUsageReport, WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSettings,
     WorktreeSummary,
@@ -27,12 +27,19 @@ mod product_search;
 mod script_tool;
 #[cfg(feature = "web-search-port")]
 mod web_search;
+#[cfg(feature = "hook-function-runtime")]
+pub use hook_function::*;
+#[cfg(feature = "workspace-ports")]
+pub use local_workspace_snapshot::{
+    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
+    LocalWorkspaceSnapshotTurnRequest,
+};
 #[cfg(feature = "product-search")]
-pub use bitfun_product_domains::product_search::{
+pub use openbitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse,
 };
 #[cfg(feature = "permission")]
-pub use bitfun_product_domains::tool_permissions::{
+pub use openbitfun_product_domains::tool_permissions::{
     deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,
     resolve_permission_policy, wildcard_matches, ChildPermissionPolicyLayers, PermissionAuditEvent,
     PermissionAuditRecord, PermissionConstraintLayer, PermissionDelegationContext,
@@ -43,13 +50,6 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
-};
-#[cfg(feature = "hook-function-runtime")]
-pub use hook_function::*;
-#[cfg(feature = "workspace-ports")]
-pub use local_workspace_snapshot::{
-    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
-    LocalWorkspaceSnapshotTurnRequest,
 };
 #[cfg(feature = "permission")]
 pub use permission::{

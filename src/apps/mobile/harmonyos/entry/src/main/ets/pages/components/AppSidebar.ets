@@ -215,7 +215,7 @@ export struct AppSidebar {
   @Builder
   private AuthenticatedHeader() {
     Row() {
-      Text('BitFun')
+      Text('OpenBitFun')
         .fontSize(MobileDesignTypography.headlineMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
@@ -396,7 +396,7 @@ export struct AppSidebar {
       }
 
       Button() {
-        Text(RemoteI18n.t('sidebar.signInBitFunAccount'))
+        Text(RemoteI18n.t('sidebar.signInOpenBitFunAccount'))
           .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(CARD)

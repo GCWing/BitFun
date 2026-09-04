@@ -11,7 +11,7 @@ import {
   type AskUserAnswers,
   type AskUserQuestion,
   type AskUserState,
-} from '@bitfun/ui/flow-chat';
+} from '@openbitfun/ui/flow-chat';
 import React, {
   useCallback,
   useEffect,

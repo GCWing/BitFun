@@ -1,18 +1,20 @@
 //! Product-owned persistence for imported command Hook snapshots.
 
-use bitfun_agent_runtime::native_hooks::{
+use openbitfun_agent_runtime::native_hooks::{
     AgentHookScope, AgentHookSettings, AgentHookSettingsLayer, MAX_HOOKS_FILE_BYTES,
 };
-use bitfun_product_domains::external_hook_catalog::{ExternalHookSource, ExternalHookSourceKind};
-use bitfun_product_domains::external_hook_import::{
+use openbitfun_product_domains::external_hook_catalog::{
+    ExternalHookSource, ExternalHookSourceKind,
+};
+use openbitfun_product_domains::external_hook_import::{
     PreparedExternalHookAsset, MAX_EXTERNAL_HOOK_IMPORT_ASSETS,
     MAX_EXTERNAL_HOOK_IMPORT_ASSET_BYTES, MAX_EXTERNAL_HOOK_IMPORT_ASSET_DEPTH,
     MAX_EXTERNAL_HOOK_IMPORT_TOTAL_ASSET_BYTES,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceHealth, ExternalSourceScope, SourceKey,
 };
-use bitfun_services_core::json_store::JsonFileStore;
+use openbitfun_services_core::json_store::JsonFileStore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -767,7 +769,7 @@ fn content_digest_from_parts(hooks_json: &[u8], assets: &[PreparedExternalHookAs
     let mut ordered = assets.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     let mut hasher = Sha256::new();
-    digest_part(&mut hasher, b"bitfun-hook-import-bundle-v1");
+    digest_part(&mut hasher, b"openbitfun-hook-import-bundle-v1");
     digest_part(&mut hasher, hooks_json);
     for asset in ordered {
         digest_part(
@@ -1137,11 +1139,11 @@ fn io_error(error: impl std::fmt::Display) -> HookImportStoreError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::external_hook_catalog::{
+    use openbitfun_product_domains::external_hook_catalog::{
         ExternalHookSource, ExternalHookSourceKind,
     };
-    use bitfun_product_domains::external_hook_import::PreparedExternalHookAsset;
-    use bitfun_product_domains::external_sources::{
+    use openbitfun_product_domains::external_hook_import::PreparedExternalHookAsset;
+    use openbitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceHealth, ExternalSourceScope, SourceKey,
     };
     use tempfile::tempdir;

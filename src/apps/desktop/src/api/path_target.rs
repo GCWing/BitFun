@@ -2,16 +2,16 @@
 
 use crate::api::app_state::AppState;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use bitfun_core::agentic::tools::workspace_paths::{
-    is_bitfun_runtime_uri, parse_bitfun_runtime_uri,
+use openbitfun_core::agentic::tools::workspace_paths::{
+    is_openbitfun_runtime_uri, parse_openbitfun_runtime_uri,
 };
-use bitfun_core::infrastructure::get_path_manager_arc;
-use bitfun_core::infrastructure::FileOperationOptions;
-use bitfun_core::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
-use bitfun_core::service::remote_ssh::{
+use openbitfun_core::infrastructure::get_path_manager_arc;
+use openbitfun_core::infrastructure::FileOperationOptions;
+use openbitfun_core::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
+use openbitfun_core::service::remote_ssh::{
     get_remote_workspace_manager, normalize_remote_workspace_path, RemoteWorkspaceEntry,
 };
-use bitfun_core::service::workspace::{WorkspaceInfo, WorkspaceKind};
+use openbitfun_core::service::workspace::{WorkspaceInfo, WorkspaceKind};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -82,11 +82,11 @@ async fn resolve_runtime_artifact_path(
     app_state: &AppState,
     raw_path: &str,
 ) -> Result<Option<PathBuf>, String> {
-    if !is_bitfun_runtime_uri(raw_path) {
+    if !is_openbitfun_runtime_uri(raw_path) {
         return Ok(None);
     }
 
-    let parsed = parse_bitfun_runtime_uri(raw_path).map_err(|e| e.to_string())?;
+    let parsed = parse_openbitfun_runtime_uri(raw_path).map_err(|e| e.to_string())?;
     let workspace = if parsed.workspace_scope == "current" {
         app_state.workspace_service.get_current_workspace().await
     } else {

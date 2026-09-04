@@ -4,7 +4,7 @@
  */
 import React, { Suspense, lazy, useState } from 'react';
 
-import { SegmentedControl } from '@bitfun/ui';
+import { SegmentedControl } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
@@ -38,7 +38,7 @@ const MiniAppGalleryScene: React.FC = () => {
   );
 
   return (
-    <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
+    <div className="miniapp-gallery-scene" data-openbitfun-scene="miniapp-gallery" data-openbitfun-part="root">
       <div className="miniapp-gallery-scene__content">
         <Suspense fallback={null}>
           {activeTab === 'apps' && <MiniAppLibraryView tabs={tabs} />}

@@ -64,7 +64,7 @@ test("a Query streams tool and permission events before the terminal Result", as
   assert.equal(initializeRequests.length, 1);
   assert.deepEqual(initializeRequests[0], {
     protocolVersion: 6,
-    clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
+    clientInfo: { name: "@openbitfun/agent-sdk", version: "0.0.0" },
     capabilities: {
       serverNotifications: true,
       permissionResponses: true,

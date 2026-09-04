@@ -62,7 +62,7 @@ export interface UsagePattern {
 }
 
 export interface InsightsSuggestions {
-  bitfun_md_additions: MdAddition[];
+  openbitfun_md_additions: MdAddition[];
   features_to_try: FeatureRecommendation[];
   usage_patterns: UsagePattern[];
 }

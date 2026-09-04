@@ -9,7 +9,7 @@ use crate::service::search::{
     workspace_search_feature_enabled, workspace_search_runtime_available, ContentSearchOutputMode,
     ContentSearchRequest, WorkspaceSearchHit, WorkspaceSearchLine,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -128,7 +128,7 @@ impl GrepTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let resolved =
             context.resolve_tool_path(input.get("path").and_then(Value::as_str).unwrap_or("."))?;
         let fs = context.file_system_for_path(&resolved)?;
@@ -141,11 +141,11 @@ impl GrepTool {
         )
         .await
         .map_err(|_| {
-            BitFunError::tool(
+            OpenBitFunError::tool(
                 "Workspace search timed out after 30000ms; narrow the search path".to_string(),
             )
         })?
-        .map_err(BitFunError::tool)?;
+        .map_err(OpenBitFunError::tool)?;
         let result = search.result;
         let mut assistant_text = result.result_text.clone();
         if !search.used_rg_candidates && !search.used_grep_candidates {
@@ -179,11 +179,11 @@ impl GrepTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<GrepOptions> {
+    ) -> OpenBitFunResult<GrepOptions> {
         let pattern = input
             .get("pattern")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("pattern is required".to_string()))?;
 
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved = context.resolve_tool_path(search_path)?;
@@ -198,8 +198,8 @@ impl GrepTool {
             .get("output_mode")
             .and_then(|v| v.as_str())
             .unwrap_or("files_with_matches");
-        let output_mode =
-            OutputMode::from_str(output_mode_str).map_err(|e| BitFunError::tool(e.to_string()))?;
+        let output_mode = OutputMode::from_str(output_mode_str)
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
         let show_line_numbers = input
             .get("-n")
             .and_then(|v| v.as_bool())
@@ -274,17 +274,17 @@ impl GrepTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<(ContentSearchRequest, String, bool, usize, Option<usize>)> {
+    ) -> OpenBitFunResult<(ContentSearchRequest, String, bool, usize, Option<usize>)> {
         let workspace_root = context
             .workspace
             .as_ref()
             .map(|workspace| PathBuf::from(workspace.root_path_string()))
-            .ok_or_else(|| BitFunError::tool("Workspace is required for Grep".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("Workspace is required for Grep".to_string()))?;
 
         let pattern = input
             .get("pattern")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("pattern is required".to_string()))?;
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved_path = context.resolve_workspace_tool_path(search_path)?;
         let resolved_path_buf = PathBuf::from(&resolved_path);
@@ -480,8 +480,8 @@ impl Tool for GrepTool {
         "Grep"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Search file contents in the active workspace with BitFun's built-in structured search.
+    async fn description(&self) -> OpenBitFunResult<String> {
+        Ok(r#"Search file contents in the active workspace with OpenBitFun's built-in structured search.
 
 Usage:
 - Use Grep by default for codebase content search because it preserves workspace-aware permissions and consistent output.
@@ -491,7 +491,7 @@ Usage:
 - A common workflow is `output_mode: "files_with_matches"` to locate candidate files, followed by `output_mode: "content"` with `-n` and small context when exact lines are needed.
 - Uses Rust regex syntax (e.g., "log.*Error", "function\s+\w+"); look-around and backreferences are not supported.
 - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
-- The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool
+- The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `openbitfun://...` URI returned by another tool
 - Omit path to search the current workspace. Do not search host roots or placeholder paths such as `/workspace`.
 - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
 - Use Task tool for open-ended searches requiring multiple rounds
@@ -513,7 +513,7 @@ Usage:
                 },
                 "path": {
                     "type": "string",
-                    "description": "File or directory to search in. Omit to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI."
+                    "description": "File or directory to search in. Omit to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact openbitfun:// URI."
                 },
                 "glob": {
                     "type": "string",
@@ -590,7 +590,7 @@ Usage:
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         // Resolve and authorize the workspace path before selecting IO.
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved = context.resolve_tool_path(search_path)?;
@@ -598,7 +598,7 @@ Usage:
         #[cfg(feature = "tools-miniapp")]
         if is_virtual_context_path(context, &resolved) {
             let files = virtual_context_files_for_search(context, &resolved).ok_or_else(|| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "MiniApp context path is unavailable: {}",
                     resolved.logical_path
                 ))
@@ -611,9 +611,9 @@ Usage:
                 tokio::task::spawn_blocking(move || grep_search_virtual_files(options, &files))
                     .await
                     .map_err(|error| {
-                        BitFunError::tool(format!("virtual grep task failed: {error}"))
+                        OpenBitFunError::tool(format!("virtual grep task failed: {error}"))
                     })?
-                    .map_err(BitFunError::tool)?;
+                    .map_err(OpenBitFunError::tool)?;
             return Ok(vec![ToolResult::Result {
                 data: json!({
                     "pattern": pattern,
@@ -632,7 +632,7 @@ Usage:
         }
         #[cfg(feature = "tools-miniapp")]
         if requires_virtual_context_path(context) {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "MiniApp context path is unavailable: {}",
                 resolved.logical_path
             )));
@@ -668,12 +668,12 @@ Usage:
                     let search_service =
                         remote_workspace_search_service_for_path(&repo_root, preferred_connection_id)
                             .await
-                            .map_err(BitFunError::tool)?;
+                            .map_err(OpenBitFunError::tool)?;
                     let search_started_at = Instant::now();
                     let search_result = search_service
                         .search_content(request)
                         .await
-                        .map_err(BitFunError::tool)?;
+                        .map_err(OpenBitFunError::tool)?;
                     let display_base = Self::display_base(context);
                     let (result_text, file_count, total_matches) =
                         self.format_workspace_search_output(
@@ -705,7 +705,7 @@ Usage:
                         workspace_search_elapsed_ms,
                     );
 
-                    Ok::<Vec<ToolResult>, BitFunError>(vec![ToolResult::Result {
+                    Ok::<Vec<ToolResult>, OpenBitFunError>(vec![ToolResult::Result {
                         data: json!({
                             "pattern": pattern,
                             "path": path,
@@ -889,8 +889,8 @@ Usage:
             cancelled: _,
         } = match search_result {
             Ok(Ok(result)) => result,
-            Ok(Err(e)) => return Err(BitFunError::tool(e)),
-            Err(e) => return Err(BitFunError::tool(format!("grep search failed: {}", e))),
+            Ok(Err(e)) => return Err(OpenBitFunError::tool(e)),
+            Err(e) => return Err(OpenBitFunError::tool(format!("grep search failed: {}", e))),
         };
 
         Ok(vec![ToolResult::Result {
@@ -932,7 +932,7 @@ mod tests {
         WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchRepoPhase,
         WorkspaceSearchRepoStatus,
     };
-    use bitfun_runtime_ports::ToolRuntimeHandles;
+    use openbitfun_runtime_ports::ToolRuntimeHandles;
     use serde_json::json;
     use std::collections::HashMap;
     use tool_runtime::search::grep_search::relativize_result_text;
@@ -1275,11 +1275,11 @@ mod tests {
             repo_status: WorkspaceSearchRepoStatus {
                 repo_id: "repo".to_string(),
                 repo_path: "/repo".to_string(),
-                storage_root: "/repo/.bitfun/search/flashgrep-index".to_string(),
-                base_snapshot_root: "/repo/.bitfun/search/flashgrep-index/base-snapshot"
+                storage_root: "/repo/.openbitfun/search/flashgrep-index".to_string(),
+                base_snapshot_root: "/repo/.openbitfun/search/flashgrep-index/base-snapshot"
                     .to_string(),
-                workspace_overlay_root: "/repo/.bitfun/search/flashgrep-index/workspace-overlay"
-                    .to_string(),
+                workspace_overlay_root:
+                    "/repo/.openbitfun/search/flashgrep-index/workspace-overlay".to_string(),
                 phase: WorkspaceSearchRepoPhase::Ready,
                 snapshot_key: None,
                 base_head_commit: None,
@@ -1355,11 +1355,11 @@ mod tests {
             repo_status: WorkspaceSearchRepoStatus {
                 repo_id: "repo".to_string(),
                 repo_path: "/repo".to_string(),
-                storage_root: "/repo/.bitfun/search/flashgrep-index".to_string(),
-                base_snapshot_root: "/repo/.bitfun/search/flashgrep-index/base-snapshot"
+                storage_root: "/repo/.openbitfun/search/flashgrep-index".to_string(),
+                base_snapshot_root: "/repo/.openbitfun/search/flashgrep-index/base-snapshot"
                     .to_string(),
-                workspace_overlay_root: "/repo/.bitfun/search/flashgrep-index/workspace-overlay"
-                    .to_string(),
+                workspace_overlay_root:
+                    "/repo/.openbitfun/search/flashgrep-index/workspace-overlay".to_string(),
                 phase: WorkspaceSearchRepoPhase::Ready,
                 snapshot_key: None,
                 base_head_commit: None,
@@ -1494,7 +1494,7 @@ mod tests {
 
     mod workspace_io {
         use crate::agentic::workspace::{LocalWorkspaceFs, LocalWorkspaceShell};
-        use bitfun_runtime_ports::{
+        use openbitfun_runtime_ports::{
             WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry,
             WorkspaceFileSystem, WorkspaceMetadata, WorkspaceReader, WorkspaceShell,
         };
@@ -1555,7 +1555,7 @@ mod tests {
 
         const UNFILTERED_FILES: &[&str] = &[
             "known.py",
-            "custom.bitfun_custom_ext",
+            "custom.openbitfun_custom_ext",
             "opaque_workspace_notes",
             "src/lib.rs",
             "other.rs",
@@ -1616,12 +1616,12 @@ mod tests {
         async fn default_type_and_relative_globs_match_expected_files_across_workspace_paths() {
             let dir = unfiltered_fixture();
             let root = dir.path().to_string_lossy().into_owned();
-            let mut candidates = "BITFUN_RG_CANDIDATES_BEGIN\0".to_string();
+            let mut candidates = "OPENBITFUN_RG_CANDIDATES_BEGIN\0".to_string();
             for name in UNFILTERED_FILES {
                 candidates.push_str(&LocalWorkspaceFs.join_path(&root, &[*name]));
                 candidates.push('\0');
             }
-            candidates.push_str("BITFUN_RG_CANDIDATES_END\0");
+            candidates.push_str("OPENBITFUN_RG_CANDIDATES_END\0");
             let shell = ResponseShell {
                 status: 0,
                 stdout: candidates,
@@ -1869,7 +1869,7 @@ mod tests {
                 command: &str,
                 options: WorkspaceCommandOptions,
             ) -> anyhow::Result<WorkspaceCommandResult> {
-                if command.contains("BITFUN_RG_CANDIDATES_BEGIN") {
+                if command.contains("OPENBITFUN_RG_CANDIDATES_BEGIN") {
                     return Ok(WorkspaceCommandResult {
                         stdout: String::new(),
                         stderr: String::new(),
@@ -1878,7 +1878,7 @@ mod tests {
                         timed_out: false,
                     });
                 }
-                if command.contains("BITFUN_GREP_BATCH_END") {
+                if command.contains("OPENBITFUN_GREP_BATCH_END") {
                     self.batches
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if self.malformed_batch {
@@ -2142,7 +2142,8 @@ mod tests {
             fs.opened.lock().unwrap().clear();
             let empty = ResponseShell {
                 status: 1,
-                stdout: "BITFUN_RG_CANDIDATES_BEGIN\0BITFUN_RG_CANDIDATES_END\0".to_string(),
+                stdout: "OPENBITFUN_RG_CANDIDATES_BEGIN\0OPENBITFUN_RG_CANDIDATES_END\0"
+                    .to_string(),
                 timed_out: false,
             };
             let result = grep_search_workspace(options.clone(), &fs, Some(&empty))
@@ -2278,7 +2279,7 @@ mod tests {
         #[tokio::test]
         async fn remote_tool_uses_shared_options_results_and_no_rg_io_provider() {
             use super::*;
-            use bitfun_runtime_ports::WorkspaceServices;
+            use openbitfun_runtime_ports::WorkspaceServices;
             let dir = fixture();
             let root = dir.path().to_string_lossy().into_owned();
             let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(

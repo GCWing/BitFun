@@ -6,6 +6,6 @@ export const statusBarPopoversAppearanceDescriptor: AppearanceSurfaceDescriptor 
     { id: 'root' }, { id: 'hint' }, { id: 'inputWrap' }, { id: 'input' },
   ],
   facets: [
-    { id: 'kind', attribute: 'data-bf-popover', values: ['line', 'indent', 'encoding', 'language'] },
+    { id: 'kind', attribute: 'data-openbitfun-popover', values: ['line', 'indent', 'encoding', 'language'] },
   ],
 };

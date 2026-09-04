@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Public @bitfun/ui color governance baseline. Component CSS and mask assets consume only canonical peer-owned variables and remain free of literals and fallbacks.",
+  "description": "Public @openbitfun/ui color governance baseline. Component CSS and mask assets consume only canonical peer-owned variables and remain free of literals and fallbacks.",
   "budgets": {
     "fallbackOccurrences": { "max": 0 },
     "fallbackUniqueTokens": { "max": 0 },

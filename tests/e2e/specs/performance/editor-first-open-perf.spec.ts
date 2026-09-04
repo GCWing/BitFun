@@ -40,7 +40,7 @@ async function writeReport(name: string, data: unknown): Promise<void> {
 }
 
 function getScenario(): EditorScenario {
-  const raw = process.env.BITFUN_E2E_EDITOR_SCENARIO;
+  const raw = process.env.OPENBITFUN_E2E_EDITOR_SCENARIO;
   return raw === 'git-diff' ? 'git-diff' : 'code-editor';
 }
 
@@ -49,12 +49,12 @@ function getWorkspacePath(): string {
 }
 
 function getEditorFilePath(workspacePath: string): string {
-  return process.env.BITFUN_E2E_EDITOR_FILE_PATH
+  return process.env.OPENBITFUN_E2E_EDITOR_FILE_PATH
     || path.join(workspacePath, 'src', 'web-ui', 'src', 'main.tsx');
 }
 
 function shouldWaitForEditorWarmup(): boolean {
-  return process.env.BITFUN_E2E_WAIT_FOR_EDITOR_WARMUP === '1';
+  return process.env.OPENBITFUN_E2E_WAIT_FOR_EDITOR_WARMUP === '1';
 }
 
 function fileNameOf(filePath: string): string {
@@ -79,7 +79,7 @@ async function openGitScene(): Promise<void> {
   await browser.execute(() => {
     window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'git' } }));
   });
-  await $('.bitfun-git-scene-working-copy__diff-area').waitForExist({ timeout: 15000 });
+  await $('.openbitfun-git-scene-working-copy__diff-area').waitForExist({ timeout: 15000 });
 }
 
 async function triggerCodeEditor(filePath: string, fileName: string): Promise<number> {
@@ -224,7 +224,7 @@ describe('Editor first-open performance telemetry', () => {
     const trace = await readStartupTraceSnapshot();
 
     const report: EditorOpenReport = {
-      appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
+      appMode: process.env.OPENBITFUN_E2E_APP_MODE ?? 'auto',
       scenario,
       traceId: trace.traceId || snapshotBefore.traceId,
       filePath,

@@ -3,8 +3,8 @@
 //! This service owns ngrok discovery, process lifecycle, and tunnel URL parsing.
 
 use anyhow::{anyhow, Result};
-use bitfun_services_core::process_manager;
 use log::{info, warn};
+use openbitfun_services_core::process_manager;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -107,7 +107,7 @@ pub async fn start_ngrok_tunnel(local_port: u16) -> Result<NgrokTunnel> {
         anyhow!(
             "ngrok is not installed.\n\
              Please install ngrok and configure your auth token, then retry.\n\
-             No need to start ngrok manually \u{2014} BitFun will start it automatically.\n\
+             No need to start ngrok manually \u{2014} OpenBitFun will start it automatically.\n\
              Setup guide: https://dashboard.ngrok.com/get-started/setup"
         )
     })?;
@@ -143,7 +143,7 @@ pub async fn start_ngrok_tunnel(local_port: u16) -> Result<NgrokTunnel> {
                 "Failed to start ngrok process: {error}\n\
                  Please ensure ngrok is installed and your auth token is configured \
                  (run: ngrok config add-authtoken <YOUR_TOKEN>).\n\
-                 No need to start ngrok manually \u{2014} BitFun will start it automatically."
+                 No need to start ngrok manually \u{2014} OpenBitFun will start it automatically."
             )
         })?;
 

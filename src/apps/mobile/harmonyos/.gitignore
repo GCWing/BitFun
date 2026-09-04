@@ -14,11 +14,11 @@
 /.appanalyzer
 
 # Local emulator verification artifacts
-/bitfun_*.jpeg
-/bitfun_*_layout.json
-/bitfun_layout*.json
-.bitfun/
-/.bitfun/search/flashgrep-index/
+/openbitfun_*.jpeg
+/openbitfun_*_layout.json
+/openbitfun_layout*.json
+.openbitfun/
+/.openbitfun/search/flashgrep-index/
 
 # Signing credentials and installable artifacts
 /signing.local.json5

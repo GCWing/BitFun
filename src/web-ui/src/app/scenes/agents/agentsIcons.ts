@@ -1,8 +1,8 @@
 /**
  * Icon and color mapping for the agents scene
- * Catalog-mapped glyphs render through @bitfun/ui Icon; the rest stay lucide.
+ * Catalog-mapped glyphs render through @openbitfun/ui Icon; the rest stay lucide.
  */
-import { Icon, type IconName, type IconSize } from '@bitfun/ui';
+import { Icon, type IconName, type IconSize } from '@openbitfun/ui';
 import {
   Code2,
   FlaskConical,

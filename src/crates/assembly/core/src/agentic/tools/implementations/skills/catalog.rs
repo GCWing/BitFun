@@ -1,8 +1,8 @@
 //! Compatibility re-export for skill catalog facts.
 //!
-//! The provider-neutral owner lives in `bitfun-agent-runtime`.
+//! The provider-neutral owner lives in `openbitfun-agent-runtime`.
 
-pub use bitfun_agent_runtime::skills::builtin_skill_group_key;
+pub use openbitfun_agent_runtime::skills::builtin_skill_group_key;
 
 #[cfg(test)]
 mod tests {
@@ -15,14 +15,17 @@ mod tests {
         for removed in ["docx", "pdf", "pptx", "xlsx"] {
             assert_eq!(builtin_skill_group_key(removed), None);
         }
-        assert_eq!(builtin_skill_group_key("create-bitfun-skin"), Some("meta"));
+        assert_eq!(
+            builtin_skill_group_key("create-openbitfun-skin"),
+            Some("meta")
+        );
         assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
         assert_eq!(builtin_skill_group_key("debug"), Some("debugging"));
         assert_eq!(builtin_skill_group_key("multitask"), Some("coordination"));
         assert_eq!(builtin_skill_group_key("plan"), Some("planning"));
         assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
         assert_eq!(
-            builtin_skill_group_key("bitfun-frontend-dev"),
+            builtin_skill_group_key("openbitfun-frontend-dev"),
             Some("creation")
         );
         assert_eq!(builtin_skill_group_key("writing-skills"), Some("meta"));

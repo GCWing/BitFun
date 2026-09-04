@@ -1,7 +1,7 @@
 # Remote workspace transport
 
 This document defines the transport boundary for SSH and Docker workspaces.
-The Agent Runtime stays on the BitFun host. Local and remote workspaces share
+The Agent Runtime stays on the OpenBitFun host. Local and remote workspaces share
 file-tool algorithms through Session-bound IO providers; search retains native
 acceleration with shared matching and reduction. The convergence section below
 describes this boundary and the remaining capability limits.
@@ -185,7 +185,7 @@ config hosts, discover local or remote Docker containers, choose `auto` or
 `docker-exec`, and test the resolved jump/target/container stages before
 connecting.
 
-BitFun intentionally does not expose an arbitrary “run on Docker host” action
+OpenBitFun intentionally does not expose an arbitrary “run on Docker host” action
 from a container workspace. That would bypass the selected workspace and its
 security boundary. Host diagnosis, if added later, must be a typed, read-only
 capability with a distinct confirmation and audit surface.
@@ -208,13 +208,13 @@ temporarily offline. Destructive removal remains an explicit user action.
 Contract tests cover legacy Agent/profile deserialization, defaulted connection
 options, remote-workspace retention, stdio round trips, cancellation, and
 delimiter-safe Docker metadata parsing. A Docker-backed ignored integration test
-is available through `BITFUN_TEST_DOCKER_CONTAINER`.
+is available through `OPENBITFUN_TEST_DOCKER_CONTAINER`.
 
 ## Agent Runtime convergence
 
-Decision: keep remote workspaces lightweight. Do not require BitFun CLI,
+Decision: keep remote workspaces lightweight. Do not require OpenBitFun CLI,
 a remote Agent daemon, a shared service, or a new remote installation. The
-BitFun host keeps the existing Agent Runtime, model credentials, Session and
+OpenBitFun host keeps the existing Agent Runtime, model credentials, Session and
 permission ownership. Only workspace filesystem and process IO crosses SSH.
 Read, Write, Edit, Delete and LS use the bound filesystem provider. Grep and
 Glob share matching/result algorithms while retaining native acceleration.
@@ -225,7 +225,7 @@ gated because individual recorded operations do not prove historical coverage.
 
 ```mermaid
 flowchart TB
-  Surface["Driving surface"] --> Runtime["Existing Agent Runtime on BitFun host"]
+  Surface["Driving surface"] --> Runtime["Existing Agent Runtime on OpenBitFun host"]
   Runtime --> Owners["Session · tools · permission · hooks · snapshots"]
   Owners --> IO["Session-bound workspace IO"]
   IO --> Local["Local filesystem and process provider"]
@@ -236,7 +236,7 @@ flowchart TB
 Runtime ownership and execution location are different concerns. Sharing the
 Runtime does not require deploying it beside the workspace. Session lifecycle,
 read-before-write checks, edit matching, result rendering, snapshot history and
-revert transitions have one implementation on the BitFun host. Providers only
+revert transitions have one implementation on the OpenBitFun host. Providers only
 perform typed filesystem/process operations; they do not implement Read, Edit,
 Grep or fork as separate product features.
 
@@ -254,7 +254,7 @@ are unchanged.
 | Edit/Write matching, freshness and result construction | Existing tool pipeline and read-state owner | Read bytes, inspect metadata, write bytes |
 | LS/Glob filtering, order and presentation | Shared listing and search helpers | Enumerate typed entries with metadata |
 | Grep pattern/type/ignore policy and result reduction | Shared search helpers | Native scanning, remote bytes, optional compatible search accelerator |
-| Snapshot hashes, compression, history and revert phases | Existing Snapshot owners on the BitFun host | Read/restore/remove actual workspace files |
+| Snapshot hashes, compression, history and revert phases | Existing Snapshot owners on the OpenBitFun host | Read/restore/remove actual workspace files |
 | Exec lifecycle and output | Existing execution owner | Local process or existing SSH process transport |
 | Hook contract, permission decisions and source trust | Existing hook owner | Explicitly selected execution domain and process provider |
 
@@ -275,7 +275,7 @@ on network transfer.
 The path resolver and Runtime context select the provider once from the
 Session's verified workspace binding. A remote request with an unavailable
 provider fails; it never acquires a local provider as a fallback. Explicit
-`bitfun://` artifacts remain host-owned and use local storage even in a remote
+`openbitfun://` artifacts remain host-owned and use local storage even in a remote
 Session. Tools must not consult whichever workspace is currently selected in
 the UI. POSIX remote paths must not acquire controller OS path semantics.
 
@@ -287,7 +287,7 @@ the same. Share pattern/type expansion, matching semantics, sorting, pagination
 and output construction; retain provider-specific data access optimizations.
 
 An already available compatible target search executable can reduce network
-traffic. It is an optional accelerator, not a requirement to install BitFun.
+traffic. It is an optional accelerator, not a requirement to install OpenBitFun.
 Its results must satisfy the same contract, including file type definitions,
 ignore rules, Unicode, filenames containing newlines, context and truncation.
 Do not equate different system `rg` type catalogs or approximate a Rust regex
@@ -380,12 +380,12 @@ cross-user transaction guarantee.
 
 ### Multiple users and capability differences
 
-Each BitFun host retains its own Session, model credentials, permissions and
+Each OpenBitFun host retains its own Session, model credentials, permissions and
 connection state. SSH authenticates an ordinary target OS user; no shared
-BitFun daemon or global target configuration is introduced. Connection routing
+OpenBitFun daemon or global target configuration is introduced. Connection routing
 and local mirrors must not mix profiles or identities. If users intentionally
 share a target OS account or directory, normal filesystem permissions and
-concurrent-edit conflicts still apply; BitFun cannot manufacture isolation
+concurrent-edit conflicts still apply; OpenBitFun cannot manufacture isolation
 between identical OS credentials.
 
 Discover capabilities at the provider/assembly boundary, not with scattered
@@ -396,7 +396,7 @@ silently relocated to the target. Keep its execution domain and source trust
 explicit; reuse the existing engine and approval mechanism.
 
 Remote workspaces do not acquire Detached Dispatch semantics through this
-change: closing the BitFun host does not promise a durable remote Agent run.
+change: closing the OpenBitFun host does not promise a durable remote Agent run.
 Keep existing cancellation/reconnection behavior and report unknown command
 outcomes honestly.
 

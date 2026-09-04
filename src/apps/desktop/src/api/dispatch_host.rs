@@ -1,6 +1,6 @@
 //! Target-side detached-dispatch adapter for account device RPC.
 //!
-//! Desktop deliberately delegates execution to the same `bitfun dispatch`
+//! Desktop deliberately delegates execution to the same `openbitfun dispatch`
 //! runner used by SSH and CLI Peer Host. This keeps one durable job/session
 //! owner and avoids creating a second desktop-only dispatch implementation.
 
@@ -19,7 +19,7 @@ pub(crate) async fn dispatch(command: &str, args: Value) -> anyhow::Result<Value
         .ok_or_else(|| anyhow!("Unknown detached dispatch target command '{command}'"))?;
     let executable = discover_cli().ok_or_else(|| {
         anyhow!(
-            "BitFun CLI dispatch runner is not installed on this device; install `bitfun` in ~/.local/bin or PATH"
+            "OpenBitFun CLI dispatch runner is not installed on this device; install `openbitfun` in ~/.local/bin or PATH"
         )
     })?;
     invoke_cli(&executable, verb, args).await
@@ -52,7 +52,7 @@ fn target_cli_verb(command: &str) -> Option<&'static str> {
 
 async fn invoke_cli(executable: &Path, verb: &str, args: Value) -> anyhow::Result<Value> {
     let request = serde_json::to_vec(&args).context("serialize target dispatch request")?;
-    let mut child = bitfun_core::util::process_manager::create_tokio_command(executable)
+    let mut child = openbitfun_core::util::process_manager::create_tokio_command(executable)
         .arg("dispatch")
         .arg(verb)
         .stdin(std::process::Stdio::piped())
@@ -110,9 +110,9 @@ async fn invoke_cli(executable: &Path, verb: &str, args: Value) -> anyhow::Resul
 
 fn discover_cli() -> Option<PathBuf> {
     let executable_name = if cfg!(windows) {
-        "bitfun.exe"
+        "openbitfun.exe"
     } else {
-        "bitfun"
+        "openbitfun"
     };
     let mut candidates = Vec::new();
     if let Some(home) = dirs::home_dir() {
@@ -162,7 +162,7 @@ mod tests {
     /// answer exactly that family, no more and no less.
     #[test]
     fn target_command_family_matches_registry() {
-        use bitfun_product_domains::remote_surface::{operations, PeerStance};
+        use openbitfun_product_domains::remote_surface::{operations, PeerStance};
         for op in operations() {
             let registry_says_target = op.id.starts_with("dispatch_target_");
             assert_eq!(
@@ -183,9 +183,9 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let temp = tempfile::tempdir().expect("tempdir");
-        let binary = temp.path().join("bitfun-real");
+        let binary = temp.path().join("openbitfun-real");
         std::fs::write(&binary, b"binary").expect("binary");
-        let link = temp.path().join("bitfun");
+        let link = temp.path().join("openbitfun");
         symlink(&binary, &link).expect("symlink");
 
         assert_eq!(

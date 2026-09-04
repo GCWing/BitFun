@@ -5,7 +5,7 @@ import { OhosError } from './OhosError';
 import { RemoteChatCacheSlice, RemoteChatCacheStore } from './RemoteChatCache';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
-  name: 'bitfun_remote_chat.db',
+  name: 'openbitfun_remote_chat.db',
   // A step above the S1 the general-chat store uses: these transcripts carry
   // the user's source, file paths and terminal output from a machine they own.
   securityLevel: relationalStore.SecurityLevel.S2

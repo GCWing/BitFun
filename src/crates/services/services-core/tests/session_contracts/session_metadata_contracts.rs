@@ -1,4 +1,4 @@
-use bitfun_services_core::session::{
+use openbitfun_services_core::session::{
     build_session_index_snapshot, refresh_session_metadata_from_turns, remove_session_index_entry,
     try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry, DialogTurnData,
     DialogTurnKind, ModelRoundData, SessionContextUsage, SessionContextUsageSource, SessionKind,

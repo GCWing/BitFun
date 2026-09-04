@@ -304,7 +304,7 @@ struct RemoteAuthorityGateTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let source = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
         )
 
         // Workspace-first: workspace authority is sufficient to dispatch the
@@ -350,10 +350,10 @@ struct RemoteAuthorityGateTests {
         expect(source.contains("busy = ready.busy"), "session state keeps its original busy authority")
 
         let modelSource = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel.swift")
         )
         let createViewSource = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Features/Shell/RemoteCreateSessionView.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Features/Shell/RemoteCreateSessionView.swift")
         )
         expect(
             modelSource.contains("RemoteCreateInteractionPolicy.resolve(") &&
@@ -478,7 +478,7 @@ struct RemoteAuthorityGateTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let accountSource = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+Account.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel+Account.swift")
         )
         expectInvalidationBeforeMutation(
             in: accountSource,
@@ -519,7 +519,7 @@ struct RemoteAuthorityGateTests {
         )
 
         let modelSource = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel.swift")
         )
         expectInvalidationBeforeMutation(
             in: modelSource,
@@ -548,7 +548,7 @@ struct RemoteAuthorityGateTests {
         )
 
         let remoteSessionSource = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
         )
         expectCallBeforeMutation(
             in: remoteSessionSource,
@@ -559,7 +559,7 @@ struct RemoteAuthorityGateTests {
         )
 
         let filePreviewSource = readSource(
-            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+FilePreview.swift")
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel+FilePreview.swift")
         )
         let guardedEntryCount = filePreviewSource.components(
             separatedBy: "guard surface == .remote, remoteSessionSelected"

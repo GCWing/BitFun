@@ -43,20 +43,20 @@ Switch themes and languages, tune typography, and install or import appearance p
 3. 选择主题、语言或外观包
    Choose a theme, language, or appearance package
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
-| 主题 / Theme | `system` / `bitfun-light` / `bitfun-monochrome` / `bitfun-slate` / `bitfun-dark` / `bitfun-midnight` / `bitfun-china-style` / `bitfun-china-night` / `bitfun-cyber` / `bitfun-tokyo-night` | 使用系统、BitFun 深色或 BitFun 浅色外观。 | Use the system, BitFun dark, or BitFun light appearance. |
-| 界面语言 / Interface language | `zh-CN` / `en-US` / `zh-TW` | 设置 BitFun 的界面语言。 | Set the BitFun interface language. |
+| 主题 / Theme | `system` / `openbitfun-light` / `openbitfun-monochrome` / `openbitfun-slate` / `openbitfun-dark` / `openbitfun-midnight` / `openbitfun-china-style` / `openbitfun-china-night` / `openbitfun-cyber` / `openbitfun-tokyo-night` | 使用系统、OpenBitFun 深色或 OpenBitFun 浅色外观。 | Use the system, OpenBitFun dark, or OpenBitFun light appearance. |
+| 界面语言 / Interface language | `zh-CN` / `en-US` / `zh-TW` | 设置 OpenBitFun 的界面语言。 | Set the OpenBitFun interface language. |
 
 ## 可以直接对 Agent 说 / Try saying
 

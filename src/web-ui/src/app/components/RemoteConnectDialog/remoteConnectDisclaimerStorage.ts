@@ -1,4 +1,4 @@
-export const REMOTE_CONNECT_DISCLAIMER_KEY = 'bitfun:remote-connect:disclaimer-agreed:v1';
+export const REMOTE_CONNECT_DISCLAIMER_KEY = 'openbitfun:remote-connect:disclaimer-agreed:v1';
 
 export const getRemoteConnectDisclaimerAgreed = (): boolean => {
   try {

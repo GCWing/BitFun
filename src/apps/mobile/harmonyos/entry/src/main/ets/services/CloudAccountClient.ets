@@ -100,7 +100,7 @@ export interface CloudSettingsBlob {
   version: number;
 }
 
-/** Default BitFun cloud relay used by the desktop account flow. */
+/** Default OpenBitFun cloud relay used by the desktop account flow. */
 export const DEFAULT_CLOUD_RELAY_URL: string = 'https://remote.openbitfun.com/relay';
 
 /** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */

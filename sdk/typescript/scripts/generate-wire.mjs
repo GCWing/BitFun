@@ -25,7 +25,7 @@ await run(
     "test",
     "--locked",
     "-p",
-    "bitfun-sdk-host",
+    "openbitfun-sdk-host",
     "--no-default-features",
     "--features",
     "ts",
@@ -79,7 +79,7 @@ await writeFile(
   }),
 );
 
-const header = `// GENERATED CODE! DO NOT MODIFY BY HAND!\n// Source: bitfun-sdk-host protocol types via ts-rs.\n`;
+const header = `// GENERATED CODE! DO NOT MODIFY BY HAND!\n// Source: openbitfun-sdk-host protocol types via ts-rs.\n`;
 const exports = files.map(
   (file) => `export type { ${file} } from "./${file}.js";`,
 );

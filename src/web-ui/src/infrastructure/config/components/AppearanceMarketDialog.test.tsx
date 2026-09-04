@@ -38,7 +38,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, isLoading: _isLoading, loading: _loading, iconOnly: _iconOnly, ...props }: any) => (
@@ -147,7 +147,7 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@/shared/utils/version', () => ({
-  getVersionInfo: () => ({ version: '0.2.15' }),
+  getVersionInfo: () => ({ version: '1.0.0' }),
 }));
 
 const summary = {
@@ -160,7 +160,7 @@ const summary = {
   mode: 'dark',
   packageVersion: '2.0.0',
   latestRelease: 2,
-  minBitfunVersion: '0.1.0',
+  minOpenBitFunVersion: '1.0.0',
   requiredCapabilities: ['components.v1'],
   owner: { githubId: 1, login: 'studio', avatarUrl: '' },
   previewUrl: `https://market.openbitfun.com/skin/api/v1/artifacts/previews/${'a'.repeat(64)}`,
@@ -173,7 +173,7 @@ const release = {
   listingId: 'listing-1',
   releaseNumber: 2,
   packageVersion: '2.0.0',
-  minBitfunVersion: '0.1.0',
+  minOpenBitFunVersion: '1.0.0',
   packageSha256: 'a'.repeat(64),
   packageSize: 100,
   reviewBundleHash: 'b'.repeat(64),
@@ -196,7 +196,7 @@ describe('AppearanceMarketDialog', () => {
     mocks.downloadRelease.mockReset().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
     mocks.listSubmissions.mockReset().mockResolvedValue([]);
     mocks.chooseSubmissionPackage.mockReset()
-      .mockResolvedValue('/tmp/ocean-night.bitfun-appearance');
+      .mockResolvedValue('/tmp/ocean-night.openbitfun-appearance');
     mocks.submitPackage.mockReset().mockResolvedValue({
       submissionId: 'submission-upload',
       slug: 'ocean-night',
@@ -206,7 +206,7 @@ describe('AppearanceMarketDialog', () => {
       description: 'A calm blue appearance',
       mode: 'dark',
       packageVersion: '1.0.0',
-      minBitfunVersion: '0.2.15',
+      minOpenBitFunVersion: '1.0.0',
       requiredCapabilities: [],
       changelog: 'Initial release.',
       license: { spdxExpression: 'MIT' },
@@ -334,7 +334,7 @@ describe('AppearanceMarketDialog', () => {
       description: 'Candidate package',
       mode: 'dark',
       packageVersion: '2.0.0',
-      minBitfunVersion: '0.1.0',
+      minOpenBitFunVersion: '1.0.0',
       requiredCapabilities: ['components.v1'],
       changelog: 'More polished',
       license: { spdxExpression: 'MIT' },
@@ -379,7 +379,7 @@ describe('AppearanceMarketDialog', () => {
       slug: 'unpublished-skin',
       releaseNumber: 1,
       name: 'Unpublished Skin',
-      minBitfunVersion: '0.2.15',
+      minOpenBitFunVersion: '1.0.0',
       requiredCapabilities: [],
       changelog: 'Initial release',
       license: { spdxExpression: 'MIT' },
@@ -442,9 +442,9 @@ describe('AppearanceMarketDialog', () => {
     await act(async () => submitButton?.click());
 
     await vi.waitFor(() => expect(mocks.submitPackage).toHaveBeenCalledWith({
-      packagePath: '/tmp/ocean-night.bitfun-appearance',
+      packagePath: '/tmp/ocean-night.openbitfun-appearance',
       slug: undefined,
-      minBitfunVersion: '0.2.15',
+      minOpenBitFunVersion: '1.0.0',
       changelog: undefined,
       license: { spdxExpression: 'MIT' },
       repositoryUrl: undefined,

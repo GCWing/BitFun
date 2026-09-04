@@ -81,8 +81,8 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
           key={`ring-${i}`}
           d={d}
           style={{
-            fill: i === RING_FRACTIONS.length - 1 ? 'var(--bf-color-surface-subtle)' : 'none',
-            stroke: 'var(--bf-color-border-subtle)',
+            fill: i === RING_FRACTIONS.length - 1 ? 'var(--openbitfun-color-surface-subtle)' : 'none',
+            stroke: 'var(--openbitfun-color-border-subtle)',
             strokeWidth: 0.7,
           }}
         />
@@ -93,7 +93,7 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
         <line
           key={`axis-${i}`}
           x1={cx} y1={cy} x2={v.x} y2={v.y}
-          style={{ stroke: 'var(--bf-color-border-subtle)', strokeWidth: 0.7 }}
+          style={{ stroke: 'var(--openbitfun-color-border-subtle)', strokeWidth: 0.7 }}
         />
       ))}
 
@@ -101,9 +101,9 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
       <path
         d={scorePath}
         style={{
-          fill: 'var(--bf-color-accent-default)',
+          fill: 'var(--openbitfun-color-accent-default)',
           fillOpacity: 0.12,
-          stroke: 'var(--bf-color-accent-default)',
+          stroke: 'var(--openbitfun-color-accent-default)',
           strokeWidth: 1.2,
           strokeLinejoin: 'round',
         }}
@@ -111,7 +111,7 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
 
       {/* Score dots */}
       {dots.map((p, i) => (
-        <circle key={`dot-${i}`} cx={p.x} cy={p.y} r={2.2} style={{ fill: 'var(--bf-color-accent-default)' }} />
+        <circle key={`dot-${i}`} cx={p.x} cy={p.y} r={2.2} style={{ fill: 'var(--openbitfun-color-accent-default)' }} />
       ))}
 
       {/* Chart hit area: only this area triggers "expand" */}
@@ -148,9 +148,9 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               style={{
-                fontSize: 'var(--bf-type-overline-sm-font-size)',
-                fill: hasClick ? 'var(--bf-color-content-secondary)' : 'var(--bf-color-content-muted)',
-                fontFamily: 'var(--bf-type-body-sm-font-family)',
+                fontSize: 'var(--openbitfun-type-overline-sm-font-size)',
+                fill: hasClick ? 'var(--openbitfun-color-content-secondary)' : 'var(--openbitfun-color-content-muted)',
+                fontFamily: 'var(--openbitfun-type-body-sm-font-family)',
                 userSelect: 'none',
                 cursor: hasClick ? 'pointer' : 'default',
                 transition: 'fill 0.15s',

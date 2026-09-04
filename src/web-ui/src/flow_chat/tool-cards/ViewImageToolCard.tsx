@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ViewImageToolCard as ViewImageToolCardView } from '@bitfun/ui/flow-chat';
+import { ViewImageToolCard as ViewImageToolCardView } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
@@ -92,7 +92,7 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
         : viewingText;
 
   return (
-    <div data-bf-adapter="view-image" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-openbitfun-adapter="view-image" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <ViewImageToolCardView
         status={toolItem.status}
         isExpanded={isExpanded}

@@ -3,7 +3,7 @@ use crate::{
     PluginGenerationLease, PluginHostCapabilities, PluginHostError, PluginInstanceOpenRequest,
     PluginPreparationSummary, PluginPrepareRequest, GENERATION_FENCING_V1,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     HookFunctionAfterRequest, HookFunctionAfterResult, HookFunctionAvailability,
     HookFunctionBeforeRequest, HookFunctionBeforeResult, HookFunctionCancelRequest,
     HookFunctionCancelResult, HookFunctionConfigContribution, HookFunctionConfigContributor,
@@ -194,14 +194,14 @@ impl From<RawPluginIdentity> for HookFunctionPluginIdentity {
 #[serde(rename_all = "camelCase")]
 struct RawConfigContributor {
     plugin: RawPluginIdentity,
-    outcome: bitfun_runtime_ports::HookFunctionContributorOutcome,
+    outcome: openbitfun_runtime_ports::HookFunctionContributorOutcome,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawConfigContribution {
     plugin: RawPluginIdentity,
-    outcome: bitfun_runtime_ports::HookFunctionContributorOutcome,
+    outcome: openbitfun_runtime_ports::HookFunctionContributorOutcome,
     config: serde_json::Map<String, Value>,
 }
 
@@ -443,8 +443,8 @@ fn lease(generation: &HookFunctionGeneration) -> PluginGenerationLease {
 fn map_invocation_error(
     error: PluginHostError,
     side_effect: bool,
-) -> bitfun_runtime_ports::PortError {
-    use bitfun_runtime_ports::{PortError, PortErrorKind};
+) -> openbitfun_runtime_ports::PortError {
+    use openbitfun_runtime_ports::{PortError, PortErrorKind};
     let kind = match error {
         // The tool may have completed before cancellation was observed, while
         // its authoritative response was lost at the deadline. Retrying can

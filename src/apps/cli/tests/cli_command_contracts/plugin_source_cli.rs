@@ -20,7 +20,7 @@ fn sha256(bytes: &[u8]) -> String {
 }
 
 fn write_package(workspace: &Path, source: &[u8], declared_hash: &str) {
-    let package = workspace.join(".bitfun/plugins/acme.demo");
+    let package = workspace.join(".openbitfun/plugins/acme.demo");
     std::fs::create_dir_all(package.join(".opencode/plugins")).expect("create package directories");
     std::fs::write(package.join(".opencode/plugins/demo.ts"), source).expect("write plugin source");
     let manifest = serde_json::json!({
@@ -34,7 +34,7 @@ fn write_package(workspace: &Path, source: &[u8], declared_hash: &str) {
         }],
     });
     std::fs::write(
-        package.join("bitfun.plugin.json"),
+        package.join("openbitfun.plugin.json"),
         serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
     )
     .expect("write manifest");
@@ -42,19 +42,19 @@ fn write_package(workspace: &Path, source: &[u8], declared_hash: &str) {
 
 fn run_cli(workspace: &Path, user_root: &Path, home_root: &Path, args: &[&str]) -> Output {
     let config_root = user_root.join("host-config");
-    bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+    openbitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_openbitfun"))
         .args(args)
         .current_dir(workspace)
-        .env_remove("BITFUN_USER_ROOT")
-        .env_remove("BITFUN_HOME")
-        .env("BITFUN_E2E_STORAGE_GUARD", "1")
-        .env("BITFUN_E2E_USER_ROOT", user_root)
-        .env("BITFUN_E2E_HOME", home_root)
+        .env_remove("OPENBITFUN_USER_ROOT")
+        .env_remove("OPENBITFUN_HOME")
+        .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
+        .env("OPENBITFUN_E2E_USER_ROOT", user_root)
+        .env("OPENBITFUN_E2E_HOME", home_root)
         .env("APPDATA", &config_root)
         .env("XDG_CONFIG_HOME", &config_root)
         .env("HOME", home_root)
         .output()
-        .expect("run bitfun")
+        .expect("run openbitfun")
 }
 
 fn stdout(output: &Output) -> String {
@@ -121,22 +121,22 @@ fn plugin_source_cli_rejects_unavailable_product_paths() {
     std::fs::create_dir_all(&workspace).expect("create workspace");
 
     let output =
-        bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+        openbitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_openbitfun"))
             .args(["plugins", "list"])
             .current_dir(&workspace)
-            .env_remove("BITFUN_USER_ROOT")
-            .env_remove("BITFUN_HOME")
-            .env_remove("BITFUN_E2E_USER_ROOT")
-            .env_remove("BITFUN_E2E_HOME")
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env_remove("OPENBITFUN_USER_ROOT")
+            .env_remove("OPENBITFUN_HOME")
+            .env_remove("OPENBITFUN_E2E_USER_ROOT")
+            .env_remove("OPENBITFUN_E2E_HOME")
+            .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
             .env("APPDATA", &config_root)
             .env("XDG_CONFIG_HOME", &config_root)
             .output()
-            .expect("run bitfun");
+            .expect("run openbitfun");
 
     assert!(!output.status.success());
     assert!(stderr(&output).contains("Configuration error"));
-    assert!(stderr(&output).contains("BITFUN_E2E_STORAGE_GUARD"));
+    assert!(stderr(&output).contains("OPENBITFUN_E2E_STORAGE_GUARD"));
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn plugin_source_cli_lifecycle_and_doctor_exit_codes() {
     assert!(!rejected.status.success());
     assert!(stderr(&rejected).contains("does not match"));
     assert!(stderr(&rejected)
-        .contains("Re-run `bitfun plugins activate acme.demo` to preview the current content"));
+        .contains("Re-run `openbitfun plugins activate acme.demo` to preview the current content"));
 
     let content_hash = activation_content_hash(&preview);
 
@@ -260,7 +260,7 @@ fn plugin_source_cli_lifecycle_and_doctor_exit_codes() {
     assert!(stdout(&changed).contains("acme.demo 1.0.0 (workspace, unreviewed)"));
 
     std::fs::write(
-        workspace.join(".bitfun/plugins/acme.demo/.opencode/plugins/demo.ts"),
+        workspace.join(".openbitfun/plugins/acme.demo/.opencode/plugins/demo.ts"),
         b"tampered",
     )
     .expect("tamper package");
@@ -300,7 +300,8 @@ fn plugin_deactivate_cleans_residual_records_without_revoking_source_approval() 
     assert!(approve.status.success(), "{}", stderr(&approve));
     activate_package(&workspace, &user_root, &home_root);
 
-    std::fs::remove_dir_all(workspace.join(".bitfun/plugins/acme.demo")).expect("remove package");
+    std::fs::remove_dir_all(workspace.join(".openbitfun/plugins/acme.demo"))
+        .expect("remove package");
     let missing = run_cli(
         &workspace,
         &user_root,
@@ -333,7 +334,7 @@ fn plugin_deactivate_cleans_residual_records_without_revoking_source_approval() 
     write_package(&workspace, PLUGIN_SOURCE, &sha256(PLUGIN_SOURCE));
     activate_package(&workspace, &user_root, &home_root);
     std::fs::write(
-        workspace.join(".bitfun/plugins/acme.demo/bitfun.plugin.json"),
+        workspace.join(".openbitfun/plugins/acme.demo/openbitfun.plugin.json"),
         "{not-json",
     )
     .expect("corrupt package manifest");
@@ -348,12 +349,12 @@ fn plugin_deactivate_cleans_residual_records_without_revoking_source_approval() 
     assert!(stdout(&corrupt).contains("is unavailable"));
     assert!(stdout(&corrupt).contains("saved activation state was cleared"));
     assert!(stdout(&corrupt).contains("[error:invalid_manifest]"));
-    assert!(stdout(&corrupt).contains("bitfun.plugin.json"));
+    assert!(stdout(&corrupt).contains("openbitfun.plugin.json"));
 
     write_package(&workspace, PLUGIN_SOURCE, &sha256(PLUGIN_SOURCE));
     activate_package(&workspace, &user_root, &home_root);
-    std::fs::remove_dir_all(workspace.join(".bitfun/plugins")).expect("remove plugin root");
-    std::fs::write(workspace.join(".bitfun/plugins"), "not a directory")
+    std::fs::remove_dir_all(workspace.join(".openbitfun/plugins")).expect("remove plugin root");
+    std::fs::write(workspace.join(".openbitfun/plugins"), "not a directory")
         .expect("make plugin root unreadable");
 
     let incomplete = run_cli(

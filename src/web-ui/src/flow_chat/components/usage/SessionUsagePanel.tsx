@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Database, FileText, GitCompare, ShieldCheck, Wrench, type LucideProps } from 'lucide-react';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip } from '@openbitfun/ui';
 import { snapshotAPI } from '@/infrastructure/api';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -41,7 +41,7 @@ import {
 } from './usageReportUtils';
 import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsagePanel.scss';
-import { IconButton, Icon } from '@bitfun/ui';
+import { IconButton, Icon } from '@openbitfun/ui';
 
 const log = createLogger('SessionUsagePanel');
 type UsageTranslator = (key: string, options?: Record<string, unknown>) => string;
@@ -156,8 +156,8 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
   if (!report) {
     return (
-      <div data-bf-component="session-usage-panel" data-bf-part="root" data-bf-state="fallback" className="session-usage-panel session-usage-panel--fallback">
-        <div className="session-usage-panel__fallback-toolbar" data-bf-component="session-usage-panel" data-bf-part="header">
+      <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="root" data-openbitfun-state="fallback" className="session-usage-panel session-usage-panel--fallback">
+        <div className="session-usage-panel__fallback-toolbar" data-openbitfun-component="session-usage-panel" data-openbitfun-part="header">
           <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
             <IconButton
               size="sm"
@@ -188,8 +188,8 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
   );
 
   return (
-    <div data-bf-component="session-usage-panel" data-bf-part="root" data-bf-tab={activeTab} className="session-usage-panel">
-      <header className="session-usage-panel__header" data-bf-component="session-usage-panel" data-bf-part="header">
+    <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="root" data-openbitfun-tab={activeTab} className="session-usage-panel">
+      <header className="session-usage-panel__header" data-openbitfun-component="session-usage-panel" data-openbitfun-part="header">
         <div className="session-usage-panel__title-wrap">
           <div className="session-usage-panel__title-main">
             <h2>{t('usage.title')}</h2>
@@ -240,8 +240,8 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
       <nav
         className="session-usage-panel__tabs"
-        data-bf-component="session-usage-panel"
-        data-bf-part="tabs"
+        data-openbitfun-component="session-usage-panel"
+        data-openbitfun-part="tabs"
         role="tablist"
         aria-orientation="horizontal"
         aria-label={t('usage.panel.tabsLabel')}
@@ -259,10 +259,10 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
             aria-controls={tabPanelId(tab)}
             tabIndex={activeTab === tab ? 0 : -1}
             className={`session-usage-panel__tab${activeTab === tab ? ' session-usage-panel__tab--active' : ''}`}
-            data-bf-component="session-usage-panel"
-            data-bf-part="tab"
-            data-bf-tab={tab}
-            data-bf-state={activeTab === tab ? 'active' : undefined}
+            data-openbitfun-component="session-usage-panel"
+            data-openbitfun-part="tab"
+            data-openbitfun-tab={tab}
+            data-openbitfun-state={activeTab === tab ? 'active' : undefined}
             onClick={() => setActiveTab(tab)}
             onKeyDown={event => handleTabKeyDown(event, tab)}
           >
@@ -273,9 +273,9 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
       <main
         className="session-usage-panel__body"
-        data-bf-component="session-usage-panel"
-        data-bf-part="body"
-        data-bf-tab={activeTab}
+        data-openbitfun-component="session-usage-panel"
+        data-openbitfun-part="body"
+        data-openbitfun-tab={activeTab}
         role="tabpanel"
         id={tabPanelId(activeTab)}
         aria-labelledby={tabId(activeTab)}
@@ -337,7 +337,7 @@ function UsageMetaRow({
   onCopy?: () => void;
 }) {
   return (
-    <div data-bf-component="session-usage-panel" data-bf-part="metaRow" className="session-usage-panel__meta-row">
+    <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="metaRow" className="session-usage-panel__meta-row">
       <span className="session-usage-panel__meta-label">{label}</span>
       <span className="session-usage-panel__meta-value" title={value}>{value}</span>
       {onCopy && copyLabel && (
@@ -621,7 +621,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
   ];
 
   return (
-    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
+    <section data-openbitfun-component="session-usage-panel" data-openbitfun-part="section" className="session-usage-panel__section">
       {report.coverage.level !== 'complete' && (
         <div className="session-usage-panel__notice">
           <AlertTriangle size={14} aria-hidden />
@@ -633,7 +633,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
         {metrics.map(metric => {
           const Icon = metric.icon;
           return (
-            <div data-bf-component="session-usage-panel" data-bf-part="metric" className="session-usage-panel__overview-metric" key={metric.key}>
+            <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="metric" className="session-usage-panel__overview-metric" key={metric.key}>
               <Icon size={16} aria-hidden />
               <div>
                 <span>{metric.label}</span>
@@ -952,7 +952,7 @@ function UsageFiles({
   }), [handleJumpToFileTurn, handleOpenFileDiff, openingDiffKey, redactPaths, report.files.files, report.files.scope, sessionId, t, workspacePath]);
 
   return (
-    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
+    <section data-openbitfun-component="session-usage-panel" data-openbitfun-part="section" className="session-usage-panel__section">
       <div className="session-usage-panel__scope-line">
         <span>{t('usage.panel.fileScope')}</span>
         <UsageValue
@@ -983,7 +983,7 @@ function UsageFiles({
 function UsageErrors({ report, sessionId }: { report: SessionUsageReport; sessionId?: string }) {
   const { t } = useTranslation('flow-chat');
   return (
-    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
+    <section data-openbitfun-component="session-usage-panel" data-openbitfun-part="section" className="session-usage-panel__section">
       <div className="session-usage-panel__scope-line">
         <span>{t('usage.panel.errorScope')}</span>
         <UsageValue
@@ -1106,7 +1106,7 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
   }, [sessionId]);
 
   return (
-    <section data-bf-component="session-usage-panel" data-bf-part="section" className="session-usage-panel__section">
+    <section data-openbitfun-component="session-usage-panel" data-openbitfun-part="section" className="session-usage-panel__section">
       <div className="session-usage-panel__scope-line">
         <span>{t('usage.sections.slowest')}</span>
         <UsageValue
@@ -1259,7 +1259,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
 
   if (empty) {
     return (
-      <div data-bf-component="session-usage-panel" data-bf-part="empty" className="session-usage-panel__empty">
+      <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="empty" className="session-usage-panel__empty">
         <UsageValue value={emptyLabel} help={emptyHelp} strong />
         {emptyDescription && <span>{emptyDescription}</span>}
       </div>
@@ -1273,7 +1273,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
 
   return (
     <>
-      <div data-bf-component="session-usage-panel" data-bf-part="table" className="session-usage-panel__table-wrap">
+      <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="table" className="session-usage-panel__table-wrap">
         <table className={['session-usage-panel__table', tableClassName].filter(Boolean).join(' ')}>
           <thead>
             <tr>

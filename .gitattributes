@@ -2,7 +2,7 @@
 # Line-ending policy.
 #
 # Git for Windows defaults to `core.autocrlf=true`, which rewrites every text
-# file to CRLF on checkout. Two BitFun paths break silently when that happens:
+# file to CRLF on checkout. Two OpenBitFun paths break silently when that happens:
 #
 #   1. `src/apps/relay-server/*.sh` is embedded into the Desktop binary with
 #      `include_str!` and uploaded verbatim to the relay host. A CR turns each

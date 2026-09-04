@@ -3,18 +3,15 @@
   The launcher mark, as every device we ship to draws it: `minSdk` is 26, so
   this file — not the legacy bitmap beside it — is what a home screen shows.
 
-  The layers are the same split HarmonyOS's `layered_image.json` makes: a flat
-  field behind the cube rather than a cube with a field baked into it, so the
-  launcher's own mask can crop it to whatever shape the device uses without
-  clipping a corner the artwork was relying on. `ic_launcher_foreground` is the
-  cube alone on transparency, sized to the 66dp key line inside the 108dp
-  canvas; the seams between its faces are cut out too, and the background colour
-  showing through them is what puts them back.
+  The layers keep the field and mark separate so the launcher's own mask can
+  crop the black application icon to whatever shape the device uses. The
+  foreground is the white OpenBitFun mark on transparency, sized to the safe
+  area inside the 108dp adaptive-icon canvas.
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
-    <!-- Themed icons (Android 13+) get a tint, not a palette: the cube's shading
-         is carried by alpha so the faces still read once the colour is gone. -->
+    <!-- Themed icons (Android 13+) get a tint; the mark's alpha preserves its
+         negative-space geometry when the launcher applies that tint. -->
     <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>

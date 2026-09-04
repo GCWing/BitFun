@@ -79,7 +79,7 @@ describe('TodoWriteDisplay expansion', () => {
     document.body.append(container);
     root = createRoot(container);
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      const height = (this as HTMLElement).querySelector?.('[data-bf-part="todoList"]') ? 320 : 64;
+      const height = (this as HTMLElement).querySelector?.('[data-openbitfun-part="todoList"]') ? 320 : 64;
       return {
         bottom: height,
         height,
@@ -106,22 +106,22 @@ describe('TodoWriteDisplay expansion', () => {
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
     });
-    expect(container.querySelector('[data-bf-part="todoList"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="todoList"]')).toBeNull();
 
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
     });
-    expect(container.querySelector('[data-bf-part="todoList"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="todoList"]')).toBeNull();
 
     act(() => {
       container.querySelector<HTMLElement>('[data-testid="todo-tool-card-toggle"]')?.click();
     });
-    expect(container.querySelector('[data-bf-part="todoList"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="todoList"]')).not.toBeNull();
 
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
     });
-    expect(container.querySelector('[data-bf-part="todoList"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="todoList"]')).not.toBeNull();
 
     act(() => {
       container.querySelector<HTMLElement>('[data-testid="todo-tool-card-toggle"]')?.click();
@@ -129,7 +129,7 @@ describe('TodoWriteDisplay expansion', () => {
     act(() => {
       vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS);
     });
-    expect(container.querySelector('[data-bf-part="todoList"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="todoList"]')).toBeNull();
   });
 
   it('shows the first task when all tasks are pending', () => {
@@ -145,7 +145,7 @@ describe('TodoWriteDisplay expansion', () => {
       );
     });
 
-    const summary = container.querySelector('[data-bf-tool-card="todo"] [data-bf-part="summary"]');
+    const summary = container.querySelector('[data-openbitfun-tool-card="todo"] [data-openbitfun-part="summary"]');
     expect(summary?.textContent).toContain('First task');
     expect(summary?.textContent).not.toContain('Second task');
   });

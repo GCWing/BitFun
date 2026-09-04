@@ -37,7 +37,7 @@ test("MultiSelect exposes an explicit multi-value trigger contract", () => {
     "aria-label": "Models",
   }));
 
-  assert.match(markup, /data-bf-component="multi-select"/);
+  assert.match(markup, /data-openbitfun-component="multi-select"/);
   assert.match(markup, /role="combobox"/);
   assert.match(markup, /aria-expanded="true"/);
   assert.match(markup, /aria-label="Models"/);
@@ -72,12 +72,12 @@ test("Combobox styling uses public field, overlay, action, and motion tokens", a
     "utf8",
   );
 
-  assert.match(styles, /--bf-color-field-background/);
-  assert.match(styles, /--bf-overlay-menu-surface-radius/);
-  assert.match(styles, /--bf-color-action-neutral-surface/);
-  assert.match(styles, /--bf-shadow-menu/);
+  assert.match(styles, /--openbitfun-color-field-background/);
+  assert.match(styles, /--openbitfun-overlay-menu-surface-radius/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface/);
+  assert.match(styles, /--openbitfun-shadow-menu/);
   assert.match(styles, /position:\s*fixed/);
-  assert.match(styles, /z-index:\s*var\(--bf-layer-popover\)/);
+  assert.match(styles, /z-index:\s*var\(--openbitfun-layer-popover\)/);
   assert.match(source, /className=\{styles\.searchField\}/);
   assert.match(styles, /\.searchField\s*\{[^}]*inline-size:\s*100%/);
   assert.doesNotMatch(styles, /data-popover-mode/);
@@ -96,13 +96,13 @@ test("Combobox search and option geometry follows the standard menu rhythm", asy
 
   assert.match(source, /clearLabel=\{query \? designSystem\.messages\.clearSelection : undefined\}/);
   assert.match(source, /leadingIcon=\{<Icon name="search" \/>\}/);
-  assert.match(styles, /\.popover\s*\{[^}]*gap:\s*var\(--bf-space-1\)/s);
+  assert.match(styles, /\.popover\s*\{[^}]*gap:\s*var\(--openbitfun-space-1\)/s);
   assert.match(
     styles,
-    /\.searchField \[data-bf-component="input"\]\s*\{[^}]*border-radius:\s*var\(--bf-control-select-radius\)/s,
+    /\.searchField \[data-openbitfun-component="input"\]\s*\{[^}]*border-radius:\s*var\(--openbitfun-control-select-radius\)/s,
   );
   assert.match(
     styles,
-    /\.listbox \[data-bf-part="list"\],[^}]*gap:\s*calc\(var\(--bf-space-1\) \/ 2\)/s,
+    /\.listbox \[data-openbitfun-part="list"\],[^}]*gap:\s*calc\(var\(--openbitfun-space-1\) \/ 2\)/s,
   );
 });

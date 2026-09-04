@@ -211,7 +211,7 @@ fn try_build_request_body_with_context(
     if let Some(schema) = request_context.and_then(|context| context.output_schema.as_ref()) {
         request_body["text"]["format"] = serde_json::json!({
             "type": "json_schema",
-            "name": "bitfun_output",
+            "name": "openbitfun_output",
             "strict": true,
             "schema": schema
         });
@@ -353,7 +353,7 @@ mod tests {
     use super::{build_request_body, build_request_body_with_context};
     use crate::types::{ModelRequestContext, ToolDefinition};
     use crate::{client::AIClient, types::AIConfig};
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
     };
     use serde_json::json;

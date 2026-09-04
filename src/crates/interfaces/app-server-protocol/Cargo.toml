@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-app-server-protocol"
+name = "openbitfun-app-server-protocol"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Behavior-light wire contracts and roles for the BitFun App Server"
+description = "Behavior-light wire contracts and roles for the OpenBitFun App Server"
 
 [lib]
-name = "bitfun_app_server_protocol"
+name = "openbitfun_app_server_protocol"
 
 [dependencies]
 agent-client-protocol = { workspace = true, optional = true }
-bitfun-events = { path = "../../contracts/events" }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port"] }
+openbitfun-events = { path = "../../contracts/events" }
+openbitfun-core-types = { path = "../../contracts/core-types" }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true, optional = true }
@@ -23,9 +23,9 @@ default = ["rpc"]
 rpc = ["dep:agent-client-protocol"]
 ts = [
     "dep:ts-rs",
-    "bitfun-core-types/ts",
-    "bitfun-product-domains/ts",
-    "bitfun-runtime-ports/ts",
+    "openbitfun-core-types/ts",
+    "openbitfun-product-domains/ts",
+    "openbitfun-runtime-ports/ts",
 ]
 
 [lints]

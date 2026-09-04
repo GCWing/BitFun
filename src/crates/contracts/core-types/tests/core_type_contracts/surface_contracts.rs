@@ -1,4 +1,4 @@
-use bitfun_core_types::surface::{
+use openbitfun_core_types::surface::{
     ApprovalSource, CapabilityRequest, CapabilityRequestKind, PermissionDecision, PermissionScope,
     RuntimeArtifactKind, RuntimeArtifactRef, SurfaceKind, ThreadEnvironment, ThreadEnvironmentKind,
 };

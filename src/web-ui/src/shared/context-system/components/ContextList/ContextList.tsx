@@ -1,7 +1,7 @@
  
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Icon, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, ScrollArea } from '@openbitfun/ui';
 import { AlertCircle } from 'lucide-react';
 import { useContextStore, selectContexts } from '../../../stores/contextStore';
 import { ContextCard } from '../ContextCard/ContextCard';
@@ -97,13 +97,13 @@ export const ContextList: React.FC<ContextListProps> = ({
   
   if (renderedContexts.length === 0) {
     return (
-      <div className={`bitfun-context-list bitfun-context-list--empty ${className}`} data-bf-component="context-list" data-bf-part="root" data-bf-state="empty">
-        <div className="bitfun-context-list__empty-state" data-bf-component="context-list" data-bf-part="empty">
-          <AlertCircle size={24} className="bitfun-context-list__empty-icon" />
-          <p className="bitfun-context-list__empty-text">
+      <div className={`openbitfun-context-list openbitfun-context-list--empty ${className}`} data-openbitfun-component="context-list" data-openbitfun-part="root" data-openbitfun-state="empty">
+        <div className="openbitfun-context-list__empty-state" data-openbitfun-component="context-list" data-openbitfun-part="empty">
+          <AlertCircle size={24} className="openbitfun-context-list__empty-icon" />
+          <p className="openbitfun-context-list__empty-text">
             {t('contextSystem.contextList.emptyTitle')}
           </p>
-          <p className="bitfun-context-list__empty-hint">
+          <p className="openbitfun-context-list__empty-hint">
             {t('contextSystem.contextList.emptyHint')}
           </p>
         </div>
@@ -112,12 +112,12 @@ export const ContextList: React.FC<ContextListProps> = ({
   }
   
   return (
-    <div className={`bitfun-context-list ${className}`} data-bf-component="context-list" data-bf-part="root">
+    <div className={`openbitfun-context-list ${className}`} data-openbitfun-component="context-list" data-openbitfun-part="root">
       
-      <div className="bitfun-context-list__header" data-bf-component="context-list" data-bf-part="header">
-        <div className="bitfun-context-list__title" data-bf-component="context-list" data-bf-part="title">
+      <div className="openbitfun-context-list__header" data-openbitfun-component="context-list" data-openbitfun-part="header">
+        <div className="openbitfun-context-list__title" data-openbitfun-component="context-list" data-openbitfun-part="title">
           {t('contextSystem.contextList.title')}
-          <span className="bitfun-context-list__count" data-bf-component="context-list" data-bf-part="count">
+          <span className="openbitfun-context-list__count" data-openbitfun-component="context-list" data-openbitfun-part="count">
             {contexts.length}
           </span>
         </div>
@@ -137,23 +137,23 @@ export const ContextList: React.FC<ContextListProps> = ({
       
       
       <ScrollArea 
-        className="bitfun-context-list__items"
+        className="openbitfun-context-list__items"
         style={{ maxHeight }}
-        data-bf-component="context-list"
-        data-bf-part="items"
+        data-openbitfun-component="context-list"
+        data-openbitfun-part="items"
       >
         {renderedContexts.map(({ context, exiting }) => (
           <div
             key={context.id}
-            className="bitfun-context-list__item"
+            className="openbitfun-context-list__item"
             data-exiting={exiting ? 'true' : 'false'}
             aria-hidden={exiting || undefined}
             {...(exiting ? { inert: '' } : {})}
             onClick={exiting ? undefined : () => handleCardClick(context.id)}
-            data-bf-component="context-list"
-            data-bf-part="item"
+            data-openbitfun-component="context-list"
+            data-openbitfun-part="item"
           >
-            <div className="bitfun-context-list__item-inner">
+            <div className="openbitfun-context-list__item-inner">
               <ContextCard
                 context={context}
                 onRemove={exiting ? undefined : handleRemove}

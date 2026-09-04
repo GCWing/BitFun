@@ -16,7 +16,7 @@ export async function generateRuntimeValidators(
 
   const header = [
     "// GENERATED CODE! DO NOT MODIFY BY HAND!",
-    "// Source: bitfun-sdk-host Rust protocol types via ts-rs.",
+    "// Source: openbitfun-sdk-host Rust protocol types via ts-rs.",
     "",
     `import type { ${names.join(", ")} } from ${JSON.stringify(typeImportPath)};`,
     "",

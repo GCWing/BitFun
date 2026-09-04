@@ -1,4 +1,4 @@
-use bitfun_services_core::session::SessionStorageLayout;
+use openbitfun_services_core::session::SessionStorageLayout;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,7 +12,7 @@ impl TestTempDir {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("bitfun-session-layout-{name}-{nonce}"));
+        let path = std::env::temp_dir().join(format!("openbitfun-session-layout-{name}-{nonce}"));
         std::fs::create_dir_all(&path).expect("create temp dir");
         Self { path }
     }

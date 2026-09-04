@@ -1,4 +1,4 @@
-import { themeCssVariables } from '@bitfun/theme-bitfun';
+import { themeCssVariables } from '@openbitfun/theme-openbitfun';
 
 import {
   APPEARANCE_ROOT_TOKEN_NAMES,
@@ -14,7 +14,7 @@ import type {
 
 const ROOT_ALLOWED_TOKEN_NAMES = new Set<string>(APPEARANCE_ROOT_TOKEN_NAMES);
 const SCOPED_ALLOWED_TOKEN_NAMES = new Set<string>(APPEARANCE_SCOPED_TOKEN_NAMES);
-const SCOPE_STYLE_ATTRIBUTE = 'data-bf-appearance-theme-scopes';
+const SCOPE_STYLE_ATTRIBUTE = 'data-openbitfun-appearance-theme-scopes';
 const ROOT_BACKGROUND_VARIABLE = themeCssVariables['color.surface.chrome'];
 const FORBIDDEN_VALUE = /(?:url\s*\(|var\s*\(|expression\s*\(|[;{}<>])/i;
 

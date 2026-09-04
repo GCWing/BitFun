@@ -1,4 +1,4 @@
-use bitfun_product_capabilities::{
+use openbitfun_product_capabilities::{
     agent_runtime_baseline_tool_plan, default_product_assembly_plan,
     default_product_capability_assembly, default_product_capability_registry,
     product_assembly_plan_for_profile, product_delivery_profile_entries, DeliveryProfile,
@@ -7,13 +7,13 @@ use bitfun_product_capabilities::{
     ProductCoreDependencyMode, ProductFeatureGroup, ProductRuntimeAssembly,
     ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
     PluginRuntimeBinding, PluginRuntimeClient, PluginRuntimeUnavailableReason, PortResult,
     RuntimeServiceCapability,
 };
-use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
-use bitfun_runtime_services::{
+use openbitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
+use openbitfun_runtime_services::{
     RuntimeServiceMarkerPort, RuntimeServicesBuilder, RuntimeServicesProvider,
 };
 use std::sync::Arc;
@@ -56,8 +56,8 @@ fn every_agent_runtime_delivery_profile_includes_product_control_discovery() {
                 .tool_provider_group_plan()
                 .iter()
                 .flat_map(|provider| provider.tool_names())
-                .any(|tool_name| *tool_name == "BitFunControl"),
-            "{} must expose BitFunControl to its agents",
+                .any(|tool_name| *tool_name == "OpenBitFunControl"),
+            "{} must expose OpenBitFunControl to its agents",
             profile.id()
         );
     }

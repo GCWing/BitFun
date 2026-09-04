@@ -8,5 +8,5 @@ export const exportImageAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'text' }, { id: 'thinking' }, { id: 'tool' }, { id: 'footer' },
     { id: 'trigger' },
   ],
-  states: [{ id: 'exporting', selector: { kind: 'self', suffix: '[data-bf-state~="exporting"]' } }],
+  states: [{ id: 'exporting', selector: { kind: 'self', suffix: '[data-openbitfun-state~="exporting"]' } }],
 };

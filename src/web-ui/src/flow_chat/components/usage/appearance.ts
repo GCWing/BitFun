@@ -15,10 +15,10 @@ export const sessionUsagePanelAppearanceDescriptor: AppearanceSurfaceDescriptor 
     { id: 'empty' },
   ],
   facets: [
-    { id: 'tab', attribute: 'data-bf-tab', values: ['overview', 'models', 'tools', 'files', 'errors', 'slowest'] },
+    { id: 'tab', attribute: 'data-openbitfun-tab', values: ['overview', 'models', 'tools', 'files', 'errors', 'slowest'] },
   ],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'fallback', selector: { kind: 'self', suffix: '[data-bf-state~="fallback"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'fallback', selector: { kind: 'self', suffix: '[data-openbitfun-state~="fallback"]' } },
   ],
 };

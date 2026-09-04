@@ -54,7 +54,7 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   ...props
 }, ref) {
   const generatedId = useId();
-  const controlId = children.props.id ?? `bf-field-${generatedId}`;
+  const controlId = children.props.id ?? `openbitfun-field-${generatedId}`;
   const descriptionId = description === undefined || description === null
     ? undefined
     : `${controlId}-description`;
@@ -75,7 +75,7 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="field"
+      data-openbitfun-component="field"
       data-control-width={controlWidth}
       data-horizontal-gap={horizontalGap}
       data-label-width={labelWidth}
@@ -84,43 +84,43 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
       data-required={isRequired ? "true" : "false"}
       ref={ref}
     >
-      <span className={styles.content} data-bf-part="content">
-        <span className={styles.labelRow} data-bf-part="label-row">
+      <span className={styles.content} data-openbitfun-part="content">
+        <span className={styles.labelRow} data-openbitfun-part="label-row">
           <label className={styles.label} htmlFor={controlId}>
             <span>{label}</span>
             {isRequired && (
-              <span aria-hidden="true" className={styles.required} data-bf-part="required">
+              <span aria-hidden="true" className={styles.required} data-openbitfun-part="required">
                 *
               </span>
             )}
           </label>
           {labelAction !== undefined && labelAction !== null && (
-            <span className={styles.labelAction} data-bf-part="label-action">
+            <span className={styles.labelAction} data-openbitfun-part="label-action">
               {labelAction}
             </span>
           )}
         </span>
         {descriptionId !== undefined && (
-          <span className={styles.description} data-bf-part="description" id={descriptionId}>
+          <span className={styles.description} data-openbitfun-part="description" id={descriptionId}>
             {description}
           </span>
         )}
       </span>
-      <span className={styles.control} data-bf-part="control">
+      <span className={styles.control} data-openbitfun-part="control">
         {controlLeading !== undefined && controlLeading !== null && (
-          <span className={styles.controlAdornment} data-bf-part="control-leading">
+          <span className={styles.controlAdornment} data-openbitfun-part="control-leading">
             {controlLeading}
           </span>
         )}
         {control}
         {controlTrailing !== undefined && controlTrailing !== null && (
-          <span className={styles.controlAdornment} data-bf-part="control-trailing">
+          <span className={styles.controlAdornment} data-openbitfun-part="control-trailing">
             {controlTrailing}
           </span>
         )}
       </span>
       {hasError && (
-        <span className={styles.error} data-bf-part="error" id={errorId}>
+        <span className={styles.error} data-openbitfun-part="error" id={errorId}>
           {error}
         </span>
       )}

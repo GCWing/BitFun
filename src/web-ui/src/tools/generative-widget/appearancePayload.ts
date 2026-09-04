@@ -2,7 +2,7 @@ import {
   cssVariables as systemCssVariables,
   tokens as systemTokens,
   type TokenName as SystemTokenName,
-} from '@bitfun/design-tokens';
+} from '@openbitfun/design-tokens';
 
 import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
 import { WIDGET_APPEARANCE_VARIABLE_NAMES } from '@/infrastructure/appearance/adapters/widgetAppearanceVariables';
@@ -27,7 +27,7 @@ function requireBuiltinThemeToken(name: string): string {
 export const WIDGET_APPEARANCE_FALLBACK_VARS = Object.freeze(Object.fromEntries(
   WIDGET_APPEARANCE_VARIABLE_NAMES.map(name => [
     name,
-    name === '--bf-color-surface-canvas' ? 'transparent' : requireBuiltinThemeToken(name),
+    name === '--openbitfun-color-surface-canvas' ? 'transparent' : requireBuiltinThemeToken(name),
   ]),
 ));
 

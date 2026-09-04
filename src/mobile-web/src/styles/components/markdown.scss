@@ -1,9 +1,9 @@
 // Markdown content styling — aligned with desktop Markdown.scss
 .chat-msg__assistant-content {
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-body-lg-line-height);
-  font-family: var(--bf-type-body-md-font-family);
-  font-size: var(--bf-type-body-md-font-size);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-body-lg-line-height);
+  font-family: var(--openbitfun-type-body-md-font-family);
+  font-size: var(--openbitfun-type-body-md-font-size);
   word-wrap: break-word;
   overflow-wrap: break-word;
   max-width: 100%;
@@ -31,9 +31,9 @@
     margin-top: 0;
     margin-bottom: 0.5rem;
     display: block;
-    line-height: var(--bf-type-body-md-line-height);
-    font-size: var(--bf-type-body-md-font-size);
-    color: var(--bf-color-content-primary);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    color: var(--openbitfun-color-content-primary);
     &:last-child { margin-bottom: 0; }
 
     code { display: inline !important; }
@@ -42,38 +42,38 @@
   // ─── Headings ───────────────────────────────────────────────────────────────
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--bf-type-body-md-font-family);
-    color: var(--bf-color-content-primary);
+    font-family: var(--openbitfun-type-body-md-font-family);
+    color: var(--openbitfun-color-content-primary);
     margin-top: 1.25rem;
     margin-bottom: 0.6rem;
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-heading-page-line-height);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-heading-page-line-height);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     &:first-child { margin-top: 0; }
   }
 
   h1 {
-    font-size: var(--bf-type-flow-section-title-font-size);
+    font-size: var(--openbitfun-type-flow-section-title-font-size);
     margin: 1.25rem 0 0.75rem 0;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   h2 {
-    font-size: var(--bf-type-flow-title-font-size);
+    font-size: var(--openbitfun-type-flow-title-font-size);
     margin: 1rem 0 0.6rem 0;
     padding-bottom: 0.35rem;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   h3 {
-    font-size: var(--bf-type-body-lg-font-size);
+    font-size: var(--openbitfun-type-body-lg-font-size);
     margin: 0.85rem 0 0.5rem 0;
   }
 
-  h4 { font-size: var(--bf-type-body-md-font-size); margin: 0.7rem 0 0.4rem 0; color: var(--bf-color-content-secondary); }
-  h5 { font-size: var(--bf-type-body-md-font-size); margin: 0.6rem 0 0.4rem 0; color: var(--bf-color-content-secondary); }
-  h6 { font-size: var(--bf-type-body-xs-font-size); margin: 0.5rem 0 0.35rem 0; color: var(--bf-color-content-muted); opacity: 0.85; }
+  h4 { font-size: var(--openbitfun-type-body-md-font-size); margin: 0.7rem 0 0.4rem 0; color: var(--openbitfun-color-content-secondary); }
+  h5 { font-size: var(--openbitfun-type-body-md-font-size); margin: 0.6rem 0 0.4rem 0; color: var(--openbitfun-color-content-secondary); }
+  h6 { font-size: var(--openbitfun-type-body-xs-font-size); margin: 0.5rem 0 0.35rem 0; color: var(--openbitfun-color-content-muted); opacity: 0.85; }
 
   // ─── Lists ──────────────────────────────────────────────────────────────────
 
@@ -81,16 +81,16 @@
     margin-top: 0;
     margin-bottom: 0.5rem;
     padding-left: 1.5rem;
-    line-height: var(--bf-type-body-md-line-height);
-    font-size: var(--bf-type-body-md-font-size);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 
   li {
     word-wrap: break-word;
     margin-bottom: 0.1rem;
     position: relative;
-    line-height: var(--bf-type-body-md-line-height);
-    color: var(--bf-color-content-primary);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    color: var(--openbitfun-color-content-primary);
     &:last-child { margin-bottom: 0; }
 
     p {
@@ -101,8 +101,8 @@
   }
 
   /* typography-audit: allow -- list marker geometry scales with its owning text */
-  ul > li::marker { color: var(--bf-color-content-muted); font-size: 1.2em; font-weight: var(--bf-type-heading-page-font-weight); }
-  ol > li::marker { color: var(--bf-color-content-muted); font-weight: var(--bf-type-heading-page-font-weight); }
+  ul > li::marker { color: var(--openbitfun-color-content-muted); font-size: 1.2em; font-weight: var(--openbitfun-type-heading-page-font-weight); }
+  ol > li::marker { color: var(--openbitfun-color-content-muted); font-weight: var(--openbitfun-type-heading-page-font-weight); }
 
   ul ul, ol ol, ul ol, ol ul {
     margin-top: 0.1rem;
@@ -125,16 +125,16 @@
   .inline-code {
     padding: 0.15em 0.35em;
     margin: 0 0.05em;
-    font-size: var(--bf-type-body-xs-font-size);
-    background: var(--bf-color-action-neutral-surface-hover);
-    border: 1px solid var(--bf-color-border-subtle);
+    font-size: var(--openbitfun-type-body-xs-font-size);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    border: 1px solid var(--openbitfun-color-border-subtle);
     border-radius: 4px;
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
     white-space: nowrap;
     vertical-align: baseline;
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
-    color: var(--bf-color-content-primary);
-    font-weight: var(--bf-type-label-lg-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
   }
 
   // ─── Code blocks ────────────────────────────────────────────────────────────
@@ -156,9 +156,9 @@
   .code-block-wrapper {
     margin: 0.5rem 0;
     border-radius: var(--size-radius-base);
-    background: var(--bf-color-surface-canvas);
-    border: 1px dashed var(--bf-color-border-subtle);
-    box-shadow: var(--bf-shadow-sm);
+    background: var(--openbitfun-color-surface-canvas);
+    border: 1px dashed var(--openbitfun-color-border-subtle);
+    box-shadow: var(--openbitfun-shadow-sm);
     overflow: hidden;
     position: relative;
 
@@ -167,25 +167,25 @@
       border: none !important;
       border-radius: var(--size-radius-base) !important;
       padding: 1rem !important;
-      background: var(--bf-color-surface-canvas) !important;
+      background: var(--openbitfun-color-surface-canvas) !important;
       box-shadow: none !important;
-      font-size: var(--bf-type-body-xs-font-size) !important;
+      font-size: var(--openbitfun-type-body-xs-font-size) !important;
     }
 
     pre code {
-      font-family: var(--bf-type-code-md-font-family) !important;
-      background: var(--bf-color-surface-canvas) !important;
-      font-size: var(--bf-type-body-xs-font-size) !important;
+      font-family: var(--openbitfun-type-code-md-font-family) !important;
+      background: var(--openbitfun-color-surface-canvas) !important;
+      font-size: var(--openbitfun-type-body-xs-font-size) !important;
     }
 
     pre[style] {
-      background: var(--bf-color-surface-canvas) !important;
+      background: var(--openbitfun-color-surface-canvas) !important;
       border: none !important;
       box-shadow: none !important;
     }
 
     code[style] {
-      background: var(--bf-color-surface-canvas) !important;
+      background: var(--openbitfun-color-surface-canvas) !important;
       border: none !important;
     }
   }
@@ -198,7 +198,7 @@
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -211,11 +211,11 @@
 
     &:active {
       opacity: 1;
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
 
     &.copy-success {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
       opacity: 1;
     }
   }
@@ -224,19 +224,19 @@
     padding: 1rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    font-size: var(--bf-type-body-xs-font-size);
-    line-height: var(--bf-type-body-md-line-height);
-    background: var(--bf-color-surface-canvas);
-    border: 1px dashed var(--bf-color-border-subtle);
+    font-size: var(--openbitfun-type-body-xs-font-size);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    background: var(--openbitfun-color-surface-canvas);
+    border: 1px dashed var(--openbitfun-color-border-subtle);
     border-radius: var(--size-radius-base);
     margin: 0.5rem 0;
-    box-shadow: var(--bf-shadow-sm);
+    box-shadow: var(--openbitfun-shadow-sm);
     position: relative;
 
     code {
       background: none;
       padding: 0;
-      font-size: var(--bf-type-body-xs-font-size);
+      font-size: var(--openbitfun-type-body-xs-font-size);
     }
   }
 
@@ -258,10 +258,10 @@
     margin: 1rem 0;
     padding: 0.75rem 1rem;
     position: relative;
-    background: var(--bf-color-accent-surface-subtle);
-    border-left: 3px solid var(--bf-color-accent-border);
+    background: var(--openbitfun-color-accent-surface-subtle);
+    border-left: 3px solid var(--openbitfun-color-accent-border);
     border-radius: 0 var(--size-radius-sm) var(--size-radius-sm) 0;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
 
     > :first-child { margin-top: 0; }
     > :last-child { margin-bottom: 0; }
@@ -275,34 +275,34 @@
     -webkit-overflow-scrolling: touch;
     margin: 1rem 0;
     border-radius: var(--size-radius-base);
-    border: 1px solid var(--bf-color-border-subtle);
-    box-shadow: var(--bf-shadow-sm);
-    background: var(--bf-color-surface-canvas);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    box-shadow: var(--openbitfun-shadow-sm);
+    background: var(--openbitfun-color-surface-canvas);
 
     table {
       border-spacing: 0;
       border-collapse: collapse;
       width: 100%;
-      font-size: var(--bf-type-body-xs-font-size);
+      font-size: var(--openbitfun-type-body-xs-font-size);
     }
   }
 
   .table-wrapper th,
   .table-wrapper td {
     padding: 8px 12px;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     text-align: left;
   }
 
   .table-wrapper th {
-    font-weight: var(--bf-type-label-selected-font-weight);
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
   }
 
   .table-wrapper td {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   .table-wrapper th:first-child { border-radius: var(--size-radius-base) 0 0 0; }
@@ -310,12 +310,12 @@
   .table-wrapper tr:last-child td:first-child { border-radius: 0 0 0 var(--size-radius-base); }
   .table-wrapper tr:last-child td:last-child { border-radius: 0 0 var(--size-radius-base) 0; }
   .table-wrapper tr:last-child td { border-bottom: none; }
-  .table-wrapper tbody tr:nth-child(2n) { background: var(--bf-color-surface-subtle); }
+  .table-wrapper tbody tr:nth-child(2n) { background: var(--openbitfun-color-surface-subtle); }
 
   // ─── Links ──────────────────────────────────────────────────────────────────
 
   a {
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
     text-decoration: none;
     word-break: break-all;
     &:active { text-decoration: underline; }
@@ -327,7 +327,7 @@
     height: 1px;
     padding: 0;
     margin: 1.5rem 0;
-    background: var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-border-subtle);
     border: 0;
     border-radius: 1px;
   }
@@ -335,24 +335,24 @@
   // ─── Typography ─────────────────────────────────────────────────────────────
 
   strong {
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   em {
     font-style: italic;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   del {
     text-decoration: line-through;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   // ─── Checkbox ───────────────────────────────────────────────────────────────
 
   input[type='checkbox'] {
     margin-right: 6px;
-    accent-color: var(--bf-color-accent-default);
+    accent-color: var(--openbitfun-color-accent-default);
   }
 }

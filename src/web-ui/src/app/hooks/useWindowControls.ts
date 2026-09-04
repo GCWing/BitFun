@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
-import { useOverlayLayerActions } from '@bitfun/ui';
+import { useOverlayLayerActions } from '@openbitfun/ui';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';

@@ -204,7 +204,7 @@
       },
       "valueYes": "Yes",
       "valueNo": "No",
-      "officialSource": "BitFun official",
+      "officialSource": "OpenBitFun official",
       "executableTool": "Can execute",
       "readonlyToolHint": "This tool reads information without changing project or system state.",
       "executableToolHint": "This tool can perform actions. Actual approval requirements follow the current permission rules.",

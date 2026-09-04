@@ -2,7 +2,7 @@
 //!
 //! This module owns provider-neutral managed-runtime command discovery. Product
 //! crates supply the managed runtime root; command lookup and PATH merging stay
-//! reusable and testable without `bitfun-core`.
+//! reusable and testable without `openbitfun-core`.
 
 use crate::system;
 use serde::{Deserialize, Serialize};
@@ -66,7 +66,7 @@ impl ManagedRuntimeResolver {
     /// Resolve a command from:
     /// 1) explicit path command
     /// 2) system PATH
-    /// 3) BitFun managed runtimes
+    /// 3) OpenBitFun managed runtimes
     pub fn resolve_command(&self, command: &str) -> Option<ResolvedCommand> {
         if is_path_like_command(command) {
             return self.resolve_explicit_path_command(command);
@@ -350,7 +350,7 @@ mod tests {
     fn temp_runtime_root() -> PathBuf {
         let mut p = std::env::temp_dir();
         let id = format!(
-            "bitfun-runtime-test-{}-{}",
+            "openbitfun-runtime-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

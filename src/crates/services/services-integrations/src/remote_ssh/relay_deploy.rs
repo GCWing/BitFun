@@ -11,7 +11,7 @@
 //!    the image script restores any staged previous container).
 //! 5. `import_account` — hand a locally-provisioned account to `relay-admin import-user`.
 //!
-//! Remote deploy state lives under `~/.bitfun/relay-deploy/`. One-click deploy
+//! Remote deploy state lives under the compiled product data directory. One-click deploy
 //! never clones the repository or compiles on the customer server.
 //!
 //! Product / regression invariants (wizard + entry points):
@@ -25,6 +25,9 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
+use super::product_paths::{
+    product_data_path, product_data_relative_path, product_home_shell_path,
+};
 #[cfg(test)]
 use super::release_verify::RELEASE_PUBKEY;
 use super::release_verify::{release_pubkey, release_tag_for_version, verify_minisign};
@@ -42,18 +45,19 @@ pub fn normalize_relay_port(port: u16) -> Result<u16> {
     Ok(port)
 }
 /// Relay container name, matching docker-compose.yml.
-const RELAY_CONTAINER_NAME: &str = "bitfun-relay";
+const RELAY_CONTAINER_NAME: &str = "openbitfun-relay";
 /// Account DB path inside the relay container (RELAY_DB_PATH in docker-compose.yml).
-const RELAY_CONTAINER_DB: &str = "/app/data/bitfun_relay.db";
+const RELAY_CONTAINER_DB: &str = "/app/data/openbitfun_relay.db";
 /// Canonical repository URLs supplied to the shared regional-routing helper.
-const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
+const REPO_GIT_URL: &str = "https://github.com/GCWing/OpenBitFun.git";
 /// Tarball fallback when git is unavailable or clone/fetch fails.
-const REPO_TARBALL_URL: &str = "https://github.com/GCWing/BitFun/archive/refs/heads/main.tar.gz";
+const REPO_TARBALL_URL: &str =
+    "https://github.com/GCWing/OpenBitFun/archive/refs/heads/main.tar.gz";
 /// Release asset bases. GitHub is authoritative; OpenBitFun mirrors the same
 /// signed bytes and is used when GitHub metadata is unavailable.
-const RELEASE_BASE: &str = "https://github.com/GCWing/BitFun/releases";
+const RELEASE_BASE: &str = "https://github.com/GCWing/OpenBitFun/releases";
 const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
-const RELAY_IMAGE_REPOSITORY: &str = "ghcr.io/gcwing/bitfun-relay-server";
+const RELAY_IMAGE_REPOSITORY: &str = "ghcr.io/gcwing/openbitfun-relay-server";
 const RELAY_IMAGE_DESCRIPTOR_ASSET: &str = "relay-image.json";
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
 /// Embedded so Desktop orchestration can select Docker-install and image routes.
@@ -67,14 +71,16 @@ const RELAY_RELEASE_DOWNLOAD_SH: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../apps/relay-server/release-download.sh"
 ));
-/// Remote directory (relative to the SSH user's home) holding deploy state.
-const DEPLOY_STATE_DIR: &str = ".bitfun/relay-deploy";
 /// Line printed by task scripts on success; polled to detect completion.
 const TASK_DONE_MARKER: &str = "RELAY_TASK_DONE";
 /// How long the seeded `preparing` flag may sit with no live driver process
 /// before the task counts as dead. Covers PTY startup and the shell prompt; an
 /// alive driver (an open sudo password prompt, say) is never bounded by this.
 const PREPARE_GRACE_SECONDS: u64 = 90;
+
+fn deploy_state_relative_dir() -> String {
+    product_data_relative_path(&["relay-deploy"])
+}
 
 /// Long-running remote operations that run detached and are polled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,13 +182,13 @@ pub struct RelayPreflight {
     pub port_busy: bool,
     /// Port that was probed (`port_busy` / selected-port health).
     pub probed_port: u16,
-    /// Selected port is published by the existing `bitfun-relay` container (or
+    /// Selected port is published by the existing `openbitfun-relay` container (or
     /// answers `/health` as that relay). Used to distinguish "our relay" from
     /// an unrelated occupant when the user changes the listen port.
     pub port_owned_by_relay: bool,
-    /// A `bitfun-relay` container already exists (any state).
+    /// An `openbitfun-relay` container already exists (any state).
     pub container_exists: bool,
-    /// A `bitfun-relay` container is currently running.
+    /// An `openbitfun-relay` container is currently running.
     pub container_running: bool,
     /// Host port published by the running relay (0 if unknown / not running).
     pub existing_relay_port: u16,
@@ -227,6 +233,7 @@ pub async fn run_preflight(
     port: u16,
 ) -> Result<RelayPreflight> {
     let port = normalize_relay_port(port)?;
+    let relay_port_path = product_home_shell_path(&["relay-deploy", "relay.port"]);
     let script = format!(
         r#"
 PORT="{port}"
@@ -254,7 +261,7 @@ if [ ! -e "$HOME/.docker" ]; then echo "docker_home_writable=1"
 elif [ -w "$HOME/.docker" ] && {{ [ ! -e "$HOME/.docker/buildx" ] || [ -w "$HOME/.docker/buildx" ]; }}; then echo "docker_home_writable=1"
 else echo "docker_home_writable=0"; fi
 echo "mem_kb=$(awk '/MemTotal/ {{print $2}}' /proc/meminfo 2>/dev/null || echo 0)"
-# Free space where the work actually lands: ~/.bitfun holds task state and
+# Free space where the work actually lands: the product data home holds task state and
 # Docker's data root holds the pulled image and writable layers.
 echo "home_free_kb=$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
 DOCKER_ROOT=$(docker info -f '{{{{.DockerRootDir}}}}' 2>/dev/null \
@@ -272,18 +279,18 @@ CONTAINER=0
 RUNNING=0
 EXISTING_PORT=0
 if [ -n "$D" ]; then
-  if $D ps -a --format '{{{{.Names}}}}' 2>/dev/null | grep -qx bitfun-relay; then CONTAINER=1; fi
-  if $D ps --format '{{{{.Names}}}}' 2>/dev/null | grep -qx bitfun-relay; then RUNNING=1; fi
+  if $D ps -a --format '{{{{.Names}}}}' 2>/dev/null | grep -qx openbitfun-relay; then CONTAINER=1; fi
+  if $D ps --format '{{{{.Names}}}}' 2>/dev/null | grep -qx openbitfun-relay; then RUNNING=1; fi
   if [ "$CONTAINER" = "1" ]; then
     # First published host port on the container (compose maps RELAY_PORT:RELAY_PORT).
-    EXISTING_PORT=$($D inspect -f '{{{{range $p, $conf := .NetworkSettings.Ports}}}}{{{{range $conf}}}}{{{{if .HostPort}}}}{{{{.HostPort}}}}{{{{end}}}}{{{{end}}}}{{{{end}}}}' bitfun-relay 2>/dev/null | awk 'NF {{print $1; exit}}')
+    EXISTING_PORT=$($D inspect -f '{{{{range $p, $conf := .NetworkSettings.Ports}}}}{{{{range $conf}}}}{{{{if .HostPort}}}}{{{{.HostPort}}}}{{{{end}}}}{{{{end}}}}{{{{end}}}}' openbitfun-relay 2>/dev/null | awk 'NF {{print $1; exit}}')
     EXISTING_PORT=$(printf '%s' "$EXISTING_PORT" | tr -cd '0-9')
   fi
 fi
-# Fallback: last deploy wrote ~/.bitfun/relay-deploy/relay.port
+# Fallback: the last deploy recorded its selected port in the product data home.
 if [ -z "$EXISTING_PORT" ] || [ "$EXISTING_PORT" = "0" ]; then
-  if [ -f "$HOME/.bitfun/relay-deploy/relay.port" ]; then
-    EXISTING_PORT=$(tr -cd '0-9' < "$HOME/.bitfun/relay-deploy/relay.port")
+  if [ -f "{relay_port_path}" ]; then
+    EXISTING_PORT=$(tr -cd '0-9' < "{relay_port_path}")
   fi
 fi
 [ -n "$EXISTING_PORT" ] || EXISTING_PORT=0
@@ -438,7 +445,7 @@ pub async fn start_task(
     mirror_mode: RelayMirrorMode,
 ) -> Result<RelayTaskStart> {
     let home = resolve_home(manager, connection_id).await?;
-    let dir = format!("{home}/{DEPLOY_STATE_DIR}");
+    let dir = product_data_path(&home, &["relay-deploy"]);
     let stem = task.stem();
     let port = normalize_relay_port(port)?;
 
@@ -578,9 +585,10 @@ pub async fn poll_task(
     cursor: u64,
 ) -> Result<RelayTaskPoll> {
     let stem = task.stem();
+    let deploy_state_dir = deploy_state_relative_dir();
     let script = format!(
         r#"
-D="$HOME/{DEPLOY_STATE_DIR}"
+D="$HOME/{deploy_state_dir}"
 LOG="$D/{stem}.log"
 PIDF="$D/{stem}.pid"
 DRVF="$D/{stem}.driver.pid"
@@ -684,10 +692,11 @@ pub async fn cancel_task(
     task: RelayDeployTask,
 ) -> Result<()> {
     let stem = task.stem();
+    let deploy_state_dir = deploy_state_relative_dir();
     let script = format!(
         r#"
 set +e
-D="$HOME/{DEPLOY_STATE_DIR}"
+D="$HOME/{deploy_state_dir}"
 STEM="{stem}"
 LOG="$D/$STEM.log"
 PIDF="$D/$STEM.pid"
@@ -733,7 +742,6 @@ if [ "$was_active" = "1" ]; then
 fi
 exit 0
 "#,
-        DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         stem = stem,
     );
     let (_stdout, stderr, code) = exec_script(manager, connection_id, &script).await?;
@@ -804,7 +812,7 @@ fn split_poll_stdout(stdout: &str) -> (&str, &str) {
 /// Import a locally-provisioned account into the running relay container.
 ///
 /// `account_json` is the serialized `ImportableAccount` produced client-side
-/// by `bitfun_relay_service::admin::provision` — it contains only derived
+/// by `openbitfun_relay_service::admin::provision` — it contains only derived
 /// artifacts (salts, Argon2id hash, wrapped master key). The file is written
 /// with 0600 permissions and removed immediately after the import attempt.
 pub async fn import_account(
@@ -813,7 +821,7 @@ pub async fn import_account(
     account_json: &str,
 ) -> Result<()> {
     let home = resolve_home(manager, connection_id).await?;
-    let dir = format!("{home}/{DEPLOY_STATE_DIR}");
+    let dir = product_data_path(&home, &["relay-deploy"]);
     exec_ok(
         manager,
         connection_id,
@@ -945,13 +953,13 @@ async fn exec_ok(manager: &SSHConnectionManager, connection_id: &str, command: &
 
 /// Shared interactive prepare helpers embedded in driver scripts.
 fn prepare_helpers_bash() -> String {
-    // Mirror helpers first so prepare/install/deploy can call bitfun_mirror_init
+    // Mirror helpers first so prepare/install/deploy can call openbitfun_mirror_init
     // before apt/git/docker downloads.
-    format!(
+    let helpers = format!(
         r#"
-# --- begin BitFun relay mirror.sh (embedded) ---
+# --- begin OpenBitFun Relay mirror.sh (embedded) ---
 {mirror}
-# --- end BitFun relay mirror.sh ---
+# --- end OpenBitFun Relay mirror.sh ---
 "#,
         mirror = RELAY_MIRROR_SH
     ) + r#"
@@ -959,14 +967,14 @@ fn prepare_helpers_bash() -> String {
 # - Never use `sudo -v` when NOPASSWD is set — on many cloud images `sudo -v`
 #   still demands a password even though `sudo -n true` works.
 # - Prefer already-root → passwordless sudo → interactive sudo / sudo su -.
-# - When elevating via `su -`, keep the original HOME so ~/.bitfun paths stay valid.
+# - When elevating via `su -`, keep the original HOME so product data paths stay valid.
 
-bitfun_have_passwordless_sudo() {
+openbitfun_have_passwordless_sudo() {
   [ "$(id -u)" != "0" ] && sudo -n true >/dev/null 2>&1
 }
 
 # Run a command with the best available privilege (root / sudo -n / sudo).
-bitfun_priv() {
+openbitfun_priv() {
   if [ "$(id -u)" = "0" ]; then
     "$@"
   elif sudo -n true >/dev/null 2>&1; then
@@ -978,25 +986,25 @@ bitfun_priv() {
 
 # For Docker install: if not root, re-exec this driver as root once.
 # Passwordless path uses `sudo su -` (no prompt). Interactive path prompts once.
-# Sets BITFUN_ELEVATED=1 to avoid loops. Preserves HOME for ~/.bitfun/*.
-bitfun_elevate_install_driver() {
+# Sets OPENBITFUN_ELEVATED=1 to avoid loops. Preserves HOME for product data.
+openbitfun_elevate_install_driver() {
   local self="$1"
-  if [ "$(id -u)" = "0" ] || [ "${BITFUN_ELEVATED:-0}" = "1" ]; then
+  if [ "$(id -u)" = "0" ] || [ "${OPENBITFUN_ELEVATED:-0}" = "1" ]; then
     return 0
   fi
-  local keep_home="${BITFUN_KEEP_HOME:-$HOME}"
+  local keep_home="${OPENBITFUN_KEEP_HOME:-$HOME}"
   local q_self q_home
   q_self=$(printf '%q' "$self")
   q_home=$(printf '%q' "$keep_home")
-  if bitfun_have_passwordless_sudo; then
+  if openbitfun_have_passwordless_sudo; then
     echo ">>> Root needed for Docker install; elevating via passwordless sudo su -..."
-    exec sudo -n su - -c "export BITFUN_ELEVATED=1 BITFUN_KEEP_HOME=$q_home HOME=$q_home; cd $q_home 2>/dev/null || cd /; bash $q_self"
+    exec sudo -n su - -c "export OPENBITFUN_ELEVATED=1 OPENBITFUN_KEEP_HOME=$q_home HOME=$q_home; cd $q_home 2>/dev/null || cd /; bash $q_self"
   fi
   echo ">>> Root needed for Docker install; elevating via sudo su - (password may be required)..."
-  exec sudo su - -c "export BITFUN_ELEVATED=1 BITFUN_KEEP_HOME=$q_home HOME=$q_home; cd $q_home 2>/dev/null || cd /; bash $q_self"
+  exec sudo su - -c "export OPENBITFUN_ELEVATED=1 OPENBITFUN_KEEP_HOME=$q_home HOME=$q_home; cd $q_home 2>/dev/null || cd /; bash $q_self"
 }
 
-bitfun_ensure_tools() {
+openbitfun_ensure_tools() {
   local pkgs=()
   if [ "$#" -eq 0 ]; then set -- git curl tar; fi
   local tool
@@ -1011,62 +1019,62 @@ bitfun_ensure_tools() {
     elif command -v yum >/dev/null 2>&1; then yum install -y "${pkgs[@]}"
     else echo "ERROR: missing tools (${pkgs[*]}) and no supported package manager" >&2; return 1; fi
   else
-    if command -v apt-get >/dev/null 2>&1; then bitfun_priv apt-get update -y && bitfun_priv apt-get install -y "${pkgs[@]}"
-    elif command -v dnf >/dev/null 2>&1; then bitfun_priv dnf install -y "${pkgs[@]}"
-    elif command -v yum >/dev/null 2>&1; then bitfun_priv yum install -y "${pkgs[@]}"
+    if command -v apt-get >/dev/null 2>&1; then openbitfun_priv apt-get update -y && openbitfun_priv apt-get install -y "${pkgs[@]}"
+    elif command -v dnf >/dev/null 2>&1; then openbitfun_priv dnf install -y "${pkgs[@]}"
+    elif command -v yum >/dev/null 2>&1; then openbitfun_priv yum install -y "${pkgs[@]}"
     else echo "ERROR: missing tools (${pkgs[*]}); install them then retry" >&2; return 1; fi
   fi
 }
 
 # Install Docker Engine for the original SSH user. The caller must initialize
 # mirror routing first and, when interactive sudo is needed, re-exec the driver
-# through bitfun_elevate_install_driver before calling this helper.
-bitfun_install_docker_engine() {
+# through openbitfun_elevate_install_driver before calling this helper.
+openbitfun_install_docker_engine() {
   local deploy_user="${SUDO_USER:-}" installed=0
   if [ -z "$deploy_user" ] || [ "$deploy_user" = "root" ]; then
-    if [ -n "${BITFUN_KEEP_HOME:-}" ] && [ -d "${BITFUN_KEEP_HOME}" ]; then
-      deploy_user="$(stat -c '%U' "$BITFUN_KEEP_HOME" 2>/dev/null || true)"
+    if [ -n "${OPENBITFUN_KEEP_HOME:-}" ] && [ -d "${OPENBITFUN_KEEP_HOME}" ]; then
+      deploy_user="$(stat -c '%U' "$OPENBITFUN_KEEP_HOME" 2>/dev/null || true)"
     fi
   fi
   if [ -z "$deploy_user" ] || [ "$deploy_user" = "root" ]; then
     deploy_user="$(id -un)"
   fi
 
-  bitfun_ensure_tools curl
-  echo ">>> Installing Docker as uid=$(id -u) for user=$deploy_user (mirror_mode=${BITFUN_MIRROR_MODE:-global}) ..."
-  if [ "${BITFUN_MIRROR_MODE:-}" = "cn" ]; then
-    if bitfun_mirror_install_docker_aliyun; then
+  openbitfun_ensure_tools curl
+  echo ">>> Installing Docker as uid=$(id -u) for user=$deploy_user (mirror_mode=${OPENBITFUN_MIRROR_MODE:-global}) ..."
+  if [ "${OPENBITFUN_MIRROR_MODE:-}" = "cn" ]; then
+    if openbitfun_mirror_install_docker_aliyun; then
       installed=1
     else
       echo ">>> Aliyun docker-ce install failed; falling back to get.docker.com mirror..."
     fi
   fi
   if [ "$installed" != "1" ]; then
-    bitfun_mirror_fetch_docker_install_script /tmp/bitfun-get-docker.sh \
-      || curl -fsSL --retry 3 https://get.docker.com -o /tmp/bitfun-get-docker.sh
+    openbitfun_mirror_fetch_docker_install_script /tmp/openbitfun-get-docker.sh \
+      || curl -fsSL --retry 3 https://get.docker.com -o /tmp/openbitfun-get-docker.sh
     if [ "$(id -u)" = "0" ]; then
-      sh /tmp/bitfun-get-docker.sh
+      sh /tmp/openbitfun-get-docker.sh
     else
-      bitfun_priv sh /tmp/bitfun-get-docker.sh
+      openbitfun_priv sh /tmp/openbitfun-get-docker.sh
     fi
-    rm -f /tmp/bitfun-get-docker.sh
+    rm -f /tmp/openbitfun-get-docker.sh
   fi
 
   if [ "$(id -u)" = "0" ]; then
     systemctl enable --now docker 2>/dev/null || service docker start
     usermod -aG docker "$deploy_user" || true
   else
-    bitfun_priv systemctl enable --now docker 2>/dev/null || bitfun_priv service docker start
-    bitfun_priv usermod -aG docker "$deploy_user"
+    openbitfun_priv systemctl enable --now docker 2>/dev/null || openbitfun_priv service docker start
+    openbitfun_priv usermod -aG docker "$deploy_user"
   fi
-  if [ "${BITFUN_MIRROR_MODE:-}" = "cn" ]; then
-    bitfun_mirror_apply_docker_daemon || true
+  if [ "${OPENBITFUN_MIRROR_MODE:-}" = "cn" ]; then
+    openbitfun_mirror_apply_docker_daemon || true
   fi
-  bitfun_fix_docker_home
+  openbitfun_fix_docker_home
   if [ "$(id -u)" = "0" ] && [ -n "$deploy_user" ] && [ "$deploy_user" != "root" ] \
-     && [ -d "$HOME/.bitfun" ]; then
-    echo ">>> Restoring ownership of $HOME/.bitfun to $deploy_user..."
-    chown -R "$deploy_user" "$HOME/.bitfun" 2>/dev/null || true
+     && [ -d "__OPENBITFUN_PRODUCT_HOME__" ]; then
+    echo ">>> Restoring ownership of __OPENBITFUN_PRODUCT_HOME__ to $deploy_user..."
+    chown -R "$deploy_user" "__OPENBITFUN_PRODUCT_HOME__" 2>/dev/null || true
   fi
 
   if docker info >/dev/null 2>&1 \
@@ -1081,36 +1089,36 @@ bitfun_install_docker_engine() {
 }
 
 # Owner of $HOME — the SSH user even when this script runs elevated with their
-# HOME preserved (BITFUN_KEEP_HOME).
-bitfun_home_owner() {
+# HOME preserved (OPENBITFUN_KEEP_HOME).
+openbitfun_home_owner() {
   stat -c '%U:%G' "$HOME" 2>/dev/null || stat -f '%Su:%Sg' "$HOME" 2>/dev/null || true
 }
 
 # Make DOCKER_CONFIG usable by whoever is running now.
 #
 # The Docker-install task runs as root but keeps the SSH user's HOME, so it used
-# to leave ~/.bitfun/docker-config (and its config.json) owned by root:root 0700.
+# to leave the product Docker config (and its config.json) owned by root:root 0700.
 # Every later unprivileged deploy then hit
 #   WARNING: Error loading config file: .../config.json: permission denied
 # and the docker CLI misparsed the command that followed. Repair ownership when
 # we have the rights, and otherwise move to a config dir we can actually read.
-bitfun_fix_docker_config() {
-  export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.bitfun/docker-config}"
+openbitfun_fix_docker_config() {
+  export DOCKER_CONFIG="${DOCKER_CONFIG:-__OPENBITFUN_DOCKER_CONFIG__}"
   mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
   if [ "$(id -u)" = "0" ]; then
     # Hand the tree back to the SSH user; root reads it either way.
     local owner
-    owner="$(bitfun_home_owner)"
+    owner="$(openbitfun_home_owner)"
     if [ -n "$owner" ] && [ "$owner" != "root:root" ]; then
       chown -R "$owner" "$DOCKER_CONFIG" 2>/dev/null || true
     fi
   elif [ ! -r "$DOCKER_CONFIG" ] || [ ! -w "$DOCKER_CONFIG" ] \
     || { [ -e "$DOCKER_CONFIG/config.json" ] && [ ! -r "$DOCKER_CONFIG/config.json" ]; }; then
     echo ">>> $DOCKER_CONFIG is not usable by $(id -un) (left root-owned by an earlier install)."
-    bitfun_priv chown -R "$(id -un):$(id -gn)" "$DOCKER_CONFIG" 2>/dev/null || true
+    openbitfun_priv chown -R "$(id -un):$(id -gn)" "$DOCKER_CONFIG" 2>/dev/null || true
     if [ ! -r "$DOCKER_CONFIG" ] || [ ! -w "$DOCKER_CONFIG" ] \
       || { [ -e "$DOCKER_CONFIG/config.json" ] && [ ! -r "$DOCKER_CONFIG/config.json" ]; }; then
-      DOCKER_CONFIG="$HOME/.bitfun/docker-config-$(id -u)"
+      DOCKER_CONFIG="__OPENBITFUN_DOCKER_CONFIG__-$(id -u)"
       export DOCKER_CONFIG
       mkdir -p "$DOCKER_CONFIG"
       echo ">>> Could not repair it; using DOCKER_CONFIG=$DOCKER_CONFIG instead."
@@ -1119,8 +1127,8 @@ bitfun_fix_docker_config() {
   chmod 700 "$DOCKER_CONFIG" 2>/dev/null || true
 }
 
-bitfun_fix_docker_home() {
-  bitfun_fix_docker_config
+openbitfun_fix_docker_home() {
+  openbitfun_fix_docker_config
   if [ -e "$HOME/.docker" ] && [ ! -w "$HOME/.docker" ]; then
     echo ">>> $HOME/.docker is not writable (often root-owned buildx lock)."
     echo ">>> Fixing ownership..."
@@ -1131,7 +1139,7 @@ bitfun_fix_docker_home() {
       chown -R "$owner" "$HOME/.docker" 2>/dev/null \
         || chown -R "$(id -un):$(id -gn)" "$HOME/.docker"
     else
-      bitfun_priv chown -R "$(id -un):$(id -gn)" "$HOME/.docker"
+      openbitfun_priv chown -R "$(id -un):$(id -gn)" "$HOME/.docker"
     fi
   fi
   if [ -e "$HOME/.docker" ] && [ ! -w "$HOME/.docker" ]; then
@@ -1139,7 +1147,7 @@ bitfun_fix_docker_home() {
   fi
 }
 
-bitfun_start_docker_daemon() {
+openbitfun_start_docker_daemon() {
   if docker info >/dev/null 2>&1 || sudo -n docker info >/dev/null 2>&1; then return 0; fi
   echo ">>> Starting Docker daemon..."
   if [ "$(id -u)" = "0" ]; then
@@ -1153,34 +1161,34 @@ bitfun_start_docker_daemon() {
   sleep 1
 }
 
-# Sets BITFUN_DOCKER_MODE to: direct | sg | sudo
-bitfun_resolve_docker_mode() {
-  bitfun_fix_docker_home
-  bitfun_start_docker_daemon
+# Sets OPENBITFUN_DOCKER_MODE to: direct | sg | sudo
+openbitfun_resolve_docker_mode() {
+  openbitfun_fix_docker_home
+  openbitfun_start_docker_daemon
   if docker info >/dev/null 2>&1; then
-    BITFUN_DOCKER_MODE=direct
+    OPENBITFUN_DOCKER_MODE=direct
     return 0
   fi
   if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
     if sg docker -c 'docker info' >/dev/null 2>&1; then
-      BITFUN_DOCKER_MODE=sg
+      OPENBITFUN_DOCKER_MODE=sg
       return 0
     fi
   elif getent group docker 2>/dev/null | grep -qE "(^|:|,)$(id -un)(,|$)"; then
     echo ">>> User is in docker group but session has not activated it; using sg docker."
     if sg docker -c 'docker info' >/dev/null 2>&1; then
-      BITFUN_DOCKER_MODE=sg
+      OPENBITFUN_DOCKER_MODE=sg
       return 0
     fi
   fi
   if sudo -n docker info >/dev/null 2>&1; then
     echo ">>> Using passwordless sudo for Docker."
-    BITFUN_DOCKER_MODE=sudo
+    OPENBITFUN_DOCKER_MODE=sudo
     return 0
   fi
   echo ">>> Docker needs interactive sudo (enter password if prompted)..."
   if sudo docker info >/dev/null 2>&1; then
-    BITFUN_DOCKER_MODE=sudo
+    OPENBITFUN_DOCKER_MODE=sudo
     return 0
   fi
   echo "ERROR: cannot reach Docker daemon" >&2
@@ -1190,7 +1198,7 @@ bitfun_resolve_docker_mode() {
 # POSIX single-quote each argument so `sg -c` cannot re-split or glob them.
 # `sg docker -c "docker $*"` loses argument boundaries: a context path with a
 # space, or a `-f '{{.State.Running}}'` format string, arrives mangled.
-bitfun_shell_join() {
+openbitfun_shell_join() {
   local out="" arg
   for arg in "$@"; do
     out="$out'$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")' "
@@ -1198,9 +1206,9 @@ bitfun_shell_join() {
   printf '%s' "$out"
 }
 
-bitfun_docker() {
-  case "${BITFUN_DOCKER_MODE:-direct}" in
-    sg) sg docker -c "$(bitfun_shell_join docker "$@")" ;;
+openbitfun_docker() {
+  case "${OPENBITFUN_DOCKER_MODE:-direct}" in
+    sg) sg docker -c "$(openbitfun_shell_join docker "$@")" ;;
     sudo)
       if sudo -n true >/dev/null 2>&1; then sudo -n docker "$@"; else sudo docker "$@"; fi
       ;;
@@ -1208,16 +1216,24 @@ bitfun_docker() {
   esac
 }
 
-"#
+"#;
+    helpers
+        .replace("__OPENBITFUN_PRODUCT_HOME__", &product_home_shell_path(&[]))
+        .replace(
+            "__OPENBITFUN_DOCKER_CONFIG__",
+            &product_home_shell_path(&["docker-config"]),
+        )
 }
 
 /// Interactive driver: prepare (TTY/sudo OK) → nohup body → tail -f log.
 fn interactive_driver_script(stem: &str, kind: &str) -> String {
     let helpers = prepare_helpers_bash();
+    let deploy_state_dir = deploy_state_relative_dir();
+    let docker_config = product_home_shell_path(&["docker-config"]);
     format!(
         r#"#!/usr/bin/env bash
 set -euo pipefail
-D="$HOME/{DEPLOY_STATE_DIR}"
+D="$HOME/{deploy_state_dir}"
 STEM="{stem}"
 LOG="$D/$STEM.log"
 PIDF="$D/$STEM.pid"
@@ -1230,18 +1246,18 @@ DRIVER_PIDF="$D/$STEM.driver.pid"
 echo $$ >"$DRIVER_PIDF"
 {helpers}
 
-echo ">>> BitFun relay {kind}: interactive prepare"
+echo ">>> OpenBitFun Relay {kind}: interactive prepare"
 echo ">>> Closing the wizard stops this task."
 # Preserve the SSH user's home across root elevation (su - would otherwise use /root).
-export BITFUN_KEEP_HOME="${{BITFUN_KEEP_HOME:-$HOME}}"
+export OPENBITFUN_KEEP_HOME="${{OPENBITFUN_KEEP_HOME:-$HOME}}"
 # install: elevate to root first (passwordless sudo su - when available).
 if [ "{kind}" = "install" ]; then
-  bitfun_elevate_install_driver "$D/$STEM.sh"
+  openbitfun_elevate_install_driver "$D/$STEM.sh"
 fi
-# After elevation HOME may need restoring from BITFUN_KEEP_HOME.
-if [ -n "${{BITFUN_KEEP_HOME:-}}" ]; then
-  export HOME="$BITFUN_KEEP_HOME"
-  D="$HOME/{DEPLOY_STATE_DIR}"
+# After elevation HOME may need restoring from OPENBITFUN_KEEP_HOME.
+if [ -n "${{OPENBITFUN_KEEP_HOME:-}}" ]; then
+  export HOME="$OPENBITFUN_KEEP_HOME"
+  D="$HOME/{deploy_state_dir}"
   LOG="$D/$STEM.log"
   PIDF="$D/$STEM.pid"
   BODY="$D/$STEM-body.sh"
@@ -1261,54 +1277,54 @@ echo ">>> prepare starting (uid=$(id -u) home=$HOME)" | tee -a "$LOG"
 cleanup_prepare() {{ rm -f "$PREPARE_FLAG" "$DRIVER_PIDF"; }}
 trap cleanup_prepare EXIT
 # Region/mirrors before apt tool install and Docker/GitHub downloads.
-export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
-export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+export OPENBITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export OPENBITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
 if [ -f "$MIRROR_MODE_FILE" ]; then
   requested_mirror_mode="$(tr -d '[:space:]' < "$MIRROR_MODE_FILE")"
   case "$requested_mirror_mode" in
-    auto|cn|global) export BITFUN_MIRROR="$requested_mirror_mode" ;;
+    auto|cn|global) export OPENBITFUN_MIRROR="$requested_mirror_mode" ;;
     *) echo "ERROR: invalid relay mirror mode: $requested_mirror_mode" >&2; exit 1 ;;
   esac
 fi
-bitfun_mirror_init
-export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
+openbitfun_mirror_init
+export DOCKER_CONFIG="${{DOCKER_CONFIG:-{docker_config}}}"
 # May exist root-owned from an older Docker-install run; repair or relocate it
 # instead of letting an unwritable dir abort the run under `set -e`.
-bitfun_fix_docker_config
+openbitfun_fix_docker_config
 
 # Deploy is genuinely one-click: if Docker is absent, install it through
-# bitfun_priv/bitfun_mirror_priv (interactive sudo is allowed), then continue as
+# openbitfun_priv/openbitfun_mirror_priv (interactive sudo is allowed), then continue as
 # the original SSH user so cancellation can still signal the detached task.
 if [ "{kind}" = "deploy" ] && ! command -v docker >/dev/null 2>&1; then
   echo ">>> Docker is not installed; installing it before pulling Relay..." | tee -a "$LOG"
-  bitfun_install_docker_engine 2>&1 | tee -a "$LOG"
+  openbitfun_install_docker_engine 2>&1 | tee -a "$LOG"
 fi
 
 # Standalone install resolves nothing; deploy always needs live daemon access.
 if [ "{kind}" = "install" ]; then
-  BITFUN_DOCKER_MODE=direct
+  OPENBITFUN_DOCKER_MODE=direct
 else
-  bitfun_resolve_docker_mode
+  openbitfun_resolve_docker_mode
 fi
-export BITFUN_DOCKER_MODE
+export OPENBITFUN_DOCKER_MODE
 
 # Docker install runs in the foreground. The image pull/start task goes through
 # nohup so the wizard can poll and follow its log.
 if [ "{kind}" = "install" ]; then
   echo ">>> Installing Docker..." | tee -a "$LOG"
-  export BITFUN_KEEP_HOME="${{BITFUN_KEEP_HOME:-$HOME}}"
+  export OPENBITFUN_KEEP_HOME="${{OPENBITFUN_KEEP_HOME:-$HOME}}"
   set +e
   if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
-      BITFUN_MIRROR="${{BITFUN_MIRROR:-auto}}" \
-      BITFUN_MIRROR_MODE="${{BITFUN_MIRROR_MODE:-}}" \
-      BITFUN_MIRROR_REASON="${{BITFUN_MIRROR_REASON:-}}" \
+    stdbuf -oL -eL env OPENBITFUN_KEEP_HOME="$OPENBITFUN_KEEP_HOME" \
+      OPENBITFUN_MIRROR="${{OPENBITFUN_MIRROR:-auto}}" \
+      OPENBITFUN_MIRROR_MODE="${{OPENBITFUN_MIRROR_MODE:-}}" \
+      OPENBITFUN_MIRROR_REASON="${{OPENBITFUN_MIRROR_REASON:-}}" \
       bash "$BODY" 2>&1 | tee -a "$LOG"
   else
-    env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
-      BITFUN_MIRROR="${{BITFUN_MIRROR:-auto}}" \
-      BITFUN_MIRROR_MODE="${{BITFUN_MIRROR_MODE:-}}" \
-      BITFUN_MIRROR_REASON="${{BITFUN_MIRROR_REASON:-}}" \
+    env OPENBITFUN_KEEP_HOME="$OPENBITFUN_KEEP_HOME" \
+      OPENBITFUN_MIRROR="${{OPENBITFUN_MIRROR:-auto}}" \
+      OPENBITFUN_MIRROR_MODE="${{OPENBITFUN_MIRROR_MODE:-}}" \
+      OPENBITFUN_MIRROR_REASON="${{OPENBITFUN_MIRROR_REASON:-}}" \
       bash "$BODY" 2>&1 | tee -a "$LOG"
   fi
   code=${{PIPESTATUS[0]}}
@@ -1325,10 +1341,10 @@ fi
 
 if command -v stdbuf >/dev/null 2>&1; then RUNNER=(stdbuf -oL -eL bash); else RUNNER=(bash); fi
 echo ">>> Starting background task (log: $LOG)" | tee -a "$LOG"
-nohup env BITFUN_DOCKER_MODE="$BITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG" \
-  BITFUN_MIRROR="${{BITFUN_MIRROR:-auto}}" \
-  BITFUN_MIRROR_MODE="${{BITFUN_MIRROR_MODE:-}}" \
-  BITFUN_MIRROR_REASON="${{BITFUN_MIRROR_REASON:-}}" \
+nohup env OPENBITFUN_DOCKER_MODE="$OPENBITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG" \
+  OPENBITFUN_MIRROR="${{OPENBITFUN_MIRROR:-auto}}" \
+  OPENBITFUN_MIRROR_MODE="${{OPENBITFUN_MIRROR_MODE:-}}" \
+  OPENBITFUN_MIRROR_REASON="${{OPENBITFUN_MIRROR_REASON:-}}" \
   "${{RUNNER[@]}}" "$BODY" >"$LOG" 2>&1 < /dev/null &
 echo $! >"$PIDF"
 # The body pid now drives liveness; `exec tail` below would leave a stale driver
@@ -1338,7 +1354,6 @@ trap - EXIT
 echo ">>> Following log..."
 exec tail -n +1 -f "$LOG"
 "#,
-        DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         stem = stem,
         kind = kind,
         helpers = helpers,
@@ -1350,18 +1365,19 @@ exec tail -n +1 -f "$LOG"
 /// Docker install body (usually run as root after driver elevation).
 fn install_docker_body_script() -> String {
     let helpers = prepare_helpers_bash();
+    let docker_config = product_home_shell_path(&["docker-config"]);
     format!(
         r#"#!/usr/bin/env bash
 set -euo pipefail
 {helpers}
 # Prefer the original SSH user's home (set by elevated driver).
-if [ -n "${{BITFUN_KEEP_HOME:-}}" ]; then export HOME="$BITFUN_KEEP_HOME"; fi
-export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
+if [ -n "${{OPENBITFUN_KEEP_HOME:-}}" ]; then export HOME="$OPENBITFUN_KEEP_HOME"; fi
+export DOCKER_CONFIG="${{DOCKER_CONFIG:-{docker_config}}}"
 mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
-export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
-export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
-bitfun_mirror_init
-bitfun_install_docker_engine
+export OPENBITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
+export OPENBITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+openbitfun_mirror_init
+openbitfun_install_docker_engine
 echo {TASK_DONE_MARKER}
 "#,
         helpers = helpers,
@@ -1381,11 +1397,11 @@ echo {TASK_DONE_MARKER}
 fn release_binary_deploy_bash() -> String {
     format!(
         r#"
-export BITFUN_GITHUB_RELEASE_BASE="{RELEASE_BASE}"
-export BITFUN_OPENBITFUN_RELEASE_BASE="{OPENBITFUN_RELEASE_BASE}"
-# --- begin BitFun relay release-download.sh ---
+export OPENBITFUN_GITHUB_RELEASE_BASE="{RELEASE_BASE}"
+export OPENBITFUN_OPENBITFUN_RELEASE_BASE="{OPENBITFUN_RELEASE_BASE}"
+# --- begin OpenBitFun Relay release-download.sh ---
 {release_download}
-# --- end BitFun relay release-download.sh ---
+# --- end OpenBitFun Relay release-download.sh ---
 "#,
         RELEASE_BASE = RELEASE_BASE,
         OPENBITFUN_RELEASE_BASE = OPENBITFUN_RELEASE_BASE,
@@ -1502,35 +1518,37 @@ async fn fetch_text(client: &reqwest::Client, url: &str) -> Option<String> {
 fn deploy_body_script_with_image(port: u16, descriptor: &RelayImageDescriptor) -> String {
     let helpers = prepare_helpers_bash();
     let release_binary_deploy = release_binary_deploy_bash();
+    let deploy_state_dir = deploy_state_relative_dir();
+    let docker_config = product_home_shell_path(&["docker-config"]);
     format!(
         r#"#!/usr/bin/env bash
 set -euo pipefail
 {helpers}
 {release_binary_deploy}
-export BITFUN_RELAY_IMAGE={image}
-export BITFUN_RELAY_IMAGE_DIGEST={digest}
-export BITFUN_RELEASE_TAG={tag}
-export BITFUN_RELEASE_VERSION={version}
-export BITFUN_REQUIRE_IMAGE_DIGEST=1
-export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
-BITFUN_DOCKER_MODE="${{BITFUN_DOCKER_MODE:-direct}}"
+export OPENBITFUN_RELAY_IMAGE={image}
+export OPENBITFUN_RELAY_IMAGE_DIGEST={digest}
+export OPENBITFUN_RELEASE_TAG={tag}
+export OPENBITFUN_RELEASE_VERSION={version}
+export OPENBITFUN_REQUIRE_IMAGE_DIGEST=1
+export DOCKER_CONFIG="${{DOCKER_CONFIG:-{docker_config}}}"
+OPENBITFUN_DOCKER_MODE="${{OPENBITFUN_DOCKER_MODE:-direct}}"
 # Repair DOCKER_CONFIG unconditionally: when the driver already resolved a
-# non-direct mode, bitfun_resolve_docker_mode (which normally does this) is
+# non-direct mode, openbitfun_resolve_docker_mode (which normally does this) is
 # skipped below, and the docker CLI then fails on an unreadable config.json.
-bitfun_fix_docker_config
-if [ "$BITFUN_DOCKER_MODE" = "direct" ] && ! docker info >/dev/null 2>&1; then
-  bitfun_resolve_docker_mode
+openbitfun_fix_docker_config
+if [ "$OPENBITFUN_DOCKER_MODE" = "direct" ] && ! docker info >/dev/null 2>&1; then
+  openbitfun_resolve_docker_mode
 fi
 # Prefer the port staged by the desktop wizard; fall back to embedded default.
-PORT_FILE="$HOME/{DEPLOY_STATE_DIR}/relay.port"
+PORT_FILE="$HOME/{deploy_state_dir}/relay.port"
 if [ -f "$PORT_FILE" ]; then
   RELAY_PORT="$(tr -d '[:space:]' < "$PORT_FILE")"
 fi
 RELAY_PORT="${{RELAY_PORT:-{port}}}"
 export RELAY_PORT
 echo ">>> Using RELAY_PORT=$RELAY_PORT"
-bitfun_mirror_init
-bitfun_try_release_deploy
+openbitfun_mirror_init
+openbitfun_try_release_deploy
 echo {TASK_DONE_MARKER}
 "#,
         helpers = helpers,
@@ -1539,7 +1557,6 @@ echo {TASK_DONE_MARKER}
         digest = shell_quote_posix(&descriptor.digest),
         tag = shell_quote_posix(&descriptor.tag),
         version = shell_quote_posix(&descriptor.version),
-        DEPLOY_STATE_DIR = DEPLOY_STATE_DIR,
         port = port,
         TASK_DONE_MARKER = TASK_DONE_MARKER,
     )
@@ -1570,8 +1587,8 @@ mod tests {
     #[test]
     fn embedded_mirror_script_exposes_init_and_cn_defaults() {
         assert!(
-            RELAY_MIRROR_SH.contains("bitfun_mirror_init"),
-            "mirror.sh must define bitfun_mirror_init"
+            RELAY_MIRROR_SH.contains("openbitfun_mirror_init"),
+            "mirror.sh must define openbitfun_mirror_init"
         );
         assert!(
             RELAY_MIRROR_SH.contains("rsproxy.cn"),
@@ -1582,38 +1599,38 @@ mod tests {
             "mirror.sh must default GitHub proxy"
         );
         assert!(
-            RELAY_MIRROR_SH.contains("bitfun_mirror_country_via_bash_tcp"),
+            RELAY_MIRROR_SH.contains("openbitfun_mirror_country_via_bash_tcp"),
             "mirror.sh must keep a country fallback for minimal hosts without curl"
         );
         assert!(
-            RELAY_MIRROR_SH.contains("bitfun_mirror_restore_host"),
+            RELAY_MIRROR_SH.contains("openbitfun_mirror_restore_host"),
             "mirror.sh must support switching a managed host back to global mode"
         );
         assert!(
-            RELAY_MIRROR_SH.contains("BITFUN_MIRROR_REASON"),
+            RELAY_MIRROR_SH.contains("OPENBITFUN_MIRROR_REASON"),
             "mirror selection must log why auto detection chose its route"
         );
         assert!(
-            !RELAY_MIRROR_SH.contains("data[\"bitfun-cn-mirror\"]"),
+            !RELAY_MIRROR_SH.contains("data[\"openbitfun-cn-mirror\"]"),
             "daemon.json must contain only dockerd-supported directives"
         );
         assert!(
-            !RELAY_MIRROR_SH.contains("bitfun_mirror_apply_cargo_config"),
+            !RELAY_MIRROR_SH.contains("openbitfun_mirror_apply_cargo_config"),
             "relay deploy must not rewrite the SSH user's global Cargo config"
         );
         let helpers = prepare_helpers_bash();
         assert!(
-            helpers.contains("bitfun_mirror_init"),
+            helpers.contains("openbitfun_mirror_init"),
             "prepare helpers must embed mirror.sh"
         );
         assert!(
-            helpers.contains("bitfun_install_docker_engine"),
+            helpers.contains("openbitfun_install_docker_engine"),
             "prepare helpers must support install-and-continue deployment"
         );
         let driver = interactive_driver_script("deploy", "deploy");
         assert!(
             driver.contains("relay.mirror-mode")
-                && driver.contains("auto|cn|global) export BITFUN_MIRROR"),
+                && driver.contains("auto|cn|global) export OPENBITFUN_MIRROR"),
             "the wizard's explicit mirror choice must reach remote preparation"
         );
     }
@@ -1779,36 +1796,36 @@ mod tests {
     }
 
     /// The Docker-install task runs as root with the SSH user's HOME, so it
-    /// creates ~/.bitfun/docker-config root-owned. Left that way, the next
+    /// creates ~/.openbitfun/docker-config root-owned. Left that way, the next
     /// unprivileged deploy hits `config.json: permission denied` and the docker
     /// CLI can mis-dispatch the pull that follows.
     #[test]
     fn docker_config_ownership_is_repaired_across_privilege_levels() {
         let helpers = prepare_helpers_bash();
         assert!(
-            helpers.contains("bitfun_fix_docker_config"),
+            helpers.contains("openbitfun_fix_docker_config"),
             "helpers must expose a DOCKER_CONFIG repair"
         );
 
         let install = install_docker_body_script();
         assert!(
-            install.contains("bitfun_install_docker_engine"),
+            install.contains("openbitfun_install_docker_engine"),
             "standalone install must use the shared Docker installer"
         );
         assert!(
-            helpers.contains(r#"chown -R "$deploy_user" "$HOME/.bitfun""#),
-            "root install must hand ~/.bitfun back to the SSH user"
+            helpers.contains(r#"chown -R "$deploy_user" "$HOME/.openbitfun""#),
+            "root install must hand ~/.openbitfun back to the SSH user"
         );
 
-        // The driver exports BITFUN_DOCKER_MODE, so the body skips
-        // bitfun_resolve_docker_mode (which is the other caller of the repair)
+        // The driver exports OPENBITFUN_DOCKER_MODE, so the body skips
+        // openbitfun_resolve_docker_mode (which is the other caller of the repair)
         // for every non-direct mode. It has to repair the config itself.
         let body = deploy_body_script_with_image(9700, &test_image_descriptor());
         let repair = body
-            .find("bitfun_fix_docker_config")
+            .find("openbitfun_fix_docker_config")
             .expect("deploy body must repair DOCKER_CONFIG");
         let mode_check = body
-            .find(r#"if [ "$BITFUN_DOCKER_MODE" = "direct" ]"#)
+            .find(r#"if [ "$OPENBITFUN_DOCKER_MODE" = "direct" ]"#)
             .expect("deploy body must keep the direct-mode probe");
         assert!(
             repair < mode_check,
@@ -1818,7 +1835,7 @@ mod tests {
         let driver = interactive_driver_script("deploy", "deploy");
         assert!(
             driver.contains("Docker is not installed; installing it before pulling Relay")
-                && driver.contains("bitfun_install_docker_engine"),
+                && driver.contains("openbitfun_install_docker_engine"),
             "the deploy button must install a missing Docker engine and continue"
         );
         assert!(
@@ -1840,7 +1857,7 @@ mod tests {
             "sg path must not re-split arguments through an unquoted $*"
         );
         assert!(
-            helpers.contains("bitfun_shell_join"),
+            helpers.contains("openbitfun_shell_join"),
             "sg path must quote each argument"
         );
     }
@@ -1851,7 +1868,7 @@ mod tests {
         let helpers = to_unix_script(&prepare_helpers_bash());
         let script = format!(
             r#"{helpers}
-sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '*')"
+sh -c "$(openbitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '*')"
 "#
         );
         let output = std::process::Command::new("bash")
@@ -1874,21 +1891,21 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
     #[test]
     fn one_click_uses_digest_pinned_prebuilt_images_and_regional_routes() {
         let script = release_binary_deploy_bash();
-        assert!(script.contains("BITFUN_RELAY_IMAGE_DIGEST"));
-        assert!(script.contains("m.daocloud.io/${BITFUN_RELAY_IMAGE}"));
-        assert!(script.contains("ghcr.nju.edu.cn/${BITFUN_RELAY_IMAGE#ghcr.io/}"));
+        assert!(script.contains("OPENBITFUN_RELAY_IMAGE_DIGEST"));
+        assert!(script.contains("m.daocloud.io/${OPENBITFUN_RELAY_IMAGE}"));
+        assert!(script.contains("ghcr.nju.edu.cn/${OPENBITFUN_RELAY_IMAGE#ghcr.io/}"));
         assert!(script.contains("official GHCR fallback"));
-        assert!(script.contains("BITFUN_GITHUB_HEALTHY_BPS"));
-        assert!(script.contains("bitfun_probe_github_throughput"));
+        assert!(script.contains("OPENBITFUN_GITHUB_HEALTHY_BPS"));
+        assert!(script.contains("openbitfun_probe_github_throughput"));
         assert!(script.contains("524288"));
         assert!(script.contains("pull --platform"));
-        assert!(script.contains("bitfun_restore_previous_relay"));
-        assert!(script.contains("--name bitfun-relay"));
+        assert!(script.contains("openbitfun_restore_previous_relay"));
+        assert!(script.contains("--name openbitfun-relay"));
         assert!(script.contains("relay-server_relay-db:/app/data"));
         assert!(script.contains("RELAY_PAGE_PUBLIC_BASE_URL"));
         assert!(script.contains("RELAY_PAGE_AUTH_BASE_URL"));
-        assert!(script.contains("trap 'bitfun_restore_previous_relay"));
-        assert!(script.contains("name=^bitfun-relay-before-image-"));
+        assert!(script.contains("trap 'openbitfun_restore_previous_relay"));
+        assert!(script.contains("name=^openbitfun-relay-before-image-"));
         assert!(!script.contains("docker build"));
         assert!(!script.contains("cargo build"));
         assert!(
@@ -1908,7 +1925,7 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
             .expect("health failure branch")
             .1;
         let logs = failure
-            .split_once("logs --tail 40 bitfun-relay")
+            .split_once("logs --tail 40 openbitfun-relay")
             .expect("failure branch must dump container logs")
             .1;
         assert!(
@@ -1957,24 +1974,27 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
         }
 
         let body = deploy_body_script_with_image(9700, &descriptor);
-        assert!(body.contains(&format!("export BITFUN_RELAY_IMAGE={}", descriptor.image)));
         assert!(body.contains(&format!(
-            "export BITFUN_RELAY_IMAGE_DIGEST={}",
+            "export OPENBITFUN_RELAY_IMAGE={}",
+            descriptor.image
+        )));
+        assert!(body.contains(&format!(
+            "export OPENBITFUN_RELAY_IMAGE_DIGEST={}",
             descriptor.digest
         )));
-        assert!(body.contains("export BITFUN_RELEASE_TAG=v1.2.3"));
-        assert!(body.contains("export BITFUN_RELEASE_VERSION=1.2.3"));
-        assert!(body.contains("export BITFUN_REQUIRE_IMAGE_DIGEST=1"));
-        assert!(!body.contains("bitfun_sync_source"));
-        assert!(!body.contains("bitfun_run_deploy_sh"));
+        assert!(body.contains("export OPENBITFUN_RELEASE_TAG=v1.2.3"));
+        assert!(body.contains("export OPENBITFUN_RELEASE_VERSION=1.2.3"));
+        assert!(body.contains("export OPENBITFUN_REQUIRE_IMAGE_DIGEST=1"));
+        assert!(!body.contains("openbitfun_sync_source"));
+        assert!(!body.contains("openbitfun_run_deploy_sh"));
     }
 
-    /// Same fixture as the CLI updater, produced with the real `minisign` CLI.
+    /// Same fixture as the CLI updater, produced with the Tauri signer CLI.
     /// Descriptor bytes from any origin must pass this verification before a
     /// digest is sent to a relay host.
-    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
-    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
-    const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERENTQzQUM5RUY0NTIzRTMKUldUakkwWHZ5VHBVM1NOMXJWMHhLVlljSDBOY2x4YlpxVHA2clN1NEJPMWcyY2Qvd2U4VUR2b3AK";
+    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUakkwWHZ5VHBVM2RVVFdoR3FNZDltSWNUeEQ1K2ZnNWRUSnYxWk5lUkZzd0h0MkdzSUhUSlV6a0haUTdNZm1aemM5QVBQWW50UWgvaWpFcEp1Zkp4SERWdnhIc1g2YUFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NDg2NTU4CWZpbGU6Lm9wZW5iaXRmdW4tbWluaXNpZ24tZml4dHVyZS50eHQKa1QxdDQ3bWtLVlhaZUdFSjR4R0V5R1Z3REVnUlI0RGJqbHFoZkVHdkdLSlFyTGJ5Z05JRTI5V3dwdXRkSFpZckUrK0RaUVVJYUJod1dzcmVydHZnQXc9PQo=";
+    const FIXTURE_DATA: &[u8] = b"hello-openbitfun\n";
 
     #[test]
     fn checksum_signature_verifies_and_rejects_tampering() {
@@ -2023,9 +2043,9 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
 set -euo pipefail
 source "$1"
 export TRACE="$2"
-export BITFUN_MIRROR_MODE=cn
-export BITFUN_RELAY_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-bitfun_image_docker_with_timeout() {
+export OPENBITFUN_MIRROR_MODE=cn
+export OPENBITFUN_RELAY_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+openbitfun_image_docker_with_timeout() {
   shift
   printf '%s\n' "$*" >>"$TRACE"
   case "$*" in
@@ -2034,12 +2054,12 @@ bitfun_image_docker_with_timeout() {
     *) return 1 ;;
   esac
 }
-bitfun_image_docker() {
+openbitfun_image_docker() {
   if [ "$1 $2" = "image inspect" ]; then echo amd64; return 0; fi
   return 1
 }
-selected="$(bitfun_pull_relay_image linux/amd64)"
-test "$selected" = "m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
+selected="$(openbitfun_pull_relay_image linux/amd64)"
+test "$selected" = "m.daocloud.io/ghcr.io/gcwing/openbitfun-relay-server@$OPENBITFUN_RELAY_IMAGE_DIGEST"
 "#,
             )
             .arg("image-route-failover")
@@ -2056,8 +2076,8 @@ test "$selected" = "m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@$BITFUN_REL
         let pulls = std::fs::read_to_string(trace_path).expect("read pull trace");
         let routes: Vec<_> = pulls.lines().collect();
         assert_eq!(routes.len(), 2);
-        assert!(routes[0].contains("ghcr.nju.edu.cn/gcwing/bitfun-relay-server@sha256:"));
-        assert!(routes[1].contains("m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@sha256:"));
+        assert!(routes[0].contains("ghcr.nju.edu.cn/gcwing/openbitfun-relay-server@sha256:"));
+        assert!(routes[1].contains("m.daocloud.io/ghcr.io/gcwing/openbitfun-relay-server@sha256:"));
     }
 
     #[cfg(unix)]
@@ -2073,22 +2093,22 @@ test "$selected" = "m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@$BITFUN_REL
                 r#"
 set -euo pipefail
 source "$1"
-export BITFUN_MIRROR_REQUESTED_MODE=auto
-export BITFUN_RELAY_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-bitfun_probe_github_throughput() { echo "$MOCK_SPEED"; }
-bitfun_image_docker_with_timeout() { return 0; }
-bitfun_image_docker() {
+export OPENBITFUN_MIRROR_REQUESTED_MODE=auto
+export OPENBITFUN_RELAY_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+openbitfun_probe_github_throughput() { echo "$MOCK_SPEED"; }
+openbitfun_image_docker_with_timeout() { return 0; }
+openbitfun_image_docker() {
   if [ "$1 $2" = "image inspect" ]; then echo amd64; return 0; fi
   return 1
 }
 
 MOCK_SPEED=524288
-healthy="$(bitfun_pull_relay_image linux/amd64)"
-test "$healthy" = "ghcr.io/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
+healthy="$(openbitfun_pull_relay_image linux/amd64)"
+test "$healthy" = "ghcr.io/gcwing/openbitfun-relay-server@$OPENBITFUN_RELAY_IMAGE_DIGEST"
 
 MOCK_SPEED=524287
-slow="$(bitfun_pull_relay_image linux/amd64)"
-test "$slow" = "ghcr.nju.edu.cn/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
+slow="$(openbitfun_pull_relay_image linux/amd64)"
+test "$slow" = "ghcr.nju.edu.cn/gcwing/openbitfun-relay-server@$OPENBITFUN_RELAY_IMAGE_DIGEST"
 "#,
             )
             .arg("image-speed-policy")
@@ -2130,15 +2150,15 @@ test "$slow" = "ghcr.nju.edu.cn/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_D
                 r#"
 set -euo pipefail
 export HOME="$2/home"
-export BITFUN_DOCKER_DAEMON_JSON="$2/etc/docker/daemon.json"
+export OPENBITFUN_DOCKER_DAEMON_JSON="$2/etc/docker/daemon.json"
 mkdir -p "$HOME"
 source "$1"
-bitfun_mirror_priv() { "$@"; }
-bitfun_mirror_backup_file() { :; }
-bitfun_mirror_restart_docker_if_needed() { :; }
-bitfun_mirror_write_docker_daemon_json \
+openbitfun_mirror_priv() { "$@"; }
+openbitfun_mirror_backup_file() { :; }
+openbitfun_mirror_restart_docker_if_needed() { :; }
+openbitfun_mirror_write_docker_daemon_json \
   "https://docker.1ms.run https://dockerproxy.net"
-python3 - "$BITFUN_DOCKER_DAEMON_JSON" <<'PY'
+python3 - "$OPENBITFUN_DOCKER_DAEMON_JSON" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     data = json.load(f)
@@ -2148,10 +2168,10 @@ assert data["registry-mirrors"] == [
     "https://docker.1ms.run",
     "https://dockerproxy.net",
 ]
-assert "bitfun-cn-mirror" not in data
+assert "openbitfun-cn-mirror" not in data
 PY
-bitfun_mirror_remove_docker_daemon
-python3 - "$BITFUN_DOCKER_DAEMON_JSON" <<'PY'
+openbitfun_mirror_remove_docker_daemon
+python3 - "$OPENBITFUN_DOCKER_DAEMON_JSON" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     data = json.load(f)

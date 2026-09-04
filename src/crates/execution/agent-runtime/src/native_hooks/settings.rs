@@ -1,6 +1,6 @@
 //! Hook settings document parsing.
 //!
-//! BitFun reads the same `hooks.json` document shape as Codex:
+//! OpenBitFun reads the same `hooks.json` document shape as Codex:
 //!
 //! ```json
 //! {
@@ -355,7 +355,7 @@ impl fmt::Display for AgentHookSettingsIssue {
                 handler_type,
             } => write!(
                 f,
-                "Hook handler type '{handler_type}' under '{event}' is recognized but not executable by BitFun; only 'command' handlers run: {source}"
+                "Hook handler type '{handler_type}' under '{event}' is recognized but not executable by OpenBitFun; only 'command' handlers run: {source}"
             ),
             AgentHookSettingsIssue::HandlerLimitExceeded { source } => write!(
                 f,
@@ -605,7 +605,7 @@ fn parse_handler(handler: &Value) -> ParsedHandler {
     match handler_type {
         "command" => {}
         // Codex recognizes prompt/agent declarations but they are not
-        // native command handlers; BitFun skips them the same way.
+        // native command handlers; OpenBitFun skips them the same way.
         "prompt" | "agent" => return ParsedHandler::Unsupported(handler_type.to_string()),
         _ => return ParsedHandler::Invalid,
     }

@@ -21,13 +21,13 @@ export const remoteConnectDialogAppearanceDescriptor: AppearanceSurfaceDescripto
     { id: 'error' },
   ],
   facets: [
-    { id: 'view', attribute: 'data-bf-view', values: ['overview', 'network', 'bot', 'account'] },
-    { id: 'group', attribute: 'data-bf-group', values: ['network', 'bot', 'account'] },
+    { id: 'view', attribute: 'data-openbitfun-view', values: ['overview', 'network', 'bot', 'account'] },
+    { id: 'group', attribute: 'data-openbitfun-group', values: ['network', 'bot', 'account'] },
   ],
   states: [
-    { id: 'authenticated', selector: { kind: 'self', suffix: '[data-bf-state~="authenticated"]' } },
-    { id: 'connected', selector: { kind: 'self', suffix: '[data-bf-state~="connected"]' } },
-    { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } },
+    { id: 'authenticated', selector: { kind: 'self', suffix: '[data-openbitfun-state~="authenticated"]' } },
+    { id: 'connected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="connected"]' } },
+    { id: 'disabled', selector: { kind: 'self', suffix: '[data-openbitfun-state~="disabled"]' } },
   ],
 };
 
@@ -50,11 +50,11 @@ export const remoteAccountPanelAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'deviceCard' },
   ],
   facets: [
-    { id: 'view', attribute: 'data-bf-view', values: ['login', 'overwrite', 'devices'] },
+    { id: 'view', attribute: 'data-openbitfun-view', values: ['login', 'overwrite', 'devices'] },
   ],
   states: [
-    { id: 'offline', selector: { kind: 'self', suffix: '[data-bf-state~="offline"]' } },
-    { id: 'current', selector: { kind: 'self', suffix: '[data-bf-state~="current"]' } },
-    { id: 'syncing', selector: { kind: 'self', suffix: '[data-bf-state~="syncing"]' } },
+    { id: 'offline', selector: { kind: 'self', suffix: '[data-openbitfun-state~="offline"]' } },
+    { id: 'current', selector: { kind: 'self', suffix: '[data-openbitfun-state~="current"]' } },
+    { id: 'syncing', selector: { kind: 'self', suffix: '[data-openbitfun-state~="syncing"]' } },
   ],
 };

@@ -1,8 +1,8 @@
 {
-  "name": "@bitfun/agent-sdk",
+  "name": "@openbitfun/agent-sdk",
   "version": "0.0.0",
   "private": true,
-  "description": "Internal TypeScript vertical slice for the BitFun Agent SDK",
+  "description": "Internal TypeScript vertical slice for the OpenBitFun Agent SDK",
   "type": "module",
   "exports": {
     ".": {

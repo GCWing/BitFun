@@ -14,7 +14,7 @@
 //!
 //! `import-user` inserts an account provisioned elsewhere (JSON from --file or
 //! stdin). The plaintext password never transits the server: the producer
-//! (e.g. a BitFun client self-deploying its relay) only sends derived
+//! (e.g. an OpenBitFun client self-deploying its relay) only sends derived
 //! artifacts — salts, the Argon2id password hash, and the wrapped master key.
 
 use anyhow::{anyhow, Result};
@@ -76,17 +76,17 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let pool = bitfun_relay_service::db::connect_for_admin(&cli.db).await?;
+    let pool = openbitfun_relay_service::db::connect_for_admin(&cli.db).await?;
 
     match cli.command {
         Command::AddUser { username, password } => {
             let password = resolve_password(password)?;
             let user_id =
-                bitfun_relay_service::admin::add_user(&pool, &username, &password).await?;
+                openbitfun_relay_service::admin::add_user(&pool, &username, &password).await?;
             println!("Created account: username='{username}' user_id={user_id}");
         }
         Command::ListUsers => {
-            let users = bitfun_relay_service::admin::list_users(&pool).await?;
+            let users = openbitfun_relay_service::admin::list_users(&pool).await?;
             if users.is_empty() {
                 println!("No accounts found.");
             } else {
@@ -101,12 +101,12 @@ async fn main() -> Result<()> {
             }
         }
         Command::DeleteUser { username } => {
-            bitfun_relay_service::admin::delete_user(&pool, &username).await?;
+            openbitfun_relay_service::admin::delete_user(&pool, &username).await?;
             println!("Deleted account: {username}");
         }
         Command::ResetPassword { username, password } => {
             let password = resolve_password(password)?;
-            bitfun_relay_service::admin::reset_password(&pool, &username, &password).await?;
+            openbitfun_relay_service::admin::reset_password(&pool, &username, &password).await?;
             println!("Password reset for: {username}");
             println!("NOTE: All previously synced sessions/settings are now unreadable");
             println!("      (they were encrypted with the old master key).");
@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
             username,
             new_username,
         } => {
-            bitfun_relay_service::admin::rename_user(&pool, &username, &new_username).await?;
+            openbitfun_relay_service::admin::rename_user(&pool, &username, &new_username).await?;
             println!("Renamed: {username} → {new_username}");
         }
         Command::ImportUser { file } => {
@@ -131,9 +131,9 @@ async fn main() -> Result<()> {
                     buf
                 }
             };
-            let import: bitfun_relay_service::admin::ImportableAccount =
+            let import: openbitfun_relay_service::admin::ImportableAccount =
                 serde_json::from_str(&json).map_err(|e| anyhow!("parse import JSON: {e}"))?;
-            let user_id = bitfun_relay_service::admin::import_user(&pool, &import).await?;
+            let user_id = openbitfun_relay_service::admin::import_user(&pool, &import).await?;
             println!(
                 "Imported account: username='{}' user_id={user_id}",
                 import.username

@@ -10,8 +10,8 @@ const items: AssistantDefaultsFilterableItem[] = [
   {
     name: 'Web scraper',
     description: 'Read structured content from a page',
-    source: 'BitFun official',
-    originalId: 'bitfun.web.scraper',
+    source: 'OpenBitFun official',
+    originalId: 'openbitfun.web.scraper',
     enabled: true,
     defaultEnabled: false,
     available: true,
@@ -38,7 +38,7 @@ describe('assistant defaults presentation', () => {
 
   it('matches names, descriptions, sources, and original ids', () => {
     expect(matchesAssistantDefaultsFilter(items[0], 'all', 'structured')).toBe(true);
-    expect(matchesAssistantDefaultsFilter(items[0], 'all', 'bitfun.web')).toBe(true);
+    expect(matchesAssistantDefaultsFilter(items[0], 'all', 'openbitfun.web')).toBe(true);
     expect(matchesAssistantDefaultsFilter(items[1], 'unavailable', 'project')).toBe(true);
     expect(matchesAssistantDefaultsFilter(items[1], 'enabled', 'project')).toBe(false);
   });

@@ -1,6 +1,6 @@
 /** Git diff view. */
 
-import { Button, Icon, IconButton, SegmentedControl } from '@bitfun/ui';
+import { Button, Icon, IconButton, SegmentedControl } from '@openbitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, Minus, EyeOff, AlertCircle } from 'lucide-react';
@@ -213,9 +213,9 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           !line.startsWith('--- ') && !line.startsWith('+++ ')) {
         lineNumber++;
         diffLines.push(
-          <div data-bf-component="git-diff-view" data-bf-part="diffLine" key={index} className={`bitfun-git-diff-view__diff-line bitfun-git-diff-view__diff-line--${lineType}`}>
-            <span data-bf-component="git-diff-view" data-bf-part="lineNumber" className="bitfun-git-diff-view__line-number">{lineNumber}</span>
-            <span data-bf-component="git-diff-view" data-bf-part="lineContent" className="bitfun-git-diff-view__line-content">{content}</span>
+          <div data-openbitfun-component="git-diff-view" data-openbitfun-part="diffLine" key={index} className={`openbitfun-git-diff-view__diff-line openbitfun-git-diff-view__diff-line--${lineType}`}>
+            <span data-openbitfun-component="git-diff-view" data-openbitfun-part="lineNumber" className="openbitfun-git-diff-view__line-number">{lineNumber}</span>
+            <span data-openbitfun-component="git-diff-view" data-openbitfun-part="lineContent" className="openbitfun-git-diff-view__line-content">{content}</span>
           </div>
         );
       }
@@ -233,9 +233,9 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
 
   if (loading) {
     return (
-      <div className={`bitfun-git-diff-view ${className}`} data-bf-component="git-diff-view" data-bf-part="root" data-bf-state="loading">
-        <div data-bf-component="git-diff-view" data-bf-part="loading" className="bitfun-git-diff-view__loading-state">
-          <div className="bitfun-git-diff-view__loading-spinner" />
+      <div className={`openbitfun-git-diff-view ${className}`} data-openbitfun-component="git-diff-view" data-openbitfun-part="root" data-openbitfun-state="loading">
+        <div data-openbitfun-component="git-diff-view" data-openbitfun-part="loading" className="openbitfun-git-diff-view__loading-state">
+          <div className="openbitfun-git-diff-view__loading-spinner" />
           <p>{t('diffView.loading')}</p>
         </div>
       </div>
@@ -244,8 +244,8 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
 
   if (error) {
     return (
-      <div className={`bitfun-git-diff-view ${className}`} data-bf-component="git-diff-view" data-bf-part="root" data-bf-state="error">
-        <div data-bf-component="git-diff-view" data-bf-part="error" className="bitfun-git-diff-view__error-state">
+      <div className={`openbitfun-git-diff-view ${className}`} data-openbitfun-component="git-diff-view" data-openbitfun-part="root" data-openbitfun-state="error">
+        <div data-openbitfun-component="git-diff-view" data-openbitfun-part="error" className="openbitfun-git-diff-view__error-state">
           <FileText size={48} />
           <h3>{t('diffView.loadFailedTitle')}</h3>
           <p>{error}</p>
@@ -258,17 +258,17 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
   }
 
   return (
-    <div className={`bitfun-git-diff-view ${className}`} data-bf-component="git-diff-view" data-bf-part="root">
-      <div className="bitfun-git-diff-view__header" data-bf-component="git-diff-view" data-bf-part="header">
-        <div data-bf-component="git-diff-view" data-bf-part="headerLeft" className="bitfun-git-diff-view__header-left">
+    <div className={`openbitfun-git-diff-view ${className}`} data-openbitfun-component="git-diff-view" data-openbitfun-part="root">
+      <div className="openbitfun-git-diff-view__header" data-openbitfun-component="git-diff-view" data-openbitfun-part="header">
+        <div data-openbitfun-component="git-diff-view" data-openbitfun-part="headerLeft" className="openbitfun-git-diff-view__header-left">
           {sourceCommit && targetCommit && (
-            <span className="bitfun-git-diff-view__commit-range">
+            <span className="openbitfun-git-diff-view__commit-range">
               {sourceCommit.substring(0, 7)}...{targetCommit.substring(0, 7)}
             </span>
           )}
           {!sourceCommit && !targetCommit && (
             <SegmentedControl
-              className="bitfun-git-diff-view__diff-type-switcher"
+              className="openbitfun-git-diff-view__diff-type-switcher"
               options={[
                 { value: 'working', label: t('diffView.workingTree') },
                 { value: 'staged', label: t('diffView.staged') },
@@ -278,15 +278,15 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             />
           )}
           {loading && (
-            <span className="bitfun-git-diff-view__loading-indicator">
+            <span className="openbitfun-git-diff-view__loading-indicator">
               <Icon name="refresh" size="sm" className="spinning" />
               {t('common.loading')}
             </span>
           )}
         </div>
         
-        <div data-bf-component="git-diff-view" data-bf-part="headerRight" className="bitfun-git-diff-view__header-right">
-          <div className="bitfun-git-diff-view__view-options">
+        <div data-openbitfun-component="git-diff-view" data-openbitfun-part="headerRight" className="openbitfun-git-diff-view__header-right">
+          <div className="openbitfun-git-diff-view__view-options">
             <IconButton
               aria-label={allExpanded ? t('diffView.collapseAll') : t('diffView.expandAll')}
               onClick={toggleAllExpansion}
@@ -306,9 +306,9 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-git-diff-view__content" data-bf-component="git-diff-view" data-bf-part="content">
+      <div className="openbitfun-git-diff-view__content" data-openbitfun-component="git-diff-view" data-openbitfun-part="content">
         {error ? (
-          <div data-bf-component="git-diff-view" data-bf-part="error" data-bf-state="error" className="bitfun-git-diff-view__error-state">
+          <div data-openbitfun-component="git-diff-view" data-openbitfun-part="error" data-openbitfun-state="error" className="openbitfun-git-diff-view__error-state">
             <div className="error-icon">
               <AlertCircle size={20} />
             </div>
@@ -320,47 +320,47 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             </Button>
           </div>
         ) : loading ? (
-          <div data-bf-component="git-diff-view" data-bf-part="loading" data-bf-state="loading" className="bitfun-git-diff-view__loading-state">
-            <div className="bitfun-git-diff-view__loading-spinner" />
+          <div data-openbitfun-component="git-diff-view" data-openbitfun-part="loading" data-openbitfun-state="loading" className="openbitfun-git-diff-view__loading-state">
+            <div className="openbitfun-git-diff-view__loading-spinner" />
             <p>{t('diffView.loadingData')}</p>
           </div>
         ) : diffFiles.length > 0 ? (
-          <div data-bf-component="git-diff-view" data-bf-part="fileList" className="bitfun-git-diff-view__file-list">
+          <div data-openbitfun-component="git-diff-view" data-openbitfun-part="fileList" className="openbitfun-git-diff-view__file-list">
             {diffFiles.map((file, index) => (
-              <div data-bf-component="git-diff-view" data-bf-part="file" data-bf-state={file.expanded ? 'expanded' : undefined} key={file.path} className="bitfun-git-diff-view__file-item">
+              <div data-openbitfun-component="git-diff-view" data-openbitfun-part="file" data-openbitfun-state={file.expanded ? 'expanded' : undefined} key={file.path} className="openbitfun-git-diff-view__file-item">
                 <div 
-                  data-bf-component="git-diff-view"
-                  data-bf-part="fileHeader"
-                  className="bitfun-git-diff-view__file-header"
+                  data-openbitfun-component="git-diff-view"
+                  data-openbitfun-part="fileHeader"
+                  className="openbitfun-git-diff-view__file-header"
                   onClick={() => toggleFileExpansion(index)}
                 >
-                  <div data-bf-component="git-diff-view" data-bf-part="fileInfo" className="bitfun-git-diff-view__file-info">
-                    <span className={`bitfun-git-diff-view__expand-icon ${file.expanded ? 'bitfun-git-diff-view__expand-icon--expanded' : ''}`}>
+                  <div data-openbitfun-component="git-diff-view" data-openbitfun-part="fileInfo" className="openbitfun-git-diff-view__file-info">
+                    <span className={`openbitfun-git-diff-view__expand-icon ${file.expanded ? 'openbitfun-git-diff-view__expand-icon--expanded' : ''}`}>
                       {file.expanded ? <Icon name="chevron-down" size="md" /> : <Icon name="chevron-right" size="md" />}
                     </span>
                     
-                    <span className="bitfun-git-diff-view__file-status-icon">
+                    <span className="openbitfun-git-diff-view__file-status-icon">
                       {getFileStatusIcon(file.status)}
                     </span>
                     
-                    <span className="bitfun-git-diff-view__file-path">{file.path}</span>
+                    <span className="openbitfun-git-diff-view__file-path">{file.path}</span>
                     
                     {file.oldPath && file.oldPath !== file.path && (
-                      <span className={`bitfun-git-diff-view__file-status bitfun-git-diff-view__file-status--${file.status}`}>
+                      <span className={`openbitfun-git-diff-view__file-status openbitfun-git-diff-view__file-status--${file.status}`}>
                         ← {file.oldPath}
                       </span>
                     )}
                   </div>
                   
-                  <div data-bf-component="git-diff-view" data-bf-part="fileStats" className="bitfun-git-diff-view__file-stats">
+                  <div data-openbitfun-component="git-diff-view" data-openbitfun-part="fileStats" className="openbitfun-git-diff-view__file-stats">
                     {file.additions > 0 && (
-                      <span className="bitfun-git-diff-view__additions">
+                      <span className="openbitfun-git-diff-view__additions">
                         <Icon name="plus" size="xs" />
                         {file.additions}
                       </span>
                     )}
                     {file.deletions > 0 && (
-                      <span className="bitfun-git-diff-view__deletions">
+                      <span className="openbitfun-git-diff-view__deletions">
                         <Minus size={12} />
                         {file.deletions}
                       </span>
@@ -369,7 +369,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
                 </div>
                 
                 {file.expanded && (
-                  <div data-bf-component="git-diff-view" data-bf-part="diffContent" className="bitfun-git-diff-view__diff-content">
+                  <div data-openbitfun-component="git-diff-view" data-openbitfun-part="diffContent" className="openbitfun-git-diff-view__diff-content">
                     {renderDiffContent(file.diff)}
                   </div>
                 )}
@@ -377,7 +377,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             ))}
           </div>
         ) : (
-          <div data-bf-component="git-diff-view" data-bf-part="empty" className="bitfun-git-diff-view__empty-state">
+          <div data-openbitfun-component="git-diff-view" data-openbitfun-part="empty" className="openbitfun-git-diff-view__empty-state">
             <FileText size={48} />
             <h3>{t('diffView.empty.title')}</h3>
             <p>

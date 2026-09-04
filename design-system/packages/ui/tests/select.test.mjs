@@ -42,18 +42,18 @@ test("Select exposes size, invalid, disabled, and leading regions independently"
   assert.match(markup, /data-disabled="true"/);
   assert.match(markup, /data-invalid="true"/);
   assert.match(markup, /aria-invalid="true"/);
-  assert.match(markup, /data-bf-part="leading"/);
-  assert.match(markup, /data-bf-part="indicator"/);
+  assert.match(markup, /data-openbitfun-part="leading"/);
+  assert.match(markup, /data-openbitfun-part="indicator"/);
 });
 
 test("Select styles theme both the closed field and native option menu", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-control-select-padding-inline/);
-  assert.match(styles, /--bf-control-select-indicator-size/);
-  assert.match(styles, /--bf-color-field-border-focus/);
-  assert.match(styles, /option[^}]*color:\s*var\(--bf-color-content-primary\)/s);
-  assert.match(styles, /option[^}]*background-color:\s*var\(--bf-color-surface-panel\)/s);
-  assert.match(styles, /option:disabled[^}]*color:\s*var\(--bf-color-content-disabled\)/s);
-  assert.match(styles, /--bf-color-status-danger-border/);
+  assert.match(styles, /--openbitfun-control-select-padding-inline/);
+  assert.match(styles, /--openbitfun-control-select-indicator-size/);
+  assert.match(styles, /--openbitfun-color-field-border-focus/);
+  assert.match(styles, /option[^}]*color:\s*var\(--openbitfun-color-content-primary\)/s);
+  assert.match(styles, /option[^}]*background-color:\s*var\(--openbitfun-color-surface-panel\)/s);
+  assert.match(styles, /option:disabled[^}]*color:\s*var\(--openbitfun-color-content-disabled\)/s);
+  assert.match(styles, /--openbitfun-color-status-danger-border/);
 });

@@ -60,7 +60,7 @@ impl ArtifactStore {
     }
 
     fn package_path(&self, sha256: &str) -> PathBuf {
-        content_path(&self.root.join("packages"), sha256, "bitfun-appearance")
+        content_path(&self.root.join("packages"), sha256, "openbitfun-appearance")
     }
 
     fn preview_path(&self, sha256: &str) -> PathBuf {
@@ -208,7 +208,7 @@ impl ArtifactStore {
         &self,
         cutoff: SystemTime,
     ) -> anyhow::Result<Vec<String>> {
-        hashes_older_than(&self.root.join("packages"), "bitfun-appearance", cutoff).await
+        hashes_older_than(&self.root.join("packages"), "openbitfun-appearance", cutoff).await
     }
 
     pub(crate) async fn preview_hashes_older_than(

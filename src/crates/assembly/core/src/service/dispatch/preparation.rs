@@ -2,8 +2,8 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Result};
-use bitfun_services_core::json_store::JsonFileCrossProcessLock;
 use chrono::{DateTime, Duration, Utc};
+use openbitfun_services_core::json_store::JsonFileCrossProcessLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::fs;
@@ -613,7 +613,7 @@ fn validate_setup_audit_event(event: &Value) -> Result<()> {
         .get("action")
         .and_then(Value::as_str)
         .is_none_or(|action| {
-            !bitfun_services_core::dispatch_contract::dispatch_supported_setup_audit_actions()
+            !openbitfun_services_core::dispatch_contract::dispatch_supported_setup_audit_actions()
                 .any(|supported| supported == action)
         })
         || object
@@ -722,7 +722,7 @@ mod tests {
             .await
             .expect("begin");
         store
-            .attach_preparation_baseline("job-orphan", "worktree-1", "bitfun/dispatch/job")
+            .attach_preparation_baseline("job-orphan", "worktree-1", "openbitfun/dispatch/job")
             .await
             .expect("attach");
         let path = store.preparation_path("job-orphan").expect("path");
@@ -772,7 +772,7 @@ mod tests {
             .await
             .expect("begin");
         store
-            .attach_preparation_baseline("job-owned", "worktree-1", "bitfun/dispatch/job")
+            .attach_preparation_baseline("job-owned", "worktree-1", "openbitfun/dispatch/job")
             .await
             .expect("attach");
         let mut outbound = OutboundDispatchRecord::new(
@@ -789,7 +789,7 @@ mod tests {
         )
         .expect("outbound");
         outbound.baseline_worktree_id = Some("worktree-1".to_string());
-        outbound.branch = Some("bitfun/dispatch/job".to_string());
+        outbound.branch = Some("openbitfun/dispatch/job".to_string());
         store.bind_if_absent(&outbound).await.expect("bind");
 
         let path = store.preparation_path("job-owned").expect("path");
@@ -877,7 +877,7 @@ mod tests {
             .await
             .expect("begin");
         store
-            .attach_preparation_baseline("job-unreadable", "worktree-1", "bitfun/dispatch/job")
+            .attach_preparation_baseline("job-unreadable", "worktree-1", "openbitfun/dispatch/job")
             .await
             .expect("attach");
         let path = store.preparation_path("job-unreadable").expect("path");

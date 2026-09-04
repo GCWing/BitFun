@@ -438,12 +438,12 @@ mod tests {
     #[test]
     fn test_cursor_forward() {
         // \x1b[16C moves cursor forward 16 columns (from current position)
-        let input = "d----           2026/1/10\x1b[16C.bitfun";
+        let input = "d----           2026/1/10\x1b[16C.openbitfun";
         // "d----           2026/1/10" is 22 chars, cursor moves from col 22 to col 22+16=38
-        // Since 38 > 22, spaces are padded to reach col 38, then ".bitfun" is appended
+        // Since 38 > 22, spaces are padded to reach col 38, then ".openbitfun" is appended
         assert_eq!(
             strip_ansi(input),
-            "d----           2026/1/10                .bitfun"
+            "d----           2026/1/10                .openbitfun"
         );
     }
 
@@ -493,11 +493,11 @@ mod tests {
 
     #[test]
     fn human_written_test() {
-        let input = "\u{001b}[93mls\u{001b}[K\r\n\u{001b}[?25h\u{001b}[m\r\n\u{001b}[?25l    Directory: E:\\Projects\\ForTest\\basic-rust\u{001b}[32m\u{001b}[1m\u{001b}[5;1HMode                 LastWriteTime\u{001b}[m \u{001b}[32m\u{001b}[1m\u{001b}[3m        Length\u{001b}[23m Name\r\n----   \u{001b}[m \u{001b}[32m\u{001b}[1m             -------------\u{001b}[m \u{001b}[32m\u{001b}[1m        ------\u{001b}[m \u{001b}[32m\u{001b}[1m----\u{001b}[m\r\nd----           2026/1/10    19:23\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16C.bitfun\u{001b}[m\r\nd----           2026/1/10    21:18\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16C.worktrees\u{001b}[m\r\nd----           2026/1/10    19:21\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16Csrc\u{001b}[m\r\nd----           2026/1/10    19:21\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16Ctarget\r\n\u{001b}[?25h\u{001b}[?25l\u{001b}[m-a---           2026/1/10    19:23             57 .gitignore\r\n-a---           2026/1/10    19:21            154 Cargo.lock\r\n-a---           2026/1/10    19:21             81 Cargo.toml\u{001b}[15;1H\u{001b}[?25h";
+        let input = "\u{001b}[93mls\u{001b}[K\r\n\u{001b}[?25h\u{001b}[m\r\n\u{001b}[?25l    Directory: E:\\Projects\\ForTest\\basic-rust\u{001b}[32m\u{001b}[1m\u{001b}[5;1HMode                 LastWriteTime\u{001b}[m \u{001b}[32m\u{001b}[1m\u{001b}[3m        Length\u{001b}[23m Name\r\n----   \u{001b}[m \u{001b}[32m\u{001b}[1m             -------------\u{001b}[m \u{001b}[32m\u{001b}[1m        ------\u{001b}[m \u{001b}[32m\u{001b}[1m----\u{001b}[m\r\nd----           2026/1/10    19:23\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16C.openbitfun\u{001b}[m\r\nd----           2026/1/10    21:18\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16C.worktrees\u{001b}[m\r\nd----           2026/1/10    19:21\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16Csrc\u{001b}[m\r\nd----           2026/1/10    19:21\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16Ctarget\r\n\u{001b}[?25h\u{001b}[?25l\u{001b}[m-a---           2026/1/10    19:23             57 .gitignore\r\n-a---           2026/1/10    19:21            154 Cargo.lock\r\n-a---           2026/1/10    19:21             81 Cargo.toml\u{001b}[15;1H\u{001b}[?25h";
         // The blank line between "Directory:" and "Mode..." was produced by
         // ESC[5;1H jumping from row 2 to row 4, leaving row 3 as a phantom
         // empty line.  With phantom-line filtering it is now omitted.
-        let expected_output = "ls\n\n    Directory: E:\\Projects\\ForTest\\basic-rust\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\nd----           2026/1/10    19:23                .bitfun\nd----           2026/1/10    21:18                .worktrees\nd----           2026/1/10    19:21                src\nd----           2026/1/10    19:21                target\n-a---           2026/1/10    19:23             57 .gitignore\n-a---           2026/1/10    19:21            154 Cargo.lock\n-a---           2026/1/10    19:21             81 Cargo.toml";
+        let expected_output = "ls\n\n    Directory: E:\\Projects\\ForTest\\basic-rust\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\nd----           2026/1/10    19:23                .openbitfun\nd----           2026/1/10    21:18                .worktrees\nd----           2026/1/10    19:21                src\nd----           2026/1/10    19:21                target\n-a---           2026/1/10    19:23             57 .gitignore\n-a---           2026/1/10    19:21            154 Cargo.lock\n-a---           2026/1/10    19:21             81 Cargo.toml";
         assert_eq!(strip_ansi(input), expected_output);
     }
 

@@ -58,14 +58,14 @@ pub use crate::runtime::{
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use crate::user_questions::{PendingUserQuestion, PendingUserQuestionSnapshot};
-pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
-pub use bitfun_core_types::SessionUsageReport;
-// Event envelope types re-exported so protocol surfaces (e.g. `bitfun-app-server`)
+pub use openbitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
+pub use openbitfun_core_types::SessionUsageReport;
+// Event envelope types re-exported so protocol surfaces (e.g. `openbitfun-app-server`)
 // can carry the runtime event stream over a JSON-RPC transport without depending
-// on `bitfun-events` directly. These are the exact types the runtime's event
+// on `openbitfun-events` directly. These are the exact types the runtime's event
 // subscribers receive; the app-server forwards them as `agent/event` notifications.
-pub use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
-pub use bitfun_runtime_ports::{
+pub use openbitfun_events::{AgenticEvent, AgenticEventEnvelope};
+pub use openbitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentContextReloadPort, AgentDialogSteerRequest,
     AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRecoveryOutcome,
     AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
@@ -112,7 +112,7 @@ pub use bitfun_runtime_ports::{
     TranscriptContent, TranscriptMessage, TranscriptToolCall, WorkspaceDiffContent,
     WorkspaceDiffFile, WorkspaceDiffFileStatus, WorkspaceDiffSnapshot, WorkspacePort,
 };
-pub use bitfun_runtime_services::{
+pub use openbitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,
     RuntimeServicesProvider, RuntimeServicesRegistry,
 };

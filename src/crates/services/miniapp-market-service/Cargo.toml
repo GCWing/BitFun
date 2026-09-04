@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-miniapp-market-service"
+name = "openbitfun-miniapp-market-service"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun MiniApp marketplace service"
+description = "OpenBitFun MiniApp marketplace service"
 
 [lib]
-name = "bitfun_miniapp_market_service"
+name = "openbitfun_miniapp_market_service"
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["miniapp"] }
-bitfun-services-core = { path = "../services-core", features = ["tls-provider"] }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["miniapp"] }
+openbitfun-services-core = { path = "../services-core", features = ["tls-provider"] }
 chrono = { workspace = true }
 hex = { workspace = true }
 image = { workspace = true, features = ["jpeg", "png", "webp"] }

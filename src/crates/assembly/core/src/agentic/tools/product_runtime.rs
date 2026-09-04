@@ -13,14 +13,14 @@ mod materialization;
 mod snapshot;
 
 use crate::agentic::tools::registry::{ProductToolDecoratorRef, ToolRegistry};
-use bitfun_agent_tools::SnapshotToolDecorator;
+use materialization::{create_product_tool_registry_from_plan, ProductToolMaterializationError};
+use openbitfun_agent_tools::SnapshotToolDecorator;
 #[cfg(not(feature = "product-full"))]
-use bitfun_product_capabilities::agent_runtime_baseline_tool_plan;
-use bitfun_product_capabilities::{
+use openbitfun_product_capabilities::agent_runtime_baseline_tool_plan;
+use openbitfun_product_capabilities::{
     product_assembly_plan_for_profile, DeliveryProfile, ProductAssemblyPlan, ProductToolPlan,
 };
-use bitfun_tool_packs::{ToolPackFeatureGroup, ToolProviderGroupPlan};
-use materialization::{create_product_tool_registry_from_plan, ProductToolMaterializationError};
+use openbitfun_tool_packs::{ToolPackFeatureGroup, ToolProviderGroupPlan};
 use snapshot::ProductSnapshotToolWrapper;
 use std::sync::Arc;
 
@@ -132,7 +132,7 @@ mod tests {
 
     use super::ProductToolRuntime;
     use crate::agentic::tools::registry::create_tool_registry;
-    use bitfun_product_capabilities::{product_assembly_plan_for_profile, DeliveryProfile};
+    use openbitfun_product_capabilities::{product_assembly_plan_for_profile, DeliveryProfile};
 
     #[test]
     fn product_tool_runtime_owner_preserves_registry_contract() {
@@ -270,7 +270,7 @@ mod tests {
 #[cfg(all(test, not(feature = "product-full")))]
 mod baseline_tests {
     use super::ProductToolRuntime;
-    use bitfun_product_capabilities::DeliveryProfile;
+    use openbitfun_product_capabilities::DeliveryProfile;
 
     #[test]
     fn agent_runtime_baseline_materializes_only_its_owned_tool_groups() {

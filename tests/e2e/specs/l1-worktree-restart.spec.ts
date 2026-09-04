@@ -50,8 +50,8 @@ type InvokeOutcome<T> =
   | { ok: true; value: T }
   | { ok: false; error: unknown };
 
-const phase = process.env.BITFUN_E2E_WORKTREE_RESTART_PHASE;
-const manifestPath = process.env.BITFUN_E2E_WORKTREE_RESTART_MANIFEST;
+const phase = process.env.OPENBITFUN_E2E_WORKTREE_RESTART_PHASE;
+const manifestPath = process.env.OPENBITFUN_E2E_WORKTREE_RESTART_MANIFEST;
 
 function git(repositoryPath: string, args: string[]): string {
   return execFileSync('git', args, {
@@ -188,7 +188,7 @@ async function cleanupFixture(manifest: Partial<RestartManifest>): Promise<void>
 
   if (
     manifest.fixtureRoot
-    && path.basename(manifest.fixtureRoot).startsWith('bitfun-worktree-restart-e2e-')
+    && path.basename(manifest.fixtureRoot).startsWith('openbitfun-worktree-restart-e2e-')
   ) {
     fs.rmSync(manifest.fixtureRoot, { recursive: true, force: true });
   }
@@ -197,7 +197,7 @@ async function cleanupFixture(manifest: Partial<RestartManifest>): Promise<void>
 describe('L1 managed Worktree desktop restart recovery', () => {
   if (!manifestPath) {
     it('requires a runner-provided manifest path', () => {
-      throw new Error('BITFUN_E2E_WORKTREE_RESTART_MANIFEST is required');
+      throw new Error('OPENBITFUN_E2E_WORKTREE_RESTART_MANIFEST is required');
     });
     return;
   }
@@ -208,7 +208,7 @@ describe('L1 managed Worktree desktop restart recovery', () => {
 
     it('persists a managed Worktree and session before Desktop exits', async () => {
       const fixtureRoot = fs.mkdtempSync(
-        path.join(os.tmpdir(), 'bitfun-worktree-restart-e2e-'),
+        path.join(os.tmpdir(), 'openbitfun-worktree-restart-e2e-'),
       );
       const createdRepositoryPath = path.join(fixtureRoot, 'repository');
       fs.mkdirSync(createdRepositoryPath);
@@ -216,8 +216,8 @@ describe('L1 managed Worktree desktop restart recovery', () => {
       pendingManifest = { fixtureRoot, repositoryPath };
 
       git(repositoryPath, ['init']);
-      git(repositoryPath, ['config', 'user.name', 'BitFun E2E']);
-      git(repositoryPath, ['config', 'user.email', 'bitfun-e2e@example.invalid']);
+      git(repositoryPath, ['config', 'user.name', 'OpenBitFun E2E']);
+      git(repositoryPath, ['config', 'user.email', 'openbitfun-e2e@example.invalid']);
       fs.writeFileSync(path.join(repositoryPath, 'shared.txt'), 'restart baseline\n');
       git(repositoryPath, ['add', 'shared.txt']);
       git(repositoryPath, ['commit', '-m', 'restart baseline']);
@@ -334,7 +334,7 @@ describe('L1 managed Worktree desktop restart recovery', () => {
 
   it('requires a valid restart phase', () => {
     throw new Error(
-      'BITFUN_E2E_WORKTREE_RESTART_PHASE must be "create" or "verify"',
+      'OPENBITFUN_E2E_WORKTREE_RESTART_PHASE must be "create" or "verify"',
     );
   });
 });

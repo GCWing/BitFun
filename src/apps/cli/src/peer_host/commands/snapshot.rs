@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 
-use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-use bitfun_runtime_ports::{
+use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use openbitfun_runtime_ports::{
     AgentSessionRollbackToTurnRequest, AgentSessionWorkspaceLocation, LocalWorkspaceSnapshotPort,
     LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats, PortError, PortErrorKind,
 };
@@ -103,7 +103,7 @@ pub(crate) async fn get_session_files(
     let session_id = get_string(request, "sessionId")?;
     let workspace_path = get_string(request, "workspacePath")?;
 
-    bitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
+    openbitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
     require_local_snapshot_workspace(request, &workspace_path).await?;
     let scope = ensure_session_workspace_runtime_ownership(state, request)?;
     let storage_path = resolved_session_storage_scope(state, scope).await?;
@@ -135,7 +135,7 @@ pub(crate) async fn rollback_session_to_turn(
         serde_json::from_value(request.clone())
             .map_err(|error| format!("Invalid targeted Session rollback request: {error}"))?;
 
-    bitfun_agent_runtime::session_control::validate_session_id(&rollback_request.session_id)?;
+    openbitfun_agent_runtime::session_control::validate_session_id(&rollback_request.session_id)?;
     require_complete_rollback_workspace(
         request,
         &rollback_request.workspace_path,
@@ -157,7 +157,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
 
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest,
         LocalWorkspaceSnapshotStats, LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind,
         PortResult,
@@ -261,7 +261,7 @@ mod tests {
         let workspace = tempfile::tempdir().expect("create local workspace");
         let workspace_path = workspace.path().to_string_lossy().to_string();
         let remote =
-            bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
+            openbitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
         remote
             .register_remote_workspace(
                 workspace_path.clone(),
@@ -274,7 +274,7 @@ mod tests {
         require_complete_rollback_workspace(
             &json!({ "workspaceId": "local_workspace-1" }),
             &workspace_path,
-            Some(bitfun_runtime_ports::AgentSessionWorkspaceLocation::Local),
+            Some(openbitfun_runtime_ports::AgentSessionWorkspaceLocation::Local),
         )
         .await
         .expect("explicit local identity must disambiguate the registered remote path");

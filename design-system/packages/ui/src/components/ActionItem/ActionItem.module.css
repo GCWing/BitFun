@@ -1,55 +1,55 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     display: inline-flex;
     align-items: center;
     min-inline-size: 0;
-    min-block-size: var(--bf-control-height-sm);
-    gap: var(--bf-space-1);
-    padding-inline: var(--bf-space-2);
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-action-neutral-content);
+    min-block-size: var(--openbitfun-control-height-sm);
+    gap: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-action-neutral-content);
     background: transparent;
     transition:
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root:not([data-disabled="true"]):hover,
-  .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="hover"]) {
-    background: var(--bf-color-action-neutral-surface);
+  .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="hover"]) {
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   .root:not([data-disabled="true"]):has(.trigger:active),
-  .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) {
-    background: var(--bf-color-action-neutral-surface-pressed);
+  .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="active"]) {
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .root:not([data-disabled="true"]):has(.trigger:active) .label,
-  .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) .label {
-    font-weight: var(--bf-type-label-selected-font-weight);
+  .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="active"]) .label {
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .root:has(.trigger:focus-visible) {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .root[data-disabled="true"] {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
   }
 
-  .root[data-bf-tone="danger"]:not([data-disabled="true"]) {
-    color: var(--bf-color-status-danger-content);
+  .root[data-openbitfun-tone="danger"]:not([data-disabled="true"]) {
+    color: var(--openbitfun-color-status-danger-content);
   }
 
-  .root[data-bf-tone="danger"]:not([data-disabled="true"]):hover,
-  .root[data-bf-tone="danger"]:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="hover"]) {
-    background: var(--bf-color-status-danger-surface);
+  .root[data-openbitfun-tone="danger"]:not([data-disabled="true"]):hover,
+  .root[data-openbitfun-tone="danger"]:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="hover"]) {
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
-  .root[data-bf-tone="danger"]:not([data-disabled="true"]):has(.trigger:active),
-  .root[data-bf-tone="danger"]:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) {
-    background: var(--bf-color-status-danger-surface);
+  .root[data-openbitfun-tone="danger"]:not([data-disabled="true"]):has(.trigger:active),
+  .root[data-openbitfun-tone="danger"]:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="active"]) {
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   .trigger {
@@ -58,7 +58,7 @@
     align-items: center;
     min-inline-size: 0;
     min-block-size: inherit;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     margin: 0;
     padding: 0;
     border: 0;
@@ -79,12 +79,12 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-font-size-sm);
-    block-size: var(--bf-font-size-sm);
+    inline-size: var(--openbitfun-font-size-sm);
+    block-size: var(--openbitfun-font-size-sm);
   }
 
   .leading > :where(svg, img),
-  .leading > [data-bf-component="icon"] {
+  .leading > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -94,11 +94,11 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -112,12 +112,12 @@
   }
 
   .metadata {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     white-space: nowrap;
   }
 
@@ -126,7 +126,7 @@
   }
 
   .actions {
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -137,7 +137,7 @@
 
   @media (forced-colors: active) {
     .root:has(.trigger:focus-visible) {
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
 
     .root:not([data-disabled="true"]):hover,

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$BinDir = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'BitFun\bin'),
+    [string]$BinDir = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'OpenBitFun\bin'),
     [switch]$SkipPathUpdate
 )
 
@@ -25,7 +25,7 @@ function Resolve-RepoRoot {
         $candidate = $parent
     }
 
-    throw "Could not locate the BitFun repository root from $PSScriptRoot"
+    throw "Could not locate the OpenBitFun repository root from $PSScriptRoot"
 }
 
 function Resolve-TargetRoot([string]$RepoRoot) {
@@ -76,27 +76,11 @@ function Assert-CommandSucceeded([string]$Description) {
     }
 }
 
-function Assert-EntrypointPair([string]$Primary, [string]$Legacy) {
-    & $Primary --version | Out-Null
-    Assert-CommandSucceeded 'bitfun --version'
-
-    $id = [guid]::NewGuid().ToString('N')
-    $stdoutFile = Join-Path ([IO.Path]::GetTempPath()) "bitfun-install-$id.out"
-    $stderrFile = Join-Path ([IO.Path]::GetTempPath()) "bitfun-install-$id.err"
-    try {
-        $legacyProcess = Start-Process -FilePath $Legacy -ArgumentList '--version' -Wait -PassThru -NoNewWindow `
-            -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
-        if ($legacyProcess.ExitCode -ne 0) {
-            throw "bitfun-cli --version failed with exit code $($legacyProcess.ExitCode)"
-        }
-        $legacyWarning = (Get-Content -LiteralPath $stderrFile -Raw).TrimEnd("`r", "`n")
-        if ($legacyWarning -cne $script:deprecation) {
-            throw "Deprecated entrypoint emitted an unexpected warning: $legacyWarning"
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
-    }
+function Assert-Entrypoint([string]$Executable) {
+    & $Executable --version | Out-Null
+    Assert-CommandSucceeded 'openbitfun --version'
+    & $Executable --help | Out-Null
+    Assert-CommandSucceeded 'openbitfun --help'
 }
 
 function Assert-PluginHostResources([string]$Directory) {
@@ -108,46 +92,35 @@ function Assert-PluginHostResources([string]$Directory) {
     }
 }
 
-function Install-EntrypointPair(
+function Install-OpenBitFunCli(
     [string]$PrimarySource,
-    [string]$LegacySource,
     [string]$PluginHostSource,
     [string]$Destination
 ) {
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $stageDir = Join-Path $Destination ".bitfun-install-$([guid]::NewGuid().ToString('N'))"
-    $stagedPrimary = Join-Path $stageDir 'bitfun.exe'
-    $stagedLegacy = Join-Path $stageDir 'bitfun-cli.exe'
+    $stageDir = Join-Path $Destination ".openbitfun-install-$([guid]::NewGuid().ToString('N'))"
+    $stagedPrimary = Join-Path $stageDir 'openbitfun.exe'
     $stagedPluginHost = Join-Path $stageDir 'ext-host'
-    $primaryTarget = Join-Path $Destination 'bitfun.exe'
-    $legacyTarget = Join-Path $Destination 'bitfun-cli.exe'
+    $primaryTarget = Join-Path $Destination 'openbitfun.exe'
     $pluginHostTarget = Join-Path $Destination 'resources\ext-host'
-    $primaryBackup = Join-Path $stageDir 'previous-bitfun.exe'
-    $legacyBackup = Join-Path $stageDir 'previous-bitfun-cli.exe'
+    $primaryBackup = Join-Path $stageDir 'previous-openbitfun.exe'
     $pluginHostBackup = Join-Path $stageDir 'previous-ext-host'
     $primaryBackedUp = $false
-    $legacyBackedUp = $false
     $pluginHostBackedUp = $false
     $primaryCommitted = $false
-    $legacyCommitted = $false
     $pluginHostCommitted = $false
 
     New-Item -ItemType Directory -Path $stageDir | Out-Null
     try {
         Copy-Item -LiteralPath $PrimarySource -Destination $stagedPrimary
-        Copy-Item -LiteralPath $LegacySource -Destination $stagedLegacy
         New-Item -ItemType Directory -Path $stagedPluginHost | Out-Null
         Copy-Item -LiteralPath (Join-Path $PluginHostSource 'extension-host.js') -Destination $stagedPluginHost
-        Assert-EntrypointPair $stagedPrimary $stagedLegacy
+        Assert-Entrypoint $stagedPrimary
         Assert-PluginHostResources $stagedPluginHost
 
         if (Test-Path -LiteralPath $primaryTarget -PathType Leaf) {
             Move-Item -LiteralPath $primaryTarget -Destination $primaryBackup
             $primaryBackedUp = $true
-        }
-        if (Test-Path -LiteralPath $legacyTarget -PathType Leaf) {
-            Move-Item -LiteralPath $legacyTarget -Destination $legacyBackup
-            $legacyBackedUp = $true
         }
         if (Test-Path -LiteralPath $pluginHostTarget -PathType Container) {
             Move-Item -LiteralPath $pluginHostTarget -Destination $pluginHostBackup
@@ -156,12 +129,10 @@ function Install-EntrypointPair(
 
         Move-Item -LiteralPath $stagedPrimary -Destination $primaryTarget
         $primaryCommitted = $true
-        Move-Item -LiteralPath $stagedLegacy -Destination $legacyTarget
-        $legacyCommitted = $true
         New-Item -ItemType Directory -Path (Split-Path -Parent $pluginHostTarget) -Force | Out-Null
         Move-Item -LiteralPath $stagedPluginHost -Destination $pluginHostTarget
         $pluginHostCommitted = $true
-        Assert-EntrypointPair $primaryTarget $legacyTarget
+        Assert-Entrypoint $primaryTarget
         Assert-PluginHostResources $pluginHostTarget
     }
     catch {
@@ -169,14 +140,8 @@ function Install-EntrypointPair(
         if ($pluginHostCommitted) {
             Remove-Item -LiteralPath $pluginHostTarget -Recurse -Force -ErrorAction SilentlyContinue
         }
-        if ($legacyCommitted) {
-            Remove-Item -LiteralPath $legacyTarget -Force -ErrorAction SilentlyContinue
-        }
         if ($primaryCommitted) {
             Remove-Item -LiteralPath $primaryTarget -Force -ErrorAction SilentlyContinue
-        }
-        if ($legacyBackedUp) {
-            Move-Item -LiteralPath $legacyBackup -Destination $legacyTarget -Force
         }
         if ($primaryBackedUp) {
             Move-Item -LiteralPath $primaryBackup -Destination $primaryTarget -Force
@@ -185,7 +150,7 @@ function Install-EntrypointPair(
             New-Item -ItemType Directory -Path (Split-Path -Parent $pluginHostTarget) -Force | Out-Null
             Move-Item -LiteralPath $pluginHostBackup -Destination $pluginHostTarget -Force
         }
-        throw "CLI installation failed; the previous entrypoint pair was restored. $installError"
+        throw "CLI installation failed; the previous OpenBitFun CLI was restored. $installError"
     }
     finally {
         Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -194,12 +159,9 @@ function Install-EntrypointPair(
 
 $repoRoot = Resolve-RepoRoot
 $releaseDir = Resolve-ReleaseDir $repoRoot
-$primarySource = Join-Path $releaseDir 'bitfun.exe'
-$legacySource = Join-Path $releaseDir 'bitfun-cli.exe'
+$primarySource = Join-Path $releaseDir 'openbitfun.exe'
 $pluginHostSource = Join-Path $repoRoot 'src\apps\extension-host\dist'
-$primaryInstalled = Join-Path $BinDir 'bitfun.exe'
-$legacyInstalled = Join-Path $BinDir 'bitfun-cli.exe'
-$deprecation = 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.'
+$primaryInstalled = Join-Path $BinDir 'openbitfun.exe'
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     throw 'cargo was not found. Install Rust from https://rustup.rs and re-run.'
@@ -208,31 +170,28 @@ if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
     throw 'rustc was not found. Install Rust from https://rustup.rs and re-run.'
 }
 
-Write-Host '=== BitFun CLI Install ==='
+Write-Host '=== OpenBitFun CLI Install ==='
 Write-Host "Repo: $repoRoot"
 Write-Host "Install dir: $BinDir"
 
 Push-Location $repoRoot
 try {
-    Write-Host '[1/3] Building the bitfun and deprecated bitfun-cli entrypoints...'
-    & cargo build -p bitfun-cli --release
+    Write-Host '[1/3] Building openbitfun...'
+    & cargo build -p openbitfun-cli --release --bin openbitfun
     Assert-CommandSucceeded 'cargo build'
 }
 finally {
     Pop-Location
 }
 
-foreach ($source in @($primarySource, $legacySource)) {
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-        throw "Built executable was not found at $source"
-    }
+if (-not (Test-Path -LiteralPath $primarySource -PathType Leaf)) {
+    throw "Built executable was not found at $primarySource"
 }
 Assert-PluginHostResources $pluginHostSource
 
-Write-Host '[2/3] Installing executables...'
-Install-EntrypointPair $primarySource $legacySource $pluginHostSource $BinDir
+Write-Host '[2/3] Installing executable...'
+Install-OpenBitFunCli $primarySource $pluginHostSource $BinDir
 Write-Host "Installed: $primaryInstalled"
-Write-Host "Installed deprecated compatibility entrypoint: $legacyInstalled"
 Write-Host "Installed plugin Host resources: $(Join-Path $BinDir 'resources\ext-host')"
 
 if (-not $SkipPathUpdate) {
@@ -242,12 +201,11 @@ else {
     Write-Host 'Skipped the user PATH update (-SkipPathUpdate).'
 }
 
-Write-Host '[3/3] Verifying both entrypoints...'
-Assert-EntrypointPair $primaryInstalled $legacyInstalled
+Write-Host '[3/3] Verifying openbitfun...'
+Assert-Entrypoint $primaryInstalled
 Assert-PluginHostResources (Join-Path $BinDir 'resources\ext-host')
 
 Write-Host '=== Install complete ==='
-Write-Host 'Open a new terminal, then run: bitfun'
-Write-Host "Current PowerShell: `$env:Path = `"$([IO.Path]::GetFullPath($BinDir));`$env:Path`"; bitfun"
+Write-Host 'Open a new terminal, then run: openbitfun'
+Write-Host "Current PowerShell: `$env:Path = `"$([IO.Path]::GetFullPath($BinDir));`$env:Path`"; openbitfun"
 Write-Host "Direct path: $primaryInstalled"
-Write-Host 'Deprecated compatibility command: bitfun-cli'

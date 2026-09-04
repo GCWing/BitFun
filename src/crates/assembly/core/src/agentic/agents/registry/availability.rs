@@ -3,7 +3,7 @@ use crate::agentic::agents::{resolve_mode_config_profile_id, SubAgentSource};
 use crate::service::config::types::{
     AgentSubagentOverrideConfig, AgentSubagentOverrideState, ParentSubagentOverrideConfig,
 };
-use bitfun_agent_runtime::agents::{
+use openbitfun_agent_runtime::agents::{
     resolve_subagent_availability, resolve_subagent_default_enabled, subagent_source_kind,
     ResolvedSubagentAvailability, SubagentOverrideLayers as ResolvedOverrideLayers,
     SubagentOverrideState,

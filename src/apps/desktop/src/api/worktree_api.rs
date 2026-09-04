@@ -1,13 +1,13 @@
 //! Thin desktop adapter for product-owned managed worktrees.
 
-use bitfun_core::service::remote_ssh::lookup_remote_connection;
-use bitfun_core::service::worktree::{
+use openbitfun_core::service::remote_ssh::lookup_remote_connection;
+use openbitfun_core::service::worktree::{
     WorktreeCreateBranchRequest, WorktreeCreateRequest, WorktreeCreateResult, WorktreeListRequest,
     WorktreeMutationResult, WorktreeProjectListRequest, WorktreeProjectSummary,
     WorktreePromoteRequest, WorktreeRecreateRequest, WorktreeRemoveRequest, WorktreeRemoveResult,
     WorktreeService, WorktreeSessionBindingRequest, WorktreeSessionBindingResult,
 };
-use bitfun_core_types::{WorktreeError, WorktreeErrorCode, WorktreeSummary};
+use openbitfun_core_types::{WorktreeError, WorktreeErrorCode, WorktreeSummary};
 
 fn remote_unsupported() -> WorktreeError {
     WorktreeError {

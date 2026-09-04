@@ -7,13 +7,13 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     attach_session_event_cursor, AgentEventReceiver, PermissionRequestEvent,
 };
-use bitfun_agent_tools::effective_tool_invocation;
-use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
-use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
-use bitfun_events::{project_agentic_frontend_event, AgenticEvent, ToolEventData};
+use openbitfun_agent_tools::effective_tool_invocation;
+use openbitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+use openbitfun_core::service::remote_connect::remote_server::RemoteCommand;
+use openbitfun_events::{project_agentic_frontend_event, AgenticEvent, ToolEventData};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::account::PeerFanoutOwner;
@@ -246,7 +246,7 @@ async fn interrupt_and_fail_peer_turns(state: &PeerHostState, closed: bool, reas
 
 /// Returns true when the sender side closed while the stale backlog was drained.
 fn drain_broadcast_receiver(
-    rx: &mut broadcast::Receiver<bitfun_events::AgenticEventEnvelope>,
+    rx: &mut broadcast::Receiver<openbitfun_events::AgenticEventEnvelope>,
 ) -> bool {
     loop {
         match rx.try_recv() {
@@ -760,7 +760,7 @@ fn interrupted_turn_failure_projection(
 
 #[cfg(test)]
 mod tests {
-    use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+    use openbitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 
     use super::{
         continuity_is_current, drain_broadcast_receiver, enqueue_inherited_peer_device_event,

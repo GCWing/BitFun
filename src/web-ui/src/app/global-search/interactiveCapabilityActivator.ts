@@ -13,7 +13,7 @@ export async function activateInteractiveCapability(
   options: InteractiveCapabilityActivationOptions = {},
 ): Promise<void> {
   const capability = getInteractiveCapability(capabilityId);
-  if (!capability) throw new Error(`Unknown BitFun capability: ${capabilityId}`);
+  if (!capability) throw new Error(`Unknown OpenBitFun capability: ${capabilityId}`);
   const item = options.itemId
     ? capability.items.find(({ id }) => id === options.itemId)
     : undefined;

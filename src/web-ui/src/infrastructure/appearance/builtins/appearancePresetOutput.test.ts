@@ -113,7 +113,7 @@ describe('builtin appearance preset output', () => {
 
   it('keeps approved near-neutral preset stops scoped to their semantic roles', () => {
     const serializedAppearances = JSON.stringify(builtinAppearancePalettes).toLowerCase();
-    const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'bitfun-light');
+    const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'openbitfun-light');
 
     expect(lightAppearance?.colors.background.primary).toBe('#fdfdfd');
     expect(lightAppearance?.monaco?.colors.background).toBe('#ffffff');
@@ -124,8 +124,8 @@ describe('builtin appearance preset output', () => {
   });
 
   it('keeps the default light appearance on the neutral, navy, and restrained semantic palette', () => {
-    const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'bitfun-light');
-    const tokens = getBuiltinAppearanceThemeTokens('bitfun-light');
+    const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'openbitfun-light');
+    const tokens = getBuiltinAppearanceThemeTokens('openbitfun-light');
 
     expect(lightAppearance).toMatchObject({
       description: 'Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions',
@@ -188,21 +188,21 @@ describe('builtin appearance preset output', () => {
       },
     });
     expect(tokens).toMatchObject({
-      '--bf-color-surface-chrome': '#f8f8f9',
-      '--bf-color-selection-surface': 'rgba(0, 0, 0, 0.08)',
-      '--bf-component-config-page-section-background': '#f7f7f7',
-      '--bf-component-config-page-section-border': 'rgba(16, 26, 39, 0.08)',
-      '--bf-component-config-page-section-border-width': '1px',
-      '--bf-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
+      '--openbitfun-color-surface-chrome': '#f8f8f9',
+      '--openbitfun-color-selection-surface': 'rgba(0, 0, 0, 0.08)',
+      '--openbitfun-component-config-page-section-background': '#f7f7f7',
+      '--openbitfun-component-config-page-section-border': 'rgba(16, 26, 39, 0.08)',
+      '--openbitfun-component-config-page-section-border-width': '1px',
+      '--openbitfun-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
     });
   });
 
   it('keeps monochrome content readable while projecting inverse structural chrome', () => {
     const monochrome = builtinAppearancePalettes.find(
-      appearance => appearance.id === 'bitfun-monochrome',
+      appearance => appearance.id === 'openbitfun-monochrome',
     );
-    const monochromePackage = getBuiltinAppearance('bitfun-monochrome');
-    const tokens = getBuiltinAppearanceThemeTokens('bitfun-monochrome');
+    const monochromePackage = getBuiltinAppearance('openbitfun-monochrome');
+    const tokens = getBuiltinAppearanceThemeTokens('openbitfun-monochrome');
     const chromeTokens = monochromePackage?.renderers?.['theme-tokens']?.settings.scopes?.chrome;
 
     expect(monochrome).toMatchObject({
@@ -269,25 +269,25 @@ describe('builtin appearance preset output', () => {
       },
     });
     expect(tokens).toMatchObject({
-      '--bf-color-surface-canvas': '#ffffff',
-      '--bf-color-content-primary': 'rgba(0, 0, 0, 0.80)',
-      '--bf-color-content-secondary': 'rgba(0, 0, 0, 0.60)',
-      '--bf-color-content-disabled': 'rgba(0, 0, 0, 0.30)',
-      '--bf-color-border-subtle': 'rgba(16, 26, 39, 0.08)',
-      '--bf-color-border-default': 'rgba(16, 26, 39, 0.15)',
-      '--bf-color-surface-subtle': 'rgba(16, 26, 39, 0.03)',
-      '--bf-color-action-quiet-hover': '#f3f3f5',
-      '--bf-color-scrollbar-thumb': 'rgba(16, 26, 39, 0.15)',
-      '--bf-component-config-page-section-background': '#f3f3f5',
-      '--bf-component-config-page-section-border': 'transparent',
-      '--bf-component-config-page-section-border-width': '0',
-      '--bf-component-config-page-section-shadow': 'none',
-      '--bf-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
+      '--openbitfun-color-surface-canvas': '#ffffff',
+      '--openbitfun-color-content-primary': 'rgba(0, 0, 0, 0.80)',
+      '--openbitfun-color-content-secondary': 'rgba(0, 0, 0, 0.60)',
+      '--openbitfun-color-content-disabled': 'rgba(0, 0, 0, 0.30)',
+      '--openbitfun-color-border-subtle': 'rgba(16, 26, 39, 0.08)',
+      '--openbitfun-color-border-default': 'rgba(16, 26, 39, 0.15)',
+      '--openbitfun-color-surface-subtle': 'rgba(16, 26, 39, 0.03)',
+      '--openbitfun-color-action-quiet-hover': '#f3f3f5',
+      '--openbitfun-color-scrollbar-thumb': 'rgba(16, 26, 39, 0.15)',
+      '--openbitfun-component-config-page-section-background': '#f3f3f5',
+      '--openbitfun-component-config-page-section-border': 'transparent',
+      '--openbitfun-component-config-page-section-border-width': '0',
+      '--openbitfun-component-config-page-section-shadow': 'none',
+      '--openbitfun-component-config-page-divider': 'rgba(16, 26, 39, 0.08)',
     });
     expect(chromeTokens).toMatchObject({
-      '--bf-color-surface-canvas': '#1c1c1f',
-      '--bf-color-content-primary': '#f3f3f5',
-      '--bf-color-action-quiet-hover': 'rgba(255, 255, 255, 0.06)',
+      '--openbitfun-color-surface-canvas': '#1c1c1f',
+      '--openbitfun-color-content-primary': '#f3f3f5',
+      '--openbitfun-color-action-quiet-hover': 'rgba(255, 255, 255, 0.06)',
     });
   });
 
@@ -324,48 +324,48 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "b396b5799649aeea82b816511f1187027a92a011473bf60626d1c29ddb7f86db",
-          "id": "bitfun-light",
+          "hash": "50d3928d5d563c0a24663862668fe172e24266182ead5fb8052b5d7fe272a8ec",
+          "id": "openbitfun-light",
           "type": "light",
         },
         {
-          "hash": "4674aa933f038aa728fe9013cee2272d3de853e844c7b04708d4aa954d19152c",
-          "id": "bitfun-monochrome",
+          "hash": "7bb69b925ebe3be3a161e74cb615763685996d1cd0a29e31bfc0e1760ae2890c",
+          "id": "openbitfun-monochrome",
           "type": "light",
         },
         {
-          "hash": "d5d100c9f013b8827b800f2c4183f8da540af6f01118738603658145bc9f0953",
-          "id": "bitfun-slate",
+          "hash": "1e318b55bb667a5f0dd042c02189c907e367b73ef01c4733e9d2c2828b47f2c2",
+          "id": "openbitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "12f16e11bc459ed7f48de3a59a3cd8eab0f66694023f40ce0ce529d45bbf453e",
-          "id": "bitfun-dark",
+          "hash": "a07c7a8671a46dce4210c116f64a7953f78c1ebec3c86f45f8766844db15054c",
+          "id": "openbitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "74be0da6f5a9357aacc287c3ceac869aa9057cf6235193a5363b6c06e30c996e",
-          "id": "bitfun-midnight",
+          "hash": "a50b8c195173166c247ca75b97eaaea3d59eb698741e12289d72cc8493359761",
+          "id": "openbitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "7327064fbfe41d709c942a480829cf33ea1c2dcbc6552ece012a4f43ef15fdbe",
-          "id": "bitfun-china-style",
+          "hash": "c1e0a46d859aa191c8c4b753ccf2867a91832babecc33a49634f82fb1631f0bc",
+          "id": "openbitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "ba820850c6bb14e35e128eb2c950ca999542b525577ff5f58ba5a1d7f6704dd8",
-          "id": "bitfun-china-night",
+          "hash": "17449840509547a810f8cfd85823ea62e162352018a1857c86d68650fd6d028e",
+          "id": "openbitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "6bf3b8ccc3df8e57eeda3c6fedddc4cd5220d3c03a4733b3e4ddbfc9b6ae0e5c",
-          "id": "bitfun-cyber",
+          "hash": "9ec2b937bc9c21caa8482c4d9008b38786f74afdef00b4e6949886f50f5e0b86",
+          "id": "openbitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "ed40c5b47a335e87db582174afc55bc28849647daf61ad809a321c9258a9f7fc",
-          "id": "bitfun-tokyo-night",
+          "hash": "d3a84aafd59824a6b3716e5560034e4b5901068aa9af8e07f891c6543d0dcf58",
+          "id": "openbitfun-tokyo-night",
           "type": "dark",
         },
       ]

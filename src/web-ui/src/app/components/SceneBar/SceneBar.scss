@@ -1,13 +1,13 @@
 /**
- * Scene-level tabs. Tab anatomy and visual states come from @bitfun/ui;
+ * Scene-level tabs. Tab anatomy and visual states come from @openbitfun/ui;
  * SceneBar owns only product-shell layout, overflow, and label truncation.
  */
 
-.bitfun-scene-bar {
+.openbitfun-scene-bar {
   display: flex;
   align-items: center;
   flex: 1 1 240px;
-  min-width: calc(var(--bf-control-tab-group-item-height-sm) * 4);
+  min-width: calc(var(--openbitfun-control-tab-group-item-height-sm) * 4);
   height: 100%;
   overflow: hidden;
   background: transparent;
@@ -17,7 +17,7 @@
     display: flex;
     align-items: center;
     flex: 1 1 auto;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
     height: 100%;
   }
@@ -28,11 +28,11 @@
     flex: 1 1 auto;
     min-width: 0;
     height: 100%;
-    padding-inline: var(--bf-border-width-default);
+    padding-inline: var(--openbitfun-border-width-default);
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
-    scroll-padding-inline: var(--bf-control-tab-group-gap);
+    scroll-padding-inline: var(--openbitfun-control-tab-group-gap);
     scrollbar-width: none;
     -ms-overflow-style: none;
 
@@ -43,10 +43,10 @@
 
   &__scroll-button {
     --_scene-bar-scroll-button-control-zone: calc(
-      var(--bf-control-tab-group-item-height-sm) + var(--bf-space-1)
+      var(--openbitfun-control-tab-group-item-height-sm) + var(--openbitfun-space-1)
     );
     --_scene-bar-scroll-button-fade-width: calc(
-      var(--bf-control-height-sm) + var(--bf-space-2)
+      var(--openbitfun-control-height-sm) + var(--openbitfun-space-2)
     );
     --_scene-bar-scroll-button-effect-width: calc(
       var(--_scene-bar-scroll-button-control-zone)
@@ -54,7 +54,7 @@
     );
     --_scene-bar-scroll-button-surface: color-mix(
       in srgb,
-      var(--bf-color-surface-scene) 76%,
+      var(--openbitfun-color-surface-scene) 76%,
       transparent
     );
 
@@ -63,21 +63,21 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 var(--bf-control-tab-group-item-height-sm);
-    width: var(--bf-control-tab-group-item-height-sm);
-    height: var(--bf-control-tab-group-item-height-sm);
+    flex: 0 0 var(--openbitfun-control-tab-group-item-height-sm);
+    width: var(--openbitfun-control-tab-group-item-height-sm);
+    height: var(--openbitfun-control-tab-group-item-height-sm);
     padding: 0;
-    border: var(--bf-border-width-default) solid transparent;
-    border-radius: var(--bf-radius-pill);
+    border: var(--openbitfun-border-width-default) solid transparent;
+    border-radius: var(--openbitfun-radius-pill);
     outline: none;
     overflow: visible;
     background: transparent;
-    color: var(--bf-color-action-neutral-content);
+    color: var(--openbitfun-color-action-neutral-content);
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &::before {
       content: '';
@@ -85,41 +85,41 @@
       inset-block-start: 50%;
       z-index: -1;
       width: var(--_scene-bar-scroll-button-effect-width);
-      height: var(--bf-control-tab-group-item-height-sm);
+      height: var(--openbitfun-control-tab-group-item-height-sm);
       background: var(--_scene-bar-scroll-button-surface);
-      backdrop-filter: var(--bf-effect-blur-subtle);
-      -webkit-backdrop-filter: var(--bf-effect-blur-subtle);
+      backdrop-filter: var(--openbitfun-effect-blur-subtle);
+      -webkit-backdrop-filter: var(--openbitfun-effect-blur-subtle);
       transform: translateY(-50%);
       pointer-events: none;
     }
 
-    &[data-bf-part='scrollPrevious']::before {
+    &[data-openbitfun-part='scrollPrevious']::before {
       inset-inline-start: 0;
       mask-image: linear-gradient(
         to right,
-        var(--bf-color-content-on-light) 0
+        var(--openbitfun-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
       -webkit-mask-image: linear-gradient(
         to right,
-        var(--bf-color-content-on-light) 0
+        var(--openbitfun-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
     }
 
-    &[data-bf-part='scrollNext']::before {
+    &[data-openbitfun-part='scrollNext']::before {
       inset-inline-end: 0;
       mask-image: linear-gradient(
         to left,
-        var(--bf-color-content-on-light) 0
+        var(--openbitfun-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
       -webkit-mask-image: linear-gradient(
         to left,
-        var(--bf-color-content-on-light) 0
+        var(--openbitfun-color-content-on-light) 0
           var(--_scene-bar-scroll-button-control-zone),
         transparent 100%
       );
@@ -132,12 +132,12 @@
 
     &:active {
       transform: scale(0.94);
-      background: var(--bf-color-action-neutral-surface-pressed);
+      background: var(--openbitfun-color-action-neutral-surface-pressed);
     }
 
     &:focus-visible {
-      outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-      outline-offset: var(--bf-focus-offset);
+      outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+      outline-offset: var(--openbitfun-focus-offset);
     }
   }
 
@@ -152,13 +152,13 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-scene-bar__scroll-button:hover {
-    background: var(--bf-color-action-neutral-surface-hover);
+  .openbitfun-scene-bar__scroll-button:hover {
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-scene-bar__scroll-button {
+  .openbitfun-scene-bar__scroll-button {
     transition: none;
     transform: none;
   }

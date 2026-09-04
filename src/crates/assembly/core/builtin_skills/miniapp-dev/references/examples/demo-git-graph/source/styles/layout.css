@@ -23,7 +23,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 280px;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
 }
 .toolbar__branch-filter { position: relative; }
 .toolbar__branch-filter .chevron { margin-left: 4px; opacity: .8; }
@@ -38,7 +38,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--bitfun-shadow-overlay);
+  box-shadow: var(--openbitfun-shadow-overlay);
   z-index: 200;
   padding: 4px 0;
 }
@@ -74,7 +74,7 @@
 }
 .btn--primary {
   background: var(--accent-dim);
-  color: var(--bitfun-text-on-accent);
+  color: var(--openbitfun-text-on-accent);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .btn--primary:hover { background: var(--accent); }
@@ -242,7 +242,7 @@
 }
 .commit-row__hash {
   flex-shrink: 0;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 11px;
   color: var(--accent);
   width: 56px;
@@ -303,5 +303,5 @@
   font-size: 11px;
   color: var(--text-dim);
   text-align: right;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
 }

@@ -1,20 +1,20 @@
-.bitfun-panel-header {
+.openbitfun-panel-header {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   // Unified header height: IconButton(xs=24px) + padding(6px*2)=36px
   padding: 6px 12px;
-  background: var(--bf-color-surface-canvas);
-  border-bottom: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-canvas);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
   flex-shrink: 0;
   min-height: 36px;
 
   &__title {
     margin: 0;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;

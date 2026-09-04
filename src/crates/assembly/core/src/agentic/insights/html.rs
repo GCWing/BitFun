@@ -74,7 +74,7 @@ impl HtmlLabels {
 
     pub fn en() -> Self {
         HtmlLabels {
-            title: "BitFun Insights",
+            title: "OpenBitFun Insights",
             subtitle_template: "{msgs} messages across {sessions} sessions ({analyzed} analyzed) | {start} to {end}",
             at_a_glance: "At a Glance",
             whats_working: "What's working:",
@@ -82,7 +82,7 @@ impl HtmlLabels {
             quick_wins: "Quick wins to try:",
             looking_ahead: "Looking ahead:",
             nav_work: "What You Work On",
-            nav_usage: "How You Use BitFun",
+            nav_usage: "How You Use OpenBitFun",
             nav_wins: "Impressive Things",
             nav_friction: "Where Things Go Wrong",
             nav_suggestions: "Suggestions",
@@ -95,7 +95,7 @@ impl HtmlLabels {
             stat_median_response: "Median Response",
             stat_avg_response: "Avg Response",
             section_work: "What You Work On",
-            section_usage: "How You Use BitFun",
+            section_usage: "How You Use OpenBitFun",
             section_wins: "Impressive Things You Did",
             section_friction: "Where Things Go Wrong",
             section_suggestions: "Suggestions",
@@ -123,7 +123,7 @@ impl HtmlLabels {
             no_big_wins: "No big wins identified yet.",
             no_friction: "No significant friction points found.",
             no_horizon: "No horizon workflows identified.",
-            md_additions: "BITFUN.md Additions",
+            md_additions: "OPENBITFUN.md Additions",
             copy_all_checked: "Copy All Checked",
             features_to_try: "Features to Try",
             usage_patterns: "Usage Patterns",
@@ -138,7 +138,7 @@ impl HtmlLabels {
 
     pub fn zh() -> Self {
         HtmlLabels {
-            title: "BitFun 洞察",
+            title: "OpenBitFun 洞察",
             subtitle_template:
                 "{msgs} 条消息，{sessions} 个会话（{analyzed} 个已分析）| {start} 至 {end}",
             at_a_glance: "概览",
@@ -160,7 +160,7 @@ impl HtmlLabels {
             stat_median_response: "中位响应",
             stat_avg_response: "平均响应",
             section_work: "工作领域",
-            section_usage: "你如何使用 BitFun",
+            section_usage: "你如何使用 OpenBitFun",
             section_wins: "亮眼成果",
             section_friction: "问题所在",
             section_suggestions: "建议",
@@ -188,7 +188,7 @@ impl HtmlLabels {
             no_big_wins: "暂未识别到亮眼成果。",
             no_friction: "未发现明显摩擦点。",
             no_horizon: "暂未识别到未来工作流。",
-            md_additions: "BITFUN.md 补充",
+            md_additions: "OPENBITFUN.md 补充",
             copy_all_checked: "复制选中项",
             features_to_try: "推荐功能",
             usage_patterns: "使用模式",
@@ -889,9 +889,9 @@ fn render_friction_categories(categories: &[FrictionCategory], l: &HtmlLabels) -
 fn render_suggestions(suggestions: &InsightsSuggestions, l: &HtmlLabels) -> String {
     let mut sections = Vec::new();
 
-    if !suggestions.bitfun_md_additions.is_empty() {
+    if !suggestions.openbitfun_md_additions.is_empty() {
         let items: Vec<String> = suggestions
-            .bitfun_md_additions
+            .openbitfun_md_additions
             .iter()
             .enumerate()
             .map(|(i, md)| {

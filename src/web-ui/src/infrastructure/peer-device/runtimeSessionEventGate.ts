@@ -23,8 +23,8 @@ import {
 } from '@/flow_chat/session-stream/position';
 
 /** Keep in sync with the Rust `SessionEventJournal` delivery-envelope keys. */
-export const RUNTIME_EVENT_STREAM_ID_KEY = '__bitfunRuntimeStreamId';
-export const RUNTIME_EVENT_CURSOR_KEY = '__bitfunRuntimeEventCursor';
+export const RUNTIME_EVENT_STREAM_ID_KEY = '__openbitfunRuntimeStreamId';
+export const RUNTIME_EVENT_CURSOR_KEY = '__openbitfunRuntimeEventCursor';
 
 const gapListeners = new Set<(surfaceId: DeviceSurfaceId, sessionId: string) => void>();
 

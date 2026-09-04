@@ -20,9 +20,9 @@ use crate::trace::{
 use crate::types::ProxyConfig;
 use crate::types::*;
 use anyhow::Result;
-use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use format::ApiFormat;
 use log::warn;
+use openbitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use reqwest::Client;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -772,7 +772,7 @@ mod tests {
             label: id.to_string(),
             order: 0,
             actions,
-            source: bitfun_core_types::ReasoningPresetSource::ModelConfig,
+            source: openbitfun_core_types::ReasoningPresetSource::ModelConfig,
             execution_provider: None,
             execution_model: None,
         }
@@ -789,7 +789,7 @@ mod tests {
             label: id.to_string(),
             order: 0,
             actions,
-            source: bitfun_core_types::ReasoningPresetSource::ModelsDev,
+            source: openbitfun_core_types::ReasoningPresetSource::ModelsDev,
             execution_provider: Some(execution_provider.to_string()),
             execution_model: Some(execution_model.to_string()),
         }
@@ -804,7 +804,7 @@ mod tests {
             label: id.to_string(),
             order: 0,
             actions,
-            source: bitfun_core_types::ReasoningPresetSource::AdapterFallback,
+            source: openbitfun_core_types::ReasoningPresetSource::AdapterFallback,
             execution_provider: Some(GENERIC_REASONING_PROVIDER_ID.to_string()),
             execution_model: Some("unlisted-model".to_string()),
         }

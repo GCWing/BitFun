@@ -14,9 +14,9 @@ export const markdownAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'table' }, { id: 'blockquote' }, { id: 'math' },
   ],
   states: [
-    { id: 'fallback', selector: { kind: 'self', suffix: '[data-bf-state~="fallback"]' } },
-    { id: 'streaming', selector: { kind: 'self', suffix: '[data-bf-state~="streaming"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'fallback', selector: { kind: 'self', suffix: '[data-openbitfun-state~="fallback"]' } },
+    { id: 'streaming', selector: { kind: 'self', suffix: '[data-openbitfun-state~="streaming"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

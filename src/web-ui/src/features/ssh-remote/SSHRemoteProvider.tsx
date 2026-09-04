@@ -73,7 +73,7 @@ function getActiveRemoteWorkspaceForConnection(connectionId: string): RemoteWork
   };
 }
 
-/** Match opened `WorkspaceInfo` so list_sessions maps to ~/.bitfun/remote_ssh/... */
+/** Match opened `WorkspaceInfo` so list_sessions maps to ~/.openbitfun/remote_ssh/... */
 function sshHostForRemoteWorkspace(connectionId: string, remotePath: string): string | undefined {
   const norm = normalizeRemoteWorkspacePath(remotePath);
   const cid = connectionId.trim();

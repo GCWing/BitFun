@@ -4,8 +4,8 @@ export const acpPermissionActionsAppearanceDescriptor: AppearanceSurfaceDescript
   id: 'acp-permission-actions',
   parts: [{ id: 'root' }, { id: 'action' }],
   facets: [
-    { id: 'presentation', attribute: 'data-bf-presentation', values: ['icon', 'text'] },
-    { id: 'decision', attribute: 'data-bf-decision', values: ['allow', 'reject'] },
+    { id: 'presentation', attribute: 'data-openbitfun-presentation', values: ['icon', 'text'] },
+    { id: 'decision', attribute: 'data-openbitfun-decision', values: ['allow', 'reject'] },
   ],
   states: [{ id: 'disabled', selector: { kind: 'self', suffix: ':disabled' } }],
 };

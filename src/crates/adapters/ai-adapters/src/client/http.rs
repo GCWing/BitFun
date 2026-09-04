@@ -8,13 +8,13 @@ pub(crate) fn create_http_client(
     proxy_config: Option<ProxyConfig>,
     skip_ssl_verify: bool,
 ) -> Client {
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     let mut builder = Client::builder()
         .tls_backend_rustls()
         .connect_timeout(std::time::Duration::from_secs(
             AIClient::STREAM_CONNECT_TIMEOUT_SECS,
         ))
-        .user_agent("BitFun/1.0")
+        .user_agent("OpenBitFun/1.0")
         .pool_idle_timeout(std::time::Duration::from_secs(
             AIClient::HTTP_POOL_IDLE_TIMEOUT_SECS,
         ))

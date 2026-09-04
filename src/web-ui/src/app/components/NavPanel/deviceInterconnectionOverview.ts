@@ -215,7 +215,7 @@ function connectionServiceFromActiveMethod(
   if (method.startsWith('ngrok')) {
     return { kind: 'public-tunnel', url: null, host: null };
   }
-  if (method.startsWith('bitfunserver')) {
+  if (method.startsWith('openbitfunserver')) {
     return { kind: 'official', url: null, host: OFFICIAL_RELAY_HOST };
   }
   if (method.startsWith('customserver')) {
@@ -316,8 +316,8 @@ export function projectDeviceInterconnectionOverview(
 
   let backgroundTaskCount = 0;
   for (const job of input.dispatchJobs) {
-    // SSH is a remote-workspace / transport concern, not a BitFun device.
-    // Only a same-account BitFun host belongs in this overview.
+    // SSH is a remote-workspace / transport concern, not a OpenBitFun device.
+    // Only a same-account OpenBitFun host belongs in this overview.
     if (!ACTIVE_DISPATCH_STATES.has(job.state) || job.target.kind !== 'device') {
       continue;
     }

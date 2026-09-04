@@ -8,10 +8,10 @@
   box-sizing: border-box;
   width: min(100%, 900px);
   margin: 0 auto;
-  padding: 0 var(--bf-control-flow-chat-content-padding-inline);
+  padding: 0 var(--openbitfun-control-flow-chat-content-padding-inline);
 
   @media (max-width: 768px) {
-    padding: 0 var(--bf-control-flow-chat-content-padding-inline-mobile);
+    padding: 0 var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
   }
 }
 
@@ -19,26 +19,26 @@
 
 .explore-region--collapsible {
   margin: 0 0 0.3rem 0;
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 
   .explore-region__header {
     display: flex;
     align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
     padding: 0;
     background: transparent;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     cursor: pointer;
     user-select: none;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     transition: color 0.15s ease;
 
     &:hover {
       .explore-region__summary {
-        color: var(--bf-color-content-secondary);
+        color: var(--openbitfun-color-content-secondary);
         opacity: 1;
       }
 
@@ -58,17 +58,17 @@
 
   .explore-region__leading-icon {
     position: relative;
-    width: var(--bf-control-icon-size-sm);
-    height: var(--bf-control-icon-size-sm);
+    width: var(--openbitfun-control-icon-size-sm);
+    height: var(--openbitfun-control-icon-size-sm);
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.6;
     transition: opacity 0.15s ease;
 
-    > [data-bf-component='icon'] {
+    > [data-openbitfun-component='icon'] {
       position: absolute;
       inset: 0;
       transition: opacity 0.15s ease;
@@ -85,8 +85,8 @@
   }
 
   .explore-region__summary {
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     opacity: 0.8;
   }
 
@@ -114,11 +114,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-color-border-default);
+      background: var(--openbitfun-color-border-default);
       border-radius: 2px;
 
       &:hover {
-        background: var(--bf-color-field-border-hover);
+        background: var(--openbitfun-color-field-border-hover);
       }
     }
   }
@@ -159,8 +159,8 @@
     z-index: 3;
     background: linear-gradient(
       to bottom,
-      var(--bf-color-surface-scene) 0%,
-      color-mix(in srgb, var(--bf-color-surface-scene) 60%, transparent) 50%,
+      var(--openbitfun-color-surface-scene) 0%,
+      color-mix(in srgb, var(--openbitfun-color-surface-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }
@@ -178,8 +178,8 @@
     z-index: 3;
     background: linear-gradient(
       to top,
-      var(--bf-color-surface-scene) 0%,
-      color-mix(in srgb, var(--bf-color-surface-scene) 60%, transparent) 50%,
+      var(--openbitfun-color-surface-scene) 0%,
+      color-mix(in srgb, var(--openbitfun-color-surface-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }

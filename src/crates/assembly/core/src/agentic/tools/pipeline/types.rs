@@ -6,8 +6,8 @@ use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
-use bitfun_agent_tools::{ResolvedToolInvocation, ValidationResult};
-use bitfun_runtime_ports::{
+use openbitfun_agent_tools::{ResolvedToolInvocation, ValidationResult};
+use openbitfun_runtime_ports::{
     DelegationPolicy, PermissionDelegationContext, RemoteExecPort, ResolvedPermissionPolicy,
     TerminalPort,
 };
@@ -96,7 +96,7 @@ pub struct ToolExecutionContext {
     pub permission_delegation: Option<PermissionDelegationContext>,
     pub(crate) delegation_policy: DelegationPolicy,
     pub deferred_tools: Vec<String>,
-    pub loaded_deferred_tool_specs: Vec<bitfun_agent_tools::LoadedDeferredToolSpec>,
+    pub loaded_deferred_tool_specs: Vec<openbitfun_agent_tools::LoadedDeferredToolSpec>,
     /// Allowed tools list (whitelist)
     /// If empty, allow all registered tools
     /// If not empty, only allow tools in the list to be executed

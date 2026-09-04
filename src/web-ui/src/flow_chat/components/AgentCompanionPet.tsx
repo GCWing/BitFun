@@ -1,5 +1,5 @@
 /**
- * BitFun Agent companion renderer — sleeping panda and Petdex sprites.
+ * OpenBitFun Agent companion renderer — sleeping panda and Petdex sprites.
  *
  * Geometry: lifted verbatim from the user's hand-drawn panda.svg
  * (viewBox 320x204). The component layers:
@@ -48,14 +48,14 @@ const PETDEX_ROWS = 9;
 
 function Silhouette() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="silhouette" className="bitfun-panda-head__silhouette" aria-hidden>
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="silhouette" className="openbitfun-panda-head__silhouette" aria-hidden>
       {/* Ears + back-hump bump */}
-      <g className="bitfun-panda-head__ears">
-        <g className="bitfun-panda-head__ear bitfun-panda-head__ear--left">
-          <ellipse cx={50} cy={70} rx={29} ry={29} className="bitfun-panda__b" />
+      <g className="openbitfun-panda-head__ears">
+        <g className="openbitfun-panda-head__ear openbitfun-panda-head__ear--left">
+          <ellipse cx={50} cy={70} rx={29} ry={29} className="openbitfun-panda__b" />
         </g>
-        <g className="bitfun-panda-head__ear bitfun-panda-head__ear--right">
-          <ellipse cx={181} cy={42} rx={28} ry={27} className="bitfun-panda__b" />
+        <g className="openbitfun-panda-head__ear openbitfun-panda-head__ear--right">
+          <ellipse cx={181} cy={42} rx={28} ry={27} className="openbitfun-panda__b" />
         </g>
       </g>
       <ellipse
@@ -63,64 +63,64 @@ function Silhouette() {
         cy={96}
         rx={22}
         ry={24}
-        className="bitfun-panda__b"
+        className="openbitfun-panda__b"
         transform="rotate(-38 259 96)"
       />
 
       {/* Back body and rear leg */}
       <path
-        className="bitfun-panda__b"
+        className="openbitfun-panda__b"
         d="M190 76 C216 68 242 78 262 100 C279 112 293 119 304 136 C315 152 311 165 292 168 C268 170 246 172 225 178 C196 185 168 181 156 166 C143 148 147 115 160 96 C167 86 177 80 190 76Z"
       />
 
       {/* Front body and left foreleg */}
-      <g className="bitfun-panda-head__body bitfun-panda-head__body--front">
+      <g className="openbitfun-panda-head__body openbitfun-panda-head__body--front">
         <path
-          className="bitfun-panda__b"
+          className="openbitfun-panda__b"
           d="M36 130 C33 91 60 45 113 36 C155 29 194 43 208 76 C223 111 206 154 168 171 C135 187 90 188 50 181 C25 176 13 165 15 151 C17 141 24 134 36 130Z"
         />
       </g>
 
       {/* White face */}
       <path
-        className="bitfun-panda__face-mask"
+        className="openbitfun-panda__face-mask"
         d="M55 132 C58 84 88 51 128 49 C169 47 200 68 201 103 C202 137 176 164 139 170 C103 175 69 160 58 139 C56 136 55 134 55 132Z"
       />
 
       {/* White shoulder */}
       <path
-        className="bitfun-panda__face-mask"
+        className="openbitfun-panda__face-mask"
         d="M207 84 C232 89 253 112 257 138 C260 153 252 164 237 166 C239 142 232 118 214 100 C210 96 207 91 207 84Z"
       />
 
       {/* Dark face-mask patches (eye patches) */}
       <path
-        className="bitfun-panda__b"
+        className="openbitfun-panda__b"
         d="M69 139 C74 122 88 111 103 108 C112 107 116 113 112 121 C106 132 96 141 92 154 C90 162 80 164 73 158 C67 153 66 146 69 139Z"
       />
       <path
-        className="bitfun-panda__b"
+        className="openbitfun-panda__b"
         d="M137 103 C150 98 171 103 181 116 C188 125 184 136 173 138 C160 140 145 134 137 123 C130 114 130 106 137 103Z"
       />
 
       {/* Dark front paws and chin outline (split into LEFT/RIGHT for paw taps) */}
-      <g className="bitfun-panda-head__paw bitfun-panda-head__paw--front">
+      <g className="openbitfun-panda-head__paw openbitfun-panda-head__paw--front">
         <path
-          className="bitfun-panda__b"
+          className="openbitfun-panda__b"
           d="M22 142 C39 129 72 130 97 142 C111 149 113 162 102 171 C87 184 49 181 27 170 C11 162 10 151 22 142Z"
         />
       </g>
-      <g className="bitfun-panda-head__paw bitfun-panda-head__paw--rear">
+      <g className="openbitfun-panda-head__paw openbitfun-panda-head__paw--rear">
         <path
-          className="bitfun-panda__b"
+          className="openbitfun-panda__b"
           d="M151 144 C171 133 209 133 232 145 C247 153 246 165 231 173 C209 184 169 184 151 173 C138 165 138 152 151 144Z"
         />
       </g>
 
       {/* White muzzle (animated for yawn) */}
-      <g className="bitfun-panda-head__muzzle">
+      <g className="openbitfun-panda-head__muzzle">
         <path
-          className="bitfun-panda__face-mask"
+          className="openbitfun-panda__face-mask"
           d="M96 151 C104 138 122 136 137 140 C154 145 161 158 151 169 C142 178 115 179 103 171 C95 166 92 158 96 151Z"
         />
       </g>
@@ -131,7 +131,7 @@ function Silhouette() {
         cy={153}
         rx={18}
         ry={8}
-        className="bitfun-panda__b"
+        className="openbitfun-panda__b"
         transform="rotate(-8 130 153)"
       />
     </g>
@@ -142,26 +142,26 @@ function Silhouette() {
 
 function FaceRest() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="rest" className="bitfun-panda-head__face bitfun-panda-head__face--rest">
-      <g className="bitfun-panda-head__zzz" aria-hidden>
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="rest" className="openbitfun-panda-head__face openbitfun-panda-head__face--rest">
+      <g className="openbitfun-panda-head__zzz" aria-hidden>
         <text
           x={215}
           y={75}
-          className="bitfun-panda-head__zzz-glyph bitfun-panda-head__zzz-glyph--a"
+          className="openbitfun-panda-head__zzz-glyph openbitfun-panda-head__zzz-glyph--a"
         >
           z
         </text>
         <text
           x={245}
           y={45}
-          className="bitfun-panda-head__zzz-glyph bitfun-panda-head__zzz-glyph--b"
+          className="openbitfun-panda-head__zzz-glyph openbitfun-panda-head__zzz-glyph--b"
         >
           z
         </text>
         <text
           x={278}
           y={18}
-          className="bitfun-panda-head__zzz-glyph bitfun-panda-head__zzz-glyph--c"
+          className="openbitfun-panda-head__zzz-glyph openbitfun-panda-head__zzz-glyph--c"
         >
           Z
         </text>
@@ -172,11 +172,11 @@ function FaceRest() {
 
 function FaceAnalyzing() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="analyze" className="bitfun-panda-head__face bitfun-panda-head__face--analyze">
-      <g className="bitfun-panda-head__think" aria-hidden>
-        <circle cx={222} cy={72} r={4.5} className="bitfun-panda__b bitfun-panda-head__think-pip" />
-        <circle cx={250} cy={48} r={6} className="bitfun-panda__b bitfun-panda-head__think-pip" />
-        <circle cx={282} cy={20} r={8} className="bitfun-panda__b bitfun-panda-head__think-pip" />
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="analyze" className="openbitfun-panda-head__face openbitfun-panda-head__face--analyze">
+      <g className="openbitfun-panda-head__think" aria-hidden>
+        <circle cx={222} cy={72} r={4.5} className="openbitfun-panda__b openbitfun-panda-head__think-pip" />
+        <circle cx={250} cy={48} r={6} className="openbitfun-panda__b openbitfun-panda-head__think-pip" />
+        <circle cx={282} cy={20} r={8} className="openbitfun-panda__b openbitfun-panda-head__think-pip" />
       </g>
     </g>
   );
@@ -184,11 +184,11 @@ function FaceAnalyzing() {
 
 function FaceWaiting() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="wait" className="bitfun-panda-head__face bitfun-panda-head__face--wait">
-      <g className="bitfun-panda-head__wait-pips" aria-hidden>
-        <circle cx={228} cy={50} r={5} className="bitfun-panda-head__wait-pip" />
-        <circle cx={252} cy={50} r={5} className="bitfun-panda-head__wait-pip" />
-        <circle cx={276} cy={50} r={5} className="bitfun-panda-head__wait-pip" />
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="wait" className="openbitfun-panda-head__face openbitfun-panda-head__face--wait">
+      <g className="openbitfun-panda-head__wait-pips" aria-hidden>
+        <circle cx={228} cy={50} r={5} className="openbitfun-panda-head__wait-pip" />
+        <circle cx={252} cy={50} r={5} className="openbitfun-panda-head__wait-pip" />
+        <circle cx={276} cy={50} r={5} className="openbitfun-panda-head__wait-pip" />
       </g>
     </g>
   );
@@ -196,12 +196,12 @@ function FaceWaiting() {
 
 function FaceWorking() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="work" className="bitfun-panda-head__face bitfun-panda-head__face--work">
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="work" className="openbitfun-panda-head__face openbitfun-panda-head__face--work">
       {/* Sweat drop trickling down from forehead — classic "trying hard" cue. */}
-      <g className="bitfun-panda-head__sweat" aria-hidden>
+      <g className="openbitfun-panda-head__sweat" aria-hidden>
         <path
           d="M210 50 C204 60 204 72 210 76 C216 72 216 60 210 50 Z"
-          className="bitfun-panda-head__sweat-drop"
+          className="openbitfun-panda-head__sweat-drop"
         />
       </g>
     </g>
@@ -210,10 +210,10 @@ function FaceWorking() {
 
 function FaceHover() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="hover" className="bitfun-panda-head__face bitfun-panda-head__face--hover">
-      <g className="bitfun-panda-head__sparkles" aria-hidden>
-        <path d="M226 46 L232 58 L244 64 L232 70 L226 82 L220 70 L208 64 L220 58 Z" className="bitfun-panda-head__sparkle bitfun-panda-head__sparkle--a" />
-        <path d="M270 20 L274 28 L282 32 L274 36 L270 44 L266 36 L258 32 L266 28 Z" className="bitfun-panda-head__sparkle bitfun-panda-head__sparkle--b" />
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="hover" className="openbitfun-panda-head__face openbitfun-panda-head__face--hover">
+      <g className="openbitfun-panda-head__sparkles" aria-hidden>
+        <path d="M226 46 L232 58 L244 64 L232 70 L226 82 L220 70 L208 64 L220 58 Z" className="openbitfun-panda-head__sparkle openbitfun-panda-head__sparkle--a" />
+        <path d="M270 20 L274 28 L282 32 L274 36 L270 44 L266 36 L258 32 L266 28 Z" className="openbitfun-panda-head__sparkle openbitfun-panda-head__sparkle--b" />
       </g>
     </g>
   );
@@ -221,10 +221,10 @@ function FaceHover() {
 
 function FaceDragging() {
   return (
-    <g data-bf-component="chat-input-pixel-pet" data-bf-part="drag" className="bitfun-panda-head__face bitfun-panda-head__face--drag">
-      <g className="bitfun-panda-head__drag-lines" aria-hidden>
-        <path d="M226 48 C244 40 262 40 282 48" className="bitfun-panda-head__drag-line bitfun-panda-head__drag-line--a" />
-        <path d="M230 72 C248 64 268 65 286 75" className="bitfun-panda-head__drag-line bitfun-panda-head__drag-line--b" />
+    <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="drag" className="openbitfun-panda-head__face openbitfun-panda-head__face--drag">
+      <g className="openbitfun-panda-head__drag-lines" aria-hidden>
+        <path d="M226 48 C244 40 262 40 282 48" className="openbitfun-panda-head__drag-line openbitfun-panda-head__drag-line--a" />
+        <path d="M230 72 C248 64 268 65 286 75" className="openbitfun-panda-head__drag-line openbitfun-panda-head__drag-line--b" />
       </g>
     </g>
   );
@@ -394,10 +394,10 @@ export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
   }, [mood]);
 
   const stageClasses = [
-    'bitfun-agent-companion-pet__stage',
-    `bitfun-agent-companion-pet__stage--${mood}`,
-    transitioning ? 'bitfun-agent-companion-pet__stage--transition' : '',
-    idleAction ? `bitfun-agent-companion-pet__stage--idle-${idleAction}` : '',
+    'openbitfun-agent-companion-pet__stage',
+    `openbitfun-agent-companion-pet__stage--${mood}`,
+    transitioning ? 'openbitfun-agent-companion-pet__stage--transition' : '',
+    idleAction ? `openbitfun-agent-companion-pet__stage--idle-${idleAction}` : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -413,25 +413,25 @@ export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
     };
     const nativePetdexStyle = nativePetdexSize && petFrameSize
       ? {
-        '--bitfun-petdex-width': `${petFrameSize.width}px`,
-        '--bitfun-petdex-height': `${petFrameSize.height}px`,
+        '--openbitfun-petdex-width': `${petFrameSize.width}px`,
+        '--openbitfun-petdex-height': `${petFrameSize.height}px`,
       }
       : {};
     return (
-      <div data-bf-component="chat-input-pixel-pet" data-bf-part="root"
-        data-bf-mood={mood}
-        data-bf-layout="petdex"
-        className={`bitfun-agent-companion-pet ${className}`.trim()}
+      <div data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="root"
+        data-openbitfun-mood={mood}
+        data-openbitfun-layout="petdex"
+        className={`openbitfun-agent-companion-pet ${className}`.trim()}
         style={nativePetdexStyle as React.CSSProperties}
         aria-hidden
       >
         <div
-          data-bf-component="chat-input-pixel-pet"
-          data-bf-part="petdex"
-          className={`bitfun-agent-companion-pet__petdex bitfun-agent-companion-pet__petdex--${mood}`}
+          data-openbitfun-component="chat-input-pixel-pet"
+          data-openbitfun-part="petdex"
+          className={`openbitfun-agent-companion-pet__petdex openbitfun-agent-companion-pet__petdex--${mood}`}
           style={{
-            '--bitfun-petdex-src': `url("${petSrc}")`,
-            '--bitfun-petdex-row': rowByMood[mood],
+            '--openbitfun-petdex-src': `url("${petSrc}")`,
+            '--openbitfun-petdex-row': rowByMood[mood],
           } as React.CSSProperties}
         />
       </div>
@@ -440,17 +440,17 @@ export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
 
   if (pet) {
     return (
-      <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout="default" className={`bitfun-agent-companion-pet ${className}`.trim()} aria-hidden />
+      <div data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="root" data-openbitfun-mood={mood} data-openbitfun-layout="default" className={`openbitfun-agent-companion-pet ${className}`.trim()} aria-hidden />
     );
   }
 
   return (
-    <div data-bf-component="chat-input-pixel-pet" data-bf-part="root" data-bf-mood={mood} data-bf-layout="default" className={`bitfun-agent-companion-pet ${className}`.trim()} aria-hidden>
-      <div data-bf-component="chat-input-pixel-pet" data-bf-part="stage" className={stageClasses}>
+    <div data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="root" data-openbitfun-mood={mood} data-openbitfun-layout="default" className={`openbitfun-agent-companion-pet ${className}`.trim()} aria-hidden>
+      <div data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="stage" className={stageClasses}>
         <svg
-          data-bf-component="chat-input-pixel-pet"
-          data-bf-part="svg"
-          className={`bitfun-agent-companion-pet__svg bitfun-agent-companion-pet__svg--${mood}`}
+          data-openbitfun-component="chat-input-pixel-pet"
+          data-openbitfun-part="svg"
+          className={`openbitfun-agent-companion-pet__svg openbitfun-agent-companion-pet__svg--${mood}`}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           xmlns="http://www.w3.org/2000/svg"
           aria-hidden
@@ -462,7 +462,7 @@ export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
              original graphic on top. */}
           <defs>
             <filter
-              id="bitfun-panda-outline"
+              id="openbitfun-panda-outline"
               x="-15%"
               y="-15%"
               width="130%"
@@ -477,13 +477,13 @@ export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
               </feMerge>
             </filter>
           </defs>
-          <g className={`bitfun-panda-head bitfun-panda-head--${mood}`}>
+          <g className={`openbitfun-panda-head openbitfun-panda-head--${mood}`}>
             <Silhouette />
-            <g data-bf-component="chat-input-pixel-pet" data-bf-part="face" className="bitfun-panda-head__faces">
+            <g data-openbitfun-component="chat-input-pixel-pet" data-openbitfun-part="face" className="openbitfun-panda-head__faces">
               {FACE_ORDER.map(m => (
                 <g
                   key={m}
-                  className="bitfun-panda-head__face-layer"
+                  className="openbitfun-panda-head__face-layer"
                   data-active={m === mood ? 'true' : 'false'}
                 >
                   {FaceFor(m)}

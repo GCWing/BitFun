@@ -23,7 +23,7 @@
 
     &:hover,
     &.is-dragging {
-      background: var(--bf-color-action-secondary-background);
+      background: var(--openbitfun-color-action-secondary-background);
     }
 
     .canvas-split-handle__line {
@@ -46,7 +46,7 @@
 
     &:hover,
     &.is-dragging {
-      background: var(--bf-color-action-secondary-background);
+      background: var(--openbitfun-color-action-secondary-background);
     }
 
     .canvas-split-handle__line {
@@ -64,13 +64,13 @@
 
   // Divider line
   &__line {
-    background: var(--bf-color-border-default);
+    background: var(--openbitfun-color-border-default);
     transition: background-color 0.15s ease;
   }
 
   &:hover &__line,
   &.is-dragging &__line {
-    background: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
   }
 
   // Grip handle
@@ -79,10 +79,10 @@
     align-items: center;
     justify-content: center;
     padding: 4px;
-    background: var(--bf-color-surface-panel);
-    border: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-panel);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 4px;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0;
     transition: opacity 0.15s ease, color 0.15s ease;
   }
@@ -94,8 +94,8 @@
 
   &:hover &__grip,
   &.is-dragging &__grip {
-    color: var(--bf-color-accent-default);
-    border-color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
+    border-color: var(--openbitfun-color-accent-default);
   }
 }
 

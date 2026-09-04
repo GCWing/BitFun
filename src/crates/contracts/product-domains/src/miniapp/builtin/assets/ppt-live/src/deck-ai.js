@@ -3,7 +3,7 @@ import { clone, ensureState, makeSlide, normalizeSlide, uid } from './state.js';
 import { STYLE_PRESETS } from './style-presets.js';
 
 const PPT_DESIGN_SKILL_CONTEXT = [
-  'You are PPT Live, a presentation design engine embedded in BitFun.',
+  'You are PPT Live, a presentation design engine embedded in OpenBitFun.',
   'The user is the final decision maker. Execute the PPT task end to end and do not impose any fixed content agenda on the topic.',
   '',
   'Production method:',
@@ -1367,7 +1367,7 @@ function cleanUrlToken(value) {
 }
 
 async function askAi() {
-  throw new Error('PPT Live generation must use the BitFun host AI client');
+  throw new Error('PPT Live generation must use the OpenBitFun host AI client');
 }
 
 function extractJson(value) {

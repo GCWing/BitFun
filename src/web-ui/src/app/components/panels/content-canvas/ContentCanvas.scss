@@ -8,7 +8,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
   overflow: hidden;
   // Create isolated stacking context to prevent high z-index elements
   // from covering external floating UI (ChatInput, popovers, etc.)

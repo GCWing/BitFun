@@ -360,10 +360,10 @@ mod tests {
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("\"$BITFUN_PROCESS_TREE_TEST_EXE\" --exact process_tree::tests::unix_detached_fixture_process --nocapture")
-            .env("BITFUN_PROCESS_TREE_TEST_EXE", executable)
-            .env("BITFUN_DETACHED_FIXTURE", "1")
-            .env("BITFUN_DESCENDANT_PID_FILE", &pid_file)
+            .arg("\"$OPENBITFUN_PROCESS_TREE_TEST_EXE\" --exact process_tree::tests::unix_detached_fixture_process --nocapture")
+            .env("OPENBITFUN_PROCESS_TREE_TEST_EXE", executable)
+            .env("OPENBITFUN_DETACHED_FIXTURE", "1")
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", &pid_file)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
@@ -389,7 +389,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_detached_fixture_process() {
-        if std::env::var_os("BITFUN_DETACHED_FIXTURE").is_none() {
+        if std::env::var_os("OPENBITFUN_DETACHED_FIXTURE").is_none() {
             return;
         }
         assert!(
@@ -398,7 +398,8 @@ mod tests {
             unsafe { libc::setsid() } >= 0,
             "fixture must create a new session"
         );
-        let pid_file = std::env::var("BITFUN_DESCENDANT_PID_FILE").expect("fixture PID file path");
+        let pid_file =
+            std::env::var("OPENBITFUN_DESCENDANT_PID_FILE").expect("fixture PID file path");
         std::fs::write(pid_file, std::process::id().to_string())
             .expect("publish detached fixture PID");
         loop {
@@ -408,27 +409,27 @@ mod tests {
 
     #[cfg(windows)]
     fn descendant_fixture(pid_file: &Path) -> Command {
-        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:BITFUN_DESCENDANT_PID_FILE, [string]$child.Id); while ($true) { Start-Sleep -Seconds 60 }"#;
+        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:OPENBITFUN_DESCENDANT_PID_FILE, [string]$child.Id); while ($true) { Start-Sleep -Seconds 60 }"#;
         let mut command = Command::new("powershell.exe");
         command
             .arg("-NoProfile")
             .arg("-NonInteractive")
             .arg("-Command")
             .arg(script)
-            .env("BITFUN_DESCENDANT_PID_FILE", pid_file);
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
         command
     }
 
     #[cfg(windows)]
     fn orphaned_descendant_fixture(pid_file: &Path) -> Command {
-        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:BITFUN_DESCENDANT_PID_FILE, [string]$child.Id)"#;
+        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:OPENBITFUN_DESCENDANT_PID_FILE, [string]$child.Id)"#;
         let mut command = Command::new("powershell.exe");
         command
             .arg("-NoProfile")
             .arg("-NonInteractive")
             .arg("-Command")
             .arg(script)
-            .env("BITFUN_DESCENDANT_PID_FILE", pid_file);
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
         command
     }
 
@@ -437,8 +438,8 @@ mod tests {
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("sleep 60 & echo $! > \"$BITFUN_DESCENDANT_PID_FILE\"; wait")
-            .env("BITFUN_DESCENDANT_PID_FILE", pid_file);
+            .arg("sleep 60 & echo $! > \"$OPENBITFUN_DESCENDANT_PID_FILE\"; wait")
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
         command
     }
 
@@ -447,8 +448,8 @@ mod tests {
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("sleep 60 & echo $! > \"$BITFUN_DESCENDANT_PID_FILE\"")
-            .env("BITFUN_DESCENDANT_PID_FILE", pid_file);
+            .arg("sleep 60 & echo $! > \"$OPENBITFUN_DESCENDANT_PID_FILE\"")
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
         command
     }
 

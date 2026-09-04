@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
@@ -166,8 +166,8 @@ const PersistentFooterActions: React.FC = () => {
         setShowRemoteDisclaimer(true);
       }
     };
-    window.addEventListener('bitfun:open-remote-connect', handlePlaybookOpen);
-    return () => window.removeEventListener('bitfun:open-remote-connect', handlePlaybookOpen);
+    window.addEventListener('openbitfun:open-remote-connect', handlePlaybookOpen);
+    return () => window.removeEventListener('openbitfun:open-remote-connect', handlePlaybookOpen);
   }, [hasAgreedRemoteDisclaimer]);
 
   const handleAgreeDisclaimer = useCallback(() => {
@@ -181,8 +181,8 @@ const PersistentFooterActions: React.FC = () => {
 
   return (
     <>
-      <div className="bitfun-nav-panel__footer" data-bf-component="nav-panel" data-bf-part="footer">
-        <div className="bitfun-nav-panel__footer-left">
+      <div className="openbitfun-nav-panel__footer" data-openbitfun-component="nav-panel" data-openbitfun-part="footer">
+        <div className="openbitfun-nav-panel__footer-left">
           <DeviceStatusControl
             open={deviceOverviewOpen}
             onOpenChange={handleDeviceOverviewOpenChange}
@@ -190,8 +190,8 @@ const PersistentFooterActions: React.FC = () => {
           />
         </div>
 
-        <div className="bitfun-nav-panel__footer-right">
-          <div className="bitfun-nav-panel__footer-menu-wrap">
+        <div className="openbitfun-nav-panel__footer-right">
+          <div className="openbitfun-nav-panel__footer-menu-wrap">
             <Tooltip
               content={t('shared:features.settings')}
               placement="right"
@@ -200,16 +200,16 @@ const PersistentFooterActions: React.FC = () => {
             >
               <IconButton
                 ref={menuTriggerRef}
-                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${menuOpen || isSettingsActive ? ' is-active' : ''}`}
+                className={`openbitfun-nav-panel__footer-btn openbitfun-nav-panel__footer-btn--icon${menuOpen || isSettingsActive ? ' is-active' : ''}`}
                 aria-label={t('shared:features.settings')}
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
                 aria-pressed={isSettingsActive}
                 onClick={toggleMenu}
                 data-testid="nav-footer-settings-item"
-                data-bf-component="nav-panel"
-                data-bf-part="settingsEntry"
-                data-bf-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
+                data-openbitfun-component="nav-panel"
+                data-openbitfun-part="settingsEntry"
+                data-openbitfun-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
                 icon={<Icon name="gear" size="sm" aria-hidden="true" />}
                 size="sm"
                 variant="quiet"
@@ -219,12 +219,12 @@ const PersistentFooterActions: React.FC = () => {
             {menuOpen && createPortal(
               <>
                 <div
-                  className="bitfun-nav-panel__footer-backdrop"
+                  className="openbitfun-nav-panel__footer-backdrop"
                   onClick={closeMenu}
                 />
                 <Menu
                   ref={menuPopoverRef}
-                  className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
+                  className={`openbitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
                   aria-label={t('shared:features.settings')}
                   data-testid="nav-settings-menu"
                   onKeyDown={(event) => {

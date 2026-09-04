@@ -1,5 +1,5 @@
 (function () {
-  var storageKey = 'bitfun-market-theme';
+  var storageKey = 'openbitfun-market-theme';
   var storedTheme = null;
 
   try {
@@ -16,7 +16,7 @@
         : 'light';
 
   var root = document.documentElement;
-  root.setAttribute('data-bf-design-system-root', '');
+  root.setAttribute('data-openbitfun-design-system-root', '');
   root.dataset.colorScheme = theme;
   root.dataset.contrast = 'standard';
   root.dataset.density = 'comfortable';

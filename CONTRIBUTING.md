@@ -2,7 +2,7 @@
 
 [中文版](./CONTRIBUTING_CN.md)
 
-Thanks for your interest in BitFun! BitFun is a multi-platform AI programming environment powered by Rust and TypeScript, with shared core logic across Desktop/CLI/Server. This guide explains how to contribute effectively.
+Thanks for your interest in OpenBitFun! OpenBitFun is a multi-platform AI programming environment powered by Rust and TypeScript, with shared core logic across Desktop/CLI/Server. This guide explains how to contribute effectively.
 
 ## Code of Conduct
 
@@ -17,7 +17,7 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 - Rust toolchain (install via [rustup](https://rustup.rs/))
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop development
 
-BitFun standardizes local JavaScript builds and CI on Node.js 22.12+. The GitHub
+OpenBitFun standardizes local JavaScript builds and CI on Node.js 22.12+. The GitHub
 Actions upgrades in this repository use Node.js 24-compatible action runtimes,
 but project scripts should run on Node.js 22.12+ unless a narrower local guide
 says otherwise. After switching from an older Node.js version, rerun
@@ -25,7 +25,7 @@ says otherwise. After switching from an older Node.js version, rerun
 
 #### Build Prerequisites Check
 
-When `cargo check --workspace`, `cargo check -p bitfun-desktop`, or pnpm build
+When `cargo check --workspace`, `cargo check -p openbitfun-desktop`, or pnpm build
 commands fail with confusing errors (e.g., "resource path doesn't exist" or
 sherpa-onnx download failures), run the preflight check to identify missing
 prerequisites and get actionable fix commands:
@@ -39,8 +39,8 @@ The check detects:
 
 - Missing `node_modules` (fix: `pnpm install`)
 - Missing `src/mobile-web/dist` (fix: `pnpm run prepare:mobile-web` — the
-  bitfun-desktop Tauri build script references this directory as a resource,
-  so `cargo check -p bitfun-desktop` and `cargo check --workspace` fail
+  openbitfun-desktop Tauri build script references this directory as a resource,
+  so `cargo check -p openbitfun-desktop` and `cargo check --workspace` fail
   without it)
 - Missing sherpa-onnx prebuilt libs (the sherpa-onnx-sys build script
   downloads from GitHub at build time; if the download fails on poor
@@ -77,7 +77,7 @@ pnpm run e2e:test
 ### Desktop debugging tools
 
 Desktop dev builds enable the `devtools` Cargo feature. Use `F12` for native
-webview DevTools. `Cmd/Ctrl + Shift + I` toggles the BitFun element inspector,
+webview DevTools. `Cmd/Ctrl + Shift + I` toggles the OpenBitFun element inspector,
 and `Cmd/Ctrl + Shift + J` also opens native DevTools. These tools are disabled
 in end-user `release` builds.
 
@@ -167,7 +167,7 @@ Common local checks:
 | Frontend runtime or UI | `pnpm run check:web`, plus the nearest focused test when behavior changed |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
 | Rust shared runtime or services | `cargo check --workspace`, plus a focused `cargo test` when behavior changed |
-| Desktop/Tauri integration | `cargo check -p bitfun-desktop` |
+| Desktop/Tauri integration | `cargo check -p openbitfun-desktop` |
 | i18n resources or contract | use the matching i18n row in `AGENTS.md` |
 
 For UI changes, include screenshots or a short recording when helpful. If you

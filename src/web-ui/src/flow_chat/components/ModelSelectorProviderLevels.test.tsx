@@ -22,6 +22,7 @@ const flowChatStoreMocks = vi.hoisted(() => {
   };
   const sessions = new Map<string, TestSession>();
   const subscribers = new Set<() => void>();
+  const configChangeListeners = new Set<(path: string) => void>();
   const store = {
     getState: () => ({ sessions }),
     subscribe: vi.fn((callback: () => void) => {
@@ -33,7 +34,7 @@ const flowChatStoreMocks = vi.hoisted(() => {
     updateSessionMaxContextTokens: vi.fn(),
     updateAcpContextUsage: vi.fn(),
   };
-  return { sessions, subscribers, store };
+  return { sessions, subscribers, configChangeListeners, store };
 });
 
 vi.mock('@/infrastructure/api/service-api/AIApi', () => ({
@@ -45,8 +46,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Switch: () => null,
 }));
@@ -54,7 +55,10 @@ vi.mock('@bitfun/ui', async importOriginal => ({
 vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
   configManager: {
     getConfigs: vi.fn(),
-    onConfigChange: vi.fn(() => () => undefined),
+    onConfigChange: vi.fn((listener: (path: string) => void) => {
+      flowChatStoreMocks.configChangeListeners.add(listener);
+      return () => flowChatStoreMocks.configChangeListeners.delete(listener);
+    }),
     setConfig: vi.fn(async () => undefined),
   },
 }));
@@ -131,11 +135,12 @@ describe('ModelSelector provider levels', () => {
 
   const openMenu = async () => {
     await openSettingsMenu();
-    await act(async () => {
-      document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="chat-model-selector-settings-model"]',
-      )?.click();
-    });
+    const settingsModel = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-model"]',
+    );
+    if (settingsModel) {
+      await act(async () => settingsModel.click());
+    }
   };
 
   const openProvider = async (providerKey: string) => {
@@ -151,7 +156,7 @@ describe('ModelSelector provider levels', () => {
   );
 
   const sharedSubmenuItems = () => nativeSubmenu()?.querySelector<HTMLElement>(
-    '[data-bf-part="section-items"]',
+    '[data-openbitfun-part="section-items"]',
   ) ?? null;
 
   const renderSelector = async (
@@ -180,6 +185,7 @@ describe('ModelSelector provider levels', () => {
   beforeEach(() => {
     flowChatStoreMocks.sessions.clear();
     flowChatStoreMocks.subscribers.clear();
+    flowChatStoreMocks.configChangeListeners.clear();
     const storage = new Map<string, string>();
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -314,7 +320,7 @@ describe('ModelSelector provider levels', () => {
     expect(options.map(option => option.dataset.presetId))
       .toEqual(['auto', 'off', 'on', 'low', 'medium', 'high']);
     expect(options.every(option => (
-      option.querySelector('.bitfun-model-selector__option-desc') === null
+      option.querySelector('.openbitfun-model-selector__option-desc') === null
     ))).toBe(true);
     expect(options.every(option => option.querySelector('svg') === null)).toBe(true);
     expect(options.find(option => option.dataset.presetId === 'high')?.getAttribute('aria-checked'))
@@ -366,7 +372,7 @@ describe('ModelSelector provider levels', () => {
 
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-settings"]',
-    )).not.toBeNull();
+    )).toBeNull();
     expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
     expect(sharedSubmenuItems()).not.toBeNull();
     expect(providerRows().every(row => sharedSubmenuItems()?.contains(row))).toBe(true);
@@ -379,8 +385,10 @@ describe('ModelSelector provider levels', () => {
     const submenuButtons = Array.from(
       sharedSubmenuItems()?.querySelectorAll<HTMLButtonElement>('button') ?? [],
     );
-    expect(submenuButtons.indexOf(providerRows()[1]))
-      .toBeLessThan(submenuButtons.indexOf(modelOption('primary')!));
+    expect(submenuButtons.indexOf(modelOption('primary')!))
+      .toBeLessThan(submenuButtons.indexOf(modelOption('fast')!));
+    expect(submenuButtons.indexOf(modelOption('fast')!))
+      .toBeLessThan(submenuButtons.indexOf(providerRows()[0]));
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-provider-selected-model"]',
     )).toBeNull();
@@ -458,7 +466,7 @@ describe('ModelSelector provider levels', () => {
     await openProvider('provider-acme');
     expect(modelOption('acme-deep')).not.toBeNull();
 
-    // Closing and reopening starts over at the settings summary.
+    // Closing and reopening opens the direct model list again.
     await act(async () => {
       container.querySelector<HTMLButtonElement>(
         '[data-testid="chat-model-selector-btn"]',
@@ -467,42 +475,217 @@ describe('ModelSelector provider levels', () => {
     await openSettingsMenu();
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-settings"]',
-    )).not.toBeNull();
-    expect(providerRows()).toHaveLength(0);
+    )).toBeNull();
+    expect(nativeSubmenu()?.dataset.submenuKind).toBe('models');
+    expect(providerRows()).toHaveLength(2);
     expect(modelOption('acme-deep')).toBeNull();
   });
 
-  it('lets Escape step out of a provider, then the submenu, before closing the menu', async () => {
+  it('keeps the selector visible and actionable when no model is configured', async () => {
+    const onAvailabilityChange = vi.fn();
+    vi.mocked(configManager.getConfigs).mockResolvedValue({
+      'ai.models': [],
+      'ai.default_models': {},
+      'ai.agent_model_defaults': { mode: 'primary' },
+    });
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          onAvailabilityChange={onAvailabilityChange}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-btn"]',
+    );
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain('modelSelector.status.unconfigured');
+    expect(onAvailabilityChange).toHaveBeenLastCalledWith({
+      status: 'unconfigured',
+      canSend: false,
+    });
+
+    await act(async () => trigger?.click());
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-status"][data-model-status="unconfigured"]',
+    )).not.toBeNull();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-open-settings"]',
+    )).not.toBeNull();
+  });
+
+  it('distinguishes configured models from enabled chat models', async () => {
+    const onAvailabilityChange = vi.fn();
+    vi.mocked(configManager.getConfigs).mockResolvedValue({
+      'ai.models': [{
+        ...model('disabled-model', 'Disabled', 'provider-disabled', 'https://disabled.test/v1'),
+        enabled: false,
+      }],
+      'ai.default_models': { primary: 'disabled-model' },
+      'ai.agent_model_defaults': { mode: 'primary' },
+    });
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          onAvailabilityChange={onAvailabilityChange}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-btn"]',
+    );
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain('modelSelector.status.noEnabledChatModel');
+    expect(onAvailabilityChange).toHaveBeenLastCalledWith({
+      status: 'no-enabled-chat-model',
+      canSend: false,
+    });
+  });
+
+  it('treats empty capabilities as the category default for legacy chat models', async () => {
+    const onAvailabilityChange = vi.fn();
+    vi.mocked(configManager.getConfigs).mockResolvedValue({
+      'ai.models': [{
+      ...model('legacy-chat', 'Legacy', 'provider-legacy', 'https://legacy.test/v1'),
+      category: 'general_chat',
+      capabilities: [],
+      }],
+      'ai.default_models': { primary: 'legacy-chat' },
+      'ai.agent_model_defaults': { mode: 'legacy-chat' },
+    });
+
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          onAvailabilityChange={onAvailabilityChange}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(onAvailabilityChange).toHaveBeenLastCalledWith({
+      status: 'ready',
+      canSend: true,
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+    });
+    expect(providerRows()).toHaveLength(1);
+    await openProvider('provider-legacy');
+    expect(modelOption('legacy-chat')).not.toBeNull();
+  });
+
+  it('keeps model choices available when the optional catalog request fails', async () => {
+    const onAvailabilityChange = vi.fn();
+    vi.mocked(configManager.getConfigs).mockResolvedValue({
+      'ai.models': CATALOG_MODELS,
+      'ai.default_models': { primary: 'acme-fast', fast: 'umbra-main' },
+      'ai.agent_model_defaults': { mode: 'acme-fast' },
+    });
+    aiApiMocks.getModelCatalog.mockRejectedValueOnce(new Error('catalog unavailable'));
+
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          modeDefaultModelId="acme-fast"
+          onAvailabilityChange={onAvailabilityChange}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(onAvailabilityChange).toHaveBeenLastCalledWith({
+      status: 'catalog-unavailable',
+      canSend: true,
+    });
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')).not.toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+    });
+    expect(providerRows()).toHaveLength(2);
+  });
+
+  it('refreshes the selector after the model configuration is saved', async () => {
+    const onAvailabilityChange = vi.fn();
+    const firstModel = model('first-model', 'First', 'provider-first', 'https://first.test/v1');
+    const secondModel = model('second-model', 'Second', 'provider-second', 'https://second.test/v1');
+
+    vi.mocked(configManager.getConfigs)
+      .mockResolvedValueOnce({
+        'ai.models': [firstModel],
+        'ai.default_models': { primary: 'first-model' },
+        'ai.agent_model_defaults': { mode: 'first-model' },
+      })
+      .mockResolvedValueOnce({
+        'ai.models': [secondModel],
+        'ai.default_models': { primary: 'second-model' },
+        'ai.agent_model_defaults': { mode: 'second-model' },
+      });
+
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          onAvailabilityChange={onAvailabilityChange}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.textContent)
+      .toContain('first-model-native');
+
+    const listeners = [...flowChatStoreMocks.configChangeListeners];
+    expect(listeners).toHaveLength(1);
+    await act(async () => {
+      // ModelSettingsPage writes ai.models through ConfigManager's ai-scoped
+      // mutation notification, so this is the post-save event to handle.
+      listeners[0]?.('ai');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.textContent)
+      .toContain('second-model-native');
+    expect(onAvailabilityChange).toHaveBeenLastCalledWith({
+      status: 'ready',
+      canSend: true,
+    });
+  });
+
+  it('lets Escape step out of a provider, then closes the direct model list', async () => {
     await renderSelector();
     await openMenu();
     await openProvider('provider-acme');
 
     const pressEscape = async () => {
       await act(async () => {
-        (nativeSubmenu() ?? document.body
-          .querySelector('[data-testid="chat-model-selector-menu"]'))
+        nativeSubmenu()
           ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
     };
 
     await pressEscape();
-    const menu = document.body.querySelector('[data-testid="chat-model-selector-menu"]');
-    expect(menu?.getAttribute('data-open')).toBe('true');
     expect(providerRows()).toHaveLength(2);
 
     await pressEscape();
     expect(nativeSubmenu()).toBeNull();
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-settings"]',
-    )).not.toBeNull();
-    expect(menu?.getAttribute('data-open')).toBe('true');
-
-    await pressEscape();
-    expect(
-      document.body
-        .querySelector('[data-testid="chat-model-selector-menu"]')
-        ?.getAttribute('data-open'),
-    ).toBe('false');
+    )).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-btn"]',
+    )?.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('opens native submenus only by click, keeps the parent stable, and toggles them explicitly', async () => {
@@ -566,7 +749,25 @@ describe('ModelSelector provider levels', () => {
   });
 
   it('supports Right and Left Arrow navigation and closes both menus on outside click', async () => {
-    await renderSelector();
+    flowChatStoreMocks.sessions.set('session-a', {
+      config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
+    });
+    aiApiMocks.getModelCatalog.mockResolvedValue({
+      version: 1,
+      default_models: { primary: 'acme-fast' },
+      models: [{
+        id: 'umbra-main',
+        reasoning: {
+          status: 'known',
+          default_preset: 'medium',
+          presets: [
+            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+          ],
+        },
+      }],
+    });
+    await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
     await openSettingsMenu();
     const modelRow = document.body.querySelector<HTMLButtonElement>(
       '[data-testid="chat-model-selector-settings-model"]',

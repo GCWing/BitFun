@@ -12,7 +12,7 @@ test("Spinner exposes canonical matrix and bar presentations", () => {
     variant: "bars",
   }));
 
-  assert.match(matrix, /data-bf-component="spinner"/);
+  assert.match(matrix, /data-openbitfun-component="spinner"/);
   assert.match(matrix, /data-variant="matrix"/);
   assert.equal((matrix.match(/aria-hidden="true"/g) ?? []).length, 10);
   assert.match(bars, /role="status"/);
@@ -22,15 +22,15 @@ test("Spinner exposes canonical matrix and bar presentations", () => {
 
 test("LoadingState composes Spinner with optional support copy", () => {
   const markup = renderToStaticMarkup(createElement(LoadingState, null, "Loading project"));
-  assert.match(markup, /data-bf-component="loading-state"/);
-  assert.match(markup, /data-bf-component="spinner"/);
-  assert.match(markup, /data-bf-part="label">Loading project/);
+  assert.match(markup, /data-openbitfun-component="loading-state"/);
+  assert.match(markup, /data-openbitfun-component="spinner"/);
+  assert.match(markup, /data-openbitfun-part="label">Loading project/);
 });
 
 test("Spinner styling uses public system, motion, and semantic tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
-  assert.match(styles, /--bf-layout-spinner-matrix-cell-md/);
-  assert.match(styles, /--bf-layout-spinner-matrix-gap-md/);
-  assert.match(styles, /--bf-motion-duration-loop/);
-  assert.match(styles, /--bf-color-content-muted/);
+  assert.match(styles, /--openbitfun-layout-spinner-matrix-cell-md/);
+  assert.match(styles, /--openbitfun-layout-spinner-matrix-gap-md/);
+  assert.match(styles, /--openbitfun-motion-duration-loop/);
+  assert.match(styles, /--openbitfun-color-content-muted/);
 });

@@ -10,7 +10,7 @@
 //! `max_results` here is for): reading files for matches that are about to be
 //! truncated away is pure I/O waste on large result sets.
 
-use bitfun_services_core::filesystem::{
+use openbitfun_services_core::filesystem::{
     ContentMatchPreviewBuilder, FileSearchResult, SearchMatchType,
 };
 use std::fs::File;

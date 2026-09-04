@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, SearchField, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Switch, Tooltip, ScrollArea } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, Plug2, RotateCcw, Wrench } from 'lucide-react';
 
@@ -647,9 +647,9 @@ const AssistantDefaultsPage: React.FC = () => {
           key={row.id}
           role="row"
           className={rowClassName}
-          data-bf-component="assistant-defaults-page"
-          data-bf-part="skill"
-          data-bf-state={rowState}
+          data-openbitfun-component="assistant-defaults-page"
+          data-openbitfun-part="skill"
+          data-openbitfun-state={rowState}
         >
           {rowContent}
         </div>
@@ -661,9 +661,9 @@ const AssistantDefaultsPage: React.FC = () => {
         key={row.id}
         role="row"
         className={rowClassName}
-        data-bf-component="assistant-defaults-page"
-        data-bf-part="tool"
-        data-bf-state={rowState}
+        data-openbitfun-component="assistant-defaults-page"
+        data-openbitfun-part="tool"
+        data-openbitfun-state={rowState}
       >
         {rowContent}
       </div>
@@ -671,7 +671,7 @@ const AssistantDefaultsPage: React.FC = () => {
   };
 
   const renderListHeader = () => (
-    <div role="row" className="assistant-defaults-list__header" data-bf-component="assistant-defaults-page" data-bf-part="listHeader">
+    <div role="row" className="assistant-defaults-list__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="listHeader">
       <div role="columnheader">{t('nursery.template.columns.name')}</div>
       <div role="columnheader">{t('nursery.template.columns.source')}</div>
       <div role="columnheader">{t('nursery.template.columns.availability')}</div>
@@ -683,7 +683,7 @@ const AssistantDefaultsPage: React.FC = () => {
   );
 
   const renderEmptyState = (message: string) => (
-    <div className="assistant-defaults-empty" data-bf-component="assistant-defaults-page" data-bf-part="empty">
+    <div className="assistant-defaults-empty" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="empty">
       <Icon name="search" size="lg" />
       <p>{message}</p>
       {(searchQuery || statusFilter !== 'all') ? (
@@ -731,11 +731,11 @@ const AssistantDefaultsPage: React.FC = () => {
             <section
               key={group.id}
               className="assistant-defaults-group"
-              data-bf-component="assistant-defaults-page"
-              data-bf-part="group"
-              data-bf-state={collapsed ? 'collapsed' : undefined}
+              data-openbitfun-component="assistant-defaults-page"
+              data-openbitfun-part="group"
+              data-openbitfun-state={collapsed ? 'collapsed' : undefined}
             >
-              <div className="assistant-defaults-group__header" data-bf-component="assistant-defaults-page" data-bf-part="groupHeader">
+              <div className="assistant-defaults-group__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="groupHeader">
                 <button
                   type="button"
                   className="assistant-defaults-group__collapse"
@@ -803,8 +803,8 @@ const AssistantDefaultsPage: React.FC = () => {
       return (
         <aside
           className="assistant-defaults-detail assistant-defaults-detail--empty"
-          data-bf-component="assistant-defaults-page"
-          data-bf-part="detail"
+          data-openbitfun-component="assistant-defaults-page"
+          data-openbitfun-part="detail"
           aria-label={t('nursery.template.detailPanel')}
         >
           <div className="assistant-defaults-detail__empty">
@@ -827,15 +827,15 @@ const AssistantDefaultsPage: React.FC = () => {
       const available = isMcpServerAvailable(server);
       const title = server?.name ?? detail.serverId;
       return (
-        <aside className="assistant-defaults-detail" data-bf-component="assistant-defaults-page" data-bf-part="detail" aria-label={t('nursery.template.detailPanel')}>
-          <div className="assistant-defaults-detail__header" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
+        <aside className="assistant-defaults-detail" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detail" aria-label={t('nursery.template.detailPanel')}>
+          <div className="assistant-defaults-detail__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailHeader">
             <div>
               <span className="assistant-defaults-detail__eyebrow">MCP</span>
               <h3>{title}</h3>
             </div>
             <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><Icon name="xmark" size="md" /></button>
           </div>
-          <ScrollArea className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
+          <ScrollArea className="assistant-defaults-detail__body" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailBody">
             {server?.statusMessage ? <p className="assistant-defaults-detail__description">{server.statusMessage}</p> : null}
             <section>
               <h4>{t('nursery.template.detailSections.basic')}</h4>
@@ -897,15 +897,15 @@ const AssistantDefaultsPage: React.FC = () => {
         : t('nursery.template.toolTypeBuiltin');
 
     return (
-      <aside className="assistant-defaults-detail" data-bf-component="assistant-defaults-page" data-bf-part="detail" aria-label={t('nursery.template.detailPanel')}>
-        <div className="assistant-defaults-detail__header" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
+      <aside className="assistant-defaults-detail" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detail" aria-label={t('nursery.template.detailPanel')}>
+        <div className="assistant-defaults-detail__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailHeader">
           <div>
             <span className="assistant-defaults-detail__eyebrow">{kindLabel}</span>
             <h3>{row.name}</h3>
           </div>
           <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><Icon name="xmark" size="md" /></button>
         </div>
-        <ScrollArea className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
+        <ScrollArea className="assistant-defaults-detail__body" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailBody">
           <p className="assistant-defaults-detail__description">{row.description}</p>
           <section>
             <h4>{t('nursery.template.detailSections.basic')}</h4>
@@ -984,10 +984,10 @@ const AssistantDefaultsPage: React.FC = () => {
       : t('nursery.template.saveState.saved');
 
   return (
-    <div data-bf-component="assistant-defaults-page" data-bf-part="root" className="nursery-page nursery-page--assistant-defaults">
-      <div className="assistant-defaults" data-bf-component="assistant-defaults-page" data-bf-part="content">
-        <header className="assistant-defaults__header" data-bf-component="assistant-defaults-page" data-bf-part="header">
-          <div className="assistant-defaults__title-row" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
+    <div data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="root" className="nursery-page nursery-page--assistant-defaults">
+      <div className="assistant-defaults" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="content">
+        <header className="assistant-defaults__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="header">
+          <div className="assistant-defaults__title-row" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="toolbar">
             <Tooltip content={t('nursery.backToGallery')}>
               <IconButton
                 size="sm"
@@ -1024,13 +1024,13 @@ const AssistantDefaultsPage: React.FC = () => {
         </header>
 
         {loading ? (
-          <div className="assistant-defaults__loading" data-bf-component="assistant-defaults-page" data-bf-part="loading">
+          <div className="assistant-defaults__loading" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="loading">
             <Icon name="refresh" size="lg" className="nursery-spinning" style={{ width: 20, height: 20 }} />
             <span>{t('nursery.template.loading')}</span>
           </div>
         ) : (
-          <div className="assistant-defaults__workspace" data-bf-component="assistant-defaults-page" data-bf-part="shell">
-            <ScrollArea className="assistant-defaults__main" data-bf-component="assistant-defaults-page" data-bf-part="main">
+          <div className="assistant-defaults__workspace" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="shell">
+            <ScrollArea className="assistant-defaults__main" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="main">
               {loadWarning ? (
                 <div className="assistant-defaults__warning" role="status">
                   <CircleAlert size={17} />
@@ -1046,13 +1046,13 @@ const AssistantDefaultsPage: React.FC = () => {
                 </div>
               ) : null}
 
-              <section className="assistant-defaults-summary" aria-label={t('nursery.template.summaryLabel')} data-bf-component="assistant-defaults-page" data-bf-part="summary">
+              <section className="assistant-defaults-summary" aria-label={t('nursery.template.summaryLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="summary">
                 <div><span>{t('nursery.template.summary.enabled')}</span><strong>{summary.enabled}</strong></div>
                 <div><span>{t('nursery.template.summary.changed')}</span><strong>{summary.changed}</strong></div>
                 <div><span>{t('nursery.template.summary.unavailable')}</span><strong>{summary.unavailable}</strong></div>
               </section>
 
-              <div className="assistant-defaults-tabs" role="tablist" aria-label={t('nursery.template.categoryLabel')} data-bf-component="assistant-defaults-page" data-bf-part="tabs">
+              <div className="assistant-defaults-tabs" role="tablist" aria-label={t('nursery.template.categoryLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="tabs">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -1067,7 +1067,7 @@ const AssistantDefaultsPage: React.FC = () => {
                 ))}
               </div>
 
-              <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-bf-component="assistant-defaults-page" data-bf-part="filters">
+              <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="filters">
                 <SearchField
                   className="assistant-defaults-search"
                   value={searchQuery}
@@ -1093,15 +1093,15 @@ const AssistantDefaultsPage: React.FC = () => {
                 </div>
               </section>
 
-              <section className="assistant-defaults-list" role="table" aria-label={tabs.find((tab) => tab.id === activeTab)?.label} data-bf-component="assistant-defaults-page" data-bf-part="list">
+              <section className="assistant-defaults-list" role="table" aria-label={tabs.find((tab) => tab.id === activeTab)?.label} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="list">
                 {renderListHeader()}
                 {activeTab === 'mcp' ? renderMcpGroups() : visibleFlatRows.length > 0 ? (
                   activeTab === 'skills' ? (
-                    <div role="rowgroup" data-bf-component="assistant-defaults-page" data-bf-part="skillList">
+                    <div role="rowgroup" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="skillList">
                       {visibleFlatRows.map(renderCapabilityRow)}
                     </div>
                   ) : (
-                    <div role="rowgroup" data-bf-component="assistant-defaults-page" data-bf-part="toolList">
+                    <div role="rowgroup" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="toolList">
                       {visibleFlatRows.map(renderCapabilityRow)}
                     </div>
                   )

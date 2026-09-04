@@ -9,19 +9,19 @@ export const flowToolCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   facets: [
     {
       id: 'attention',
-      attribute: 'data-bf-attention',
+      attribute: 'data-openbitfun-attention',
       values: ['ambient', 'prominent'],
     },
     {
       id: 'presentation',
-      attribute: 'data-bf-presentation',
+      attribute: 'data-openbitfun-presentation',
       values: ['standard', 'dedicated'],
     },
   ],
   states: [
     {
       id: 'permissionPending',
-      selector: { kind: 'self', suffix: '[data-bf-state~="permission-pending"]' },
+      selector: { kind: 'self', suffix: '[data-openbitfun-state~="permission-pending"]' },
     },
   ],
 };

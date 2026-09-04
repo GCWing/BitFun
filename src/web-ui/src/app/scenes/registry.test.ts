@@ -12,14 +12,14 @@ describe('scene tab icon registry', () => {
   it('uses the shared catalog glyph for the session tab', () => {
     const SceneIcon = getSceneDef('session')!.Icon!;
     const markup = renderToStaticMarkup(createElement(SceneIcon));
-    expect(markup).toContain('data-bf-component="icon"');
-    expect(markup).toContain('data-bf-name="session"');
+    expect(markup).toContain('data-openbitfun-component="icon"');
+    expect(markup).toContain('data-openbitfun-name="session"');
   });
 
   it('uses a gear rather than the control-center glyph for Settings', () => {
     const SceneIcon = getSceneDef('settings')!.Icon!;
     const markup = renderToStaticMarkup(createElement(SceneIcon));
-    expect(markup).toContain('data-bf-name="gear"');
-    expect(markup).not.toContain('data-bf-name="settings"');
+    expect(markup).toContain('data-openbitfun-name="gear"');
+    expect(markup).not.toContain('data-openbitfun-name="settings"');
   });
 });

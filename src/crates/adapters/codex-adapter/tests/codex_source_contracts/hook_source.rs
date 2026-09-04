@@ -1,10 +1,10 @@
-use bitfun_codex_adapter::{CodexHookProvider, CodexHookProviderOptions};
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_codex_adapter::{CodexHookProvider, CodexHookProviderOptions};
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookNativeActivation, ExternalHookProjectionStatus,
     ExternalHookSourceProvider,
 };
-use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
-use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
+use openbitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use openbitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
 use std::fs;
 use tempfile::tempdir;
 
@@ -52,12 +52,12 @@ fn prepares_only_the_supported_synchronous_codex_command_subset() {
     assert_eq!(first.handlers[0].matcher.as_deref(), Some("Bash"));
     assert!(first.handlers[0]
         .command
-        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+        .contains("__OPENBITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
     assert!(first.handlers[0]
         .command_windows
         .as_deref()
         .unwrap()
-        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+        .contains("__OPENBITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
     assert_eq!(first.handlers[0].timeout_seconds, Some(17));
     assert_eq!(
         first.handlers[0].status_message.as_deref(),

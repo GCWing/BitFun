@@ -227,7 +227,7 @@ mod tests {
             .unwrap();
         let preview = preview_output.into_inner();
         let manifest = serde_json::json!({
-            "schema": "bitfun.appearance",
+            "schema": "openbitfun.appearance",
             "schemaVersion": 1,
             "id": package_id,
             "name": "Aurora",
@@ -266,7 +266,7 @@ mod tests {
         let body = serde_json::json!({
             "slug": slug,
             "releaseNumber": 1,
-            "minBitfunVersion": "0.2.15",
+            "minOpenBitFunVersion": "1.0.0",
             "changelog": "Initial release",
             "license": {"spdxExpression": "MIT"}
         });
@@ -302,7 +302,7 @@ mod tests {
         upload.headers_mut().insert(
             header::CONTENT_TYPE,
             HeaderValue::from_static(
-                bitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+                openbitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
             ),
         );
         assert_eq!(
@@ -372,7 +372,7 @@ mod tests {
         upload.headers_mut().insert(
             header::CONTENT_TYPE,
             HeaderValue::from_static(
-                bitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+                openbitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
             ),
         );
         let response = app.clone().oneshot(upload).await.unwrap();
@@ -577,7 +577,7 @@ mod tests {
         let unsafe_license = serde_json::json!({
             "slug": "unsafe-license",
             "releaseNumber": 1,
-            "minBitfunVersion": "0.2.15",
+            "minOpenBitFunVersion": "1.0.0",
             "changelog": "Initial release",
             "license": {"customUrl": "javascript:alert(1)"}
         });
@@ -701,13 +701,13 @@ mod tests {
         oversized.headers_mut().insert(
             header::CONTENT_TYPE,
             HeaderValue::from_static(
-                bitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+                openbitfun_product_domains::appearance_market::APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
             ),
         );
         oversized.headers_mut().insert(
             header::CONTENT_LENGTH,
             HeaderValue::from_str(
-                &(bitfun_product_domains::appearance_market::APPEARANCE_MARKET_MAX_PACKAGE_BYTES
+                &(openbitfun_product_domains::appearance_market::APPEARANCE_MARKET_MAX_PACKAGE_BYTES
                     + 1)
                 .to_string(),
             )

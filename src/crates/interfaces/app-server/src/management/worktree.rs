@@ -1,9 +1,9 @@
 //! App Server Worktree management operations.
 
-use bitfun_app_server_protocol::worktree::*;
-use bitfun_core::service::git::GitService;
-use bitfun_core::service::worktree::{WorktreeService, WorktreeSessionBindingRequest};
-use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, WorktreeError, WorktreeErrorCode};
+use openbitfun_app_server_protocol::worktree::*;
+use openbitfun_core::service::git::GitService;
+use openbitfun_core::service::worktree::{WorktreeService, WorktreeSessionBindingRequest};
+use openbitfun_runtime_ports::{AgentSessionWorkspaceBinding, WorktreeError, WorktreeErrorCode};
 
 use super::{AppManagementError, AppManagementResult};
 

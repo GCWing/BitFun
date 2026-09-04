@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use bitfun_tool_call_jsonrepair::{jsonrepair_to_writer, JsonRepairWriteError};
+use openbitfun_tool_call_jsonrepair::{jsonrepair_to_writer, JsonRepairWriteError};
 
 #[test]
 fn repairs_into_writer() {

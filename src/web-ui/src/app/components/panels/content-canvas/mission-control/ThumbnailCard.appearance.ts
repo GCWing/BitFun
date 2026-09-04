@@ -6,12 +6,12 @@ export const canvasThumbnailAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'actions' }, { id: 'action' }, { id: 'preview' }, { id: 'code' },
     { id: 'placeholder' }, { id: 'groupBadge' },
   ],
-  facets: [{ id: 'group', attribute: 'data-bf-group', values: ['primary', 'secondary', 'tertiary'] }],
+  facets: [{ id: 'group', attribute: 'data-openbitfun-group', values: ['primary', 'secondary', 'tertiary'] }],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'dirty', selector: { kind: 'self', suffix: '[data-bf-state~="dirty"]' } },
-    { id: 'deleted', selector: { kind: 'self', suffix: '[data-bf-state~="deleted"]' } },
-    { id: 'pinned', selector: { kind: 'self', suffix: '[data-bf-state~="pinned"]' } },
-    { id: 'preview', selector: { kind: 'self', suffix: '[data-bf-state~="preview"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'dirty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="dirty"]' } },
+    { id: 'deleted', selector: { kind: 'self', suffix: '[data-openbitfun-state~="deleted"]' } },
+    { id: 'pinned', selector: { kind: 'self', suffix: '[data-openbitfun-state~="pinned"]' } },
+    { id: 'preview', selector: { kind: 'self', suffix: '[data-openbitfun-state~="preview"]' } },
   ],
 };

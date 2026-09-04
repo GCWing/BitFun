@@ -1,23 +1,23 @@
-@layer bf.components {
+@layer openbitfun.components {
   .tabGroup {
-    --_tab-group-item-height: var(--bf-control-tab-group-item-height);
-    --_tab-group-item-padding-block: var(--bf-space-component-block);
-    --_tab-group-item-padding-inline: var(--bf-control-tab-group-item-padding-inline);
+    --_tab-group-item-height: var(--openbitfun-control-tab-group-item-height);
+    --_tab-group-item-padding-block: var(--openbitfun-space-component-block);
+    --_tab-group-item-padding-inline: var(--openbitfun-control-tab-group-item-padding-inline);
     --_tab-group-item-action-reserve: calc(
-      var(--bf-control-tab-group-item-action-size)
-      + var(--bf-control-tab-group-item-action-inset)
-      + var(--bf-control-tab-group-item-gap)
+      var(--openbitfun-control-tab-group-item-action-size)
+      + var(--openbitfun-control-tab-group-item-action-inset)
+      + var(--openbitfun-control-tab-group-item-gap)
     );
 
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-control-tab-group-gap);
+    gap: var(--openbitfun-control-tab-group-gap);
   }
 
   .tabGroup[data-size="sm"] {
-    --_tab-group-item-height: var(--bf-control-tab-group-item-height-sm);
-    --_tab-group-item-padding-block: var(--bf-control-tab-group-item-padding-block-sm);
-    --_tab-group-item-padding-inline: var(--bf-control-tab-group-item-padding-inline-sm);
+    --_tab-group-item-height: var(--openbitfun-control-tab-group-item-height-sm);
+    --_tab-group-item-padding-block: var(--openbitfun-control-tab-group-item-padding-block-sm);
+    --_tab-group-item-padding-inline: var(--openbitfun-control-tab-group-item-padding-inline-sm);
   }
 
   .item {
@@ -30,10 +30,10 @@
 
   .tab {
     --_tab-background: transparent;
-    --_tab-background-hover: var(--bf-color-action-neutral-surface);
-    --_tab-background-active: var(--bf-color-action-neutral-surface-pressed);
-    --_tab-border: var(--bf-color-action-neutral-border);
-    --_tab-content: var(--bf-color-content-primary);
+    --_tab-background-hover: var(--openbitfun-color-action-neutral-surface);
+    --_tab-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
+    --_tab-border: var(--openbitfun-color-action-neutral-border);
+    --_tab-content: var(--openbitfun-color-content-primary);
 
     display: inline-flex;
     align-items: center;
@@ -42,21 +42,21 @@
     block-size: var(--_tab-group-item-height);
     padding-block: var(--_tab-group-item-padding-block);
     padding-inline: var(--_tab-group-item-padding-inline);
-    border: var(--bf-border-width-default) solid var(--_tab-border);
-    border-radius: var(--bf-control-tab-group-item-radius);
+    border: var(--openbitfun-border-width-default) solid var(--_tab-border);
+    border-radius: var(--openbitfun-control-tab-group-item-radius);
     color: var(--_tab-content);
     background: var(--_tab-background);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
-    line-height: var(--bf-type-label-md-line-height);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
+    line-height: var(--openbitfun-type-label-md-line-height);
     white-space: nowrap;
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .item[data-has-end-action="true"] .tab {
@@ -70,32 +70,32 @@
   }
 
   .tab[aria-selected="true"] {
-    --_tab-background: var(--bf-color-selection-surface);
-    --_tab-background-hover: var(--bf-color-action-neutral-surface-hover);
+    --_tab-background: var(--openbitfun-color-selection-surface);
+    --_tab-background-hover: var(--openbitfun-color-action-neutral-surface-hover);
     --_tab-border: transparent;
 
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .tab:hover:not(:disabled),
   .item:hover .tab:not(:disabled),
-  .tabGroup[data-bf-preview-state="hover"] .tab[aria-selected="false"]:not(:disabled) {
+  .tabGroup[data-openbitfun-preview-state="hover"] .tab[aria-selected="false"]:not(:disabled) {
     background: var(--_tab-background-hover);
   }
 
   .tab:active:not(:disabled),
-  .tabGroup[data-bf-preview-state="active"] .tab[aria-selected="false"]:not(:disabled) {
+  .tabGroup[data-openbitfun-preview-state="active"] .tab[aria-selected="false"]:not(:disabled) {
     background: var(--_tab-background-active);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .tab:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .tab:disabled {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
   }
 
@@ -104,14 +104,14 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-control-tab-group-item-icon-size);
-    block-size: var(--bf-control-tab-group-item-icon-size);
-    margin-inline-end: var(--bf-control-tab-group-item-gap);
+    inline-size: var(--openbitfun-control-tab-group-item-icon-size);
+    block-size: var(--openbitfun-control-tab-group-item-icon-size);
+    margin-inline-end: var(--openbitfun-control-tab-group-item-gap);
     color: currentColor;
   }
 
   .icon > :where(svg, img),
-  .icon > [data-bf-component="icon"] {
+  .icon > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -119,7 +119,7 @@
 
   .label {
     min-inline-size: 0;
-    line-height: var(--bf-type-label-md-line-height);
+    line-height: var(--openbitfun-type-label-md-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -127,15 +127,15 @@
   .endAction {
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-end: var(--bf-control-tab-group-item-action-inset);
+    inset-inline-end: var(--openbitfun-control-tab-group-item-action-inset);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-control-tab-group-item-action-size);
-    block-size: var(--bf-control-tab-group-item-action-size);
-    color: var(--bf-color-action-neutral-content);
+    inline-size: var(--openbitfun-control-tab-group-item-action-size);
+    block-size: var(--openbitfun-control-tab-group-item-action-size);
+    color: var(--openbitfun-color-action-neutral-content);
     transform: translateY(-50%);
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .endAction > :where(button, [role="button"]) {
@@ -147,32 +147,32 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     color: inherit;
     background: transparent;
     font: inherit;
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .endAction > :where(button, [role="button"]):hover {
-    color: var(--bf-color-action-neutral-content);
-    background: var(--bf-color-action-neutral-surface-hover);
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
   .endAction > :where(button, [role="button"]):active {
-    background: var(--bf-color-action-neutral-surface-pressed);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .endAction > :where(button, [role="button"]):focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .endAction > :where(button, [role="button"]):disabled {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
   }
 

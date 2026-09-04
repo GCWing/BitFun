@@ -15,12 +15,12 @@ The App Server surface is split across four owners:
 | `app-server` | Server lifecycle, production handler registration, event forwarding, Runtime/domain-to-wire conversion, and error mapping |
 | Product Host under `src/apps/*` | Concrete transport, authentication, connection scope, capability/limit construction, platform capabilities, process supervision, and shutdown |
 
-Do not add new protocol or client ownership to `bitfun-app-server`. Compatibility
+Do not add new protocol or client ownership to `openbitfun-app-server`. Compatibility
 modules and re-exports may remain while consumers migrate, but new methods,
 DTOs, wire errors, and typed client behavior belong in the adjacent protocol
 and client crates.
 
-The `bitfun-app-server/ts` feature is a compatibility forwarder only. The
+The `openbitfun-app-server/ts` feature is a compatibility forwarder only. The
 protocol crate is the sole TypeScript schema exporter; do not add `ts-rs`,
 runtime implementation types, or a second export command back to this crate.
 Protocol wire DTOs and serde contracts remain available with no feature. The
@@ -43,8 +43,8 @@ and must not enable `rpc` or `agent-client-protocol`.
   Product Domain owner. A handler validates the wire contract and converts
   types; it must not hold a second copy of Session, Permission, Config,
   capability, or lifecycle state.
-- This crate may select only the narrow `bitfun-core` owner features required
-  by registered handlers. `bitfun-core/product-full` is forbidden. Add a new
+- This crate may select only the narrow `openbitfun-core` owner features required
+  by registered handlers. `openbitfun-core/product-full` is forbidden. Add a new
   owner feature only with the corresponding boundary verification.
 - Host-specific authentication, identity, workspace/execution scope,
   capability availability, transport limits, platform providers, process
@@ -74,14 +74,14 @@ Host subscription:
 Map Runtime and domain failures to protocol-owned wire errors in this server
 adapter. Keep stable kinds and structured data, and do not leak Runtime
 internals. Host transport/auth/scope failures remain Host-owned; owner
-failures use helpers such as `BitfunAppRuntime::runtime_error` and
+failures use helpers such as `OpenBitFunAppRuntime::runtime_error` and
 `session_runtime_error`.
 
 ## Verification
 
 ```bash
-cargo check --locked -p bitfun-app-server --offline
-cargo test --locked -p bitfun-app-server --offline --lib server::wire::tests
-cargo test --locked -p bitfun-app-server-protocol --offline --test legacy_wire_contracts
+cargo check --locked -p openbitfun-app-server --offline
+cargo test --locked -p openbitfun-app-server --offline --lib server::wire::tests
+cargo test --locked -p openbitfun-app-server-protocol --offline --test legacy_wire_contracts
 pnpm run check:core-boundaries
 ```

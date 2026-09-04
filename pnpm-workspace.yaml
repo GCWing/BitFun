@@ -8,7 +8,7 @@ packages:
   - "src/mobile-web"
   - "src/miniapp-market-web"
   - "src/skin-market-web"
-  - "BitFun-Installer"
+  - "OpenBitFun-Installer"
   - "website"
   - "tests/e2e"
 

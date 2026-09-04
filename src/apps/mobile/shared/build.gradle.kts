@@ -5,7 +5,7 @@
 // coordinates. Nothing is published from here; the version only distinguishes
 // one local build from another.
 allprojects {
-    group = "com.bitfun.mobile"
+    group = "com.openbitfun.mobile"
     version = "0.1.0"
 }
 

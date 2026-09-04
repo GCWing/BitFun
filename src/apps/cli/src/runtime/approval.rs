@@ -1,7 +1,7 @@
-use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
-use bitfun_agent_runtime::sdk::{PermissionRequest, AUTO_APPROVE_ASK_CONTEXT_KEY};
-use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
-use bitfun_runtime_ports::PermissionMode;
+use openbitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+use openbitfun_agent_runtime::sdk::{PermissionRequest, AUTO_APPROVE_ASK_CONTEXT_KEY};
+use openbitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use openbitfun_runtime_ports::PermissionMode;
 use serde_json::{Map, Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,12 +72,12 @@ pub(crate) fn permission_request_targets_session(
 #[cfg(test)]
 mod tests {
     use super::{approval_metadata, permission_request_targets_session, CliApprovalPolicy};
-    use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
-    use bitfun_agent_runtime::sdk::{
+    use openbitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+    use openbitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
         PermissionRequestSourceKind, AUTO_APPROVE_ASK_CONTEXT_KEY,
     };
-    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+    use openbitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
     use serde_json::Map;
 
     fn request() -> PermissionRequest {

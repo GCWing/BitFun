@@ -2,7 +2,7 @@
 //!
 //! The concrete SSH facade is compiled only by `remote-workspace`. Local Agent
 //! Runtime code still shares the stable workspace/session identity helpers
-//! owned by `bitfun-services-core`.
+//! owned by `openbitfun-services-core`.
 //!
 //! This build cannot execute against a remote workspace. Callers that hold a
 //! remote marker must refuse instead of reading the controller filesystem;
@@ -26,7 +26,7 @@ pub mod workspace_state {
 
     pub use super::RemoteWorkspaceSupport;
 
-    pub use bitfun_services_core::workspace_identity::{
+    pub use openbitfun_services_core::workspace_identity::{
         canonicalize_local_workspace_root, local_workspace_roots_equal,
         local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
         normalize_remote_workspace_path, remote_root_to_mirror_subpath,
@@ -46,7 +46,7 @@ pub mod workspace_state {
     }
 
     pub fn remote_workspace_runtime_root(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
-        bitfun_services_core::workspace_identity::remote_workspace_runtime_root(
+        openbitfun_services_core::workspace_identity::remote_workspace_runtime_root(
             crate::infrastructure::get_path_manager_arc().remote_ssh_mirror_root_dir(),
             ssh_host,
             remote_root_norm,
@@ -54,7 +54,7 @@ pub mod workspace_state {
     }
 
     pub fn remote_workspace_session_mirror_dir(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
-        bitfun_services_core::workspace_identity::remote_workspace_session_mirror_dir(
+        openbitfun_services_core::workspace_identity::remote_workspace_session_mirror_dir(
             crate::infrastructure::get_path_manager_arc().remote_ssh_mirror_root_dir(),
             ssh_host,
             remote_root_norm,
@@ -65,7 +65,7 @@ pub mod workspace_state {
         connection_id: &str,
         workspace_path_norm: &str,
     ) -> PathBuf {
-        bitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
+        openbitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
             crate::infrastructure::get_path_manager_arc().remote_ssh_mirror_root_dir(),
             connection_id,
             workspace_path_norm,
@@ -87,7 +87,7 @@ pub mod workspace_state {
     /// states that no local fallback was attempted.
     pub fn remote_workspace_not_compiled_message(path: &str) -> String {
         format!(
-            "Remote workspaces are not compiled into this BitFun host (feature `remote-workspace`); refusing to read the local filesystem for a remote path: {path}"
+            "Remote workspaces are not compiled into this OpenBitFun host (feature `remote-workspace`); refusing to read the local filesystem for a remote path: {path}"
         )
     }
 

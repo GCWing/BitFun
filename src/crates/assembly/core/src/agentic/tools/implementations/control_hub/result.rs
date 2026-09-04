@@ -31,7 +31,7 @@
 
 use super::errors::ErrorCode;
 use crate::agentic::tools::framework::ToolResult;
-use crate::util::errors::BitFunError;
+use crate::util::errors::OpenBitFunError;
 use serde_json::{json, Value};
 
 /// Lightweight error type carried inside a successful tool call (vs returning
@@ -121,7 +121,7 @@ pub fn ok_response_full(
 }
 
 /// Build the failure envelope as a *successful* tool call (so the model
-/// receives the structured error JSON instead of a plain BitFunError text).
+/// receives the structured error JSON instead of a plain OpenBitFunError text).
 pub fn err_response(domain: &str, action: &str, err: ControlHubError) -> Vec<ToolResult> {
     let summary = format!("{}: {}", err.code.as_str(), err.message);
     let body = json!({
@@ -133,25 +133,25 @@ pub fn err_response(domain: &str, action: &str, err: ControlHubError) -> Vec<Too
     vec![ToolResult::ok(body, Some(summary))]
 }
 
-/// Builds a `BitFunError` whose message is prefixed with `[CODE]` using the
+/// Builds a `OpenBitFunError` whose message is prefixed with `[CODE]` using the
 /// canonical [`ErrorCode`] instead of a hand-typed string literal (e.g.
 /// `"[INVALID_PARAMS] ..."`). Callers that cannot return the full
 /// `ControlHubError` envelope (e.g. `?`-propagated parameter validation) use
 /// this so the bracket prefix can never drift from the enum that
 /// [`super::errors::ErrorCode::from_str`] / `map_dispatch_error` parse it
 /// back into.
-pub fn coded_tool_error(code: ErrorCode, message: impl std::fmt::Display) -> BitFunError {
-    BitFunError::tool(format!("[{}] {}", code.as_str(), message))
+pub fn coded_tool_error(code: ErrorCode, message: impl std::fmt::Display) -> OpenBitFunError {
+    OpenBitFunError::tool(format!("[{}] {}", code.as_str(), message))
 }
 
-/// Convenience: lift a `BitFunError` into the structured envelope using the
+/// Convenience: lift a `OpenBitFunError` into the structured envelope using the
 /// supplied default error code. Used as a fallback when an underlying domain
 /// implementation still returns `Err` instead of a structured envelope.
 pub fn lift_error(
     domain: &str,
     action: &str,
     default_code: ErrorCode,
-    err: BitFunError,
+    err: OpenBitFunError,
 ) -> Vec<ToolResult> {
     err_response(
         domain,

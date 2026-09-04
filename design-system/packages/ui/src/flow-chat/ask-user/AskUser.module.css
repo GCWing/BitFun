@@ -1,24 +1,24 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     inline-size: 100%;
     min-inline-size: 0;
     overflow: hidden;
     border: 0;
-    border-radius: var(--bf-radius-lg);
-    outline: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    outline-offset: calc(-1 * var(--bf-border-width-default));
-    background: var(--bf-color-surface-panel);
+    border-radius: var(--openbitfun-radius-lg);
+    outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    outline-offset: calc(-1 * var(--openbitfun-border-width-default));
+    background: var(--openbitfun-color-surface-panel);
     box-shadow: none;
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-body-md-font-family);
-    line-height: var(--bf-type-heading-page-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-body-md-font-family);
+    line-height: var(--openbitfun-type-heading-page-line-height);
   }
 
   .header,
   .summaryButton {
-    min-block-size: var(--bf-control-ask-user-header-height);
+    min-block-size: var(--openbitfun-control-ask-user-header-height);
     border: 0;
-    color: var(--bf-color-action-neutral-content);
+    color: var(--openbitfun-color-action-neutral-content);
     background: transparent;
     font: inherit;
   }
@@ -26,11 +26,11 @@
   .header {
     display: flex;
     align-items: center;
-    padding-block: var(--bf-control-ask-user-summary-padding-block);
-    padding-inline: var(--bf-control-ask-user-summary-padding-inline-start);
-    border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-lg-font-weight);
+    padding-block: var(--openbitfun-control-ask-user-summary-padding-block);
+    padding-inline: var(--openbitfun-control-ask-user-summary-padding-inline-start);
+    border-block-end: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
   }
 
   .summaryButton {
@@ -38,21 +38,21 @@
     inline-size: 100%;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-control-ask-user-option-content-gap);
-    padding-block: var(--bf-control-ask-user-summary-padding-block);
-    padding-inline-start: var(--bf-control-ask-user-summary-padding-inline-start);
-    padding-inline-end: var(--bf-control-ask-user-summary-padding-inline-end);
+    gap: var(--openbitfun-control-ask-user-option-content-gap);
+    padding-block: var(--openbitfun-control-ask-user-summary-padding-block);
+    padding-inline-start: var(--openbitfun-control-ask-user-summary-padding-inline-start);
+    padding-inline-end: var(--openbitfun-control-ask-user-summary-padding-inline-end);
     text-align: start;
     cursor: pointer;
   }
 
-  .root[data-bf-expanded="true"] .summaryButton {
-    border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  .root[data-openbitfun-expanded="true"] .summaryButton {
+    border-block-end: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .summaryButton:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: calc(-1 * var(--bf-focus-width));
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: calc(-1 * var(--openbitfun-focus-width));
   }
 
   .summaryLeading,
@@ -64,15 +64,15 @@
 
   .summaryLeading {
     flex: 1 1 auto;
-    gap: var(--bf-control-ask-user-option-content-gap);
+    gap: var(--openbitfun-control-ask-user-option-content-gap);
   }
 
   .summaryCopy {
     flex: 1 1 auto;
-    gap: var(--bf-space-1);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-lg-font-weight);
-    line-height: var(--bf-type-heading-page-line-height);
+    gap: var(--openbitfun-space-1);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
+    line-height: var(--openbitfun-type-heading-page-line-height);
   }
 
   .summaryIcon,
@@ -80,19 +80,19 @@
   .statusIcon {
     display: inline-flex;
     flex: 0 0 auto;
-    inline-size: var(--bf-control-ask-user-icon-size);
-    block-size: var(--bf-control-ask-user-icon-size);
+    inline-size: var(--openbitfun-control-ask-user-icon-size);
+    block-size: var(--openbitfun-control-ask-user-icon-size);
     align-items: center;
     justify-content: center;
   }
 
   .summaryIcon {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 
   .summaryIcon > svg {
     fill: currentColor;
-    stroke: var(--bf-color-content-inverse);
+    stroke: var(--openbitfun-color-content-inverse);
   }
 
   .summaryIcon > svg,
@@ -124,22 +124,22 @@
   .summaryAction {
     display: inline-flex;
     flex: 0 0 auto;
-    inline-size: var(--bf-control-ask-user-summary-action-size);
-    block-size: var(--bf-control-ask-user-summary-action-size);
+    inline-size: var(--openbitfun-control-ask-user-summary-action-size);
+    block-size: var(--openbitfun-control-ask-user-summary-action-size);
     align-items: center;
     justify-content: center;
-    padding: var(--bf-space-1);
-    border-radius: var(--bf-radius-xs);
-    color: var(--bf-color-content-muted);
+    padding: var(--openbitfun-space-1);
+    border-radius: var(--openbitfun-radius-xs);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .details {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: grid-template-rows var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
-  .root[data-bf-has-summary="true"][data-bf-expanded="false"] .details {
+  .root[data-openbitfun-has-summary="true"][data-openbitfun-expanded="false"] .details {
     grid-template-rows: 0fr;
   }
 
@@ -151,8 +151,8 @@
   .body {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-control-ask-user-body-gap);
-    padding: var(--bf-control-ask-user-body-padding);
+    gap: var(--openbitfun-control-ask-user-body-gap);
+    padding: var(--openbitfun-control-ask-user-body-padding);
   }
 
   .question {
@@ -166,49 +166,49 @@
   }
 
   .question + .question {
-    padding-block-start: var(--bf-control-ask-user-body-gap);
-    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    padding-block-start: var(--openbitfun-control-ask-user-body-gap);
+    border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .prompt {
     display: block;
     inline-size: 100%;
-    padding-inline: var(--bf-control-ask-user-question-padding-inline);
-    color: var(--bf-color-action-neutral-content);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-heading-page-line-height);
+    padding-inline: var(--openbitfun-control-ask-user-question-padding-inline);
+    color: var(--openbitfun-color-action-neutral-content);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-heading-page-line-height);
   }
 
   .options {
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-control-ask-user-option-gap);
-    margin-block-start: var(--bf-control-ask-user-question-options-gap);
+    gap: var(--openbitfun-control-ask-user-option-gap);
+    margin-block-start: var(--openbitfun-control-ask-user-question-options-gap);
   }
 
   .option {
     display: flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-control-ask-user-option-content-gap);
-    padding-block: var(--bf-control-ask-user-option-padding-block);
-    padding-inline: var(--bf-control-ask-user-option-padding-inline);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-subtle);
+    gap: var(--openbitfun-control-ask-user-option-content-gap);
+    padding-block: var(--openbitfun-control-ask-user-option-padding-block);
+    padding-inline: var(--openbitfun-control-ask-user-option-padding-inline);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-subtle);
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .option:hover:not(:has(.nativeControl:disabled)),
-  .option:has(.nativeControl[data-bf-preview-state="hover"]) {
-    background: var(--bf-color-action-neutral-surface-hover);
+  .option:has(.nativeControl[data-openbitfun-preview-state="hover"]) {
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
   .option:has(.nativeControl:focus-visible) {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .nativeControl {
@@ -225,7 +225,7 @@
     flex: 1 1 auto;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-control-ask-user-option-content-gap);
+    gap: var(--openbitfun-control-ask-user-option-content-gap);
     cursor: pointer;
   }
 
@@ -234,11 +234,11 @@
   }
 
   .controlIcon {
-    color: var(--bf-color-border-default);
+    color: var(--openbitfun-color-border-default);
   }
 
   .option[data-selected="true"] .controlIcon {
-    color: var(--bf-color-action-neutral-content);
+    color: var(--openbitfun-color-action-neutral-content);
   }
 
   .optionContent {
@@ -247,63 +247,63 @@
     min-inline-size: 0;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-4);
+    gap: var(--openbitfun-space-4);
   }
 
   .optionLabel,
   .optionDescription {
-    font-size: var(--bf-type-body-sm-font-size);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .optionLabel {
     flex: 0 1 auto;
     min-inline-size: 0;
-    color: var(--bf-color-action-neutral-content);
-    font-weight: var(--bf-type-label-lg-font-weight);
-    line-height: var(--bf-type-heading-page-line-height);
+    color: var(--openbitfun-color-action-neutral-content);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
+    line-height: var(--openbitfun-type-heading-page-line-height);
   }
 
   .optionDescription {
     overflow: hidden;
     flex: 1 1 auto;
-    max-inline-size: var(--bf-control-ask-user-description-max-width);
+    max-inline-size: var(--openbitfun-control-ask-user-description-max-width);
     min-inline-size: 0;
-    color: var(--bf-color-content-muted);
-    font-weight: var(--bf-type-body-md-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-weight: var(--openbitfun-type-body-md-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-align: end;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .customInput {
-    flex: 1 1 var(--bf-control-ask-user-description-max-width);
-    max-inline-size: var(--bf-control-ask-user-description-max-width);
+    flex: 1 1 var(--openbitfun-control-ask-user-description-max-width);
+    max-inline-size: var(--openbitfun-control-ask-user-description-max-width);
     min-inline-size: 180px;
   }
 
-  .customInput > :global([data-bf-component="input"]) {
+  .customInput > :global([data-openbitfun-component="input"]) {
     inline-size: 100%;
   }
 
   .root[data-disabled="true"] .option {
-    color: var(--bf-color-content-disabled);
+    color: var(--openbitfun-color-content-disabled);
   }
 
   .root[data-disabled="true"] .optionLabel,
   .root[data-disabled="true"] .optionDescription,
   .root[data-disabled="true"] .controlIcon {
-    color: var(--bf-color-content-disabled);
+    color: var(--openbitfun-color-content-disabled);
   }
 
   .footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
-    padding-block: var(--bf-space-2);
-    padding-inline: var(--bf-space-3);
-    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    gap: var(--openbitfun-space-2);
+    padding-block: var(--openbitfun-space-2);
+    padding-inline: var(--openbitfun-space-3);
+    border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .submit,
@@ -315,70 +315,70 @@
   }
 
   .status {
-    gap: var(--bf-space-1);
-    padding-inline-start: var(--bf-space-2);
-    border-inline-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    color: var(--bf-color-content-muted);
+    gap: var(--openbitfun-space-1);
+    padding-inline-start: var(--openbitfun-space-2);
+    border-inline-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .statusText {
-    font-size: var(--bf-type-body-xs-font-size);
-    font-weight: var(--bf-type-label-lg-font-weight);
-    line-height: var(--bf-type-body-md-line-height);
+    font-size: var(--openbitfun-type-body-xs-font-size);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
+    line-height: var(--openbitfun-type-body-md-line-height);
   }
 
-  .root[data-bf-state="asking"] .statusIcon,
-  .root[data-bf-state="timeout"] .statusIcon {
-    color: var(--bf-color-status-warning-content);
+  .root[data-openbitfun-state="asking"] .statusIcon,
+  .root[data-openbitfun-state="timeout"] .statusIcon {
+    color: var(--openbitfun-color-status-warning-content);
   }
 
-  .root[data-bf-state="submitted"] .statusIcon,
-  .root[data-bf-state="completed"] .statusIcon {
-    color: var(--bf-color-status-success-content);
+  .root[data-openbitfun-state="submitted"] .statusIcon,
+  .root[data-openbitfun-state="completed"] .statusIcon {
+    color: var(--openbitfun-color-status-success-content);
   }
 
-  .root[data-bf-state="error"] .statusIcon {
-    color: var(--bf-color-status-danger-content);
+  .root[data-openbitfun-state="error"] .statusIcon {
+    color: var(--openbitfun-color-status-danger-content);
   }
 
-  .root[data-bf-state="loading"] .statusIcon,
-  .root[data-bf-state="submitting"] .statusIcon {
-    color: var(--bf-color-content-secondary);
+  .root[data-openbitfun-state="loading"] .statusIcon,
+  .root[data-openbitfun-state="submitting"] .statusIcon {
+    color: var(--openbitfun-color-content-secondary);
   }
 
-  .root[data-bf-state="loading"] .statusIcon > svg,
-  .root[data-bf-state="submitting"] .statusIcon > svg {
-    animation: bf-ask-user-spin var(--bf-motion-duration-loop) linear infinite;
+  .root[data-openbitfun-state="loading"] .statusIcon > svg,
+  .root[data-openbitfun-state="submitting"] .statusIcon > svg {
+    animation: openbitfun-ask-user-spin var(--openbitfun-motion-duration-loop) linear infinite;
   }
 
   .statusOnly {
-    min-block-size: var(--bf-control-ask-user-header-height);
-    gap: var(--bf-space-2);
-    padding-block: var(--bf-space-3);
-    padding-inline: var(--bf-space-4);
+    min-block-size: var(--openbitfun-control-ask-user-header-height);
+    gap: var(--openbitfun-space-2);
+    padding-block: var(--openbitfun-space-3);
+    padding-inline: var(--openbitfun-space-4);
   }
 
   .feedback {
-    gap: var(--bf-space-2);
-    margin-block-end: var(--bf-control-ask-user-body-padding);
-    margin-inline: var(--bf-control-ask-user-body-padding);
-    padding-block: var(--bf-space-2);
-    padding-inline: var(--bf-space-3);
-    border: var(--bf-border-width-default) solid var(--bf-color-status-warning-border);
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-status-warning-content);
-    background: var(--bf-color-status-warning-surface);
+    gap: var(--openbitfun-space-2);
+    margin-block-end: var(--openbitfun-control-ask-user-body-padding);
+    margin-inline: var(--openbitfun-control-ask-user-body-padding);
+    padding-block: var(--openbitfun-space-2);
+    padding-inline: var(--openbitfun-space-3);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-status-warning-border);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
-  .root[data-bf-state="error"] .feedback {
-    border-color: var(--bf-color-status-danger-border);
-    color: var(--bf-color-status-danger-content);
-    background: var(--bf-color-status-danger-surface);
+  .root[data-openbitfun-state="error"] .feedback {
+    border-color: var(--openbitfun-color-status-danger-border);
+    color: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   :global([data-density="touch"]) .summaryButton,
   :global([data-density="touch"]) .option {
-    min-block-size: var(--bf-control-hit-target);
+    min-block-size: var(--openbitfun-control-hit-target);
   }
 
   @media (max-width: 640px) {
@@ -398,7 +398,7 @@
     .optionDescription {
       display: block;
       max-inline-size: none;
-      margin-block-start: var(--bf-space-1);
+      margin-block-start: var(--openbitfun-space-1);
       text-align: start;
       white-space: normal;
     }
@@ -406,7 +406,7 @@
     .customInput {
       flex-basis: 100%;
       max-inline-size: none;
-      margin-inline-start: calc(var(--bf-control-ask-user-icon-size) + var(--bf-control-ask-user-option-content-gap));
+      margin-inline-start: calc(var(--openbitfun-control-ask-user-icon-size) + var(--openbitfun-control-ask-user-option-content-gap));
     }
   }
 
@@ -416,8 +416,8 @@
       transition: none;
     }
 
-    .root[data-bf-state="loading"] .statusIcon > svg,
-    .root[data-bf-state="submitting"] .statusIcon > svg {
+    .root[data-openbitfun-state="loading"] .statusIcon > svg,
+    .root[data-openbitfun-state="submitting"] .statusIcon > svg {
       animation: none;
     }
   }
@@ -426,7 +426,7 @@
     .root,
     .option,
     .feedback {
-      border: var(--bf-border-width-default) solid CanvasText;
+      border: var(--openbitfun-border-width-default) solid CanvasText;
       outline: 0;
       box-shadow: none;
     }
@@ -447,7 +447,7 @@
   }
 }
 
-@keyframes bf-ask-user-spin {
+@keyframes openbitfun-ask-user-spin {
   to {
     transform: rotate(1turn);
   }

@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
-use bitfun_transport::encode_json_with_limit;
 use futures_util::StreamExt;
+use openbitfun_agent_runtime::sdk::AgentRuntime;
+use openbitfun_transport::encode_json_with_limit;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -13,10 +13,10 @@ use tokio::time::{timeout, Instant};
 use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
 use tokio_util::sync::CancellationToken;
 
-use bitfun_sdk_host::host::{
+use openbitfun_sdk_host::host::{
     ConnectionControl, HostOutput, SdkHostConfig, SdkHostConnection, TemporaryModelInstaller,
 };
-use bitfun_sdk_host::protocol::{
+use openbitfun_sdk_host::protocol::{
     JsonRpcErrorResponse, JsonRpcRequest, RequestId, METHOD_INITIALIZE, METHOD_PERMISSION_RESPOND,
     METHOD_QUERY_CANCEL, METHOD_SESSION_CLOSE, METHOD_SHUTDOWN,
 };

@@ -12,10 +12,10 @@ use crate::infrastructure::ai::reasoning_catalog::{
 use crate::infrastructure::ai::AIClient;
 use crate::util::errors::*;
 use async_trait::async_trait;
-use bitfun_core_types::ReasoningCatalogBinding;
-#[cfg(test)]
-use bitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
 use log::{error, info};
+use openbitfun_core_types::ReasoningCatalogBinding;
+#[cfg(test)]
+use openbitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
 use std::collections::HashMap;
 
 fn serialize_default_config(section: &str, value: impl serde::Serialize) -> serde_json::Value {
@@ -43,6 +43,10 @@ fn ai_validation_error_location(message: &str) -> (String, String) {
         Some(("context_window", "MODEL_CONTEXT_WINDOW_INVALID"))
     } else if message.contains("max_tokens") {
         Some(("max_tokens", "MODEL_MAX_TOKENS_INVALID"))
+    } else if message.contains("temperature") {
+        Some(("temperature", "MODEL_TEMPERATURE_INVALID"))
+    } else if message.contains("top_p") {
+        Some(("top_p", "MODEL_TOP_P_INVALID"))
     } else if message.contains("reasoning config") {
         Some(("reasoning", "MODEL_REASONING_INVALID"))
     } else if message.contains("reasoning default preset") {
@@ -92,6 +96,27 @@ fn ai_validation_error_location(message: &str) -> (String, String) {
             "TASK_MODEL_INVALID".to_string(),
         );
     }
+    for field in [
+        "primary",
+        "fast",
+        "search",
+        "image_understanding",
+        "image_generation",
+        "speech_recognition",
+    ] {
+        if message.contains(&format!("default_models.{field}")) {
+            return (
+                format!("ai.default_models.{field}"),
+                "DEFAULT_MODEL_INVALID".to_string(),
+            );
+        }
+    }
+    if message.contains("agent_model_defaults") {
+        return (
+            "ai.agent_model_defaults".to_string(),
+            "AGENT_MODEL_DEFAULT_INVALID".to_string(),
+        );
+    }
 
     ("ai".to_string(), "VALIDATION_ERROR".to_string())
 }
@@ -123,7 +148,7 @@ impl ConfigProvider for AIConfigProvider {
         serialize_default_config("ai", AIConfig::default())
     }
 
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
+    async fn validate_config(&self, config: &serde_json::Value) -> OpenBitFunResult<Vec<String>> {
         let mut warnings = Vec::new();
 
         if let Ok(ai_config) = serde_json::from_value::<AIConfig>(config.clone()) {
@@ -140,7 +165,7 @@ impl ConfigProvider for AIConfigProvider {
 
             if let Some(stream_idle_timeout_secs) = ai_config.stream_idle_timeout_secs {
                 if stream_idle_timeout_secs == 0 {
-                    return Err(BitFunError::validation(
+                    return Err(OpenBitFunError::validation(
                         "AI stream_idle_timeout_secs must be greater than 0".to_string(),
                     ));
                 }
@@ -148,24 +173,39 @@ impl ConfigProvider for AIConfigProvider {
 
             if let Some(stream_ttft_timeout_secs) = ai_config.stream_ttft_timeout_secs {
                 if stream_ttft_timeout_secs == 0 {
-                    return Err(BitFunError::validation(
+                    return Err(OpenBitFunError::validation(
                         "AI stream_ttft_timeout_secs must be greater than 0".to_string(),
                     ));
                 }
             }
 
             for (index, model) in ai_config.models.iter().enumerate() {
+                if !model.supports_text_generation() {
+                    for (field, present) in [
+                        ("context_window", model.context_window.is_some()),
+                        ("max_tokens", model.max_tokens.is_some()),
+                        ("temperature", model.temperature.is_some()),
+                        ("top_p", model.top_p.is_some()),
+                    ] {
+                        if present {
+                            return Err(OpenBitFunError::validation(format!(
+                                "Model '{}' has text-generation-only field {field} at index {}",
+                                model.name, index
+                            )));
+                        }
+                    }
+                }
                 if !model.enabled {
                     continue;
                 }
                 if model.name.trim().is_empty() {
-                    return Err(BitFunError::validation(format!(
+                    return Err(OpenBitFunError::validation(format!(
                         "Model name is required at index {}",
                         index
                     )));
                 }
                 if model.provider.trim().is_empty() {
-                    return Err(BitFunError::validation(format!(
+                    return Err(OpenBitFunError::validation(format!(
                         "Model provider is required at index {}",
                         index
                     )));
@@ -176,7 +216,7 @@ impl ConfigProvider for AIConfigProvider {
                 if model.supports_text_generation() {
                     if let Some(context_window) = model.context_window {
                         if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
-                            return Err(BitFunError::validation(format!(
+                            return Err(OpenBitFunError::validation(format!(
                                 "Model '{}' context_window must be at least {} at index {}",
                                 model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS, index
                             )));
@@ -184,7 +224,7 @@ impl ConfigProvider for AIConfigProvider {
                     }
                     if let Some(max_tokens) = model.max_tokens {
                         if max_tokens == 0 {
-                            return Err(BitFunError::validation(format!(
+                            return Err(OpenBitFunError::validation(format!(
                                 "Model '{}' max_tokens must be greater than 0 at index {}",
                                 model.name, index
                             )));
@@ -202,7 +242,7 @@ impl ConfigProvider for AIConfigProvider {
 
                 if let Some(reasoning) = model.reasoning.as_ref() {
                     reasoning.validate_schema().map_err(|message| {
-                        BitFunError::validation(format!(
+                        OpenBitFunError::validation(format!(
                             "Model '{}' reasoning config is invalid at index {}: {}",
                             model.name, index, message
                         ))
@@ -218,7 +258,7 @@ impl ConfigProvider for AIConfigProvider {
                                     .and_then(|snapshot| snapshot.catalog.as_deref()),
                             );
                             if projection.default_preset.as_deref() != Some(default_preset) {
-                                return Err(BitFunError::validation(format!(
+                                return Err(OpenBitFunError::validation(format!(
                                     "Model '{}' reasoning default preset '{}' is not available at index {}",
                                     model.name, default_preset, index
                                 )));
@@ -229,7 +269,7 @@ impl ConfigProvider for AIConfigProvider {
                         if reasoning.preset(default_preset).is_none()
                             && matches!(reasoning.catalog, ReasoningCatalogBinding::Disabled)
                         {
-                            return Err(BitFunError::validation(format!(
+                            return Err(OpenBitFunError::validation(format!(
                                 "Model '{}' reasoning default preset '{}' is not available at index {}",
                                 model.name, default_preset, index
                             )));
@@ -242,7 +282,7 @@ impl ConfigProvider for AIConfigProvider {
                             AIModelConfig,
                         >>::try_from(model.clone())
                         .map_err(|message| {
-                            BitFunError::validation(format!(
+                            OpenBitFunError::validation(format!(
                                 "Model '{}' reasoning target is invalid at index {}: {}",
                                 model.name, index, message
                             ))
@@ -265,13 +305,13 @@ impl ConfigProvider for AIConfigProvider {
                                 .iter()
                                 .find(|descriptor| descriptor.id == preset_id)
                                 .ok_or_else(|| {
-                                    BitFunError::validation(format!(
+                                    OpenBitFunError::validation(format!(
                                         "Model '{}' reasoning preset '{}' is not available at index {}",
                                         model.name, preset_id, index
                                     ))
                                 })?;
                             client.validate_reasoning_preset(descriptor).map_err(|error| {
-                                BitFunError::validation(format!(
+                                OpenBitFunError::validation(format!(
                                     "Model '{}' reasoning preset '{}' is unsupported at index {}: {}",
                                     model.name, preset_id, index, error
                                 ))
@@ -281,16 +321,63 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
+            let enabled_model_with_capability =
+                |model_id: &str, capability: ModelCapability| {
+                    ai_config.models.iter().any(|model| {
+                        model.enabled
+                            && model.id == model_id
+                            && model.supports_capability(capability.clone())
+                    })
+                };
+            for (field, model_id, capability) in [
+                (
+                    "primary",
+                    ai_config.default_models.primary.as_deref(),
+                    ModelCapability::TextChat,
+                ),
+                (
+                    "fast",
+                    ai_config.default_models.fast.as_deref(),
+                    ModelCapability::TextChat,
+                ),
+                (
+                    "search",
+                    ai_config.default_models.search.as_deref(),
+                    ModelCapability::Search,
+                ),
+                (
+                    "image_understanding",
+                    ai_config.default_models.image_understanding.as_deref(),
+                    ModelCapability::ImageUnderstanding,
+                ),
+                (
+                    "image_generation",
+                    ai_config.default_models.image_generation.as_deref(),
+                    ModelCapability::ImageGeneration,
+                ),
+                (
+                    "speech_recognition",
+                    ai_config.default_models.speech_recognition.as_deref(),
+                    ModelCapability::SpeechRecognition,
+                ),
+            ] {
+                if model_id.is_some_and(|model_id| {
+                    !enabled_model_with_capability(model_id, capability.clone())
+                }) {
+                    return Err(OpenBitFunError::validation(format!(
+                        "ai.default_models.{field} references unavailable or incapable model '{}'",
+                        model_id.expect("checked above")
+                    )));
+                }
+            }
+
             let valid_task_model = |model_id: &str| {
                 matches!(model_id, "primary" | "fast")
-                    || ai_config
-                        .models
-                        .iter()
-                        .any(|model| model.enabled && model.id == model_id)
+                    || enabled_model_with_capability(model_id, ModelCapability::TextChat)
             };
             if let Some(model_id) = ai_config.task_models.session_title.fixed_model_id() {
                 if !valid_task_model(model_id) {
-                    return Err(BitFunError::validation(format!(
+                    return Err(OpenBitFunError::validation(format!(
                         "The session-title task model '{}' does not exist",
                         model_id
                     )));
@@ -298,22 +385,53 @@ impl ConfigProvider for AIConfigProvider {
             }
             match &ai_config.task_models.git_commit {
                 crate::service::config::types::TaskModelSelection::Inherit => {
-                    return Err(BitFunError::validation(
+                    return Err(OpenBitFunError::validation(
                         "The Git commit task model cannot inherit a session model".to_string(),
                     ));
                 }
                 crate::service::config::types::TaskModelSelection::Fixed { model_id }
                     if !valid_task_model(model_id) =>
                 {
-                    return Err(BitFunError::validation(format!(
+                    return Err(OpenBitFunError::validation(format!(
                         "The Git commit task model '{}' does not exist",
                         model_id
                     )));
                 }
                 crate::service::config::types::TaskModelSelection::Fixed { .. } => {}
             }
+
+            let validate_agent_selection =
+                |path: &str, selection: &SubagentModelSelection| -> OpenBitFunResult<()> {
+                    if selection
+                        .fixed_model_id()
+                        .is_some_and(|model_id| !valid_task_model(model_id))
+                    {
+                        return Err(OpenBitFunError::validation(format!(
+                            "ai.agent_model_defaults.{path} references unavailable or incapable model '{}'",
+                            selection.fixed_model_id().expect("checked above")
+                        )));
+                    }
+                    Ok(())
+                };
+            if !valid_task_model(&ai_config.agent_model_defaults.mode) {
+                return Err(OpenBitFunError::validation(format!(
+                    "ai.agent_model_defaults.mode references unavailable or incapable model '{}'",
+                    ai_config.agent_model_defaults.mode
+                )));
+            }
+            validate_agent_selection(
+                "subagents.default",
+                &ai_config.agent_model_defaults.subagents.default_selection,
+            )?;
+            validate_agent_selection(
+                "subagents.fork",
+                &ai_config.agent_model_defaults.subagents.fork,
+            )?;
+            for (subagent_id, selection) in &ai_config.agent_model_defaults.subagents.builtin {
+                validate_agent_selection(&format!("subagents.builtin.{subagent_id}"), selection)?;
+            }
         } else {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Invalid AI config format".to_string(),
             ));
         }
@@ -325,7 +443,7 @@ impl ConfigProvider for AIConfigProvider {
         &self,
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Ok(ai_config) = serde_json::from_value::<AIConfig>(new_config.clone()) {
             info!(
                 "AI config changed: {} models configured",
@@ -341,27 +459,6 @@ impl ConfigProvider for AIConfigProvider {
         Ok(())
     }
 
-    async fn migrate_config(
-        &self,
-        version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        match version {
-            "0.1.0" => {
-                if let Ok(mut ai_config) = serde_json::from_value::<AIConfig>(config.clone()) {
-                    for model in &mut ai_config.models {
-                        if config.get("enabled").is_none() {
-                            model.enabled = true;
-                        }
-                    }
-                    Ok(serde_json::to_value(ai_config)?)
-                } else {
-                    Ok(config)
-                }
-            }
-            _ => Ok(config),
-        }
-    }
 }
 
 /// Web UI appearance selection provider.
@@ -377,17 +474,17 @@ impl ConfigProvider for AppearanceConfigProvider {
         serialize_default_config("appearance", AppearanceConfig::default())
     }
 
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
+    async fn validate_config(&self, config: &serde_json::Value) -> OpenBitFunResult<Vec<String>> {
         let warnings = Vec::new();
 
         if let Ok(appearance_config) = serde_json::from_value::<AppearanceConfig>(config.clone()) {
             if appearance_config.selection.trim().is_empty() {
-                return Err(BitFunError::validation(
+                return Err(OpenBitFunError::validation(
                     "Appearance selection must not be empty".to_string(),
                 ));
             }
         } else {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Invalid appearance config format".to_string(),
             ));
         }
@@ -399,7 +496,7 @@ impl ConfigProvider for AppearanceConfigProvider {
         &self,
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Ok(appearance_config) =
             serde_json::from_value::<AppearanceConfig>(new_config.clone())
         {
@@ -411,13 +508,6 @@ impl ConfigProvider for AppearanceConfigProvider {
         Ok(())
     }
 
-    async fn migrate_config(
-        &self,
-        _version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        Ok(config)
-    }
 }
 
 /// Editor configuration provider.
@@ -433,7 +523,7 @@ impl ConfigProvider for EditorConfigProvider {
         serialize_default_config("editor", EditorConfig::default())
     }
 
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
+    async fn validate_config(&self, config: &serde_json::Value) -> OpenBitFunResult<Vec<String>> {
         let mut warnings = Vec::new();
 
         if let Ok(editor_config) = serde_json::from_value::<EditorConfig>(config.clone()) {
@@ -449,7 +539,7 @@ impl ConfigProvider for EditorConfigProvider {
                 warnings.push("Line height should be between 1.0 and 3.0".to_string());
             }
         } else {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Invalid editor config format".to_string(),
             ));
         }
@@ -461,7 +551,7 @@ impl ConfigProvider for EditorConfigProvider {
         &self,
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Ok(editor_config) = serde_json::from_value::<EditorConfig>(new_config.clone()) {
             info!(
                 "Editor config changed: font_size={}",
@@ -471,13 +561,6 @@ impl ConfigProvider for EditorConfigProvider {
         Ok(())
     }
 
-    async fn migrate_config(
-        &self,
-        _version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        Ok(config)
-    }
 }
 
 /// Terminal configuration provider.
@@ -493,7 +576,7 @@ impl ConfigProvider for TerminalConfigProvider {
         serialize_default_config("terminal", TerminalConfig::default())
     }
 
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
+    async fn validate_config(&self, config: &serde_json::Value) -> OpenBitFunResult<Vec<String>> {
         let mut warnings = Vec::new();
 
         if let Ok(terminal_config) = serde_json::from_value::<TerminalConfig>(config.clone()) {
@@ -513,7 +596,7 @@ impl ConfigProvider for TerminalConfigProvider {
                 );
             }
         } else {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Invalid terminal config format".to_string(),
             ));
         }
@@ -525,7 +608,7 @@ impl ConfigProvider for TerminalConfigProvider {
         &self,
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Ok(terminal_config) = serde_json::from_value::<TerminalConfig>(new_config.clone()) {
             info!(
                 "Terminal config changed: shell={}, font_size={}",
@@ -535,13 +618,6 @@ impl ConfigProvider for TerminalConfigProvider {
         Ok(())
     }
 
-    async fn migrate_config(
-        &self,
-        _version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        Ok(config)
-    }
 }
 
 /// Workspace configuration provider.
@@ -557,7 +633,7 @@ impl ConfigProvider for WorkspaceConfigProvider {
         serialize_default_config("workspace", WorkspaceConfig::default())
     }
 
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
+    async fn validate_config(&self, config: &serde_json::Value) -> OpenBitFunResult<Vec<String>> {
         let mut warnings = Vec::new();
 
         if let Ok(workspace_config) = serde_json::from_value::<WorkspaceConfig>(config.clone()) {
@@ -570,7 +646,7 @@ impl ConfigProvider for WorkspaceConfigProvider {
                     .push("No exclude patterns defined, may scan unnecessary files".to_string());
             }
         } else {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Invalid workspace config format".to_string(),
             ));
         }
@@ -582,7 +658,7 @@ impl ConfigProvider for WorkspaceConfigProvider {
         &self,
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Ok(workspace_config) = serde_json::from_value::<WorkspaceConfig>(new_config.clone())
         {
             info!(
@@ -593,13 +669,6 @@ impl ConfigProvider for WorkspaceConfigProvider {
         Ok(())
     }
 
-    async fn migrate_config(
-        &self,
-        _version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        Ok(config)
-    }
 }
 
 /// App configuration provider.
@@ -615,7 +684,7 @@ impl ConfigProvider for AppConfigProvider {
         serialize_default_config("app", AppConfig::default())
     }
 
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
+    async fn validate_config(&self, config: &serde_json::Value) -> OpenBitFunResult<Vec<String>> {
         let mut warnings = Vec::new();
 
         if let Ok(app_config) = serde_json::from_value::<AppConfig>(config.clone()) {
@@ -632,13 +701,13 @@ impl ConfigProvider for AppConfigProvider {
                 "trace" | "debug" | "info" | "warn" | "error" | "off"
             );
             if !valid_log_level {
-                return Err(BitFunError::validation(format!(
+                return Err(OpenBitFunError::validation(format!(
                     "Invalid app.logging.level '{}': expected one of trace/debug/info/warn/error/off",
                     app_config.logging.level
                 )));
             }
         } else {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Invalid app config format".to_string(),
             ));
         }
@@ -650,7 +719,7 @@ impl ConfigProvider for AppConfigProvider {
         &self,
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Ok(app_config) = serde_json::from_value::<AppConfig>(new_config.clone()) {
             info!(
                 "App config changed: language={}, zoom_level={}, log_level={}",
@@ -660,13 +729,6 @@ impl ConfigProvider for AppConfigProvider {
         Ok(())
     }
 
-    async fn migrate_config(
-        &self,
-        _version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        Ok(config)
-    }
 }
 
 /// Configuration provider registry.
@@ -716,7 +778,7 @@ impl ConfigProviderRegistry {
     pub async fn validate_config(
         &self,
         config: &GlobalConfig,
-    ) -> BitFunResult<ConfigValidationResult> {
+    ) -> OpenBitFunResult<ConfigValidationResult> {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
 
@@ -787,7 +849,7 @@ impl ConfigProviderRegistry {
         path: &str,
         old_config: &GlobalConfig,
         new_config: &GlobalConfig,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let provider_name = path.split('.').next().unwrap_or(path);
 
         if let Some(provider) = self.get_provider(provider_name) {
@@ -805,7 +867,7 @@ impl ConfigProviderRegistry {
         &self,
         section: &str,
         config: &GlobalConfig,
-    ) -> BitFunResult<serde_json::Value> {
+    ) -> OpenBitFunResult<serde_json::Value> {
         match section {
             "app" => Ok(serde_json::to_value(&config.app)?),
             "appearance" => Ok(serde_json::to_value(&config.appearance)?),
@@ -813,7 +875,7 @@ impl ConfigProviderRegistry {
             "terminal" => Ok(serde_json::to_value(&config.terminal)?),
             "workspace" => Ok(serde_json::to_value(&config.workspace)?),
             "ai" => Ok(serde_json::to_value(&config.ai)?),
-            _ => Err(BitFunError::validation(format!(
+            _ => Err(OpenBitFunError::validation(format!(
                 "Unknown config section: {}",
                 section
             ))),
@@ -844,7 +906,7 @@ mod tests {
         }
     }
 
-    async fn validate_reasoning(reasoning: ReasoningConfig) -> BitFunResult<Vec<String>> {
+    async fn validate_reasoning(reasoning: ReasoningConfig) -> OpenBitFunResult<Vec<String>> {
         let mut config = AIConfig::default();
         config.models.push(model_with_reasoning(reasoning));
         AIConfigProvider
@@ -875,7 +937,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn accepts_generation_sentinels_on_pure_speech_models() {
+    async fn rejects_generation_fields_on_pure_speech_models() {
         let mut config = AIConfig::default();
         config.models.push(AIModelConfig {
             name: "Qwen ASR".to_string(),
@@ -888,10 +950,11 @@ mod tests {
             ..AIModelConfig::default()
         });
 
-        AIConfigProvider
+        let error = AIConfigProvider
             .validate_config(&serde_json::to_value(config).unwrap())
             .await
-            .expect("pure speech models do not use generation token fields");
+            .expect_err("current configs must not carry inapplicable generation fields");
+        assert!(error.to_string().contains("context_window"), "{error}");
     }
 
     #[tokio::test]
@@ -941,6 +1004,35 @@ mod tests {
         assert_eq!(result.errors[0].path, "ai.models[0].context_window");
         assert_eq!(result.errors[0].code, "MODEL_CONTEXT_WINDOW_INVALID");
         assert_eq!(result.diagnostics[0].path, "ai.models[0].context_window");
+    }
+
+    #[tokio::test]
+    async fn rejects_default_and_agent_references_to_incapable_models() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            id: "speech".to_string(),
+            name: "Speech".to_string(),
+            provider: "openai".to_string(),
+            enabled: true,
+            category: ModelCategory::SpeechRecognition,
+            capabilities: vec![ModelCapability::SpeechRecognition],
+            ..AIModelConfig::default()
+        });
+        config.default_models.primary = Some("speech".to_string());
+
+        let error = AIConfigProvider
+            .validate_config(&serde_json::to_value(&config).unwrap())
+            .await
+            .expect_err("primary must reference an enabled text model");
+        assert!(error.to_string().contains("default_models.primary"));
+
+        config.default_models.primary = None;
+        config.agent_model_defaults.mode = "speech".to_string();
+        let error = AIConfigProvider
+            .validate_config(&serde_json::to_value(config).unwrap())
+            .await
+            .expect_err("agent defaults must reference an enabled text model");
+        assert!(error.to_string().contains("agent_model_defaults.mode"));
     }
 
     #[tokio::test]

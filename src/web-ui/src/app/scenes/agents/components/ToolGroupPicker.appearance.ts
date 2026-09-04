@@ -9,5 +9,5 @@ export const toolGroupPickerAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'managerEditor' }, { id: 'managerList' }, { id: 'managerGroup' },
     { id: 'summary' }, { id: 'summaryGroup' }, { id: 'empty' },
   ],
-  states: [{ id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } }],
+  states: [{ id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } }],
 };

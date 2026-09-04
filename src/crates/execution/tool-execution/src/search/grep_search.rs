@@ -10,12 +10,12 @@ use super::workspace_grep_prefilter::{
     grep_batch_command, grep_probe_command, literal_alternatives, parse_grep_batch_output,
     MAX_GREP_BATCH_COMMAND_BYTES, MAX_GREP_BATCH_PATHS,
 };
-use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind, WorkspaceShell};
 use globset::GlobBuilder;
 use grep_regex::{RegexMatcher, RegexMatcherBuilder};
 use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkMatch};
 use ignore::types::TypesBuilder;
 use ignore::{DirEntry, WalkBuilder, WalkState};
+use openbitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind, WorkspaceShell};
 use std::collections::HashSet;
 
 const MAX_DISPLAY_COLUMNS: usize = 500;
@@ -1257,13 +1257,13 @@ pub fn build_grep_candidate_command(options: &GrepOptions) -> String {
     // a match accepted by the Runtime's matcher.
     format!(
         "command -v rg >/dev/null 2>&1 || exit 127\n\
-         printf 'before\\000bitfun.probe\\n' | command rg --no-config --fixed-strings --text --quiet -e 'bitfun.probe' || exit 127\n\
+         printf 'before\\000openbitfun.probe\\n' | command rg --no-config --fixed-strings --text --quiet -e 'openbitfun.probe' || exit 127\n\
          printf '\\377\\376b\\000f\\000\\n\\000' | command rg --no-config --fixed-strings --text --quiet -e bf || exit 127\n\
          printf '\\376\\377\\000b\\000f\\000\\n' | command rg --no-config --fixed-strings --text --quiet -e bf || exit 127\n\
-         printf 'BITFUN_RG_CANDIDATES_BEGIN\\000'\n\
-         if {command}; then bitfun_search_status=0; else bitfun_search_status=$?; fi\n\
-         printf 'BITFUN_RG_CANDIDATES_END\\000'\n\
-         exit \"$bitfun_search_status\""
+         printf 'OPENBITFUN_RG_CANDIDATES_BEGIN\\000'\n\
+         if {command}; then openbitfun_search_status=0; else openbitfun_search_status=$?; fi\n\
+         printf 'OPENBITFUN_RG_CANDIDATES_END\\000'\n\
+         exit \"$openbitfun_search_status\""
     )
 }
 
@@ -1281,8 +1281,8 @@ fn parse_rg_candidates(
     root: &str,
 ) -> Result<HashSet<String>, String> {
     let payload = stdout
-        .strip_prefix("BITFUN_RG_CANDIDATES_BEGIN\0")
-        .and_then(|text| text.strip_suffix("BITFUN_RG_CANDIDATES_END\0"))
+        .strip_prefix("OPENBITFUN_RG_CANDIDATES_BEGIN\0")
+        .and_then(|text| text.strip_suffix("OPENBITFUN_RG_CANDIDATES_END\0"))
         .ok_or_else(|| {
             "Workspace search candidate protocol was incomplete or contaminated".to_string()
         })?;
@@ -1419,7 +1419,7 @@ impl Drop for WorkspaceSearchWorkerGuard {
 }
 
 struct CancellableWorkspaceReader {
-    reader: bitfun_runtime_ports::WorkspaceReader,
+    reader: openbitfun_runtime_ports::WorkspaceReader,
     cancelled: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
     bytes_read: Arc<std::sync::atomic::AtomicU64>,
 }
@@ -1489,7 +1489,7 @@ struct WorkspaceGrepCollector<'a> {
 impl WorkspaceGrepCollector<'_> {
     async fn scan_batch(
         &mut self,
-        files: &mut Vec<(String, bitfun_runtime_ports::WorkspaceMetadata)>,
+        files: &mut Vec<(String, openbitfun_runtime_ports::WorkspaceMetadata)>,
         grep_prefilter: Option<(&dyn WorkspaceShell, &[&str])>,
     ) -> Result<(), String> {
         if files.is_empty() {
@@ -1509,7 +1509,7 @@ impl WorkspaceGrepCollector<'_> {
                 let result = shell
                     .exec_with_options(
                         &grep_batch_command(literals, &paths),
-                        bitfun_runtime_ports::WorkspaceCommandOptions {
+                        openbitfun_runtime_ports::WorkspaceCommandOptions {
                             timeout_ms: Some(30_000),
                             cancellation_token: Some(cancellation.token.clone()),
                         },
@@ -1668,7 +1668,7 @@ async fn grep_search_workspace_inner(
         let command_result = shell
             .exec_with_options(
                 &build_grep_candidate_command(&options),
-                bitfun_runtime_ports::WorkspaceCommandOptions {
+                openbitfun_runtime_ports::WorkspaceCommandOptions {
                     timeout_ms: Some(30_000),
                     cancellation_token: Some(cancellation.token.clone()),
                 },
@@ -1696,7 +1696,7 @@ async fn grep_search_workspace_inner(
                     let probe = shell
                         .exec_with_options(
                             grep_probe_command(),
-                            bitfun_runtime_ports::WorkspaceCommandOptions {
+                            openbitfun_runtime_ports::WorkspaceCommandOptions {
                                 timeout_ms: Some(30_000),
                                 cancellation_token: Some(cancellation.token.clone()),
                             },
@@ -2105,7 +2105,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("bitfun-grep-search-{name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("openbitfun-grep-search-{name}-{unique}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }

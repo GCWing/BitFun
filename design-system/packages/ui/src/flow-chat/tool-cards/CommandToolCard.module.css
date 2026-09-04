@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     min-inline-size: 0;
   }
@@ -11,14 +11,14 @@
     padding: 0;
     border: 0;
     border-radius: 0;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     background: transparent;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .command[data-empty="true"] {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     font-style: italic;
   }
 
@@ -26,50 +26,50 @@
     display: inline-flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-space-1);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
+    gap: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .statusLabel {
     display: inline-flex;
     align-items: center;
-    padding-block: var(--bf-space-1);
-    padding-inline: var(--bf-space-2);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-action-neutral-surface);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    padding-block: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-action-neutral-surface);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     white-space: nowrap;
   }
 
   .statusLabel[data-tone="warning"] {
-    color: var(--bf-color-status-warning-content);
-    background: var(--bf-color-status-warning-surface);
+    color: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
   .statusLabel[data-tone="danger"] {
-    color: var(--bf-color-status-danger-content);
-    background: var(--bf-color-status-danger-surface);
+    color: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   .criticalAction {
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   .details {
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .outputFrame {
     position: relative;
     overflow: hidden;
     min-block-size: 0;
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-canvas);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   .outputFrame[data-density="compact"] {
@@ -110,9 +110,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--bf-space-3);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
+    padding: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
     font-style: italic;
     text-align: center;
   }
@@ -120,16 +120,16 @@
   .outputActions {
     position: absolute;
     z-index: 1;
-    inset-block-start: var(--bf-space-1);
-    inset-inline-end: var(--bf-space-1);
+    inset-block-start: var(--openbitfun-space-1);
+    inset-inline-end: var(--openbitfun-space-1);
     display: inline-flex;
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .outputFrame:is(:hover, :focus-within) .outputActions,
-  .outputFrame[data-bf-preview-state="hover"] .outputActions {
+  .outputFrame[data-openbitfun-preview-state="hover"] .outputActions {
     opacity: 1;
     pointer-events: auto;
   }
@@ -139,20 +139,20 @@
     min-inline-size: 0;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding-block: var(--bf-space-2);
-    padding-inline: var(--bf-space-3);
-    border-radius: var(--bf-radius-sm);
-    color: var(--bf-color-content-muted);
-    background: var(--bf-color-surface-raised);
-    font-size: var(--bf-type-body-sm-font-size);
+    gap: var(--openbitfun-space-2);
+    padding-block: var(--openbitfun-space-2);
+    padding-inline: var(--openbitfun-space-3);
+    border-radius: var(--openbitfun-radius-sm);
+    color: var(--openbitfun-color-content-muted);
+    background: var(--openbitfun-color-surface-raised);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .footerItem {
     display: inline-flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     white-space: nowrap;
   }
 
@@ -165,33 +165,33 @@
   }
 
   .footerLabel {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .footerValue {
     overflow: hidden;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     text-overflow: ellipsis;
   }
 
   .footerItem[data-tone="success"] .footerValue {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 
   .footerItem[data-tone="warning"] .footerValue {
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   .footerItem[data-tone="danger"] .footerValue {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   .error {
-    color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-type-body-sm-font-size);
-    line-height: var(--bf-type-body-md-line-height);
+    color: var(--openbitfun-color-status-danger-content);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }

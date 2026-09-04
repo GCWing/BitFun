@@ -1,4 +1,4 @@
-use bitfun_transport::{encode_json_with_limit, JsonCodecError};
+use openbitfun_transport::{encode_json_with_limit, JsonCodecError};
 
 #[test]
 fn bounded_json_encoding_stops_before_exceeding_the_budget() {

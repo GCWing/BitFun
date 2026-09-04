@@ -14,7 +14,7 @@ describe('L1 external file composer input', () => {
     const header = new Header();
     const startupPage = new StartupPage();
 
-    fixtureRoot = mkdtempSync(join(tmpdir(), 'bitfun-external-file-e2e-'));
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'openbitfun-external-file-e2e-'));
     writeFileSync(join(fixtureRoot, 'notes.txt'), 'external file context\n', 'utf8');
     writeFileSync(join(fixtureRoot, 'preview.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     mkdirSync(join(fixtureRoot, 'reference-folder'));
@@ -99,8 +99,8 @@ describe('L1 external file composer input', () => {
     try {
       expect(dispatchResult).toEqual({ targetFound: true, defaultPrevented: true });
       await browser.waitUntil(async () => {
-        const tags = await $$('[data-bf-part="contextTag"]').getElements();
-        const images = await $$('[data-testid="chat-input-image-strip"] [data-bf-part="image"]').getElements();
+        const tags = await $$('[data-openbitfun-part="contextTag"]').getElements();
+        const images = await $$('[data-testid="chat-input-image-strip"] [data-openbitfun-part="image"]').getElements();
         return tags.length === 2 && images.length === 1;
       }, {
         timeout: 5000,
@@ -121,14 +121,14 @@ describe('L1 external file composer input', () => {
       ]);
 
       const tagTypes = await browser.execute(() => Array.from(
-        document.querySelectorAll<HTMLElement>('[data-bf-part="contextTag"]'),
-        element => element.dataset.bfContextType,
+        document.querySelectorAll<HTMLElement>('[data-openbitfun-part="contextTag"]'),
+        element => element.dataset.openbitfunContextType,
       ));
       const tagTitles = await browser.execute(() => Array.from(
-        document.querySelectorAll<HTMLElement>('[data-bf-part="contextTag"]'),
+        document.querySelectorAll<HTMLElement>('[data-openbitfun-part="contextTag"]'),
         element => element.title,
       ));
-      const imageTitle = await $('[data-testid="chat-input-image-strip"] [data-bf-part="image"]').getAttribute('title');
+      const imageTitle = await $('[data-testid="chat-input-image-strip"] [data-openbitfun-part="image"]').getAttribute('title');
 
       expect(tagTypes).toEqual(['file', 'directory']);
       expect(tagTitles).toEqual([paths[0], `${paths[1]} (recursive)`]);

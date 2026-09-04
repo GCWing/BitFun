@@ -1,13 +1,13 @@
 [package]
-name = "bitfun-agent-workflows"
+name = "openbitfun-agent-workflows"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Named BitFun agent workflow policies"
+description = "Named OpenBitFun agent workflow policies"
 autotests = false
 
 [lib]
-name = "bitfun_agent_workflows"
+name = "openbitfun_agent_workflows"
 crate-type = ["rlib"]
 
 [dependencies]

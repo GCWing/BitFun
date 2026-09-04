@@ -2,7 +2,7 @@ use crate::request_id;
 use axum::http::{header::HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use bitfun_product_domains::miniapp::market::{MarketApiErrorBody, MarketApiErrorEnvelope};
+use openbitfun_product_domains::miniapp::market::{MarketApiErrorBody, MarketApiErrorEnvelope};
 
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]

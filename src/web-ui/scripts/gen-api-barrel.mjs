@@ -16,7 +16,7 @@ if (process.argv.includes('--clean')) {
 
 const header = `// GENERATED CODE! DO NOT MODIFY BY HAND!
 //
-// Source: bitfun-app-server-protocol (+ stable contract crates), exported via
+// Source: openbitfun-app-server-protocol (+ stable contract crates), exported via
 // ts-rs (#[ts(export)], run by \`npm run gen:types\`).
 // This barrel re-exports every generated type so consumers can import from a
 // single path: \`import type { SubmitDialogTurnBody } from '@/generated/api'\`.

@@ -5,14 +5,14 @@
   position: relative;
   margin:
     0.06rem
-    var(--bf-control-flow-chat-content-padding-inline)
-    var(--bf-control-flow-chat-flow-item-gap)
-    var(--bf-control-flow-chat-content-padding-inline);
+    var(--openbitfun-control-flow-chat-content-padding-inline)
+    var(--openbitfun-control-flow-chat-flow-item-gap)
+    var(--openbitfun-control-flow-chat-content-padding-inline);
 
   &--with-timestamp {
     /* The timestamp occupies stable space even while transparent. Hover must
        never resize a virtualized transcript row. */
-    margin-bottom: calc(var(--bf-control-flow-chat-flow-item-gap) + 1rem);
+    margin-bottom: calc(var(--openbitfun-control-flow-chat-flow-item-gap) + 1rem);
   }
 
   &:hover,
@@ -28,8 +28,8 @@
   }
 
   @media (max-width: 768px) {
-    margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
-    margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
+    margin-left: var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
+    margin-right: var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
   }
 }
 
@@ -42,7 +42,7 @@
    * `--failed`) re-point it to their own line box.
    */
   --user-message-line-box: calc(
-    var(--bf-type-flow-body-font-size) * var(--bf-type-flow-body-line-height)
+    var(--openbitfun-type-flow-body-font-size) * var(--openbitfun-type-flow-body-line-height)
   );
   /*
    * Fills the reading column instead of hugging its text: the bubble shares the
@@ -51,9 +51,9 @@
    */
   width: auto;
   padding: 0.46rem 0.68rem;
-  background: var(--bf-color-action-quiet-hover);
-  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 72%, transparent);
-  border-radius: calc(var(--bf-control-flow-chat-card-radius) + 2px);
+  background: var(--openbitfun-color-action-quiet-hover);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-default) 72%, transparent);
+  border-radius: calc(var(--openbitfun-control-flow-chat-card-radius) + 2px);
   margin: 0;
   box-shadow: none;
   transition: opacity 140ms ease;
@@ -65,24 +65,24 @@
   position: relative;
 
   &:hover {
-    background: var(--bf-color-action-quiet-hover);
-    border-color: color-mix(in srgb, var(--bf-color-border-subtle) 56%, transparent);
+    background: var(--openbitfun-color-action-quiet-hover);
+    border-color: color-mix(in srgb, var(--openbitfun-color-border-subtle) 56%, transparent);
   }
 
   &:focus-within {
-    border-color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent) 68%, var(--bf-color-border-default));
+    border-color: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent) 68%, var(--openbitfun-color-border-default));
   }
 
 }
 
 .user-message-item__timestamp {
   /* The timestamp shares the external meta row with the action cluster. */
-  color: var(--bf-color-content-muted);
-  font-family: var(--bf-type-flow-meta-font-family);
-  font-size: var(--bf-type-flow-meta-font-size);
-  font-weight: var(--bf-type-flow-meta-font-weight);
+  color: var(--openbitfun-color-content-muted);
+  font-family: var(--openbitfun-type-flow-meta-font-family);
+  font-size: var(--openbitfun-type-flow-meta-font-size);
+  font-weight: var(--openbitfun-type-flow-meta-font-weight);
   font-variant-numeric: tabular-nums;
-  line-height: var(--bf-type-flow-meta-line-height);
+  line-height: var(--openbitfun-type-flow-meta-line-height);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -110,7 +110,7 @@
 .user-message-item__main {
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
 }
 
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
@@ -125,17 +125,17 @@
   width: fit-content;
   padding: 0.12rem 0.44rem;
   border-radius: 999px;
-  font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-flow-meta-line-height);
-  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-flow-meta-line-height);
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   user-select: none;
 }
 
 .user-message-item__steering-tag--pending {
-  color: var(--bf-color-status-warning-content);
-  background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 28%, transparent);
+  color: var(--openbitfun-color-status-warning-content);
+  background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 28%, transparent);
 }
 
 .user-message-item__actions {
@@ -152,15 +152,15 @@
 }
 
 .user-message-item__blocks {
-  margin-top: var(--bf-control-flow-chat-flow-item-gap);
+  margin-top: var(--openbitfun-control-flow-chat-flow-item-gap);
 }
 
 .user-message-item__content {
   flex: 1;
-  font-size: var(--bf-type-flow-body-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-flow-body-line-height);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-flow-body-line-height);
+  color: var(--openbitfun-color-content-primary);
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -183,24 +183,24 @@
   margin: 0.08rem 0.14rem;
   padding: 0.08rem 0.38rem;
   vertical-align: text-bottom;
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-sm);
-  background: var(--bf-color-action-neutral-surface-hover);
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-meta-line-height);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-sm);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-meta-line-height);
   white-space: nowrap;
   user-select: none;
 
   svg,
-  [data-bf-component='icon'] {
+  [data-openbitfun-component='icon'] {
     flex: 0 0 auto;
   }
 }
 
 .user-message-item__reference--session-reference {
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .user-message-item__reference-label {
@@ -217,8 +217,8 @@
 // Failed state: no bubble. Icons/actions align to the first text line (not flex baseline:
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
-  --_failed-font-size: var(--bf-type-flow-control-font-size);
-  --_failed-line-height: var(--bf-type-support-line-height);
+  --_failed-font-size: var(--openbitfun-type-flow-control-font-size);
+  --_failed-line-height: var(--openbitfun-type-support-line-height);
   --_failed-line-box: calc(
     var(--_failed-font-size) * var(--_failed-line-height)
   );
@@ -232,7 +232,7 @@
 
   .user-message-item__main {
     align-items: flex-start;
-    gap: var(--bf-control-flow-chat-flow-item-gap);
+    gap: var(--openbitfun-control-flow-chat-flow-item-gap);
   }
 
   // Text column + actions row: actions sit beside text; optional vertical nudge vs first line.
@@ -240,7 +240,7 @@
     display: flex;
     flex-flow: row wrap;
     align-items: flex-start;
-    column-gap: var(--bf-control-flow-chat-inline-gap);
+    column-gap: var(--openbitfun-control-flow-chat-inline-gap);
     row-gap: 0.28em;
     flex: 1;
     min-width: 0;
@@ -252,7 +252,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--bf-control-flow-chat-inline-gap);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
   }
 
   .user-message-item__failed-avatar {
@@ -264,7 +264,7 @@
     box-sizing: border-box;
     height: var(--_failed-line-box);
     min-height: var(--_failed-line-box);
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.9;
 
     svg {
@@ -278,13 +278,13 @@
     flex: 0 1 auto;
     width: max-content;
     max-width: 100%;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     font-size: var(--_failed-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     font-style: italic;
     line-height: var(--_failed-line-height);
     text-decoration: line-through;
-    text-decoration-color: color-mix(in srgb, var(--bf-color-content-muted) 72%, transparent);
+    text-decoration-color: color-mix(in srgb, var(--openbitfun-color-content-muted) 72%, transparent);
   }
 
   .user-message-item__actions {
@@ -325,8 +325,8 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--bf-radius-sm);
-  color: var(--bf-color-content-secondary);
+  border-radius: var(--openbitfun-radius-sm);
+  color: var(--openbitfun-color-content-secondary);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   flex-shrink: 0;
@@ -336,7 +336,7 @@
 
   &:hover:not(:disabled) {
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     box-shadow: none;
   }
 
@@ -345,7 +345,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
   }
 
@@ -355,7 +355,7 @@
   }
 
   svg,
-  [data-bf-component='icon'] {
+  [data-openbitfun-component='icon'] {
     width: 14px;
     height: 14px;
     display: block;
@@ -364,8 +364,8 @@
 }
 
 .user-message-item__copy-btn.copied {
-  color: var(--bf-color-status-success-content);
-  background: var(--bf-color-status-success-surface);
+  color: var(--openbitfun-color-status-success-content);
+  background: var(--openbitfun-color-status-success-surface);
 }
 
 .user-message-edit-composer {
@@ -377,8 +377,8 @@
   min-height: 5.5rem;
   max-height: 45vh;
   overflow-y: auto;
-  font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-type-flow-body-line-height);
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  line-height: var(--openbitfun-type-flow-body-line-height);
 }
 
 .user-message-edit-composer__rich-input {
@@ -393,8 +393,8 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    font-size: var(--bf-type-flow-body-font-size);
-    line-height: var(--bf-type-flow-body-line-height);
+    font-size: var(--openbitfun-type-flow-body-font-size);
+    line-height: var(--openbitfun-type-flow-body-line-height);
   }
 }
 
@@ -434,12 +434,12 @@
   border-radius: 5px;
   overflow: hidden;
   cursor: pointer;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--openbitfun-color-content-on-light) 30%, transparent);
   }
 
   img {
@@ -454,8 +454,8 @@
 .user-message-item__lightbox {
   position: fixed;
   inset: 0;
-  z-index: var(--bf-layer-fullscreen);
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
+  z-index: var(--openbitfun-layer-fullscreen);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -465,7 +465,7 @@
     max-width: 90vw;
     max-height: 85vh;
     border-radius: 8px;
-    box-shadow: 0 8px 32px var(--bf-color-overlay-scrim);
+    box-shadow: 0 8px 32px var(--openbitfun-color-overlay-scrim);
     object-fit: contain;
   }
 }
@@ -474,7 +474,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
   border: none;
   border-radius: 50%;
   width: 36px;
@@ -482,12 +482,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--bf-color-content-on-dark);
+  color: var(--openbitfun-color-content-on-dark);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 30%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 30%, transparent);
   }
 
   &:active {
@@ -495,7 +495,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-color-content-on-dark);
+    outline: 2px solid var(--openbitfun-color-content-on-dark);
     outline-offset: 2px;
   }
 }

@@ -11,14 +11,14 @@ export const toolbarModeAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'todoCurrent' }, { id: 'streamText' }, { id: 'controls' },
   ],
   facets: [
-    { id: 'contentKind', attribute: 'data-bf-content-kind', values: ['text', 'tool', 'todo'] },
+    { id: 'contentKind', attribute: 'data-openbitfun-content-kind', values: ['text', 'tool', 'todo'] },
   ],
   states: [
-    { id: 'expanded', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="expanded"]' } },
-    { id: 'processing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="processing"]' } },
-    { id: 'error', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="error"]' } },
-    { id: 'confirm', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="confirm"]' } },
-    { id: 'streaming', selector: { kind: 'self', suffix: '[data-bf-state~="streaming"]' } },
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
+    { id: 'expanded', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="expanded"]' } },
+    { id: 'processing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="processing"]' } },
+    { id: 'error', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'confirm', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="confirm"]' } },
+    { id: 'streaming', selector: { kind: 'self', suffix: '[data-openbitfun-state~="streaming"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
   ],
 };

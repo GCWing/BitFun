@@ -24,28 +24,28 @@
     // constraint when the overlay is placed by the viewport anchor hook.
     bottom: auto;
     left: auto;
-    z-index: var(--bf-layer-popover);
+    z-index: var(--openbitfun-layer-popover);
     width: min(400px, calc(100vw - 16px));
     min-width: min(260px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-body-sm-font-family);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-body-sm-font-family);
   }
   
   &__header {
     display: flex;
     align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    padding: var(--bf-control-flow-chat-inline-gap) var(--bf-control-flow-chat-card-expanded-padding-inline);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    padding: var(--openbitfun-control-flow-chat-inline-gap) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     
     svg,
-    [data-bf-component='icon'] {
+    [data-openbitfun-component='icon'] {
       opacity: 0.6;
     }
   }
@@ -55,7 +55,7 @@
     min-width: 0;
     display: flex;
     align-items: baseline;
-    gap: var(--bf-control-flow-chat-inline-gap);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
   }
 
   &__dir-name,
@@ -68,14 +68,14 @@
   &__dir-name {
     flex: 0 1 auto;
     max-width: 55%;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &__parent-path {
     flex: 1 1 auto;
     min-width: 0;
-    color: var(--bf-color-content-muted);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
   }
   
   &__content {
@@ -91,10 +91,10 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    padding: var(--bf-control-flow-chat-card-expanded-padding-inline);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
     
     span {
       opacity: 0.7;
@@ -103,7 +103,7 @@
   
   &__spinner {
     animation: file-mention-picker-spin 1s linear infinite;
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
     
     @keyframes file-mention-picker-spin {
       from { transform: rotate(0deg); }
@@ -113,18 +113,18 @@
   
   &__list {
     block-size: 100%;
-    padding: var(--bf-overlay-menu-surface-padding);
+    padding: var(--openbitfun-overlay-menu-surface-padding);
   }
   
   &__footer {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-control-flow-chat-control-gap);
-    padding: var(--bf-control-flow-chat-inline-gap) var(--bf-control-flow-chat-card-expanded-padding-inline);
-    border-top: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-type-flow-micro-font-size);
-    color: var(--bf-color-content-muted);
+    gap: var(--openbitfun-control-flow-chat-control-gap);
+    padding: var(--openbitfun-control-flow-chat-inline-gap) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    color: var(--openbitfun-color-content-muted);
     
     > span {
       display: flex;
@@ -133,18 +133,18 @@
     }
   }
 
-  :root[data-bf-appearance-mode="light"] &,
-  :root[data-bf-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
   .light & {
     // Blur over chat content reads as muddy/dark; use a solid elevated surface
-    background: var(--bf-color-surface-raised);
+    background: var(--openbitfun-color-surface-raised);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    border-color: var(--bf-color-border-subtle);
+    border-color: var(--openbitfun-color-border-subtle);
     box-shadow:
-      0 4px 18px color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent),
-      0 1px 3px color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
+      0 4px 18px color-mix(in srgb, var(--openbitfun-color-content-muted) 4%, transparent),
+      0 1px 3px color-mix(in srgb, var(--openbitfun-color-content-muted) 4%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 95%, transparent);
 
   }
 }

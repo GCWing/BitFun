@@ -9,7 +9,7 @@ description: Use when creating new skills, editing existing skills, or verifying
 
 **Writing skills IS Test-Driven Development applied to process documentation.**
 
-**Personal skills live in `%APPDATA%/BitFun/skills` on Windows, `~/Library/Application Support/BitFun/skills` on macOS, and `~/.local/share/BitFun/skills` on Linux.**
+**Personal skills live in `%APPDATA%/OpenBitFun/skills` on Windows, `~/Library/Application Support/OpenBitFun/skills` on macOS, and `~/.local/share/OpenBitFun/skills` on Linux.**
 
 You write test cases (pressure scenarios with subagents), watch them fail (baseline behavior), write the skill (documentation), watch tests pass (agents comply), and refactor (close loopholes).
 
@@ -17,11 +17,11 @@ You write test cases (pressure scenarios with subagents), watch them fail (basel
 
 **CORE PRINCIPLE:** This skill adapts the RED-GREEN-REFACTOR cycle to documentation — write a failing test (baseline scenario), write the skill, verify it works, then close loopholes.
 
-**Official guidance:** For BitFun bundled skills, keep instructions self-contained, tool-accurate, and independent of external assistant runtimes. This document provides additional patterns and guidelines that complement the TDD-focused approach in this skill.
+**Official guidance:** For OpenBitFun bundled skills, keep instructions self-contained, tool-accurate, and independent of external assistant runtimes. This document provides additional patterns and guidelines that complement the TDD-focused approach in this skill.
 
 ## What is a Skill?
 
-A **skill** is a reference guide for proven techniques, patterns, or tools. Skills help future BitFun instances find and apply effective approaches.
+A **skill** is a reference guide for proven techniques, patterns, or tools. Skills help future OpenBitFun instances find and apply effective approaches.
 
 **Skills are:** Reusable techniques, patterns, tools, reference guides
 
@@ -137,13 +137,13 @@ Concrete results
 ```
 
 
-## BitFun Search Optimization (CSO)
+## OpenBitFun Search Optimization (CSO)
 
-**Critical for discovery:** Future BitFun needs to FIND your skill
+**Critical for discovery:** Future OpenBitFun needs to FIND your skill
 
 ### 1. Rich Description Field
 
-**Purpose:** BitFun reads description to decide which skills to load for a given task. Make it answer: "Should I read this skill right now?"
+**Purpose:** OpenBitFun reads description to decide which skills to load for a given task. Make it answer: "Should I read this skill right now?"
 
 **Format:** Start with "Use when..." to focus on triggering conditions
 
@@ -151,14 +151,14 @@ Concrete results
 
 The description should ONLY describe triggering conditions. Do NOT summarize the skill's process or workflow in the description.
 
-**Why this matters:** Testing revealed that when a description summarizes the skill's workflow, BitFun may follow the description instead of reading the full skill content. A description saying "code review between tasks" caused BitFun to do ONE review, even though the skill's flowchart clearly showed TWO reviews (spec compliance then code quality).
+**Why this matters:** Testing revealed that when a description summarizes the skill's workflow, OpenBitFun may follow the description instead of reading the full skill content. A description saying "code review between tasks" caused OpenBitFun to do ONE review, even though the skill's flowchart clearly showed TWO reviews (spec compliance then code quality).
 
-When the description was changed to just "Use when executing implementation plans with independent tasks" (no workflow summary), BitFun correctly read the flowchart and followed the two-stage review process.
+When the description was changed to just "Use when executing implementation plans with independent tasks" (no workflow summary), OpenBitFun correctly read the flowchart and followed the two-stage review process.
 
-**The trap:** Descriptions that summarize workflow create a shortcut BitFun will take. The skill body becomes documentation BitFun skips.
+**The trap:** Descriptions that summarize workflow create a shortcut OpenBitFun will take. The skill body becomes documentation OpenBitFun skips.
 
 ```yaml
-# ❌ BAD: Summarizes workflow - BitFun may follow this instead of reading skill
+# ❌ BAD: Summarizes workflow - OpenBitFun may follow this instead of reading skill
 description: Use when executing plans - dispatches subagent per task with code review between tasks
 
 # ❌ BAD: Too much process detail
@@ -198,7 +198,7 @@ description: Use when using React Router and handling authentication redirects
 
 ### 2. Keyword Coverage
 
-Use words BitFun would search for:
+Use words OpenBitFun would search for:
 - Error messages: "Hook timed out", "ENOTEMPTY", "race condition"
 - Symptoms: "flaky", "hanging", "zombie", "pollution"
 - Synonyms: "timeout/hang/freeze", "cleanup/teardown/afterEach"
@@ -634,7 +634,7 @@ Deploying untested skills = deploying untested code. It's a violation of quality
 
 ## Discovery Workflow
 
-How future BitFun finds your skill:
+How future OpenBitFun finds your skill:
 
 1. **Encounters problem** ("tests are flaky")
 3. **Finds SKILL** (description matches)

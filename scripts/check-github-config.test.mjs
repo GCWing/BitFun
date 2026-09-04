@@ -21,7 +21,7 @@ const requireFromWebUi = createRequire(
 const yaml = requireFromWebUi('yaml');
 
 function createRepo({ workflow, nodeVersionFile }) {
-  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-github-config-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-github-config-'));
   mkdirSync(path.join(root, '.github/workflows'), { recursive: true });
   writeFileSync(
     path.join(root, 'package.json'),
@@ -48,7 +48,7 @@ function runCheck(root) {
     cwd: repoRoot,
     env: {
       ...process.env,
-      BITFUN_GITHUB_CONFIG_TEST_ROOT: root,
+      OPENBITFUN_GITHUB_CONFIG_TEST_ROOT: root,
     },
     encoding: 'utf8',
   });
@@ -302,7 +302,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
   assert.equal(
     cliJob.steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
-    'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+    'cargo test --locked -p openbitfun-cli --test terminal_process_contracts -- --test-threads=1',
   );
 
   const rustCache = rustJob.steps.find((step) =>
@@ -381,7 +381,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
   assert.equal(
     commandByStep.get('Run subscription authentication tests'),
-    'cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth',
+    'cargo test --locked -p openbitfun-ai-adapters --features subscription-auth --lib subscription_auth',
   );
   const installerCheck = rustJob.steps.find(
     (step) => step.name === 'Check installer compilation',
@@ -389,7 +389,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   assert.equal(installerCheck?.if, "runner.os == 'Windows'");
   assert.equal(
     installerCheck?.run,
-    'cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml',
+    'cargo check --manifest-path OpenBitFun-Installer/src-tauri/Cargo.toml',
   );
   const coreLibraryTests = rustJob.steps.find(
     (step) => step.name === 'Run core library tests',
@@ -398,7 +398,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     (step) => step.name === 'Run full core library tests on Linux',
   );
   const coreLibraryTestSteps = rustJob.steps.filter(
-    (step) => /^cargo test --locked -p bitfun-core\b.*\s--lib$/.test(step.run ?? ''),
+    (step) => /^cargo test --locked -p openbitfun-core\b.*\s--lib$/.test(step.run ?? ''),
   );
   const desktopLibraryTests = rustJob.steps.find(
     (step) => step.name === 'Run desktop library tests',
@@ -415,7 +415,7 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
   assert.equal(
     coreLibraryTests?.run,
-    'cargo test --locked -p bitfun-core --lib',
+    'cargo test --locked -p openbitfun-core --lib',
   );
   assert.equal(
     linuxFullCoreLibraryTests?.if,
@@ -423,18 +423,18 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
   assert.equal(
     linuxFullCoreLibraryTests?.run,
-    'cargo test --locked -p bitfun-core --features product-full --lib',
+    'cargo test --locked -p openbitfun-core --features product-full --lib',
   );
   assert.deepEqual(
     coreLibraryTestSteps.map((step) => ({ if: step.if, run: step.run })),
     [
       {
         if: "runner.os != 'Linux'",
-        run: 'cargo test --locked -p bitfun-core --lib',
+        run: 'cargo test --locked -p openbitfun-core --lib',
       },
       {
         if: "runner.os == 'Linux'",
-        run: 'cargo test --locked -p bitfun-core --features product-full --lib',
+        run: 'cargo test --locked -p openbitfun-core --features product-full --lib',
       },
     ],
     'Core library validation must contain exactly the reviewed complementary steps',
@@ -442,13 +442,13 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   assert.equal(desktopLibraryTests?.if, "runner.os != 'Windows'");
   assert.equal(
     desktopLibraryTests?.run,
-    'cargo test --locked -p bitfun-desktop --lib',
+    'cargo test --locked -p openbitfun-desktop --lib',
   );
   assert.equal(windowsDesktopProbe?.if, "runner.os == 'Windows'");
   assert.equal(windowsDesktopProbe?.shell, 'pwsh');
   assert.match(
     windowsDesktopProbe?.run ?? '',
-    /cargo test --locked -p bitfun-desktop --lib 2>&1/,
+    /cargo test --locked -p openbitfun-desktop --lib 2>&1/,
   );
   assert.match(windowsDesktopProbe?.run ?? '', /0xc0000139/);
   assert.match(windowsDesktopProbe?.run ?? '', /STATUS_ENTRYPOINT_NOT_FOUND/);
@@ -461,18 +461,18 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   );
   assert.match(
     productControlContracts?.run ?? '',
-    /bitfun-product-domains --no-default-features product_control/,
+    /openbitfun-product-domains --no-default-features product_control/,
   );
   assert.match(
     productControlContracts?.run ?? '',
-    /bitfun-product-capabilities every_agent_runtime_delivery_profile_includes_product_control_discovery/,
+    /openbitfun-product-capabilities every_agent_runtime_delivery_profile_includes_product_control_discovery/,
   );
   const fileWatchContracts = rustJob.steps.find(
     (step) => step.name === 'Run file watch contract tests',
   );
   assert.equal(
     fileWatchContracts?.run,
-    'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
+    'cargo test --locked -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
   );
   assert.equal(
     fileWatchContracts?.if,
@@ -611,7 +611,7 @@ test('gates fast checks and PR packaging behind one fail-closed build decision',
   assert.deepEqual(buildJob.permissions, { contents: 'read' });
   assert.deepEqual(buildJob.with, {
     checkout_ref: '${{ github.sha }}',
-    version: '0.0.0-nightly.ci.${{ github.run_id }}',
+    version: '1.0.0-nightly.ci.${{ github.run_id }}',
     artifact_prefix: 'ci-${{ github.run_id }}',
     artifact_retention_days: 1,
     validate_relay_image:
@@ -809,7 +809,7 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   assert.equal(rustCache?.with?.['cache-on-failure'], restoreOnlyOnPr);
   const upload = steps.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
   const verifyOutputs = steps.find((step) => step.name === 'Verify package outputs');
-  assert.match(verifyOutputs?.run ?? '', /bitfun-installer\.exe/);
+  assert.match(verifyOutputs?.run ?? '', /openbitfun-installer\.exe/);
   assert.match(verifyOutputs?.run ?? '', /\*\.AppImage/);
   assert.ok(steps.indexOf(verifyOutputs) < steps.indexOf(upload));
   assert.equal(upload?.if, '${{ inputs.upload_artifacts }}');
@@ -842,7 +842,7 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   assert.equal(steps[installerI18nIndex].if, "runner.os == 'Windows'");
   assert.equal(
     steps[installerI18nIndex].run,
-    'pnpm --dir BitFun-Installer run sync:i18n',
+    'pnpm --dir OpenBitFun-Installer run sync:i18n',
   );
   assert.equal(steps[tauriAlignmentIndex].if, "runner.os == 'Windows'");
   assert.match(
@@ -856,7 +856,7 @@ test('nightly validates generated inputs and projected lockfiles before packagin
   );
   assert.equal(
     steps.find((step) => step.name === 'Run Windows CLI terminal contracts')?.run,
-    'cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1',
+    'cargo test --locked -p openbitfun-cli --test terminal_process_contracts -- --test-threads=1',
   );
 });
 
@@ -1028,7 +1028,7 @@ test('nightly publishes and verifies the Relay image in the current repository o
 
   assert.match(
     metadata?.run ?? '',
-    /image=ghcr\.io\/\$\{GITHUB_REPOSITORY_OWNER,,\}\/bitfun-relay-server/,
+    /image=ghcr\.io\/\$\{GITHUB_REPOSITORY_OWNER,,\}\/openbitfun-relay-server/,
   );
   assert.equal(
     publish?.with?.tags,
@@ -1061,7 +1061,7 @@ test('passes the verification key when signing the versioned Windows installer',
   );
 
   assert.equal(
-    signingStep?.env?.BITFUN_SIGNING_PUBKEY,
+    signingStep?.env?.OPENBITFUN_SIGNING_PUBKEY,
     '${{ secrets.TAURI_UPDATER_PUBKEY }}',
     'release signatures must be self-verified with the configured public key',
   );
@@ -1112,18 +1112,18 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   const prepareStep = workflow.jobs.prepare.steps.find(
     (step) => step.name === 'Resolve version metadata',
   );
-  assert.match(prepareStep.run, /GITHUB_REPOSITORY.*GCWing\/BitFun/);
+  assert.match(prepareStep.run, /GITHUB_REPOSITORY.*GCWing\/OpenBitFun/);
   assert.match(prepareStep.run, /merge-base --is-ancestor/);
   assert.match(prepareStep.run, /rev-parse --verify --quiet/);
 
   const packageJob = workflow.jobs.package;
   assert.equal(
-    packageJob.env.BITFUN_RELEASE_CHANNEL,
+    packageJob.env.OPENBITFUN_RELEASE_CHANNEL,
     '${{ needs.prepare.outputs.release_channel }}',
   );
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /github\.repository/);
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /channel-beta/);
-  assert.match(packageJob.env.BITFUN_RELEASE_PUBKEY, /BITFUN_RELEASE_PUBKEY/);
+  assert.match(packageJob.env.OPENBITFUN_RELEASE_PUBKEY, /OPENBITFUN_RELEASE_PUBKEY/);
   const appleSetupIndex = packageJob.steps.findIndex(
     (step) => step.name === 'Configure Apple Developer ID signing and notarization',
   );
@@ -1141,7 +1141,7 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   );
   assert.equal(packageJob.steps[appleSetupIndex].if, "runner.os == 'macOS'");
   assert.equal(
-    packageJob.steps[appleSetupIndex].env.BITFUN_REQUIRE_APPLE_SIGNING,
+    packageJob.steps[appleSetupIndex].env.OPENBITFUN_REQUIRE_APPLE_SIGNING,
     '${{ needs.prepare.outputs.upload_to_release }}',
   );
   assert.equal(packageJob.steps[appleVerifyIndex].if, "runner.os == 'macOS'");
@@ -1183,7 +1183,7 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
     (step) => step.name === 'Sign installer packages',
   );
   assert.match(signingStep.run, /write-minisign-public-key\.mjs/);
-  assert.doesNotMatch(signingStep.run, /BITFUN_SIGNING_PUBKEY.*base64 -d/);
+  assert.doesNotMatch(signingStep.run, /OPENBITFUN_SIGNING_PUBKEY.*base64 -d/);
   const promotionStep = uploadSteps.find(
     (step) => step.name === 'Resolve beta channel promotion',
   );
@@ -1232,16 +1232,16 @@ test('nightly and beta use the shared build-version projection', () => {
     (step) => step.name === 'Patch nightly version',
   );
   assert.match(patch.run, /node scripts\/set-build-version\.mjs/);
-  assert.equal(artifacts.jobs.package.env.BITFUN_RELEASE_CHANNEL, 'nightly');
+  assert.equal(artifacts.jobs.package.env.OPENBITFUN_RELEASE_CHANNEL, 'nightly');
   assert.equal(
     artifacts.jobs.package.env.TAURI_UPDATER_ENDPOINT,
-    'https://github.com/GCWing/BitFun/releases/latest/download/latest.json',
+    'https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json',
   );
   assert.equal(
     artifacts.jobs.package.env.TAURI_UPDATER_FALLBACK_ENDPOINT,
     'https://openbitfun.com/release/latest.json',
   );
-  assert.equal(artifacts.jobs.package.env.BITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
+  assert.equal(artifacts.jobs.package.env.OPENBITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
   const signingStep = nightly.jobs['publish-nightly'].steps.find(
     (step) => step.name === 'Sign installer packages',
   );

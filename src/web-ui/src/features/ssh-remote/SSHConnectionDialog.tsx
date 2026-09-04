@@ -1,6 +1,6 @@
 /**
  * SSH Connection Dialog Component
- * Professional SSH connection dialog following BitFun design patterns
+ * Professional SSH connection dialog following OpenBitFun design patterns
  */
 
 import {
@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
@@ -227,9 +227,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   }, [isConnecting, status, t]);
 
   // Port is intentionally excluded so that the ID stays stable when the user
-  // changes the SSH port.  Old-format IDs that include the port (e.g.
-  // "ssh-root@host:22") are migrated on the Rust side when saved connections
-  // are loaded from disk.
+  // changes the SSH port.
   const generateConnectionId = (host: string, _port: number, username: string) => {
     return `ssh-${username}@${host}`;
   };
@@ -724,9 +722,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           <DialogClose />
         </DialogHeader>
         <DialogBody inset="none">
-        <div className="ssh-connection-dialog" data-bf-component="ssh-remote" data-bf-part="connection">
+        <div className="ssh-connection-dialog" data-openbitfun-component="ssh-remote" data-openbitfun-part="connection">
           {error && (
-            <div className="ssh-connection-dialog__error-banner" data-bf-component="ssh-remote" data-bf-part="connectionError">
+            <div className="ssh-connection-dialog__error-banner" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionError">
               <Alert
                 tone="error"
                 message={error}
@@ -737,13 +735,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             </div>
           )}
 
-          <ScrollArea className="ssh-connection-dialog__scroll" data-bf-component="ssh-remote" data-bf-part="connectionContent">
+          <ScrollArea className="ssh-connection-dialog__scroll" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionContent">
           {/* Saved connections section */}
           {savedConnections.length > 0 && (
             <FormSection
               className="ssh-connection-dialog__section"
-              data-bf-component="ssh-remote"
-              data-bf-part="connectionSection"
+              data-openbitfun-component="ssh-remote"
+              data-openbitfun-part="connectionSection"
               headingAs="h3"
               title={<span className="ssh-connection-dialog__section-title">{t('ssh.remote.savedConnections')}</span>}
               actions={(
@@ -757,7 +755,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 />
               )}
             >
-              <ScrollArea className="ssh-connection-dialog__saved-list" data-bf-component="ssh-remote" data-bf-part="connectionList">
+              <ScrollArea className="ssh-connection-dialog__saved-list" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionList">
                 {filteredSavedConnections.map((conn) => (
                   <div
                     key={conn.id}
@@ -840,8 +838,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   <div
                     key={configHost.host}
                     className="ssh-connection-dialog__saved-item ssh-connection-dialog__saved-item--config"
-                    data-bf-component="ssh-remote"
-                    data-bf-part="connectionItem"
+                    data-openbitfun-component="ssh-remote"
+                    data-openbitfun-part="connectionItem"
                     onClick={() => !isConnecting && handleFillFromConfig(configHost)}
                     role="button"
                     tabIndex={0}
@@ -894,8 +892,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               'ssh-connection-dialog__form',
               formHighlighted ? 'ssh-connection-dialog__form--highlighted' : '',
             ].filter(Boolean).join(' ')}
-            data-bf-component="ssh-remote"
-            data-bf-part="connectionForm"
+            data-openbitfun-component="ssh-remote"
+            data-openbitfun-part="connectionForm"
           >
             <FieldRow padding="none" className="ssh-connection-dialog__field">
               <label className="ssh-connection-dialog__label">
@@ -1341,7 +1339,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           </ScrollArea>
 
           {/* Actions */}
-          <div className="ssh-connection-dialog__actions" data-bf-component="ssh-remote" data-bf-part="connectionActions">
+          <div className="ssh-connection-dialog__actions" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionActions">
             <Button
               variant="outline"
               size="sm"

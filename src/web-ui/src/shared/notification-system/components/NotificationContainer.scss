@@ -1,12 +1,12 @@
 .notification-container {
   --notification-stack-max-height: calc(100vh - 120px);
-  --notification-visual-gutter: var(--bf-space-8);
+  --notification-visual-gutter: var(--openbitfun-space-8);
 
   position: fixed;
   bottom: 60px;
   left: 16px;
   right: auto;
-  z-index: var(--bf-layer-notification);
+  z-index: var(--openbitfun-layer-notification);
   display: flex;
   pointer-events: none;
 
@@ -35,7 +35,7 @@
 .notification-container__viewport {
   box-sizing: border-box;
   display: grid;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   max-height: calc(
     var(--notification-stack-max-height)
     + var(--notification-visual-gutter)

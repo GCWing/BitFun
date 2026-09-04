@@ -1,5 +1,5 @@
 // Pure projections and review text derived from the external-source catalog.
-use bitfun_product_domains::external_source_control::{
+use openbitfun_product_domains::external_source_control::{
     ExternalSourceDesiredState, ExternalSourceEffectiveStatus, ExternalSourceRecoveryActionV1,
 };
 
@@ -34,7 +34,7 @@ fn external_command_projections(
                     .sources
                     .iter()
                     .find(|source| source.record.key == entry.definition.id.source)?;
-                let native_candidate_id = format!("bitfun.cli:{}", action.id);
+                let native_candidate_id = format!("openbitfun.cli:{}", action.id);
                 let external_candidate_id = entry.candidate_id.clone();
                 let conflict_key = native_prompt_command_conflict_key(
                     source.record.execution_domain_id.as_str(),
@@ -91,7 +91,7 @@ fn external_command_projections(
                     .find(|source| source.record.key == candidate.source)
                     .map(|source| source.record.execution_domain_id.as_str())
             })?;
-            let native_candidate_id = format!("bitfun.cli:{}", action.id);
+            let native_candidate_id = format!("openbitfun.cli:{}", action.id);
             let mut candidates = conflict
                 .candidates
                 .iter()
@@ -165,14 +165,14 @@ fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, 
 fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -> Vec<String> {
     let policy = &snapshot.integration_policy;
     if policy.status
-        == bitfun_product_domains::external_integration_policy::ExternalIntegrationPolicyStatus::IncompatibleSchema
+        == openbitfun_product_domains::external_integration_policy::ExternalIntegrationPolicyStatus::IncompatibleSchema
     {
         return vec![
             format!(
                 "Access: safely off; unsupported policy schema {}",
                 policy.schema_major
             ),
-            "Recover: bitfun config external reset-incompatible".to_string(),
+            "Recover: openbitfun config external reset-incompatible".to_string(),
         ];
     }
     if !policy.status.is_compatible() {
@@ -181,7 +181,8 @@ fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -
                 "Access: safely off; unsupported policy status '{}'",
                 policy.status.as_str()
             ),
-            "Recover: upgrade BitFun or connect through a compatible workspace host".to_string(),
+            "Recover: upgrade OpenBitFun or connect through a compatible workspace host"
+                .to_string(),
         ];
     }
     let scope = if policy.workspace_override.is_some() {
@@ -237,7 +238,7 @@ fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -
             descriptor.display_name
         ));
     }
-    lines.push("Manage: bitfun config external --help".to_string());
+    lines.push("Manage: openbitfun config external --help".to_string());
     lines
 }
 
@@ -286,7 +287,7 @@ fn parse_external_control_action(arguments: &str) -> Result<ExternalControlUiAct
 }
 
 fn external_control_status_text(
-    control: &bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
+    control: &openbitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
 ) -> String {
     let mut lines = vec!["Extensions".to_string(), String::new()];
     if control.safe_mode {
@@ -377,7 +378,7 @@ struct ExternalControlMutationResult {
     action: ExternalControlUiAction,
     result: std::result::Result<
         (
-            bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
+            openbitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
             Option<ExternalSourceCatalogSnapshot>,
             Option<ExternalSourceConflictPreferences>,
         ),
@@ -403,7 +404,7 @@ fn external_operation_error_status(surface: &str, error: &ExternalSourceOperatio
             "This external integration requires review before it can run."
         }
         ExternalSourceOperationErrorCode::PolicyIncompatible => {
-            "Compatibility settings were written by a newer BitFun version."
+            "Compatibility settings were written by a newer OpenBitFun version."
         }
         ExternalSourceOperationErrorCode::PolicyLimited => {
             "The current safety policy does not allow this change."
@@ -425,7 +426,7 @@ fn external_operation_error_status(surface: &str, error: &ExternalSourceOperatio
         }
         ExternalSourceOperationErrorCode::Unsupported
         | ExternalSourceOperationErrorCode::IncompatibleVersion => {
-            "This external integration is not supported by the current BitFun version."
+            "This external integration is not supported by the current OpenBitFun version."
         }
         ExternalSourceOperationErrorCode::Timeout
         | ExternalSourceOperationErrorCode::Overloaded
@@ -437,7 +438,7 @@ fn external_operation_error_status(surface: &str, error: &ExternalSourceOperatio
         }
         ExternalSourceOperationErrorCode::InvalidResponse
         | ExternalSourceOperationErrorCode::Internal => {
-            "BitFun could not complete the external integration update."
+            "OpenBitFun could not complete the external integration update."
         }
     };
     let next_steps = error
@@ -580,7 +581,7 @@ fn external_tool_next_step(activation: &ExternalToolActivationState) -> &'static
             "Choose which tool to use below, or leave this name disabled."
         }
         ExternalToolActivationState::Unsupported { .. } => {
-            "Change the code to a single JavaScript file supported by BitFun, then refresh."
+            "Change the code to a single JavaScript file supported by OpenBitFun, then refresh."
         }
         ExternalToolActivationState::RuntimeUnavailable { .. } => {
             "Install or repair Node.js, then refresh. You can continue without external JavaScript tools while the run environment is unavailable."
@@ -604,12 +605,14 @@ fn external_tool_default_reason(activation: &ExternalToolActivationState) -> &'s
         ExternalToolActivationState::Active => "The tool code is loaded and ready to use.",
         ExternalToolActivationState::Conflict => "Another tool uses the same name.",
         ExternalToolActivationState::Unsupported { .. } => {
-            "This tool file contains code or operations that BitFun does not support."
+            "This tool file contains code or operations that OpenBitFun does not support."
         }
         ExternalToolActivationState::RuntimeUnavailable { .. } => {
             "The required JavaScript run environment is unavailable."
         }
-        ExternalToolActivationState::LoadFailed { .. } => "BitFun could not load this tool file.",
+        ExternalToolActivationState::LoadFailed { .. } => {
+            "OpenBitFun could not load this tool file."
+        }
         _ => "The current state is unavailable.",
     }
 }
@@ -703,17 +706,17 @@ fn external_tool_runtime_label(runtime: ExternalToolRuntimeKind) -> &'static str
 
 fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
     let Some(snapshot) = snapshot else {
-        return "Tools\n\nBitFun and MCP\nBuilt-in tools are provided by BitFun. Use /mcp to manage MCP servers.\n\nExternal AI applications\nBitFun has not finished checking imported tools. Run /tools refresh and try again."
+        return "Tools\n\nOpenBitFun and MCP\nBuilt-in tools are provided by OpenBitFun. Use /mcp to manage MCP servers.\n\nExternal AI applications\nOpenBitFun has not finished checking imported tools. Run /tools refresh and try again."
             .to_string();
     };
     let mut lines = vec![
         "Tools".to_string(),
         String::new(),
-        "BitFun and MCP".to_string(),
-        "Built-in tools are provided by BitFun. Use /mcp to manage MCP servers.".to_string(),
+        "OpenBitFun and MCP".to_string(),
+        "Built-in tools are provided by OpenBitFun. Use /mcp to manage MCP servers.".to_string(),
         String::new(),
         "External AI applications".to_string(),
-        "BitFun does not run external code while checking sources. Enabling tools runs their code with your user permissions and inherited environment variables. The code is not isolated by an OS sandbox, and processes it starts may keep running after cancellation."
+        "OpenBitFun does not run external code while checking sources. Enabling tools runs their code with your user permissions and inherited environment variables. The code is not isolated by an OS sandbox, and processes it starts may keep running after cancellation."
             .to_string(),
     ];
     lines.push(String::new());
@@ -722,7 +725,7 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
     if snapshot.discovery_pending {
         lines.push(String::new());
         lines.push(
-            "BitFun is still checking for changes. Existing tools remain usable.".to_string(),
+            "OpenBitFun is still checking for changes. Existing tools remain usable.".to_string(),
         );
     }
 
@@ -853,7 +856,7 @@ fn external_tool_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -
                 ));
             }
             lines.push(
-                "     Choose which tool BitFun should use for this name. The choice is remembered until one of these tools changes."
+                "     Choose which tool OpenBitFun should use for this name. The choice is remembered until one of these tools changes."
                     .to_string(),
             );
         }
@@ -958,15 +961,15 @@ fn external_tool_run_location_label(execution_domain_id: &str) -> &'static str {
 
 fn external_source_diagnostic_summary(code: &str) -> &'static str {
     if code.contains("preference_read_failed") {
-        "BitFun could not verify saved tool confirmations. Affected tools remain disabled; check BitFun settings storage, then refresh."
+        "OpenBitFun could not verify saved tool confirmations. Affected tools remain disabled; check OpenBitFun settings storage, then refresh."
     } else if code.contains("conflict_history_write_failed") {
-        "BitFun could not save conflict information. Affected names remain unavailable; check BitFun settings storage, then refresh."
+        "OpenBitFun could not save conflict information. Affected names remain unavailable; check OpenBitFun settings storage, then refresh."
     } else if code.contains("discovery_in_progress") {
         "One source is still being checked. Existing content remains available."
     } else if code.contains("timeout") {
         "Checking one source took too long. Other content remains available; refresh to try again."
     } else if code.contains("trust_required") {
-        "A source needs your confirmation before BitFun can use it."
+        "A source needs your confirmation before OpenBitFun can use it."
     } else if code.contains("too_large")
         || code.contains("file_limit")
         || code.contains("bytes_limit")
@@ -984,16 +987,16 @@ fn external_source_diagnostic_summary(code: &str) -> &'static str {
         || code.contains("metadata_failed")
         || code.contains("directory_")
     {
-        "BitFun could not read part of a source. Check file access, then refresh."
+        "OpenBitFun could not read part of a source. Check file access, then refresh."
     } else if code.contains("projection_only")
         || code.contains("unsupported")
         || code.contains("restricted")
     {
-        "This type of external content is not supported yet, so BitFun did not load or run it."
+        "This type of external content is not supported yet, so OpenBitFun did not load or run it."
     } else if code.contains("failed") {
-        "BitFun could not check one source. Other sources remain available; refresh to retry."
+        "OpenBitFun could not check one source. Other sources remain available; refresh to retry."
     } else {
-        "BitFun found an issue in one source. The affected content was not enabled."
+        "OpenBitFun found an issue in one source. The affected content was not enabled."
     }
 }
 
@@ -1004,7 +1007,7 @@ enum ExternalIssueSurface {
 }
 
 fn is_external_agent_diagnostic(
-    diagnostic: &bitfun_product_domains::external_sources::ExternalSourceDiagnostic,
+    diagnostic: &openbitfun_product_domains::external_sources::ExternalSourceDiagnostic,
 ) -> bool {
     matches!(diagnostic.asset_kind, ExternalSourceAssetKind::Subagent)
 }
@@ -1060,7 +1063,7 @@ fn append_external_source_issues(
     }
 }
 
-const DISABLED_EXTERNAL_AGENT_CONFLICT_CHOICE: &str = "__bitfun_disabled__";
+const DISABLED_EXTERNAL_AGENT_CONFLICT_CHOICE: &str = "__openbitfun_disabled__";
 
 fn external_agent_activation_label(state: &ExternalSubagentActivationState) -> &'static str {
     match state {
@@ -1099,7 +1102,7 @@ fn external_agent_model_label(
 
 fn external_agent_model_request_label(request: &ExternalSubagentModelRequest) -> String {
     match request {
-        ExternalSubagentModelRequest::Default => "BitFun default".to_string(),
+        ExternalSubagentModelRequest::Default => "OpenBitFun default".to_string(),
         ExternalSubagentModelRequest::Inherit => "parent session model".to_string(),
         ExternalSubagentModelRequest::Reference {
             provider_hint,
@@ -1126,13 +1129,13 @@ fn external_agent_model_binding_method_label(
     method: ExternalSubagentModelBindingMethod,
 ) -> &'static str {
     match method {
-        ExternalSubagentModelBindingMethod::Default => "BitFun default",
+        ExternalSubagentModelBindingMethod::Default => "OpenBitFun default",
         ExternalSubagentModelBindingMethod::Inherit => "inherited from the parent session",
         ExternalSubagentModelBindingMethod::Exact => "exact configured model",
         ExternalSubagentModelBindingMethod::Explicit => "user binding",
-        ExternalSubagentModelBindingMethod::BindingRequired => "choose a BitFun model",
+        ExternalSubagentModelBindingMethod::BindingRequired => "choose a OpenBitFun model",
         ExternalSubagentModelBindingMethod::BindingUnavailable => {
-            "saved BitFun model is unavailable"
+            "saved OpenBitFun model is unavailable"
         }
     }
 }
@@ -1149,14 +1152,14 @@ fn external_agent_model_binding_target_label(
 
 fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
     let Some(snapshot) = snapshot else {
-        return "Agents\n\nExternal AI applications\nBitFun has not finished checking imported agents. Run /agent refresh and try again."
+        return "Agents\n\nExternal AI applications\nOpenBitFun has not finished checking imported agents. Run /agent refresh and try again."
             .to_string();
     };
     let mut lines = vec![
         "Agents".to_string(),
         String::new(),
         "External AI applications".to_string(),
-        "BitFun only reads supported settings while checking sources. Agent instructions stay hidden and are not added to the current agent. Once enabled, those instructions guide the selected model and may call the tools listed below. Before enabling, review the model, tools, and where the agent runs. BitFun asks again if the instructions, model, tools, or configuration sources change. Each use starts a new task; follow-up is not supported in this version."
+        "OpenBitFun only reads supported settings while checking sources. Agent instructions stay hidden and are not added to the current agent. Once enabled, those instructions guide the selected model and may call the tools listed below. Before enabling, review the model, tools, and where the agent runs. OpenBitFun asks again if the instructions, model, tools, or configuration sources change. Each use starts a new task; follow-up is not supported in this version."
             .to_string(),
     ];
     lines.push(String::new());
@@ -1164,7 +1167,7 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
     if snapshot.discovery_pending {
         lines.push(String::new());
         lines.push(
-            "BitFun is still checking for changes. Previously enabled agents remain usable."
+            "OpenBitFun is still checking for changes. Previously enabled agents remain usable."
                 .to_string(),
         );
     }
@@ -1363,7 +1366,7 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                 let kind = if candidate.external {
                     "external"
                 } else {
-                    "BitFun/local"
+                    "OpenBitFun/local"
                 };
                 lines.push(format!(
                     "     {}. {} ({}, {}) - /agent choose {} {}",
@@ -1446,7 +1449,7 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                 let kind = if candidate.external {
                     "external"
                 } else {
-                    "BitFun/local"
+                    "OpenBitFun/local"
                 };
                 let status = if conflict.selected_candidate_id.as_deref()
                     == Some(candidate.candidate_id.as_str())
@@ -1508,17 +1511,17 @@ fn external_agent_diagnostic_lines(
 ) -> Vec<String> {
     let (reason, next_step) = if code.contains("configuration_unavailable") {
         (
-            "BitFun could not read its model settings.",
-            "Open BitFun model settings, check that BitFun can read and save its settings, then refresh.",
+            "OpenBitFun could not read its model settings.",
+            "Open OpenBitFun model settings, check that OpenBitFun can read and save its settings, then refresh.",
         )
     } else if code.contains("model_unavailable") {
         (
-            "The requested model is not available in BitFun.",
-            "Choose an available model in the source application, or set a fixed Sub-Agent model in BitFun, then refresh.",
+            "The requested model is not available in OpenBitFun.",
+            "Choose an available model in the source application, or set a fixed Sub-Agent model in OpenBitFun, then refresh.",
         )
     } else if code.contains("tool_unavailable") {
         (
-            "One or more requested tools are not available in BitFun.",
+            "One or more requested tools are not available in OpenBitFun.",
             "Remove or replace the unsupported tools in the source application, then refresh.",
         )
     } else if code.contains("type_invalid")
@@ -1531,12 +1534,12 @@ fn external_agent_diagnostic_lines(
         )
     } else if blocks_activation {
         (
-            "This agent requires behavior or settings that BitFun does not support.",
+            "This agent requires behavior or settings that OpenBitFun does not support.",
             "Update the agent in the source application to use supported settings and include all required content, then refresh.",
         )
     } else {
         (
-            "BitFun does not use this setting.",
+            "OpenBitFun does not use this setting.",
             "Before enabling, review the model and tools that will actually be used, and confirm that this setting will not apply.",
         )
     };
@@ -1720,7 +1723,7 @@ fn parse_external_agent_review_action(
         return Ok(ExternalAgentReviewAction::Show);
     }
     let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
-        "BitFun has not finished checking agents from external AI applications; run /agent refresh".to_string()
+        "OpenBitFun has not finished checking agents from external AI applications; run /agent refresh".to_string()
     })?;
     if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
         let index = parse_positive_index(parts.next(), "agent number")?;

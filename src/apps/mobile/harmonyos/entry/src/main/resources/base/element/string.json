@@ -2,23 +2,23 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "BitFun remote control client"
+      "value": "OpenBitFun remote control client"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "Connect to BitFun desktop and control remote sessions"
+      "value": "Connect to OpenBitFun desktop and control remote sessions"
     },
     {
       "name": "EntryAbility_label",
-      "value": "BitFun"
+      "value": "OpenBitFun"
     },
     {
       "name": "permission_camera_reason",
-      "value": "Used to scan the BitFun desktop remote connection QR code."
+      "value": "Used to scan the OpenBitFun desktop remote connection QR code."
     },
     {
       "name": "permission_read_pasteboard_reason",
-      "value": "Used to paste the BitFun desktop remote connection link."
+      "value": "Used to paste the OpenBitFun desktop remote connection link."
     },
     {
       "name": "permission_microphone_reason",
@@ -26,7 +26,7 @@
     },
     {
       "name": "permission_distributed_datasync_reason",
-      "value": "Used to authorize a watch on the same BitFun account so you do not have to type the password on the watch."
+      "value": "Used to authorize a watch on the same OpenBitFun account so you do not have to type the password on the watch."
     }
   ]
 }

@@ -10,7 +10,7 @@
  * - Reset button restores all defaults
  */
 
-import { Button, Icon, IconButton, SearchField, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Tooltip } from '@openbitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
@@ -624,21 +624,21 @@ const KeyboardShortcutsTab: React.FC = () => {
   });
 
   return (
-    <ConfigPageLayout data-bf-component="keyboard-shortcuts" data-bf-part="root">
+    <ConfigPageLayout data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="root">
       <ConfigPageHeader
         className="kb-shortcuts-page-header"
         title={t('keyboard.title')}
         subtitle={t('keyboard.description')}
-        data-bf-component="keyboard-shortcuts"
-        data-bf-part="header"
+        data-openbitfun-component="keyboard-shortcuts"
+        data-openbitfun-part="header"
       />
-      <ConfigPageContent data-bf-component="keyboard-shortcuts" data-bf-part="content">
+      <ConfigPageContent data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="content">
         {/* Search + actions bar */}
-        <div className="kb-shortcuts__toolbar" data-bf-component="keyboard-shortcuts" data-bf-part="toolbar">
+        <div className="kb-shortcuts__toolbar" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="toolbar">
           <SearchField
             className="kb-shortcuts__search"
-            data-bf-component="keyboard-shortcuts"
-            data-bf-part="search"
+            data-openbitfun-component="keyboard-shortcuts"
+            data-openbitfun-part="search"
             size="sm"
             value={searchQuery}
             onValueChange={setSearchQuery}
@@ -648,7 +648,7 @@ const KeyboardShortcutsTab: React.FC = () => {
             clearLabel={searchQuery ? tComponents('search.clear') : undefined}
             onClear={searchQuery ? () => setSearchQuery('') : undefined}
           />
-          <div className="kb-shortcuts__actions" data-bf-component="keyboard-shortcuts" data-bf-part="actions">
+          <div className="kb-shortcuts__actions" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="actions">
             {hasPendingChanges || saving || saveError ? (
               <ConfigFieldStatus
                 status={saveError ? 'error' : saving ? 'saving' : 'unsaved'}
@@ -677,7 +677,7 @@ const KeyboardShortcutsTab: React.FC = () => {
         </div>
 
         {hasBlockingConflicts && (
-          <div role="alert" className="kb-shortcuts__error" data-bf-component="keyboard-shortcuts" data-bf-part="error">
+          <div role="alert" className="kb-shortcuts__error" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="error">
             {t('keyboard.conflictBlocking')}
           </div>
         )}
@@ -700,12 +700,12 @@ const KeyboardShortcutsTab: React.FC = () => {
               key={scope}
               title={t(SCOPE_LABEL_KEYS[scope])}
             >
-              <div className="kb-shortcuts__list" data-bf-component="keyboard-shortcuts" data-bf-part="list">
+              <div className="kb-shortcuts__list" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="list">
                 {showMergedTab && (
                   <div
-                    data-bf-component="keyboard-shortcuts"
-                    data-bf-part="item"
-                    data-bf-state={[
+                    data-openbitfun-component="keyboard-shortcuts"
+                    data-openbitfun-part="item"
+                    data-openbitfun-state={[
                       recordingId === MERGED_TAB_RECORD_ID && 'recording',
                       mergedTabConflict && 'conflict',
                       mergedTabPending && 'modified',
@@ -720,7 +720,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                       .join(' ')}
                     key="tab-switch-merged"
                   >
-                    <div className="kb-shortcuts__item-label" data-bf-component="keyboard-shortcuts" data-bf-part="label">
+                    <div className="kb-shortcuts__item-label" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="label">
                       <span className="kb-shortcuts__item-name">{t('keyboard.shortcuts.tab.switchMerged')}</span>
                       <span className="kb-shortcuts__item-hint">{t('keyboard.shortcuts.tab.switchMergedHint')}</span>
                       {mergedTabConflict && (
@@ -729,7 +729,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
+                    <div className="kb-shortcuts__item-key" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="key">
                       <Tooltip content={t('keyboard.clickToRecord')} placement="top">
                         <Button
                           aria-pressed={recordingId === MERGED_TAB_RECORD_ID}
@@ -765,9 +765,9 @@ const KeyboardShortcutsTab: React.FC = () => {
                 )}
                 {showMergedScene && (
                   <div
-                    data-bf-component="keyboard-shortcuts"
-                    data-bf-part="item"
-                    data-bf-state={[
+                    data-openbitfun-component="keyboard-shortcuts"
+                    data-openbitfun-part="item"
+                    data-openbitfun-state={[
                       recordingId === MERGED_SCENE_RECORD_ID && 'recording',
                       mergedSceneConflict && 'conflict',
                       mergedScenePending && 'modified',
@@ -782,7 +782,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                       .join(' ')}
                     key="scene-focus-merged"
                   >
-                    <div className="kb-shortcuts__item-label" data-bf-component="keyboard-shortcuts" data-bf-part="label">
+                    <div className="kb-shortcuts__item-label" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="label">
                       <span className="kb-shortcuts__item-name">{t('keyboard.shortcuts.scene.focusMerged')}</span>
                       <span className="kb-shortcuts__item-hint">{t('keyboard.shortcuts.scene.focusMergedHint')}</span>
                       {mergedSceneConflict && (
@@ -791,7 +791,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
+                    <div className="kb-shortcuts__item-key" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="key">
                       <Tooltip content={t('keyboard.clickToRecord')} placement="top">
                         <Button
                           aria-pressed={recordingId === MERGED_SCENE_RECORD_ID}
@@ -834,9 +834,9 @@ const KeyboardShortcutsTab: React.FC = () => {
 
                   return (
                     <div
-                      data-bf-component="keyboard-shortcuts"
-                      data-bf-part="item"
-                      data-bf-state={[
+                      data-openbitfun-component="keyboard-shortcuts"
+                      data-openbitfun-part="item"
+                      data-openbitfun-state={[
                         isRecording && 'recording',
                         conflict && 'conflict',
                         pending && 'modified',
@@ -849,7 +849,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                         pending ? 'kb-shortcuts__item--modified' : '',
                       ].filter(Boolean).join(' ')}
                     >
-                      <div className="kb-shortcuts__item-label" data-bf-component="keyboard-shortcuts" data-bf-part="label">
+                      <div className="kb-shortcuts__item-label" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="label">
                         <span className="kb-shortcuts__item-name">
                           {displayName}
                         </span>
@@ -859,7 +859,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <div className="kb-shortcuts__item-key" data-bf-component="keyboard-shortcuts" data-bf-part="key">
+                      <div className="kb-shortcuts__item-key" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="key">
                         <Tooltip content={t('keyboard.clickToRecord')} placement="top">
                           <Button
                             aria-pressed={isRecording}
@@ -900,7 +900,7 @@ const KeyboardShortcutsTab: React.FC = () => {
         })}
 
         {displayRegistrations.length > 0 && !hasAnyVisibleShortcut && (
-          <div className="kb-shortcuts__empty" data-bf-component="keyboard-shortcuts" data-bf-part="empty">
+          <div className="kb-shortcuts__empty" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="empty">
             {t('keyboard.noResults')}
           </div>
         )}

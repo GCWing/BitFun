@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-bf-design-system-root data-color-scheme="dark">
+<html lang="en" data-openbitfun-design-system-root data-color-scheme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -8,19 +8,19 @@
     <style>
       :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       * { box-sizing: border-box; }
-      body { margin: 0; background: var(--bf-color-surface-canvas); color: var(--bf-color-content-primary); }
+      body { margin: 0; background: var(--openbitfun-color-surface-canvas); color: var(--openbitfun-color-content-primary); }
       main { padding: 26px 28px 24px; }
-      .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--bf-color-content-secondary); font-size: 12px; }
-      .indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--bf-color-accent-secondary); box-shadow: 0 0 0 4px var(--bf-color-accent-secondary-surface-strong); }
+      .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--openbitfun-color-content-secondary); font-size: 12px; }
+      .indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--openbitfun-color-accent-secondary); box-shadow: 0 0 0 4px var(--openbitfun-color-accent-secondary-surface-strong); }
       .indicator.loading { animation: pulse 1.1s ease-in-out infinite; }
       h1 { margin: 0 0 9px; font-size: 20px; letter-spacing: -.01em; }
-      p { min-height: 48px; margin: 0 0 19px; color: var(--bf-color-content-secondary); line-height: 1.5; }
-      strong { color: var(--bf-color-content-primary); font-variant-numeric: tabular-nums; }
+      p { min-height: 48px; margin: 0 0 19px; color: var(--openbitfun-color-content-secondary); line-height: 1.5; }
+      strong { color: var(--openbitfun-color-content-primary); font-variant-numeric: tabular-nums; }
       .actions { display: flex; gap: 10px; justify-content: flex-end; }
-      button { min-width: 94px; border: 1px solid var(--bf-color-action-neutral-border); border-radius: 9px; padding: 9px 15px; background: var(--bf-color-action-neutral-surface); color: var(--bf-color-action-neutral-content); cursor: pointer; font: inherit; }
-      button.primary { border-color: var(--bf-color-accent-border); background: var(--bf-color-action-primary-background); color: var(--bf-color-action-primary-content); }
+      button { min-width: 94px; border: 1px solid var(--openbitfun-color-action-neutral-border); border-radius: 9px; padding: 9px 15px; background: var(--openbitfun-color-action-neutral-surface); color: var(--openbitfun-color-action-neutral-content); cursor: pointer; font: inherit; }
+      button.primary { border-color: var(--openbitfun-color-accent-border); background: var(--openbitfun-color-action-primary-background); color: var(--openbitfun-color-action-primary-content); }
       button:disabled { opacity: .48; cursor: wait; }
-      #error { min-height: 18px; margin-top: 11px; color: var(--bf-color-status-danger-content); font-size: 12px; }
+      #error { min-height: 18px; margin-top: 11px; color: var(--openbitfun-color-status-danger-content); font-size: 12px; }
       @keyframes pulse { 0%, 100% { opacity: .4; transform: scale(.86); } 50% { opacity: 1; transform: scale(1); } }
       @media (prefers-reduced-motion: reduce) { .indicator.loading { animation: none; } }
     </style>
@@ -29,7 +29,7 @@
     <main>
       <div class="eyebrow"><span id="indicator" class="indicator loading"></span><span id="phase">Safety check</span></div>
       <h1 id="title">Loading the new frontend…</h1>
-      <p id="message">BitFun is waiting for the real app shell to render. You can roll back immediately if the preview looks wrong.</p>
+      <p id="message">OpenBitFun is waiting for the real app shell to render. You can roll back immediately if the preview looks wrong.</p>
       <div class="actions">
         <button id="rollback" type="button">Roll back</button>
         <button id="confirm" class="primary" type="button" disabled>Keep changes</button>
@@ -45,24 +45,24 @@
           phaseDone: '已完成',
           titleLoading: '正在加载新界面…',
           titleReady: '保留这次前端修改吗？',
-          messageLoading: 'BitFun 正在等待真实应用界面完成渲染。如果预览不对，可以立即回滚。',
-          messageReady: function (seconds) { return '请在 <strong>' + seconds + '</strong> 秒内确认，否则 BitFun 会自动恢复上一版本。'; },
+          messageLoading: 'OpenBitFun 正在等待真实应用界面完成渲染。如果预览不对，可以立即回滚。',
+          messageReady: function (seconds) { return '请在 <strong>' + seconds + '</strong> 秒内确认，否则 OpenBitFun 会自动恢复上一版本。'; },
           rolledBack: '已恢复上一版本。',
           rollback: '回滚',
           confirm: '保留修改',
-          bridgeError: 'BitFun 宿主桥接不可用',
+          bridgeError: 'OpenBitFun 宿主桥接不可用',
         } : {
           phaseLoading: 'Safety check',
           phaseReady: 'Preview ready',
           phaseDone: 'Complete',
           titleLoading: 'Loading the new frontend…',
           titleReady: 'Keep this frontend?',
-          messageLoading: 'BitFun is waiting for the real app shell to render. You can roll back immediately if the preview looks wrong.',
-          messageReady: function (seconds) { return 'Confirm within <strong>' + seconds + '</strong> seconds or BitFun will restore the previous version automatically.'; },
+          messageLoading: 'OpenBitFun is waiting for the real app shell to render. You can roll back immediately if the preview looks wrong.',
+          messageReady: function (seconds) { return 'Confirm within <strong>' + seconds + '</strong> seconds or OpenBitFun will restore the previous version automatically.'; },
           rolledBack: 'The previous version has been restored.',
           rollback: 'Roll back',
           confirm: 'Keep changes',
-          bridgeError: 'BitFun host bridge is unavailable',
+          bridgeError: 'OpenBitFun host bridge is unavailable',
         };
         if (zh) document.documentElement.lang = 'zh-CN';
 

@@ -13,7 +13,7 @@ priority: 5
 
 # Keyboard Shortcut System
 
-BitFun ships with a complete shortcut system covering panel toggles, scene switching, editor operations and more.
+OpenBitFun ships with a complete shortcut system covering panel toggles, scene switching, editor operations and more.
 
 **Every shortcut is customisable** — remap anything to match your muscle memory, or restore defaults at any time.
 
@@ -34,7 +34,7 @@ Shortcuts are organised into three scopes:
 4. Click the key badge next to it and press your new combination
 5. Press `Enter` to confirm or `Escape` to cancel
 
-**Tip:** If the new shortcut conflicts with an existing binding, BitFun will warn you and ask whether to overwrite.
+**Tip:** If the new shortcut conflicts with an existing binding, OpenBitFun will warn you and ask whether to overwrite.
 
 <!-- page -->
 

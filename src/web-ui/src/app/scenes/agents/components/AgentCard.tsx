@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bot, Wrench, Cpu, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusPill } from '@bitfun/ui';
+import { Icon, StatusPill } from '@openbitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
@@ -32,7 +32,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const openDetails = () => onOpenDetails(agent);
 
   return (
-    <div data-bf-component="agent-card" data-bf-part="root"
+    <div data-openbitfun-component="agent-card" data-openbitfun-part="root"
       className="agent-card"
       style={{
         '--surface-stagger-index': index,
@@ -53,9 +53,9 @@ const AgentCard: React.FC<AgentCardProps> = ({
       data-agent-kind={agent.agentKind}
       data-subagent-source={agent.subagentSource ?? ''}
     >
-      <div className="agent-card__icon-area" data-bf-component="agent-card" data-bf-part="iconArea">
+      <div className="agent-card__icon-area" data-openbitfun-component="agent-card" data-openbitfun-part="iconArea">
         <div className="agent-card__icon-tile">
-          <div className="agent-card__icon" data-bf-component="agent-card" data-bf-part="icon">
+          <div className="agent-card__icon" data-openbitfun-component="agent-card" data-openbitfun-part="icon">
             <AgentGlyph size={21} strokeWidth={1.6} />
           </div>
         </div>
@@ -63,12 +63,12 @@ const AgentCard: React.FC<AgentCardProps> = ({
       </div>
 
       <div className="agent-card__content">
-        <div className="agent-card__header" data-bf-component="agent-card" data-bf-part="header">
-          <div className="agent-card__header-info" data-bf-component="agent-card" data-bf-part="headerInfo">
-            <div className="agent-card__title-row" data-bf-component="agent-card" data-bf-part="titleRow">
-              <span className="agent-card__name" data-bf-component="agent-card" data-bf-part="name" data-testid="agent-list-item-title">{agent.name}</span>
+        <div className="agent-card__header" data-openbitfun-component="agent-card" data-openbitfun-part="header">
+          <div className="agent-card__header-info" data-openbitfun-component="agent-card" data-openbitfun-part="headerInfo">
+            <div className="agent-card__title-row" data-openbitfun-component="agent-card" data-openbitfun-part="titleRow">
+              <span className="agent-card__name" data-openbitfun-component="agent-card" data-openbitfun-part="name" data-testid="agent-list-item-title">{agent.name}</span>
             </div>
-            <div className="agent-card__cap-chips" data-bf-component="agent-card" data-bf-part="capabilities">
+            <div className="agent-card__cap-chips" data-openbitfun-component="agent-card" data-openbitfun-part="capabilities">
               {agent.capabilities.slice(0, 2).map((cap) => (
                 <span
                   key={cap.category}
@@ -79,21 +79,21 @@ const AgentCard: React.FC<AgentCardProps> = ({
               ))}
             </div>
           </div>
-          <div className="agent-card__badges" data-bf-component="agent-card" data-bf-part="badges">
+          <div className="agent-card__badges" data-openbitfun-component="agent-card" data-openbitfun-part="badges">
             <StatusPill tone={badge.variant} className="agent-card__kind-badge">
               {badge.label}
             </StatusPill>
           </div>
         </div>
 
-        <div className="agent-card__body" data-bf-component="agent-card" data-bf-part="body">
-          <p className="agent-card__desc" data-bf-component="agent-card" data-bf-part="description" data-testid="agent-list-item-description">
+        <div className="agent-card__body" data-openbitfun-component="agent-card" data-openbitfun-part="body">
+          <p className="agent-card__desc" data-openbitfun-component="agent-card" data-openbitfun-part="description" data-testid="agent-list-item-description">
             {getAgentDescription(t, agent)}
           </p>
         </div>
 
-        <div className="agent-card__footer" data-bf-component="agent-card" data-bf-part="footer">
-          <div className="agent-card__meta" data-bf-component="agent-card" data-bf-part="meta">
+        <div className="agent-card__footer" data-openbitfun-component="agent-card" data-openbitfun-part="footer">
+          <div className="agent-card__meta" data-openbitfun-component="agent-card" data-openbitfun-part="meta">
             <span className="agent-card__meta-item">
               <span className="agent-card__meta-icon"><Wrench size={11} /></span>
               <span className="agent-card__meta-label">{t('agentCard.metrics.tools')}</span>

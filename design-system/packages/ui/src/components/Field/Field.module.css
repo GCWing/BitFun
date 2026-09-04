@@ -1,31 +1,31 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     display: grid;
     min-inline-size: 0;
-    gap: var(--bf-layout-field-root-gap);
-    color: var(--bf-color-content-primary);
+    gap: var(--openbitfun-layout-field-root-gap);
+    color: var(--openbitfun-color-content-primary);
   }
 
   .root[data-orientation="horizontal"] {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    column-gap: var(--bf-layout-field-horizontal-gap);
+    column-gap: var(--openbitfun-layout-field-horizontal-gap);
   }
 
   .root[data-orientation="horizontal"][data-horizontal-gap="lg"] {
-    column-gap: var(--bf-layout-field-horizontal-gap-wide);
+    column-gap: var(--openbitfun-layout-field-horizontal-gap-wide);
   }
 
   .root[data-orientation="horizontal"][data-label-width="sm"] {
-    grid-template-columns: var(--bf-layout-field-label-width-sm) auto;
+    grid-template-columns: var(--openbitfun-layout-field-label-width-sm) auto;
   }
 
   .root[data-orientation="horizontal"][data-label-width="md"] {
-    grid-template-columns: var(--bf-layout-field-label-width-md) auto;
+    grid-template-columns: var(--openbitfun-layout-field-label-width-md) auto;
   }
 
   .root[data-orientation="horizontal"][data-label-width="lg"] {
-    grid-template-columns: minmax(0, var(--bf-layout-field-label-width-lg)) auto;
+    grid-template-columns: minmax(0, var(--openbitfun-layout-field-label-width-lg)) auto;
   }
 
   .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="auto"] {
@@ -33,15 +33,15 @@
   }
 
   .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="sm"] {
-    grid-template-columns: var(--bf-layout-field-label-width-sm) minmax(0, 1fr);
+    grid-template-columns: var(--openbitfun-layout-field-label-width-sm) minmax(0, 1fr);
   }
 
   .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="md"] {
-    grid-template-columns: var(--bf-layout-field-label-width-md) minmax(0, 1fr);
+    grid-template-columns: var(--openbitfun-layout-field-label-width-md) minmax(0, 1fr);
   }
 
   .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="lg"] {
-    grid-template-columns: minmax(0, var(--bf-layout-field-label-width-lg)) minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--openbitfun-layout-field-label-width-lg)) minmax(0, 1fr);
   }
 
   .content {
@@ -49,7 +49,7 @@
     min-inline-size: 0;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--bf-layout-field-content-gap);
+    gap: var(--openbitfun-layout-field-content-gap);
   }
 
   .labelRow {
@@ -57,24 +57,24 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    gap: var(--bf-layout-field-label-action-gap);
+    gap: var(--openbitfun-layout-field-label-action-gap);
   }
 
   .label {
     display: inline-flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-layout-field-label-gap);
-    color: var(--bf-color-content-primary);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    gap: var(--openbitfun-layout-field-label-gap);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   }
 
   .required {
-    color: var(--bf-color-content-required-indicator);
+    color: var(--openbitfun-color-content-required-indicator);
   }
 
   .labelAction {
@@ -85,29 +85,29 @@
   }
 
   .description {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-support-font-family);
-    font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-type-support-font-weight);
-    line-height: var(--bf-type-support-line-height);
-    letter-spacing: var(--bf-type-support-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-support-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-support-line-height);
+    letter-spacing: var(--openbitfun-type-support-letter-spacing);
   }
 
   .error {
     grid-column: 1 / -1;
-    color: var(--bf-color-status-danger-content);
-    font-family: var(--bf-type-support-font-family);
-    font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-type-support-font-weight);
-    line-height: var(--bf-type-support-line-height);
-    letter-spacing: var(--bf-type-support-letter-spacing);
+    color: var(--openbitfun-color-status-danger-content);
+    font-family: var(--openbitfun-type-support-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-support-line-height);
+    letter-spacing: var(--openbitfun-type-support-letter-spacing);
   }
 
   .control {
     display: inline-flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-layout-field-control-gap);
+    gap: var(--openbitfun-layout-field-control-gap);
   }
 
   .root[data-control-width="fill"] .control {

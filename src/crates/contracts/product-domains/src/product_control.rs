@@ -1,4 +1,4 @@
-//! Platform-agnostic contracts and discovery policy for controlling BitFun itself.
+//! Platform-agnostic contracts and discovery policy for controlling OpenBitFun itself.
 //!
 //! The resolved graph is generated from owner facts plus the same explanatory
 //! overlay used by the Playbook and global search. Concrete providers live in
@@ -589,7 +589,7 @@ impl ProductControlRegistry {
             .capabilities
             .iter()
             .find(|capability| capability.id == capability_id)
-            .ok_or_else(|| format!("Unknown BitFun capability: {capability_id}"))
+            .ok_or_else(|| format!("Unknown OpenBitFun capability: {capability_id}"))
     }
 
     pub fn definition(
@@ -600,7 +600,9 @@ impl ProductControlRegistry {
             .definitions
             .iter()
             .find(|definition| definition.id == definition_id)
-            .ok_or_else(|| format!("Unknown BitFun product-control definition: {definition_id}"))
+            .ok_or_else(|| {
+                format!("Unknown OpenBitFun product-control definition: {definition_id}")
+            })
     }
 
     pub fn option(
@@ -1151,7 +1153,7 @@ pub fn validate_operation_argument_scopes(
         match scope {
             ProductControlArgumentScope::ProductHostLocal => {
                 return Err(format!(
-                    "arguments.{argument} is a local BitFun product-host path and is unavailable in a remote workspace session; use a stable resource ID returned by the provider instead"
+                    "arguments.{argument} is a local OpenBitFun product-host path and is unavailable in a remote workspace session; use a stable resource ID returned by the provider instead"
                 ));
             }
         }

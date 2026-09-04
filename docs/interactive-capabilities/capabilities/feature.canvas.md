@@ -43,13 +43,13 @@ Display and save visualizations, interactive pages, and structured artifacts gen
 3. 从工具结果打开 Canvas
    Open the Canvas from the tool result
 
-入口 / Entry: BitFun 对应场景
+入口 / Entry: OpenBitFun 对应场景
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

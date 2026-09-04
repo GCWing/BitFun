@@ -9,11 +9,11 @@
 //! runtime client.
 
 use async_trait::async_trait;
-use bitfun_plugin_runtime_client::PluginRuntimeAdapter;
-use bitfun_product_domains::plugin_source::{
+use openbitfun_plugin_runtime_client::PluginRuntimeAdapter;
+use openbitfun_product_domains::plugin_source::{
     PluginActivationAuthority, PluginPackageInput, PluginPackageSourceIdentity,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PluginAuditRef, PluginConfigValidationIssue, PluginConfigValidationState,
     PluginConfigValidationStatus, PluginDiagnostic, PluginDiagnosticDetail,
     PluginDiagnosticSeverity, PluginDispatchEnvelope, PluginManifestRef, PluginResponseEnvelope,
@@ -63,11 +63,11 @@ impl DshPluginRuntimeAdapter {
             .trim_start_matches("sha256:")
             .to_string();
         let package_uri = format!(
-            "bitfun://managed-plugins/{provenance_id}/{}",
+            "openbitfun://managed-plugins/{provenance_id}/{}",
             urlencoding::encode(&source.package_id)
         );
         let package_json_uri = format!(
-            "bitfun://managed-plugins/{provenance_id}/{}/{PACKAGE_JSON}",
+            "openbitfun://managed-plugins/{provenance_id}/{}/{PACKAGE_JSON}",
             source.package_id
         );
         let projections = project_package(
@@ -313,10 +313,10 @@ pub fn load_dsh_package_adapter(
     Vec<(
         PluginSourceRef,
         String,
-        bitfun_runtime_ports::PluginCapabilityRef,
+        openbitfun_runtime_ports::PluginCapabilityRef,
         Vec<(
-            bitfun_runtime_ports::PluginTargetRef,
-            bitfun_runtime_ports::PluginRiskLevel,
+            openbitfun_runtime_ports::PluginTargetRef,
+            openbitfun_runtime_ports::PluginRiskLevel,
         )>,
     )>,
 )> {
@@ -327,7 +327,7 @@ pub fn load_dsh_package_adapter(
         None => DshPluginRuntimeAdapter::from_package(input, observed_at_ms)?,
     };
     // Cordis rows can mount services that later register model-facing tools in
-    // dsh, but static row metadata is not a safe executable BitFun provider
+    // dsh, but static row metadata is not a safe executable OpenBitFun provider
     // candidate. This runtime-free adapter therefore exposes no dispatch target.
     Ok((Arc::new(adapter), Vec::new()))
 }
@@ -413,10 +413,10 @@ impl DshEntryKind {
     fn diagnostic_message(self) -> &'static str {
         match self {
             Self::Bundle => {
-                "dsh bundle entry is discovered from cordis.patch.yml but is not installed or executed by BitFun"
+                "dsh bundle entry is discovered from cordis.patch.yml but is not installed or executed by OpenBitFun"
             }
             Self::ProfileBundle => {
-                "dsh profile bundle reference is discovered from package.json but is not installed or executed by BitFun"
+                "dsh profile bundle reference is discovered from package.json but is not installed or executed by OpenBitFun"
             }
         }
     }
@@ -1309,7 +1309,7 @@ fn managed_source_uri(provenance_id: &str, package_id: &str, relative_path: &str
         .collect::<Vec<_>>()
         .join("/");
     format!(
-        "bitfun://managed-plugins/{provenance_id}/{}/{encoded_path}",
+        "openbitfun://managed-plugins/{provenance_id}/{}/{encoded_path}",
         urlencoding::encode(package_id)
     )
 }

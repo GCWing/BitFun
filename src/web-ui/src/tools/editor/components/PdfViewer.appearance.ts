@@ -12,6 +12,6 @@ export const pdfViewerAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'textLayer' },
   ],
   states: [
-    { id: 'rendering', selector: { kind: 'ancestorPart', part: 'page', suffix: '[data-bf-state~="rendering"]' } },
+    { id: 'rendering', selector: { kind: 'ancestorPart', part: 'page', suffix: '[data-openbitfun-state~="rendering"]' } },
   ],
 };

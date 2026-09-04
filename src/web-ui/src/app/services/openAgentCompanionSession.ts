@@ -81,7 +81,7 @@ export async function openAgentCompanionSession(sessionId: string): Promise<bool
 
   // When the session was already active before the pet bubble was clicked,
   // activateMainSession takes an early-return path that does not call
-  // switchChatSession, so `bitfun:session-switched` is never dispatched and
+  // switchChatSession, so `openbitfun:session-switched` is never dispatched and
   // SessionsSection's listener never clears the unread marks. Clear them
   // explicitly here so the bubble and workspace dot dismiss reliably.
   requestAnimationFrame(() => {

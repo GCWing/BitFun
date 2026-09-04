@@ -1,11 +1,13 @@
 //! External-source composition for local user instruction adapters.
 
-use bitfun_claude_code_adapter::{
+use openbitfun_claude_code_adapter::{
     load_claude_code_user_instructions, ClaudeCodeInstructionSourceOptions,
 };
-use bitfun_codex_adapter::{load_codex_user_instructions, CodexInstructionSourceOptions};
-use bitfun_opencode_adapter::{load_opencode_user_instructions, OpenCodeInstructionSourceOptions};
-use bitfun_services_core::local_instructions::{LocalInstructionFile, LocalInstructionFiles};
+use openbitfun_codex_adapter::{load_codex_user_instructions, CodexInstructionSourceOptions};
+use openbitfun_opencode_adapter::{
+    load_opencode_user_instructions, OpenCodeInstructionSourceOptions,
+};
+use openbitfun_services_core::local_instructions::{LocalInstructionFile, LocalInstructionFiles};
 use std::path::Path;
 
 pub(crate) struct LocalUserInstructionFiles {
@@ -110,7 +112,7 @@ fn deduplicate_user_instruction_files(files: &mut Vec<LocalInstructionFile>) {
 #[cfg(test)]
 mod tests {
     use super::deduplicate_user_instruction_files;
-    use bitfun_services_core::local_instructions::LocalInstructionFile;
+    use openbitfun_services_core::local_instructions::LocalInstructionFile;
     use std::path::PathBuf;
 
     #[test]

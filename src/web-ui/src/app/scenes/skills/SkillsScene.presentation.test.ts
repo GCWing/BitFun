@@ -27,6 +27,7 @@ describe('Skills scene presentation', () => {
     const scrollEnd = stylesheet.indexOf('.skills-main__grid {', scrollStart);
 
     expect(stylesheet.slice(shellStart, shellEnd)).toContain('overflow: hidden;');
+    expect(stylesheet.slice(shellStart, shellEnd)).toContain('padding: 12px 16px 16px;');
     expect(stylesheet.slice(scrollStart, scrollEnd)).toContain('flex: 0 1 auto;');
     expect(stylesheet).toContain('min-height: 64px;');
   });
@@ -36,7 +37,19 @@ describe('Skills scene presentation', () => {
 
     expect(stylesheet).toContain('$skills-sidebar-width: 184px;');
     expect(stylesheet).toContain('min-height: 32px;');
-    expect(stylesheet).toContain('font-size: var(--bf-type-flow-section-title-font-size);');
+    expect(stylesheet).toContain('font-size: var(--openbitfun-type-flow-section-title-font-size);');
+  });
+
+  it('lets the skills page inherit the surrounding scene surface', () => {
+    const stylesheet = readSibling('./SkillsScene.scss');
+    const listSurfaceStart = stylesheet.indexOf('.skills-main__grid,');
+    const listSurfaceEnd = stylesheet.indexOf('\n\n.skills-main__grid {', listSurfaceStart);
+    const discoverHeroStart = stylesheet.indexOf('.skills-discover__hero {');
+    const discoverHeroEnd = stylesheet.indexOf('\n}', discoverHeroStart);
+
+    expect(stylesheet).not.toContain('background: var(--openbitfun-color-surface-canvas);');
+    expect(stylesheet.slice(listSurfaceStart, listSurfaceEnd)).not.toContain('background:');
+    expect(stylesheet.slice(discoverHeroStart, discoverHeroEnd)).not.toContain('background:');
   });
 
   it('keeps the suite scrollbar on the scene edge without moving its content', () => {
@@ -59,8 +72,8 @@ describe('Skills scene presentation', () => {
     const stylesheet = readSibling('./SkillsScene.scss');
 
     expect(source).toContain('className="skills-card__actions"');
-    expect(source).toContain('data-bf-part="installedCardDetails"');
-    expect(source).toContain('data-bf-part="installedCardDelete"');
+    expect(source).toContain('data-openbitfun-part="installedCardDetails"');
+    expect(source).toContain('data-openbitfun-part="installedCardDelete"');
     expect(stylesheet).toContain('64px 64px;');
     expect(stylesheet).toContain('.skills-card__actions {');
   });

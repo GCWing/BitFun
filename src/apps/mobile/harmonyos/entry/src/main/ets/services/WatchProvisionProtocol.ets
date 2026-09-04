@@ -14,8 +14,8 @@
  * them even when the failure was in key agreement.
  */
 
-export const WATCH_PROVISION_REQUEST_KEY: string = 'bitfun.account.provision.request';
-export const WATCH_PROVISION_RESPONSE_KEY: string = 'bitfun.account.provision.response';
+export const WATCH_PROVISION_REQUEST_KEY: string = 'openbitfun.account.provision.request';
+export const WATCH_PROVISION_RESPONSE_KEY: string = 'openbitfun.account.provision.response';
 export const WATCH_PROVISION_PROTOCOL_VERSION: number = 1;
 
 /**

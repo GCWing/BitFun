@@ -1,13 +1,10 @@
 //! MCP server runtime helper contracts.
 
 use super::{MCPRuntimeError, MCPRuntimeResult};
-use bitfun_services_core::managed_runtime::{
+use openbitfun_services_core::managed_runtime::{
     ManagedRuntimeResolver, ResolvedCommand, RuntimeSource,
 };
-use std::collections::HashMap;
 use std::path::PathBuf;
-
-const AUTHORIZATION_KEYS: [&str; 3] = ["Authorization", "authorization", "AUTHORIZATION"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MCPLocalCommandResolution {
@@ -28,7 +25,7 @@ pub(crate) fn resolve_mcp_local_command_with_resolver(
 ) -> MCPRuntimeResult<MCPLocalCommandResolution> {
     let resolved = resolver.resolve_command(command).ok_or_else(|| {
         MCPRuntimeError::process(format!(
-            "MCP server command '{}' not found in system PATH or BitFun managed runtimes at {}",
+            "MCP server command '{}' not found in system PATH or OpenBitFun managed runtimes at {}",
             command,
             resolver.runtime_root_display()
         ))
@@ -73,24 +70,6 @@ pub fn is_mcp_auth_error_message(message: &str) -> bool {
     patterns.iter().any(|p| msg.contains(p))
 }
 
-pub fn merge_mcp_remote_headers(
-    headers: &HashMap<String, String>,
-    env: &HashMap<String, String>,
-) -> HashMap<String, String> {
-    let mut merged_headers = headers.clone();
-    if AUTHORIZATION_KEYS
-        .iter()
-        .all(|key| !merged_headers.contains_key(*key))
-    {
-        // Backward compatibility: older BitFun configs store `Authorization` under `env`.
-        if let Some(value) = AUTHORIZATION_KEYS.iter().find_map(|key| env.get(*key)) {
-            merged_headers.insert("Authorization".to_string(), value.clone());
-        }
-    }
-
-    merged_headers
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,7 +86,7 @@ mod tests {
     fn temp_runtime_root() -> PathBuf {
         let mut p = std::env::temp_dir();
         p.push(format!(
-            "bitfun-mcp-local-command-test-{}-{}",
+            "openbitfun-mcp-local-command-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -143,14 +122,14 @@ mod tests {
     fn local_command_resolution_reports_missing_command_as_process_error() {
         let root = temp_runtime_root();
         let error = resolve_mcp_local_command_with_resolver(
-            "definitely-missing-bitfun-command",
+            "definitely-missing-openbitfun-command",
             ManagedRuntimeResolver::new(root.clone()),
         )
         .expect_err("missing command");
 
         assert!(error
             .to_string()
-            .contains("definitely-missing-bitfun-command"));
+            .contains("definitely-missing-openbitfun-command"));
         assert!(error
             .to_string()
             .contains(&root.to_string_lossy().to_string()));

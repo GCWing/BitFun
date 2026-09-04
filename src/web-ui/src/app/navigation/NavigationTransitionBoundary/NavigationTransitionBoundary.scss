@@ -1,4 +1,4 @@
-.bitfun-navigation-transition-boundary {
+.openbitfun-navigation-transition-boundary {
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -29,7 +29,7 @@
   }
 
   &[data-view-transition-phase='preparing'] {
-    > .bitfun-navigation-transition-boundary__layer--incoming {
+    > .openbitfun-navigation-transition-boundary__layer--incoming {
       opacity: 0.72;
       transform: translate3d(0, 6px, 0) scale(0.995);
       transition: none;
@@ -37,7 +37,7 @@
   }
 
   &[data-view-transition-phase='running'] {
-    > .bitfun-navigation-transition-boundary__layer--outgoing {
+    > .openbitfun-navigation-transition-boundary__layer--outgoing {
       opacity: 0;
       transform: translate3d(0, -4px, 0) scale(0.997);
     }
@@ -45,7 +45,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-navigation-transition-boundary {
+  .openbitfun-navigation-transition-boundary {
     &__layer--incoming,
     &__layer--outgoing {
       transform: none;
@@ -53,14 +53,14 @@
     }
 
     &[data-view-transition-phase='preparing'] {
-      > .bitfun-navigation-transition-boundary__layer--incoming {
+      > .openbitfun-navigation-transition-boundary__layer--incoming {
         opacity: 0.82;
         transform: none;
       }
     }
 
     &[data-view-transition-phase='running'] {
-      > .bitfun-navigation-transition-boundary__layer--outgoing {
+      > .openbitfun-navigation-transition-boundary__layer--outgoing {
         transform: none;
       }
     }

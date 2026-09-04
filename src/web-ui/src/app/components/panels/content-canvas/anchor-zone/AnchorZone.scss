@@ -5,8 +5,8 @@
 .canvas-anchor-zone {
   display: flex;
   flex-direction: column;
-  background: var(--bf-color-surface-canvas);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-canvas);
+  border: 1px solid var(--openbitfun-color-border-default);
   overflow: hidden;
 
   // Bottom position
@@ -56,7 +56,7 @@
   // Resizing state
   &.is-resizing {
     .canvas-anchor-zone__resizer-line {
-      background: var(--bf-color-accent-default);
+      background: var(--openbitfun-color-accent-default);
     }
   }
 
@@ -89,13 +89,13 @@
 
     &:hover {
       .canvas-anchor-zone__resizer-line {
-        background: var(--bf-color-accent-default);
+        background: var(--openbitfun-color-accent-default);
       }
     }
   }
 
   &__resizer-line {
-    background: var(--bf-color-border-default);
+    background: var(--openbitfun-color-border-default);
     transition: background-color 0.15s ease;
   }
 
@@ -105,8 +105,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 12px;
-    background: var(--bf-color-surface-panel);
-    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-panel);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
     flex-shrink: 0;
   }
 
@@ -114,12 +114,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
 
     svg {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
@@ -138,19 +138,19 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
     }
   }
 
   &__close-btn:hover {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   // Content area

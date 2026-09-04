@@ -10,7 +10,7 @@ val argon2InteropDir = layout.projectDirectory.dir("src/nativeInterop/cinterop")
 fun registerArgon2Archive(
     targetName: String,
     targetTriple: String,
-): TaskProvider<Exec> = tasks.register<Exec>("buildBitfunArgon2${targetName.replaceFirstChar(Char::uppercase)}") {
+): TaskProvider<Exec> = tasks.register<Exec>("buildOpenBitFunArgon2${targetName.replaceFirstChar(Char::uppercase)}") {
     val outputDir = layout.buildDirectory.dir("native/argon2/$targetName")
     val sources = listOf(
         "argon2.c",
@@ -20,14 +20,14 @@ fun registerArgon2Archive(
         "blake2/blake2b.c",
     )
     inputs.dir(sharedArgon2Dir)
-    inputs.file(argon2InteropDir.file("bitfun_argon2_wrapper.c"))
-    outputs.file(outputDir.map { it.file("libbitfun_argon2.a") })
+    inputs.file(argon2InteropDir.file("openbitfun_argon2_wrapper.c"))
+    outputs.file(outputDir.map { it.file("libopenbitfun_argon2.a") })
     doFirst {
         val directory = outputDir.get().asFile
         directory.mkdirs()
         val include = sharedArgon2Dir.asFile.absolutePath
         val objects = sources.mapIndexed { index, source -> directory.resolve("argon2-$index.o") }
-        val wrapper = directory.resolve("bitfun-argon2-wrapper.o")
+        val wrapper = directory.resolve("openbitfun-argon2-wrapper.o")
         // The target triple is the single source of platform and deployment
         // metadata, avoiding conflicting minimum-version flags.
         val compile = listOf(
@@ -42,8 +42,8 @@ fun registerArgon2Archive(
         sources.zip(objects).forEach { (source, objectFile) ->
             run(compile + listOf(sharedArgon2Dir.file(source).asFile.absolutePath, "-o", objectFile.absolutePath))
         }
-        run(compile + listOf(argon2InteropDir.file("bitfun_argon2_wrapper.c").asFile.absolutePath, "-o", wrapper.absolutePath))
-        run(listOf("ar", "rcs", directory.resolve("libbitfun_argon2.a").absolutePath) + objects.map(File::getAbsolutePath) + wrapper.absolutePath)
+        run(compile + listOf(argon2InteropDir.file("openbitfun_argon2_wrapper.c").asFile.absolutePath, "-o", wrapper.absolutePath))
+        run(listOf("ar", "rcs", directory.resolve("libopenbitfun_argon2.a").absolutePath) + objects.map(File::getAbsolutePath) + wrapper.absolutePath)
     }
     commandLine("true")
 }
@@ -60,7 +60,7 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.bitfun.mobile.core.crypto"
+        namespace = "com.openbitfun.mobile.core.crypto"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
         withHostTest {}
@@ -73,15 +73,15 @@ kotlin {
     }
 
     iosArm64 {
-        compilations.getByName("main").cinterops.create("bitfunArgon2") {
-            defFile(argon2InteropDir.file("bitfun_argon2.def"))
+        compilations.getByName("main").cinterops.create("openbitfunArgon2") {
+            defFile(argon2InteropDir.file("openbitfun_argon2.def"))
             includeDirs(sharedArgon2Dir, argon2InteropDir)
             extraOpts("-libraryPath", layout.buildDirectory.dir("native/argon2/iosArm64").get().asFile.absolutePath)
         }
     }
     iosSimulatorArm64 {
-        compilations.getByName("main").cinterops.create("bitfunArgon2") {
-            defFile(argon2InteropDir.file("bitfun_argon2_simulator.def"))
+        compilations.getByName("main").cinterops.create("openbitfunArgon2") {
+            defFile(argon2InteropDir.file("openbitfun_argon2_simulator.def"))
             includeDirs(sharedArgon2Dir, argon2InteropDir)
             extraOpts("-libraryPath", layout.buildDirectory.dir("native/argon2/iosSimulatorArm64").get().asFile.absolutePath)
         }
@@ -132,5 +132,5 @@ kotlin {
     }
 }
 
-tasks.matching { it.name == "cinteropBitfunArgon2IosArm64" }.configureEach { dependsOn(iosArgon2Archive) }
-tasks.matching { it.name == "cinteropBitfunArgon2IosSimulatorArm64" }.configureEach { dependsOn(iosSimulatorArgon2Archive) }
+tasks.matching { it.name == "cinteropOpenBitFunArgon2IosArm64" }.configureEach { dependsOn(iosArgon2Archive) }
+tasks.matching { it.name == "cinteropOpenBitFunArgon2IosSimulatorArm64" }.configureEach { dependsOn(iosSimulatorArgon2Archive) }

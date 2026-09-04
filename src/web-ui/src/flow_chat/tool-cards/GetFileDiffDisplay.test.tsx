@@ -96,15 +96,15 @@ describe('GetFileDiffDisplay', () => {
       root.render(<GetFileDiffDisplay toolItem={toolItem} config={config} />);
     });
 
-    expect(container.querySelector('[data-bf-part="action"]')?.textContent).toBe('Diff:');
-    expect(container.querySelector('[data-bf-part="path"]')?.textContent).toBe('app.tsx');
-    expect(container.querySelector('[data-bf-part="path"]')?.getAttribute('data-path')).toBe('src/app.tsx');
-    expect(container.querySelector('[data-bf-part="path"]')?.getAttribute('title')).toBe('src/app.tsx');
-    expect(container.querySelector('[data-bf-part="changeSummary"]')?.textContent).toBe('+12-0');
-    expect(container.querySelector('[data-bf-part="changeSummary"]')?.getAttribute('aria-label')).toBe(
+    expect(container.querySelector('[data-openbitfun-part="action"]')?.textContent).toBe('Diff:');
+    expect(container.querySelector('[data-openbitfun-part="path"]')?.textContent).toBe('app.tsx');
+    expect(container.querySelector('[data-openbitfun-part="path"]')?.getAttribute('data-path')).toBe('src/app.tsx');
+    expect(container.querySelector('[data-openbitfun-part="path"]')?.getAttribute('title')).toBe('src/app.tsx');
+    expect(container.querySelector('[data-openbitfun-part="changeSummary"]')?.textContent).toBe('+12-0');
+    expect(container.querySelector('[data-openbitfun-part="changeSummary"]')?.getAttribute('aria-label')).toBe(
       '12 additions and 0 deletions',
     );
-    expect(container.querySelector('[data-bf-tool-card="file-diff"]')?.getAttribute('data-diff-type')).toBe('git');
+    expect(container.querySelector('[data-openbitfun-tool-card="file-diff"]')?.getAttribute('data-diff-type')).toBe('git');
     expect(container.textContent).not.toContain('Git HEAD');
   });
 });

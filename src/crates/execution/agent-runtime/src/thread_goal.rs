@@ -1,6 +1,6 @@
 //! Persisted thread goal runtime decisions.
 
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     validate_thread_goal_objective, SetThreadGoalResult, ThreadGoal, ThreadGoalContinuationPlan,
     ThreadGoalStatus, ThreadGoalToolResponse, GOAL_MODE_METADATA_KEY,
     MAX_THREAD_GOAL_AUTO_CONTINUATIONS, THREAD_GOAL_METADATA_KEY,

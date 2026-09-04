@@ -1,6 +1,6 @@
 #![cfg(feature = "file-watch")]
 
-use bitfun_services_integrations::file_watch::{
+use openbitfun_services_integrations::file_watch::{
     FileWatchEventKind, FileWatchService, FileWatcherConfig,
 };
 use std::fs;
@@ -13,7 +13,7 @@ async fn file_watch_preserves_missing_path_error() {
 
     let error = service
         .watch_path(
-            "__bitfun_missing_watch_path_for_services_integrations_test__",
+            "__openbitfun_missing_watch_path_for_services_integrations_test__",
             None,
         )
         .await

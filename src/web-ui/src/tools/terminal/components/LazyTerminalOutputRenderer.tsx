@@ -26,8 +26,8 @@ export function TerminalOutputFallback({
   return (
     <pre
       className={['terminal-output-pre', className].filter(Boolean).join(' ')}
-      data-bf-component="terminal-tool"
-      data-bf-part="output"
+      data-openbitfun-component="terminal-tool"
+      data-openbitfun-part="output"
       style={{
         height: `${fallback.height}px`,
         maxHeight: `${fallback.height}px`,

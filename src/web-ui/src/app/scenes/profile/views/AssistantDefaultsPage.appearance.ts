@@ -11,11 +11,11 @@ export const assistantDefaultsPageAppearanceDescriptor: AppearanceSurfaceDescrip
     { id: 'detailHeader' }, { id: 'detailBody' }, { id: 'empty' }, { id: 'loading' },
   ],
   states: [
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
-    { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } },
-    { id: 'covered', selector: { kind: 'self', suffix: '[data-bf-state~="covered"]' } },
-    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-bf-state~="collapsed"]' } },
-    { id: 'unavailable', selector: { kind: 'self', suffix: '[data-bf-state~="unavailable"]' } },
-    { id: 'changed', selector: { kind: 'self', suffix: '[data-bf-state~="changed"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
+    { id: 'disabled', selector: { kind: 'self', suffix: '[data-openbitfun-state~="disabled"]' } },
+    { id: 'covered', selector: { kind: 'self', suffix: '[data-openbitfun-state~="covered"]' } },
+    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="collapsed"]' } },
+    { id: 'unavailable', selector: { kind: 'self', suffix: '[data-openbitfun-state~="unavailable"]' } },
+    { id: 'changed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="changed"]' } },
   ],
 };

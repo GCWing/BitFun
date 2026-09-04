@@ -5,13 +5,13 @@
 //! long connection and routes them through the shared command router.
 
 use anyhow::{anyhow, Result};
-use bitfun_services_integrations::remote_connect::bot::feishu::{
+use log::{error, info, warn};
+use openbitfun_services_integrations::remote_connect::bot::feishu::{
     self as feishu_provider, FeishuBotApi,
 };
-pub use bitfun_services_integrations::remote_connect::bot::feishu::{
+pub use openbitfun_services_integrations::remote_connect::bot::feishu::{
     FeishuConfig, MAX_FEISHU_FILE_BYTES,
 };
-use log::{error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -49,9 +49,9 @@ impl FeishuBot {
 
     fn enter_pairing_code_message(language: BotLanguage) -> &'static str {
         if language.is_chinese() {
-            "\u{8bf7}\u{8f93}\u{5165} BitFun Desktop \u{4e2d}\u{663e}\u{793a}\u{7684} 6 \u{4f4d}\u{914d}\u{5bf9}\u{7801}\u{3002}"
+            "\u{8bf7}\u{8f93}\u{5165} OpenBitFun Desktop \u{4e2d}\u{663e}\u{793a}\u{7684} 6 \u{4f4d}\u{914d}\u{5bf9}\u{7801}\u{3002}"
         } else {
-            "Please enter the 6-digit pairing code from BitFun Desktop."
+            "Please enter the 6-digit pairing code from OpenBitFun Desktop."
         }
     }
 

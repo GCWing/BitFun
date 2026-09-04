@@ -41,7 +41,7 @@ describe('global search ownership', () => {
     expect(globalSearchStyles).toMatch(
       /\.global-search--modal,\s*\.global-search--embedded\s*\{/,
     );
-    expect(globalSearchStyles).toContain('padding: var(--bf-overlay-dialog-content-padding-lg)');
+    expect(globalSearchStyles).toContain('padding: var(--openbitfun-overlay-dialog-content-padding-lg)');
   });
 
   it('routes global-search action identities through canonical theme tokens in every host', () => {
@@ -78,10 +78,10 @@ describe('global search ownership', () => {
       'open-files',
     ]) {
       expect(globalSearchStyles).toContain(`&[data-icon-role='${role}']`);
-      expect(globalSearchStyles).toContain(`var(--bf-color-identity-global-search-${role})`);
+      expect(globalSearchStyles).toContain(`var(--openbitfun-color-identity-global-search-${role})`);
     }
     expect(globalSearchStyles).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-    expect(globalSearchStyles).not.toContain('--bf-color-status-');
+    expect(globalSearchStyles).not.toContain('--openbitfun-color-status-');
     expect(actionCatalog).not.toMatch(/iconTone|iconColor|leadingTone/);
   });
 
@@ -94,7 +94,7 @@ describe('global search ownership', () => {
     expect(globalSearch).toContain("if (event.key === 'ArrowDown')");
     expect(globalSearch).toContain('setActiveId(navigableItems[nextIndex]?.id ?? null)');
     expect(globalSearchStyles).toMatch(
-      /&:hover\s*\{\s*border-color: var\(--bf-color-border-default\)/,
+      /&:hover\s*\{\s*border-color: var\(--openbitfun-color-border-default\)/,
     );
   });
 

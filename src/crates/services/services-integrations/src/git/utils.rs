@@ -6,8 +6,8 @@ pub use super::{
     build_git_changed_files_args, build_git_diff_args, parse_branch_line, parse_git_log_line,
 };
 use super::{GitCommandOutput, GitError, GitFileStatus};
-use bitfun_services_core::process_manager;
 use git2::{Repository, Status, StatusOptions};
+use openbitfun_services_core::process_manager;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;

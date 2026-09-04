@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_services_integrations::mcp::auth::rmcp_compat::StoredCredentials;
-use bitfun_services_integrations::mcp::auth::MCPRemoteOAuthCredentialVault;
+use openbitfun_services_integrations::mcp::auth::rmcp_compat::StoredCredentials;
+use openbitfun_services_integrations::mcp::auth::MCPRemoteOAuthCredentialVault;
 
 async fn persisted_test_manager() -> (
     tempfile::TempDir,
@@ -220,7 +220,7 @@ async fn failed_external_start_publishes_a_reason_before_runtime_cleanup() {
                 name: "Unavailable external MCP".to_string(),
                 server_type: MCPServerType::Local,
                 transport: None,
-                command: Some("bitfun-command-that-does-not-exist".to_string()),
+                command: Some("openbitfun-command-that-does-not-exist".to_string()),
                 args: Vec::new(),
                 env: HashMap::new(),
                 working_directory: None,

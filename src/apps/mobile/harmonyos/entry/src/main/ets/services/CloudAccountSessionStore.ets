@@ -3,10 +3,10 @@ import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
 import { OhosError } from './OhosError';
 
-const STORE_NAME: string = 'bitfun_cloud_account';
+const STORE_NAME: string = 'openbitfun_cloud_account';
 const CIPHER_KEY: string = 'session_cipher';
 const IV_KEY: string = 'session_iv';
-const HUKS_ALIAS: string = 'bitfun_cloud_account_session';
+const HUKS_ALIAS: string = 'openbitfun_cloud_account_session';
 
 export interface PersistedCloudAccountSession {
   relayUrl: string;

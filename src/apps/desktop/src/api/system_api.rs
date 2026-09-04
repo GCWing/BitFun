@@ -5,22 +5,23 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
-use bitfun_core::service::system;
+use openbitfun_core::service::system;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Position, Size, State};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 /// Emitted during `install_update` download; matches `installUpdateWithProgress` / frontend listener.
-const UPDATE_PROGRESS_EVENT: &str = "bitfun-update-progress";
+const UPDATE_PROGRESS_EVENT: &str = "openbitfun-update-progress";
 
 /// Updater origins, in configured (fallback) order. Kept in step with
 /// `scripts/desktop-tauri-build.mjs`, which bakes the same pair into the bundle.
-const GITHUB_UPDATER_ENDPOINT: &str = match option_env!("BITFUN_UPDATER_PRIMARY_ENDPOINT") {
+const GITHUB_UPDATER_ENDPOINT: &str = match option_env!("OPENBITFUN_UPDATER_PRIMARY_ENDPOINT") {
     Some(endpoint) => endpoint,
-    None => "https://github.com/GCWing/BitFun/releases/latest/download/latest.json",
+    None => "https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json",
 };
-const OPENBITFUN_UPDATER_ENDPOINT: &str = match option_env!("BITFUN_UPDATER_FALLBACK_ENDPOINT") {
+const OPENBITFUN_UPDATER_ENDPOINT: &str = match option_env!("OPENBITFUN_UPDATER_FALLBACK_ENDPOINT")
+{
     Some(endpoint) => endpoint,
     None => "https://openbitfun.com/release/latest.json",
 };
@@ -485,7 +486,7 @@ pub async fn run_system_command(
     request: RunCommandRequest,
 ) -> Result<CommandOutputResponse, String> {
     if let Some(cwd) = request.cwd.as_deref() {
-        if bitfun_core::service::remote_ssh::workspace_state::is_remote_path(cwd.trim()).await {
+        if openbitfun_core::service::remote_ssh::workspace_state::is_remote_path(cwd.trim()).await {
             return Err(format!(
                 "run_system_command cannot execute '{}' in remote workspace directory '{}': this command spawns controller-local processes only; local filesystem fallback was not attempted",
                 request.command, cwd
@@ -965,7 +966,7 @@ fn should_use_configured_notification_app_id() -> bool {
     use std::path::MAIN_SEPARATOR;
 
     // Match the Tauri plugin's development behavior. A Cargo-built executable
-    // has no installed Windows shortcut that registers BitFun's AppUserModelID.
+    // has no installed Windows shortcut that registers OpenBitFun's AppUserModelID.
     let Ok(executable) = tauri::utils::platform::current_exe() else {
         return false;
     };
@@ -1053,11 +1054,11 @@ mod tests {
     fn updater_uses_mirror_only_for_a_slow_github_and_the_same_release() {
         let github = UpdaterManifestInfo {
             version: "1.2.3".into(),
-            package_url: "https://github.example/bitfun.tar.gz".into(),
+            package_url: "https://github.example/openbitfun.tar.gz".into(),
         };
         let synchronized_mirror = UpdaterManifestInfo {
             version: "1.2.3".into(),
-            package_url: "https://mirror.example/bitfun.tar.gz".into(),
+            package_url: "https://mirror.example/openbitfun.tar.gz".into(),
         };
         let stale_mirror = UpdaterManifestInfo {
             version: "1.2.2".into(),
@@ -1117,7 +1118,7 @@ mod tests {
 #[cfg(test)]
 mod remote_guard_tests {
     use super::{run_system_command, RunCommandRequest};
-    use bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager;
+    use openbitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager;
 
     const REMOTE_ROOT: &str = "/remote-audit-run-command";
     const CONNECTION_ID: &str = "remote-audit-run-command-connection";

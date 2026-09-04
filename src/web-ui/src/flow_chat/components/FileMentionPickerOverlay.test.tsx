@@ -69,7 +69,7 @@ describe('FileMentionPicker overlay', () => {
   afterEach(() => {
     vi.useRealTimers();
     act(() => root.unmount());
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     container.remove();
     vi.clearAllMocks();
   });
@@ -81,7 +81,7 @@ describe('FileMentionPicker overlay', () => {
     });
 
     const picker = document.querySelector<HTMLElement>('.file-mention-picker--overlay');
-    expect(picker?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(picker?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(picker?.style.visibility).toBe('visible');
     expect(workspaceAPI.getDirectoryChildren).toHaveBeenCalledWith(
       '/workspace',
@@ -103,11 +103,11 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    const item = document.querySelector<HTMLElement>('[data-bf-part="option"]');
-    expect(document.querySelector('[data-bf-part="currentDirectoryName"]')?.textContent).toBe('workspace');
-    expect(document.querySelector('[data-bf-part="parentDirectoryPath"]')).toBeNull();
-    expect(item?.querySelector('[data-bf-part="label"]')?.textContent).toBe('src');
-    expect(item?.querySelector('[data-bf-part="metadata"]')).toBeNull();
+    const item = document.querySelector<HTMLElement>('[data-openbitfun-part="option"]');
+    expect(document.querySelector('[data-openbitfun-part="currentDirectoryName"]')?.textContent).toBe('workspace');
+    expect(document.querySelector('[data-openbitfun-part="parentDirectoryPath"]')).toBeNull();
+    expect(item?.querySelector('[data-openbitfun-part="label"]')?.textContent).toBe('src');
+    expect(item?.querySelector('[data-openbitfun-part="metadata"]')).toBeNull();
 
     vi.mocked(workspaceAPI.getDirectoryChildren).mockResolvedValueOnce([
       {
@@ -122,11 +122,11 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    expect(document.querySelector('[data-bf-part="currentDirectoryName"]')?.textContent).toBe('src');
-    expect(document.querySelector('[data-bf-part="parentDirectoryPath"]')?.textContent).toBe('workspace');
-    const nestedItem = document.querySelector('[data-bf-part="option"]');
-    expect(nestedItem?.querySelector('[data-bf-part="label"]')?.textContent).toBe('App.tsx');
-    expect(nestedItem?.querySelector('[data-bf-part="metadata"]')).toBeNull();
+    expect(document.querySelector('[data-openbitfun-part="currentDirectoryName"]')?.textContent).toBe('src');
+    expect(document.querySelector('[data-openbitfun-part="parentDirectoryPath"]')?.textContent).toBe('workspace');
+    const nestedItem = document.querySelector('[data-openbitfun-part="option"]');
+    expect(nestedItem?.querySelector('[data-openbitfun-part="label"]')?.textContent).toBe('App.tsx');
+    expect(nestedItem?.querySelector('[data-openbitfun-part="metadata"]')).toBeNull();
   });
 
   it('does not present a remote browse failure as an empty directory', async () => {
@@ -139,9 +139,9 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    expect(document.querySelector('[data-bf-part="empty"][data-bf-state~="error"]')?.textContent)
+    expect(document.querySelector('[data-openbitfun-part="empty"][data-openbitfun-state~="error"]')?.textContent)
       .toBe('fileMention.browseUnavailable');
-    expect(document.querySelector('[data-bf-part="empty"]:not([data-bf-state~="error"])')).toBeNull();
+    expect(document.querySelector('[data-openbitfun-part="empty"]:not([data-openbitfun-state~="error"])')).toBeNull();
   });
 
   it('shows streamed remote matches before the recursive search completes', async () => {
@@ -220,9 +220,9 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    expect(document.querySelector('[data-bf-part="option"] [data-bf-part="label"]')?.textContent)
+    expect(document.querySelector('[data-openbitfun-part="option"] [data-openbitfun-part="label"]')?.textContent)
       .toBe('手写笔画标注项目');
-    expect(document.querySelector('[data-bf-part="root"]')?.getAttribute('data-bf-state'))
+    expect(document.querySelector('[data-openbitfun-part="root"]')?.getAttribute('data-openbitfun-state'))
       .toBe('loading');
 
     await act(async () => {

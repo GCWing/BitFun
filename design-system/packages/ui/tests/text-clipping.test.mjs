@@ -31,7 +31,7 @@ for (const [component, selector] of [
     }
     assert.match(
       declarations["line-height"],
-      /^var\(--bf-(?:line-height-base|type-body-sm-line-height|type-label-(?:xs|md)-line-height)\)$/,
+      /^var\(--openbitfun-(?:line-height-base|type-body-sm-line-height|type-label-(?:xs|md)-line-height)\)$/,
     );
     assert.equal(declarations.overflow, "hidden");
     assert.equal(declarations["text-overflow"], "ellipsis");

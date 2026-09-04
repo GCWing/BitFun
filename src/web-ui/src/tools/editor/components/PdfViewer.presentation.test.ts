@@ -15,7 +15,7 @@ describe('PdfViewer presentation', () => {
   });
 
   it('does not dim the visible canvas while a replacement frame renders', () => {
-    expect(stylesheet).not.toMatch(/data-bf-state[^}]*rendering[^}]*canvas\s*{/s);
+    expect(stylesheet).not.toMatch(/data-openbitfun-state[^}]*rendering[^}]*canvas\s*{/s);
     expect(stylesheet).not.toMatch(/transition:\s*opacity/);
   });
 });

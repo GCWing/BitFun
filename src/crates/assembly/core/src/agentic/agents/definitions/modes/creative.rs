@@ -58,7 +58,7 @@ impl Agent for CreativeMode {
     }
 
     fn description(&self) -> &str {
-        "Creation mode for building MiniApps and safely customizing the running BitFun frontend"
+        "Creation mode for building MiniApps and safely customizing the running OpenBitFun frontend"
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -81,14 +81,14 @@ impl Agent for CreativeMode {
         &self,
         previous_agent_type: Option<&str>,
         _workspace: Option<&crate::agentic::WorkspaceBinding>,
-    ) -> crate::util::errors::BitFunResult<String> {
+    ) -> crate::util::errors::OpenBitFunResult<String> {
         if previous_agent_type == Some(self.id()) {
             return Ok(String::new());
         }
         get_embedded_prompt(CREATIVE_MODE_FIRST_ENTRY_REMINDER_TEMPLATE)
             .map(str::to_string)
             .ok_or_else(|| {
-                crate::util::errors::BitFunError::Agent(format!(
+                crate::util::errors::OpenBitFunError::Agent(format!(
                     "{} not found in embedded files",
                     CREATIVE_MODE_FIRST_ENTRY_REMINDER_TEMPLATE
                 ))

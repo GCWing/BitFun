@@ -1,12 +1,12 @@
 {
   "name": "entry",
   "version": "1.0.0",
-  "description": "BitFun HarmonyOS entry module.",
+  "description": "OpenBitFun HarmonyOS entry module.",
   "main": "",
   "author": "",
   "license": "",
   "dependencies": {
-    "libbitfun_crypto.so": "file:./src/main/cpp/types/libbitfun_crypto"
+    "libopenbitfun_crypto.so": "file:./src/main/cpp/types/libopenbitfun_crypto"
   },
   "devDependencies": {},
   "dynamicDependencies": {}

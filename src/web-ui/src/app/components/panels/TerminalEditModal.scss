@@ -20,13 +20,13 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 20px 16px;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .terminal-edit-dialog__btn {
   padding: 7px 14px;
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -38,11 +38,11 @@
     box-shadow 140ms ease;
 
   &--cancel {
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-content-secondary);
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-secondary);
 
     &:hover {
-      background: var(--bf-color-action-quiet-hover);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
     
     &:active {
@@ -51,11 +51,11 @@
   }
 
   &--confirm {
-    background: var(--bf-color-accent-default);
-    color: var(--bf-color-content-on-dark);
+    background: var(--openbitfun-color-accent-default);
+    color: var(--openbitfun-color-content-on-dark);
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-accent-hover);
+      background: var(--openbitfun-color-accent-hover);
     }
     
     &:active:not(:disabled) {

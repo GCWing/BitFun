@@ -1,15 +1,15 @@
 //! Shared, runtime-free bounded file and parser support for ecosystem source adapters.
 
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookMatcherSummary,
 };
-use bitfun_product_domains::external_hook_import::{
+use openbitfun_product_domains::external_hook_import::{
     ExternalHookImportDependencyV1, MANAGED_HOOK_ROOT_PLACEHOLDER, MAX_EXTERNAL_HOOK_IMPORT_ASSETS,
     MAX_EXTERNAL_HOOK_IMPORT_ASSET_BYTES, MAX_EXTERNAL_HOOK_IMPORT_ASSET_DEPTH,
     MAX_EXTERNAL_HOOK_IMPORT_TOTAL_ASSET_BYTES,
 };
-use bitfun_product_domains::external_subagents::ExternalSubagentToolCapability;
-pub use bitfun_services_core::bounded_fs::{
+use openbitfun_product_domains::external_subagents::ExternalSubagentToolCapability;
+pub use openbitfun_services_core::bounded_fs::{
     collect_bounded_regular_files, read_bounded_file, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimit, BoundedDirectoryWalkLimits, BoundedFileRead, BoundedTextRead,
 };
@@ -672,7 +672,7 @@ fn matcher_summary(value: Option<&Value>) -> ExternalHookMatcherSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::external_subagents::ExternalSubagentToolCapability;
+    use openbitfun_product_domains::external_subagents::ExternalSubagentToolCapability;
 
     #[test]
     fn common_external_tool_names_map_without_source_specific_contract_behavior() {

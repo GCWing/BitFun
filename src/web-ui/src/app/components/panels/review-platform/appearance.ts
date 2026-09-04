@@ -58,9 +58,9 @@ export const reviewPlatformAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'diff' },
   ],
   facets: [
-    { id: 'layout', attribute: 'data-bf-layout', values: ['full', 'detail'] },
+    { id: 'layout', attribute: 'data-openbitfun-layout', values: ['full', 'detail'] },
   ],
   states: [
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
   ],
 };

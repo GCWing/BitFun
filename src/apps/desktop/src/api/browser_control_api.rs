@@ -1,11 +1,11 @@
 //! Browser control API — Tauri commands for CDP-based browser control.
 
-use bitfun_core::agentic::tools::browser_control::browser_launcher::{
+use openbitfun_core::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
-use bitfun_core::agentic::tools::browser_control::cdp_client::CdpClient;
-use bitfun_core::agentic::tools::implementations::control_hub_tool::disconnect_external_browser;
-use bitfun_core::service::config::{get_global_config_service, GlobalConfig};
+use openbitfun_core::agentic::tools::browser_control::cdp_client::CdpClient;
+use openbitfun_core::agentic::tools::implementations::control_hub_tool::disconnect_external_browser;
+use openbitfun_core::service::config::{get_global_config_service, GlobalConfig};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -23,8 +23,8 @@ fn default_cdp_port() -> u16 {
 ///
 /// The browser remembers the remote debugging preference across its own
 /// restarts, and it keeps an approved connection grant for as long as it stays
-/// running — but BitFun's connection registry lives in this process, so every
-/// BitFun restart otherwise leaves Settings reporting "not connected" until
+/// running — but OpenBitFun's connection registry lives in this process, so every
+/// OpenBitFun restart otherwise leaves Settings reporting "not connected" until
 /// something asks for the browser. Reattaching here restores that connection
 /// without the user having to click anything.
 ///
@@ -163,7 +163,7 @@ pub struct BrowserControlStatusResponse {
     /// the platform-specific automatic open did not produce the right tab.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_url: Option<String>,
-    /// The selected browser is running with remote debugging on, so BitFun can
+    /// The selected browser is running with remote debugging on, so OpenBitFun can
     /// attach whenever it needs to. Distinguishes "ready, nothing attached yet"
     /// from "nothing to attach to", which both used to read as "not connected".
     pub browser_ready: bool,
@@ -471,7 +471,7 @@ pub struct BrowserControlDisconnectResponse {
     pub browser_kind: String,
 }
 
-/// Detach BitFun from the selected browser without closing browser tabs or
+/// Detach OpenBitFun from the selected browser without closing browser tabs or
 /// changing the browser-owned Remote debugging preference.
 #[tauri::command]
 pub async fn browser_control_disconnect(

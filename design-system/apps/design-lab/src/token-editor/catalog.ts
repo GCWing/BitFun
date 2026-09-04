@@ -1,11 +1,11 @@
 import {
   tokenCatalog as systemTokenCatalog,
   type SystemTokenMode,
-} from "@bitfun/design-tokens";
+} from "@openbitfun/design-tokens";
 import {
   themeTokenCatalog,
   type ThemeDataName,
-} from "@bitfun/theme-bitfun";
+} from "@openbitfun/theme-openbitfun";
 
 export type TokenCollection = "system" | "theme";
 export type EditableTokenMode = SystemTokenMode | ThemeDataName;
@@ -13,7 +13,7 @@ export type EditableTokenMode = SystemTokenMode | ThemeDataName;
 export interface EditableToken {
   readonly category: string;
   readonly collection: TokenCollection;
-  readonly cssVariable: `--bf-${string}`;
+  readonly cssVariable: `--openbitfun-${string}`;
   readonly description?: string;
   readonly name: string;
   readonly type: string;

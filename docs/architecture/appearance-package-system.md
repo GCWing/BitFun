@@ -1,7 +1,7 @@
-# BitFun Appearance 外观包系统
+# OpenBitFun Appearance 外观包系统
 
 本文定义 Web UI 的唯一外观运行时。原 `ThemeService + SkinService + DeepSkinComponents.scss`
-双系统已经废弃；`bitfun.skin`、`.bitfun-skin`、旧 IndexedDB 数据和旧 manifest 均不兼容、
+双系统已经废弃；`openbitfun.skin`、`.openbitfun-skin`、旧 IndexedDB 数据和旧 manifest 均不兼容、
 不迁移。
 
 ## 目标
@@ -32,7 +32,7 @@ src/web-ui/src/infrastructure/appearance/
 
 `AppearanceRuntime` 是唯一视觉 owner。内置外观和导入外观使用同一个 `AppearancePackage`
 契约、同一个 compiler、同一个事务提交路径。选择值由正式配置键 `appearance.selection`
-持久化；IndexedDB `bitfun-appearance` 只保存导入包和 catalog，不保存当前选择。
+持久化；IndexedDB `openbitfun-appearance` 只保存导入包和 catalog，不保存当前选择。
 
 包可以只声明需要覆盖的字段，但进入 runtime 前必须通过 `composeAppearancePackage` 与同模式的
 完整内置基准组合。compiler 会按“内置基准普通层、导入包覆盖层”分别生成 surface 规则，避免
@@ -49,10 +49,10 @@ material 结构；外观包必须按本文和当前 registry 重新生成。
 
 ## 包格式
 
-文件扩展名为 `.bitfun-appearance`，内容为 ZIP，根目录必须包含 `appearance.json`：
+文件扩展名为 `.openbitfun-appearance`，内容为 ZIP，根目录必须包含 `appearance.json`：
 
 ```text
-aurora.bitfun-appearance
+aurora.openbitfun-appearance
 ├── appearance.json
 └── assets/
     ├── preview.webp
@@ -65,7 +65,7 @@ aurora.bitfun-appearance
 
 ```json
 {
-  "schema": "bitfun.appearance",
+  "schema": "openbitfun.appearance",
   "schemaVersion": 1,
   "id": "example.aurora",
   "name": "Aurora",
@@ -78,7 +78,7 @@ aurora.bitfun-appearance
 
 ```json
 {
-  "schema": "bitfun.appearance",
+  "schema": "openbitfun.appearance",
   "schemaVersion": 1,
   "id": "example.aurora",
   "name": "Aurora",
@@ -194,10 +194,10 @@ transform 等复杂值必须使用结构化对象，不能使用 CSS 字符串�
 ## Token 与 Material
 
 `globals` 提供 colors、lengths、numbers、durations、easings 和 shadows。字体体系由
-`@bitfun/design-tokens` 独占，不属于 Appearance 包的可覆盖协议。
+`@openbitfun/design-tokens` 独占，不属于 Appearance 包的可覆盖协议。
 组件规则通过 `{ "kind": "ref", "path": "globals.colors.accent" }` 引用。
 
-编译器将全局 token 投影为 `--bf-appearance-*` 变量。`materials` 是带视觉角色的可复用样式定义：
+编译器将全局 token 投影为 `--openbitfun-appearance-*` 变量。`materials` 是带视觉角色的可复用样式定义：
 
 ```json
 {
@@ -247,11 +247,11 @@ Appearance 契约按“可见 surface owner”而不是按 React 文件数量划
 
 ```tsx
 <button
-  data-bf-component="button"
-  data-bf-part="root"
-  data-bf-variant={variant}
-  data-bf-size={size}
-  data-bf-state={state}
+  data-openbitfun-component="button"
+  data-openbitfun-part="root"
+  data-openbitfun-variant={variant}
+  data-openbitfun-size={size}
+  data-openbitfun-state={state}
 />
 ```
 
@@ -288,8 +288,8 @@ states: [
 自己的 selector。编译器按 descriptor 生成规则，例如：
 
 ```css
-:root[data-bf-appearance="example.aurora"]
-  [data-bf-component="button"][data-bf-part="root"][data-bf-variant="primary"]:hover:not(:disabled) { ... }
+:root[data-openbitfun-appearance="example.aurora"]
+  [data-openbitfun-component="button"][data-openbitfun-part="root"][data-openbitfun-variant="primary"]:hover:not(:disabled) { ... }
 ```
 
 part 规则分四层，后者覆盖前者：
@@ -324,7 +324,7 @@ CSS。超过 25% 的 part 使用 override 时，validator 会产生 `EXCESSIVE_O
 的祖先目录中不能通过审计，也禁止恢复目录级 ownership 规则。
 
 descriptor 只建立源码所有权还不够：所有需要独立定制的可见部件必须同时暴露稳定
-`data-bf-component` / `data-bf-scene` 与 `data-bf-part` DOM 契约。审计同时验证 descriptor、
+`data-openbitfun-component` / `data-openbitfun-scene` 与 `data-openbitfun-part` DOM 契约。审计同时验证 descriptor、
 DOM 和 registry 三者闭合。
 
 审计逐个 JSX 节点验证 component/scene 与 part 必须在同一真实 DOM 节点成对出现，ID 必须是
@@ -333,7 +333,7 @@ DOM 和 registry 三者闭合。
 
 ## Scene 与 Portal
 
-Scene 使用与组件相同的规则，但稳定根属性是 `data-bf-scene`。每个场景必须登记自己的
+Scene 使用与组件相同的规则，但稳定根属性是 `data-openbitfun-scene`。每个场景必须登记自己的
 canvas、navigation、toolbar、content、emptyState 等可见 part。
 
 Portal 必须挂载到统一 `AppearanceOverlayHost`，Portal 内组件仍使用普通 component/part
@@ -382,8 +382,8 @@ flowchart LR
 
 每次成功提交都会增加单调 revision，并原子更新：
 
-- `<style data-bf-appearance-runtime="revision">`；
-- `data-bf-appearance`、`data-bf-appearance-mode`、`data-bf-appearance-revision`；
+- `<style data-openbitfun-appearance-runtime="revision">`；
+- `data-openbitfun-appearance`、`data-openbitfun-appearance-mode`、`data-openbitfun-appearance-revision`；
 - `ResolvedAppearance`；
 - renderer adapter 状态；
 - 当前包的 blob URL 生命周期。
@@ -422,11 +422,11 @@ IndexedDB 前完成相同 preflight；覆盖活动包时，存储、目录或后
 
 产品在目录、设置入口和公网 URL 中把 Appearance 包称为 **Skin**；这只是产品文案，不新增
 Skin runtime、manifest 或文件格式。公网入口固定为 `market.openbitfun.com/skin/`，稳定 API 为
-`/skin/api/v1`，下载物仍是 `.bitfun-appearance`，根 manifest 仍是 `appearance.json` 和
-`schema: bitfun.appearance`。
+`/skin/api/v1`，下载物仍是 `.openbitfun-appearance`，根 manifest 仍是 `appearance.json` 和
+`schema: openbitfun.appearance`。
 
-市场稳定 DTO 和发布状态机由 `bitfun-product-domains::appearance_market` 拥有。独立
-`bitfun-skin-market` 服务使用自己的 SQLite、content-addressed package/preview artifacts、审核日志、
+市场稳定 DTO 和发布状态机由 `openbitfun-product-domains::appearance_market` 拥有。独立
+`openbitfun-skin-market` 服务使用自己的 SQLite、content-addressed package/preview artifacts、审核日志、
 retention 和备份；不与 MiniApp listing/release/submission 表共用 namespace。公开 Web 站只读。
 Desktop 投稿复用 MiniApp 市场凭据存储中的 GitHub Desktop token；macOS 使用应用数据目录下的
 本地加密文件，避免系统钥匙串授权提示，Windows/Linux 仍使用各自的原生凭据存储。Skin 服务只把 Bearer token
@@ -446,7 +446,7 @@ UI 明确显示为本地版本，不能继续伪装成已安装的市场 release
 安装是当前设备 UI 行为，与 workspace 本地/远程无关，绝不能把 package 发送到 SSH workspace。
 
 Agent 的 outward-facing `PublishAppearance` 只接受用户明确指定的本机绝对
-`.bitfun-appearance` 路径，在上传前执行本地 package envelope 校验，并复用 Desktop 登录与投稿编排。
+`.openbitfun-appearance` 路径，在上传前执行本地 package envelope 校验，并复用 Desktop 登录与投稿编排。
 远程 SSH workspace 中它必须 fail closed；Agent Runtime 不得扫描目录、猜测用户许可，或假装能读取
 WebView IndexedDB 中已安装的包。
 
@@ -455,7 +455,7 @@ snapshot 和结构化日志中；未来可以按产品无障碍策略升级为 g
 
 ## 存储与安全
 
-系统只使用 IndexedDB `bitfun-appearance`，不读取旧主题或皮肤数据库。
+系统只使用 IndexedDB `openbitfun-appearance`，不读取旧主题或皮肤数据库。
 
 导入限制：
 
@@ -477,7 +477,7 @@ DOM 属性或旧 CSS token 兼容层。内置外观与导入包使用同一个 p
 storage 和激活事务；Monaco、xterm、Mermaid、Canvas、Widget 与 CSS token projection 全部通过正式
 renderer adapter 接入。
 
-每个可见 owner 使用专属 surface 或明确的共享组件 surface。`data-bf-kind`、按源码路径生成的 kind
+每个可见 owner 使用专属 surface 或明确的共享组件 surface。`data-openbitfun-kind`、按源码路径生成的 kind
 数组，以及 `workbench.item` / `flow-chat.item` 聚合契约均被禁止。复杂 owner 的审计依据是样式表中
 实际被 TSX 使用的视觉 class 与 TSX AST 中的 styled DOM 结构，不使用源码行数阈值。
 
@@ -498,7 +498,7 @@ Appearance 系统的完成标准由以下持续性证据定义：
 - 每个 scene canvas、导航区、工具栏、空状态和重复业务卡片都有契约；
 - 所有 Portal 使用统一 OverlayHost；
 - Monaco、xterm、canvas、mermaid、widget 等都有 renderer adapter；
-- 生产代码不存在 `SkinService`、`DeepSkinComponents.scss`、`bitfun.skin` 兼容逻辑；
+- 生产代码不存在 `SkinService`、`DeepSkinComponents.scss`、`openbitfun.skin` 兼容逻辑；
 - `ThemeService` 和旧 CSS 变量 owner 已删除，内置外观直接由 Appearance 定义；
 - registry 覆盖检查、包解析测试、compiler snapshot、runtime rollback、组件 DOM contract、
   type-check、i18n audit 和 `theme:color-audit:all` 全部通过。

@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bitfun_services_integrations::remote_ssh::{
+use openbitfun_services_integrations::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecError,
     RemoteFileService, RemoteTerminalManager, SSHAuthMethod, SSHConnectionConfig,
     SSHConnectionManager,

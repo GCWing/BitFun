@@ -220,7 +220,7 @@ function renderToken(
     : null;
 
   return (
-    <span data-bf-component="inline-diff-preview" data-bf-part="lineContent" key={key} className={classNames.join(' ')} style={style}>
+    <span data-openbitfun-component="inline-diff-preview" data-openbitfun-part="lineContent" key={key} className={classNames.join(' ')} style={style}>
       {children}
     </span>
   );
@@ -466,8 +466,8 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
 
   if (!originalContent && !modifiedContent) {
     return (
-      <div data-bf-component="inline-diff-preview" data-bf-part="root" data-bf-state="empty" className={`inline-diff-preview inline-diff-preview--empty ${className}`}>
-        <span className="inline-diff-preview__placeholder" data-bf-component="inline-diff-preview" data-bf-part="placeholder">No content</span>
+      <div data-openbitfun-component="inline-diff-preview" data-openbitfun-part="root" data-openbitfun-state="empty" className={`inline-diff-preview inline-diff-preview--empty ${className}`}>
+        <span className="inline-diff-preview__placeholder" data-openbitfun-component="inline-diff-preview" data-openbitfun-part="placeholder">No content</span>
       </div>
     );
   }
@@ -483,17 +483,17 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
   void measureGeneration;
 
   return (
-    <div data-bf-component="inline-diff-preview" data-bf-part="root" className={`inline-diff-preview ${className}`}>
+    <div data-openbitfun-component="inline-diff-preview" data-openbitfun-part="root" className={`inline-diff-preview ${className}`}>
       {truncated.truncated && (
-        <div className="inline-diff-preview__truncation-notice" data-bf-component="inline-diff-preview" data-bf-part="notice">
+        <div className="inline-diff-preview__truncation-notice" data-openbitfun-component="inline-diff-preview" data-openbitfun-part="notice">
           Content too large; showing first and last portions ({truncated.omittedLines} lines omitted).
         </div>
       )}
       <div
         ref={containerRef}
         className="inline-diff-preview__content"
-        data-bf-component="inline-diff-preview"
-        data-bf-part="content"
+        data-openbitfun-component="inline-diff-preview"
+        data-openbitfun-part="content"
         style={{ maxHeight: `${maxHeight}px`, overflow: 'auto' }}
       >
         {/* Spacer div that gives the scrollable area its full virtual height */}
@@ -504,7 +504,7 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
 
             if (line.type === 'context-separator') {
               return (
-                <div data-bf-component="inline-diff-preview" data-bf-part="line"
+                <div data-openbitfun-component="inline-diff-preview" data-openbitfun-part="line"
                   key={virtualRow.key}
                   ref={virtualizer.measureElement}
                   className="diff-line diff-line--separator"
@@ -537,7 +537,7 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
             const lineTokens = getTokensForLine(line);
 
             return (
-              <div data-bf-component="inline-diff-preview" data-bf-part="line"
+              <div data-openbitfun-component="inline-diff-preview" data-openbitfun-part="line"
                 key={virtualRow.key}
                 ref={virtualizer.measureElement}
                 className={lineClass}
@@ -553,24 +553,24 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
               >
                 {showLineNumbers &&
                   (lineNumberMode === 'single' ? (
-                    <span className="diff-line__gutter diff-line__gutter--single" data-bf-component="inline-diff-preview" data-bf-part="gutter">
+                    <span className="diff-line__gutter diff-line__gutter--single" data-openbitfun-component="inline-diff-preview" data-openbitfun-part="gutter">
                       <span className="diff-line__num">{virtualRow.index + 1}</span>
                     </span>
                   ) : (
-                    <span className="diff-line__gutter" data-bf-component="inline-diff-preview" data-bf-part="gutter">
+                    <span className="diff-line__gutter" data-openbitfun-component="inline-diff-preview" data-openbitfun-part="gutter">
                       <span className="diff-line__num diff-line__num--original">{origNum}</span>
                       <span className="diff-line__num diff-line__num--modified">{modNum}</span>
                     </span>
                   ))}
-                {showPrefix && <span className="diff-line__prefix" data-bf-component="inline-diff-preview" data-bf-part="prefix">{prefix}</span>}
+                {showPrefix && <span className="diff-line__prefix" data-openbitfun-component="inline-diff-preview" data-openbitfun-part="prefix">{prefix}</span>}
                 <span
                   className="diff-line__content"
-                  data-bf-component="inline-diff-preview"
-                  data-bf-part="lineContent"
+                  data-openbitfun-component="inline-diff-preview"
+                  data-openbitfun-part="lineContent"
                   style={{
-                    fontFamily: 'var(--bf-type-flow-code-font-family)',
-                    fontSize: 'var(--bf-type-flow-code-font-size)',
-                    fontWeight: 'var(--bf-type-flow-code-font-weight)',
+                    fontFamily: 'var(--openbitfun-type-flow-code-font-family)',
+                    fontSize: 'var(--openbitfun-type-flow-code-font-size)',
+                    fontWeight: 'var(--openbitfun-type-flow-code-font-weight)',
                   }}
                 >
                   {renderTokenLine(lineTokens, stylesheet)}

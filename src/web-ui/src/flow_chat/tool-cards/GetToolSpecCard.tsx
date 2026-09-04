@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
-import { GetToolSpecToolCard } from '@bitfun/ui/flow-chat';
+import { GetToolSpecToolCard } from '@openbitfun/ui/flow-chat';
 
 interface ParsedGetToolSpecResult {
   toolName: string;

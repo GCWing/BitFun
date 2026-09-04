@@ -1,4 +1,4 @@
-Analyze this BitFun usage data and describe the user's interaction style. Use second person ("you").
+Analyze this OpenBitFun usage data and describe the user's interaction style. Use second person ("you").
 
 Write a **narrative** (2-3 paragraphs) about how this user interacts with the AI:
 - What kind of tasks do they delegate vs. do themselves?

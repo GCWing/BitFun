@@ -1,4 +1,4 @@
-.bitfun-settings-view-page {
+.openbitfun-settings-view-page {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -16,7 +16,7 @@
 
   &__tab-list {
     flex: 0 0 auto;
-    margin: var(--bf-space-3) var(--bf-space-6) 0;
+    margin: var(--openbitfun-space-3) var(--openbitfun-space-6) 0;
   }
 
   &__tab-content {
@@ -28,14 +28,14 @@
 
   &__loading {
     display: grid;
-    gap: var(--bf-space-3);
-    padding: var(--bf-space-6);
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-6);
   }
 
   &__loading-line,
   &__loading-block {
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-subtle);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__loading-line {

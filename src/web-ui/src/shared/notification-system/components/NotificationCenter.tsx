@@ -10,7 +10,7 @@ import {
   Dialog,
   DialogBody,
   DialogHeader,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -210,8 +210,8 @@ export const NotificationCenter: React.FC = () => {
       <div
         key={notification.id}
         className="notification-center__active-task-item"
-        data-bf-component="notification"
-        data-bf-part="centerItem"
+        data-openbitfun-component="notification"
+        data-openbitfun-part="centerItem"
       >
         <div className="notification-center__active-task-icon">
           <Loader2 size={16} className="notification-center__spinner" />
@@ -281,9 +281,9 @@ export const NotificationCenter: React.FC = () => {
         data-notification-message={notification.message}
         data-notification-diagnostics={technicalDetails ?? undefined}
         data-context-type="notification"
-        data-bf-component="notification"
-        data-bf-part="centerItem"
-        data-bf-state={`${!notification.read ? 'unread ' : ''}${isExpanded ? 'expanded' : ''}`.trim() || undefined}
+        data-openbitfun-component="notification"
+        data-openbitfun-part="centerItem"
+        data-openbitfun-state={`${!notification.read ? 'unread ' : ''}${isExpanded ? 'expanded' : ''}`.trim() || undefined}
       >
         <div className={`notification-center__item-icon ${iconClass}`}>
           {getIcon(notification.type, notification.status)}
@@ -372,9 +372,9 @@ export const NotificationCenter: React.FC = () => {
       <DialogHeader>
       </DialogHeader>
       <DialogBody inset="none">
-      <div className="notification-center" data-testid="notification-center" data-bf-component="notification" data-bf-part="centerRoot">
+      <div className="notification-center" data-testid="notification-center" data-openbitfun-component="notification" data-openbitfun-part="centerRoot">
         
-        <div className="notification-center__header" data-bf-component="notification" data-bf-part="centerHeader">
+        <div className="notification-center__header" data-openbitfun-component="notification" data-openbitfun-part="centerHeader">
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
           <div className="notification-center__header-actions">
             <button
@@ -403,8 +403,8 @@ export const NotificationCenter: React.FC = () => {
               title={t('common:actions.close')}
               aria-label={t('common:actions.close')}
               data-testid="notification-center-close-btn"
-              data-bf-component="notification"
-              data-bf-part="centerClose"
+              data-openbitfun-component="notification"
+              data-openbitfun-part="centerClose"
             />
           </div>
         </div>
@@ -452,7 +452,7 @@ export const NotificationCenter: React.FC = () => {
         </div>
 
         
-        <ScrollArea className="notification-center__content" data-bf-component="notification" data-bf-part="centerList">
+        <ScrollArea className="notification-center__content" data-openbitfun-component="notification" data-openbitfun-part="centerList">
           
           {activeTaskNotifications.length > 0 && (
             <div className="notification-center__active-section" data-testid="notification-center-active-section">

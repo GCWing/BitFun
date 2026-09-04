@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use crate::service::config::ConfigService;
 use crate::service::mcp::server::MCPServerConfig;
-use crate::util::errors::BitFunResult;
+use crate::util::errors::OpenBitFunResult;
 
 pub struct MCPConfigService {
-    pub(super) inner: bitfun_services_integrations::mcp::config::MCPConfigService,
+    pub(super) inner: openbitfun_services_integrations::mcp::config::MCPConfigService,
 }
 
 struct CoreMCPConfigStore {
@@ -14,20 +14,20 @@ struct CoreMCPConfigStore {
 }
 
 #[async_trait]
-impl bitfun_services_integrations::mcp::config::MCPConfigStore for CoreMCPConfigStore {
+impl openbitfun_services_integrations::mcp::config::MCPConfigStore for CoreMCPConfigStore {
     async fn get_config_value(
         &self,
         key: &str,
-    ) -> bitfun_services_integrations::mcp::MCPRuntimeResult<Option<serde_json::Value>> {
+    ) -> openbitfun_services_integrations::mcp::MCPRuntimeResult<Option<serde_json::Value>> {
         match self
             .config_service
             .get_config::<serde_json::Value>(Some(key))
             .await
         {
             Ok(value) => Ok(Some(value)),
-            Err(crate::util::errors::BitFunError::NotFound(_)) => Ok(None),
+            Err(crate::util::errors::OpenBitFunError::NotFound(_)) => Ok(None),
             Err(error) => Err(
-                bitfun_services_integrations::mcp::MCPRuntimeError::configuration(
+                openbitfun_services_integrations::mcp::MCPRuntimeError::configuration(
                     error.to_string(),
                 ),
             ),
@@ -38,12 +38,12 @@ impl bitfun_services_integrations::mcp::config::MCPConfigStore for CoreMCPConfig
         &self,
         key: &str,
         value: serde_json::Value,
-    ) -> bitfun_services_integrations::mcp::MCPRuntimeResult<()> {
+    ) -> openbitfun_services_integrations::mcp::MCPRuntimeResult<()> {
         self.config_service
             .set_config(key, value)
             .await
             .map_err(|e| {
-                bitfun_services_integrations::mcp::MCPRuntimeError::configuration(e.to_string())
+                openbitfun_services_integrations::mcp::MCPRuntimeError::configuration(e.to_string())
             })
     }
 
@@ -52,62 +52,64 @@ impl bitfun_services_integrations::mcp::config::MCPConfigStore for CoreMCPConfig
         key: &str,
         expected: Option<serde_json::Value>,
         replacement: serde_json::Value,
-    ) -> bitfun_services_integrations::mcp::MCPRuntimeResult<bool> {
+    ) -> openbitfun_services_integrations::mcp::MCPRuntimeResult<bool> {
         self.config_service
             .compare_and_set_json_config(key, expected, replacement)
             .await
             .map_err(|error| {
-                bitfun_services_integrations::mcp::MCPRuntimeError::configuration(error.to_string())
+                openbitfun_services_integrations::mcp::MCPRuntimeError::configuration(
+                    error.to_string(),
+                )
             })
     }
 }
 
 impl MCPConfigService {
     pub fn get_remote_authorization_value(config: &MCPServerConfig) -> Option<String> {
-        bitfun_services_integrations::mcp::config::MCPConfigService::get_remote_authorization_value(
+        openbitfun_services_integrations::mcp::config::MCPConfigService::get_remote_authorization_value(
             config,
         )
     }
 
     pub fn get_remote_authorization_source(config: &MCPServerConfig) -> Option<&'static str> {
-        bitfun_services_integrations::mcp::config::MCPConfigService::get_remote_authorization_source(
+        openbitfun_services_integrations::mcp::config::MCPConfigService::get_remote_authorization_source(
             config,
         )
     }
 
     pub fn has_remote_authorization(config: &MCPServerConfig) -> bool {
-        bitfun_services_integrations::mcp::config::MCPConfigService::has_remote_authorization(
+        openbitfun_services_integrations::mcp::config::MCPConfigService::has_remote_authorization(
             config,
         )
     }
 
     pub fn has_remote_oauth(config: &MCPServerConfig) -> bool {
-        bitfun_services_integrations::mcp::config::MCPConfigService::has_remote_oauth(config)
+        openbitfun_services_integrations::mcp::config::MCPConfigService::has_remote_oauth(config)
     }
 
     pub fn has_remote_xaa(config: &MCPServerConfig) -> bool {
-        bitfun_services_integrations::mcp::config::MCPConfigService::has_remote_xaa(config)
+        openbitfun_services_integrations::mcp::config::MCPConfigService::has_remote_xaa(config)
     }
 
-    pub fn new(config_service: Arc<ConfigService>) -> BitFunResult<Self> {
+    pub fn new(config_service: Arc<ConfigService>) -> OpenBitFunResult<Self> {
         let store = Arc::new(CoreMCPConfigStore { config_service });
         Ok(Self {
-            inner: bitfun_services_integrations::mcp::config::MCPConfigService::new(store),
+            inner: openbitfun_services_integrations::mcp::config::MCPConfigService::new(store),
         })
     }
 
-    pub async fn load_all_configs(&self) -> BitFunResult<Vec<MCPServerConfig>> {
+    pub async fn load_all_configs(&self) -> OpenBitFunResult<Vec<MCPServerConfig>> {
         Ok(self.inner.load_all_configs().await?)
     }
 
     pub async fn get_server_config(
         &self,
         server_id: &str,
-    ) -> BitFunResult<Option<MCPServerConfig>> {
+    ) -> OpenBitFunResult<Option<MCPServerConfig>> {
         Ok(self.inner.get_server_config(server_id).await?)
     }
 
-    pub async fn save_server_config(&self, config: &MCPServerConfig) -> BitFunResult<()> {
+    pub async fn save_server_config(&self, config: &MCPServerConfig) -> OpenBitFunResult<()> {
         Ok(self.inner.save_server_config(config).await?)
     }
 
@@ -115,7 +117,7 @@ impl MCPConfigService {
         &self,
         server_id: &str,
         authorization_value: &str,
-    ) -> BitFunResult<MCPServerConfig> {
+    ) -> OpenBitFunResult<MCPServerConfig> {
         Ok(self
             .inner
             .set_remote_authorization(server_id, authorization_value)
@@ -125,19 +127,19 @@ impl MCPConfigService {
     pub async fn clear_remote_authorization(
         &self,
         server_id: &str,
-    ) -> BitFunResult<MCPServerConfig> {
+    ) -> OpenBitFunResult<MCPServerConfig> {
         Ok(self.inner.clear_remote_authorization(server_id).await?)
     }
 
-    pub async fn delete_server_config(&self, server_id: &str) -> BitFunResult<()> {
+    pub async fn delete_server_config(&self, server_id: &str) -> OpenBitFunResult<()> {
         Ok(self.inner.delete_server_config(server_id).await?)
     }
 
     pub async fn user_import_snapshot(
         &self,
     ) -> Result<
-        bitfun_services_integrations::mcp::config::MCPUserImportSnapshot,
-        bitfun_services_integrations::mcp::config::MCPImportError,
+        openbitfun_services_integrations::mcp::config::MCPUserImportSnapshot,
+        openbitfun_services_integrations::mcp::config::MCPImportError,
     > {
         self.inner.user_import_snapshot().await
     }
@@ -145,8 +147,8 @@ impl MCPConfigService {
     pub async fn apply_user_import(
         &self,
         expected_fingerprint: &str,
-        imports: Vec<bitfun_services_integrations::mcp::config::MCPImportServer>,
-    ) -> Result<(), bitfun_services_integrations::mcp::config::MCPImportError> {
+        imports: Vec<openbitfun_services_integrations::mcp::config::MCPImportServer>,
+    ) -> Result<(), openbitfun_services_integrations::mcp::config::MCPImportError> {
         self.inner
             .apply_user_import(expected_fingerprint, imports)
             .await
@@ -202,7 +204,7 @@ mod tests {
         );
         config
             .env
-            .insert("Authorization".to_string(), "legacy-token".to_string());
+            .insert("Authorization".to_string(), "process-env-token".to_string());
         config.headers.insert(
             "Authorization".to_string(),
             "Bearer header-token".to_string(),
@@ -217,7 +219,7 @@ mod tests {
             Some("headers")
         );
         assert_eq!(
-            bitfun_services_integrations::mcp::config::normalize_mcp_authorization_value(
+            openbitfun_services_integrations::mcp::config::normalize_mcp_authorization_value(
                 "plain-token"
             )
             .as_deref(),

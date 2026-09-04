@@ -111,7 +111,7 @@ export const ECOSYSTEM_IMPORT_ITEM_KINDS: readonly EcosystemImportItemKind[] = [
 ];
 
 /**
- * Current product-to-BitFun adaptation facts. These are deliberately explicit:
+ * Current product-to-OpenBitFun adaptation facts. These are deliberately explicit:
  * a missing discovery result must not imply that every upstream product offers
  * every object type. Catalog-backed kinds are discovered by this page; Skill
  * and Hook reuse stays with their existing capability owners.

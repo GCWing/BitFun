@@ -1,6 +1,6 @@
 #![cfg(feature = "serde")]
 
-use bitfun_tool_call_jsonrepair::{
+use openbitfun_tool_call_jsonrepair::{
     jsonrepair_parse, jsonrepair_parse_with_options, jsonrepair_value,
     jsonrepair_value_with_options, JsonRepairErrorKind, JsonRepairParseError, RepairOptions,
 };

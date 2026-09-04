@@ -1,19 +1,19 @@
 const CHANNELS = {
   stable: {
     primaryUpdaterEndpoint:
-      'https://github.com/GCWing/BitFun/releases/latest/download/latest.json',
+      'https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json',
     fallbackUpdaterEndpoint: 'https://openbitfun.com/release/latest.json',
     githubChannelTag: null,
   },
   beta: {
     primaryUpdaterEndpoint:
-      'https://github.com/GCWing/BitFun/releases/download/channel-beta/latest.json',
+      'https://github.com/GCWing/OpenBitFun/releases/download/channel-beta/latest.json',
     fallbackUpdaterEndpoint: 'https://openbitfun.com/release/beta/latest.json',
     githubChannelTag: 'channel-beta',
   },
   nightly: {
     primaryUpdaterEndpoint:
-      'https://github.com/GCWing/BitFun/releases/download/nightly/latest.json',
+      'https://github.com/GCWing/OpenBitFun/releases/download/nightly/latest.json',
     fallbackUpdaterEndpoint: 'https://openbitfun.com/release/nightly/latest.json',
     githubChannelTag: 'nightly',
   },
@@ -33,11 +33,11 @@ export function resolveReleaseChannel(value = 'stable') {
 export function validateReleaseVersion(channelValue, versionValue) {
   const { channel } = resolveReleaseChannel(channelValue);
   const version = String(versionValue || '').trim();
-  const stablePattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+  const stablePattern = /^([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
   const betaPattern =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.([1-9]\d*)$/;
+    /^([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.([1-9]\d*)$/;
   const nightlyPattern =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-nightly\.\d{8}$/;
+    /^([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-nightly\.\d{8}$/;
   const valid = channel === 'stable'
     ? stablePattern.test(version)
     : channel === 'beta'
@@ -45,10 +45,10 @@ export function validateReleaseVersion(channelValue, versionValue) {
       : nightlyPattern.test(version);
   if (!valid) {
     const example = channel === 'stable'
-      ? '0.2.18'
+      ? '1.0.0'
       : channel === 'beta'
-        ? '0.2.18-beta.1'
-        : '0.2.18-nightly.20260811';
+        ? '1.0.0-beta.1'
+        : '1.0.0-nightly.20260811';
     throw new Error(
       `Version "${versionValue}" is invalid for the ${channel} channel. Expected a version like ${example}`,
     );

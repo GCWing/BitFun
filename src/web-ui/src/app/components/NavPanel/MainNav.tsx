@@ -25,7 +25,7 @@ import {
   NavigationPanelHeader,
   ScrollArea,
   Tooltip,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { FolderOpen, FolderPlus, History, Users, Network } from 'lucide-react';
@@ -271,7 +271,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const workspaceMenuPortal = workspaceMenuOpen ? createPortal(
     <Menu
       ref={workspaceMenuRef}
-      className={`bitfun-nav-panel__workspace-menu${workspaceMenuClosing ? ' is-closing' : ''}`}
+      className={`openbitfun-nav-panel__workspace-menu${workspaceMenuClosing ? ' is-closing' : ''}`}
       style={{ top: workspaceMenuPos.top, left: workspaceMenuPos.left }}
     >
       <MenuItem
@@ -312,9 +312,9 @@ const MainNav: React.FC<MainNavProps> = ({
           </>
         )}
       >
-        <ScrollArea className="bitfun-nav-panel__workspace-menu-workspaces">
+        <ScrollArea className="openbitfun-nav-panel__workspace-menu-workspaces">
         {recentWorkspaces.length === 0 ? (
-          <div className="bitfun-nav-panel__workspace-menu-empty">
+          <div className="openbitfun-nav-panel__workspace-menu-empty">
             <span>{t('header.noRecentWorkspaces')}</span>
           </div>
         ) : (
@@ -333,16 +333,16 @@ const MainNav: React.FC<MainNavProps> = ({
                 data-testid="nav-workspace-menu-recent-workspace"
                 data-workspace-id={workspace.id}
               >
-                <span className="bitfun-nav-panel__workspace-menu-item-main">
+                <span className="openbitfun-nav-panel__workspace-menu-item-main">
                   {hostPrefix ? (
                     <>
-                      <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
-                      <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
+                      <span className="openbitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
+                      <span className="openbitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
                         ·
                       </span>
                     </>
                   ) : null}
-                  <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
+                  <span className="openbitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
                 </span>
               </MenuItem>
             );
@@ -369,28 +369,28 @@ const MainNav: React.FC<MainNavProps> = ({
   return (
     <>
     <NavigationPanel
-      className="bitfun-nav-panel__main-nav"
+      className="openbitfun-nav-panel__main-nav"
     >
-      <NavigationPanelHeader className="bitfun-nav-panel__main-nav-header">
-        <div data-bf-component="nav-panel" data-bf-part="brandHeader" className="bitfun-nav-panel__brand-header">
-        <div className="bitfun-nav-panel__utility-row" data-bf-component="nav-panel" data-bf-part="utilityRow">
-          <div className="bitfun-nav-panel__brand-search" data-bf-component="nav-panel" data-bf-part="search">
+      <NavigationPanelHeader className="openbitfun-nav-panel__main-nav-header">
+        <div data-openbitfun-component="nav-panel" data-openbitfun-part="brandHeader" className="openbitfun-nav-panel__brand-header">
+        <div className="openbitfun-nav-panel__utility-row" data-openbitfun-component="nav-panel" data-openbitfun-part="utilityRow">
+          <div className="openbitfun-nav-panel__brand-search" data-openbitfun-component="nav-panel" data-openbitfun-part="search">
             <Tooltip content={t('nav.search.triggerTooltip')} placement="right" followCursor>
               <button
                 type="button"
-                className="bitfun-nav-panel__search-trigger"
-                data-bf-component="nav-panel"
-                data-bf-part="searchTrigger"
+                className="openbitfun-nav-panel__search-trigger"
+                data-openbitfun-component="nav-panel"
+                data-openbitfun-part="searchTrigger"
                 onClick={() => openGlobalSearch()}
                 aria-label={t('nav.search.triggerTooltip')}
                 data-testid="nav-search-trigger"
               >
-                <span className="bitfun-nav-panel__search-trigger__icon" aria-hidden="true">
-                  <span className="bitfun-nav-panel__search-trigger__icon-inner">
+                <span className="openbitfun-nav-panel__search-trigger__icon" aria-hidden="true">
+                  <span className="openbitfun-nav-panel__search-trigger__icon-inner">
                     <Icon name="search" size="xs" />
                   </span>
                 </span>
-                <span className="bitfun-nav-panel__search-trigger__label">
+                <span className="openbitfun-nav-panel__search-trigger__label">
                   {t('nav.search.triggerPlaceholder')}
                 </span>
                 <KeyHint
@@ -406,10 +406,10 @@ const MainNav: React.FC<MainNavProps> = ({
           <Tooltip content={createSessionLabel} placement="right" followCursor>
             <button
               type="button"
-              className="bitfun-nav-panel__utility-action"
-              data-bf-component="nav-panel"
-              data-bf-part="topAction"
-              data-bf-action="new-session"
+              className="openbitfun-nav-panel__utility-action"
+              data-openbitfun-component="nav-panel"
+              data-openbitfun-part="topAction"
+              data-openbitfun-action="new-session"
               onClick={handleCreateSession}
               aria-label={createSessionLabel}
               data-testid="nav-new-session-btn"
@@ -420,26 +420,26 @@ const MainNav: React.FC<MainNavProps> = ({
         </div>
         </div>
       </NavigationPanelHeader>
-      <NavigationPanelBody className="bitfun-nav-panel__sections" ref={sectionsScrollRef}>
-        <NavigationPanelContent className="bitfun-nav-panel__main-nav-content">
-        <div data-testid="nav-sections" className="bitfun-nav-panel__sections-slot">
-        <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
+      <NavigationPanelBody className="openbitfun-nav-panel__sections" ref={sectionsScrollRef}>
+        <NavigationPanelContent className="openbitfun-nav-panel__main-nav-content">
+        <div data-testid="nav-sections" className="openbitfun-nav-panel__sections-slot">
+        <div data-openbitfun-component="nav-panel" data-openbitfun-part="topActions" className="openbitfun-nav-panel__top-actions">
           <Tooltip content={assistantManagerLabel} placement="right" followCursor>
             <button
               type="button"
               className={[
-                'bitfun-nav-panel__top-action-btn',
+                'openbitfun-nav-panel__top-action-btn',
                 isAssistantManagerActive ? 'is-active' : '',
               ].filter(Boolean).join(' ')}
-              data-bf-component="nav-panel"
-              data-bf-part="topAction"
-              data-bf-action="assistant-manager"
-              data-bf-state={isAssistantManagerActive ? 'active' : ''}
+              data-openbitfun-component="nav-panel"
+              data-openbitfun-part="topAction"
+              data-openbitfun-action="assistant-manager"
+              data-openbitfun-state={isAssistantManagerActive ? 'active' : ''}
               onClick={handleOpenAssistantManager}
               aria-label={assistantManagerLabel}
               data-testid="nav-assistant-manager"
             >
-              <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+              <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                 <Icon name="user" size="sm" />
               </span>
               <span>{assistantManagerLabel}</span>
@@ -450,26 +450,26 @@ const MainNav: React.FC<MainNavProps> = ({
             <button
               type="button"
               className={[
-                'bitfun-nav-panel__top-action-btn',
+                'openbitfun-nav-panel__top-action-btn',
                 isTaskBoardActive ? 'is-active' : '',
               ].filter(Boolean).join(' ')}
-              data-bf-component="nav-panel"
-              data-bf-part="todoEntry"
-              data-bf-action="todos"
-              data-bf-state={isTaskBoardActive ? 'active' : ''}
+              data-openbitfun-component="nav-panel"
+              data-openbitfun-part="todoEntry"
+              data-openbitfun-action="todos"
+              data-openbitfun-state={isTaskBoardActive ? 'active' : ''}
               onClick={handleOpenTodos}
               aria-label={taskBoardLabel}
               aria-pressed={isTaskBoardActive}
               data-testid="nav-todos-btn"
             >
-              <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+              <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                 <Icon name="clock" size="sm" />
               </span>
               <span>{taskBoardLabel}</span>
             </button>
           </Tooltip>
 
-          <div className="bitfun-nav-panel__miniapp-navigation" data-bf-component="nav-panel" data-bf-part="miniAppFooter">
+          <div className="openbitfun-nav-panel__miniapp-navigation" data-openbitfun-component="nav-panel" data-openbitfun-part="miniAppFooter">
             <MiniAppEntry
               isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
               activeMiniAppId={activeMiniAppId}
@@ -478,38 +478,38 @@ const MainNav: React.FC<MainNavProps> = ({
             />
           </div>
 
-          <div className="bitfun-nav-panel__top-action-expand" data-bf-component="nav-panel" data-bf-part="extensionGroup" data-bf-state={isExtensionsOpen ? 'open' : ''} data-testid="agent-skill-panel">
+          <div className="openbitfun-nav-panel__top-action-expand" data-openbitfun-component="nav-panel" data-openbitfun-part="extensionGroup" data-openbitfun-state={isExtensionsOpen ? 'open' : ''} data-testid="agent-skill-panel">
             <Tooltip content={extensionsLabel} placement="right" followCursor>
               <button
                 type="button"
                 className={[
-                  'bitfun-nav-panel__top-action-btn',
-                  'bitfun-nav-panel__top-action-btn--expand',
+                  'openbitfun-nav-panel__top-action-btn',
+                  'openbitfun-nav-panel__top-action-btn--expand',
                   isExtensionsOpen ? 'is-open' : '',
                 ].filter(Boolean).join(' ')}
-                data-bf-component="nav-panel"
-                data-bf-part="topAction"
-                data-bf-action="extensions"
-                data-bf-state={isExtensionsOpen ? 'open' : ''}
+                data-openbitfun-component="nav-panel"
+                data-openbitfun-part="topAction"
+                data-openbitfun-action="extensions"
+                data-openbitfun-state={isExtensionsOpen ? 'open' : ''}
                 onClick={() => setIsExtensionsOpen(v => !v)}
                 aria-expanded={isExtensionsOpen}
                 aria-label={extensionsLabel}
                 data-testid="agent-skill-entry"
               >
                 <span
-                  className="bitfun-nav-panel__top-action-icon-slot bitfun-nav-panel__top-action-expand-icons"
+                  className="openbitfun-nav-panel__top-action-icon-slot openbitfun-nav-panel__top-action-expand-icons"
                   aria-hidden="true"
                 >
                   <Icon
                     name="extension"
                     size="sm"
-                    className="bitfun-nav-panel__top-action-expand-icon-default"
+                    className="openbitfun-nav-panel__top-action-expand-icon-default"
                   />
                   <Icon
                     name="chevron-down"
                     size="sm"
                     className={[
-                      'bitfun-nav-panel__top-action-expand-icon-chevron',
+                      'openbitfun-nav-panel__top-action-expand-icon-chevron',
                       isExtensionsOpen ? 'is-open' : '',
                     ].filter(Boolean).join(' ')}
                   />
@@ -519,26 +519,26 @@ const MainNav: React.FC<MainNavProps> = ({
             </Tooltip>
 
             <div
-              className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}
+              className={`openbitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}
               data-testid="agent-skill-tabs"
             >
               <Tooltip content={agentsTooltip} placement="right" followCursor>
                 <button
                   type="button"
                   className={[
-                    'bitfun-nav-panel__top-action-btn',
-                    'bitfun-nav-panel__top-action-btn--sub',
+                    'openbitfun-nav-panel__top-action-btn',
+                    'openbitfun-nav-panel__top-action-btn--sub',
                     isAgentsActive ? 'is-active' : '',
                   ].filter(Boolean).join(' ')}
-                  data-bf-component="nav-panel"
-                  data-bf-part="topAction"
-                  data-bf-action="agents"
-                  data-bf-state={isAgentsActive ? 'active' : ''}
+                  data-openbitfun-component="nav-panel"
+                  data-openbitfun-part="topAction"
+                  data-openbitfun-action="agents"
+                  data-openbitfun-state={isAgentsActive ? 'active' : ''}
                   onClick={handleOpenAgents}
                   aria-label={agentsTooltip}
                   data-testid="agent-tab"
                 >
-                  <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                  <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                     <Users size={15} />
                   </span>
                   <span>{t('nav.items.agents')}</span>
@@ -549,19 +549,19 @@ const MainNav: React.FC<MainNavProps> = ({
                 <button
                   type="button"
                   className={[
-                    'bitfun-nav-panel__top-action-btn',
-                    'bitfun-nav-panel__top-action-btn--sub',
+                    'openbitfun-nav-panel__top-action-btn',
+                    'openbitfun-nav-panel__top-action-btn--sub',
                     isSkillsActive ? 'is-active' : '',
                   ].filter(Boolean).join(' ')}
-                  data-bf-component="nav-panel"
-                  data-bf-part="topAction"
-                  data-bf-action="skills"
-                  data-bf-state={isSkillsActive ? 'active' : ''}
+                  data-openbitfun-component="nav-panel"
+                  data-openbitfun-part="topAction"
+                  data-openbitfun-action="skills"
+                  data-openbitfun-state={isSkillsActive ? 'active' : ''}
                   onClick={handleOpenSkills}
                   aria-label={skillsTooltip}
                   data-testid="skill-tab"
                 >
-                  <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                  <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                     <Icon name="extension" size="sm" />
                   </span>
                   <span>{t('nav.items.skills')}</span>
@@ -572,27 +572,27 @@ const MainNav: React.FC<MainNavProps> = ({
                 <button
                   type="button"
                   className={[
-                    'bitfun-nav-panel__top-action-btn',
-                    'bitfun-nav-panel__top-action-btn--sub',
+                    'openbitfun-nav-panel__top-action-btn',
+                    'openbitfun-nav-panel__top-action-btn--sub',
                     isEcosystemCompatibilityActive ? 'is-active' : '',
                   ].filter(Boolean).join(' ')}
-                  data-bf-component="nav-panel"
-                  data-bf-part="topAction"
-                  data-bf-action="ecosystem-compatibility"
-                  data-bf-state={isEcosystemCompatibilityActive ? 'active' : ''}
+                  data-openbitfun-component="nav-panel"
+                  data-openbitfun-part="topAction"
+                  data-openbitfun-action="ecosystem-compatibility"
+                  data-openbitfun-state={isEcosystemCompatibilityActive ? 'active' : ''}
                   onClick={handleOpenEcosystemCompatibility}
                   aria-label={ecosystemCompatibilityTooltip}
                   data-testid="ecosystem-compatibility-tab"
                 >
-                  <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                  <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                     <Network size={15} />
                   </span>
                   <span>{t('nav.items.ecosystemCompatibility')}</span>
                   {hasUnseenEcosystemCompatibility ? (
                     <span
-                      className="bitfun-nav-panel__top-action-unseen"
-                      data-bf-component="nav-panel"
-                      data-bf-part="topActionUnseen"
+                      className="openbitfun-nav-panel__top-action-unseen"
+                      data-openbitfun-component="nav-panel"
+                      data-openbitfun-part="topActionUnseen"
                       aria-hidden="true"
                     />
                   ) : null}
@@ -603,7 +603,7 @@ const MainNav: React.FC<MainNavProps> = ({
         </div>
 
         {/* Unified sessions */}
-        <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="sessions">
+        <div className="openbitfun-nav-panel__section" data-openbitfun-component="nav-panel" data-openbitfun-part="section" data-openbitfun-section="sessions">
           <StickySectionHeader scrollRootRef={sectionsScrollRef}>
             <SectionHeader
               label={t('nav.items.sessions')}
@@ -611,12 +611,12 @@ const MainNav: React.FC<MainNavProps> = ({
                 <>
                   <WorkspaceSessionGroupingToggle />
                   <WorkspaceSessionFilterMenu />
-                  <div className="bitfun-nav-panel__workspace-action-wrap">
+                  <div className="openbitfun-nav-panel__workspace-action-wrap">
                     <Tooltip content={addSessionGroupTooltip} placement="right" followCursor disabled={workspaceMenuOpen}>
                       <button
                         ref={workspaceMenuButtonRef}
                         type="button"
-                        className={`bitfun-nav-panel__section-action${workspaceMenuOpen ? ' is-active' : ''}`}
+                        className={`openbitfun-nav-panel__section-action${workspaceMenuOpen ? ' is-active' : ''}`}
                         aria-label={addSessionGroupTooltip}
                         aria-haspopup="menu"
                         aria-expanded={workspaceMenuOpen}
@@ -631,7 +631,7 @@ const MainNav: React.FC<MainNavProps> = ({
               }
             />
           </StickySectionHeader>
-          <div className="bitfun-nav-panel__items" data-bf-component="nav-panel" data-bf-part="sectionContent">
+          <div className="openbitfun-nav-panel__items" data-openbitfun-component="nav-panel" data-openbitfun-part="sectionContent">
             <WorkspaceListSection variant="all" />
           </div>
         </div>

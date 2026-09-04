@@ -12,9 +12,9 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'permissionOptions' }, { id: 'usageAction' },
   ],
   states: [
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'armed', selector: { kind: 'self', suffix: '[data-bf-state~="armed"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'armed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="armed"]' } },
   ],
 };

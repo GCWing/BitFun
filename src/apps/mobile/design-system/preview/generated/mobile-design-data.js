@@ -2,7 +2,7 @@
 export const mobileTokens = {
   "version": 1,
   "identity": {
-    "name": "BitFun Mobile",
+    "name": "OpenBitFun Mobile",
     "signature": "Paper-and-ink conversation chrome with a single blue information accent"
   },
   "colors": {
@@ -857,7 +857,7 @@ export const mobilePreviewScenarios = {
       ],
       "composer": {
         "draft": "",
-        "placeholder": "向 BitFun 提问",
+        "placeholder": "向 OpenBitFun 提问",
         "phase": "connected",
         "streaming": false
       }

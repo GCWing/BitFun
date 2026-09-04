@@ -1,13 +1,13 @@
 //! Unified event model
 //!
-//! Uses bitfun-events layer event definitions, extending core-specific functionality here
+//! Uses openbitfun-events layer event definitions, extending core-specific functionality here
 
 use crate::agentic::core::SessionState;
-use bitfun_agent_runtime::session_state::session_state_label_for_state;
+use openbitfun_agent_runtime::session_state::session_state_label_for_state;
 
 // ============ Re-export events layer types ============
-pub use bitfun_events::agentic::ErrorCategory;
-pub use bitfun_events::{
+pub use openbitfun_events::agentic::ErrorCategory;
+pub use openbitfun_events::{
     AgenticEvent as BaseAgenticEvent, AgenticEventEnvelope as EventEnvelope,
     AgenticEventPriority as EventPriority, DeepReviewQueueReason, DeepReviewQueueState,
     DeepReviewQueueStatus, ModelRoundAttemptDiagnostic, ModelRoundAttemptToolDiagnostic,

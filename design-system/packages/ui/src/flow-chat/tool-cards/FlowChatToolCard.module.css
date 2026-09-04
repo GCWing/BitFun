@@ -1,20 +1,20 @@
-@layer bf.components {
+@layer openbitfun.components {
   .prominentRoot,
   .ambientRoot {
-    --_tool-card-font-family: var(--bf-type-body-sm-font-family);
-    --_tool-card-font-size: var(--bf-type-body-sm-font-size);
-    --_tool-card-title-font-weight: var(--bf-type-label-lg-font-weight);
-    --_tool-card-content-font-weight: var(--bf-type-body-sm-font-weight);
-    --_tool-card-action-size: var(--bf-space-6);
-    --_flow-chat-tool-card-icon-size: var(--bf-font-size-xl);
-    --_tool-card-transition: var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    --_tool-card-font-family: var(--openbitfun-type-body-sm-font-family);
+    --_tool-card-font-size: var(--openbitfun-type-body-sm-font-size);
+    --_tool-card-title-font-weight: var(--openbitfun-type-label-lg-font-weight);
+    --_tool-card-content-font-weight: var(--openbitfun-type-body-sm-font-weight);
+    --_tool-card-action-size: var(--openbitfun-space-6);
+    --_flow-chat-tool-card-icon-size: var(--openbitfun-font-size-xl);
+    --_tool-card-transition: var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     box-sizing: border-box;
     display: flex;
     inline-size: 100%;
     min-inline-size: 0;
     flex-direction: column;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     font-family: var(--_tool-card-font-family);
     font-size: var(--_tool-card-font-size);
     font-variant-numeric: proportional-nums;
@@ -23,10 +23,10 @@
 
   .prominentRoot {
     overflow: hidden;
-    margin-block: var(--bf-space-1);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-md);
-    background: var(--bf-color-surface-panel);
+    margin-block: var(--openbitfun-space-1);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-md);
+    background: var(--openbitfun-color-surface-panel);
     box-shadow: none;
     transition:
       border-color var(--_tool-card-transition),
@@ -34,19 +34,19 @@
   }
 
   .prominentRoot:is(:hover, :focus-within),
-  .prominentRoot[data-bf-preview-state="hover"],
-  :global([data-bf-preview-state="hover"]) .prominentRoot {
-    border-color: var(--bf-color-border-strong);
+  .prominentRoot[data-openbitfun-preview-state="hover"],
+  :global([data-openbitfun-preview-state="hover"]) .prominentRoot {
+    border-color: var(--openbitfun-color-border-strong);
   }
 
-  .prominentRoot[data-bf-state~="confirmation"] {
-    border-color: var(--bf-color-status-warning-border);
-    background: var(--bf-color-status-warning-surface);
+  .prominentRoot[data-openbitfun-state~="confirmation"] {
+    border-color: var(--openbitfun-color-status-warning-border);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
-  .prominentRoot[data-bf-status="cancelled"],
-  .prominentRoot[data-bf-status="rejected"] {
-    opacity: var(--bf-opacity-muted);
+  .prominentRoot[data-openbitfun-status="cancelled"],
+  .prominentRoot[data-openbitfun-status="rejected"] {
+    opacity: var(--openbitfun-opacity-muted);
   }
 
   .surface {
@@ -65,7 +65,7 @@
     cursor: default;
   }
 
-  .prominentSurface[data-bf-interactive="true"] {
+  .prominentSurface[data-openbitfun-interactive="true"] {
     cursor: pointer;
   }
 
@@ -78,11 +78,11 @@
   }
 
   .prominentSummary {
-    min-block-size: var(--bf-control-height-sm);
-    gap: var(--bf-space-2);
-    padding-block: var(--bf-space-1);
-    padding-inline: var(--bf-space-3) var(--bf-space-1);
-    line-height: var(--bf-type-heading-page-line-height);
+    min-block-size: var(--openbitfun-control-height-sm);
+    gap: var(--openbitfun-space-2);
+    padding-block: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-space-3) var(--openbitfun-space-1);
+    line-height: var(--openbitfun-type-heading-page-line-height);
   }
 
   .actionLabel,
@@ -111,7 +111,7 @@
 
   .actionLabel {
     flex: 0 0 auto;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     font-weight: var(--_tool-card-title-font-weight);
     white-space: nowrap;
   }
@@ -121,8 +121,8 @@
     overflow: hidden;
     flex: 1 1 auto;
     align-items: center;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-secondary);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-secondary);
     font-weight: var(--_tool-card-content-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -143,9 +143,9 @@
 
   .extra {
     min-inline-size: 0;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     margin-inline-start: auto;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     font-weight: var(--_tool-card-content-font-weight);
   }
 
@@ -153,32 +153,32 @@
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: var(--bf-space-1);
-    color: var(--bf-color-content-muted);
+    gap: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-muted);
     font-family: var(--_tool-card-font-family);
     font-size: var(--_tool-card-font-size);
     font-weight: var(--_tool-card-content-font-weight);
     white-space: nowrap;
   }
 
-  .changeSummary [data-bf-change="added"] {
-    color: var(--bf-color-code-change-added);
+  .changeSummary [data-openbitfun-change="added"] {
+    color: var(--openbitfun-color-code-change-added);
   }
 
-  .changeSummary [data-bf-change="removed"] {
-    color: var(--bf-color-code-change-removed);
+  .changeSummary [data-openbitfun-change="removed"] {
+    color: var(--openbitfun-color-code-change-removed);
   }
 
   .actionRegion {
     overflow: hidden;
     max-inline-size: 0;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     margin-inline-start: 0;
     padding-inline-start: 0;
-    border-inline-start: var(--bf-border-width-default) solid transparent;
+    border-inline-start: var(--openbitfun-border-width-default) solid transparent;
     opacity: 0;
     pointer-events: none;
-    transform: translateX(var(--bf-space-1));
+    transform: translateX(var(--openbitfun-space-1));
     transition:
       max-inline-size var(--_tool-card-transition),
       margin-inline-start var(--_tool-card-transition),
@@ -189,13 +189,13 @@
   }
 
   .prominentRoot:is(:hover, :focus-within) .actionRegion,
-  .prominentRoot[data-bf-preview-state="hover"] .actionRegion,
-  :global([data-bf-preview-state="hover"]) .prominentRoot .actionRegion,
+  .prominentRoot[data-openbitfun-preview-state="hover"] .actionRegion,
+  :global([data-openbitfun-preview-state="hover"]) .prominentRoot .actionRegion,
   .prominentRoot[data-actions-visible="true"] .actionRegion {
     max-inline-size: 24rem;
-    margin-inline-start: var(--bf-space-1);
-    padding-inline-start: var(--bf-space-2);
-    border-inline-start-color: var(--bf-color-border-subtle);
+    margin-inline-start: var(--openbitfun-space-1);
+    padding-inline-start: var(--openbitfun-space-2);
+    border-inline-start-color: var(--openbitfun-color-border-subtle);
     opacity: 1;
     pointer-events: auto;
     transform: translateX(0);
@@ -203,16 +203,16 @@
 
   .affordanceButton {
     display: inline-flex;
-    inline-size: var(--bf-space-6);
-    block-size: var(--bf-space-6);
+    inline-size: var(--openbitfun-space-6);
+    block-size: var(--openbitfun-space-6);
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--bf-radius-sm);
-    color: var(--bf-color-content-muted);
+    border-radius: var(--openbitfun-radius-sm);
+    color: var(--openbitfun-color-content-muted);
     background: transparent;
     cursor: pointer;
     transition:
@@ -220,20 +220,20 @@
       color var(--_tool-card-transition);
   }
 
-  .affordanceButton:is(:hover, [data-bf-preview-state="hover"]) {
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-action-neutral-surface);
+  .affordanceButton:is(:hover, [data-openbitfun-preview-state="hover"]) {
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   .affordanceButton:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .affordanceButton > :where(svg, img) {
     display: block;
-    inline-size: var(--bf-font-size-base);
-    block-size: var(--bf-font-size-base);
+    inline-size: var(--openbitfun-font-size-base);
+    block-size: var(--openbitfun-font-size-base);
   }
 
   .affordanceButton[aria-expanded="true"] :global(svg) {
@@ -245,7 +245,7 @@
   }
 
   .toolCardActions {
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   .toolCardActions:empty {
@@ -259,9 +259,9 @@
   }
 
   .trailingActions[data-divider="true"] {
-    margin-inline-start: var(--bf-space-1);
-    padding-inline-start: var(--bf-space-2);
-    border-inline-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    margin-inline-start: var(--openbitfun-space-1);
+    padding-inline-start: var(--openbitfun-space-2);
+    border-inline-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .iconSlot {
@@ -272,12 +272,12 @@
     block-size: var(--_tool-card-action-size);
     align-items: center;
     justify-content: center;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .iconSlot[data-divider="true"] {
-    margin-inline-end: var(--bf-space-1);
-    border-inline-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    margin-inline-end: var(--openbitfun-space-1);
+    border-inline-end: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .iconMarks {
@@ -311,7 +311,7 @@
   }
 
   .inlineAffordance {
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     opacity: 0;
   }
 
@@ -319,15 +319,15 @@
     transform: rotate(180deg);
   }
 
-  .ambientRoot:is(:hover, :focus-within) .iconSlot[data-bf-expandable="true"] .mainIcon,
-  .ambientRoot[data-bf-preview-state="hover"] .iconSlot[data-bf-expandable="true"] .mainIcon,
-  :global([data-bf-preview-state="hover"]) .ambientRoot .iconSlot[data-bf-expandable="true"] .mainIcon {
+  .ambientRoot:is(:hover, :focus-within) .iconSlot[data-openbitfun-expandable="true"] .mainIcon,
+  .ambientRoot[data-openbitfun-preview-state="hover"] .iconSlot[data-openbitfun-expandable="true"] .mainIcon,
+  :global([data-openbitfun-preview-state="hover"]) .ambientRoot .iconSlot[data-openbitfun-expandable="true"] .mainIcon {
     opacity: 0;
   }
 
-  .ambientRoot:is(:hover, :focus-within) .iconSlot[data-bf-expandable="true"] .inlineAffordance,
-  .ambientRoot[data-bf-preview-state="hover"] .iconSlot[data-bf-expandable="true"] .inlineAffordance,
-  :global([data-bf-preview-state="hover"]) .ambientRoot .iconSlot[data-bf-expandable="true"] .inlineAffordance {
+  .ambientRoot:is(:hover, :focus-within) .iconSlot[data-openbitfun-expandable="true"] .inlineAffordance,
+  .ambientRoot[data-openbitfun-preview-state="hover"] .iconSlot[data-openbitfun-expandable="true"] .inlineAffordance,
+  :global([data-openbitfun-preview-state="hover"]) .ambientRoot .iconSlot[data-openbitfun-expandable="true"] .inlineAffordance {
     opacity: 1;
   }
 
@@ -338,37 +338,37 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     outline: 0;
     background: transparent;
     cursor: pointer;
   }
 
   .iconAffordanceHit:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .statusIcon {
-    inline-size: var(--bf-font-size-lg);
-    block-size: var(--bf-font-size-lg);
+    inline-size: var(--openbitfun-font-size-lg);
+    block-size: var(--openbitfun-font-size-lg);
     justify-content: center;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .statusIcon[data-divider="true"] {
     box-sizing: content-box;
-    margin-inline-start: var(--bf-space-1);
-    padding-inline-start: var(--bf-space-2);
-    border-inline-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    margin-inline-start: var(--openbitfun-space-1);
+    padding-inline-start: var(--openbitfun-space-2);
+    border-inline-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
-  .prominentRoot[data-bf-status="completed"] .statusIcon {
-    color: var(--bf-color-status-success-content);
+  .prominentRoot[data-openbitfun-status="completed"] .statusIcon {
+    color: var(--openbitfun-color-status-success-content);
   }
 
-  .prominentRoot[data-bf-status="error"] .statusIcon {
-    color: var(--bf-color-status-danger-content);
+  .prominentRoot[data-openbitfun-status="error"] .statusIcon {
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   .collapse {
@@ -377,8 +377,8 @@
     opacity: 0;
     visibility: hidden;
     transition:
-      grid-template-rows var(--_tool-card-collapse-duration) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      grid-template-rows var(--_tool-card-collapse-duration) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       visibility 0s linear var(--_tool-card-collapse-duration);
   }
 
@@ -401,31 +401,31 @@
   .expanded,
   .error {
     box-sizing: border-box;
-    padding: var(--bf-space-3);
-    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-body-sm-font-size);
-    line-height: var(--bf-type-body-md-line-height);
+    padding: var(--openbitfun-space-3);
+    border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-md-line-height);
   }
 
   .error {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   .ambientRoot {
     position: relative;
     gap: 0;
-    border-radius: var(--bf-radius-md);
-    color: var(--bf-color-content-muted);
+    border-radius: var(--openbitfun-radius-md);
+    color: var(--openbitfun-color-content-muted);
     background-color: transparent;
-    line-height: var(--bf-type-body-md-line-height);
+    line-height: var(--openbitfun-type-body-md-line-height);
     transition: background-color var(--_tool-card-transition);
   }
 
   .ambientRoot::after {
     position: absolute;
     inset: 0;
-    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-default);
     border-radius: inherit;
     content: "";
     opacity: 0;
@@ -433,22 +433,22 @@
     transition: opacity var(--_tool-card-transition);
   }
 
-  .ambientRoot[data-bf-direct-action="true"] {
-    border-radius: var(--bf-radius-sm);
+  .ambientRoot[data-openbitfun-direct-action="true"] {
+    border-radius: var(--openbitfun-radius-sm);
     cursor: pointer;
   }
 
-  .ambientRoot[data-bf-direct-action="true"]:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+  .ambientRoot[data-openbitfun-direct-action="true"]:focus-visible {
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .ambientSurface {
     display: flex;
-    min-block-size: max(1lh, var(--bf-control-tool-card-ambient-row-min-block-size));
+    min-block-size: max(1lh, var(--openbitfun-control-tool-card-ambient-row-min-block-size));
     align-items: center;
-    gap: var(--bf-space-1);
-    padding-inline: var(--bf-space-1) var(--bf-space-2);
+    gap: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-space-1) var(--openbitfun-space-2);
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -458,18 +458,18 @@
       opacity var(--_tool-card-transition);
   }
 
-  .ambientSurface[data-bf-interactive="true"] {
+  .ambientSurface[data-openbitfun-interactive="true"] {
     cursor: pointer;
   }
 
   .ambientSurface:is(:hover, :focus-within),
-  .ambientRoot[data-bf-preview-state="hover"] .ambientSurface,
-  :global([data-bf-preview-state="hover"]) .ambientRoot .ambientSurface {
-    color: var(--bf-color-content-primary);
+  .ambientRoot[data-openbitfun-preview-state="hover"] .ambientSurface,
+  :global([data-openbitfun-preview-state="hover"]) .ambientRoot .ambientSurface {
+    color: var(--openbitfun-color-content-primary);
   }
 
   .ambientSurface .iconSlot {
-    --_tool-card-action-size: var(--bf-space-5);
+    --_tool-card-action-size: var(--openbitfun-space-5);
 
     margin-inline-end: 1px;
   }
@@ -499,7 +499,7 @@
 
   .ambientExpandedShell {
     overflow: hidden;
-    background-color: var(--bf-color-surface-panel);
+    background-color: var(--openbitfun-color-surface-panel);
     box-shadow: none;
   }
 
@@ -508,30 +508,30 @@
   }
 
   .ambientExpandedShell .ambientSurface {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
-  .ambientRoot[data-bf-state~="loading"] .ambientAction,
-  .ambientRoot[data-bf-state~="loading"] .ambientContent,
-  .prominentRoot[data-bf-state~="loading"] .actionLabel,
-  .prominentRoot[data-bf-state~="loading"] .content {
-    animation: bf-flow-chat-tool-loading var(--bf-motion-duration-loop) var(--bf-motion-easing-standard) infinite alternate;
+  .ambientRoot[data-openbitfun-state~="loading"] .ambientAction,
+  .ambientRoot[data-openbitfun-state~="loading"] .ambientContent,
+  .prominentRoot[data-openbitfun-state~="loading"] .actionLabel,
+  .prominentRoot[data-openbitfun-state~="loading"] .content {
+    animation: openbitfun-flow-chat-tool-loading var(--openbitfun-motion-duration-loop) var(--openbitfun-motion-easing-standard) infinite alternate;
   }
 
-  @keyframes bf-flow-chat-tool-loading {
+  @keyframes openbitfun-flow-chat-tool-loading {
     from {
       opacity: 1;
     }
 
     to {
-      opacity: var(--bf-opacity-hover);
+      opacity: var(--openbitfun-opacity-hover);
     }
   }
 
-  .ambientRoot[data-bf-status="error"] .ambientAction,
-  .ambientRoot[data-bf-status="error"] .ambientContent,
-  .ambientRoot[data-bf-status="error"] .ambientExtra {
-    color: var(--bf-color-status-danger-content);
+  .ambientRoot[data-openbitfun-status="error"] .ambientAction,
+  .ambientRoot[data-openbitfun-status="error"] .ambientContent,
+  .ambientRoot[data-openbitfun-status="error"] .ambientExtra {
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -547,10 +547,10 @@
       transition: none;
     }
 
-    .ambientRoot[data-bf-state~="loading"] .ambientAction,
-    .ambientRoot[data-bf-state~="loading"] .ambientContent,
-    .prominentRoot[data-bf-state~="loading"] .actionLabel,
-    .prominentRoot[data-bf-state~="loading"] .content {
+    .ambientRoot[data-openbitfun-state~="loading"] .ambientAction,
+    .ambientRoot[data-openbitfun-state~="loading"] .ambientContent,
+    .prominentRoot[data-openbitfun-state~="loading"] .actionLabel,
+    .prominentRoot[data-openbitfun-state~="loading"] .content {
       animation: none;
     }
   }
@@ -568,7 +568,7 @@
       outline-color: Highlight;
     }
 
-    .ambientRoot[data-bf-direct-action="true"]:focus-visible {
+    .ambientRoot[data-openbitfun-direct-action="true"]:focus-visible {
       outline-color: Highlight;
     }
 

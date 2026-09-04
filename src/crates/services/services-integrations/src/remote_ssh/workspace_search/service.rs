@@ -26,7 +26,7 @@ use crate::workspace_search::{
     WorkspaceSearchRepoStatus,
 };
 use async_trait::async_trait;
-use bitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchOutcome};
+use openbitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchOutcome};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
@@ -41,7 +41,7 @@ use tokio::time::{sleep, timeout};
 const REMOTE_STDIO_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const REMOTE_STDIO_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 const REMOTE_STDIO_SESSION_IDLE_GRACE: Duration = Duration::from_secs(45);
-const CLIENT_NAME: &str = "bitfun-remote-workspace-search";
+const CLIENT_NAME: &str = "openbitfun-remote-workspace-search";
 
 static REMOTE_STDIO_SESSIONS: LazyLock<RwLock<HashMap<String, RemoteStdioSessionEntry>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -572,7 +572,7 @@ impl RemoteWorkspaceSearchService {
         Ok(WorkspaceIndexStatus {
             active_task,
             repo_status,
-            // Remote workspaces are indexed by the remote daemon directly; BitFun's local
+            // Remote workspaces are indexed by the remote daemon directly; OpenBitFun's local
             // auto-index policy never evaluates them, so there is no decision to report.
             auto_index: None,
         })

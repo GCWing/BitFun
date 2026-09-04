@@ -14,8 +14,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   IconButton: ({
     children,
     loading,
@@ -86,10 +86,10 @@ describe('AssistantCard actions', () => {
     const card = container.querySelector('[role="listitem"]');
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
     const newSession = container.querySelector(
-      'button[data-bf-component="button"][data-bf-variant="fill"]',
+      'button[data-openbitfun-component="button"][data-openbitfun-variant="fill"]',
     ) as HTMLButtonElement;
-    const remove = container.querySelector('[data-bf-part="delete"]') as HTMLButtonElement;
-    const setPrimary = container.querySelector('[data-bf-part="setPrimary"]') as HTMLButtonElement;
+    const remove = container.querySelector('[data-openbitfun-part="delete"]') as HTMLButtonElement;
+    const setPrimary = container.querySelector('[data-openbitfun-part="setPrimary"]') as HTMLButtonElement;
 
     expect(card?.tagName).toBe('ARTICLE');
     expect(configure.getAttribute('aria-label')).toContain('Mira');
@@ -129,10 +129,10 @@ describe('AssistantCard actions', () => {
 
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
     const newSession = container.querySelector(
-      'button[data-bf-component="button"][data-bf-variant="fill"]',
+      'button[data-openbitfun-component="button"][data-openbitfun-variant="fill"]',
     ) as HTMLButtonElement;
-    const setPrimary = container.querySelector('[data-bf-part="setPrimary"]') as HTMLButtonElement;
-    const remove = container.querySelector('[data-bf-part="delete"]') as HTMLButtonElement;
+    const setPrimary = container.querySelector('[data-openbitfun-part="setPrimary"]') as HTMLButtonElement;
+    const remove = container.querySelector('[data-openbitfun-part="delete"]') as HTMLButtonElement;
     expect(configure.disabled).toBe(true);
     expect(newSession.disabled).toBe(true);
     expect(setPrimary.disabled).toBe(true);
@@ -155,7 +155,7 @@ describe('AssistantCard actions', () => {
     });
 
     const newSession = container.querySelector(
-      'button[data-bf-component="button"][data-bf-variant="fill"]',
+      'button[data-openbitfun-component="button"][data-openbitfun-variant="fill"]',
     ) as HTMLButtonElement;
     expect(newSession.disabled).toBe(true);
     expect(newSession.getAttribute('aria-busy')).toBe('true');

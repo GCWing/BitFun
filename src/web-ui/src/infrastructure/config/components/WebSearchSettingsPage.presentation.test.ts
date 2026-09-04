@@ -36,11 +36,11 @@ describe('WebSearch settings presentation', () => {
     expect(source.indexOf("title={t('sections.protocol.title')}")).toBeGreaterThan(
       source.indexOf("title={t('sections.credential.title')}"),
     );
-    expect(source).toContain('BITFUN_PROTOCOL_REQUEST_EXAMPLE');
-    expect(source).toContain('BITFUN_PROTOCOL_SUCCESS_EXAMPLE');
-    expect(source).toContain('BITFUN_PROTOCOL_ERROR_EXAMPLE');
-    expect(source).toContain('BITFUN_PROTOCOL_ERROR_CODES');
-    expect(source).not.toContain('<code>{BITFUN_PROTOCOL_ERROR_CODES}</code>');
+    expect(source).toContain('OPENBITFUN_PROTOCOL_REQUEST_EXAMPLE');
+    expect(source).toContain('OPENBITFUN_PROTOCOL_SUCCESS_EXAMPLE');
+    expect(source).toContain('OPENBITFUN_PROTOCOL_ERROR_EXAMPLE');
+    expect(source).toContain('OPENBITFUN_PROTOCOL_ERROR_CODES');
+    expect(source).not.toContain('<code>{OPENBITFUN_PROTOCOL_ERROR_CODES}</code>');
     expect(source).not.toContain("t('fields.provider.");
     expect(source).not.toContain("t('fields.fallback.");
     expect(source).not.toContain("t('fields.apply.");

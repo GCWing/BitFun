@@ -30,13 +30,13 @@ const MIDNIGHT_ERROR = '#cc7f7a';
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
 const midnightAccent = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ACCENT, alpha);
 
-export const bitfunMidnightPalette: AppearancePalette = {
+export const openBitFunMidnightPalette: AppearancePalette = {
 
-  id: 'bitfun-midnight',
+  id: 'openbitfun-midnight',
   name: 'Midnight',
   type: 'dark',
   description: 'Midnight gray dark appearance - Professional and elegant, inspired by JetBrains IDE',
-  author: 'BitFun Team',
+  author: 'OpenBitFun Team',
   version: '1.0.0',
 
 

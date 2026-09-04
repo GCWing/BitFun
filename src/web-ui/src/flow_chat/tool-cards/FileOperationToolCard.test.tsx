@@ -187,8 +187,8 @@ describe('FileOperationToolCard', () => {
 
     expect(mocks.getOperationSummary).not.toHaveBeenCalled();
     expect(mocks.emitSnapshotEvent).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-bf-change="added"]')?.textContent).toBe('+2');
-    expect(container.querySelector('[data-bf-change="removed"]')?.textContent).toBe('-1');
+    expect(container.querySelector('[data-openbitfun-change="added"]')?.textContent).toBe('+2');
+    expect(container.querySelector('[data-openbitfun-change="removed"]')?.textContent).toBe('-1');
     const openButton = container.querySelector('[data-testid="chat-file-change-open-file"]');
     expect(openButton).not.toBeNull();
     await act(async () => {
@@ -300,12 +300,12 @@ describe('FileOperationToolCard', () => {
         id: 'call-plan',
         name: 'Write',
         input: {
-          payload: `+++ .bitfun/plans/test.plan.md\n${content}`,
+          payload: `+++ .openbitfun/plans/test.plan.md\n${content}`,
         },
       },
       toolResult: {
         success: true,
-        result: { file_path: '.bitfun/plans/test.plan.md' },
+        result: { file_path: '.openbitfun/plans/test.plan.md' },
       },
     } as FlowToolItem;
 
@@ -322,7 +322,7 @@ describe('FileOperationToolCard', () => {
     expect(container.querySelector('[data-testid="write-plan-display"]')).not.toBeNull();
     expect(mocks.writePlanDisplayProps).toHaveLength(1);
     expect(mocks.writePlanDisplayProps[0]).toMatchObject({
-      planFilePath: 'D:/workspace/project/.bitfun/plans/test.plan.md',
+      planFilePath: 'D:/workspace/project/.openbitfun/plans/test.plan.md',
       initialContent: content,
       workspacePath: 'D:/workspace/project',
       remoteConnectionId: 'remote-1',
@@ -339,14 +339,14 @@ describe('FileOperationToolCard', () => {
         id: 'call-plan-edit',
         name: 'Edit',
         input: {
-          file_path: '.bitfun/plans/test.plan.md',
+          file_path: '.openbitfun/plans/test.plan.md',
           old_string: 'Old',
           new_string: 'New',
         },
       },
       toolResult: {
         success: true,
-        result: { file_path: '.bitfun/plans/test.plan.md' },
+        result: { file_path: '.openbitfun/plans/test.plan.md' },
       },
     } as FlowToolItem;
 
@@ -374,7 +374,7 @@ describe('FileOperationToolCard', () => {
         id: 'call-plan-error',
         name: 'Write',
         input: {
-          payload: '+++ .bitfun/plans/test.plan.md\npartial',
+          payload: '+++ .openbitfun/plans/test.plan.md\npartial',
         },
       },
       toolResult: {
@@ -407,13 +407,13 @@ describe('FileOperationToolCard', () => {
         id: 'call-plan-fallback',
         name: 'Write',
         input: {
-          payload: '+++ .bitfun/plans/test.plan.md\npartial',
+          payload: '+++ .openbitfun/plans/test.plan.md\npartial',
         },
       },
       toolResult: {
         success: true,
         result: {
-          file_path: '.bitfun/tmp/write-callplanfallback.txt',
+          file_path: '.openbitfun/tmp/write-callplanfallback.txt',
           used_fallback_path: true,
         },
       },
@@ -488,11 +488,11 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).toContain('toolCards.file.failed');
     expect(container.textContent).toContain('newFile.ts');
     expect(container.textContent).not.toContain('Arguments are invalid JSON.');
-    expect(container.querySelector('[data-bf-icon="warning"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-icon="warning"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"]')).toBeNull();
 
     const toggle = container.querySelector(
-      '[data-bf-part="affordanceButton"]',
+      '[data-openbitfun-part="affordanceButton"]',
     ) as HTMLButtonElement | null;
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
 
@@ -501,7 +501,7 @@ describe('FileOperationToolCard', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('true');
-    expect(container.querySelector('[data-bf-part="error"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"]')).not.toBeNull();
     expect(container.textContent).toContain('Arguments are invalid JSON.');
   });
 
@@ -551,9 +551,9 @@ describe('FileOperationToolCard', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-file-change-card"]')?.getAttribute('data-expanded')).toBe('false');
-    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"]')).toBeNull();
     expect(container.textContent).not.toContain('The target text was not found.');
-    expect(container.querySelector('[data-bf-icon="warning"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-icon="warning"]')).not.toBeNull();
   });
 
   it('opens completed write cards with the resolved result path', async () => {
@@ -665,23 +665,23 @@ describe('FileOperationToolCard', () => {
     });
 
     const contentRegion = container.querySelector(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="content"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="content"]',
     );
     const extraRegion = container.querySelector(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="extra"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="extra"]',
     );
     const changeSummary = container.querySelector(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="changeSummary"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="changeSummary"]',
     );
     expect(contentRegion?.querySelector('[data-testid="chat-file-change-path"]')).not.toBeNull();
-    expect(contentRegion?.querySelector('[data-bf-part="changeSummary"]')).toBeNull();
+    expect(contentRegion?.querySelector('[data-openbitfun-part="changeSummary"]')).toBeNull();
     expect(extraRegion?.contains(changeSummary)).toBe(true);
-    expect(changeSummary?.querySelector('[data-bf-change="added"]')?.textContent).toBe('+1');
-    expect(changeSummary?.querySelector('[data-bf-change="removed"]')?.textContent).toBe('-0');
+    expect(changeSummary?.querySelector('[data-openbitfun-change="added"]')?.textContent).toBe('+1');
+    expect(changeSummary?.querySelector('[data-openbitfun-change="removed"]')?.textContent).toBe('-0');
     expect(changeSummary?.querySelector('svg')).toBeNull();
 
     const actionRegion = container.querySelector(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="actionRegion"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="actionRegion"]',
     );
     const actionButtons = Array.from(actionRegion?.querySelectorAll('button') ?? []);
     const openButton = container.querySelector(
@@ -690,11 +690,11 @@ describe('FileOperationToolCard', () => {
 
     expect(container.querySelector('[data-testid="chat-file-change-open-diff"]')).toBeNull();
     expect(actionButtons).toHaveLength(2);
-    expect(actionButtons[0]?.getAttribute('data-bf-part')).toBe('affordanceButton');
+    expect(actionButtons[0]?.getAttribute('data-openbitfun-part')).toBe('affordanceButton');
     expect(actionButtons[1]).toBe(openButton);
-    expect(openButton?.getAttribute('data-bf-affordance')).toBe('open-panel-right');
-    expect(openButton?.querySelector('[data-bf-icon="open-panel-right"]')).not.toBeNull();
-    expect(openButton?.closest('[data-bf-part="trailingActions"]')?.getAttribute('data-divider')).toBe('true');
+    expect(openButton?.getAttribute('data-openbitfun-affordance')).toBe('open-panel-right');
+    expect(openButton?.querySelector('[data-openbitfun-icon="open-panel-right"]')).not.toBeNull();
+    expect(openButton?.closest('[data-openbitfun-part="trailingActions"]')?.getAttribute('data-divider')).toBe('true');
 
     await act(async () => {
       openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -744,14 +744,14 @@ describe('FileOperationToolCard', () => {
       );
     });
 
-    const contentRegion = container.querySelector('[data-bf-part="content"]');
-    const extraRegion = container.querySelector('[data-bf-part="extra"]');
-    const changeSummary = extraRegion?.querySelector('[data-bf-part="changeSummary"]');
+    const contentRegion = container.querySelector('[data-openbitfun-part="content"]');
+    const extraRegion = container.querySelector('[data-openbitfun-part="extra"]');
+    const changeSummary = extraRegion?.querySelector('[data-openbitfun-part="changeSummary"]');
 
     expect(contentRegion?.textContent).toContain('styles.css');
-    expect(contentRegion?.querySelector('[data-bf-part="changeSummary"]')).toBeNull();
-    expect(changeSummary?.querySelector('[data-bf-change="added"]')?.textContent).toBe('+2');
-    expect(changeSummary?.querySelector('[data-bf-change="removed"]')?.textContent).toBe('-1');
+    expect(contentRegion?.querySelector('[data-openbitfun-part="changeSummary"]')).toBeNull();
+    expect(changeSummary?.querySelector('[data-openbitfun-change="added"]')?.textContent).toBe('+2');
+    expect(changeSummary?.querySelector('[data-openbitfun-change="removed"]')?.textContent).toBe('-1');
     expect(changeSummary?.querySelector('svg')).toBeNull();
     expect(container.querySelector('[data-testid="chat-file-change-open-diff"]')).toBeNull();
   });
@@ -852,17 +852,17 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).not.toContain(
       'Use Read to load the current contents of docs/report.md before calling Write on it.',
     );
-    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"]')).toBeNull();
 
     await act(async () => {
-      container.querySelector('[data-bf-part="affordanceButton"]')
+      container.querySelector('[data-openbitfun-part="affordanceButton"]')
         ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
     expect(container.textContent).toContain(
       'Use Read to load the current contents of docs/report.md before calling Write on it.',
     );
-    expect(container.querySelector('[data-bf-part="error"] [data-guidance="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"] [data-guidance="true"]')).not.toBeNull();
   });
 
   it('renders edit guardrail blocks as guidance instead of hard failure', async () => {
@@ -913,17 +913,17 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).not.toContain(
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );
-    expect(container.querySelector('[data-bf-part="error"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"]')).toBeNull();
 
     await act(async () => {
-      container.querySelector('[data-bf-part="affordanceButton"]')
+      container.querySelector('[data-openbitfun-part="affordanceButton"]')
         ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
     expect(container.textContent).toContain(
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );
-    expect(container.querySelector('[data-bf-part="error"] [data-guidance="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="error"] [data-guidance="true"]')).not.toBeNull();
   });
 
   it('shows receiving content label while write content streams before file_path', async () => {
@@ -1213,7 +1213,7 @@ describe('FileOperationToolCard', () => {
     mocks.inlineDiffPreviewProps = [];
 
     const card = container.querySelector(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="prominent"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]',
     ) as HTMLDivElement | null;
     await act(async () => {
       card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));

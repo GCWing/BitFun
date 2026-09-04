@@ -8,7 +8,7 @@ infrastructure, not a product command or UI layer.
 
 ## Guardrails
 
-- Do not depend on `bitfun-core`, app crates, Tauri, product domains, AI
+- Do not depend on `openbitfun-core`, app crates, Tauri, product domains, AI
   providers, Git, MCP, transport adapters, or tool-runtime implementations.
 - Keep platform-specific behavior behind terminal abstractions and preserve
   Windows, macOS, and Linux shell compatibility.

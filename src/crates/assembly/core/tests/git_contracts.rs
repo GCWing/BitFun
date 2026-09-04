@@ -1,4 +1,4 @@
-use bitfun_core::service::git::{
+use openbitfun_core::service::git::{
     build_git_changed_files_args, build_git_diff_args, parse_branch_line, parse_git_log_line,
     GitChangedFileStatus, GitChangedFilesParams, GitCommandOutput, GitCommitParams, GitDiffParams,
     GitGraph, GitService, GitWorktreeInfo, GraphNode, GraphRef,
@@ -10,7 +10,7 @@ fn git_contracts_remain_available_from_core_facade() {
     assert_eq!(status, serde_json::json!("renamed"));
 
     let worktree = GitWorktreeInfo {
-        path: "D:/workspace/BitFun-worktree".to_string(),
+        path: "D:/workspace/OpenBitFun-worktree".to_string(),
         branch: Some("feature/test".to_string()),
         head: "abc123".to_string(),
         is_main: false,
@@ -39,11 +39,11 @@ fn git_contracts_remain_available_from_core_facade() {
     assert_eq!(command_output.exit_code, 1);
 
     assert_eq!(
-        parse_git_log_line("abc123|BitFun|bitfun@example.com|2026-05-12|subject"),
+        parse_git_log_line("abc123|OpenBitFun|openbitfun@example.com|2026-05-12|subject"),
         Some((
             "abc123".to_string(),
-            "BitFun".to_string(),
-            "bitfun@example.com".to_string(),
+            "OpenBitFun".to_string(),
+            "openbitfun@example.com".to_string(),
             "2026-05-12".to_string(),
             "subject".to_string(),
         ))
@@ -79,8 +79,8 @@ fn git_contracts_remain_available_from_core_facade() {
             hash: "abc123".to_string(),
             message: "initial".to_string(),
             full_message: "initial commit".to_string(),
-            author_name: "BitFun".to_string(),
-            author_email: "bitfun@example.com".to_string(),
+            author_name: "OpenBitFun".to_string(),
+            author_email: "openbitfun@example.com".to_string(),
             timestamp: 1_700_000_000,
             parents: Vec::new(),
             children: Vec::new(),

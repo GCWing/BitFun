@@ -384,7 +384,7 @@ async function loadPreparedCandidate(plugin: PreparedPlugin): Promise<LoadCandid
   let module: Record<string, unknown>
   try {
     const cacheKey = plugin.contentHash ?? `${plugin.spec}:${plugin.declarationIndex}`
-    const imported = await import(`${plugin.entry}?bitfunGeneration=${encodeURIComponent(cacheKey)}`)
+    const imported = await import(`${plugin.entry}?openbitfunGeneration=${encodeURIComponent(cacheKey)}`)
     if (!isRecord(imported)) throw new Error(`Plugin ${plugin.spec} module is empty`)
     module = imported
   } catch (error) {

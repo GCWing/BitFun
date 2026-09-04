@@ -15,7 +15,7 @@ test("Checkbox keeps native semantics and independent content", () => {
   assert.match(markup, /checked=""/);
   assert.match(markup, /Enable hooks/);
   assert.match(markup, /Runs at startup/);
-  assert.match(markup, /data-bf-component="checkbox"/);
+  assert.match(markup, /data-openbitfun-component="checkbox"/);
 });
 
 test("Checkbox exposes canonical sizes and states", () => {

@@ -496,7 +496,7 @@ describe('DispatchJobObserver', () => {
       action: 'cli-install',
       details: {
         stage: 'cli-install-succeeded',
-        release: { version: '1.2.3', cliPath: '/usr/local/bin/bitfun' },
+        release: { version: '1.2.3', cliPath: '/usr/local/bin/openbitfun' },
       },
     };
     mocks.status.mockResolvedValue(status({
@@ -525,7 +525,7 @@ describe('DispatchJobObserver', () => {
       id: 'dispatch_pending_job-1',
       userMessage: {
         content: '',
-        metadata: { __bitfunOptimisticDispatchJobId: 'job-1' },
+        metadata: { __openbitfunOptimisticDispatchJobId: 'job-1' },
       },
     });
     expect(turn?.modelRounds).toHaveLength(1);
@@ -602,7 +602,7 @@ describe('DispatchJobObserver', () => {
     registerRunningJob();
     dispatchJobStore.getState().registerJob({
       ...dispatchJobStore.getState().jobs['job-1'],
-      baselineWorktreePath: '/source/.bitfun/worktrees/missing-baseline',
+      baselineWorktreePath: '/source/.openbitfun/worktrees/missing-baseline',
     });
     mocks.checkPathExists.mockResolvedValue(false);
     mocks.status.mockResolvedValue(status());
@@ -611,7 +611,7 @@ describe('DispatchJobObserver', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mocks.checkPathExists).toHaveBeenCalledWith(
-      '/source/.bitfun/worktrees/missing-baseline',
+      '/source/.openbitfun/worktrees/missing-baseline',
     );
     expect(dispatchJobStore.getState().jobs['job-1'].baselineWorktreeMissing)
       .toBe(true);
@@ -852,7 +852,7 @@ describe('DispatchJobObserver', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(context.flowChatStore.addExternalSession).not.toHaveBeenCalled();
 
-    context.currentWorkspacePath = '/projects/BitFun';
+    context.currentWorkspacePath = '/projects/OpenBitFun';
     await vi.advanceTimersByTimeAsync(DISPATCH_JOB_POLL_INTERVAL_MS);
     expect(context.flowChatStore.addExternalSession).not.toHaveBeenCalled();
     expect(dispatchJobStore.getState().jobs['job-restored']).toBeUndefined();
@@ -870,7 +870,7 @@ describe('DispatchJobObserver', () => {
         workspacePath: '/target/repo',
         displayName: 'build-host',
       },
-      sourceWorkspacePath: '/projects/BitFun',
+      sourceWorkspacePath: '/projects/OpenBitFun',
       sourceWorkspaceId: 'workspace-1',
       workspacePath: '/target/repo',
       promptPreview: 'Dispatch test',
@@ -914,9 +914,9 @@ describe('DispatchJobObserver', () => {
       'session-restored',
       'Dispatch test',
       'agentic',
-      '/projects/BitFun',
+      '/projects/OpenBitFun',
       expect.objectContaining({
-        projectWorkspacePath: '/projects/BitFun',
+        projectWorkspacePath: '/projects/OpenBitFun',
         workspaceId: 'workspace-1',
       }),
     );

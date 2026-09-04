@@ -4,12 +4,12 @@
   align-items: stretch;
   justify-content: flex-start;
   gap: 6px;
-  margin: 0 0 var(--bf-control-flow-chat-card-gap);
-  padding: 7px var(--bf-control-tool-card-expanded-padding-inline);
-  border: 1px solid var(--bf-color-status-warning-content);
-  border-radius: var(--bf-control-flow-chat-card-radius);
-  background: color-mix(in srgb, var(--bf-color-status-warning-content) 7%, var(--bf-color-surface-scene));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
+  margin: 0 0 var(--openbitfun-control-flow-chat-card-gap);
+  padding: 7px var(--openbitfun-control-tool-card-expanded-padding-inline);
+  border: 1px solid var(--openbitfun-color-status-warning-content);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
+  background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 7%, var(--openbitfun-color-surface-scene));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
   box-sizing: border-box;
 }
 
@@ -17,21 +17,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
 }
 
 .tool-approval-bar__message {
   min-width: 0;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tool-approval-bar__countdown {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .tool-approval-bar__actions,
@@ -39,7 +39,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
   flex-shrink: 0;
 }
 
@@ -52,27 +52,27 @@
   height: 16px;
   margin: 0 2px;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--bf-color-border-subtle) 80%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-border-subtle) 80%, transparent);
 }
 
 .tool-approval-bar__auto-execute-button {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .tool-approval-bar__auto-execute-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--bf-color-status-success-content) 18%, transparent);
-  color: var(--bf-color-status-success-content);
+  background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 18%, transparent);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .tool-approval-bar__auto-execute-button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--bf-color-status-success-content) 24%, transparent);
-  color: var(--bf-color-status-success-content);
+  background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 24%, transparent);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .tool-approval-bar__instruction {
   display: flex;
   align-items: center;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
   min-width: 0;
 }
 
@@ -83,30 +83,30 @@
   min-width: 0;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: 6px;
-  background: var(--bf-color-surface-canvas);
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-control-font-size);
+  background: var(--openbitfun-color-surface-canvas);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
 }
 
 .tool-approval-bar__instruction-submit {
   flex-shrink: 0;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 45%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
-  color: var(--bf-color-status-danger-content);
-  font-size: var(--bf-type-flow-control-font-size);
+  background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
+  color: var(--openbitfun-color-status-danger-content);
+  font-size: var(--openbitfun-type-flow-control-font-size);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tool-approval-bar__instruction-submit:hover {
-  background: color-mix(in srgb, var(--bf-color-status-danger-content) 16%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 16%, transparent);
 }
 
 .tool-approval-bar__instruction-submit:active:not(:disabled),
@@ -118,7 +118,7 @@
 .tool-approval-bar__instruction-submit:focus-visible,
 .tool-approval-bar__icon-button:focus-visible,
 .tool-approval-bar__auto-execute-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
   outline-offset: 1px;
 }
 

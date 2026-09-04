@@ -135,8 +135,8 @@ const MEditorSourceFallback = forwardRef<EditorInstance, MEditorProps>((props, r
   return (
     <div
       className={`m-editor m-editor-mode-source-fallback ${className}`}
-      data-bf-component="m-editor"
-      data-bf-part="root"
+      data-openbitfun-component="m-editor"
+      data-openbitfun-part="root"
       data-m-editor-fallback="true"
       style={containerStyle}
       onKeyDown={(event) => {
@@ -434,29 +434,29 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
     <div
       ref={containerRef}
       className={`m-editor ${modeClass} ${className}`}
-      data-bf-component="m-editor"
-      data-bf-part="root"
+      data-openbitfun-component="m-editor"
+      data-openbitfun-part="root"
       style={containerStyle}
       onKeyDown={handleKeyDown}
       onFocusCapture={handleFocusCapture}
       onBlurCapture={handleBlurCapture}
       tabIndex={-1}
     >
-      {toolbar && <div data-bf-component="m-editor" data-bf-part="toolbar" className="m-editor-toolbar">{t('editor.meditor.toolbarPlaceholder')}</div>}
+      {toolbar && <div data-openbitfun-component="m-editor" data-openbitfun-part="toolbar" className="m-editor-toolbar">{t('editor.meditor.toolbarPlaceholder')}</div>}
       {irNeedsSourceFallback && (
-        <div className="m-editor-notice" data-bf-component="m-editor" data-bf-part="notice">
+        <div className="m-editor-notice" data-openbitfun-component="m-editor" data-openbitfun-part="notice">
           <AlertCircle className="m-editor-notice__icon" />
           <span>{t('editor.markdownEditor.notice.sourcePreviewFallback')}</span>
         </div>
       )}
       
-      <div data-bf-component="m-editor" data-bf-part="content" className="m-editor-content">
+      <div data-openbitfun-component="m-editor" data-openbitfun-part="content" className="m-editor-content">
         {effectiveMode === 'preview' && (
           <Preview value={value} basePath={basePath} />
         )}
 
         {effectiveMode === 'edit' && (
-          <div data-bf-component="m-editor" data-bf-part="editPanel" className="m-editor-edit-panel">
+          <div data-openbitfun-component="m-editor" data-openbitfun-part="editPanel" className="m-editor-edit-panel">
             <EditArea
               ref={textareaRef}
               value={value}
@@ -472,7 +472,7 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
 
         {effectiveMode === 'split' && (
           <>
-            <div data-bf-component="m-editor" data-bf-part="editPanel" className="m-editor-edit-panel">
+            <div data-openbitfun-component="m-editor" data-openbitfun-part="editPanel" className="m-editor-edit-panel">
               <EditArea
                 ref={textareaRef}
                 value={value}
@@ -484,14 +484,14 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
                 autofocus={autofocus}
               />
             </div>
-            <div data-bf-component="m-editor" data-bf-part="previewPanel" className="m-editor-preview-panel">
+            <div data-openbitfun-component="m-editor" data-openbitfun-part="previewPanel" className="m-editor-preview-panel">
               <Preview value={value} basePath={basePath} />
             </div>
           </>
         )}
 
         {effectiveMode === 'ir' && (
-          <div data-bf-component="m-editor" data-bf-part="irPanel" className="m-editor-ir-panel">
+          <div data-openbitfun-component="m-editor" data-openbitfun-part="irPanel" className="m-editor-ir-panel">
             <TiptapEditor
               ref={tiptapEditorRef}
               value={value}

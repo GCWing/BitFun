@@ -1,11 +1,11 @@
-# @bitfun/ui
+# @openbitfun/ui
 
 Theme-independent React primitives and components.
 
 ```tsx
-import "@bitfun/theme-bitfun/default.css";
-import "@bitfun/ui/styles.css";
-import { Button, ThemeRoot } from "@bitfun/ui";
+import "@openbitfun/theme-openbitfun/default.css";
+import "@openbitfun/ui/styles.css";
+import { Button, ThemeRoot } from "@openbitfun/ui";
 
 export function Example() {
   return (
@@ -113,7 +113,7 @@ import {
   ReadFileToolCard,
   ToolCardCopyButton,
   ToolCardChangeSummary,
-} from "@bitfun/ui/flow-chat";
+} from "@openbitfun/ui/flow-chat";
 ```
 
 `ChatComposer` owns the reusable 32px context band and the compact/expanded

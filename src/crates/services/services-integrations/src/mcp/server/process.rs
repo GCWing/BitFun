@@ -7,11 +7,11 @@ use super::{
     MCPServerConfig, MCPServerStatus, MCPServerTimeouts, MCPServerTransport, MCPServerType,
 };
 use crate::mcp::protocol::{InitializeResult, MCPMessage, MCPServerInfo, MCPTransport};
-use crate::mcp::server::{is_mcp_auth_error_message, merge_mcp_remote_headers};
+use crate::mcp::server::is_mcp_auth_error_message;
 use crate::mcp::{MCPRuntimeError, MCPRuntimeResult};
-use bitfun_services_core::process_manager;
-use bitfun_services_core::process_tree::ProcessTreeChild;
 use log::{debug, error, info, warn};
+use openbitfun_services_core::process_manager;
+use openbitfun_services_core::process_tree::ProcessTreeChild;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -247,14 +247,12 @@ impl MCPServerProcess {
         self.set_status(MCPServerStatus::Starting).await;
         self.remote_url = Some(url.to_string());
 
-        let merged_headers = merge_mcp_remote_headers(&config.headers, &config.env);
-
         let connection = Arc::new(
             MCPConnection::new_remote_with_data_dir_and_timeouts(
                 data_dir,
                 &self.id,
                 url.to_string(),
-                merged_headers,
+                config.headers.clone(),
                 config.remote_oauth_enabled(),
                 config.timeouts,
             )
@@ -320,7 +318,7 @@ impl MCPServerProcess {
         );
 
         let result: InitializeResult = connection
-            .initialize("BitFun", env!("CARGO_PKG_VERSION"))
+            .initialize("OpenBitFun", env!("CARGO_PKG_VERSION"))
             .await?;
 
         info!(
@@ -609,7 +607,7 @@ mod tests {
 
     #[test]
     fn mcp_process_timeout_child() {
-        if std::env::var_os("BITFUN_MCP_PROCESS_TIMEOUT_CHILD").is_some() {
+        if std::env::var_os("OPENBITFUN_MCP_PROCESS_TIMEOUT_CHILD").is_some() {
             std::thread::sleep(Duration::from_secs(30));
         }
     }
@@ -623,7 +621,7 @@ mod tests {
             "--nocapture".to_string(),
         ];
         let environment = HashMap::from([(
-            "BITFUN_MCP_PROCESS_TIMEOUT_CHILD".to_string(),
+            "OPENBITFUN_MCP_PROCESS_TIMEOUT_CHILD".to_string(),
             "1".to_string(),
         )]);
         let mut process = MCPServerProcess::new(

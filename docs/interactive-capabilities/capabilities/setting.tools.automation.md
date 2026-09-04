@@ -23,8 +23,8 @@ Customize post-coding quick actions and configure hooks that run on agent lifecy
   - Add, edit, and delete custom post-coding quick actions and prompts
 - **Agent 可直接控制 / Direct Agent control** · 整体启用或停用 Agent 生命周期 Hooks
   - Enable or disable agent lifecycle hooks globally
-- **Agent 可直接控制 / Direct Agent control** · 对可信仓库单独启用项目级 .bitfun/config/hooks.json
-  - Enable project-level .bitfun/config/hooks.json separately for trusted repositories
+- **Agent 可直接控制 / Direct Agent control** · 对可信仓库单独启用项目级 .openbitfun/config/hooks.json
+  - Enable project-level .openbitfun/config/hooks.json separately for trusted repositories
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `Glob` / `Read` / `Edit` · 定位用户级和项目级 Hooks 配置文件并在修改后即时生效
   - Locate user and project hook configuration files and apply edits without restarting
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在会话、Agent、工具、权限和用户输入等 Codex Hook 事件上运行处理器
@@ -43,13 +43,13 @@ Customize post-coding quick actions and configure hooks that run on agent lifecy
 3. 在“快捷操作”或“Hooks”中配置
    Configure Quick Actions or Hooks
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

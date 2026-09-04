@@ -18,11 +18,11 @@ const log = createLogger('DispatchJobStore');
 const MAX_APPLIED_EVENT_IDS = 2048;
 const MAX_DISMISSED_JOB_IDS = 2048;
 const MAX_DISMISSED_SESSION_IDS = 2048;
-const DISPATCH_JOB_STORAGE_KEY = 'bitfun-dispatch-jobs-v1';
+const DISPATCH_JOB_STORAGE_KEY = 'openbitfun-dispatch-jobs-v1';
 // Keep deletion authority outside the general Zustand snapshot. A stale HMR
 // renderer may still persist its old job cache, but it must never erase a
 // dismissal recorded by the current renderer.
-const DISPATCH_DISMISSAL_LEDGER_KEY = 'bitfun-dispatch-dismissals-v1';
+const DISPATCH_DISMISSAL_LEDGER_KEY = 'openbitfun-dispatch-dismissals-v1';
 const reportedSuppressedProjectionKeys = new Set<string>();
 const fallbackStorageValues = new Map<string, string>();
 

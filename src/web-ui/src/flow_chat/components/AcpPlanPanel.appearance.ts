@@ -6,5 +6,5 @@ export const acpPlanPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'root' }, { id: 'header' }, { id: 'title' }, { id: 'progress' },
     { id: 'list' }, { id: 'item' }, { id: 'content' },
   ],
-  facets: [{ id: 'status', attribute: 'data-bf-status', values: ['completed', 'in_progress', 'pending'] }],
+  facets: [{ id: 'status', attribute: 'data-openbitfun-status', values: ['completed', 'in_progress', 'pending'] }],
 };

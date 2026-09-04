@@ -138,25 +138,25 @@ export const NavigationTransitionBoundary: React.FC<NavigationTransitionBoundary
   }, []);
 
   const rootClassName = [
-    'bitfun-navigation-transition-boundary',
+    'openbitfun-navigation-transition-boundary',
     className,
   ].filter(Boolean).join(' ');
   const currentClassName = [
-    'bitfun-navigation-transition-boundary__layer',
-    pendingTransition && 'bitfun-navigation-transition-boundary__layer--incoming',
+    'openbitfun-navigation-transition-boundary__layer',
+    pendingTransition && 'openbitfun-navigation-transition-boundary__layer--incoming',
     layerClassName,
   ].filter(Boolean).join(' ');
   const outgoingClassName = [
-    'bitfun-navigation-transition-boundary__layer',
-    'bitfun-navigation-transition-boundary__layer--outgoing',
+    'openbitfun-navigation-transition-boundary__layer',
+    'openbitfun-navigation-transition-boundary__layer--outgoing',
     layerClassName,
   ].filter(Boolean).join(' ');
 
   return (
     <div
       className={rootClassName}
-      data-bf-component="navigation-transition-boundary"
-      data-bf-part="root"
+      data-openbitfun-component="navigation-transition-boundary"
+      data-openbitfun-part="root"
       {...rootProps}
       data-motion="presence"
       data-view-transition-phase={pendingTransition?.phase}
@@ -166,8 +166,8 @@ export const NavigationTransitionBoundary: React.FC<NavigationTransitionBoundary
           key={pendingTransition.outgoingKey}
           className={outgoingClassName}
           aria-hidden="true"
-          data-bf-component="navigation-transition-boundary"
-          data-bf-part="layer"
+          data-openbitfun-component="navigation-transition-boundary"
+          data-openbitfun-part="layer"
           {...{ inert: '' }}
         >
           {pendingTransition.children}
@@ -176,8 +176,8 @@ export const NavigationTransitionBoundary: React.FC<NavigationTransitionBoundary
       <div
         key={transitionKey}
         className={currentClassName}
-        data-bf-component="navigation-transition-boundary"
-        data-bf-part="layer"
+        data-openbitfun-component="navigation-transition-boundary"
+        data-openbitfun-part="layer"
       >
         {children}
       </div>

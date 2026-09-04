@@ -12,7 +12,7 @@ function printUsage() {
       '  node scripts/request-trace-tools/export-request-trace-usage-csv.mjs <request-trace-dir> [output.csv]',
       '',
       'Examples:',
-      '  node scripts/request-trace-tools/export-request-trace-usage-csv.mjs ~/.bitfun/projects/demo/request-traces/abc123',
+      '  node scripts/request-trace-tools/export-request-trace-usage-csv.mjs ~/.openbitfun/projects/demo/request-traces/abc123',
       '  node scripts/request-trace-tools/export-request-trace-usage-csv.mjs ./request-traces ./trace-usage.csv',
     ].join('\n'),
   );

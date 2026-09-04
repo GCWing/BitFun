@@ -15,7 +15,7 @@ import {
 } from "./core.mjs";
 import { messages, type MessageKey } from "./messages";
 
-const STORAGE_KEY = "bitfun.design-lab.locale";
+const STORAGE_KEY = "openbitfun.design-lab.locale";
 
 export interface I18nContextValue {
   locale: DesignLabLocale;

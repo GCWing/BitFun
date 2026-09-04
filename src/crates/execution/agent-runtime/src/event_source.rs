@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bitfun_events::AgenticEventEnvelope;
+use openbitfun_events::AgenticEventEnvelope;
 use tokio::sync::broadcast;
 
 use crate::event_queue::{EventQueue, SessionEventReceiver};
@@ -50,7 +50,7 @@ pub type AgentSessionEventReceiver = SessionEventReceiver;
 mod tests {
     use std::sync::Arc;
 
-    use bitfun_events::AgenticEvent;
+    use openbitfun_events::AgenticEvent;
     use tokio::sync::broadcast::error::RecvError;
 
     use crate::event_queue::{EventQueue, EventQueueConfig};

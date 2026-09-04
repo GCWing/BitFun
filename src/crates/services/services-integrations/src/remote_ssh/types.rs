@@ -178,7 +178,7 @@ fn default_true() -> bool {
     true
 }
 
-/// How BitFun enters a configured container workspace.
+/// How OpenBitFun enters a configured container workspace.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ContainerAccess {
@@ -198,7 +198,7 @@ pub struct ContainerWorkspaceConfig {
     /// Container name or ID.
     pub name: String,
     pub access: ContainerAccess,
-    /// Run Docker on the local BitFun machine instead of an SSH host.
+    /// Run Docker on the local OpenBitFun machine instead of an SSH host.
     #[serde(default)]
     pub local: bool,
     /// Docker CLI path on the machine that owns the container.
@@ -550,7 +550,7 @@ pub struct RemoteWorkspace {
     pub remote_path: String,
     #[serde(default)]
     pub connection_name: String,
-    /// SSH config `host`; used for `~/.bitfun/remote_ssh/{host}/...` session storage.
+    /// SSH config `host`; used for `~/.openbitfun/remote_ssh/{host}/...` session storage.
     #[serde(default)]
     pub ssh_host: String,
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 ;
@@ -87,13 +87,13 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
       aria-hidden={!isOpen}
       {...(!isOpen ? { inert: '' } : {})}
       onClick={handleBackdropClick}
-      data-bf-component="diff-fullscreen-viewer"
-      data-bf-part="overlay"
+      data-openbitfun-component="diff-fullscreen-viewer"
+      data-openbitfun-part="overlay"
     >
-      <div className="diff-fullscreen-container" data-bf-component="diff-fullscreen-viewer" data-bf-part="container">
+      <div className="diff-fullscreen-container" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="container">
         {/* Top toolbar */}
-        <div className="diff-fullscreen-header" data-bf-component="diff-fullscreen-viewer" data-bf-part="header">
-          <div className="file-info" data-bf-component="diff-fullscreen-viewer" data-bf-part="fileInfo">
+        <div className="diff-fullscreen-header" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="header">
+          <div className="file-info" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="fileInfo">
             <div className="file-icon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -106,7 +106,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
             </div>
           </div>
 
-          <div className="header-actions" data-bf-component="diff-fullscreen-viewer" data-bf-part="actions">
+          <div className="header-actions" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="actions">
             <Tooltip content={t('diffFullscreen.acceptFileTooltip')}>
               <Button
                 variant="fill"
@@ -145,7 +145,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
         </div>
 
         {/* Diff content */}
-        <div className="diff-fullscreen-content" data-bf-component="diff-fullscreen-viewer" data-bf-part="content">
+        <div className="diff-fullscreen-content" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="content">
           <DiffEditor
             originalContent={retainedContent.originalContent}
             modifiedContent={retainedContent.modifiedContent}
@@ -158,7 +158,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
 
         {/* Loading overlay */}
         {retainedContent.loading && (
-          <div className="fullscreen-loading-overlay" data-bf-component="diff-fullscreen-viewer" data-bf-part="loading">
+          <div className="fullscreen-loading-overlay" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="loading">
             <div className="loading-spinner" />
             <span>{t('diffFullscreen.processing')}</span>
           </div>

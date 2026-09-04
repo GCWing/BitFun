@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import {
   AtSign,
   Code2,

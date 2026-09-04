@@ -44,28 +44,28 @@ $track-item-gap: 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font: inherit;
   // The whole track speaks at one size: facts inherit it from the rail and
   // controls restate it here. Shape — the pill and its hover fill — is what
   // says a control is a control, so a label never needs a size of its own.
-  font-size: var(--bf-type-flow-meta-font-size);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  font-size: var(--openbitfun-type-flow-meta-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   letter-spacing: inherit;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover:not(:disabled),
   &[aria-expanded='true']:not(:disabled) {
-    background: var(--bf-color-action-quiet-hover);
-    color: var(--bf-color-content-secondary);
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
+    outline: 2px solid var(--openbitfun-color-accent-default);
     outline-offset: 1px;
   }
 
@@ -83,7 +83,7 @@ $track-item-gap: 10px;
   }
 }
 
-.bitfun-chat-input-workspace-strip {
+.openbitfun-chat-input-workspace-strip {
   position: relative;
   z-index: 1;
   box-sizing: border-box;
@@ -96,12 +96,12 @@ $track-item-gap: 10px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-flow-meta-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
-  font-weight: var(--bf-type-body-sm-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
-  color: var(--bf-color-content-muted);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-flow-meta-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-subtle-letter-spacing);
+  color: var(--openbitfun-color-content-muted);
   user-select: text;
   pointer-events: auto;
 
@@ -153,7 +153,7 @@ $track-item-gap: 10px;
     flex: none;
     width: 1px;
     height: 10px;
-    background: var(--bf-color-field-border-hover);
+    background: var(--openbitfun-color-field-border-hover);
     opacity: 0.6;
   }
 
@@ -170,12 +170,12 @@ $track-item-gap: 10px;
     @include strip-control;
 
     max-width: 140px;
-    background: color-mix(in srgb, var(--bf-color-accent-default) 14%, transparent);
-    color: var(--bf-color-accent-default);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 14%, transparent);
+    color: var(--openbitfun-color-accent-default);
 
     &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
-      color: var(--bf-color-accent-default);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 22%, transparent);
+      color: var(--openbitfun-color-accent-default);
     }
 
     > span {
@@ -194,22 +194,22 @@ $track-item-gap: 10px;
     // The one control whose value decides what the next turn may do, so it is
     // the row's anchor: it rests on a soft body before it is ever hovered,
     // while the quieter controls around it stay ghost until touched.
-    background: var(--bf-color-action-quiet-hover);
+    background: var(--openbitfun-color-action-quiet-hover);
 
     &:hover:not(:disabled),
     &--open:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     // Full access is the one mode whose risk must stay visible after the label
     // is dropped on a narrow composer, so its soft body turns to the error
     // tint — the track's only risk-coloured body, which is the point.
     &--full_access {
-      background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
 
       &:hover:not(:disabled),
       &--open:not(:disabled) {
-        background: color-mix(in srgb, var(--bf-color-status-danger-content) 16%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 16%, transparent);
       }
     }
   }
@@ -217,23 +217,23 @@ $track-item-gap: 10px;
   // The risk ramp lives on the trigger too, not only inside the menu: this is
   // the one control on the strip whose wrong value is expensive.
   &__permission-overview-icon {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
 
-    .bitfun-chat-input-workspace-strip__permission-trigger--ask & {
-      color: var(--bf-color-status-success-content);
+    .openbitfun-chat-input-workspace-strip__permission-trigger--ask & {
+      color: var(--openbitfun-color-status-success-content);
     }
 
-    .bitfun-chat-input-workspace-strip__permission-trigger--auto & {
-      color: var(--bf-color-status-warning-content);
+    .openbitfun-chat-input-workspace-strip__permission-trigger--auto & {
+      color: var(--openbitfun-color-status-warning-content);
     }
 
-    .bitfun-chat-input-workspace-strip__permission-trigger--full_access & {
-      color: var(--bf-color-status-danger-content);
+    .openbitfun-chat-input-workspace-strip__permission-trigger--full_access & {
+      color: var(--openbitfun-color-status-danger-content);
     }
 
-    .bitfun-chat-input-workspace-strip__permission-trigger--reject &,
-    .bitfun-chat-input-workspace-strip__permission-trigger--acp & {
-      color: var(--bf-color-content-muted);
+    .openbitfun-chat-input-workspace-strip__permission-trigger--reject &,
+    .openbitfun-chat-input-workspace-strip__permission-trigger--acp & {
+      color: var(--openbitfun-color-content-muted);
     }
   }
 
@@ -246,22 +246,22 @@ $track-item-gap: 10px;
     padding-bottom: 1px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__permission-option-icon {
     flex: none;
 
     &--ask {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
 
     &--auto {
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     &--full_access {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -272,12 +272,12 @@ $track-item-gap: 10px;
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
   }
 
   &__permission-menu {
     position: fixed;
-    z-index: var(--bf-layer-popover);
+    z-index: var(--openbitfun-layer-popover);
     width: min(240px, calc(100vw - 16px));
   }
 
@@ -303,18 +303,18 @@ $track-item-gap: 10px;
     }
 
     .is-track {
-      color: var(--bf-color-field-border-hover);
+      color: var(--openbitfun-color-field-border-hover);
     }
 
     .is-value {
-      color: var(--bf-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
       transform: rotate(-90deg);
       transform-origin: center;
     }
   }
 
   // One coordinate, two parts. Held at the inner gap they read as a single
-  // phrase — "BitFun on 1.0.0-explore" — instead of two facts that happen to
+  // phrase — "OpenBitFun on 1.0.0-explore" — instead of two facts that happen to
   // be adjacent, and the branch glyph joins them the way the slash used to,
   // except this joiner says what the second part is.
   &__location {
@@ -351,17 +351,17 @@ $track-item-gap: 10px;
     &--branch-switchable {
       cursor: pointer;
       transition:
-        background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-        color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+        background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+        color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
       &:hover:not(:disabled),
       &[aria-expanded='true']:not(:disabled) {
-        background: var(--bf-color-action-quiet-hover);
-        color: var(--bf-color-content-secondary);
+        background: var(--openbitfun-color-action-quiet-hover);
+        color: var(--openbitfun-color-content-secondary);
       }
 
       &:focus-visible {
-        outline: 2px solid var(--bf-color-accent-default);
+        outline: 2px solid var(--openbitfun-color-accent-default);
         outline-offset: 1px;
       }
     }
@@ -372,17 +372,17 @@ $track-item-gap: 10px;
   &__worktree-toggle {
     @include strip-control;
 
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
 
     &--on {
-      color: var(--bf-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
       // An engaged isolation is a state, not a resting control, so it keeps a
       // whisper of the accent body the hover state will deepen.
-      background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent);
 
       &:hover:not(:disabled) {
-        color: var(--bf-color-accent-default);
-        background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
+        color: var(--openbitfun-color-accent-default);
+        background: color-mix(in srgb, var(--openbitfun-color-accent-default) 12%, transparent);
       }
     }
   }
@@ -414,10 +414,10 @@ $track-item-gap: 10px;
     border-radius: 999px;
     background: transparent;
     color: inherit;
-    font-family:var(--bf-type-body-sm-font-family);
+    font-family:var(--openbitfun-type-body-sm-font-family);
     font-size: inherit;
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     white-space: nowrap;
     cursor: default;
   }
@@ -434,17 +434,17 @@ $track-item-gap: 10px;
   &__workspace--switchable {
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover:not(:disabled),
     &[aria-expanded='true']:not(:disabled) {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-secondary);
+      background: var(--openbitfun-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-secondary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
+      outline: 2px solid var(--openbitfun-color-accent-default);
       outline-offset: 1px;
     }
   }
@@ -455,13 +455,13 @@ $track-item-gap: 10px;
     flex: none;
     width: 12px;
     height: 12px;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__branch {
     min-width: 0;
     white-space: nowrap;
-    font-family:var(--bf-type-body-sm-font-family);
+    font-family:var(--openbitfun-type-body-sm-font-family);
     font-size: inherit;
     font-weight: inherit;
     flex: 1 1 auto;
@@ -477,7 +477,7 @@ $track-item-gap: 10px;
     @include overlay-layout.anchored-picker-inline-size;
 
     position: fixed;
-    z-index: var(--bf-layer-popover);
+    z-index: var(--openbitfun-layer-popover);
   }
 
   &__workspace-option-copy {
@@ -487,7 +487,7 @@ $track-item-gap: 10px;
     flex: 1 1 auto;
     flex-direction: column;
     gap: 0;
-    padding-block: calc(var(--bf-space-1) / 2);
+    padding-block: calc(var(--openbitfun-space-1) / 2);
   }
 
   &__workspace-option-name,
@@ -499,13 +499,13 @@ $track-item-gap: 10px;
   }
 
   &__workspace-option-detail {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.5;
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
   }
 
 }
@@ -513,7 +513,7 @@ $track-item-gap: 10px;
 // Degradation is ordered by what a reader loses: prose first, then labels, and
 // never the colors or the numeric readings that carry state and risk.
 @media (max-width: 680px) {
-  .bitfun-chat-input-workspace-strip {
+  .openbitfun-chat-input-workspace-strip {
     &__workspace {
       max-width: 112px;
     }
@@ -521,7 +521,7 @@ $track-item-gap: 10px;
 }
 
 @media (max-width: 560px) {
-  .bitfun-chat-input-workspace-strip {
+  .openbitfun-chat-input-workspace-strip {
     &__permission-label {
       display: none;
     }
@@ -541,7 +541,7 @@ $track-item-gap: 10px;
 }
 
 @media (max-width: 460px) {
-  .bitfun-chat-input-workspace-strip {
+  .openbitfun-chat-input-workspace-strip {
     &__branch {
       display: none;
     }

@@ -156,7 +156,7 @@ impl GeminiMessageConverter {
 
             // Gemini providers such as AIHubMix reject requests that mix built-in tools
             // with custom function declarations. When custom tools are present, keep all
-            // tools in function-calling mode so BitFun's local tool pipeline still works.
+            // tools in function-calling mode so OpenBitFun's local tool pipeline still works.
             let should_fallback_to_function_calling =
                 !native_tools.is_empty() && !custom_tools.is_empty();
 

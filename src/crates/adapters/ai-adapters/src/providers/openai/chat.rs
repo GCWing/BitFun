@@ -117,7 +117,7 @@ fn try_build_request_body_with_context(
         request_body["response_format"] = serde_json::json!({
             "type": "json_schema",
             "json_schema": {
-                "name": "bitfun_output",
+                "name": "openbitfun_output",
                 "strict": true,
                 "schema": schema
             }

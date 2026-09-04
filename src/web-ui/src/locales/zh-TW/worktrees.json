@@ -43,7 +43,7 @@
     },
     "autoDelete": {
       "label": "自動刪除舊 Worktree",
-      "description": "新建 worktree 後，如果工作區超過保留數量，BitFun 會刪除最舊且可安全清理的託管 worktree。"
+      "description": "新建 worktree 後，如果工作區超過保留數量，OpenBitFun 會刪除最舊且可安全清理的託管 worktree。"
     },
     "autoDeleteLimit": {
       "label": "自動刪除上限",
@@ -53,15 +53,15 @@
   },
   "management": {
     "title": "工作區 Worktrees",
-    "description": "僅顯示目前執行主機上 BitFun Worktree 根目錄內的 worktree，並依所屬工作區分組。",
-    "loading": "正在掃描 BitFun Worktree…",
-    "loadFailed": "無法載入 BitFun Worktree 清單。",
+    "description": "僅顯示目前執行主機上 OpenBitFun Worktree 根目錄內的 worktree，並依所屬工作區分組。",
+    "loading": "正在掃描 OpenBitFun Worktree…",
+    "loadFailed": "無法載入 OpenBitFun Worktree 清單。",
     "refresh": "重新整理 Worktree",
     "retry": "重試",
     "worktreeCount": "{{count}} 個 Worktree",
     "deleted": "已刪除 {{path}}。",
     "empty": {
-      "title": "目前沒有 BitFun Worktree",
+      "title": "目前沒有 OpenBitFun Worktree",
       "description": "為隔離工作階段建立的 worktree 會顯示在這裡。"
     },
     "lifecycle": {

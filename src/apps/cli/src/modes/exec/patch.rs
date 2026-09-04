@@ -39,7 +39,7 @@ impl ExecMode {
         initial_untracked_files: &BTreeSet<String>,
         output_target: Option<&str>,
     ) -> Option<String> {
-        let repo_root_output = bitfun_core::util::process_manager::create_command("git")
+        let repo_root_output = openbitfun_core::util::process_manager::create_command("git")
             .args(["rev-parse", "--show-toplevel"])
             .current_dir(workspace)
             .output()
@@ -66,7 +66,7 @@ impl ExecMode {
             });
 
         let diff_base = diff_base?;
-        let mut tracked_command = bitfun_core::util::process_manager::create_command("git");
+        let mut tracked_command = openbitfun_core::util::process_manager::create_command("git");
         tracked_command
             .args(["diff", "--binary", "--no-color", diff_base, "--", "."])
             .current_dir(&repo_root);
@@ -79,7 +79,7 @@ impl ExecMode {
             return None;
         }
 
-        let untracked = bitfun_core::util::process_manager::create_command("git")
+        let untracked = openbitfun_core::util::process_manager::create_command("git")
             .args(["ls-files", "--others", "--exclude-standard", "-z"])
             .current_dir(&repo_root)
             .output()
@@ -101,7 +101,7 @@ impl ExecMode {
             if excluded_output.as_deref() == Some(relative_path.as_str()) {
                 continue;
             }
-            let untracked_patch = bitfun_core::util::process_manager::create_command("git")
+            let untracked_patch = openbitfun_core::util::process_manager::create_command("git")
                 .args([
                     "diff",
                     "--no-index",
@@ -228,7 +228,7 @@ pub(super) fn capture_change_baseline(workspace: &Path) -> (Option<String>, BTre
 }
 
 pub(super) fn repository_root(workspace: &Path) -> Option<PathBuf> {
-    let output = bitfun_core::util::process_manager::create_command("git")
+    let output = openbitfun_core::util::process_manager::create_command("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(workspace)
         .output()
@@ -241,7 +241,7 @@ pub(super) fn repository_root(workspace: &Path) -> Option<PathBuf> {
 }
 
 pub(super) fn git_diff_base(workspace: &Path) -> Option<String> {
-    let head = bitfun_core::util::process_manager::create_command("git")
+    let head = openbitfun_core::util::process_manager::create_command("git")
         .args(["rev-parse", "--verify", "HEAD"])
         .current_dir(workspace)
         .output()
@@ -255,7 +255,7 @@ pub(super) fn git_diff_base(workspace: &Path) -> Option<String> {
 
     // Repositories without an initial commit still need a stable base if the
     // agent creates its first commit.
-    let empty_tree = bitfun_core::util::process_manager::create_command("git")
+    let empty_tree = openbitfun_core::util::process_manager::create_command("git")
         .args(["hash-object", "-t", "tree", "--stdin"])
         .current_dir(workspace)
         .output()
@@ -270,7 +270,7 @@ pub(super) fn git_diff_base(workspace: &Path) -> Option<String> {
 }
 
 pub(super) fn untracked_files(workspace: &Path) -> BTreeSet<String> {
-    let output = bitfun_core::util::process_manager::create_command("git")
+    let output = openbitfun_core::util::process_manager::create_command("git")
         .args(["ls-files", "--others", "--exclude-standard", "-z"])
         .current_dir(workspace)
         .output();

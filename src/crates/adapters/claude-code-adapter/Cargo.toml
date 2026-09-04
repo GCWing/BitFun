@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-claude-code-adapter"
+name = "openbitfun-claude-code-adapter"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Claude Code static source adapter for BitFun"
+description = "Claude Code static source adapter for OpenBitFun"
 autotests = false
 
 [lib]
-name = "bitfun_claude_code_adapter"
+name = "openbitfun_claude_code_adapter"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
-bitfun-services-core = { path = "../../services/services-core", features = ["markdown"] }
-bitfun-static-hook-support = { path = "../static-hook-support" }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-services-core = { path = "../../services/services-core", features = ["markdown"] }
+openbitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }

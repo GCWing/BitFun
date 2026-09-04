@@ -6,12 +6,12 @@ import { Encoding } from '../Encoding';
 import { OhosError } from '../OhosError';
 import { GeneralChatTokenProvider } from './GeneralChatHttpTransport';
 
-const STORE_NAME = 'bitfun_general_chat_config';
+const STORE_NAME = 'openbitfun_general_chat_config';
 const API_URL_KEY = 'api_url';
 const MODEL_NAME_KEY = 'model_name';
 const API_KEY_CIPHER_KEY = 'api_key_cipher';
 const API_KEY_IV_KEY = 'api_key_iv';
-const HUKS_ALIAS = 'bitfun_general_chat_api_key';
+const HUKS_ALIAS = 'openbitfun_general_chat_api_key';
 const SELECTED_MODEL_ID_KEY = 'selected_model_id';
 export const GENERAL_CHAT_LOCAL_MODEL_ID = 'local-general-chat';
 

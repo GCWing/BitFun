@@ -6,7 +6,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { systemAPI } from '../../infrastructure/api';
-import { WebSearchToolCard } from '@bitfun/ui/flow-chat';
+import { WebSearchToolCard } from '@openbitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
@@ -109,7 +109,7 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
   }
 
   return (
-    <div ref={cardRootRef} data-bf-adapter="web-search" data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-openbitfun-adapter="web-search" data-tool-card-id={toolId ?? ''}>
       <WebSearchToolCard
         action={`${t('toolCards.webSearch.action')}:`}
         status={status}

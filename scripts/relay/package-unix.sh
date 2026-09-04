@@ -13,13 +13,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 RELEASE_DIR="${3:-${REPO_ROOT}/target/${TARGET}/release}"
 OUTPUT_DIR="${4:-${REPO_ROOT}}"
-SERVER="${RELEASE_DIR}/bitfun-relay-server"
+SERVER="${RELEASE_DIR}/openbitfun-relay-server"
 ADMIN="${RELEASE_DIR}/relay-admin"
-STAGE_NAME="bitfun-relay-server-${VERSION}-${TARGET}"
+STAGE_NAME="openbitfun-relay-server-${VERSION}-${TARGET}"
 STAGE_DIR="${OUTPUT_DIR}/dist-relay/${STAGE_NAME}"
 # Keep the release asset name stable so Desktop can use GitHub's
 # releases/<tag>/download URL without querying the GitHub API for a versioned name.
-ARCHIVE_NAME="bitfun-relay-server-${TARGET}.tar.gz"
+ARCHIVE_NAME="openbitfun-relay-server-${TARGET}.tar.gz"
 ARCHIVE="${OUTPUT_DIR}/${ARCHIVE_NAME}"
 
 smoke_server() {
@@ -87,11 +87,11 @@ trap 'rm -rf "$EXTRACT_DIR"' EXIT
 tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
 
 EXTRACTED="$EXTRACT_DIR/$STAGE_NAME"
-[ -x "$EXTRACTED/bitfun-relay-server" ]
+[ -x "$EXTRACTED/openbitfun-relay-server" ]
 [ -x "$EXTRACTED/relay-admin" ]
 [ -f "$EXTRACTED/static/index.html" ]
 "$EXTRACTED/relay-admin" --help >/dev/null
-smoke_server "$EXTRACTED/bitfun-relay-server"
+smoke_server "$EXTRACTED/openbitfun-relay-server"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "archive=$ARCHIVE_NAME" >>"$GITHUB_OUTPUT"

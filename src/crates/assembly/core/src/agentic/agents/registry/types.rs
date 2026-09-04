@@ -9,14 +9,14 @@ use crate::agentic::agents::{
 use crate::agentic::deep_review_policy::{
     is_review_worker_agent_type, CODE_REVIEW_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
 };
-pub(super) use bitfun_agent_runtime::agents::SubagentOverrideState;
-pub use bitfun_agent_runtime::agents::{
+pub(super) use openbitfun_agent_runtime::agents::SubagentOverrideState;
+pub use openbitfun_agent_runtime::agents::{
     BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope, SubagentQueryContext,
     SubagentStateReason,
 };
-use bitfun_agent_runtime::custom_agent::CustomAgentLevel;
-use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
-use bitfun_runtime_ports::PermissionConstraintLayer;
+use openbitfun_agent_runtime::custom_agent::CustomAgentLevel;
+use openbitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
+use openbitfun_runtime_ports::PermissionConstraintLayer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -137,11 +137,11 @@ pub(super) fn subagent_key_for(
         SubAgentSource::Builtin => "builtin",
         SubAgentSource::Project => {
             let _custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
-            "bitfun"
+            "openbitfun"
         }
         SubAgentSource::User => {
             let _custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
-            "bitfun"
+            "openbitfun"
         }
         SubAgentSource::External => "external",
     };

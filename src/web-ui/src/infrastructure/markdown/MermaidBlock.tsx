@@ -1,4 +1,4 @@
-import { Icon as CatalogIcon } from '@bitfun/ui';
+import { Icon as CatalogIcon } from '@openbitfun/ui';
 /**
  * MermaidBlock component
  * Renders Mermaid diagrams in Markdown
@@ -165,9 +165,9 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
     switch (state) {
       case 'streaming':
         return (
-          <div data-bf-component="mermaid-block" data-bf-part="streaming" className="mermaid-block__streaming">
-            <div data-bf-component="mermaid-block" data-bf-part="codePreview" className="mermaid-block__code-preview">
-              <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
+          <div data-openbitfun-component="mermaid-block" data-openbitfun-part="streaming" className="mermaid-block__streaming">
+            <div data-openbitfun-component="mermaid-block" data-openbitfun-part="codePreview" className="mermaid-block__code-preview">
+              <pre data-openbitfun-component="mermaid-block" data-openbitfun-part="code" className="mermaid-code">
                 <code>{code}</code>
                 <span className="streaming-cursor">█</span>
               </pre>
@@ -178,12 +178,12 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
       case 'incomplete':
         return (
           <div className="mermaid-block__incomplete">
-            <div data-bf-component="mermaid-block" data-bf-part="codePreview" className="mermaid-block__code-preview">
-              <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
+            <div data-openbitfun-component="mermaid-block" data-openbitfun-part="codePreview" className="mermaid-block__code-preview">
+              <pre data-openbitfun-component="mermaid-block" data-openbitfun-part="code" className="mermaid-code">
                 <code>{code}</code>
               </pre>
             </div>
-            <div data-bf-component="mermaid-block" data-bf-part="hint" className="mermaid-block__hint">
+            <div data-openbitfun-component="mermaid-block" data-openbitfun-part="hint" className="mermaid-block__hint">
               <AlertCircle size={14} />
               <span>{t('mermaidBlock.codeIncomplete')}</span>
             </div>
@@ -192,7 +192,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
 
       case 'loading':
         return (
-          <div data-bf-component="mermaid-block" data-bf-part="loading" className="mermaid-block__loading">
+          <div data-openbitfun-component="mermaid-block" data-openbitfun-part="loading" className="mermaid-block__loading">
             <div className="mermaid-block__loading-indicator">
               <Loader2 size={20} className="spinning" />
               <span>{t('mermaidBlock.rendering')}</span>
@@ -202,18 +202,18 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
 
       case 'rendered':
         return (
-          <div data-bf-component="mermaid-block" data-bf-part="rendered" className="mermaid-block__rendered">
+          <div data-openbitfun-component="mermaid-block" data-openbitfun-part="rendered" className="mermaid-block__rendered">
             <div 
               className="mermaid-block__diagram"
-              data-bf-component="mermaid-block"
-              data-bf-part="diagram"
+              data-openbitfun-component="mermaid-block"
+              data-openbitfun-part="diagram"
               dangerouslySetInnerHTML={{ __html: svgContent }}
             />
             
-            <div data-bf-component="mermaid-block" data-bf-part="actions" className="mermaid-block__actions">
+            <div data-openbitfun-component="mermaid-block" data-openbitfun-part="actions" className="mermaid-block__actions">
               <button
-                data-bf-component="mermaid-block"
-                data-bf-part="action"
+                data-openbitfun-component="mermaid-block"
+                data-openbitfun-part="action"
                 className="mermaid-icon-btn"
                 onClick={() => setShowCode(!showCode)}
                 title={showCode ? t('mermaidBlock.hideCode') : t('mermaidBlock.showCode')}
@@ -221,9 +221,9 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
                 <Code2 size={14} />
               </button>
               <button
-                data-bf-component="mermaid-block"
-                data-bf-part="action"
-                data-bf-state={copied ? 'copied' : undefined}
+                data-openbitfun-component="mermaid-block"
+                data-openbitfun-part="action"
+                data-openbitfun-state={copied ? 'copied' : undefined}
                 className={`mermaid-icon-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}
                 title={t('mermaidBlock.copyCode')}
@@ -233,8 +233,8 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
             </div>
 
             {showCode && (
-              <div data-bf-component="mermaid-block" data-bf-part="source" className="mermaid-block__source">
-                <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
+              <div data-openbitfun-component="mermaid-block" data-openbitfun-part="source" className="mermaid-block__source">
+                <pre data-openbitfun-component="mermaid-block" data-openbitfun-part="code" className="mermaid-code">
                   <code>{code}</code>
                 </pre>
               </div>
@@ -244,21 +244,21 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
 
       case 'error':
         return (
-          <div data-bf-component="mermaid-block" data-bf-part="error" className="mermaid-block__error">
+          <div data-openbitfun-component="mermaid-block" data-openbitfun-part="error" className="mermaid-block__error">
             <div className="mermaid-block__error-message">
               <AlertCircle size={16} />
               <span>{t('mermaidBlock.renderFailed')}: {error}</span>
             </div>
-            <div data-bf-component="mermaid-block" data-bf-part="codePreview" className="mermaid-block__code-preview">
-              <pre data-bf-component="mermaid-block" data-bf-part="code" className="mermaid-code">
+            <div data-openbitfun-component="mermaid-block" data-openbitfun-part="codePreview" className="mermaid-block__code-preview">
+              <pre data-openbitfun-component="mermaid-block" data-openbitfun-part="code" className="mermaid-code">
                 <code>{code}</code>
               </pre>
             </div>
-            <div data-bf-component="mermaid-block" data-bf-part="actions" className="mermaid-block__actions">
+            <div data-openbitfun-component="mermaid-block" data-openbitfun-part="actions" className="mermaid-block__actions">
               <button
-                data-bf-component="mermaid-block"
-                data-bf-part="action"
-                data-bf-state={copied ? 'copied' : undefined}
+                data-openbitfun-component="mermaid-block"
+                data-openbitfun-part="action"
+                data-openbitfun-state={copied ? 'copied' : undefined}
                 className={`mermaid-icon-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}
                 title={t('mermaidBlock.copyCode')}
@@ -275,7 +275,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
   };
 
   return (
-    <div className={`mermaid-block mermaid-block--${state} ${className}`} data-bf-component="mermaid-block" data-bf-part="root" data-bf-state={state === 'error' ? 'error' : state === 'streaming' ? 'streaming' : state === 'loading' ? 'loading' : undefined}>
+    <div className={`mermaid-block mermaid-block--${state} ${className}`} data-openbitfun-component="mermaid-block" data-openbitfun-part="root" data-openbitfun-state={state === 'error' ? 'error' : state === 'streaming' ? 'streaming' : state === 'loading' ? 'loading' : undefined}>
       {renderContent()}
     </div>
   );

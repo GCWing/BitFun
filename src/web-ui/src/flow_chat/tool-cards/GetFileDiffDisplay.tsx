@@ -5,7 +5,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { FileDiffToolCard } from '@bitfun/ui/flow-chat';
+import { FileDiffToolCard } from '@openbitfun/ui/flow-chat';
 import { InlineDiffPreview } from '../components/InlineDiffPreview';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -140,7 +140,7 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
   const formattedDeletions = i18nService.formatNumber(stats?.deletions ?? 0);
 
   return (
-    <div data-bf-adapter="get-file-diff" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-openbitfun-adapter="get-file-diff" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <FileDiffToolCard
         data-diff-type={resultData?.diff_type}
         status={status}

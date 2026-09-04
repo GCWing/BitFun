@@ -10,8 +10,8 @@ use crate::agentic::tools::computer_use_host::{
     InteractiveViewOpts, VisualClickParams, VisualMarkViewOpts,
 };
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_services_core::system::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use openbitfun_services_core::system::{
     truncate_with_marker, LocalSystemActionError, LocalSystemProvider, RunScriptRequest,
 };
 use serde_json::{json, Value};
@@ -90,7 +90,7 @@ fn loop_tracker_observe(
 /// desktop clicks at the browser window (exactly what the desktop browser
 /// guard rejects).
 const OPEN_URL_ROUTING_NOTE: &str = "The page is now open in the user's default browser; \
-     BitFun cannot observe or control that window. To read or interact with the page yourself, \
+     OpenBitFun cannot observe or control that window. To read or interact with the page yourself, \
      use ControlHub domain=\"browser\" instead (browser.connect, then snapshot).";
 
 /// Routing note attached to successful `system.open_file` results. The file
@@ -160,10 +160,10 @@ impl ComputerUseActions {
         )
         .with_hints([
             "If your target is NOT the browser: the guard only looks at the app this action would drive, so switch focus with `key_chord` [\"alt\",\"tab\"] / [\"command\",\"tab\"] (never guarded) or `open_app`, or skip focus entirely and pass an explicit non-browser `app` selector ({pid|bundle_id|name}, from `list_apps`) to `app_click` / `app_type_text` / `app_scroll` / `app_key_chord`",
-            "Page content: call ControlHub browser.connect first — Chrome 144+ and Edge use a user-approved connection to the current real profile; other supported Chromium browsers reuse a real-profile endpoint when available and otherwise fall back to BitFun's persistent managed profile — then drive the page with snapshot/click/fill/press_key",
+            "Page content: call ControlHub browser.connect first — Chrome 144+ and Edge use a user-approved connection to the current real profile; other supported Chromium browsers reuse a real-profile endpoint when available and otherwise fall back to OpenBitFun's persistent managed profile — then drive the page with snapshot/click/fill/press_key",
             "Browser chrome (address bar, tabs, back/forward, reload, downloads): use browser.navigate / tab_new / switch_page / back / forward / reload / close instead of mouse+keyboard",
             "File picker or <input type=file>: do NOT drive the native dialog — use browser.set_file_input_files { selector, files: [\"/abs/path\"] }. For JS alert/confirm/prompt use browser.dialog",
-            "For Chrome or Edge login/cookies/extensions, keep using the guarded CDP path; for one-time setup, ask the user to click Enable default CDP in BitFun Settings > Browser control, enable Remote debugging in the browser-owned page, and approve BitFun",
+            "For Chrome or Edge login/cookies/extensions, keep using the guarded CDP path; for one-time setup, ask the user to click Enable default CDP in OpenBitFun Settings > Browser control, enable Remote debugging in the browser-owned page, and approve OpenBitFun",
             "For isolated project Web UI testing, use the headless browser flow instead of desktop automation",
         ])
     }
@@ -338,10 +338,10 @@ impl ComputerUseActions {
         action: &str,
         params: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let host = context.computer_use_host.as_ref().ok_or_else(|| {
-            BitFunError::tool(
-                "Desktop control is only available in the BitFun desktop app".to_string(),
+            OpenBitFunError::tool(
+                "Desktop control is only available in the OpenBitFun desktop app".to_string(),
             )
         })?;
 
@@ -491,7 +491,7 @@ impl ComputerUseActions {
                 let display_id = match params.get("display_id") {
                     Some(Value::Null) | None => None,
                     Some(v) => Some(v.as_u64().ok_or_else(|| {
-                        BitFunError::tool(
+                        OpenBitFunError::tool(
                             "focus_display: 'display_id' must be a non-negative integer or null"
                                 .to_string(),
                         )
@@ -524,7 +524,7 @@ impl ComputerUseActions {
             let target = match v {
                 Value::Null => None,
                 v => Some(v.as_u64().ok_or_else(|| {
-                    BitFunError::tool(
+                    OpenBitFunError::tool(
                         "display_id must be a non-negative integer or null".to_string(),
                     )
                 })? as u32),
@@ -559,9 +559,9 @@ impl ComputerUseActions {
         action: &str,
         params: &Value,
         text_only: bool,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         // ── Helpers ─────────────────────────────────────────────────
-        fn parse_selector(v: &Value) -> BitFunResult<AppSelector> {
+        fn parse_selector(v: &Value) -> OpenBitFunResult<AppSelector> {
             let obj = v.get("app").ok_or_else(|| {
                 coded_tool_error(
                     ErrorCode::InvalidParams,
@@ -583,7 +583,7 @@ impl ComputerUseActions {
             Ok(sel)
         }
 
-        fn parse_click_target(v: &Value) -> BitFunResult<ClickTarget> {
+        fn parse_click_target(v: &Value) -> OpenBitFunResult<ClickTarget> {
             if v.get("kind").is_some() {
                 return serde_json::from_value(v.clone()).map_err(|e| {
                     coded_tool_error(ErrorCode::InvalidParams, format!("bad ClickTarget: {} (expected {{\"kind\":\"node_idx\", \"idx\":N}}, {{\"kind\":\"image_xy\",\"x\":0,\"y\":0}}, {{\"kind\":\"image_grid\",\"x0\":0,\"y0\":0,\"width\":300,\"height\":300,\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}}, {{\"kind\":\"visual_grid\",\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}}, {{\"kind\":\"screen_xy\",\"x\":0,\"y\":0}}, or {{\"kind\":\"ocr_text\",\"needle\":\"...\"}})",
@@ -689,7 +689,7 @@ impl ComputerUseActions {
             Err(coded_tool_error(ErrorCode::InvalidParams, "unsupported ClickTarget. Use {\"kind\":\"node_idx\",\"idx\":N}, {\"node_idx\":N}, {\"kind\":\"image_xy\",\"x\":0,\"y\":0}, {\"image_xy\":{\"x\":0,\"y\":0}}, {\"kind\":\"image_grid\",\"x0\":0,\"y0\":0,\"width\":300,\"height\":300,\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}, {\"kind\":\"visual_grid\",\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}, {\"kind\":\"screen_xy\",\"x\":0,\"y\":0}, or {\"ocr_text\":{\"needle\":\"...\"}}."))
         }
 
-        fn parse_wait_predicate(v: &Value) -> BitFunResult<AppWaitPredicate> {
+        fn parse_wait_predicate(v: &Value) -> OpenBitFunResult<AppWaitPredicate> {
             if v.get("kind").is_some() {
                 return serde_json::from_value(v.clone()).map_err(|e| {
                     coded_tool_error(
@@ -1483,13 +1483,13 @@ impl ComputerUseActions {
         action: &str,
         params: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         match action {
             "open_app" => {
                 let app_name = params
                     .get("app_name")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| BitFunError::tool("open_app requires 'app_name'".to_string()))?;
+                    .ok_or_else(|| OpenBitFunError::tool("open_app requires 'app_name'".to_string()))?;
 
                 // Phase 4 (p4_open_app_unify): consolidate the two historical
                 // launch paths (ComputerUse host vs. raw shell `open`/`start`)
@@ -1541,7 +1541,7 @@ impl ComputerUseActions {
 
                 let provider = LocalSystemProvider::new();
                 let outcome = provider.open_app_shell(app_name).map_err(|e| {
-                    BitFunError::tool(format!("{} (host_error: {:?})", e.message(), host_error))
+                    OpenBitFunError::tool(format!("{} (host_error: {:?})", e.message(), host_error))
                 })?;
                 let warning = host_error.map(|e| {
                     format!("computer_use_host open_app failed; shell fallback succeeded: {}", e)
@@ -1562,7 +1562,7 @@ impl ComputerUseActions {
                 let script = params
                     .get("script")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| BitFunError::tool("run_script requires 'script'".to_string()))?;
+                    .ok_or_else(|| OpenBitFunError::tool("run_script requires 'script'".to_string()))?;
                 let script_type = params
                     .get("script_type")
                     .and_then(|v| v.as_str())
@@ -1690,7 +1690,7 @@ impl ComputerUseActions {
             // dramatically simpler than driving each target GUI by hand.
             "clipboard_set" => {
                 let text = params.get("text").and_then(|v| v.as_str()).ok_or_else(|| {
-                    BitFunError::tool("clipboard_set requires 'text'".to_string())
+                    OpenBitFunError::tool("clipboard_set requires 'text'".to_string())
                 })?;
                 match LocalSystemProvider::new().clipboard_write_text(text).await {
                     Ok(()) => Ok(vec![ToolResult::ok(
@@ -1713,7 +1713,7 @@ impl ComputerUseActions {
                 let url = params
                     .get("url")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| BitFunError::tool("open_url requires 'url'".to_string()))?;
+                    .ok_or_else(|| OpenBitFunError::tool("open_url requires 'url'".to_string()))?;
                 match LocalSystemProvider::new().open_url(url) {
                     Ok(outcome) => Ok(vec![ToolResult::ok(
                         json!({
@@ -1736,7 +1736,7 @@ impl ComputerUseActions {
             // for "open this PDF / picture / spreadsheet for me".
             "open_file" => {
                 let path_str = params.get("path").and_then(|v| v.as_str()).ok_or_else(|| {
-                    BitFunError::tool("open_file requires 'path'".to_string())
+                    OpenBitFunError::tool("open_file requires 'path'".to_string())
                 })?;
                 let app_name = params.get("app").and_then(|v| v.as_str());
 
@@ -1762,7 +1762,7 @@ impl ComputerUseActions {
                 }
             }
 
-            other => Err(BitFunError::tool(format!(
+            other => Err(OpenBitFunError::tool(format!(
                 "Unknown system action: '{}'. Valid: open_app, run_script, get_os_info, open_url, open_file, clipboard_get, clipboard_set",
                 other
             ))),
@@ -1782,12 +1782,12 @@ fn local_system_error_response(
     err_response(domain, action, control_error)
 }
 
-fn map_run_script_error(error: LocalSystemActionError) -> BitFunResult<Vec<ToolResult>> {
+fn map_run_script_error(error: LocalSystemActionError) -> OpenBitFunResult<Vec<ToolResult>> {
     match error.stable_code() {
         "NOT_AVAILABLE" | "TIMEOUT" => {
             Ok(local_system_error_response("system", "run_script", error))
         }
-        _ => Err(BitFunError::tool(error.message().to_string())),
+        _ => Err(OpenBitFunError::tool(error.message().to_string())),
     }
 }
 
@@ -1948,7 +1948,7 @@ mod tests {
         for title in [
             "Google - Google Chrome",
             "Inbox - Microsoft Edge",
-            "BitFun docs — Arc",
+            "OpenBitFun docs — Arc",
             "New Tab - Brave",
         ] {
             assert!(

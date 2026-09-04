@@ -1,4 +1,4 @@
-import { Switch } from '@bitfun/ui';
+import { Switch } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotification } from '@/shared/notification-system';

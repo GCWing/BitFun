@@ -47,8 +47,8 @@ When `PrintWindow` returns a mostly-black bitmap (DirectComposition / UWP):
 ## Verification
 
 ```bash
-cargo check -p bitfun-desktop
-cargo test -p bitfun-desktop
+cargo check -p openbitfun-desktop
+cargo test -p openbitfun-desktop
 ```
 
 Windows-only paths (`windows_wgc_capture`, UIA) compile on CI (`windows-latest`).

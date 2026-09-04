@@ -31,7 +31,7 @@ dispatch.
 5. The target CLI owns the ordinary durable session and the append-only event
    log. The controller owns only the outbound observer index and a UI cache.
    That UI cache is the observer transcript stored under
-   `~/.bitfun/dispatch/outbound/.transcripts/<jobId>.json`. It holds the
+   `~/.openbitfun/dispatch/outbound/.transcripts/<jobId>.json`. It holds the
    rendered projection, never a durable session, and the controller stores it
    verbatim without interpreting it.
 6. Status cursors advance only after every returned event has been processed.
@@ -51,8 +51,8 @@ dispatch.
    retains the record for retry so a claim cannot be orphaned; normal worktree
    retention resumes only after release.
 9. Delivery is Git-only. The target maintains a shared bare repository cache at
-   `~/.bitfun/dispatch/repos/<repoKey>` and a job worktree at
-   `~/.bitfun/dispatch/worktrees/<jobId>`. A missing base commit is supplied by
+   `~/.openbitfun/dispatch/repos/<repoKey>` and a job worktree at
+   `~/.openbitfun/dispatch/worktrees/<jobId>`. A missing base commit is supplied by
    a SHA-256-bound, Git-verified bundle; no origin write permission is required.
 10. The setup dialog accepts a base revision (`HEAD` by default); the
     controller resolves it once when creating the managed baseline.
@@ -60,7 +60,7 @@ dispatch.
     inside the managed baseline. The user's checkout is never changed, and
     ignored runtime inputs are not sent to the target.
 11. SSH submission automatically installs or upgrades a compatible signed
-    prebuilt `bitfun` release when the target runner is missing or incompatible.
+    prebuilt `openbitfun` release when the target runner is missing or incompatible.
     The resolved version, URL, and SHA-256 remain visible, integrity checks stay
     mandatory, installation has a bounded deadline, and submission probes the
     installed runner again before provisioning. Each `cli-install` audit
@@ -70,7 +70,7 @@ dispatch.
     and cached with the transcript, so the automatic action remains visible
     after replay or controller restart.
 12. The signed prebuilt release is the only way a target gets a runner. The
-    controller never compiles BitFun on someone else's machine, so a target no
+    controller never compiles OpenBitFun on someone else's machine, so a target no
     published binary fits is reported as unusable rather than offered a build.
 13. Account devices use encrypted request/response RPC and distinct
    `dispatch_target_*` commands. They never attach Peer Device Mode and an
@@ -147,7 +147,7 @@ dispatch.
     synchronization, workspace serialization, and safe CLI-profile selection
     for detached workers.
 30. Before submit acknowledgement, controller setup is recoverable from
-    `~/.bitfun/dispatch/outbound/.preparations/<jobId>.json`. The journal is
+    `~/.openbitfun/dispatch/outbound/.preparations/<jobId>.json`. The journal is
     retained through the validated target acknowledgement, and preparation,
     retry, and recovery for one job share a per-job run lock.
 31. A preparation records the stable project path that owns the worktree

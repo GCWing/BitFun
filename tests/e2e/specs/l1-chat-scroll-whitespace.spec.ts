@@ -24,7 +24,7 @@ async function dumpDomDiagnostics(): Promise<void> {
     for (const el of all) {
       if (el.className && typeof el.className === 'string') {
         for (const c of el.className.split(/\s+/)) {
-          if (c.startsWith('virtual-message') || c.startsWith('message-list') || c.startsWith('bitfun-session') || c.startsWith('bitfun-scene') || c.startsWith('bitfun-nav-panel__top-action') || c.startsWith('welcome-panel') || c.startsWith('modern-flowchat')) {
+          if (c.startsWith('virtual-message') || c.startsWith('message-list') || c.startsWith('openbitfun-session') || c.startsWith('openbitfun-scene') || c.startsWith('openbitfun-nav-panel__top-action') || c.startsWith('welcome-panel') || c.startsWith('modern-flowchat')) {
             classSet.add(c);
           }
         }
@@ -46,10 +46,10 @@ async function dumpDomDiagnostics(): Promise<void> {
       flowChatScroller: !!document.querySelector('[data-flowchat-scroller]'),
       messageListFooter: !!document.querySelector('.message-list-footer'),
       chatInputContainer: !!document.querySelector('[data-testid="chat-input-container"]'),
-      sessionScene: !!document.querySelector('.bitfun-session-scene'),
-      sceneViewport: !!document.querySelector('.bitfun-scene-viewport'),
-      topActionBtns: document.querySelectorAll('button.bitfun-nav-panel__top-action-btn').length,
-      activeSceneId: (document.querySelector('.bitfun-scene-viewport__scene--active') as HTMLElement)?.className || null,
+      sessionScene: !!document.querySelector('.openbitfun-session-scene'),
+      sceneViewport: !!document.querySelector('.openbitfun-scene-viewport'),
+      topActionBtns: document.querySelectorAll('button.openbitfun-nav-panel__top-action-btn').length,
+      activeSceneId: (document.querySelector('.openbitfun-scene-viewport__scene--active') as HTMLElement)?.className || null,
       // Key data attributes for debugging
       virtualItemCount: messagesDiv?.getAttribute('data-virtual-item-count') || 'N/A',
       activeSessionId: messagesDiv?.getAttribute('data-active-session-id') || 'N/A',

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "defaultLightAppearanceId": "bitfun-light",
-  "defaultDarkAppearanceId": "bitfun-dark",
+  "defaultLightAppearanceId": "openbitfun-light",
+  "defaultDarkAppearanceId": "openbitfun-dark",
   "appearances": [
     {
-      "id": "bitfun-light",
+      "id": "openbitfun-light",
       "mode": "light",
       "bgPrimary": "#fdfdfd",
       "bgSecondary": "#ffffff",
@@ -21,7 +21,7 @@
       "styleNotes": "Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions"
     },
     {
-      "id": "bitfun-monochrome",
+      "id": "openbitfun-monochrome",
       "mode": "light",
       "bgPrimary": "#ffffff",
       "bgSecondary": "#ffffff",
@@ -38,7 +38,7 @@
       "styleNotes": "Black-and-white contrast appearance - Deep black chrome, bright white workspace, soft neutral blocks"
     },
     {
-      "id": "bitfun-slate",
+      "id": "openbitfun-slate",
       "mode": "dark",
       "bgPrimary": "#1c1c1f",
       "bgSecondary": "#262626",
@@ -55,7 +55,7 @@
       "styleNotes": "Slate gray geometric appearance - Deep immersion, high contrast grayscale aesthetics"
     },
     {
-      "id": "bitfun-dark",
+      "id": "openbitfun-dark",
       "mode": "dark",
       "bgPrimary": "#0e0e10",
       "bgSecondary": "#1c1c1f",
@@ -72,7 +72,7 @@
       "styleNotes": "Default dark appearance"
     },
     {
-      "id": "bitfun-midnight",
+      "id": "openbitfun-midnight",
       "mode": "dark",
       "bgPrimary": "#2b2d30",
       "bgSecondary": "#1c1c1f",
@@ -89,7 +89,7 @@
       "styleNotes": "Midnight gray dark appearance - Professional and elegant, inspired by JetBrains IDE"
     },
     {
-      "id": "bitfun-china-style",
+      "id": "openbitfun-china-style",
       "mode": "light",
       "bgPrimary": "#faf8f0",
       "bgSecondary": "#f5f3e8",
@@ -106,7 +106,7 @@
       "styleNotes": "Chinese style appearance - Rice paper and ink, blue and vermilion, warm and elegant"
     },
     {
-      "id": "bitfun-china-night",
+      "id": "openbitfun-china-night",
       "mode": "dark",
       "bgPrimary": "#1c1c1f",
       "bgSecondary": "#212019",
@@ -123,7 +123,7 @@
       "styleNotes": "Chinese dark appearance - Starlit ink night, moonlight like water, serene and elegant"
     },
     {
-      "id": "bitfun-cyber",
+      "id": "openbitfun-cyber",
       "mode": "dark",
       "bgPrimary": "#0e0e10",
       "bgSecondary": "#1c1c1f",
@@ -140,7 +140,7 @@
       "styleNotes": "Tech-style appearance - Deep black hole, neon future, ultimate tech aesthetics"
     },
     {
-      "id": "bitfun-tokyo-night",
+      "id": "openbitfun-tokyo-night",
       "mode": "dark",
       "bgPrimary": "#1a1b26",
       "bgSecondary": "#1e202e",

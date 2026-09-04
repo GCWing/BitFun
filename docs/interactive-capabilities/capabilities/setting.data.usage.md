@@ -39,13 +39,13 @@ Inspect request counts, input and output tokens, cache hits, and estimated cost 
 3. 选择时间范围并查看统计
    Choose a time range and inspect statistics
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

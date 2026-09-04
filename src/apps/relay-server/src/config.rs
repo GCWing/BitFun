@@ -32,9 +32,9 @@ impl Default for RelayConfig {
             heartbeat_interval_secs: 30,
             heartbeat_timeout_secs: 90,
             static_dir: None,
-            // Also stores published BitFun Pages under `{room_web_dir}/pages/{user_id}/{slug}/`.
-            room_web_dir: "/tmp/bitfun-room-web".to_string(),
-            asset_store_max_bytes: bitfun_relay_service::DEFAULT_DISK_ASSET_STORE_MAX_BYTES,
+            // Also stores published OpenBitFun Pages under `{room_web_dir}/pages/{user_id}/{slug}/`.
+            room_web_dir: "/tmp/openbitfun-room-web".to_string(),
+            asset_store_max_bytes: openbitfun_relay_service::DEFAULT_DISK_ASSET_STORE_MAX_BYTES,
             cors_allow_origins: Vec::new(),
             page_public_base_url: None,
             page_auth_base_url: None,

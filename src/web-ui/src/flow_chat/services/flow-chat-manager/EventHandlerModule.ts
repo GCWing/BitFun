@@ -2831,7 +2831,7 @@ function handleDialogTurnCancelled(
   // P1-11: Idempotent terminal-event handling. The execution engine may emit
   // DialogTurnCancelled when it detects cancellation between rounds, and the
   // coordinator wrapper unconditionally re-emits one when the turn returns
-  // BitFunError::Cancelled. Both paths can fire on the same turn — make
+  // OpenBitFunError::Cancelled. Both paths can fire on the same turn — make
   // sure we only run the visible side-effects once.
   if (sessionId && turnId) {
     const terminalKey = `${sessionId}:${turnId}`;

@@ -75,13 +75,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
   return (
     <div 
-      className={`bitfun-file-explorer__tree ${className}`}
+      className={`openbitfun-file-explorer__tree ${className}`}
       tabIndex={0}
     >
       {processedNodes.length > 0 ? (
         renderNodes(processedNodes)
       ) : (
-        <div className="bitfun-file-explorer__empty-message">
+        <div className="openbitfun-file-explorer__empty-message">
           <p>{t('fileTree.empty')}</p>
         </div>
       )}

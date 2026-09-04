@@ -5,7 +5,7 @@
     "exaMcpFree": "Exa MCP (free, no API key)",
     "exaSearchApi": "Exa Search API",
     "tavily": "Tavily Search API",
-    "bitfunSearchHttp": "BitFun Search HTTP Protocol"
+    "openbitfunSearchHttp": "OpenBitFun Search HTTP Protocol"
   },
   "auth": {
     "none": "No authentication",
@@ -17,8 +17,8 @@
       "title": "Search provider"
     },
     "http": {
-      "title": "BitFun Search HTTP Protocol v1",
-      "description": "Connect a self-hosted or enterprise endpoint that implements the fixed BitFun protocol."
+      "title": "OpenBitFun Search HTTP Protocol v1",
+      "description": "Connect a self-hosted or enterprise endpoint that implements the fixed OpenBitFun protocol."
     },
     "protocol": {
       "title": "Protocol specification",
@@ -70,12 +70,12 @@
     },
     "error": {
       "title": "Error response",
-      "description": "A non-2xx response may use this shape. BitFun also maps common errors from the HTTP status when the envelope is absent.",
+      "description": "A non-2xx response may use this shape. OpenBitFun also maps common errors from the HTTP status when the envelope is absent.",
       "codes": "Supported codes:"
     },
     "notes": {
-      "resultHandling": "The service may return fewer than maxResults results. BitFun validates, deduplicates, and truncates results, and ignores unknown response-root fields.",
-      "transportLimits": "BitFun does not follow redirects. Requests time out after 60 seconds, and response bodies are limited to 1 MiB."
+      "resultHandling": "The service may return fewer than maxResults results. OpenBitFun validates, deduplicates, and truncates results, and ignores unknown response-root fields.",
+      "transportLimits": "OpenBitFun does not follow redirects. Requests time out after 60 seconds, and response bodies are limited to 1 MiB."
     }
   },
   "actions": {

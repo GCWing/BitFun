@@ -51,7 +51,7 @@
     width: 10px;
     height: 2px;
     border-radius: 1px;
-    background: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-content-muted);
     opacity: 0.4;
     transform: translateY(-50%);
     transform-origin: left center;
@@ -68,7 +68,7 @@
   &:not([data-hovering='true']) &__item[aria-current='step'] &__bar {
     width: 10px;
     height: 2px;
-    background: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-content-primary);
     opacity: 1;
   }
 
@@ -78,7 +78,7 @@
   }
 
   &__item:focus-visible &__bar {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 35%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-accent-default) 35%, transparent);
   }
 
   // Fixed hit areas and row heights keep the hover fan from moving its target.
@@ -87,7 +87,7 @@
   &__item[data-hover-distance='1'] &__bar { width: 16px; }
   &__item[data-hover-distance='0'] &__bar {
     width: 19px;
-    background: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-content-primary);
     opacity: 1;
   }
 
@@ -103,20 +103,20 @@
   }
 
   &__tooltip-turn {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-flow-meta-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   &__tooltip-message {
     display: -webkit-box;
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     -webkit-box-orient: vertical;

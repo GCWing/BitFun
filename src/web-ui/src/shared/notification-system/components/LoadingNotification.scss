@@ -5,11 +5,11 @@
 
   min-width: 260px;
   max-width: 320px;
-  padding: var(--bf-space-2) var(--bf-space-3);
+  padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-space-2);
-  animation: bitfun-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: var(--openbitfun-space-2);
+  animation: openbitfun-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   
   
   &--completed {
@@ -36,8 +36,8 @@
 
   
   &__spinner {
-    color: var(--bf-color-status-warning-content);
-    animation: bitfun-loading-notification-spin 1s linear infinite;
+    color: var(--openbitfun-color-status-warning-content);
+    animation: openbitfun-loading-notification-spin 1s linear infinite;
   }
 
   
@@ -48,17 +48,17 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
 
     &--success {
-      background: var(--bf-color-status-success-surface);
-      color: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-surface);
+      color: var(--openbitfun-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-color-status-danger-surface);
-      color: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-surface);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -69,16 +69,16 @@
   }
 
   &__title {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
     margin-bottom: 2px;
   }
 
   &__message {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   }
 
   
@@ -88,7 +88,7 @@
 }
 
 
-@keyframes bitfun-loading-notification-spin {
+@keyframes openbitfun-loading-notification-spin {
   from {
     transform: rotate(0deg);
   }
@@ -98,7 +98,7 @@
 }
 
 
-@keyframes bitfun-notification-slide-in {
+@keyframes openbitfun-notification-slide-in {
   from {
     opacity: 0;
     transform: translateX(-100%);

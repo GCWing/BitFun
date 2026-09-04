@@ -6,7 +6,7 @@ import test from "node:test";
 
 test("stageHost copies an already-built Host into its package destination", async () => {
   const stageHost = await loadStageHost();
-  const root = await mkdtemp(join(tmpdir(), "bitfun-sdk-stage-host-"));
+  const root = await mkdtemp(join(tmpdir(), "openbitfun-sdk-stage-host-"));
   const source = join(root, "source-host");
   const destination = join(root, "package", "native", "host");
   const contents = Buffer.from("local-host-fixture\n", "utf8");
@@ -26,7 +26,7 @@ test("stageHost copies an already-built Host into its package destination", asyn
 
 test("stageHost rejects a directory source", async () => {
   const stageHost = await loadStageHost();
-  const root = await mkdtemp(join(tmpdir(), "bitfun-sdk-stage-host-invalid-"));
+  const root = await mkdtemp(join(tmpdir(), "openbitfun-sdk-stage-host-invalid-"));
   try {
     const source = join(root, "source-directory");
     await mkdir(source);

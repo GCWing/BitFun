@@ -78,7 +78,7 @@
   },
   "import": {
     "title": "导入与复用",
-    "description": "查看 {{name}} 可与 BitFun 配合使用的内容。可导入的内容可以直接添加，其余内容会显示当前支持状态。",
+    "description": "查看 {{name}} 可与 OpenBitFun 配合使用的内容。可导入的内容可以直接添加，其余内容会显示当前支持状态。",
     "columns": {
       "item": "内容",
       "type": "类型",
@@ -102,16 +102,16 @@
     "importingAction": "导入中",
     "undetectedItem": "未发现{{type}}",
     "undetectedDescription": "当前没有发现可用内容",
-    "notAdaptedDescription": "BitFun 暂不支持使用 {{name}} 的{{type}}",
-    "ownerAdaptedDescription": "{{type}}已可在 BitFun 中直接使用，无需导入",
+    "notAdaptedDescription": "OpenBitFun 暂不支持使用 {{name}} 的{{type}}",
+    "ownerAdaptedDescription": "{{type}}已可在 OpenBitFun 中直接使用，无需导入",
     "notifications": {
-      "success": "{{name}} 已导入 BitFun",
+      "success": "{{name}} 已导入 OpenBitFun",
       "stale": "来源内容已更新，请确认最新状态后重试",
       "failed": "导入 {{name}} 失败"
     }
   },
   "run": {
-    "title": "在 BitFun 中使用",
+    "title": "在 OpenBitFun 中使用",
     "description": "可用 {{name}} 新建独立会话，也可将它设为子 Agent，由主 Agent 在合适的任务中调用。",
     "session": {
       "title": "创建独立会话",

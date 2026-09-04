@@ -3,7 +3,7 @@ use super::types::{
     SpeechModelArtifact, SpeechModelArtifactKind, SpeechModelInstallState, SpeechModelManifest,
     SpeechModelProgress, SpeechModelStatus,
 };
-use super::{BitFunError, BitFunResult};
+use super::{OpenBitFunError, OpenBitFunResult};
 use bzip2::read::BzDecoder;
 use futures_util::StreamExt;
 use sha2::{Digest, Sha256};
@@ -21,7 +21,7 @@ pub(super) async fn download_and_install_model<F>(
     manifest: &SpeechModelManifest,
     cancel: CancellationToken,
     on_progress: F,
-) -> BitFunResult<SpeechModelStatus>
+) -> OpenBitFunResult<SpeechModelStatus>
 where
     F: Fn(SpeechModelInstallState, SpeechModelProgress) + Send + Sync,
 {
@@ -29,7 +29,7 @@ where
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(30 * 60))
         .build()
-        .map_err(|error| BitFunError::Http(error.to_string()))?;
+        .map_err(|error| OpenBitFunError::Http(error.to_string()))?;
     let total_bytes = manifest.expected_bytes();
     let mut completed_bytes = 0u64;
     let mut downloaded_artifacts = Vec::with_capacity(manifest.artifacts.len());
@@ -74,7 +74,7 @@ async fn ensure_artifact_downloaded<F>(
     total_bytes: u64,
     cancel: CancellationToken,
     on_progress: &F,
-) -> BitFunResult<PathBuf>
+) -> OpenBitFunResult<PathBuf>
 where
     F: Fn(SpeechModelProgress) + Send + Sync,
 {
@@ -146,7 +146,7 @@ where
             }
         }
     }
-    Err(BitFunError::Http(format!(
+    Err(OpenBitFunError::Http(format!(
         "Speech model artifact download failed from all {} configured sources: {}",
         sources.len(),
         source_errors.join("; ")
@@ -163,13 +163,13 @@ async fn download_source<F>(
     model_total_bytes: u64,
     cancel: &CancellationToken,
     on_progress: &F,
-) -> BitFunResult<()>
+) -> OpenBitFunResult<()>
 where
     F: Fn(SpeechModelProgress) + Send + Sync,
 {
     let response_request = client
         .get(source_url)
-        .header(reqwest::header::USER_AGENT, "BitFun")
+        .header(reqwest::header::USER_AGENT, "OpenBitFun")
         .send();
     let response = tokio::select! {
         _ = cancel.cancelled() => {
@@ -177,9 +177,9 @@ where
         }
         response = response_request => response,
     }
-    .map_err(|error| BitFunError::Http(error.to_string()))?
+    .map_err(|error| OpenBitFunError::Http(error.to_string()))?
     .error_for_status()
-    .map_err(|error| BitFunError::Http(error.to_string()))?;
+    .map_err(|error| OpenBitFunError::Http(error.to_string()))?;
 
     let total_bytes = response.content_length().unwrap_or(artifact.size_bytes);
     let mut stream = response.bytes_stream();
@@ -200,7 +200,7 @@ where
             break;
         };
 
-        let chunk = chunk.map_err(|error| BitFunError::Http(error.to_string()))?;
+        let chunk = chunk.map_err(|error| OpenBitFunError::Http(error.to_string()))?;
         file.write_all(&chunk).await?;
         hasher.update(&chunk);
         downloaded += chunk.len() as u64;
@@ -230,7 +230,7 @@ where
     let actual_hash = format!("{:x}", hasher.finalize());
     if actual_hash != artifact.sha256 {
         let _ = fs::remove_file(&partial_path).await;
-        return Err(BitFunError::validation(format!(
+        return Err(OpenBitFunError::validation(format!(
             "Speech model checksum mismatch: expected={}, actual={}",
             artifact.sha256, actual_hash
         )));
@@ -247,18 +247,18 @@ fn progress_percent(downloaded_bytes: u64, total_bytes: u64) -> f64 {
     }
 }
 
-fn download_cancelled_error(manifest: &SpeechModelManifest) -> BitFunError {
-    BitFunError::Cancelled(format!("Speech model download cancelled: {}", manifest.id))
+fn download_cancelled_error(manifest: &SpeechModelManifest) -> OpenBitFunError {
+    OpenBitFunError::Cancelled(format!("Speech model download cancelled: {}", manifest.id))
 }
 
 async fn install_artifacts(
     store: &SpeechModelStore,
     manifest: &SpeechModelManifest,
     artifacts: &[(SpeechModelArtifact, PathBuf)],
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let final_dir = store.model_dir(manifest);
     let parent = final_dir.parent().ok_or_else(|| {
-        BitFunError::service(format!(
+        OpenBitFunError::service(format!(
             "Speech model path has no parent: {}",
             final_dir.display()
         ))
@@ -285,7 +285,7 @@ async fn install_artifacts_into_staging(
     artifacts: &[(SpeechModelArtifact, PathBuf)],
     staging: &Path,
     final_dir: &Path,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     for (artifact, path) in artifacts {
         match artifact.kind {
             SpeechModelArtifactKind::TarBz2 => {
@@ -296,7 +296,7 @@ async fn install_artifacts_into_staging(
                 })
                 .await
                 .map_err(|e| {
-                    BitFunError::service(format!("Speech model extraction task failed: {e}"))
+                    OpenBitFunError::service(format!("Speech model extraction task failed: {e}"))
                 })??;
             }
             SpeechModelArtifactKind::File => {
@@ -333,7 +333,7 @@ async fn install_artifacts_into_staging(
     Ok(())
 }
 
-async fn sha256_file(path: &Path) -> BitFunResult<String> {
+async fn sha256_file(path: &Path) -> OpenBitFunResult<String> {
     let mut file = fs::File::open(path).await?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1024 * 1024];
@@ -347,7 +347,7 @@ async fn sha256_file(path: &Path) -> BitFunResult<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn extract_tar_bz2(archive_path: &Path, destination: &Path) -> BitFunResult<()> {
+fn extract_tar_bz2(archive_path: &Path, destination: &Path) -> OpenBitFunResult<()> {
     let file = File::open(archive_path)?;
     let decoder = BzDecoder::new(file);
     let mut archive = Archive::new(decoder);
@@ -363,7 +363,7 @@ fn extract_tar_bz2(archive_path: &Path, destination: &Path) -> BitFunResult<()> 
     Ok(())
 }
 
-async fn find_payload_dir(staging: &Path, required_files: &[String]) -> BitFunResult<PathBuf> {
+async fn find_payload_dir(staging: &Path, required_files: &[String]) -> OpenBitFunResult<PathBuf> {
     if has_required_files_at(staging, required_files) {
         return Ok(staging.to_path_buf());
     }
@@ -376,7 +376,7 @@ async fn find_payload_dir(staging: &Path, required_files: &[String]) -> BitFunRe
         }
     }
 
-    Err(BitFunError::validation(
+    Err(OpenBitFunError::validation(
         "Downloaded speech model archive does not contain the required model files",
     ))
 }
@@ -429,7 +429,7 @@ mod tests {
             ]
         );
         assert_eq!(status.state, SpeechModelInstallState::Installed);
-        assert!(final_dir.join("bitfun-model-install.json").is_file());
+        assert!(final_dir.join("openbitfun-model-install.json").is_file());
     }
 
     #[tokio::test]
@@ -449,7 +449,7 @@ mod tests {
 
         let final_dir = store.model_dir(&manifest);
         let staging = final_dir.parent().unwrap().join(".installing-test");
-        fs::create_dir_all(staging.join("bitfun-model-install.json"))
+        fs::create_dir_all(staging.join("openbitfun-model-install.json"))
             .await
             .unwrap();
         fs::write(staging.join("model.onnx"), b"model-data")

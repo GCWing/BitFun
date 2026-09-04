@@ -7,14 +7,14 @@
 use crate::bootstrap::ServerAppState;
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use bitfun_core::agentic::agents::SubAgentSource;
-use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
-use bitfun_core::agentic::core::SessionConfig;
-use bitfun_core::agentic::deep_review_policy::{
+use openbitfun_core::agentic::agents::SubAgentSource;
+use openbitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
+use openbitfun_core::agentic::core::SessionConfig;
+use openbitfun_core::agentic::deep_review_policy::{
     apply_deep_review_queue_control, DeepReviewQueueControlAction,
 };
-use bitfun_core::service::config::SubagentModelSelection;
-use bitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
+use openbitfun_core::service::config::SubagentModelSelection;
+use openbitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -179,21 +179,21 @@ pub async fn dispatch(
             let request = extract_request(&params)?;
             let provider = get_string(&request, "provider")?;
             let status =
-                bitfun_core::service::web_search::get_web_search_credential_status(&provider)
+                openbitfun_core::service::web_search::get_web_search_credential_status(&provider)
                     .await
                     .map_err(|error| anyhow!(error.to_string()))?;
             Ok(serde_json::to_value(status)?)
         }
         "save_web_search_credential" => {
             let request = serde_json::from_value(extract_request(&params)?.clone())?;
-            let status = bitfun_core::service::web_search::save_web_search_credential(request)
+            let status = openbitfun_core::service::web_search::save_web_search_credential(request)
                 .await
                 .map_err(|error| anyhow!(error.to_string()))?;
             Ok(serde_json::to_value(status)?)
         }
         "clear_web_search_credential" => {
             let request = serde_json::from_value(extract_request(&params)?.clone())?;
-            let status = bitfun_core::service::web_search::clear_web_search_credential(request)
+            let status = openbitfun_core::service::web_search::clear_web_search_credential(request)
                 .await
                 .map_err(|error| anyhow!(error.to_string()))?;
             Ok(serde_json::to_value(status)?)
@@ -362,7 +362,7 @@ pub async fn dispatch(
                         .map_err(|e| anyhow!("Failed to update model configuration: {}", e))?;
                 }
 
-                if let Err(e) = bitfun_core::service::config::reload_global_config().await {
+                if let Err(e) = openbitfun_core::service::config::reload_global_config().await {
                     log::warn!(
                         "Failed to reload global config after server subagent config update: subagent_id={}, error={}",
                         subagent_id,

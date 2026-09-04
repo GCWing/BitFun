@@ -25,7 +25,7 @@
   },
   "hooks": {
     "title": "Hooks",
-    "description": "查看 OpenCode、Claude Code 和 Codex 的 Hook 配置。BitFun 只读取配置文件，不运行任何代码。",
+    "description": "查看 OpenCode、Claude Code 和 Codex 的 Hook 配置。OpenBitFun 只读取配置文件，不运行任何代码。",
     "refresh": "刷新 Hooks",
     "refreshing": "正在刷新 Hooks…",
     "showMoreSources": "再显示 {{count}} 个来源",
@@ -54,7 +54,7 @@
       "unknown": "未知"
     },
     "diagnostics": "诊断",
-    "readOnly": "仅供查看。BitFun 只展示这些配置，不会运行其中的 Hook。",
+    "readOnly": "仅供查看。OpenBitFun 只展示这些配置，不会运行其中的 Hook。",
     "unsupported": {
       "remote": "当前版本暂不支持检查远程工作区的 Hook。",
       "peer": "当前版本暂不支持通过 Peer Device Mode 检查 Hook。"
@@ -88,17 +88,17 @@
     },
     "diagnosticCategory": {
       "nativeDisabled": "此原生配置已禁用 Hook。",
-      "activationUnknown": "BitFun 只读取了配置文件，没有运行来源应用，因此无法确认这些 Hook 是否已启用。这只是信息提示，不影响其他功能。",
-      "staticCoverage": "BitFun 通过读取配置文件发现了一部分 Hook。来源应用运行时可能还会注册更多 Hook，这些需要实际运行应用后才能看到。",
-      "opaque": "部分 Hook 注册逻辑需要执行源码才能识别，BitFun 静态检查无法解析。",
+      "activationUnknown": "OpenBitFun 只读取了配置文件，没有运行来源应用，因此无法确认这些 Hook 是否已启用。这只是信息提示，不影响其他功能。",
+      "staticCoverage": "OpenBitFun 通过读取配置文件发现了一部分 Hook。来源应用运行时可能还会注册更多 Hook，这些需要实际运行应用后才能看到。",
+      "opaque": "部分 Hook 注册逻辑需要执行源码才能识别，OpenBitFun 静态检查无法解析。",
       "inspectionLimit": "部分 Hook 配置因静态检查安全限制而被省略。",
       "invalidConfiguration": "部分 Hook 配置无效或无法解析。",
       "unavailable": "部分 Hook 配置无法读取。",
       "generic": "Hook 检查报告了一项诊断。"
     },
     "projection": {
-      "tool_before": "对应 BitFun 工具执行前",
-      "tool_after": "对应 BitFun 工具执行后",
+      "tool_before": "对应 OpenBitFun 工具执行前",
+      "tool_after": "对应 OpenBitFun 工具执行后",
       "nativeOnly": "仅来源应用支持",
       "opaque": "静态信息不完整"
     }
@@ -128,7 +128,7 @@
   "bulkActions": {
     "enablePending": "启用全部待确认项（{{count}}）",
     "disableAll": "全部停用",
-    "enableRisk": "仅批准当前显示的 {{count}} 项；如果发现结果发生变化，BitFun 会要求重新确认。",
+    "enableRisk": "仅批准当前显示的 {{count}} 项；如果发现结果发生变化，OpenBitFun 会要求重新确认。",
     "enabled": "已启用选中的待确认项。",
     "disabled": "已停用选中的项目。"
   },
@@ -170,7 +170,7 @@
     "remoteReadOnlyHint": "该远程项目仅可查看，请切回本地项目管理。",
     "backupAndReset": "备份并重置",
     "resetConfirmTitle": "备份并重置策略？",
-    "resetConfirmMessage": "BitFun 会在本地保留新版策略备份，恢复安全默认值，并在你主动开启前保持外部执行关闭。",
+    "resetConfirmMessage": "OpenBitFun 会在本地保留新版策略备份，恢复安全默认值，并在你主动开启前保持外部执行关闭。",
     "recoveryResetComplete": "不兼容策略已备份，并已恢复安全默认值。",
     "inherited": "继承全局",
     "projectOverride": "项目覆盖",
@@ -230,7 +230,7 @@
   "operationErrors": {
     "rejected": "当前设置不允许此更改。",
     "refreshRequired": "操作完成前目录已变化。请刷新并确认当前状态后重试。",
-    "policyIncompatible": "外部设置由较新的 BitFun 版本写入。请先备份并重置，再进行更改。",
+    "policyIncompatible": "外部设置由较新的 OpenBitFun 版本写入。请先备份并重置，再进行更改。",
     "unavailableRetry": "暂时不可用，请稍后重试。",
     "internal": "操作失败，当前设置未更改。请使用下方操作重试；若仍失败，请联系支持并提供参考编号。",
     "referenceId": "支持参考编号（联系支持时请提供）：{{id}}"
@@ -239,18 +239,18 @@
     "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
     "sourceSummary": "{{name}} 有 {{count}} 项问题",
     "category": {
-      "confirmationStateUnavailable": "BitFun 无法验证已保存的工具确认状态，因此相关工具保持停用。请检查 BitFun 设置存储后刷新。",
-      "conflictHistoryUnavailable": "BitFun 无法保存冲突信息，因此相关名称保持不可用。请检查 BitFun 设置存储后刷新。",
+      "confirmationStateUnavailable": "OpenBitFun 无法验证已保存的工具确认状态，因此相关工具保持停用。请检查 OpenBitFun 设置存储后刷新。",
+      "conflictHistoryUnavailable": "OpenBitFun 无法保存冲突信息，因此相关名称保持不可用。请检查 OpenBitFun 设置存储后刷新。",
       "checkInProgress": "仍在检查一个来源，现有内容可以继续使用。",
       "checkTimedOut": "检查一个来源用时过长，其他内容仍可使用。请刷新重试。",
-      "confirmationRequired": "一个来源需要你的确认，BitFun 才能使用其中的内容。",
+      "confirmationRequired": "一个来源需要你的确认，OpenBitFun 才能使用其中的内容。",
       "sourceTooLarge": "来源内容过多，部分文件已跳过。请减少文件数量或大小后刷新。",
       "invalidSettings": "部分配置无法读取，已被跳过。请修正来源配置后刷新。",
-      "unreadableSource": "BitFun 无法读取来源中的部分内容。请检查文件访问权限后刷新。",
-      "notSupported": "BitFun 暂不支持此类外部内容，因此没有加载或运行它。",
-      "checkFailed": "BitFun 未能检查一个来源，其他来源仍可使用。请刷新重试。",
+      "unreadableSource": "OpenBitFun 无法读取来源中的部分内容。请检查文件访问权限后刷新。",
+      "notSupported": "OpenBitFun 暂不支持此类外部内容，因此没有加载或运行它。",
+      "checkFailed": "OpenBitFun 未能检查一个来源，其他来源仍可使用。请刷新重试。",
       "runtimeUnavailable": "此来源中的一个 MCP 服务器不可用。请先停用，修复配置或认证后再启用。",
-      "sourceIssue": "BitFun 未能完成一个来源的检查；现有可用内容保持不变。你可以刷新或查看技术详情。"
+      "sourceIssue": "OpenBitFun 未能完成一个来源的检查；现有可用内容保持不变。你可以刷新或查看技术详情。"
     }
   },
   "sources": {
@@ -266,11 +266,11 @@
   },
   "agents": {
     "title": "发现的 Agent",
-    "description": "Agent 仍保存在原应用中。启用前，请确认下方的模型、工具和运行位置；其指令或这些设置变化后，BitFun 会再次请你确认。",
+    "description": "Agent 仍保存在原应用中。启用前，请确认下方的模型、工具和运行位置；其指令或这些设置变化后，OpenBitFun 会再次请你确认。",
     "disable": "停用",
     "enable": "启用 Agent",
     "reviewTitle": "查看 {{name}} 的运行设置",
-    "approvalWarning": "启用后，该 Agent 可以让所选模型调用上方工具。其指令、模型、工具或配置来源发生变化时，BitFun 会要求你再次确认。",
+    "approvalWarning": "启用后，该 Agent 可以让所选模型调用上方工具。其指令、模型、工具或配置来源发生变化时，OpenBitFun 会要求你再次确认。",
     "role": {
       "primary": "主会话",
       "subagent": "单次任务，不支持续问",
@@ -295,11 +295,11 @@
     "affectedAgents": "影响 {{count}} 个 Agent",
     "effectiveModel": "实际使用 {{model}}",
     "configuredEffort": "已配置推理强度：{{value}}",
-    "selectLabel": "为 {{request}} 选择 BitFun 模型",
+    "selectLabel": "为 {{request}} 选择 OpenBitFun 模型",
     "automatic": "已自动匹配",
     "targetUnavailable": "已不可用：{{target}}",
     "request": {
-      "default": "BitFun 默认模型",
+      "default": "OpenBitFun 默认模型",
       "inherit": "父会话模型"
     },
     "profile": {
@@ -314,7 +314,7 @@
       "model": "已配置模型"
     },
     "method": {
-      "default": "BitFun 默认模型",
+      "default": "OpenBitFun 默认模型",
       "inherit": "继承父会话模型",
       "exact": "精确匹配已配置模型",
       "explicit": "用户绑定",
@@ -346,17 +346,17 @@
     "activationBlocked": "无法启用此 Agent。",
     "degradedOnly": "部分设置不会生效。",
     "configurationUnavailable": {
-      "reason": "BitFun 无法读取模型设置，无法启用此 Agent。",
+      "reason": "OpenBitFun 无法读取模型设置，无法启用此 Agent。",
       "impact": "{{impact}}",
-      "nextStep": "请检查 BitFun 的模型设置后刷新。"
+      "nextStep": "请检查 OpenBitFun 的模型设置后刷新。"
     },
     "modelUnavailable": {
-      "reason": "此 Agent 请求的模型在 BitFun 中不可用。",
+      "reason": "此 Agent 请求的模型在 OpenBitFun 中不可用。",
       "impact": "{{impact}}",
-      "nextStep": "请在来源应用中更换模型，或在 BitFun 中配置可用模型后刷新。"
+      "nextStep": "请在来源应用中更换模型，或在 OpenBitFun 中配置可用模型后刷新。"
     },
     "toolUnavailable": {
-      "reason": "以下工具在 BitFun 中不可用：{{tools}}",
+      "reason": "以下工具在 OpenBitFun 中不可用：{{tools}}",
       "impact": "{{impact}}",
       "nextStep": "请在来源应用中移除或替换这些工具后刷新。"
     },
@@ -366,12 +366,12 @@
       "nextStep": "请在来源应用中补充 prompt 后刷新。"
     },
     "unsupportedSetting": {
-      "reason": "BitFun 不支持 {{setting}} 设置，无法启用此 Agent。",
+      "reason": "OpenBitFun 不支持 {{setting}} 设置，无法启用此 Agent。",
       "impact": "{{impact}}",
       "nextStep": "请在来源应用中移除该设置后刷新。"
     },
     "ignoredSetting": {
-      "reason": "BitFun 不支持 {{setting}} 设置，会忽略它。不影响使用。",
+      "reason": "OpenBitFun 不支持 {{setting}} 设置，会忽略它。不影响使用。",
       "impact": "{{impact}}",
       "nextStep": ""
     },
@@ -399,19 +399,19 @@
       "nextStep": "请在来源应用中修正配置后刷新。"
     },
     "unsupportedBehavior": {
-      "reason": "此 Agent 包含 BitFun 当前不支持的设置，无法启用。",
+      "reason": "此 Agent 包含 OpenBitFun 当前不支持的设置，无法启用。",
       "impact": "{{impact}}",
       "nextStep": "请在来源应用中修改后刷新。"
     },
     "ignoredOption": {
-      "reason": "BitFun 不支持这项设置，会忽略它。不影响使用。",
+      "reason": "OpenBitFun 不支持这项设置，会忽略它。不影响使用。",
       "impact": "{{impact}}",
       "nextStep": ""
     }
   },
   "agentConflicts": {
     "title": "同名 Agent",
-    "description": "BitFun 不会静默替你选择。待选择项和当前选择都会保留显示；其中一个 Agent 发生变化前，BitFun 会记住你的选择。",
+    "description": "OpenBitFun 不会静默替你选择。待选择项和当前选择都会保留显示；其中一个 Agent 发生变化前，OpenBitFun 会记住你的选择。",
     "agentName": "找到多个名为 {{name}} 的 Agent",
     "disableAll": "暂不使用任何一个",
     "pending": "请选择今后执行任务时使用哪一个 Agent。选择外部 Agent 时，也会确认下方显示的模型、工具和运行位置。",
@@ -433,7 +433,7 @@
     "workingDirectory": "启动目录：{{location}}",
     "environmentCount": "已配置 {{count}} 个环境变量",
     "environmentNames": "环境变量：{{names}}",
-    "environmentReads": "将读取 BitFun 环境变量：{{names}}",
+    "environmentReads": "将读取 OpenBitFun 环境变量：{{names}}",
     "argumentCount": "命令参数数量：{{count}}",
     "headerCount": "已配置 {{count}} 个 HTTP 请求头",
     "headerNames": "HTTP 请求头：{{names}}",
@@ -442,34 +442,34 @@
     "timeoutCatalog": "目录读取 {{duration}}",
     "timeoutExecution": "执行 {{duration}}",
     "timeoutMilliseconds": "{{value}} 毫秒",
-    "changePolicy": "服务器配置发生变化后，BitFun 会在再次加载前请你确认。",
+    "changePolicy": "服务器配置发生变化后，OpenBitFun 会在再次加载前请你确认。",
     "failureReason": "原因：{{reason}}",
     "failureReasons": {
       "authentication": "此 MCP 服务器需要完成身份认证。",
       "timeout": "MCP 服务器未能在启动超时前就绪。",
       "commandUnavailable": "无法启动配置的 MCP 命令，请检查命令或运行环境。",
       "workingDirectoryUnavailable": "配置的 MCP 工作目录不可用。",
-      "connectionFailed": "BitFun 无法连接到此 MCP 服务器。",
+      "connectionFailed": "OpenBitFun 无法连接到此 MCP 服务器。",
       "protocolFailed": "MCP 服务器未能完成启动握手。",
-      "nativeConfigurationUnavailable": "BitFun 无法读取当前 MCP 配置。",
+      "nativeConfigurationUnavailable": "OpenBitFun 无法读取当前 MCP 配置。",
       "hostReadOnly": "当前主机只能发现 MCP 服务器，不能运行它们。",
       "configurationChanged": "MCP 配置在启用前发生了变化，请刷新后重新确认。",
-      "configurationInvalid": "当前 MCP 配置无法用于 BitFun 运行时。",
+      "configurationInvalid": "当前 MCP 配置无法用于 OpenBitFun 运行时。",
       "hostUnavailable": "当前主机没有可用的 MCP 运行时。",
-      "installFailed": "BitFun 无法将此 MCP 服务器注册到运行时。",
-      "preparationFailed": "BitFun 无法准备此 MCP 配置以供启用。",
+      "installFailed": "OpenBitFun 无法将此 MCP 服务器注册到运行时。",
+      "preparationFailed": "OpenBitFun 无法准备此 MCP 配置以供启用。",
       "serverMissing": "此 MCP 服务器已不在运行时中。",
       "runtimeFailed": "MCP 服务器运行失败或意外停止。",
       "stopped": "MCP 服务器当前未运行。",
-      "statusUnavailable": "BitFun 无法读取 MCP 服务器的当前状态。",
-      "other": "MCP 服务器启动失败，请检查来源配置和 BitFun 日志。"
+      "statusUnavailable": "OpenBitFun 无法读取 MCP 服务器的当前状态。",
+      "other": "MCP 服务器启动失败，请检查来源配置和 OpenBitFun 日志。"
     },
-    "runtimeUnavailableGuidance": "请先停用此服务器，修复来源配置或认证后再启用，通常无需重启 BitFun。",
+    "runtimeUnavailableGuidance": "请先停用此服务器，修复来源配置或认证后再启用，通常无需重启 OpenBitFun。",
     "unsupportedGuidance": "请在来源应用中修改此配置，然后刷新。",
     "enable": "启用服务器",
     "disable": "停用",
     "empty": "未发现 MCP 服务器。",
-    "emptyGuidance": "BitFun 从以下位置的配置中查找 MCP 服务器，但未找到任何配置：",
+    "emptyGuidance": "OpenBitFun 从以下位置的配置中查找 MCP 服务器，但未找到任何配置：",
     "emptyLocation": {
       "userGlobal": "用户全局：~/.config/opencode/opencode.json",
       "project": "项目级：.opencode/opencode.json",
@@ -482,8 +482,8 @@
   },
   "mcpApprovals": {
     "title": "待确认的 MCP 服务器",
-    "description": "BitFun 从其他 AI 应用中发现了可执行命令或网络连接配置；确认前不会启动进程或访问远程地址。",
-    "compactWarning": "启用后，BitFun 可能以你的用户权限启动该命令或连接该服务；服务器可接收工具调用中发送的数据。",
+    "description": "OpenBitFun 从其他 AI 应用中发现了可执行命令或网络连接配置；确认前不会启动进程或访问远程地址。",
+    "compactWarning": "启用后，OpenBitFun 可能以你的用户权限启动该命令或连接该服务；服务器可接收工具调用中发送的数据。",
     "showDetails": "查看配置与风险",
     "warning": "本地命令可读取列出的环境变量，远程请求可发送列出的请求头；启用前请核对这些详情。",
     "keepDisabled": "保持停用",
@@ -504,18 +504,18 @@
   },
   "mcpConflicts": {
     "title": "同名 MCP 服务器",
-    "description": "BitFun 不会自行选择。请选择使用 BitFun 或外部服务器；其中任一配置变化前，BitFun 会记住本次选择。",
+    "description": "OpenBitFun 不会自行选择。请选择使用 OpenBitFun 或外部服务器；其中任一配置变化前，OpenBitFun 会记住本次选择。",
     "serverName": "有多个 MCP 服务器名为 {{name}}",
     "pending": "请选择一个服务器。选择外部服务器时，也会确认其当前配置。",
     "currentSelection": "当前使用已选择的服务器；可选择其他可用项进行更改。",
     "unavailable": "当前不可用",
-    "nativeDisabled": "请先启用此 BitFun 服务器，再选择它",
+    "nativeDisabled": "请先启用此 OpenBitFun 服务器，再选择它",
     "review": "查看 {{name}}",
     "approveAndUse": "批准并使用 {{name}}"
   },
   "tools": {
     "title": "发现的工具",
-    "description": "工具代码仍保留在原位置；BitFun 检查来源时不会运行这些代码。",
+    "description": "工具代码仍保留在原位置；OpenBitFun 检查来源时不会运行这些代码。",
     "review": "查看设置",
     "disable": "停用这些工具",
     "reviewTitle": "查看 {{name}}（来自 {{source}}）",
@@ -560,9 +560,9 @@
     "disabled": "来源或其工具能力已被策略停用。",
     "active": "工具代码已加载，可以使用。",
     "conflict": "另一个工具使用了相同名称。",
-    "unsupported": "这个工具文件包含 BitFun 当前不支持的语法或操作。",
+    "unsupported": "这个工具文件包含 OpenBitFun 当前不支持的语法或操作。",
     "runtime_unavailable": "所需的 JavaScript 运行环境不可用。",
-    "load_failed": "BitFun 无法加载这个工具文件。"
+    "load_failed": "OpenBitFun 无法加载这个工具文件。"
   },
   "toolNextStep": {
     "approval_required": "确认上方来源和访问范围后，启用或继续停用这些工具。",
@@ -570,13 +570,13 @@
     "disabled": "请先启用此来源或其工具能力。",
     "active": "无需操作。如需停止使用该来源的全部工具，请停用这些工具。",
     "conflict": "请在下方选择要使用的工具，或继续保持停用。",
-    "unsupported": "请将来源改为 BitFun 当前支持的单文件 JavaScript 格式，然后刷新。",
+    "unsupported": "请将来源改为 OpenBitFun 当前支持的单文件 JavaScript 格式，然后刷新。",
     "runtime_unavailable": "请安装或修复 Node.js，然后刷新。运行环境不可用期间，你仍可继续使用其他功能。",
     "load_failed": "请修复来源后刷新，或继续停用这些工具。"
   },
   "toolConflicts": {
     "title": "同名工具",
-    "description": "待选择项和当前选择都会保留显示。选择前，BitFun 会继续使用可用的本地或 MCP 工具；若没有可用工具，则停用该名称。可用工具发生变化前，BitFun 会记住你的选择。",
+    "description": "待选择项和当前选择都会保留显示。选择前，OpenBitFun 会继续使用可用的本地或 MCP 工具；若没有可用工具，则停用该名称。可用工具发生变化前，OpenBitFun 会记住你的选择。",
     "toolName": "找到多个名为 {{name}} 的工具",
     "pending": "请选择今后调用这个工具名称时使用哪一个工具。",
     "currentSelection": "调用此工具名称时会使用当前选择。如需更改，请在上方选择其他工具。",
@@ -613,7 +613,7 @@
   },
   "conflicts": {
     "title": "同名命令",
-    "description": "BitFun 不会静默替你选择。待选择项和当前选择都会保留显示；其中一个来源发生变化前，BitFun 会记住你的选择。",
+    "description": "OpenBitFun 不会静默替你选择。待选择项和当前选择都会保留显示；其中一个来源发生变化前，OpenBitFun 会记住你的选择。",
     "commandName": "多个来源提供了 /{{name}}",
     "pending": "请选择使用哪个来源的命令。",
     "currentSelection": "当前命令会使用已选来源。如需更改，请在上方选择其他可用来源。",
@@ -639,7 +639,7 @@
       },
       "command": {
         "description": "发现 {{count}} 个命令 · 来自{{scope}}",
-        "effect": "启用后可在 BitFun 中调用 OpenCode 命令。",
+        "effect": "启用后可在 OpenBitFun 中调用 OpenCode 命令。",
         "risk": ""
       },
       "mcp": {

@@ -5,7 +5,7 @@
 use crate::service::config::{AIConfig, AIModelConfig, AuthConfig, GlobalConfig};
 #[cfg(feature = "remote-connect")]
 use crate::AIModelCatalog;
-use bitfun_core_types::model::{ModelEditProjection, ModelListProjection, ModelSummary};
+use openbitfun_core_types::model::{ModelEditProjection, ModelListProjection, ModelSummary};
 
 pub fn resolve_selector(ai: &AIConfig, selector: &Option<String>) -> Option<String> {
     selector
@@ -96,7 +96,7 @@ pub fn model_edit_projection(model: &AIModelConfig) -> ModelEditProjection {
 #[cfg(feature = "remote-connect")]
 pub fn model_catalog_projection(
     catalog: AIModelCatalog,
-) -> bitfun_core_types::model::TuiModelCatalogProjection {
+) -> openbitfun_core_types::model::TuiModelCatalogProjection {
     let reasoning_presets_by_model = catalog
         .models
         .into_iter()
@@ -113,7 +113,7 @@ pub fn model_catalog_projection(
             })
         })
         .collect();
-    bitfun_core_types::model::TuiModelCatalogProjection {
+    openbitfun_core_types::model::TuiModelCatalogProjection {
         provider_catalog: catalog.provider_catalog,
         reasoning_presets_by_model,
     }

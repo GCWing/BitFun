@@ -67,7 +67,7 @@ describe('scheduleAfterStartupPaint', () => {
 
     scheduleAfterStartupSignal(task, {
       frameCount: 1,
-      signalName: 'bitfun:main-window-shown',
+      signalName: 'openbitfun:main-window-shown',
       signalTarget: { addEventListener, removeEventListener },
       fallbackTimeoutMs: 2000,
       requestAnimationFrame: callback => {
@@ -79,7 +79,7 @@ describe('scheduleAfterStartupPaint', () => {
       clearTimeout: vi.fn(),
     });
 
-    expect(addEventListener).toHaveBeenCalledWith('bitfun:main-window-shown', expect.any(Function));
+    expect(addEventListener).toHaveBeenCalledWith('openbitfun:main-window-shown', expect.any(Function));
     expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), 2000);
     expect(task).not.toHaveBeenCalled();
 
@@ -88,7 +88,7 @@ describe('scheduleAfterStartupPaint', () => {
     callbacks.shift()?.(16);
 
     expect(task).toHaveBeenCalledTimes(1);
-    expect(removeEventListener).toHaveBeenCalledWith('bitfun:main-window-shown', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('openbitfun:main-window-shown', expect.any(Function));
   });
 
   it('falls back when the startup signal is not observed', () => {

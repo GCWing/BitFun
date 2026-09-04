@@ -5,8 +5,8 @@ import {
   CircleOff,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuItem } from '@bitfun/ui';
-import { Tooltip } from '@bitfun/ui';
+import { Menu, MenuItem } from '@openbitfun/ui';
+import { Tooltip } from '@openbitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type {
@@ -170,14 +170,14 @@ export const ReasoningIntensityMark: React.FC<ReasoningIntensityMarkProps> = ({
 
   return (
     <span
-      className="bitfun-reasoning-preset-selector__status-meter"
+      className="openbitfun-reasoning-preset-selector__status-meter"
       data-intensity={level}
       data-size={compact ? 'compact' : 'option'}
       aria-hidden="true"
     >
       {level === 0 ? (
         <CircleOff
-          className="bitfun-reasoning-preset-selector__status-off"
+          className="openbitfun-reasoning-preset-selector__status-off"
           size={compact ? 14 : 22}
           strokeWidth={compact ? 1.5 : 1.2}
         />
@@ -186,7 +186,7 @@ export const ReasoningIntensityMark: React.FC<ReasoningIntensityMarkProps> = ({
           {ringSizes.slice(0, ringCount).map((size, index) => (
             <Circle
               key={size}
-              className="bitfun-reasoning-preset-selector__status-ring"
+              className="openbitfun-reasoning-preset-selector__status-ring"
               data-ring={index + 1}
               size={size}
               strokeWidth={index === 0
@@ -196,7 +196,7 @@ export const ReasoningIntensityMark: React.FC<ReasoningIntensityMarkProps> = ({
           ))}
           {level === 4 && (
             <Circle
-              className="bitfun-reasoning-preset-selector__status-peak"
+              className="openbitfun-reasoning-preset-selector__status-peak"
               size={compact ? 3.5 : 5.5}
               strokeWidth={0}
               fill="currentColor"
@@ -322,23 +322,23 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   return (
     <div
       ref={rootRef}
-      className="bitfun-reasoning-preset-selector"
-      data-bf-component="reasoning-preset-selector"
-      data-bf-part="root"
-      data-bf-state={open ? 'open' : undefined}
-      data-bf-presentation={triggerPresentation}
+      className="openbitfun-reasoning-preset-selector"
+      data-openbitfun-component="reasoning-preset-selector"
+      data-openbitfun-part="root"
+      data-openbitfun-state={open ? 'open' : undefined}
+      data-openbitfun-presentation={triggerPresentation}
     >
       <Tooltip content={tooltip} disabled={open}>
         <button
           ref={triggerRef}
           type="button"
           className={[
-            'bitfun-reasoning-preset-selector__trigger',
-            open && 'bitfun-reasoning-preset-selector__trigger--open',
+            'openbitfun-reasoning-preset-selector__trigger',
+            open && 'openbitfun-reasoning-preset-selector__trigger--open',
           ].filter(Boolean).join(' ')}
-          data-bf-component="reasoning-preset-selector"
-          data-bf-part="trigger"
-          data-bf-state={open ? 'open' : undefined}
+          data-openbitfun-component="reasoning-preset-selector"
+          data-openbitfun-part="trigger"
+          data-openbitfun-state={open ? 'open' : undefined}
           data-testid="chat-reasoning-preset-selector-btn"
           aria-label={tooltip}
           aria-haspopup="menu"
@@ -366,7 +366,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           }}
         >
           {triggerPresentation === 'label' ? (
-            <span className="bitfun-reasoning-preset-selector__trigger-label">
+            <span className="openbitfun-reasoning-preset-selector__trigger-label">
               {statusLabel}
             </span>
           ) : (
@@ -381,9 +381,9 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           id={menuId}
           ref={menuRef}
           autoFocusFirstItem={keyboardOpen}
-          className="bitfun-reasoning-preset-selector__menu"
-          data-bf-component="reasoning-preset-selector"
-          data-bf-part="menu"
+          className="openbitfun-reasoning-preset-selector__menu"
+          data-openbitfun-component="reasoning-preset-selector"
+          data-openbitfun-part="menu"
           data-placement={resolvedPlacement}
           data-open={open ? 'true' : 'false'}
           data-keyboard-open={keyboardOpen ? 'true' : 'false'}
@@ -395,30 +395,30 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           onKeyDown={handleMenuKeyDown}
         >
           <div
-            className="bitfun-reasoning-preset-selector__header"
-            data-bf-component="reasoning-preset-selector"
-            data-bf-part="header"
+            className="openbitfun-reasoning-preset-selector__header"
+            data-openbitfun-component="reasoning-preset-selector"
+            data-openbitfun-part="header"
           >
-            <span className="bitfun-reasoning-preset-selector__title">
+            <span className="openbitfun-reasoning-preset-selector__title">
               {t('reasoningSelector.title')}
             </span>
             <MenuItem
               type="button"
               role="menuitemradio"
               checked={!selected}
-              className="bitfun-reasoning-preset-selector__auto-row"
-              data-bf-component="reasoning-preset-selector"
-              data-bf-part="auto"
-              data-bf-state={!selected ? 'selected' : undefined}
+              className="openbitfun-reasoning-preset-selector__auto-row"
+              data-openbitfun-component="reasoning-preset-selector"
+              data-openbitfun-part="auto"
+              data-openbitfun-state={!selected ? 'selected' : undefined}
               onClick={() => select(null)}
             >
               <span>{t('reasoningSelector.auto')}</span>
             </MenuItem>
           </div>
           <div
-            className="bitfun-reasoning-preset-selector__options"
-            data-bf-component="reasoning-preset-selector"
-            data-bf-part="options"
+            className="openbitfun-reasoning-preset-selector__options"
+            data-openbitfun-component="reasoning-preset-selector"
+            data-openbitfun-part="options"
           >
             {orderedPresets.map((preset, index) => {
               const isSelected = selected?.id === preset.id;
@@ -430,13 +430,13 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
                   role="menuitemradio"
                   checked={isSelected}
                   data-preset-id={preset.id}
-                  className="bitfun-reasoning-preset-selector__option-row"
-                  data-bf-component="reasoning-preset-selector"
-                  data-bf-part="option"
-                  data-bf-state={isSelected ? 'selected' : undefined}
+                  className="openbitfun-reasoning-preset-selector__option-row"
+                  data-openbitfun-component="reasoning-preset-selector"
+                  data-openbitfun-part="option"
+                  data-openbitfun-state={isSelected ? 'selected' : undefined}
                   onClick={() => select(preset.id)}
                 >
-                  <span className="bitfun-reasoning-preset-selector__option-label">
+                  <span className="openbitfun-reasoning-preset-selector__option-label">
                     {label}
                   </span>
                 </MenuItem>

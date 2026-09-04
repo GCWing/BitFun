@@ -2,7 +2,7 @@ use agent_client_protocol::schema::{
     Annotations, BlobResourceContents, ContentBlock, EmbeddedResourceResource, ImageContent,
     ResourceLink, Role, TextResourceContents,
 };
-use bitfun_agent_runtime::sdk::AgentInputAttachment;
+use openbitfun_agent_runtime::sdk::AgentInputAttachment;
 
 pub(super) struct ParsedPrompt {
     pub(super) user_message: String,

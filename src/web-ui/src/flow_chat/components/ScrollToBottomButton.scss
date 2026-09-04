@@ -16,19 +16,19 @@
   padding: 0;
 
   // Theme-aware surface so the control separates from the transcript; icon uses primary text (SVG stroke)
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 92%, transparent);
-  color: var(--bf-color-content-primary);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 92%, transparent);
+  color: var(--openbitfun-color-content-primary);
 
-  border: 2px solid var(--bf-color-content-primary);
+  border: 2px solid var(--openbitfun-color-content-primary);
   border-radius: 10px;
 
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 
   box-shadow:
-    0 4px 18px color-mix(in srgb, var(--bf-color-content-on-light) 38%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--bf-color-content-primary) 28%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
+    0 4px 18px color-mix(in srgb, var(--openbitfun-color-content-on-light) 38%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--openbitfun-color-content-primary) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-primary) 12%, transparent);
   
   cursor: pointer;
   transition:
@@ -54,7 +54,7 @@
   }
 
   &:focus-visible {
-    outline: 3px solid var(--bf-color-content-primary);
+    outline: 3px solid var(--openbitfun-color-content-primary);
     outline-offset: 3px;
   }
 
@@ -76,36 +76,36 @@
     justify-content: center;
     
     // Glass-like badge
-    background: color-mix(in srgb, var(--bf-color-accent-hover) 92%, var(--bf-color-content-on-light));
-    color: var(--bf-color-content-on-dark);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-hover) 92%, var(--openbitfun-color-content-on-light));
+    color: var(--openbitfun-color-content-on-dark);
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 30%, transparent);
     
     // Frosted effect
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     
-    font-size: var(--bf-type-flow-meta-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    font-size: var(--openbitfun-type-flow-meta-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     
     box-shadow: 
-      0 2px 8px color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
+      0 2px 8px color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 20%, transparent);
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .scroll-to-bottom-button[data-visible='true']:hover {
-    background: color-mix(in srgb, var(--bf-color-surface-raised) 98%, transparent);
-    color: var(--bf-color-content-primary);
-    border-color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 98%, transparent);
+    color: var(--openbitfun-color-content-primary);
+    border-color: var(--openbitfun-color-content-primary);
     transform: translateY(-2px);
 
     box-shadow:
-      0 8px 22px color-mix(in srgb, var(--bf-color-content-on-light) 42%, transparent),
-      0 0 0 1px color-mix(in srgb, var(--bf-color-content-primary) 40%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-primary) 16%, transparent);
+      0 8px 22px color-mix(in srgb, var(--openbitfun-color-content-on-light) 42%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--openbitfun-color-content-primary) 40%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-primary) 16%, transparent);
   }
 }
 

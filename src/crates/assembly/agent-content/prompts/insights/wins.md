@@ -1,4 +1,4 @@
-Analyze this BitFun usage data and identify what's working well for this user. Use second person ("you").
+Analyze this OpenBitFun usage data and identify what's working well for this user. Use second person ("you").
 
 Write a brief **intro** (1 sentence of context about the user's overall usage).
 

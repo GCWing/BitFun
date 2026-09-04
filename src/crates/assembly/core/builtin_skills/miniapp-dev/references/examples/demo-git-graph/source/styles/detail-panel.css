@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: var(--bitfun-shadow-card);
+  box-shadow: var(--openbitfun-shadow-card);
 }
 .detail-panel-resizer {
   width: 6px;
@@ -104,7 +104,7 @@
   flex-shrink: 0;
 }
 .detail-code-preview__filename {
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 12px;
   color: var(--text);
   overflow: hidden;
@@ -132,7 +132,7 @@
 .detail-code-preview__error { color: var(--red); }
 .detail-code-preview__diff {
   margin: 0;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 11px;
   line-height: 1.6;
   white-space: pre;
@@ -160,7 +160,7 @@
   margin-bottom: 8px;
 }
 .detail-hash {
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 12px;
   color: var(--accent);
   word-break: break-all;
@@ -207,7 +207,7 @@
   background: var(--bg);
   border-radius: var(--radius);
   border: 1px solid var(--border-light);
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -225,7 +225,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   color: var(--text-sec);
 }
 .detail-file__stat { display: flex; gap: 6px; flex-shrink: 0; font-size: 11px; }

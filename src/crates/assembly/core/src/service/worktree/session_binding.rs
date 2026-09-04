@@ -17,7 +17,7 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::service::worktree::{
     WorktreeCreateRequest, WorktreeListRequest, WorktreeRemoveRequest, WorktreeService,
 };
-use bitfun_core_types::{
+use openbitfun_core_types::{
     SessionExecutionTarget, WorktreeError, WorktreeErrorCode, WorktreeLifecycle,
 };
 use serde::{Deserialize, Serialize};
@@ -321,7 +321,7 @@ impl WorktreeService {
     pub async fn bind_session(
         request: WorktreeSessionBindingRequest,
     ) -> Result<WorktreeSessionBindingResult, WorktreeError> {
-        bitfun_core_types::validate_session_id(&request.session_id)
+        openbitfun_core_types::validate_session_id(&request.session_id)
             .map_err(|message| error(WorktreeErrorCode::InvalidPath, message))?;
         let _binding_guard = SESSION_BINDING_LOCKS.lock(&request.session_id).await;
         let context = load_binding_context(&request).await?;
@@ -460,7 +460,7 @@ mod tests {
         binding_action, error, persisted_session_is_remote, SessionBindingAction,
         SessionBindingContext, WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS,
     };
-    use bitfun_core_types::{SessionExecutionTarget, WorktreeErrorCode};
+    use openbitfun_core_types::{SessionExecutionTarget, WorktreeErrorCode};
     use std::time::Duration;
 
     #[test]
@@ -489,14 +489,14 @@ mod tests {
         let request: WorktreeSessionBindingRequest = serde_json::from_value(serde_json::json!({
             "requestId": "request-2",
             "sessionId": "session-2",
-            "projectWorkspacePath": "D:\\workspace\\BitFun",
+            "projectWorkspacePath": "D:\\workspace\\OpenBitFun",
             "enabled": false
         }))
         .expect("request should deserialize");
 
         assert_eq!(
             request.project_workspace_path.as_deref(),
-            Some(r"D:\workspace\BitFun")
+            Some(r"D:\workspace\OpenBitFun")
         );
     }
 

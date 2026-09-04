@@ -55,17 +55,17 @@ describe('NavigationTransitionBoundary', () => {
     act(() => renderView('first', false));
     act(() => renderView('second', true));
 
-    const outgoing = container.querySelector('.bitfun-navigation-transition-boundary__layer--outgoing');
+    const outgoing = container.querySelector('.openbitfun-navigation-transition-boundary__layer--outgoing');
     expect(outgoing?.hasAttribute('inert')).toBe(true);
     expect(outgoing?.getAttribute('aria-hidden')).toBe('true');
-    expect(container.querySelectorAll('.bitfun-navigation-transition-boundary__layer')).toHaveLength(2);
+    expect(container.querySelectorAll('.openbitfun-navigation-transition-boundary__layer')).toHaveLength(2);
 
     act(() => vi.advanceTimersByTime(32));
     expect(container.querySelector('[data-view-transition-phase="running"]')).not.toBeNull();
 
     act(() => vi.advanceTimersByTime(NAVIGATION_TRANSITION_EXIT_MS));
     expect(container.querySelector('[data-testid="view-first"]')).toBeNull();
-    expect(container.querySelectorAll('.bitfun-navigation-transition-boundary__layer')).toHaveLength(1);
+    expect(container.querySelectorAll('.openbitfun-navigation-transition-boundary__layer')).toHaveLength(1);
   });
 
   it('retargets a rapid pointer switch to the latest view', () => {

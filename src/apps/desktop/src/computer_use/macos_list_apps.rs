@@ -15,8 +15,8 @@
 
 #![allow(dead_code)]
 
-use bitfun_core::agentic::tools::computer_use_host::AppInfo;
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::agentic::tools::computer_use_host::AppInfo;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -62,7 +62,7 @@ end tell
 return out
 "#;
 
-pub(super) fn list_running_apps(include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+pub(super) fn list_running_apps(include_hidden: bool) -> OpenBitFunResult<Vec<AppInfo>> {
     if let Ok(guard) = CACHE.lock() {
         if let Some((ts, cached_hidden, ref apps)) = *guard {
             if cached_hidden == include_hidden && ts.elapsed() < CACHE_TTL {
@@ -74,9 +74,9 @@ pub(super) fn list_running_apps(include_hidden: bool) -> BitFunResult<Vec<AppInf
         .arg("-e")
         .arg(ASCRIPT)
         .output()
-        .map_err(|e| BitFunError::tool(format!("osascript spawn: {}", e)))?;
+        .map_err(|e| OpenBitFunError::tool(format!("osascript spawn: {}", e)))?;
     if !out.status.success() {
-        return Err(BitFunError::tool(format!(
+        return Err(OpenBitFunError::tool(format!(
             "osascript list_apps failed: {}",
             String::from_utf8_lossy(&out.stderr)
         )));

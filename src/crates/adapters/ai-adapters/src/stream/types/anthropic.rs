@@ -1,5 +1,5 @@
 use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
-use bitfun_agent_stream::ToolCallCompletion;
+use openbitfun_agent_stream::ToolCallCompletion;
 use serde::Deserialize;
 
 pub(crate) fn map_anthropic_stop_reason(reason: &str) -> ToolCallCompletion {
@@ -237,7 +237,7 @@ impl From<AnthropicSSEErrorDetails> for String {
 mod tests {
     use super::*;
     use crate::stream::types::unified::UnifiedTokenUsage;
-    use bitfun_agent_stream::ToolCallCompletion;
+    use openbitfun_agent_stream::ToolCallCompletion;
 
     #[test]
     fn cached_content_token_count_is_reads_only_not_sum() {

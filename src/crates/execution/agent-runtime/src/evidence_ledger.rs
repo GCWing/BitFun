@@ -1,6 +1,6 @@
 use crate::checkpoint::LightCheckpoint;
-use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use dashmap::DashMap;
+use openbitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

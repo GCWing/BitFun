@@ -33,8 +33,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: var(--bf-color-surface-panel);
-    border-bottom: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-panel);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
   }
 
   &__title {
@@ -48,9 +48,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--bf-type-label-md-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
+      color: var(--openbitfun-color-content-primary);
     }
   }
 
@@ -63,14 +63,14 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     border-radius: 3px;
     flex-shrink: 0;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
     }
   }
 
@@ -90,23 +90,23 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
     }
   }
 
   &__pin-btn:hover {
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
   }
 
   &__close-btn:hover {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   // Content area
@@ -116,7 +116,7 @@
     overflow: auto;
 
     // FlexiblePanel overrides
-    .bitfun-flexible-panel {
+    .openbitfun-flexible-panel {
       height: 100%;
 
       &__header {
@@ -136,10 +136,10 @@
     justify-content: center;
     gap: 4px;
     padding: 6px 12px;
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-muted);
-    background: var(--bf-color-surface-panel);
-    border-top: 1px solid var(--bf-color-border-subtle);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
+    background: var(--openbitfun-color-surface-panel);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__separator {

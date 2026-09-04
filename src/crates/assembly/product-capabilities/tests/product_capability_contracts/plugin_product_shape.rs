@@ -1,15 +1,15 @@
 use async_trait::async_trait;
-use bitfun_agent_runtime::runtime::AgentRuntimeBuilder;
-use bitfun_product_capabilities::{
+use openbitfun_agent_runtime::runtime::AgentRuntimeBuilder;
+use openbitfun_product_capabilities::{
     product_assembly_plan_for_profile, DeliveryProfile, ProductAssembler, ProductAssemblyError,
     ProductAssemblyInput,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
     PluginRuntimeBinding, PluginRuntimeClient, PluginRuntimeUnavailableReason, PortResult,
 };
-use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
-use bitfun_runtime_services::{
+use openbitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
+use openbitfun_runtime_services::{
     RuntimeServiceMarkerPort, RuntimeServicesBuilder, RuntimeServicesProvider,
 };
 use std::sync::{Arc, Mutex};
@@ -45,16 +45,16 @@ impl PluginRuntimeClient for AvailablePluginRuntimeClient {
 
 #[derive(Debug, Default)]
 struct ProductShapeSubmissionPort {
-    submitted_turns: Mutex<Vec<bitfun_runtime_ports::AgentSubmissionRequest>>,
+    submitted_turns: Mutex<Vec<openbitfun_runtime_ports::AgentSubmissionRequest>>,
 }
 
 #[async_trait]
-impl bitfun_runtime_ports::AgentSubmissionPort for ProductShapeSubmissionPort {
+impl openbitfun_runtime_ports::AgentSubmissionPort for ProductShapeSubmissionPort {
     async fn create_session(
         &self,
-        request: bitfun_runtime_ports::AgentSessionCreateRequest,
-    ) -> PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
-        Ok(bitfun_runtime_ports::AgentSessionCreateResult::new(
+        request: openbitfun_runtime_ports::AgentSessionCreateRequest,
+    ) -> PortResult<openbitfun_runtime_ports::AgentSessionCreateResult> {
+        Ok(openbitfun_runtime_ports::AgentSessionCreateResult::new(
             "product-shape-session",
             request.session_name,
             request.agent_type,
@@ -63,10 +63,10 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ProductShapeSubmissionPort {
 
     async fn submit_message(
         &self,
-        request: bitfun_runtime_ports::AgentSubmissionRequest,
-    ) -> PortResult<bitfun_runtime_ports::AgentSubmissionResult> {
+        request: openbitfun_runtime_ports::AgentSubmissionRequest,
+    ) -> PortResult<openbitfun_runtime_ports::AgentSubmissionResult> {
         self.submitted_turns.lock().unwrap().push(request.clone());
-        Ok(bitfun_runtime_ports::AgentSubmissionResult {
+        Ok(openbitfun_runtime_ports::AgentSubmissionResult {
             turn_id: request
                 .turn_id
                 .clone()
@@ -80,7 +80,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ProductShapeSubmissionPort {
     }
 }
 
-fn product_full_services() -> bitfun_runtime_services::RuntimeServices {
+fn product_full_services() -> openbitfun_runtime_services::RuntimeServices {
     FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
         .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
@@ -90,7 +90,7 @@ fn product_full_services() -> bitfun_runtime_services::RuntimeServices {
         .expect("product-full services should build")
 }
 
-fn baseline_services() -> bitfun_runtime_services::RuntimeServices {
+fn baseline_services() -> openbitfun_runtime_services::RuntimeServices {
     FakeRuntimeServicesProvider::with_all_required()
         .build_services()
         .expect("baseline services should build")

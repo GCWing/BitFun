@@ -27,7 +27,7 @@
 
 1. 用户提供的截图 / 品牌资料 / 现成代码
 2. `MiniApp/Demo/` 与 `src/crates/contracts/product-domains/src/miniapp/builtin/assets/` 中**最贴近形态**的内置应用——直接 `ls` + `Read` 拿到它的 `style.css`、`index.html`，识别它的视觉语言（间距、圆角、卡片密度、配色）
-3. `--bitfun-*` 主题变量（见 SKILL.md 的"主题集成"章节）——所有颜色都优先 `var(--bitfun-xxx, fallback)`
+3. `--openbitfun-*` 主题变量（见 SKILL.md 的"主题集成"章节）——所有颜色都优先 `var(--openbitfun-xxx, fallback)`
 
 **从零生成是最后选择**——它直接导致千篇一律的"AI 味"产出。
 
@@ -39,13 +39,13 @@
 /* === Design System ===
  * Theme: <一句话描述视觉调性，比如 "克制的工具感，深色优先">
  * Palette:
- *   - dominant: var(--bitfun-bg) / var(--bitfun-text)
- *   - supporting: var(--bitfun-bg-secondary), var(--bitfun-border)
- *   - accent: var(--bitfun-accent)  // 仅用于关键 CTA / 选中态
+ *   - dominant: var(--openbitfun-bg) / var(--openbitfun-text)
+ *   - supporting: var(--openbitfun-bg-secondary), var(--openbitfun-border)
+ *   - accent: var(--openbitfun-accent)  // 仅用于关键 CTA / 选中态
  * Typography:
  *   - heading: 600, 18-22px
  *   - body:    400, 13-14px
- *   - caption: 400, 11-12px, --bitfun-text-muted
+ *   - caption: 400, 11-12px, --openbitfun-text-muted
  * Radius: 8px (cards) / 4px (inputs)
  * Motif: <一种重复的视觉元素，例：图标统一放在 24×24 圆角容器里 / 标题左侧 3px 实心色块>
  * ===================== */
@@ -79,12 +79,12 @@
 
 | 反模式 | 替代方案 |
 |---|---|
-| 默认蓝紫渐变 / Aurora 风背景 | 用 `var(--bitfun-bg)` 或单色 + 一处微妙强调 |
+| 默认蓝紫渐变 / Aurora 风背景 | 用 `var(--openbitfun-bg)` 或单色 + 一处微妙强调 |
 | Emoji 当主图标 | inline SVG 占位（描边图标），或 1-2 字母圆形容器 |
 | 左侧色条 + 圆角卡片组合 | 整张卡片同色边框 + 顶部细条；或仅靠留白与字重区分 |
 | 标题下面加 1px / 2px accent 横线 | 用字重 + 字号 + 留白做层级；横线只在 section 分隔时使用且要全局一致 |
 | 硬画复杂插画 SVG | 占位框 + 显式标注 "Image: 256×160, 待用户提供素材" |
-| Inter / Roboto / Arial 兜底就完事 | `var(--bitfun-font-sans)` 优先，fallback 写完整：`-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif` |
+| Inter / Roboto / Arial 兜底就完事 | `var(--openbitfun-font-sans)` 优先，fallback 写完整：`-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif` |
 | 全部色块/字号给同等视觉权重 | dominance：一个颜色占 60-70%，1-2 个 supporting，1 个 accent |
 | 文字 < 12px / hit target < 32px | 任何可点击元素 ≥ 32px；正文 ≥ 13px；caption ≥ 11px |
 | 每个 section 都用一种新的卡片样式 | 一个 motif 贯穿；不同区块用相同卡片，靠内容区分 |
@@ -98,9 +98,9 @@
 
 ### 配色
 
-1. **首选**：直接 `var(--bitfun-*)` 系列，让小应用与宿主主题协同。
+1. **首选**：直接 `var(--openbitfun-*)` 系列，让小应用与宿主主题协同。
 2. **fallback**：每个 `var()` 都带 fallback，用于导出为独立应用时仍可用。
-3. **主题区分**：所有颜色都要在 light / dark 各测一次。可以利用 `[data-bf-appearance-mode="light"]` 选择器做差异化覆写。
+3. **主题区分**：所有颜色都要在 light / dark 各测一次。可以利用 `[data-openbitfun-appearance-mode="light"]` 选择器做差异化覆写。
 4. **辅助色板**（仅当用户明确需要"专属配色"时使用，否则默认走主题）——参考下方 10 套从内容出发的配色：
 
 | 主题感觉 | 主色 | 辅助 | 强调 | 适合的小应用 |
@@ -120,9 +120,9 @@
 
 ```css
 :root {
-  --font-heading: var(--bitfun-font-sans, -apple-system, 'Segoe UI', sans-serif);
-  --font-body:    var(--bitfun-font-sans, -apple-system, 'Segoe UI', sans-serif);
-  --font-mono:    var(--bitfun-font-mono, ui-monospace, SFMono-Regular, monospace);
+  --font-heading: var(--openbitfun-font-sans, -apple-system, 'Segoe UI', sans-serif);
+  --font-body:    var(--openbitfun-font-sans, -apple-system, 'Segoe UI', sans-serif);
+  --font-mono:    var(--openbitfun-font-mono, ui-monospace, SFMono-Regular, monospace);
 }
 ```
 
@@ -137,7 +137,7 @@
 ### 间距与圆角
 
 - 间距档位：`4 / 8 / 12 / 16 / 24 / 32`，挑 4 个用，不要全用。
-- 圆角档位：`var(--bitfun-radius)`（卡片）+ `var(--bitfun-radius-lg)`（浮层）；输入框可固定 4-6px。
+- 圆角档位：`var(--openbitfun-radius)`（卡片）+ `var(--openbitfun-radius-lg)`（浮层）；输入框可固定 4-6px。
 - 卡片内边距：紧凑 12px / 标准 16px / 宽松 20px——**全应用统一**。
 
 ---
@@ -211,12 +211,12 @@
 
 ---
 
-## 七、与 BitFun 工具型 MiniApp 的契合度
+## 七、与 OpenBitFun 工具型 MiniApp 的契合度
 
-绝大多数 BitFun 用户产出的小应用是**工具型**（regex 调试 / git 视图 / 编码自拍 / 计算器…），它们的设计调性应当：
+绝大多数 OpenBitFun 用户产出的小应用是**工具型**（regex 调试 / git 视图 / 编码自拍 / 计算器…），它们的设计调性应当：
 
 - 信息密度高、操作路径短
-- 配色冷静（首选 `--bitfun-*` 主题）
+- 配色冷静（首选 `--openbitfun-*` 主题）
 - 反对"营销页式大字 + 大图 + 渐变"
 - 仿照 `regex-playground` / `coding-selfie` / `git-graph` 的克制感
 
@@ -253,4 +253,4 @@
 - `MiniApp/Demo/git-graph/` — 复杂应用拆模块的范例（`ui/components`, `ui/panels`, `ui/services`）
 - `MiniApp/Demo/icon-design-system/` — 设计系统型应用范例
 
-读它们的 `style.css` 顶部注释和 `meta.json` 的 `i18n` 块，是最快理解"BitFun 味道"的方式。
+读它们的 `style.css` 顶部注释和 `meta.json` 的 `i18n` 块，是最快理解"OpenBitFun 味道"的方式。

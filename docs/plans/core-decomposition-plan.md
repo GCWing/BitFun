@@ -1,4 +1,4 @@
-# BitFun Core 拆解与运行时迁移计划
+# OpenBitFun Core 拆解与运行时迁移计划
 
 本文件只维护 Core 边界债务、迁移顺序和退出条件。稳定架构以
 [产品运行时架构](../architecture/product-architecture.md)为准；Agent Runtime、产品定制和 OpenCode 扩展分别由
@@ -22,11 +22,11 @@
 | 事实 | 当前状态 | 结论 |
 |---|---|---|
 | 产品能力组装 | `DeliveryProfile`、`ProductAssembler`、能力计划、服务可用性和测试已存在 | 这些是可测试的 assembly facts，不代表产品入口已接入 |
-| CLI / Desktop / ACP | CLI 与 ACP 已分别提交对应 `DeliveryProfile`、消费 Runtime Parts/SDK，并选择经过评审的 Core owner feature closure；Desktop 仍启用 `bitfun-core/product-full`，主交互已消费由现有 owner 构造的窄口径 SDK 接口 | 三个入口仍复用单一 Core runtime owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
+| CLI / Desktop / ACP | CLI 与 ACP 已分别提交对应 `DeliveryProfile`、消费 Runtime Parts/SDK，并选择经过评审的 Core owner feature closure；Desktop 仍启用 `openbitfun-core/product-full`，主交互已消费由现有 owner 构造的窄口径 SDK 接口 | 三个入口仍复用单一 Core runtime owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
 | Server | 当前生产路由只形成 health/info/ping 基线 | 没有插件状态或独立产品组装完整流程 |
 | Server / Remote / Web / Mobile Web / SDK profile | 当前为空计划、未接入入口或仅有 preview 测试 | 不得据枚举值宣称产品能力已交付 |
-| Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v9 preview 接口和 smoke test；未接入真实执行路径的通用 Harness registry 已删除 | 发布边界仍需真实嵌入方证明 |
-| 插件运行时 | 现有路径只覆盖 BitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用消息结构或静态候选扩张稳定 ABI |
+| Agent Runtime SDK | 已有无 `openbitfun-core` 依赖的 v9 preview 接口和 smoke test；未接入真实执行路径的通用 Harness registry 已删除 | 发布边界仍需真实嵌入方证明 |
+| 插件运行时 | 现有路径只覆盖 OpenBitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用消息结构或静态候选扩张稳定 ABI |
 | Relay | room/device 状态、account/sync 存储、asset store 与 HTTP/WebSocket router 已归属 `services/relay-service`，standalone 与 embedded 入口同向消费；embedded bind、静态 fallback 和任务生命周期由 Desktop 窄宿主端口持有 | Cargo metadata 门禁覆盖 workspace、独立 manifest、normal/build/dev 依赖及 optional/target 变体；宿主归位已完成并由生命周期与边界测试保护 |
 | CLI CI | 独立 Linux job 运行 CLI test，通用三平台 workspace check 覆盖 CLI 编译；Linux PTY 与 Windows ConPTY 有启动页生命周期及本地确定性流式模型夹具驱动的活动 turn 进程测试，发布归档上传前校验 SHA-256 并解压执行 | 参数/序列化/前置失败和组装已有 focused contract；本地模型 HTTP 403 授权拒绝、流中断后的重试失败、Linux PTY/Windows ConPTY Chat resize/取消、`exec` Ctrl+C 及 Patch I/O 失败已有分层回归，真实供应商审批交互、macOS 活动 PTY 与 OS 级终端故障注入仍需补齐 |
 
@@ -97,7 +97,7 @@ CLI-P0 整体退出条件尚未满足；真实供应商审批流、OS 级终端�
 
 - Server 先从现有 health/info/ping 基线选择一个真实 API 消费方，不预建完整产品 surface。
 - Remote 必须在实际工作区执行域完成能力协商，不以本地 provider 代替。
-- SDK 只有在外部或仓库内独立嵌入方无需 `bitfun-core/product-full` 即可完成最小 session/turn/event 流程后，才从 preview 晋级。
+- SDK 只有在外部或仓库内独立嵌入方无需 `openbitfun-core/product-full` 即可完成最小 session/turn/event 流程后，才从 preview 晋级。
 - 空 capability plan、disabled stub 和单元测试用于保护降级，不构成产品完成证据。
 
 ## 5. 与插件兼容的交叉点
@@ -129,9 +129,9 @@ Core 只为插件兼容提供已有 owner 的窄接口：真实工具、类型�
 | 文档与仓库边界 | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | 入口 profile 迁移 | 对应 app 的 check/test、入口级 smoke、profile/服务可用性断言、旧路径等价用例 |
 | Relay 共享 owner / Cargo 方向 | standalone 与 embedded focused tests、Cargo 依赖方向失败用例、Desktop 宿主启停/失败回滚/静态缓存行为测试 |
-| Agent Runtime / SDK | `cargo test -p bitfun-agent-runtime --no-default-features --features agent-runtime --lib`，最小 no-`bitfun-core` 嵌入测试 |
+| Agent Runtime / SDK | `cargo test -p openbitfun-agent-runtime --no-default-features --features agent-runtime --lib`，最小 no-`openbitfun-core` 嵌入测试 |
 | 插件首个执行切片 | runtime ports、`PluginRuntimeClient`、生态 adapter、`ScriptToolRuntime`、Plugin Host 与真实固定 fixture 的端到端调用 |
-| CLI | `cargo check -p bitfun-cli`，`cargo test -p bitfun-cli`，结构化协议和 package smoke |
+| CLI | `cargo check -p openbitfun-cli`，`cargo test -p openbitfun-cli`，结构化协议和 package smoke |
 
 ## 8. 暂停条件
 

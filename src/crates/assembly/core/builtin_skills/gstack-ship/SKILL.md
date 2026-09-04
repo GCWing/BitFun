@@ -12,9 +12,9 @@ description: |
 
 You are running the `/ship` workflow. This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step. The user said `/ship` which means DO IT. Run straight through and output the PR URL at the end.
 
-## BitFun Dispatch
+## OpenBitFun Dispatch
 
-When this skill is invoked by BitFun, this skill supplies the release-engineering checklist. Use existing Task sub-agents only for read-only readiness checks that can run independently, then keep all mutations in the main session.
+When this skill is invoked by OpenBitFun, this skill supplies the release-engineering checklist. Use existing Task sub-agents only for read-only readiness checks that can run independently, then keep all mutations in the main session.
 
 - Do not assume a Release Engineer sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom release/CI/docs sub-agents if available; otherwise use `Explore` for readiness mapping and built-in review sub-agents for final diff checks.
@@ -72,7 +72,7 @@ Never skip a verification step because a prior `/ship` run already performed it.
 After completing the review, read the review log and config to display the dashboard.
 
 ```bash
-true # BitFun reads review context from the current session
+true # OpenBitFun reads review context from the current session
 ```
 
 Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, review, plan-design-review, design-review-lite, adversarial-review, outside-voice-review, outside-voice-plan-review). Ignore entries with timestamps older than 7 days. For the Eng Review row, show whichever is more recent between `review` (diff-scoped pre-landing review) and `plan-eng-review` (plan-stage architecture review). Append "(DIFF)" or "(PLAN)" to the status to distinguish. For the Adversarial row, show whichever is more recent between `adversarial-review` (new auto-scaled) and `outside-voice-review` (legacy). For Design Review, show whichever is more recent between `plan-design-review` (full visual audit) and `design-review-lite` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. For the Outside Voice row, show the most recent `outside-voice-plan-review` entry — this captures outside voices from both /plan-ceo-review and /plan-eng-review.
@@ -103,7 +103,7 @@ Display:
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance.
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both BitFun adversarial subagent and outside-voice sub-agent adversarial challenge. Large diffs (200+ lines) additionally get outside-voice sub-agent structured review with P1 gate. No configuration needed.
+- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both OpenBitFun adversarial subagent and outside-voice sub-agent adversarial challenge. Large diffs (200+ lines) additionally get outside-voice sub-agent structured review with P1 gate. No configuration needed.
 - **Outside Voice (optional):** Independent plan review from a different AI model. Offered after all review sections complete in /plan-ceo-review and /plan-eng-review. Falls back to independent subagent if outside-voice sub-agent is unavailable. Never gates shipping.
 
 **Verdict logic:**
@@ -126,7 +126,7 @@ Check diff size: `git diff <base>...HEAD --stat | tail -1`. If the diff is >200 
 
 If CEO Review is missing, mention as informational ("CEO Review not run — recommended for product changes") but do NOT block.
 
-For Design Review: run `source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null)`. If `SCOPE_FRONTEND=true` and no design review (plan-design-review or design-review-lite) exists in the dashboard, mention: "Design Review not run — this PR changes frontend code. The lite design check will run automatically in Step 3.5, but consider running /design-review for a full visual audit post-implementation." Still never block.
+For Design Review: run `source <(true # OpenBitFun infers diff scope with git/rg <base> 2>/dev/null)`. If `SCOPE_FRONTEND=true` and no design review (plan-design-review or design-review-lite) exists in the dashboard, mention: "Design Review not run — this PR changes frontend code. The lite design check will run automatically in Step 3.5, but consider running /design-review for a full visual audit post-implementation." Still never block.
 
 Continue to Step 1.5 — do NOT block or ask. Ship runs its own review in Step 3.5.
 
@@ -197,7 +197,7 @@ setopt +o nomatch 2>/dev/null || true  # zsh compat
 ls jest.config.* vitest.config.* playwright.config.* .rspec pytest.ini pyproject.toml phpunit.xml 2>/dev/null
 ls -d test/ tests/ spec/ __tests__/ cypress/ e2e/ 2>/dev/null
 # Check opt-out marker
-[ -f .bitfun/team/no-test-bootstrap ] && echo "BOOTSTRAP_DECLINED"
+[ -f .openbitfun/team/no-test-bootstrap ] && echo "BOOTSTRAP_DECLINED"
 ```
 
 **If test framework detected** (config files or test directories found):
@@ -210,7 +210,7 @@ Store conventions as prose context for use in Phase 8e.5 or Step 3.4. **Skip the
 **If NO runtime detected** (no config files found): Use AskUserQuestion:
 "I couldn't detect your project's language. What runtime are you using?"
 Options: A) Node.js/TypeScript B) Ruby/Rails C) Python D) Go E) Rust F) PHP G) Elixir H) This project doesn't need tests.
-If user picks H → write `.bitfun/team/no-test-bootstrap` and continue without tests.
+If user picks H → write `.openbitfun/team/no-test-bootstrap` and continue without tests.
 
 **If runtime detected but no test framework — bootstrap:**
 
@@ -242,7 +242,7 @@ B) [Alternative] — [rationale]. Includes: [packages]
 C) Skip — don't set up testing right now
 RECOMMENDATION: Choose A because [reason based on project context]"
 
-If user picks C → write `.bitfun/team/no-test-bootstrap`. Tell user: "If you change your mind later, delete `.bitfun/team/no-test-bootstrap` and re-run." Continue without tests.
+If user picks C → write `.openbitfun/team/no-test-bootstrap`. Tell user: "If you change your mind later, delete `.openbitfun/team/no-test-bootstrap` and re-run." Continue without tests.
 
 If multiple runtimes detected (monorepo) → ask which runtime to set up first, with option to do both sequentially.
 
@@ -756,12 +756,12 @@ Using the coverage percentage from the diagram in substep 4 (the `COVERAGE: X/Y 
 After producing the coverage diagram, write a test plan artifact so `/qa` and `/qa-only` can consume it:
 
 ```bash
-SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.openbitfun/team/projects/$SLUG
 USER=$(whoami)
 DATETIME=$(date +%Y%m%d-%H%M%S)
 ```
 
-Write to `$HOME/.bitfun/team/projects/{slug}/{user}-{branch}-ship-test-plan-{datetime}.md`:
+Write to `$HOME/.openbitfun/team/projects/{slug}/{user}-{branch}-ship-test-plan-{datetime}.md`:
 
 ```markdown
 # Test Plan
@@ -796,11 +796,11 @@ Repo: {owner/repo}
 setopt +o nomatch 2>/dev/null || true  # zsh compat
 BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-')
 REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
-# Compute project slug for $HOME/.bitfun/team/projects/ lookup
+# Compute project slug for $HOME/.openbitfun/team/projects/ lookup
 _PLAN_SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-' | tr -cd 'a-zA-Z0-9._-') || true
 _PLAN_SLUG="${_PLAN_SLUG:-$(basename "$PWD" | tr -cd 'a-zA-Z0-9._-')}"
 # Search common plan file locations (project designs first, then personal/local)
-for PLAN_DIR in "$HOME/.bitfun/team/projects/$_PLAN_SLUG" "$HOME/.bitfun/team/plans" "$HOME/.codex/plans" ".bitfun/team/plans"; do
+for PLAN_DIR in "$HOME/.openbitfun/team/projects/$_PLAN_SLUG" "$HOME/.openbitfun/team/plans" "$HOME/.codex/plans" ".openbitfun/team/plans"; do
   [ -d "$PLAN_DIR" ] || continue
   PLAN=$(ls -t "$PLAN_DIR"/*.md 2>/dev/null | xargs grep -l "$BRANCH" 2>/dev/null | head -1)
   [ -z "$PLAN" ] && PLAN=$(ls -t "$PLAN_DIR"/*.md 2>/dev/null | xargs grep -l "$REPO" 2>/dev/null | head -1)
@@ -965,7 +965,7 @@ Add a `## Verification Results` section to the PR body (Step 8):
 
 ## Prior Learnings
 
-Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
+Use only OpenBitFun in-session memory, project docs, `.openbitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior OpenBitFun context applied: <source>`.
 
 ## Step 3.48: Scope Drift Detection
 
@@ -1046,7 +1046,7 @@ higher confidence.
 Check if the diff touches frontend files using `git diff + rg scope inference`:
 
 ```bash
-source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null)
+source <(true # OpenBitFun infers diff scope with git/rg <base> 2>/dev/null)
 ```
 
 **If `SCOPE_FRONTEND=false`:** Skip design review silently. No output.
@@ -1069,7 +1069,7 @@ source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null)
 6. **Log the result** for the Review Readiness Dashboard:
 
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count, COMMIT = output of `git rev-parse --short HEAD`.
@@ -1080,12 +1080,12 @@ Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "is
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-If a suitable BitFun outside-voice or review sub-agent is available, run a lightweight design check on the diff:
+If a suitable OpenBitFun outside-voice or review sub-agent is available, run a lightweight design check on the diff:
 
 ```bash
 TMPERR_DRL=$(mktemp /tmp/codex-drl-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 
 Use a 5-minute timeout (`timeout: 300000`). After the command completes, read stderr:
@@ -1104,7 +1104,7 @@ Present outside-voice sub-agent output under a `CODEX (design):` header, merged 
 ### Detect stack and scope
 
 ```bash
-source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null) || true
+source <(true # OpenBitFun infers diff scope with git/rg <base> 2>/dev/null) || true
 # Detect stack for specialist context
 STACK=""
 [ -f Gemfile ] && STACK="${STACK}ruby "
@@ -1130,7 +1130,7 @@ echo "TEST_FW: ${TEST_FW:-unknown}"
 ### Read specialist hit rates (adaptive gating)
 
 ```bash
-true # BitFun has no external specialist-stats helper 2>/dev/null || true
+true # OpenBitFun has no external specialist-stats helper 2>/dev/null || true
 ```
 
 ### Select specialists
@@ -1167,7 +1167,7 @@ Note which specialists were selected, gated, and skipped. Print the selection:
 
 ### Dispatch specialists in parallel
 
-For each selected specialist, launch an independent subagent via BitFun's Task tool.
+For each selected specialist, launch an independent subagent via OpenBitFun's Task tool.
 **Launch ALL selected specialists in a single message** (multiple Task tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 
@@ -1180,7 +1180,7 @@ Construct the prompt for each specialist. The prompt includes:
 3. Past learnings for this domain (if any exist):
 
 ```bash
-true # BitFun has no external learnings helper
+true # OpenBitFun has no external learnings helper
 ```
 
 If learnings are found, include them: "Past learnings for this domain: {learnings}"
@@ -1307,7 +1307,7 @@ If the Red Team subagent fails or times out, skip silently and continue.
 Before classifying findings, check if any were previously skipped by the user in a prior review on this branch.
 
 ```bash
-true # BitFun reads review context from the current session
+true # OpenBitFun reads review context from the current session
 ```
 
 Parse the output: only lines BEFORE `---CONFIG---` are JSONL entries (the output also contains `---CONFIG---` and `---HEAD---` footer sections that are not JSONL — ignore those).
@@ -1358,7 +1358,7 @@ Output a summary header: `Pre-Landing Review: N issues (X critical, Y informatio
 
 9. Persist the review result to the review log:
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 Substitute TIMESTAMP (ISO 8601), STATUS ("clean" if no issues, "issues_found" otherwise),
 and N values from the summary counts above. The `via:"ship"` distinguishes from standalone `/review` runs.
@@ -1411,7 +1411,7 @@ For each classified comment:
 
 ## Step 3.8: Adversarial review (always-on)
 
-Every diff gets adversarial review from both BitFun and outside-voice sub-agent. LOC is not a proxy for risk — a 5-line auth change can be critical.
+Every diff gets adversarial review from both OpenBitFun and outside-voice sub-agent. LOC is not a proxy for risk — a 5-line auth change can be critical.
 
 **Detect diff size and tool availability:**
 
@@ -1420,19 +1420,19 @@ DIFF_INS=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ insertion'
 DIFF_DEL=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
 DIFF_TOTAL=$((DIFF_INS + DIFF_DEL))
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
-# Legacy opt-out — only gates outside-voice sub-agent passes, BitFun always runs
-OLD_CFG="" # BitFun has no external codex_reviews config
+# Legacy opt-out — only gates outside-voice sub-agent passes, OpenBitFun always runs
+OLD_CFG="" # OpenBitFun has no external codex_reviews config
 echo "DIFF_SIZE: $DIFF_TOTAL"
 echo "OLD_CFG: ${OLD_CFG:-not_set}"
 ```
 
-If `OLD_CFG` is `disabled`: skip outside-voice sub-agent passes only. BitFun adversarial subagent still runs (it's free and fast). Jump to the "BitFun adversarial subagent" section.
+If `OLD_CFG` is `disabled`: skip outside-voice sub-agent passes only. OpenBitFun adversarial subagent still runs (it's free and fast). Jump to the "OpenBitFun adversarial subagent" section.
 
 **User override:** If the user explicitly requested "full review", "structured review", or "P1 gate", also run the outside-voice sub-agent structured review regardless of diff size.
 
 ---
 
-### BitFun adversarial subagent (always runs)
+### OpenBitFun adversarial subagent (always runs)
 
 Dispatch via the Task tool. The subagent has fresh context — no checklist bias from the structured review. This genuine independence catches things the primary reviewer is blind to.
 
@@ -1441,18 +1441,18 @@ Subagent prompt:
 
 Present findings under an `ADVERSARIAL REVIEW (independent subagent):` header. **FIXABLE findings** flow into the same Fix-First pipeline as the structured review. **INVESTIGATE findings** are presented as informational.
 
-If the subagent fails or times out: "BitFun adversarial subagent unavailable. Continuing."
+If the subagent fails or times out: "OpenBitFun adversarial subagent unavailable. Continuing."
 
 ---
 
 ### outside-voice sub-agent adversarial challenge (always runs when available)
 
-If a suitable BitFun outside-voice or review sub-agent is available AND `OLD_CFG` is NOT `disabled`:
+If a suitable OpenBitFun outside-voice or review sub-agent is available AND `OLD_CFG` is NOT `disabled`:
 
 ```bash
 TMPERR_ADV=$(mktemp /tmp/codex-adv-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 
 Set ExecCommand's `yield_time_ms` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. After the command completes, read stderr:
@@ -1463,13 +1463,13 @@ cat "$TMPERR_ADV"
 Present the full output verbatim. This is informational — it never blocks shipping.
 
 **Error handling:** All errors are non-blocking — adversarial review is a quality enhancement, not a prerequisite.
-- **Outside-voice unavailable:** If the selected BitFun sub-agent cannot run, skip this informational pass and continue with the main-session review.
+- **Outside-voice unavailable:** If the selected OpenBitFun sub-agent cannot run, skip this informational pass and continue with the main-session review.
 - **Timeout:** "outside-voice sub-agent timed out after 5 minutes."
 - **Empty response:** "outside-voice sub-agent returned no response. Stderr: <paste relevant error>."
 
 **Cleanup:** Run `rm -f "$TMPERR_ADV"` after processing.
 
-If outside-voice sub-agent is not available in the current BitFun runtime, run the BitFun adversarial path only and note that cross-model coverage was skipped.
+If outside-voice sub-agent is not available in the current OpenBitFun runtime, run the OpenBitFun adversarial path only and note that cross-model coverage was skipped.
 
 ---
 
@@ -1481,7 +1481,7 @@ If `DIFF_TOTAL >= 200` AND outside-voice sub-agent is available AND `OLD_CFG` is
 TMPERR=$(mktemp /tmp/outside-voice-review-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 cd "$_REPO_ROOT"
-Use the BitFun Task tool to dispatch a suitable independent read-only structured review sub-agent over the diff.
+Use the OpenBitFun Task tool to dispatch a suitable independent read-only structured review sub-agent over the diff.
 ```
 
 Set ExecCommand's `yield_time_ms` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. Present output under `CODEX SAYS (code review):` header.
@@ -1495,13 +1495,13 @@ A) Investigate and fix now (recommended)
 B) Continue — review will still complete
 ```
 
-If A: address the findings. After fixing, re-run tests (Step 3) since code has changed. Re-run `BitFun Task outside-voice review` to verify.
+If A: address the findings. After fixing, re-run tests (Step 3) since code has changed. Re-run `OpenBitFun Task outside-voice review` to verify.
 
 Read stderr for errors (same error handling as outside-voice sub-agent adversarial above).
 
 After stderr: `rm -f "$TMPERR"`
 
-If `DIFF_TOTAL < 200`: skip this section silently. The BitFun + outside-voice sub-agent adversarial passes provide sufficient coverage for smaller diffs.
+If `DIFF_TOTAL < 200`: skip this section silently. The OpenBitFun + outside-voice sub-agent adversarial passes provide sufficient coverage for smaller diffs.
 
 ---
 
@@ -1509,7 +1509,7 @@ If `DIFF_TOTAL < 200`: skip this section silently. The BitFun + outside-voice su
 
 After all passes complete, persist:
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if outside-voice sub-agent ran, "task" if only independent subagent ran. GATE = the outside-voice sub-agent structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if outside-voice sub-agent was unavailable. If all passes failed, do NOT persist.
 
@@ -1523,10 +1523,10 @@ After all passes complete, synthesize findings across all sources:
 ADVERSARIAL REVIEW SYNTHESIS (always-on, N lines):
 ════════════════════════════════════════════════════════════
   High confidence (found by multiple sources): [findings agreed on by >1 pass]
-  Unique to BitFun structured review: [from earlier step]
-  Unique to BitFun adversarial: [from subagent]
+  Unique to OpenBitFun structured review: [from earlier step]
+  Unique to OpenBitFun adversarial: [from subagent]
   Unique to outside-voice sub-agent: [from codex adversarial or code review, if ran]
-  Models used: BitFun structured ✓  BitFun adversarial ✓/✗  outside-voice sub-agent ✓/✗
+  Models used: OpenBitFun structured ✓  OpenBitFun adversarial ✓/✗  outside-voice sub-agent ✓/✗
 ════════════════════════════════════════════════════════════
 ```
 
@@ -1540,7 +1540,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun has no external telemetry helper
+true # OpenBitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -1548,7 +1548,7 @@ true # BitFun has no external telemetry helper
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
+`inferred` (AI deduction), `cross-model` (both OpenBitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.
@@ -1839,7 +1839,7 @@ you missed it.>
 - [x] All Rails tests pass (N runs, 0 failures)
 - [x] All Vitest tests pass (N tests)
 
-Generated with BitFun
+Generated with OpenBitFun
 ```
 
 **If GitHub:**
@@ -1870,9 +1870,9 @@ Print the branch name, remote URL, and instruct the user to create the PR/MR man
 ## Step 8.5: Auto-invoke /document-release
 
 After the PR is created, automatically sync project documentation. Load
-`user::bitfun-system::gstack-document-release` with the Skill tool and execute its full workflow:
+`user::openbitfun-system::gstack-document-release` with the Skill tool and execute its full workflow:
 
-1. Load `user::bitfun-system::gstack-document-release` with the Skill tool.
+1. Load `user::openbitfun-system::gstack-document-release` with the Skill tool.
 2. Follow its instructions — it reads all .md files in the project, cross-references
    the diff, and updates anything that drifted (README, ARCHITECTURE, CONTRIBUTING,
    AGENTS.md, TODOS, etc.)
@@ -1894,13 +1894,13 @@ If Step 8.5 created a docs commit, re-edit the PR/MR body to include the latest 
 Log coverage and plan completion data so `/retro` can track trends:
 
 ```bash
-SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.openbitfun/team/projects/$SLUG
 ```
 
-Append to `$HOME/.bitfun/team/projects/$SLUG/$BRANCH-reviews.jsonl`:
+Append to `$HOME/.openbitfun/team/projects/$SLUG/$BRANCH-reviews.jsonl`:
 
 ```bash
-echo '{"skill":"ship","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","coverage_pct":COVERAGE_PCT,"plan_items_total":PLAN_TOTAL,"plan_items_done":PLAN_DONE,"verification_result":"VERIFY_RESULT","version":"VERSION","branch":"BRANCH"}' >> $HOME/.bitfun/team/projects/$SLUG/$BRANCH-reviews.jsonl
+echo '{"skill":"ship","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","coverage_pct":COVERAGE_PCT,"plan_items_total":PLAN_TOTAL,"plan_items_done":PLAN_DONE,"verification_result":"VERIFY_RESULT","version":"VERSION","branch":"BRANCH"}' >> $HOME/.openbitfun/team/projects/$SLUG/$BRANCH-reviews.jsonl
 ```
 
 Substitute from earlier steps:

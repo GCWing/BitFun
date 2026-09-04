@@ -179,7 +179,7 @@ if (Get-Module -Name PSReadLine) {
 	# prediction to prevent ConPTY rendering interference. ConPTY's async
 	# renderer can flush prediction rendering (cursor repositioning, partial
 	# text fragments) AFTER the 633;C marker, polluting captured output.
-	if ($env:BITFUN_NONINTERACTIVE -eq "1") {
+	if ($env:OPENBITFUN_NONINTERACTIVE -eq "1") {
 		try { Set-PSReadLineOption -PredictionSource None } catch {}
 	}
 }

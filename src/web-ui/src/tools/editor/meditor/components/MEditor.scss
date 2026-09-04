@@ -5,29 +5,29 @@
   overflow: hidden;
   
   &-toolbar {
-    padding: var(--bf-space-2);
-    border-bottom: 1px solid var(--bf-color-border-default);
-    background: var(--bf-color-action-quiet-hover);
+    padding: var(--openbitfun-space-2);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-action-quiet-hover);
     backdrop-filter: blur(8px);
   }
 
   &-notice {
     display: flex;
     align-items: flex-start;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent);
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
 
     &__icon {
       flex: 0 0 auto;
       width: 16px;
       height: 16px;
       margin-top: 2px;
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
   }
   
@@ -49,13 +49,13 @@
     resize: none;
     border: 0;
     outline: 0;
-    padding: var(--bf-space-3);
+    padding: var(--openbitfun-space-3);
     box-sizing: border-box;
-    background: var(--bf-color-surface-scene);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-surface-scene);
+    color: var(--openbitfun-color-content-primary);
     font: inherit;
-    font-family:var(--bf-type-code-md-font-family);
-    line-height: var(--bf-type-body-lg-line-height);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    line-height: var(--openbitfun-type-body-lg-line-height);
     white-space: pre-wrap;
     overflow: auto;
   }
@@ -71,45 +71,45 @@
   &-mode-split {
     .m-editor-content {
       > .m-editor-edit-panel {
-        border-right: 1px solid var(--bf-color-border-default);
+        border-right: 1px solid var(--openbitfun-color-border-default);
       }
     }
   }
   
   &-dark {
-    background: var(--bf-color-surface-scene);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-surface-scene);
+    color: var(--openbitfun-color-content-primary);
     
     .m-editor-textarea {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
     
     .m-editor-toolbar {
-      background: var(--bf-color-action-quiet-hover);
-      border-bottom-color: var(--bf-color-border-default);
+      background: var(--openbitfun-color-action-quiet-hover);
+      border-bottom-color: var(--openbitfun-color-border-default);
     }
     
     .m-editor-edit-panel {
-      border-right-color: var(--bf-color-border-default) !important;
+      border-right-color: var(--openbitfun-color-border-default) !important;
     }
   }
   
   &-light {
-    background: var(--bf-color-surface-scene);
-    color: var(--bf-color-content-primary);
-    border: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-scene);
+    color: var(--openbitfun-color-content-primary);
+    border: 1px solid var(--openbitfun-color-border-default);
     
     .m-editor-textarea {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
     
     .m-editor-toolbar {
-      background: var(--bf-color-action-quiet-hover);
-      border-bottom-color: var(--bf-color-border-default);
+      background: var(--openbitfun-color-action-quiet-hover);
+      border-bottom-color: var(--openbitfun-color-border-default);
     }
     
     .m-editor-edit-panel {
-      border-right-color: var(--bf-color-border-default) !important;
+      border-right-color: var(--openbitfun-color-border-default) !important;
     }
 
   }

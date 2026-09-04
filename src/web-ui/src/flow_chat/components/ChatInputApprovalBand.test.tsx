@@ -38,8 +38,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactElement }) => <>{children}</>,
 }));
 
@@ -56,7 +56,7 @@ function request(overrides: Partial<PermissionRequest> = {}): PermissionRequest 
     order: 0,
     sessionId: 'session-1',
     toolCallId: 'tool-1',
-    projectPath: '/workspace/BitFun',
+    projectPath: '/workspace/OpenBitFun',
     projectId: 'project-1',
     agentId: 'agentic',
     action: 'edit',
@@ -133,7 +133,7 @@ describe('ChatInputApprovalBand', () => {
       );
     });
 
-    expect(container.querySelector('[data-bf-part="risk"]')?.textContent).toBe(
+    expect(container.querySelector('[data-openbitfun-part="risk"]')?.textContent).toBe(
       'Save status as permission.visibility.public without deploying.',
     );
   });
@@ -258,12 +258,12 @@ describe('ChatInputApprovalBand', () => {
     });
 
     await click('chat-input-approval-allow');
-    expect(container.querySelector('[data-bf-part="error"]')?.textContent).toBe(
+    expect(container.querySelector('[data-openbitfun-part="error"]')?.textContent).toBe(
       'The reply could not be delivered.',
     );
     expect(
       container.querySelector<HTMLElement>('[data-testid="chat-input-approval-band"]')
-        ?.dataset.bfState,
+        ?.dataset.openbitfunState,
     ).toBe('error');
     expect(
       container.querySelector<HTMLButtonElement>('[data-testid="chat-input-approval-allow"]')?.disabled,

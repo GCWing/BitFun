@@ -3,9 +3,9 @@
 
   &__optional-label {
     margin-left: 4px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     opacity: 0.75;
   }
   
@@ -14,8 +14,8 @@
   &__section {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-3);
-    margin-bottom: var(--bf-space-6);
+    gap: var(--openbitfun-space-3);
+    margin-bottom: var(--openbitfun-space-6);
     
     &:last-child {
       margin-bottom: 0;
@@ -28,12 +28,12 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    color: var(--bf-color-content-muted);
-    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    color: var(--openbitfun-color-content-muted);
+    transition: color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
   
   &__section-content {
-    padding-left: var(--bf-space-1);
+    padding-left: var(--openbitfun-space-1);
     animation: default-model-fade-in 0.2s ease;
   }
   
@@ -62,11 +62,11 @@
     
     &:hover {
       .default-model-config__expand-text {
-        color: var(--bf-color-content-secondary);
+        color: var(--openbitfun-color-content-secondary);
       }
       
       .default-model-config__expand-line {
-        border-color: var(--bf-color-border-default);
+        border-color: var(--openbitfun-color-border-default);
       }
     }
     
@@ -83,14 +83,14 @@
     width: calc(40% - 40px);
     height: 0;
     border: none;
-    border-top: 1px dashed var(--bf-color-border-subtle);
+    border-top: 1px dashed var(--openbitfun-color-border-subtle);
     transition: border-color 0.15s ease;
   }
   
   &__expand-text {
     flex-shrink: 0;
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
     transition: color 0.15s ease;
     white-space: nowrap;
   }
@@ -108,54 +108,54 @@
   &__core-section {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-5);
+    gap: var(--openbitfun-space-5);
   }
   
   &__model-slot {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
   
   &__slot-header {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
   
   &__slot-label {
-    font-size: var(--bf-type-body-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
   
   &__slot-badge {
     display: inline-flex;
     align-items: center;
     padding: 2px 8px;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-status-success-surface);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-status-success-surface);
     border: none;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     
     &--optional {
-      background: var(--bf-color-status-warning-surface);
-      color: var(--bf-color-content-muted);
+      background: var(--openbitfun-color-status-warning-surface);
+      color: var(--openbitfun-color-content-muted);
     }
   }
   
   &__slot-description {
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-body-sm-line-height);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     margin: 0;
   }
   
   &__slot-hint {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
     margin: 0;
     font-style: italic;
   }
@@ -169,25 +169,25 @@
   &__capability-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
   
   &__capability-item {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) 0;
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) 0;
     background: transparent;
     border: none;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     
     &--configured {
       .default-model-config__capability-status {
-        color: var(--bf-color-accent-default);
-        font-weight: var(--bf-type-label-sm-font-weight);
+        color: var(--openbitfun-color-accent-default);
+        font-weight: var(--openbitfun-type-label-sm-font-weight);
       }
     }
   }
@@ -196,26 +196,26 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
   
   &__capability-label {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    gap: var(--openbitfun-space-2);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
     
     svg {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
       flex-shrink: 0;
     }
   }
   
   &__capability-status {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -223,44 +223,44 @@
   }
   
   &__capability-description {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     margin: 0;
   }
   
   
   
   &__advanced-settings {
-    margin-top: var(--bf-space-4);
-    border-top: 1px dashed var(--bf-color-border-default);
-    padding-top: var(--bf-space-2);
+    margin-top: var(--openbitfun-space-4);
+    border-top: 1px dashed var(--openbitfun-color-border-default);
+    padding-top: var(--openbitfun-space-2);
   }
   
   &__advanced-toggle {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:active {
       transform: scale(0.985);
     }
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-surface-subtle);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-surface-subtle);
     }
     
     svg {
@@ -275,14 +275,14 @@
   &__advanced-content {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-4);
-    margin-top: var(--bf-space-3);
-    padding-left: var(--bf-space-2);
+    gap: var(--openbitfun-space-4);
+    margin-top: var(--openbitfun-space-3);
+    padding-left: var(--openbitfun-space-2);
     animation: default-model-fade-in 0.2s ease;
   }
   
   &__override-section {
-    margin-bottom: var(--bf-space-5);
+    margin-bottom: var(--openbitfun-space-5);
     
     &:last-child {
       margin-bottom: 0;
@@ -290,35 +290,35 @@
   }
   
   &__override-title {
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
-    margin: 0 0 var(--bf-space-1) 0;
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    margin: 0 0 var(--openbitfun-space-1) 0;
   }
   
   &__override-description {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-secondary);
-    margin: 0 0 var(--bf-space-3) 0;
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    margin: 0 0 var(--openbitfun-space-3) 0;
   }
   
   &__override-list {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
   
   &__override-row {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-4);
+    gap: var(--openbitfun-space-4);
   }
   
   &__override-name {
     flex: 0 0 140px;
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -336,20 +336,20 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--bf-space-10) var(--bf-space-5);
+    padding: var(--openbitfun-space-10) var(--openbitfun-space-5);
     text-align: center;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     
     svg {
-      margin-bottom: var(--bf-space-3);
+      margin-bottom: var(--openbitfun-space-3);
       opacity: 0.4;
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
     
     p {
       margin: 0;
-      font-size: var(--bf-type-label-md-font-size);
-      line-height: var(--bf-type-body-sm-line-height);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      line-height: var(--openbitfun-type-body-sm-line-height);
     }
   }
   
@@ -360,12 +360,12 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--bf-space-12) var(--bf-space-5);
+    padding: var(--openbitfun-space-12) var(--openbitfun-space-5);
     
     p {
-      margin-top: var(--bf-space-4);
-      color: var(--bf-color-content-secondary);
-      font-size: var(--bf-type-label-md-font-size);
+      margin-top: var(--openbitfun-space-4);
+      color: var(--openbitfun-color-content-secondary);
+      font-size: var(--openbitfun-type-label-md-font-size);
     }
   }
 }
@@ -388,44 +388,44 @@
 @container config-panel (max-width: 520px) {
   .default-model-config {
     &__section {
-      gap: var(--bf-space-2);
-      margin-bottom: var(--bf-space-4);
+      gap: var(--openbitfun-space-2);
+      margin-bottom: var(--openbitfun-space-4);
     }
     
     &__core-section {
-      gap: var(--bf-space-3);
+      gap: var(--openbitfun-space-3);
     }
     
     &__model-slot {
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
     }
     
     &__slot-label {
-      font-size: var(--bf-type-label-md-font-size);
+      font-size: var(--openbitfun-type-label-md-font-size);
     }
     
     &__slot-description {
-      font-size: var(--bf-type-label-sm-font-size);
+      font-size: var(--openbitfun-type-label-sm-font-size);
     }
     
     &__capability-grid {
       grid-template-columns: 1fr;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
     }
     
     &__capability-item {
-      padding: var(--bf-space-2) 0;
+      padding: var(--openbitfun-space-2) 0;
     }
     
     &__override-row {
       flex-direction: column;
       align-items: stretch;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
     }
     
     &__override-name {
       flex: none;
-      font-size: var(--bf-type-label-sm-font-size);
+      font-size: var(--openbitfun-type-label-sm-font-size);
     }
   }
 }

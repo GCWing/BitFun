@@ -364,7 +364,7 @@ export interface WorkspaceSearchTaskStatus {
 }
 
 /**
- * Outcome of BitFun's automatic-index policy. The daemon reports `needs_index` both while the
+ * Outcome of OpenBitFun's automatic-index policy. The daemon reports `needs_index` both while the
  * policy is still evaluating a workspace and after it deliberately declined to index one, so the
  * daemon phase alone cannot explain to the user why nothing is happening.
  */
@@ -388,7 +388,7 @@ export interface WorkspaceSearchAutoIndexStatus {
 export interface WorkspaceSearchIndexStatus {
   repoStatus: WorkspaceSearchRepoStatus;
   activeTask?: WorkspaceSearchTaskStatus | null;
-  /** Absent on transports without a BitFun-side auto-index policy (remote SSH workspaces). */
+  /** Absent on transports without a OpenBitFun-side auto-index policy (remote SSH workspaces). */
   autoIndex?: WorkspaceSearchAutoIndexStatus | null;
 }
 

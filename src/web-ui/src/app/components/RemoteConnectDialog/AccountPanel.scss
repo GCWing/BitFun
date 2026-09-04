@@ -6,7 +6,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  font-family:var(--bf-type-body-sm-font-family);
+  font-family:var(--openbitfun-type-body-sm-font-family);
 
   &__scroll {
     flex: 1;
@@ -14,8 +14,8 @@
     padding: 22px 40px 32px;
   }
 
-  &[data-bf-view='login'] &__scroll,
-  &[data-bf-view='overwrite'] &__scroll {
+  &[data-openbitfun-view='login'] &__scroll,
+  &[data-openbitfun-view='overwrite'] &__scroll {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -24,16 +24,16 @@
   &__error-banner {
     flex-shrink: 0;
     padding: 12px 40px 0;
-    background: var(--bf-color-surface-panel);
+    background: var(--openbitfun-color-surface-panel);
   }
 
   &__value-prop {
     width: 100%;
     max-width: 520px;
     margin: 0 0 16px;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-support-line-height);
   }
 
   &__form {
@@ -43,12 +43,12 @@
     flex-direction: column;
     gap: 13px;
     padding: 19px 22px;
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-lg);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-lg);
     background: color-mix(
       in srgb,
-      var(--bf-color-surface-subtle) 62%,
-      var(--bf-color-surface-panel)
+      var(--openbitfun-color-surface-subtle) 62%,
+      var(--openbitfun-color-surface-panel)
     );
   }
 
@@ -67,15 +67,15 @@
     justify-content: space-between;
     gap: 10px;
     padding-top: 3px;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-micro-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
   }
 
   &__security-note {
     margin: -4px 0 0;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
 
   &__actions {
@@ -91,7 +91,7 @@
     background: transparent;
   }
 
-  &[data-bf-view='devices'] &__actions {
+  &[data-openbitfun-view='devices'] &__actions {
     max-width: none;
   }
 
@@ -101,15 +101,15 @@
     gap: 8px;
     margin: 0 0 12px;
     padding: 8px 10px;
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-micro-font-size);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
 
     svg {
       flex-shrink: 0;
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
   }
 
@@ -117,7 +117,7 @@
     min-width: 0;
     flex: 1;
     overflow: hidden;
-    font-family:var(--bf-type-code-md-font-family);
+    font-family:var(--openbitfun-type-code-md-font-family);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -130,13 +130,13 @@
     align-items: center;
     gap: 12px;
     padding: 22px;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     text-align: center;
 
     p {
       margin: 0;
-      font-size: var(--bf-type-label-md-font-size);
-      line-height: var(--bf-type-body-lg-line-height);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      line-height: var(--openbitfun-type-body-lg-line-height);
     }
   }
 
@@ -154,37 +154,37 @@
     gap: 10px;
     min-height: 92px;
     padding: 15px;
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-panel);
-    color: var(--bf-color-content-primary);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-panel);
+    color: var(--openbitfun-color-content-primary);
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
 
     &:active:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-pressed);
+      background: var(--openbitfun-color-action-neutral-surface-pressed);
     }
 
     &:focus-visible {
-      outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-      outline-offset: var(--bf-focus-offset);
+      outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+      outline-offset: var(--openbitfun-focus-offset);
     }
 
     &:disabled {
-      opacity: var(--bf-opacity-disabled);
+      opacity: var(--openbitfun-opacity-disabled);
       cursor: not-allowed;
     }
 
     svg {
       flex-shrink: 0;
       margin-top: 2px;
-      color: var(--bf-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
     }
   }
 
@@ -195,14 +195,14 @@
   }
 
   &__sync-option-title {
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__sync-option-desc {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 
   &__sync-indicator {
@@ -211,17 +211,17 @@
     gap: 7px;
     margin-bottom: 12px;
     padding: 9px 11px;
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-micro-font-size);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
 
     &.done {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
 
     &.failed {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -242,7 +242,7 @@
 
   &__sync-indicator-percent {
     flex-shrink: 0;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     font-variant-numeric: tabular-nums;
   }
 
@@ -254,15 +254,15 @@
     width: 100%;
     height: 4px;
     overflow: hidden;
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-border-default);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-border-default);
   }
 
   &__sync-progress-fill {
     height: 100%;
     border-radius: inherit;
-    background: var(--bf-color-accent-default);
-    transition: width var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background: var(--openbitfun-color-accent-default);
+    transition: width var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__device-list {
@@ -273,10 +273,10 @@
 
   &__empty {
     padding: 32px 16px;
-    border: var(--bf-border-width-default) dashed var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    border: var(--openbitfun-border-width-default) dashed var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
     text-align: center;
 
     &--loading {
@@ -293,39 +293,39 @@
     gap: 9px;
     min-height: 60px;
     padding: 10px 12px;
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-panel);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-panel);
     cursor: default;
-    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &.offline {
-      opacity: var(--bf-opacity-disabled);
+      opacity: var(--openbitfun-opacity-disabled);
     }
 
     &.current {
       border-color: color-mix(
         in srgb,
-        var(--bf-color-accent-default) 45%,
-        var(--bf-color-border-subtle)
+        var(--openbitfun-color-accent-default) 45%,
+        var(--openbitfun-color-border-subtle)
       );
       background: color-mix(
         in srgb,
-        var(--bf-color-accent-default) 5%,
-        var(--bf-color-surface-panel)
+        var(--openbitfun-color-accent-default) 5%,
+        var(--openbitfun-color-surface-panel)
       );
     }
 
     &.selectable:not(.offline):has(> .account-panel__device-select:hover) {
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
 
     &.selectable:not(.offline):has(> .account-panel__device-select:active) {
-      background: var(--bf-color-action-neutral-surface-pressed);
+      background: var(--openbitfun-color-action-neutral-surface-pressed);
     }
 
     &.selectable:not(.offline):has(> .account-panel__device-select:focus-visible) {
-      box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
     }
   }
 
@@ -362,9 +362,9 @@
 
   &__device-name {
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -372,34 +372,34 @@
   &__device-meta {
     display: inline-flex;
     align-items: baseline;
-    color: var(--bf-color-content-muted);
-    font-family:var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-family:var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   }
 
   &__device-id {
-    font-family:var(--bf-type-code-md-font-family);
+    font-family:var(--openbitfun-type-code-md-font-family);
     font-variant-numeric: tabular-nums;
   }
 
   &__device-status {
-    font-family:var(--bf-type-body-sm-font-family);
+    font-family:var(--openbitfun-type-body-sm-font-family);
   }
 
   &__device-badge {
     display: inline-block;
     margin-left: 7px;
     padding: 2px 7px;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     background: color-mix(
       in srgb,
-      var(--bf-color-accent-default) 12%,
+      var(--openbitfun-color-accent-default) 12%,
       transparent
     );
-    color: var(--bf-color-accent-default);
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-accent-default);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     vertical-align: middle;
   }
 
@@ -413,18 +413,18 @@
     justify-content: center;
     gap: 9px;
     border-radius: inherit;
-    background: color-mix(in srgb, var(--bf-color-surface-raised) 92%, transparent);
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-sm-font-size);
-    backdrop-filter: var(--bf-effect-blur-subtle);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 92%, transparent);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    backdrop-filter: var(--openbitfun-effect-blur-subtle);
   }
 
   .spinning {
-    animation: bitfun-account-panel-spin var(--bf-motion-duration-lazy) linear infinite;
+    animation: openbitfun-account-panel-spin var(--openbitfun-motion-duration-lazy) linear infinite;
   }
 }
 
-@keyframes bitfun-account-panel-spin {
+@keyframes openbitfun-account-panel-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }

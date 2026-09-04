@@ -3,7 +3,7 @@ use crate::agentic::tools::restrictions::{
     canonicalize_local_path_best_effort, is_local_path_within_root,
 };
 use crate::infrastructure::get_path_manager_arc;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -11,7 +11,7 @@ pub(crate) fn file_permission_intents<'a>(
     action: &str,
     paths: impl IntoIterator<Item = &'a str>,
     context: &ToolUseContext,
-) -> BitFunResult<Vec<PermissionIntent>> {
+) -> OpenBitFunResult<Vec<PermissionIntent>> {
     file_permission_intents_with_plan_edit_access(action, paths, context, false)
 }
 
@@ -19,7 +19,7 @@ pub(crate) fn file_permission_intents_allowing_managed_plan_edits<'a>(
     action: &str,
     paths: impl IntoIterator<Item = &'a str>,
     context: &ToolUseContext,
-) -> BitFunResult<Vec<PermissionIntent>> {
+) -> OpenBitFunResult<Vec<PermissionIntent>> {
     file_permission_intents_with_plan_edit_access(action, paths, context, true)
 }
 
@@ -28,7 +28,7 @@ fn file_permission_intents_with_plan_edit_access<'a>(
     paths: impl IntoIterator<Item = &'a str>,
     context: &ToolUseContext,
     allow_managed_plan_edits: bool,
-) -> BitFunResult<Vec<PermissionIntent>> {
+) -> OpenBitFunResult<Vec<PermissionIntent>> {
     let mut resources = Vec::new();
     let mut external_directories = Vec::new();
     let mut seen_resources = HashSet::new();
@@ -56,7 +56,7 @@ fn file_permission_intents_with_plan_edit_access<'a>(
     }
 
     if !has_paths {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "File permission intent requires at least one resource".to_string(),
         ));
     }
@@ -74,7 +74,7 @@ fn file_permission_intents_with_plan_edit_access<'a>(
     Ok(intents)
 }
 
-fn normalized_permission_resource(resolved: &ToolPathResolution) -> BitFunResult<String> {
+fn normalized_permission_resource(resolved: &ToolPathResolution) -> OpenBitFunResult<String> {
     if resolved.uses_remote_workspace_backend() || resolved.is_runtime_artifact() {
         return Ok(resolved.resolved_path.replace('\\', "/"));
     }
@@ -89,17 +89,17 @@ fn normalized_permission_resource(resolved: &ToolPathResolution) -> BitFunResult
 fn external_directory_resource(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
-) -> BitFunResult<Option<String>> {
+) -> OpenBitFunResult<Option<String>> {
     if resolved.uses_remote_workspace_backend() || resolved.is_runtime_artifact() {
         return Ok(None);
     }
 
-    if is_bitfun_managed_local_path(context, resolved)? {
+    if is_openbitfun_managed_local_path(context, resolved)? {
         return Ok(None);
     }
 
     let workspace_root = context.workspace_root().ok_or_else(|| {
-        BitFunError::validation("A workspace is required for file permissions".to_string())
+        OpenBitFunError::validation("A workspace is required for file permissions".to_string())
     })?;
     let path = Path::new(&resolved.resolved_path);
     if is_local_path_within_root(path, workspace_root)? {
@@ -110,7 +110,7 @@ fn external_directory_resource(
         path
     } else {
         path.parent().ok_or_else(|| {
-            BitFunError::validation(format!(
+            OpenBitFunError::validation(format!(
                 "External path '{}' has no parent directory",
                 path.display()
             ))
@@ -123,12 +123,12 @@ fn external_directory_resource(
     ))
 }
 
-fn is_bitfun_managed_local_path(
+fn is_openbitfun_managed_local_path(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
-) -> BitFunResult<bool> {
+) -> OpenBitFunResult<bool> {
     let path = Path::new(&resolved.resolved_path);
-    for root in bitfun_managed_local_roots(context)? {
+    for root in openbitfun_managed_local_roots(context)? {
         if is_local_path_within_root(path, &root)? {
             return Ok(true);
         }
@@ -139,7 +139,7 @@ fn is_bitfun_managed_local_path(
 fn is_current_workspace_plan_path(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
-) -> BitFunResult<bool> {
+) -> OpenBitFunResult<bool> {
     if resolved.uses_remote_workspace_backend()
         || resolved.is_runtime_artifact()
         || context.workspace_root().is_none()
@@ -151,7 +151,7 @@ fn is_current_workspace_plan_path(
     is_local_path_within_root(Path::new(&resolved.resolved_path), &plans_root)
 }
 
-fn bitfun_managed_local_roots(context: &ToolUseContext) -> BitFunResult<Vec<PathBuf>> {
+fn openbitfun_managed_local_roots(context: &ToolUseContext) -> OpenBitFunResult<Vec<PathBuf>> {
     let mut roots = vec![terminal_transcript_root(context)];
     if context.workspace_root().is_none() {
         return Ok(roots);
@@ -173,7 +173,7 @@ fn terminal_transcript_root(_context: &ToolUseContext) -> PathBuf {
     #[cfg(test)]
     if let Some(path) = _context
         .custom_data
-        .get("__bitfun_test_terminal_transcript_root")
+        .get("__openbitfun_test_terminal_transcript_root")
         .and_then(|value| value.as_str())
         .filter(|path| !path.trim().is_empty())
     {
@@ -191,7 +191,7 @@ mod tests {
         DeleteFileTool, FileEditTool, FileReadTool, FileWriteTool,
     };
     use crate::agentic::WorkspaceBinding;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         PermissionConstraintLayer, PermissionEffect, PermissionEvaluator, PermissionRule,
     };
     use serde_json::{json, Value};
@@ -294,13 +294,13 @@ mod tests {
             ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
         context.session_id = Some("session-1".to_string());
         context.custom_data.insert(
-            "__bitfun_test_runtime_root".to_string(),
+            "__openbitfun_test_runtime_root".to_string(),
             json!(runtime_root.to_string_lossy().to_string()),
         );
 
         for path in [
-            "bitfun://current-session/artifacts/session-references/reference.txt",
-            "bitfun://current-session/artifacts/compression-transcripts/transcript.txt",
+            "openbitfun://current-session/artifacts/session-references/reference.txt",
+            "openbitfun://current-session/artifacts/compression-transcripts/transcript.txt",
         ] {
             let intents = file_permission_intents("read", [path], &context)
                 .expect("current session permission intents");
@@ -341,11 +341,11 @@ mod tests {
             ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
         context.session_id = Some("session-1".to_string());
         context.custom_data.insert(
-            "__bitfun_test_runtime_root".to_string(),
+            "__openbitfun_test_runtime_root".to_string(),
             json!(runtime_root.to_string_lossy().to_string()),
         );
         context.custom_data.insert(
-            "__bitfun_test_terminal_transcript_root".to_string(),
+            "__openbitfun_test_terminal_transcript_root".to_string(),
             json!(terminal_root.to_string_lossy().to_string()),
         );
 
@@ -390,11 +390,11 @@ mod tests {
             ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
         context.session_id = Some("session-1".to_string());
         context.custom_data.insert(
-            "__bitfun_test_runtime_root".to_string(),
+            "__openbitfun_test_runtime_root".to_string(),
             json!(runtime_root.to_string_lossy().to_string()),
         );
         context.custom_data.insert(
-            "__bitfun_test_terminal_transcript_root".to_string(),
+            "__openbitfun_test_terminal_transcript_root".to_string(),
             json!(temp.path().join("terminals").to_string_lossy().to_string()),
         );
 
@@ -454,11 +454,11 @@ mod tests {
             ToolUseContext::for_tool_listing(Some(WorkspaceBinding::new(None, workspace)), None);
         context.session_id = Some("session-1".to_string());
         context.custom_data.insert(
-            "__bitfun_test_runtime_root".to_string(),
+            "__openbitfun_test_runtime_root".to_string(),
             json!(runtime_root.to_string_lossy().to_string()),
         );
         context.custom_data.insert(
-            "__bitfun_test_terminal_transcript_root".to_string(),
+            "__openbitfun_test_terminal_transcript_root".to_string(),
             json!(temp.path().join("terminals").to_string_lossy().to_string()),
         );
 
@@ -548,6 +548,6 @@ mod tests {
             .expect("fallback write intent");
         assert!(fallback[0].resources[0]
             .replace('\\', "/")
-            .ends_with("/.bitfun/tmp/write_toolcall123.tmp"));
+            .ends_with("/.openbitfun/tmp/write_toolcall123.tmp"));
     }
 }

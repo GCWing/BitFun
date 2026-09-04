@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub const BUILTIN_INSTALL_MARKER: &str = ".builtin-manifest.json";
-pub const LEGACY_BUILTIN_VERSION_MARKER: &str = ".builtin-version";
 pub const BUILTIN_PLACEHOLDER_COMPILED_HTML: &str =
     "<!DOCTYPE html><html><body>Loading...</body></html>";
 
@@ -27,7 +26,6 @@ pub struct BuiltinInstallMarker {
 pub struct BuiltinSeedArtifacts {
     pub content_hash: String,
     pub marker: BuiltinInstallMarker,
-    pub legacy_version: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -186,15 +184,10 @@ pub fn build_builtin_install_marker(
     }
 }
 
-pub fn legacy_builtin_version_marker_content(app: &BuiltinMiniAppBundle) -> String {
-    app.version.to_string()
-}
-
 pub fn build_builtin_seed_artifacts(app: &BuiltinMiniAppBundle) -> BuiltinSeedArtifacts {
     let content_hash = builtin_content_hash(app);
     BuiltinSeedArtifacts {
         marker: build_builtin_install_marker(app, &content_hash),
-        legacy_version: legacy_builtin_version_marker_content(app),
         content_hash,
     }
 }
@@ -535,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn ppt_live_bundle_uses_bitfun_host_capabilities() {
+    fn ppt_live_bundle_uses_openbitfun_host_capabilities() {
         let app = BUILTIN_APPS
             .iter()
             .find(|app| app.id == "builtin-ppt-live")
@@ -564,11 +557,12 @@ mod tests {
         // A single cowork agent turn loads the ppt-design skill and produces
         // the whole deck end to end. Prompt construction is isolated from the
         // host adapter so its generated-file contract can be tested directly.
-        let adapter_source = include_str!("builtin/assets/ppt-live/src/bitfun-backend-adapter.js");
+        let adapter_source =
+            include_str!("builtin/assets/ppt-live/src/openbitfun-backend-adapter.js");
         let prompt_source = include_str!("builtin/assets/ppt-live/src/agent-prompt.js");
         assert!(adapter_source.contains("sessionId: options.sessionId"));
         assert!(adapter_source.contains("buildAgentPrompt"));
-        assert!(prompt_source.contains("user::bitfun-system::ppt-design"));
+        assert!(prompt_source.contains("user::openbitfun-system::ppt-design"));
         assert!(prompt_source.contains("export function buildAgentPrompt"));
         assert!(!adapter_source.contains("app.ai"));
         assert!(!adapter_source.contains("installFallbackBackend"));
@@ -611,11 +605,10 @@ mod tests {
             .as_array()
             .is_some_and(|scopes| scopes.iter().any(|scope| scope == "{appdata}")));
         assert!(!app.ui_js.contains("Sparo"));
-        assert!(
-            include_str!("builtin/assets/ppt-live/ui.js").contains("installBitFunBackendAdapter")
-        );
+        assert!(include_str!("builtin/assets/ppt-live/ui.js")
+            .contains("installOpenBitFunBackendAdapter"));
         // The single cowork agent turn loads the stable ppt-design skill key.
-        assert!(prompt_source.contains("user::bitfun-system::ppt-design"));
+        assert!(prompt_source.contains("user::openbitfun-system::ppt-design"));
         let ppt_live_source = include_str!("builtin/assets/ppt-live/ui.js");
         // PPT Live registers bounded content into the host's standard floating
         // ChatInput. It must not request a private composer layout or panel.
@@ -637,6 +630,6 @@ mod tests {
         assert!(app.html.contains("exportPptx"));
         assert!(!app.html.contains("src=\"./ui.js\""));
         assert!(!app.html.contains("href=\"./style.css\""));
-        assert!(app.css.contains("--bitfun-bg"));
+        assert!(app.css.contains("--openbitfun-bg"));
     }
 }

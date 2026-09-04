@@ -61,7 +61,7 @@ function createContext(dialogTurn: DialogTurn): any {
   const session = {
     sessionId: SESSION_ID,
     dialogTurns: [dialogTurn],
-    workspacePath: 'D:/workspace/BitFun',
+    workspacePath: 'D:/workspace/OpenBitFun',
     createdAt: 1,
     lastActiveAt: 2,
     status: 'active',

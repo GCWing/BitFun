@@ -2,7 +2,7 @@
  * Native L1 coverage for subagent identity presentation.
  *
  * Creates real persisted session relationships through Desktop commands, then
- * verifies the rendered Agent tree through BitFun's embedded WebDriver.
+ * verifies the rendered Agent tree through OpenBitFun's embedded WebDriver.
  */
 
 import { browser, expect, $ } from '@wdio/globals';
@@ -148,7 +148,7 @@ describe('L1 Subagent identity', () => {
 
   it('shows one default status list with the real Agent tree', async () => {
     const overviewPanel = await sessionTree.openOverview();
-    const overviewItems = await overviewPanel.$$('[data-bf-part="sessionOverviewItem"]');
+    const overviewItems = await overviewPanel.$$('[data-openbitfun-part="sessionOverviewItem"]');
     expect(overviewItems).toHaveLength(3);
     expect(await overviewItems[0].getText()).toMatch(/Agents/);
     expect(await overviewItems[1].getText()).toMatch(/后台终端|背景終端|Background terminals/);
@@ -223,7 +223,7 @@ describe('L1 Subagent identity', () => {
   });
 
   it('shows pull requests as unavailable in a real non-Git workspace', async () => {
-    const nonGitWorkspacePath = await mkdtemp(join(tmpdir(), 'bitfun-e2e-non-git-'));
+    const nonGitWorkspacePath = await mkdtemp(join(tmpdir(), 'openbitfun-e2e-non-git-'));
     const nonGitSessionId = randomUUID();
 
     try {

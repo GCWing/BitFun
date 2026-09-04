@@ -35,7 +35,7 @@ const report = (): SessionUsageReport => ({
   reportId: 'usage-report-1',
   sessionId: 'session-1',
   generatedAt: 100,
-  workspace: { kind: 'local', pathLabel: 'D:/workspace/BitFun' },
+  workspace: { kind: 'local', pathLabel: 'D:/workspace/OpenBitFun' },
   scope: { kind: 'entire_session', turnCount: 3, includesSubagents: false },
   coverage: { level: 'complete', available: [], missing: [], notes: [] },
   time: { accounting: 'approximate', denominator: 'session_wall_time', wallTimeMs: 1000 },
@@ -67,7 +67,7 @@ describe('SessionUsageModal', () => {
 
   function showReport() {
     act(() => {
-      openSessionUsageModal({ sessionId: 'session-1', workspacePath: 'D:/workspace/BitFun' });
+      openSessionUsageModal({ sessionId: 'session-1', workspacePath: 'D:/workspace/OpenBitFun' });
       showSessionUsageModalReport({
         sessionId: 'session-1',
         report: report(),
@@ -131,7 +131,7 @@ describe('SessionUsageModal', () => {
 
     expect(mocks.openSessionUsagePanel).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
-      workspacePath: 'D:/workspace/BitFun',
+      workspacePath: 'D:/workspace/OpenBitFun',
       markdown: '# Session Usage Report',
       expand: true,
     }));

@@ -8,7 +8,7 @@
 //! reviewable home instead of living inline inside the multi-thousand-line
 //! host file.
 
-use super::{BitFunError, BitFunResult};
+use super::{OpenBitFunError, OpenBitFunResult};
 use core_foundation::base::{CFRelease, TCFType};
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::CFDictionary;
@@ -34,12 +34,12 @@ unsafe extern "C" {
 /// Objective-C `NSException` thrown by TSM / HIToolbox / AppKit (which
 /// historically appears as `__rust_foreign_exception` and aborts the
 /// process when it crosses back into the Rust runtime) is converted into
-/// a `BitFunError` we can return to the caller. The closure must itself
-/// return a `BitFunResult<T>` so we can flatten the two error sources
+/// a `OpenBitFunError` we can return to the caller. The closure must itself
+/// return a `OpenBitFunResult<T>` so we can flatten the two error sources
 /// (ObjC exception + Rust-side error) into one.
-pub(super) fn run_on_main_for_enigo<F, T>(f: F) -> BitFunResult<T>
+pub(super) fn run_on_main_for_enigo<F, T>(f: F) -> OpenBitFunResult<T>
 where
-    F: FnOnce() -> BitFunResult<T> + Send,
+    F: FnOnce() -> OpenBitFunResult<T> + Send,
     T: Send,
 {
     let work = move || catch_only(f);
@@ -60,7 +60,7 @@ where
 /// Two failure modes are defended against simultaneously:
 ///
 ///   1. `NSException` thrown by the framework (caught and converted into
-///      `BitFunError`).
+///      `OpenBitFunError`).
 ///   2. AppKit's `__assert_rtn` "Must only be used from the main thread"
 ///      `SIGTRAP` which fires when AX cross-process callbacks (e.g.
 ///      `AXUIElementCopyActionNames` → `_NSThemeWidgetCell.accessibility…`
@@ -71,9 +71,9 @@ where
 ///
 /// If we're already on the main thread we run inline (avoids
 /// `dispatch_sync(main)` deadlock).
-pub(super) fn catch_objc<F, T>(f: F) -> BitFunResult<T>
+pub(super) fn catch_objc<F, T>(f: F) -> OpenBitFunResult<T>
 where
-    F: FnOnce() -> BitFunResult<T> + Send,
+    F: FnOnce() -> OpenBitFunResult<T> + Send,
     T: Send,
 {
     unsafe {
@@ -91,22 +91,27 @@ where
 /// non-`Send` data and that are guaranteed not to reach AppKit's
 /// main-thread-only AX callbacks (e.g. Vision OCR on an in-memory
 /// screenshot buffer).
-pub(super) fn catch_objc_local<F, T>(f: F) -> BitFunResult<T>
+pub(super) fn catch_objc_local<F, T>(f: F) -> OpenBitFunResult<T>
 where
-    F: FnOnce() -> BitFunResult<T>,
+    F: FnOnce() -> OpenBitFunResult<T>,
 {
     catch_only(f)
 }
 
-fn catch_only<F, T>(f: F) -> BitFunResult<T>
+fn catch_only<F, T>(f: F) -> OpenBitFunResult<T>
 where
-    F: FnOnce() -> BitFunResult<T>,
+    F: FnOnce() -> OpenBitFunResult<T>,
 {
     use std::panic::AssertUnwindSafe;
     match objc2::exception::catch(AssertUnwindSafe(f)) {
         Ok(inner) => inner,
-        Err(Some(exc)) => Err(BitFunError::tool(format!("Objective-C exception: {}", exc))),
-        Err(None) => Err(BitFunError::tool("Objective-C exception (nil)".to_string())),
+        Err(Some(exc)) => Err(OpenBitFunError::tool(format!(
+            "Objective-C exception: {}",
+            exc
+        ))),
+        Err(None) => Err(OpenBitFunError::tool(
+            "Objective-C exception (nil)".to_string(),
+        )),
     }
 }
 
@@ -125,11 +130,11 @@ unsafe extern "C" {
 }
 
 /// Mouse location in Quartz global coordinates (same space as `CGEvent` / `CGWarpMouseCursorPosition`).
-pub(super) fn quartz_mouse_location() -> BitFunResult<(f64, f64)> {
+pub(super) fn quartz_mouse_location() -> OpenBitFunResult<(f64, f64)> {
     unsafe {
         let ev = CGEventCreate(std::ptr::null());
         if ev.is_null() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "CGEventCreate returned null (pointer overlay).".to_string(),
             ));
         }
@@ -163,7 +168,7 @@ pub(super) fn request_screen_capture() -> bool {
 /// Shared AX-first desktop guard: `get_app_state_inner` and
 /// `get_app_shortcuts_inner` both silently degrade (truncated tree / empty
 /// menu bar) instead of erroring when Accessibility trust is missing, which
-/// looks like "nothing here" rather than "BitFun lacks permission". Fail
+/// looks like "nothing here" rather than "OpenBitFun lacks permission". Fail
 /// fast with a structured `[PERMISSION_DENIED]` error and re-trigger the
 /// system prompt so the user has a way back to the dialog without digging
 /// through System Settings manually.
@@ -173,15 +178,15 @@ pub(super) fn request_screen_capture() -> bool {
 /// all WebView subtree nodes."`), so each call site keeps its own precise
 /// guidance while the shared boilerplate (check + prompt + explanation)
 /// cannot drift between call sites.
-pub(super) fn require_ax_trust_for(retry_hint: &str) -> BitFunResult<()> {
+pub(super) fn require_ax_trust_for(retry_hint: &str) -> OpenBitFunResult<()> {
     if ax_trusted() {
         return Ok(());
     }
     request_ax_prompt();
-    Err(BitFunError::tool(format!(
-        "[PERMISSION_DENIED] macOS Accessibility permission not granted to BitFun. \
+    Err(OpenBitFunError::tool(format!(
+        "[PERMISSION_DENIED] macOS Accessibility permission not granted to OpenBitFun. \
          The system has been asked to surface the permission dialog (System Settings → \
-         Privacy & Security → Accessibility → enable BitFun). {}",
+         Privacy & Security → Accessibility → enable OpenBitFun). {}",
         retry_hint
     )))
 }

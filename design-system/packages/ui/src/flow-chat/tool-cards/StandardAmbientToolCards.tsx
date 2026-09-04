@@ -43,8 +43,8 @@ interface AmbientCardProps
 
 function Section({ children, label }: { children: ReactNode; label?: ReactNode }) {
   return (
-    <section className={styles.section} data-bf-part="section">
-      {label && <div className={styles.sectionLabel} data-bf-part="sectionLabel">{label}</div>}
+    <section className={styles.section} data-openbitfun-part="section">
+      {label && <div className={styles.sectionLabel} data-openbitfun-part="sectionLabel">{label}</div>}
       {children}
     </section>
   );
@@ -79,15 +79,15 @@ export function RunCodeToolCard({
   return (
     <AmbientToolCard
       {...props}
-      data-bf-tool-card="run-code"
+      data-openbitfun-tool-card="run-code"
       expandedContent={hasDetails ? (
-        <div className={styles.sections} data-bf-part="details">
+        <div className={styles.sections} data-openbitfun-part="details">
           {program && <Section label={programLabel}>{program}</Section>}
           {(output || error) && (
             <Section label={outputLabel}>
               {error
                 ? <div className={styles.error}>{error}</div>
-                : <div className={styles.resultBlock} data-bf-part="output">{output}</div>}
+                : <div className={styles.resultBlock} data-openbitfun-part="output">{output}</div>}
             </Section>
           )}
         </div>
@@ -140,15 +140,15 @@ export function WebFetchToolCard({
   return (
     <AmbientToolCard
       {...props}
-      data-bf-tool-card="web-fetch"
+      data-openbitfun-tool-card="web-fetch"
       expandedContent={hasDetails ? (
-        <div className={styles.fetchMeta} data-bf-part="details">
+        <div className={styles.fetchMeta} data-openbitfun-part="details">
           {url && (
             onOpenUrl ? (
               <button
                 aria-label={openUrlLabel}
                 className={styles.openLink}
-                data-bf-part="sourceLink"
+                data-openbitfun-part="sourceLink"
                 onClick={onOpenUrl}
                 title={url}
                 type="button"
@@ -159,19 +159,19 @@ export function WebFetchToolCard({
             ) : <span className={styles.openLinkText}>{url}</span>
           )}
           {(details.length > 0 || copyAction) && (
-            <div className={styles.detailsRow} data-bf-part="detailsRow">
+            <div className={styles.detailsRow} data-openbitfun-part="detailsRow">
               <span className={styles.pills}>
                 {details.map((detail, index) => (
-                  <span className={styles.pill} data-bf-part="detail" key={index}>{detail}</span>
+                  <span className={styles.pill} data-openbitfun-part="detail" key={index}>{detail}</span>
                 ))}
               </span>
               {copyAction && <ToolCardActions>{copyAction}</ToolCardActions>}
             </div>
           )}
           {error ? (
-            <div className={styles.error} data-bf-part="error">{error}</div>
+            <div className={styles.error} data-openbitfun-part="error">{error}</div>
           ) : (
-            <pre className={styles.resultBlock} data-bf-part="content">{content || emptyContent}</pre>
+            <pre className={styles.resultBlock} data-openbitfun-part="content">{content || emptyContent}</pre>
           )}
         </div>
       ) : undefined}
@@ -232,24 +232,24 @@ export function DefaultToolCard({
   return (
     <AmbientToolCard
       {...props}
-      data-bf-confirmation={requiresConfirmation ? "true" : "false"}
-      data-bf-tool-card="default"
+      data-openbitfun-confirmation={requiresConfirmation ? "true" : "false"}
+      data-openbitfun-tool-card="default"
       expandedContent={detailsAvailable ? (
-        <div className={styles.sections} data-bf-part="details">
-          <div className={styles.meta} data-bf-part="meta">
+        <div className={styles.sections} data-openbitfun-part="details">
+          <div className={styles.meta} data-openbitfun-part="meta">
             <span className={styles.metaLabel}>{toolName}</span>
             {description && <span className={styles.metaDescription}>{description}</span>}
           </div>
           {inputPreview && (
             <Section label={inputLabel}>
-              <pre className={styles.codeBlock} data-bf-part="input">{inputPreview}</pre>
+              <pre className={styles.codeBlock} data-openbitfun-part="input">{inputPreview}</pre>
             </Section>
           )}
           {(resultPreview || error) && (
             <Section label={resultLabel}>
               {error
-                ? <div className={styles.error} data-bf-part="error">{error}</div>
-                : <pre className={styles.codeBlock} data-bf-part="result">{resultPreview}</pre>}
+                ? <div className={styles.error} data-openbitfun-part="error">{error}</div>
+                : <pre className={styles.codeBlock} data-openbitfun-part="result">{resultPreview}</pre>}
             </Section>
           )}
         </div>
@@ -309,16 +309,16 @@ export function ViewImageToolCard({
     <>
       <AmbientToolCard
         {...props}
-        data-bf-tool-card="view-image"
+        data-openbitfun-tool-card="view-image"
         expandedContent={source ? (
-          <div className={styles.imageContent} data-bf-part="imageContent">
+          <div className={styles.imageContent} data-openbitfun-part="imageContent">
             {imageFailed ? (
-              <div className={styles.imageError} data-bf-part="imageError" role="alert">{errorText}</div>
+              <div className={styles.imageError} data-openbitfun-part="imageError" role="alert">{errorText}</div>
             ) : (
               <button
                 aria-label={previewLabel}
                 className={styles.imageButton}
-                data-bf-part="imagePreview"
+                data-openbitfun-part="imagePreview"
                 onClick={onOpenPreview}
                 type="button"
               >
@@ -357,7 +357,7 @@ export function ViewImageToolCard({
           <DialogClose />
         </DialogHeader>
         <DialogBody>
-          <div className={styles.lightbox} data-bf-part="lightbox">
+          <div className={styles.lightbox} data-openbitfun-part="lightbox">
             <img alt={alt} src={source ?? ""} />
           </div>
         </DialogBody>
@@ -415,9 +415,9 @@ export function TodoToolCard({
       <div
         {...props}
         className={styles.todoCompact}
-        data-bf-state={[loading && "loading", allCompleted && "completed"].filter(Boolean).join(" ") || undefined}
-        data-bf-tool-card="todo"
-        data-bf-view="compact"
+        data-openbitfun-state={[loading && "loading", allCompleted && "completed"].filter(Boolean).join(" ") || undefined}
+        data-openbitfun-tool-card="todo"
+        data-openbitfun-view="compact"
       >
         <span className={styles.todoCompactIcon}>
           {loading ? <ToolProcessingDots size={14} /> : <ListTodo aria-hidden="true" />}
@@ -430,7 +430,7 @@ export function TodoToolCard({
 
   const hasItems = items.length > 0;
   const headerSummary = (
-    <span className={styles.todoSummary} data-bf-part="summary">
+    <span className={styles.todoSummary} data-openbitfun-part="summary">
       <span>{summary}</span>
       {hasItems && <span className={styles.todoStats}>({completedCount}/{totalCount})</span>}
     </span>
@@ -439,13 +439,13 @@ export function TodoToolCard({
   return (
     <AmbientToolCard
       {...props}
-      data-bf-tool-card="todo"
+      data-openbitfun-tool-card="todo"
       expandedContent={hasItems ? (
-        <div className={styles.todoList} data-bf-part="todoList">
+        <div className={styles.todoList} data-openbitfun-part="todoList">
           {items.map((item) => (
             <div
               className={styles.todoItem}
-              data-bf-part="todoItem"
+              data-openbitfun-part="todoItem"
               data-status={item.status}
               key={item.key}
             >

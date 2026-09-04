@@ -7,5 +7,5 @@ export const mcpResourceBrowserAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'resource' }, { id: 'resourceIcon' }, { id: 'resourceInfo' },
     { id: 'viewer' }, { id: 'viewerHeader' }, { id: 'viewerContent' },
   ],
-  states: [{ id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } }],
+  states: [{ id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } }],
 };

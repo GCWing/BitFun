@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 
 describe('public Combobox product integration', () => {
   let root: Root;
@@ -105,11 +105,11 @@ describe('public Combobox product integration', () => {
   it('flips at the bottom edge and repositions after ancestor scrolling', () => {
     let top = window.innerHeight - 48;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.dataset.bfComponent === 'combobox-popup') return new DOMRect(0, 0, 240, 180);
+      if (this.dataset.openbitfunComponent === 'combobox-popup') return new DOMRect(0, 0, 240, 180);
       return new DOMRect(40, top, 240, 40);
     });
     render(); act(() => trigger().click());
-    const popup = document.querySelector<HTMLElement>('[data-bf-component="combobox-popup"]')!;
+    const popup = document.querySelector<HTMLElement>('[data-openbitfun-component="combobox-popup"]')!;
     expect(popup.dataset.placement).toBe('top');
     top = 20;
     act(() => host.dispatchEvent(new Event('scroll', { bubbles: true })));

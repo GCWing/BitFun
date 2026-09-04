@@ -27,7 +27,7 @@ const namespaceRegistryPath = path.join(
 const webSourceDir = path.join(root, 'src', 'web-ui', 'src');
 const mobileWebSourceDir = path.join(root, 'src', 'mobile-web', 'src');
 const mobileWebMessagesPath = path.join(mobileWebSourceDir, 'i18n', 'messages.ts');
-const installerSourceDir = path.join(root, 'BitFun-Installer', 'src');
+const installerSourceDir = path.join(root, 'OpenBitFun-Installer', 'src');
 const installerLocalesDir = path.join(installerSourceDir, 'i18n', 'locales');
 const coreLocalesDir = path.join(root, 'src', 'crates', 'assembly', 'core', 'locales');
 const relayHomepageDir = path.join(root, 'src', 'apps', 'relay-server', 'static', 'homepage');
@@ -1103,7 +1103,7 @@ function collectI18nResourceEntries(namespaces) {
         locale: localeId,
         key,
         value,
-        file: `BitFun-Installer/src/i18n/locales/${uiLocale}.json`,
+        file: `OpenBitFun-Installer/src/i18n/locales/${uiLocale}.json`,
       });
     }
   }

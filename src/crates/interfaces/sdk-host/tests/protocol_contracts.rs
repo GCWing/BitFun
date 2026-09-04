@@ -1,4 +1,4 @@
-use bitfun_sdk_host::protocol::{
+use openbitfun_sdk_host::protocol::{
     ErrorCode, ErrorData, ErrorStage, HostCapabilities, InitializeParams, InitializeResult,
     JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty,
     PermissionDecision, PermissionRespondParams, PermissionSource, PermissionSourceKind,
@@ -382,7 +382,7 @@ fn json_rpc_request_debug_redacts_temporary_model_secret() {
             "model": {
                 "provider": "openai",
                 "model": "fixture-model",
-                "apiKey": "bitfun-sdk-debug-secret-31d4"
+                "apiKey": "openbitfun-sdk-debug-secret-31d4"
             }
         }
     }))
@@ -390,5 +390,5 @@ fn json_rpc_request_debug_redacts_temporary_model_secret() {
 
     let debug = format!("{request:?}");
     assert!(debug.contains("initialize"));
-    assert!(!debug.contains("bitfun-sdk-debug-secret-31d4"));
+    assert!(!debug.contains("openbitfun-sdk-debug-secret-31d4"));
 }

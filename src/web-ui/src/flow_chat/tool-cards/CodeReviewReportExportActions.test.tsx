@@ -14,7 +14,7 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <Icon name="loader" />,
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Button: ({
     children,
     leadingIcon,

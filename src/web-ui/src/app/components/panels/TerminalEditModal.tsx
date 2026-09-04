@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
@@ -104,7 +104,7 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
         <DialogClose />
       </DialogHeader>
       <DialogBody inset="none">
-      <div data-bf-component="terminal-edit-modal" data-bf-part="content" className="terminal-edit-dialog__content">
+      <div data-openbitfun-component="terminal-edit-modal" data-openbitfun-part="content" className="terminal-edit-dialog__content">
         <Field label={t('dialog.editTerminal.nameLabel')}>
           <Input
             ref={nameInputRef}
@@ -144,7 +144,7 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
         ) : null}
       </div>
 
-      <div data-bf-component="terminal-edit-modal" data-bf-part="footer" className="terminal-edit-dialog__footer">
+      <div data-openbitfun-component="terminal-edit-modal" data-openbitfun-part="footer" className="terminal-edit-dialog__footer">
         <Button variant="outline" onClick={onClose}>
           {t('dialog.editTerminal.cancel')}
         </Button>

@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::{RuntimeIpcOperation, RuntimeIpcOperationResult};
-use bitfun_events::AgenticEventEnvelope;
-use bitfun_product_domains::tool_permissions::PermissionRequestEvent;
+use openbitfun_events::AgenticEventEnvelope;
+use openbitfun_product_domains::tool_permissions::PermissionRequestEvent;
 
 pub const PROTOCOL_VERSION: u32 = 17;
 

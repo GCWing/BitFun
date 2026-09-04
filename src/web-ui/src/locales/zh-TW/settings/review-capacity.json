@@ -2,7 +2,7 @@
   "loading": "正在載入 Review 容量...",
   "desktopOnly": {
     "title": "僅桌面端可用",
-    "description": "Review 容量設定僅在 BitFun 桌面應用中可用；目前介面不支援啟動 Review。"
+    "description": "Review 容量設定僅在 OpenBitFun 桌面應用中可用；目前介面不支援啟動 Review。"
   },
   "error": {
     "title": "Review 容量暫不可用",

@@ -6,7 +6,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { DefaultToolCard as DefaultToolCardView } from '@bitfun/ui/flow-chat';
+import { DefaultToolCard as DefaultToolCardView } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import {
   formatSessionViewPreviewText,
@@ -228,7 +228,7 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   const showConfirmationHighlight = needsConfirmation;
 
   return (
-    <div data-bf-adapter="default-tool-card" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-openbitfun-adapter="default-tool-card" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <DefaultToolCardView
         status={status}
         isExpanded={isExpanded}

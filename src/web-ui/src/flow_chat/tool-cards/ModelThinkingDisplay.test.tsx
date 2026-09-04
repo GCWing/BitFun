@@ -88,7 +88,7 @@ describe('ModelThinkingDisplay reasoning summary', () => {
     });
 
     const panel = container.querySelector('[data-testid="chat-thinking-panel"]');
-    const label = container.querySelector('[data-bf-part="label"]');
+    const label = container.querySelector('[data-openbitfun-part="label"]');
     expect(panel?.getAttribute('data-expanded')).toBe('false');
     expect(label?.textContent).toBe('Preparing the repair');
     expect(label?.textContent).not.toContain('characters');
@@ -99,24 +99,24 @@ describe('ModelThinkingDisplay reasoning summary', () => {
       root.render(<ModelThinkingDisplay thinkingItem={summaryItem('**Inspecting**')} />);
     });
 
-    const leadingIcon = container.querySelector('[data-bf-part="leadingIcon"]');
-    expect(leadingIcon?.querySelector('[data-bf-name="thinking"]')).not.toBeNull();
-    expect(leadingIcon?.querySelector('[data-bf-name="chevron-right"]')).not.toBeNull();
-    expect(leadingIcon?.querySelector('[data-bf-name="chevron-down"]')).not.toBeNull();
+    const leadingIcon = container.querySelector('[data-openbitfun-part="leadingIcon"]');
+    expect(leadingIcon?.querySelector('[data-openbitfun-name="thinking"]')).not.toBeNull();
+    expect(leadingIcon?.querySelector('[data-openbitfun-name="chevron-right"]')).not.toBeNull();
+    expect(leadingIcon?.querySelector('[data-openbitfun-name="chevron-down"]')).not.toBeNull();
   });
 
   it('replaces the collapsed preview when a new summary part arrives', async () => {
     await act(async () => {
       root.render(<ModelThinkingDisplay thinkingItem={summaryItem('**First part**')} />);
     });
-    expect(container.querySelector('[data-bf-part="label"]')?.textContent).toBe('First part');
+    expect(container.querySelector('[data-openbitfun-part="label"]')?.textContent).toBe('First part');
 
     await act(async () => {
       root.render(<ModelThinkingDisplay thinkingItem={summaryItem(
         '**First part**\n\n**Second part**',
       )} />);
     });
-    expect(container.querySelector('[data-bf-part="label"]')?.textContent).toBe('Second part');
+    expect(container.querySelector('[data-openbitfun-part="label"]')?.textContent).toBe('Second part');
   });
 
   it('keeps user expansion and renders the complete summary Markdown', async () => {
@@ -130,7 +130,7 @@ describe('ModelThinkingDisplay reasoning summary', () => {
     });
     expect(container.querySelector('[data-testid="chat-thinking-panel"]')
       ?.getAttribute('data-expanded')).toBe('true');
-    expect(container.querySelector('[data-bf-part="label"]')?.textContent)
+    expect(container.querySelector('[data-openbitfun-part="label"]')?.textContent)
       .toBe('Thinking Summary');
     expect(container.querySelector('[data-testid="thinking-markdown"]')?.textContent)
       .toBe(content);

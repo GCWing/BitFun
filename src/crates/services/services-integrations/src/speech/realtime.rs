@@ -1,12 +1,12 @@
-use super::{BitFunError, BitFunResult, SpeechService};
+use super::{OpenBitFunError, OpenBitFunResult, SpeechService};
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
-use bitfun_core_types::speech::{
+use futures_util::{SinkExt, StreamExt};
+use openbitfun_core_types::speech::{
     SpeechAppendRealtimeAudioRequest, SpeechRealtimeEvent, SpeechRealtimeEventKind,
     SpeechRealtimeFunctionCall, SpeechRealtimeSession, SpeechRealtimeSessionRequest,
     SpeechRealtimeSpeakRequest, SpeechRealtimeToolResultRequest,
 };
-use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,11 +33,11 @@ const MAX_TOOL_RESULT_BYTES: usize = 16 * 1024;
 const MAX_SPOKEN_PROGRESS_CHARS: usize = 600;
 const MAX_CLIENT_CONTEXT_CHARS: usize = 16 * 1024;
 
-const BITFUN_VOICE_INSTRUCTIONS: &str = r#"You are BitFun's client-level realtime voice assistant. Reply naturally and concisely in the user's language. Your voice call normally belongs to the whole BitFun client. When voice_call_target.kind is miniapp, the call started inside that MiniApp's floating conversation and MiniApp-related tasks should stay in that conversation.
+const OPENBITFUN_VOICE_INSTRUCTIONS: &str = r#"You are OpenBitFun's client-level realtime voice assistant. Reply naturally and concisely in the user's language. Your voice call normally belongs to the whole OpenBitFun client. When voice_call_target.kind is miniapp, the call started inside that MiniApp's floating conversation and MiniApp-related tasks should stay in that conversation.
 
-Use get_bitfun_client_context whenever the user asks about the current client, open workspaces/projects, visible sessions, running tasks, or names a workspace whose exact id is not already known from a fresh context result. Never guess a workspace id. Use switch_bitfun_workspace for navigation-only requests. When the user asks you to inspect, create, change, run, debug, research, or otherwise complete work, call run_bitfun_task with a complete standalone task description. If voice_call_target.kind is miniapp and the request belongs to that MiniApp, omit workspace_id so BitFun routes the task through the MiniApp's existing conversation and domain workflow. An explicitly supplied workspace_id overrides MiniApp routing and starts a normal workspace Agent task. Outside a MiniApp call, include the intended workspace_id, or omit it only when the user clearly means the active workspace. Set activate_workspace to true when the user asks to enter, switch to, or visibly work in a workspace; use false only for an explicit background request.
+Use get_openbitfun_client_context whenever the user asks about the current client, open workspaces/projects, visible sessions, running tasks, or names a workspace whose exact id is not already known from a fresh context result. Never guess a workspace id. Use switch_openbitfun_workspace for navigation-only requests. When the user asks you to inspect, create, change, run, debug, research, or otherwise complete work, call run_openbitfun_task with a complete standalone task description. If voice_call_target.kind is miniapp and the request belongs to that MiniApp, omit workspace_id so OpenBitFun routes the task through the MiniApp's existing conversation and domain workflow. An explicitly supplied workspace_id overrides MiniApp routing and starts a normal workspace Agent task. Outside a MiniApp call, include the intended workspace_id, or omit it only when the user clearly means the active workspace. Set activate_workspace to true when the user asks to enter, switch to, or visibly work in a workspace; use false only for an explicit background request.
 
-If the user asks to stop, cancel, abort, or interrupt the BitFun task currently running through this client voice assistant, call stop_bitfun_task immediately. A stop request is a control operation, not a new task: never pass it to run_bitfun_task and never claim the task stopped before the stop_bitfun_task result confirms it. Do not claim that work is complete before the tool result arrives. BitFun will speak brief public progress summaries while the Agent task is running; do not expose private reasoning, raw logs, or tool payloads. BitFun also speaks a concise final outcome itself. When a task tool result contains outcome_spoken=true, do not repeat that outcome; wait for the user's next request. If outcome_spoken is false or absent, summarize the outcome clearly and mention any user action still required. Never invent client state or task results."#;
+If the user asks to stop, cancel, abort, or interrupt the OpenBitFun task currently running through this client voice assistant, call stop_openbitfun_task immediately. A stop request is a control operation, not a new task: never pass it to run_openbitfun_task and never claim the task stopped before the stop_openbitfun_task result confirms it. Do not claim that work is complete before the tool result arrives. OpenBitFun will speak brief public progress summaries while the Agent task is running; do not expose private reasoning, raw logs, or tool payloads. OpenBitFun also speaks a concise final outcome itself. When a task tool result contains outcome_spoken=true, do not repeat that outcome; wait for the user's next request. If outcome_spoken is false or absent, summarize the outcome clearly and mention any user action still required. Never invent client state or task results."#;
 
 #[derive(Debug, Clone)]
 pub struct VolcengineRealtimeSpeechConfig {
@@ -71,7 +71,7 @@ impl SpeechService {
         &self,
         config: VolcengineRealtimeSpeechConfig,
         on_event: F,
-    ) -> BitFunResult<SpeechRealtimeSession>
+    ) -> OpenBitFunResult<SpeechRealtimeSession>
     where
         F: Fn(SpeechRealtimeEvent) + Send + Sync + 'static,
     {
@@ -117,11 +117,11 @@ impl SpeechService {
             }),
             Ok(Ok(Err(message))) => {
                 self.realtime.sessions.lock().await.remove(&session_id);
-                Err(BitFunError::service(message))
+                Err(OpenBitFunError::service(message))
             }
             Ok(Err(_)) => {
                 self.realtime.sessions.lock().await.remove(&session_id);
-                Err(BitFunError::service(
+                Err(OpenBitFunError::service(
                     "Realtime speech connection ended before it became ready",
                 ))
             }
@@ -129,7 +129,7 @@ impl SpeechService {
                 if let Some(handle) = self.realtime.sessions.lock().await.remove(&session_id) {
                     handle.cancel.cancel();
                 }
-                Err(BitFunError::service(
+                Err(OpenBitFunError::service(
                     "Timed out connecting to the realtime speech service",
                 ))
             }
@@ -139,19 +139,19 @@ impl SpeechService {
     pub async fn append_realtime_audio(
         &self,
         request: SpeechAppendRealtimeAudioRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let audio = BASE64_STANDARD
             .decode(request.pcm16_base64.as_bytes())
             .map_err(|error| {
-                BitFunError::validation(format!("Invalid base64 realtime audio chunk: {error}"))
+                OpenBitFunError::validation(format!("Invalid base64 realtime audio chunk: {error}"))
             })?;
         if audio.is_empty() || audio.len() % 2 != 0 {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Realtime PCM16 audio must contain complete samples",
             ));
         }
         if audio.len() > MAX_AUDIO_CHUNK_BYTES {
-            return Err(BitFunError::validation(format!(
+            return Err(OpenBitFunError::validation(format!(
                 "Realtime audio chunk exceeds {MAX_AUDIO_CHUNK_BYTES} bytes"
             )));
         }
@@ -169,7 +169,7 @@ impl SpeechService {
     pub async fn commit_realtime_audio(
         &self,
         request: SpeechRealtimeSessionRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.send_realtime_command(
             &request.session_id,
             json!({
@@ -183,13 +183,15 @@ impl SpeechService {
     pub async fn send_realtime_tool_result(
         &self,
         request: SpeechRealtimeToolResultRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let call_id = request.call_id.trim();
         if call_id.is_empty() {
-            return Err(BitFunError::validation("Function call id cannot be empty"));
+            return Err(OpenBitFunError::validation(
+                "Function call id cannot be empty",
+            ));
         }
         if request.result.len() > MAX_TOOL_RESULT_BYTES {
-            return Err(BitFunError::validation(format!(
+            return Err(OpenBitFunError::validation(format!(
                 "Realtime function result exceeds {MAX_TOOL_RESULT_BYTES} bytes"
             )));
         }
@@ -203,15 +205,15 @@ impl SpeechService {
     pub async fn speak_realtime_text(
         &self,
         request: SpeechRealtimeSpeakRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let text = request.text.trim();
         if text.is_empty() {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Spoken progress text cannot be empty",
             ));
         }
         if text.chars().count() > MAX_SPOKEN_PROGRESS_CHARS {
-            return Err(BitFunError::validation(format!(
+            return Err(OpenBitFunError::validation(format!(
                 "Spoken progress text exceeds {MAX_SPOKEN_PROGRESS_CHARS} characters"
             )));
         }
@@ -222,7 +224,7 @@ impl SpeechService {
     pub async fn cancel_realtime_response(
         &self,
         request: SpeechRealtimeSessionRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.send_realtime_command(
             &request.session_id,
             json!({
@@ -236,7 +238,7 @@ impl SpeechService {
     pub async fn close_realtime_session(
         &self,
         request: SpeechRealtimeSessionRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let handle = self
             .realtime
             .sessions
@@ -244,16 +246,20 @@ impl SpeechService {
             .await
             .remove(&request.session_id)
             .ok_or_else(|| {
-                BitFunError::NotFound("Realtime speech session not found".to_string())
+                OpenBitFunError::NotFound("Realtime speech session not found".to_string())
             })?;
         handle
             .sender
             .send(RealtimeSpeechCommand::Close)
             .await
-            .map_err(|_| BitFunError::service("Realtime speech session is already closed"))
+            .map_err(|_| OpenBitFunError::service("Realtime speech session is already closed"))
     }
 
-    async fn send_realtime_command(&self, session_id: &str, payload: Value) -> BitFunResult<()> {
+    async fn send_realtime_command(
+        &self,
+        session_id: &str,
+        payload: Value,
+    ) -> OpenBitFunResult<()> {
         let handle = self
             .realtime
             .sessions
@@ -262,13 +268,13 @@ impl SpeechService {
             .get(session_id)
             .cloned()
             .ok_or_else(|| {
-                BitFunError::NotFound("Realtime speech session not found".to_string())
+                OpenBitFunError::NotFound("Realtime speech session not found".to_string())
             })?;
         handle
             .sender
             .send(RealtimeSpeechCommand::Send(payload))
             .await
-            .map_err(|_| BitFunError::service("Realtime speech session is already closed"))
+            .map_err(|_| OpenBitFunError::service("Realtime speech session is already closed"))
     }
 }
 
@@ -296,21 +302,21 @@ fn spoken_text_payload(text: &str) -> Value {
 
 fn validate_config(
     mut config: VolcengineRealtimeSpeechConfig,
-) -> BitFunResult<VolcengineRealtimeSpeechConfig> {
+) -> OpenBitFunResult<VolcengineRealtimeSpeechConfig> {
     config.api_key = config.api_key.trim().to_string();
     config.voice = config.voice.trim().to_string();
     if config.api_key.is_empty() {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "Volcengine realtime speech API key is not configured",
         ));
     }
     if config.voice.is_empty() {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "Volcengine realtime speech voice is not configured",
         ));
     }
     if !(-50..=100).contains(&config.speed) || !(-50..=100).contains(&config.loudness) {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "Realtime speech speed and loudness must be between -50 and 100",
         ));
     }
@@ -341,7 +347,7 @@ async fn run_realtime_actor(
     ready_sender: oneshot::Sender<Result<(), String>>,
     on_event: RealtimeEventHandler,
 ) {
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     let mut request = match VOLCENGINE_REALTIME_URL.into_client_request() {
         Ok(request) => request,
         Err(error) => {
@@ -577,9 +583,9 @@ fn session_create_payload(
 ) -> Value {
     let instructions = match config.client_context.as_deref() {
         Some(context) => format!(
-            "{BITFUN_VOICE_INSTRUCTIONS}\n\nCLIENT CONTEXT SNAPSHOT AT CALL START (JSON; refresh with get_bitfun_client_context before relying on changing state):\n{context}"
+            "{OPENBITFUN_VOICE_INSTRUCTIONS}\n\nCLIENT CONTEXT SNAPSHOT AT CALL START (JSON; refresh with get_openbitfun_client_context before relying on changing state):\n{context}"
         ),
-        None => BITFUN_VOICE_INSTRUCTIONS.to_string(),
+        None => OPENBITFUN_VOICE_INSTRUCTIONS.to_string(),
     };
     json!({
         "type": "session.create",
@@ -601,8 +607,8 @@ fn session_create_payload(
             //
             // This is the provider-hosted Voice model's client control-plane
             // tool list. It is intentionally independent from the tool registry
-            // assembled for a normal BitFun Agent session. In particular,
-            // `run_bitfun_task` delegates one complete user intent either to a
+            // assembled for a normal OpenBitFun Agent session. In particular,
+            // `run_openbitfun_task` delegates one complete user intent either to a
             // newly created workspace Agent session or, when the call target
             // says so, through an Agentic MiniApp's existing chat contract.
             // Voice never receives, mirrors, or proxies that Agent session's
@@ -623,8 +629,8 @@ fn session_create_payload(
             "tools": [
                 {
                     "type": "function",
-                    "name": "get_bitfun_client_context",
-                    "description": "Return a fresh snapshot of the BitFun client: active scene, active and opened workspaces, visible sessions, running Agent tasks, and the task owned by this voice assistant. Call this before resolving a workspace name or answering questions about current client state.",
+                    "name": "get_openbitfun_client_context",
+                    "description": "Return a fresh snapshot of the OpenBitFun client: active scene, active and opened workspaces, visible sessions, running Agent tasks, and the task owned by this voice assistant. Call this before resolving a workspace name or answering questions about current client state.",
                     "parameters": {
                         "type": "object",
                         "additionalProperties": false,
@@ -633,15 +639,15 @@ fn session_create_payload(
                 },
                 {
                     "type": "function",
-                    "name": "switch_bitfun_workspace",
-                    "description": "Activate one currently opened BitFun workspace in the client. Obtain the exact workspace_id from get_bitfun_client_context and never guess it.",
+                    "name": "switch_openbitfun_workspace",
+                    "description": "Activate one currently opened OpenBitFun workspace in the client. Obtain the exact workspace_id from get_openbitfun_client_context and never guess it.",
                     "parameters": {
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
                             "workspace_id": {
                                 "type": "string",
-                                "description": "Exact id of an opened workspace from get_bitfun_client_context."
+                                "description": "Exact id of an opened workspace from get_openbitfun_client_context."
                             }
                         },
                         "required": ["workspace_id"]
@@ -649,19 +655,19 @@ fn session_create_payload(
                 },
                 {
                     "type": "function",
-                    "name": "run_bitfun_task",
-                    "description": "Complete one task through BitFun and return the final result. When voice_call_target.kind is miniapp, omit workspace_id for work that belongs to that MiniApp so BitFun reuses its conversation and domain workflow. Otherwise start a normal Agent session in the intended opened workspace; use get_bitfun_client_context first when the user names a workspace or project.",
+                    "name": "run_openbitfun_task",
+                    "description": "Complete one task through OpenBitFun and return the final result. When voice_call_target.kind is miniapp, omit workspace_id for work that belongs to that MiniApp so OpenBitFun reuses its conversation and domain workflow. Otherwise start a normal Agent session in the intended opened workspace; use get_openbitfun_client_context first when the user names a workspace or project.",
                     "parameters": {
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
                             "task": {
                                 "type": "string",
-                                "description": "A complete standalone description of the work BitFun should perform."
+                                "description": "A complete standalone description of the work OpenBitFun should perform."
                             },
                             "workspace_id": {
                                 "type": "string",
-                                "description": "Exact opened workspace id from get_bitfun_client_context. When voice_call_target.kind is miniapp, omit this for work that belongs to the MiniApp; supplying it explicitly overrides MiniApp routing. Outside a MiniApp call, omit only when the user clearly means the active workspace."
+                                "description": "Exact opened workspace id from get_openbitfun_client_context. When voice_call_target.kind is miniapp, omit this for work that belongs to the MiniApp; supplying it explicitly overrides MiniApp routing. Outside a MiniApp call, omit only when the user clearly means the active workspace."
                             },
                             "activate_workspace": {
                                 "type": "boolean",
@@ -673,8 +679,8 @@ fn session_create_payload(
                 },
                 {
                     "type": "function",
-                    "name": "stop_bitfun_task",
-                    "description": "Stop the BitFun Agent task currently owned by this client-level voice assistant. Use this for any user request to stop, cancel, abort, or interrupt the current task.",
+                    "name": "stop_openbitfun_task",
+                    "description": "Stop the OpenBitFun Agent task currently owned by this client-level voice assistant. Use this for any user request to stop, cancel, abort, or interrupt the current task.",
                     "parameters": {
                         "type": "object",
                         "additionalProperties": false,
@@ -903,7 +909,7 @@ mod tests {
     }
 
     #[test]
-    fn session_create_uses_documented_pcm_contract_and_bitfun_tool() {
+    fn session_create_uses_documented_pcm_contract_and_openbitfun_tool() {
         let payload = session_create_payload(&config(), "local-session");
         assert_eq!(
             payload.pointer("/session/id"),
@@ -920,19 +926,19 @@ mod tests {
         );
         assert_eq!(
             payload.pointer("/session/tools/0/name"),
-            Some(&json!("get_bitfun_client_context"))
+            Some(&json!("get_openbitfun_client_context"))
         );
         assert_eq!(
             payload.pointer("/session/tools/1/name"),
-            Some(&json!("switch_bitfun_workspace"))
+            Some(&json!("switch_openbitfun_workspace"))
         );
         assert_eq!(
             payload.pointer("/session/tools/2/name"),
-            Some(&json!("run_bitfun_task"))
+            Some(&json!("run_openbitfun_task"))
         );
         assert_eq!(
             payload.pointer("/session/tools/3/name"),
-            Some(&json!("stop_bitfun_task"))
+            Some(&json!("stop_openbitfun_task"))
         );
         let instructions = payload
             .pointer("/session/instructions")
@@ -965,7 +971,7 @@ mod tests {
                 "type": "response.function_call_arguments.done",
                 "items": [{
                     "call_id": "call-1",
-                    "name": "run_bitfun_task",
+                    "name": "run_openbitfun_task",
                     "arguments": "{\"task\":\"run tests\"}"
                 }]
             }),
@@ -987,7 +993,7 @@ mod tests {
                 "items": {
                     "call_id": "call-2",
                     "function": {
-                        "name": "run_bitfun_task",
+                        "name": "run_openbitfun_task",
                         "arguments": {"task": "inspect the workspace"}
                     }
                 }

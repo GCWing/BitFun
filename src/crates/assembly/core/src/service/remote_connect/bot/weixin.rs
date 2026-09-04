@@ -1,18 +1,18 @@
 //! Weixin iLink bot orchestration for Remote Connect.
 //!
-//! Provider HTTP/CDN/QR/message parsing lives in `bitfun-services-integrations`.
+//! Provider HTTP/CDN/QR/message parsing lives in `openbitfun-services-integrations`.
 //! This module keeps product pairing, command routing, persistence, and agent
 //! turn orchestration.
 
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use bitfun_services_integrations::remote_connect::bot::weixin as weixin_provider;
-use bitfun_services_integrations::remote_connect::bot::weixin::WeixinProviderClient;
-pub use bitfun_services_integrations::remote_connect::bot::weixin::{
+use log::{error, info, warn};
+use openbitfun_services_integrations::remote_connect::bot::weixin as weixin_provider;
+use openbitfun_services_integrations::remote_connect::bot::weixin::WeixinProviderClient;
+pub use openbitfun_services_integrations::remote_connect::bot::weixin::{
     WeixinConfig, WeixinQrPollResponse, WeixinQrPollStatus, WeixinQrStartResponse,
     MAX_INBOUND_IMAGES, MAX_WEIXIN_FILE_BYTES, WEIXIN_SESSION_EXPIRED_ERRCODE,
 };
-use log::{error, info, warn};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -439,9 +439,9 @@ impl WeixinBot {
                         self.try_send_text(&peer, err, "pairing-invalid").await;
                     } else if !text.is_empty() {
                         let err = if language.is_chinese() {
-                            "\u{8bf7}\u{8f93}\u{5165} BitFun \u{684c}\u{9762}\u{7aef}\u{8fdc}\u{7a0b}\u{8fde}\u{63a5}\u{4e2d}\u{663e}\u{793a}\u{7684} 6 \u{4f4d}\u{914d}\u{5bf9}\u{7801}\u{3002}"
+                            "\u{8bf7}\u{8f93}\u{5165} OpenBitFun \u{684c}\u{9762}\u{7aef}\u{8fdc}\u{7a0b}\u{8fde}\u{63a5}\u{4e2d}\u{663e}\u{793a}\u{7684} 6 \u{4f4d}\u{914d}\u{5bf9}\u{7801}\u{3002}"
                         } else {
-                            "Please send the 6-digit pairing code from BitFun Desktop Remote Connect."
+                            "Please send the 6-digit pairing code from OpenBitFun Desktop Remote Connect."
                         };
                         self.try_send_text(&peer, err, "pairing-prompt").await;
                     } else if weixin_provider::has_inbound_image_items(msg) {

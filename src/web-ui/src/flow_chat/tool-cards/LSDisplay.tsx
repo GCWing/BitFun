@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { DirectoryListToolCard } from '@bitfun/ui/flow-chat';
+import { DirectoryListToolCard } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 interface LSEntry {
   name: string;
@@ -123,7 +123,7 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
   }
 
   return (
-    <div ref={cardRootRef} data-bf-adapter="directory-list" data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-openbitfun-adapter="directory-list" data-tool-card-id={toolId ?? ''}>
       <DirectoryListToolCard
         action={renderAction()}
         status={status}

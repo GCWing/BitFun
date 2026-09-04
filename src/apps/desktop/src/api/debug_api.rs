@@ -58,7 +58,7 @@ pub async fn debug_element_picked(request: DebugElementPickedRequest) -> Result<
     });
 
     log::info!(
-        target: "bitfun::devtools",
+        target: "openbitfun::devtools",
         "Element picked: {}",
         serde_json::to_string_pretty(&payload).unwrap_or_default()
     );

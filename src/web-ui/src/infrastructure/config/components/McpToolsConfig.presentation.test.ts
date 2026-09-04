@@ -15,8 +15,8 @@ describe('MCP settings presentation', () => {
     const editorStart = stylesheet.indexOf('&__json-editor {');
     const editorEnd = stylesheet.indexOf('&__json-editor-header', editorStart);
 
-    expect(stylesheet).not.toContain('.bitfun-config-page-row {');
-    expect(stylesheet.slice(editorStart, editorEnd)).toContain('padding: var(--bf-space-4);');
+    expect(stylesheet).not.toContain('.openbitfun-config-page-row {');
+    expect(stylesheet.slice(editorStart, editorEnd)).toContain('padding: var(--openbitfun-space-4);');
   });
 
   it('presents JSON as an advanced text-labelled mode without the extensions overview', () => {

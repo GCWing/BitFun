@@ -35,17 +35,17 @@ body {
   min-width: 300px;
   min-height: 100dvh;
   margin: 0;
-  background-color: var(--bf-color-surface-canvas);
+  background-color: var(--openbitfun-color-surface-canvas);
   background-image:
     radial-gradient(
       circle at 76% 0%,
-      color-mix(in srgb, var(--bf-color-accent-default) 6%, transparent),
+      color-mix(in srgb, var(--openbitfun-color-accent-default) 6%, transparent),
       transparent 34rem
     ),
-    linear-gradient(color-mix(in srgb, var(--bf-color-content-primary) 3%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--bf-color-content-primary) 3%, transparent) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--openbitfun-color-content-primary) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--openbitfun-color-content-primary) 3%, transparent) 1px, transparent 1px);
   background-size: auto, 44px 44px, 44px 44px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 14px;
   line-height: 1.55;
 }
@@ -75,7 +75,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--bf-color-accent-default);
+  outline: 2px solid var(--openbitfun-color-accent-default);
   outline-offset: 2px;
 }
 
@@ -90,8 +90,8 @@ textarea:focus-visible {
   position: sticky;
   top: 0;
   z-index: 40;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
-  background: color-mix(in srgb, var(--bf-color-surface-canvas) 80%, transparent);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 80%, transparent);
   backdrop-filter: blur(16px) saturate(130%);
   -webkit-backdrop-filter: blur(16px) saturate(130%);
 }
@@ -124,11 +124,11 @@ textarea:focus-visible {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-content-primary);
-  box-shadow: var(--bf-shadow-sm);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-content-primary);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .brand-mark svg {
@@ -144,7 +144,7 @@ textarea:focus-visible {
 }
 
 .brand-copy strong {
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.012em;
@@ -152,7 +152,7 @@ textarea:focus-visible {
 }
 
 .brand-copy > span {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10.5px;
   line-height: 1.2;
 }
@@ -177,7 +177,7 @@ textarea:focus-visible {
   min-height: 29px;
   padding-inline: 10px;
   border-radius: var(--radius-sm);
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 12.5px;
   transition:
     background 160ms ease,
@@ -185,13 +185,13 @@ textarea:focus-visible {
 }
 
 .topbar nav button:hover {
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .topbar nav button.active {
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
   font-weight: 600;
 }
 
@@ -217,10 +217,10 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
-  color: var(--bf-color-content-muted);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
+  color: var(--openbitfun-color-content-muted);
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -230,9 +230,9 @@ textarea:focus-visible {
 
 .header-control:hover,
 .header-control[aria-expanded='true'] {
-  border-color: var(--bf-color-border-default);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-content-primary);
+  border-color: var(--openbitfun-color-border-default);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .header-control:active {
@@ -245,14 +245,14 @@ textarea:focus-visible {
 }
 
 .language-trigger .control-label {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
 }
 
 .language-caret {
-  color: var(--bf-color-content-disabled);
+  color: var(--openbitfun-color-content-disabled);
   transition: transform 160ms ease;
 }
 
@@ -285,17 +285,17 @@ textarea:focus-visible {
   z-index: 60;
   display: grid;
   gap: 2px;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: var(--radius-md);
-  background: var(--bf-color-surface-panel);
-  box-shadow: var(--bf-shadow-menu);
+  background: var(--openbitfun-color-surface-panel);
+  box-shadow: var(--openbitfun-shadow-menu);
   transform-origin: top right;
   animation: language-menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .language-menu-label {
   padding: 6px 9px 5px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -312,33 +312,33 @@ textarea:focus-visible {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 13px;
   text-align: left;
 }
 
 .language-menu button:hover {
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .language-menu button.selected {
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
   font-weight: 600;
 }
 
 .profile {
   min-width: 0;
   gap: 8px;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 12px;
 }
 
 .profile img {
   width: 24px;
   height: 24px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-pill);
 }
 
@@ -355,7 +355,7 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .icon-button svg {
@@ -365,8 +365,8 @@ textarea:focus-visible {
 
 .icon-button:hover,
 .text-action:hover {
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 main {
@@ -403,7 +403,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.006em;
@@ -419,7 +419,7 @@ main {
 .hero h1 {
   max-width: 520px;
   margin: 14px 0 12px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: clamp(31px, 3.5vw, 45px);
   font-weight: 660;
   line-height: 1.1;
@@ -431,7 +431,7 @@ main {
 .hero-copy > p {
   max-width: 500px;
   margin: 0;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 14.5px;
   line-height: 1.62;
   text-wrap: pretty;
@@ -441,10 +441,10 @@ main {
   min-width: 0;
   overflow: hidden;
   position: relative;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: var(--radius-xl);
-  background: var(--bf-color-surface-canvas);
-  box-shadow: var(--bf-shadow-lg);
+  background: var(--openbitfun-color-surface-canvas);
+  box-shadow: var(--openbitfun-shadow-lg);
   animation: rise-in 540ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -452,7 +452,7 @@ main {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 10%, transparent);
   border-radius: inherit;
   pointer-events: none;
 }
@@ -468,8 +468,8 @@ main {
 .trust-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid var(--bf-color-border-subtle);
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .trust-row > div {
@@ -479,102 +479,102 @@ main {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 12.5px;
   text-align: center;
 }
 
 .trust-row > div + div {
-  border-left: 1px solid var(--bf-color-border-subtle);
+  border-left: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .trust-row svg {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
 }
 
 /* A .bfminiapp package only runs inside the desktop client, so the catalog and
    every listing carry the same visible route to the official download page. */
-.get-bitfun {
+.get-openbitfun {
   max-width: 100%;
   margin-top: 22px;
   padding: 13px 15px;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 12px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
   text-decoration: none;
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
 }
 
-.get-bitfun-listing {
+.get-openbitfun-listing {
   margin-top: 16px;
 }
 
-.get-bitfun:hover {
-  border-color: var(--bf-color-accent-default);
-  box-shadow: var(--bf-shadow-sm);
+.get-openbitfun:hover {
+  border-color: var(--openbitfun-color-accent-default);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
-.get-bitfun-icon {
+.get-openbitfun-icon {
   width: 32px;
   height: 32px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
-  background: var(--bf-color-accent-default);
-  color: var(--bf-color-content-inverse);
+  background: var(--openbitfun-color-accent-default);
+  color: var(--openbitfun-color-content-inverse);
 }
 
-.get-bitfun-icon svg {
+.get-openbitfun-icon svg {
   width: 17px;
   height: 17px;
 }
 
-.get-bitfun-copy {
+.get-openbitfun-copy {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.get-bitfun-copy strong {
-  color: var(--bf-color-content-primary);
+.get-openbitfun-copy strong {
+  color: var(--openbitfun-color-content-primary);
   font-size: 13px;
   font-weight: 640;
 }
 
-.get-bitfun-copy > span {
-  color: var(--bf-color-content-secondary);
+.get-openbitfun-copy > span {
+  color: var(--openbitfun-color-content-secondary);
   font-size: 12px;
   line-height: 1.5;
   text-wrap: pretty;
 }
 
-.get-bitfun-action {
+.get-openbitfun-action {
   width: fit-content;
   margin-top: 2px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
   font-size: 12.5px;
   font-weight: 620;
   white-space: nowrap;
 }
 
-.get-bitfun-action svg {
+.get-openbitfun-action svg {
   width: 14px;
   height: 14px;
   transition: transform 150ms ease;
 }
 
-.get-bitfun:hover .get-bitfun-action svg {
+.get-openbitfun:hover .get-openbitfun-action svg {
   transform: translateX(2px);
 }
 
@@ -592,7 +592,7 @@ main {
 
 .catalog-heading h2 {
   margin: 0;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: clamp(20px, 2vw, 25px);
   font-weight: 660;
   letter-spacing: -0.022em;
@@ -601,14 +601,14 @@ main {
 .catalog-heading p {
   max-width: 500px;
   margin: 5px 0 0;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 12.5px;
   line-height: 1.58;
 }
 
 .result-count {
   flex: 0 0 auto;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
@@ -624,10 +624,10 @@ main {
   min-height: 36px;
   display: flex;
   align-items: center;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
-  box-shadow: var(--bf-shadow-sm);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
+  box-shadow: var(--openbitfun-shadow-sm);
   font-size: 13px;
 }
 
@@ -641,13 +641,13 @@ main {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .search-field:focus-within,
 .sort-field:focus-within {
-  border-color: var(--bf-color-accent-default);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+  border-color: var(--openbitfun-color-accent-default);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
 }
 
 .search-field input {
@@ -656,14 +656,14 @@ main {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .search-field input::placeholder,
 .review-actions input::placeholder,
 .field input::placeholder,
 .field textarea::placeholder {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   opacity: 1;
 }
 
@@ -678,7 +678,7 @@ main {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 13px;
   cursor: pointer;
 }
@@ -699,7 +699,7 @@ main {
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
   cursor: pointer;
   transition:
@@ -710,15 +710,15 @@ main {
 }
 
 .category-tabs button:hover {
-  border-color: var(--bf-color-border-default);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
-  color: var(--bf-color-content-primary);
+  border-color: var(--openbitfun-color-border-default);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .category-tabs button.active {
-  border-color: var(--bf-color-accent-default);
-  background: var(--bf-color-accent-default);
-  color: var(--bf-color-content-inverse);
+  border-color: var(--openbitfun-color-accent-default);
+  background: var(--openbitfun-color-accent-default);
+  color: var(--openbitfun-color-content-inverse);
 }
 
 .category-tabs svg {
@@ -744,13 +744,13 @@ main {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--bf-color-surface-panel);
+  background: var(--openbitfun-color-surface-panel);
   color: inherit;
   text-decoration: none;
   text-align: left;
-  box-shadow: var(--bf-shadow-sm);
+  box-shadow: var(--openbitfun-shadow-sm);
   cursor: pointer;
   transition:
     transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -761,11 +761,11 @@ main {
 
 .app-card:hover {
   transform: translateY(-2px);
-  border-color: var(--bf-color-border-default);
-  box-shadow: var(--bf-shadow-menu);
+  border-color: var(--openbitfun-color-border-default);
+  box-shadow: var(--openbitfun-shadow-menu);
 }
 
-/* 16:9 matches the MiniApp market card inside the BitFun desktop client, so a
+/* 16:9 matches the MiniApp market card inside the OpenBitFun desktop client, so a
    publisher's screenshot is cropped identically in both surfaces. */
 .card-visual {
   aspect-ratio: 16 / 9;
@@ -773,9 +773,9 @@ main {
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
-  background-color: var(--bf-color-surface-tertiary);
-  background-image: radial-gradient(circle at 68% 22%, color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent), transparent 55%);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+  background-color: var(--openbitfun-color-surface-tertiary);
+  background-image: radial-gradient(circle at 68% 22%, color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent), transparent 55%);
 }
 
 .card-visual img {
@@ -795,11 +795,11 @@ main {
   height: 52px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
   border-radius: var(--radius-md);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-accent-default);
-  box-shadow: var(--bf-shadow-sm);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-accent-default);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .app-icon-large svg {
@@ -821,7 +821,7 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10px;
 }
 
@@ -831,10 +831,10 @@ main {
   padding-inline: 7px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.008em;
@@ -855,10 +855,10 @@ main {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-secondary);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .app-icon svg {
@@ -875,7 +875,7 @@ main {
 .submission-row h2 {
   margin: 0;
   overflow: hidden;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 14px;
   font-weight: 640;
   letter-spacing: -0.012em;
@@ -887,7 +887,7 @@ main {
 .owner,
 .submission-row p {
   margin: 2px 0 0;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10.5px;
 }
 
@@ -895,7 +895,7 @@ main {
   margin: 10px 0 13px;
   overflow: hidden;
   display: -webkit-box;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 12.5px;
   line-height: 1.52;
   -webkit-box-orient: vertical;
@@ -908,8 +908,8 @@ main {
   display: flex;
   align-items: center;
   gap: 11px;
-  border-top: 1px solid var(--bf-color-border-subtle);
-  color: var(--bf-color-content-muted);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -926,23 +926,23 @@ main {
 }
 
 .card-meta .ph-fill {
-  color: var(--bf-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-content);
 }
 
 .card-favorites.active svg {
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .card-meta small {
-  color: var(--bf-color-content-disabled);
+  color: var(--openbitfun-color-content-disabled);
   font-size: 10px;
 }
 
 .card-version {
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-muted);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -950,7 +950,7 @@ main {
 
 .card-arrow {
   margin-left: auto;
-  color: var(--bf-color-content-disabled);
+  color: var(--openbitfun-color-content-disabled);
   transition:
     color 150ms ease,
     transform 150ms ease;
@@ -958,7 +958,7 @@ main {
 
 .app-card:hover .card-arrow {
   transform: translateX(2px);
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
 }
 
 .app-card-skeleton {
@@ -968,8 +968,8 @@ main {
 
 .app-card-skeleton:hover {
   transform: none;
-  border-color: var(--bf-color-border-subtle);
-  box-shadow: var(--bf-shadow-sm);
+  border-color: var(--openbitfun-color-border-subtle);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .skeleton-block,
@@ -977,9 +977,9 @@ main {
   background:
     linear-gradient(
       105deg,
-      var(--bf-color-surface-tertiary) 8%,
-      var(--bf-color-action-neutral-surface-hover) 18%,
-      var(--bf-color-surface-tertiary) 33%
+      var(--openbitfun-color-surface-tertiary) 8%,
+      var(--openbitfun-color-action-neutral-surface-hover) 18%,
+      var(--openbitfun-color-surface-tertiary) 33%
     );
   background-size: 220% 100%;
   animation: shimmer 1.35s linear infinite;
@@ -988,7 +988,7 @@ main {
 .skeleton-visual {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .skeleton-line {
@@ -1033,10 +1033,10 @@ main {
   place-items: center;
   align-content: center;
   gap: 12px;
-  border: 1px dashed var(--bf-color-border-default);
+  border: 1px dashed var(--openbitfun-color-border-default);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent) 72%, transparent);
-  color: var(--bf-color-content-secondary);
+  background: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent) 72%, transparent);
+  color: var(--openbitfun-color-content-secondary);
   text-align: center;
 }
 
@@ -1049,7 +1049,7 @@ main {
 
 .empty-state-hint {
   max-width: 460px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
   line-height: 1.6;
 }
@@ -1059,9 +1059,9 @@ main {
 .loading-mark {
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
 }
 
 .empty-state-icon {
@@ -1087,16 +1087,16 @@ main {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid var(--bf-color-action-primary-background);
+  border: 1px solid var(--openbitfun-color-action-primary-background);
   border-radius: var(--radius-sm);
-  background: var(--bf-color-action-primary-background);
-  color: var(--bf-color-action-primary-content);
+  background: var(--openbitfun-color-action-primary-background);
+  color: var(--openbitfun-color-action-primary-content);
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
-  box-shadow: var(--bf-shadow-sm);
+  box-shadow: var(--openbitfun-shadow-sm);
   cursor: pointer;
   transition:
     transform 150ms ease,
@@ -1119,8 +1119,8 @@ main {
 }
 
 .button:hover:not(:disabled):not(.disabled) {
-  background: var(--bf-color-action-primary-hover);
-  box-shadow: var(--bf-shadow-menu);
+  background: var(--openbitfun-color-action-primary-hover);
+  box-shadow: var(--openbitfun-shadow-menu);
 }
 
 .button-small {
@@ -1131,35 +1131,35 @@ main {
 
 .button-secondary,
 .button-ghost {
-  border-color: var(--bf-color-border-default);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-content-primary);
+  border-color: var(--openbitfun-color-border-default);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-content-primary);
   box-shadow: none;
 }
 
 .button-secondary:hover:not(:disabled),
 .button-ghost:hover:not(:disabled) {
-  border-color: var(--bf-color-border-strong);
-  background: var(--bf-color-action-neutral-surface-hover);
+  border-color: var(--openbitfun-color-border-strong);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
   box-shadow: none;
 }
 
 .button-secondary.active,
 .button-ghost.active {
-  border-color: color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
 }
 
 .button-danger {
-  border-color: var(--bf-color-status-danger-content);
-  background: var(--bf-color-status-danger-content);
-  color: var(--bf-color-content-on-dark);
+  border-color: var(--openbitfun-color-status-danger-content);
+  background: var(--openbitfun-color-status-danger-content);
+  color: var(--openbitfun-color-content-on-dark);
 }
 
 .button-danger:hover:not(:disabled) {
-  border-color: var(--bf-color-status-danger-content);
-  background: color-mix(in srgb, var(--bf-color-status-danger-content) 88%, var(--bf-color-content-primary));
+  border-color: var(--openbitfun-color-status-danger-content);
+  background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 88%, var(--openbitfun-color-content-primary));
 }
 
 .button.disabled,
@@ -1186,7 +1186,7 @@ main {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
   cursor: pointer;
 }
@@ -1197,8 +1197,8 @@ main {
 }
 
 .back-link:hover {
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .detail-hero {
@@ -1218,7 +1218,7 @@ main {
 
 .detail-title-row h1 {
   margin: 0;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: clamp(25px, 3vw, 34px);
   font-weight: 660;
   line-height: 1.14;
@@ -1230,7 +1230,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
 }
 
@@ -1239,7 +1239,7 @@ main {
 .review-list small span + span::before {
   content: "/";
   margin-right: 7px;
-  color: var(--bf-color-content-disabled);
+  color: var(--openbitfun-color-content-disabled);
 }
 
 .detail-icon {
@@ -1248,11 +1248,11 @@ main {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
-  box-shadow: var(--bf-shadow-sm);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .detail-icon svg {
@@ -1263,7 +1263,7 @@ main {
 .detail-description {
   max-width: 560px;
   margin: 0;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 14px;
   line-height: 1.68;
   text-wrap: pretty;
@@ -1292,7 +1292,7 @@ main {
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--bf-color-content-disabled);
+  color: var(--openbitfun-color-content-disabled);
   cursor: pointer;
 }
 
@@ -1302,35 +1302,35 @@ main {
 }
 
 .rating-control button:hover {
-  background: var(--bf-color-status-warning-surface);
-  color: var(--bf-color-status-warning-content);
+  background: var(--openbitfun-color-status-warning-surface);
+  color: var(--openbitfun-color-status-warning-content);
 }
 
 .rating-control button.selected {
-  color: var(--bf-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-content);
 }
 
 .rating-control span {
   margin-left: 7px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 
 /* Matches .card-visual and the desktop client, so the same screenshot is
-   framed identically in the grid, on the detail page and inside BitFun. */
+   framed identically in the grid, on the detail page and inside OpenBitFun. */
 .detail-gallery {
   min-width: 0;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   display: grid;
   place-items: center;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: var(--radius-lg);
-  background-color: var(--bf-color-surface-tertiary);
-  background-image: radial-gradient(circle at 68% 22%, color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent), transparent 55%);
-  color: var(--bf-color-accent-default);
-  box-shadow: var(--bf-shadow-menu);
+  background-color: var(--openbitfun-color-surface-tertiary);
+  background-image: radial-gradient(circle at 68% 22%, color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent), transparent 55%);
+  color: var(--openbitfun-color-accent-default);
+  box-shadow: var(--openbitfun-shadow-menu);
 }
 
 .detail-gallery-track {
@@ -1367,7 +1367,7 @@ main {
 .detail-columns h2,
 .release-section h2 {
   margin: 0 0 12px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.015em;
@@ -1392,10 +1392,10 @@ main {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
-  color: var(--bf-color-content-secondary);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 11.5px;
   line-height: 1.5;
 }
@@ -1407,8 +1407,8 @@ main {
   display: grid;
   place-items: center;
   border-radius: 5px;
-  background: var(--bf-color-status-success-surface);
-  color: var(--bf-color-status-success-content);
+  background: var(--openbitfun-color-status-success-surface);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .permission-list li > span svg {
@@ -1417,12 +1417,12 @@ main {
 }
 
 .permission-list .node-denied > span {
-  background: var(--bf-color-status-danger-surface);
-  color: var(--bf-color-status-danger-content);
+  background: var(--openbitfun-color-status-danger-surface);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .prose {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 13px;
   line-height: 1.72;
   white-space: pre-wrap;
@@ -1433,10 +1433,10 @@ main {
   padding: 16px;
   display: grid;
   gap: 0;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
-  box-shadow: var(--bf-shadow-sm);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .fact {
@@ -1444,7 +1444,7 @@ main {
   padding: 9px 0;
   display: grid;
   gap: 4px;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .fact:first-child {
@@ -1457,14 +1457,14 @@ main {
 }
 
 .fact span {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10px;
   letter-spacing: 0.012em;
 }
 
 .fact strong {
   overflow-wrap: anywhere;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 11.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1476,7 +1476,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
   font-size: 11.5px;
   text-decoration: none;
 }
@@ -1495,7 +1495,7 @@ main {
 .release-section {
   margin-top: 52px;
   padding-top: 28px;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .release-row {
@@ -1505,13 +1505,13 @@ main {
   grid-template-columns: 56px 118px 100px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
-  color: var(--bf-color-content-secondary);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 11.5px;
 }
 
 .release-row strong {
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .release-row.yanked {
@@ -1521,7 +1521,7 @@ main {
 
 .hash {
   overflow: hidden;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   text-overflow: ellipsis;
@@ -1536,7 +1536,7 @@ main {
 .page-intro h1,
 .auth-gate h1 {
   margin: 10px 0 8px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: clamp(22px, 2.6vw, 30px);
   font-weight: 660;
   line-height: 1.16;
@@ -1545,7 +1545,7 @@ main {
 
 .page-intro p,
 .auth-gate p {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 13.5px;
   line-height: 1.62;
 }
@@ -1563,15 +1563,15 @@ main {
   min-width: 0;
   margin: 0;
   padding: 17px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
-  box-shadow: var(--bf-shadow-sm);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .submission-form legend {
   padding: 0 7px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 12px;
   font-weight: 650;
 }
@@ -1591,13 +1591,13 @@ main {
 }
 
 .field > span {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 10.5px;
   font-weight: 600;
 }
 
 .field-hint {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1610,10 +1610,10 @@ main {
   width: 100%;
   min-height: 34px;
   padding: 7px 9px;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: var(--radius-sm);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-content-primary);
   font-size: 13px;
   outline: 0;
 }
@@ -1625,17 +1625,17 @@ main {
 .field input[type="file"] {
   min-height: 44px;
   padding: 7px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .field input[type="file"]::file-selector-button {
   min-height: 28px;
   margin-right: 9px;
   padding-inline: 10px;
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: 5px;
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-primary);
   cursor: pointer;
 }
 
@@ -1644,13 +1644,13 @@ main {
 .field textarea:focus,
 .review-actions input:focus,
 .moderation-panel input:focus {
-  border-color: var(--bf-color-accent-default);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+  border-color: var(--openbitfun-color-accent-default);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
 }
 
 .field input[readonly] {
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-muted);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .safety-note {
@@ -1658,10 +1658,10 @@ main {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
   font-size: 11.5px;
 }
 
@@ -1677,7 +1677,7 @@ main {
 }
 
 .safety-note span {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   line-height: 1.5;
 }
 
@@ -1709,15 +1709,15 @@ main {
 }
 
 .notice.error {
-  border: 1px solid var(--bf-color-status-danger-border);
-  background: var(--bf-color-status-danger-surface);
-  color: var(--bf-color-status-danger-content);
+  border: 1px solid var(--openbitfun-color-status-danger-border);
+  background: var(--openbitfun-color-status-danger-surface);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .notice.success {
-  border: 1px solid var(--bf-color-status-success-border);
-  background: var(--bf-color-status-success-surface);
-  color: var(--bf-color-status-success-content);
+  border: 1px solid var(--openbitfun-color-status-success-border);
+  background: var(--openbitfun-color-status-success-surface);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .auth-gate {
@@ -1742,9 +1742,9 @@ main {
 }
 
 .gate-icon.success {
-  border-color: var(--bf-color-status-success-border);
-  background: var(--bf-color-status-success-surface);
-  color: var(--bf-color-status-success-content);
+  border-color: var(--openbitfun-color-status-success-border);
+  background: var(--openbitfun-color-status-success-surface);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .submission-list {
@@ -1759,9 +1759,9 @@ main {
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 11px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
 }
 
 .submission-meta {
@@ -1771,7 +1771,7 @@ main {
 }
 
 .submission-row .rejection {
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .status-badge {
@@ -1780,22 +1780,22 @@ main {
   display: inline-flex;
   align-items: center;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .status-badge.approved {
-  background: var(--bf-color-status-success-surface);
-  color: var(--bf-color-status-success-content);
+  background: var(--openbitfun-color-status-success-surface);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .status-badge.rejected,
 .status-badge.withdrawn {
-  background: var(--bf-color-status-danger-surface);
-  color: var(--bf-color-status-danger-content);
+  background: var(--openbitfun-color-status-danger-surface);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .admin-page {
@@ -1807,16 +1807,16 @@ main {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--bf-color-surface-panel);
-  box-shadow: var(--bf-shadow-sm);
+  background: var(--openbitfun-color-surface-panel);
+  box-shadow: var(--openbitfun-shadow-sm);
 }
 
 .review-list {
   padding: 8px;
-  border-right: 1px solid var(--bf-color-border-subtle);
-  background: var(--bf-color-surface-tertiary);
+  border-right: 1px solid var(--openbitfun-color-border-subtle);
+  background: var(--openbitfun-color-surface-tertiary);
 }
 
 .review-list > button {
@@ -1830,18 +1830,18 @@ main {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   text-align: left;
   cursor: pointer;
 }
 
 .review-list > button:hover {
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 88%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 88%, transparent);
 }
 
 .review-list > button.selected {
-  border-color: color-mix(in srgb, var(--bf-color-accent-default) 28%, transparent);
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+  border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
 }
 
 .review-list strong {
@@ -1857,12 +1857,12 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10px;
 }
 
 .review-list .review-submission-meta {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .review-detail {
@@ -1876,7 +1876,7 @@ main {
   place-items: center;
   align-content: center;
   gap: 10px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 12.5px;
   text-align: center;
 }
@@ -1884,7 +1884,7 @@ main {
 .review-placeholder svg {
   width: 28px;
   height: 28px;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
 }
 
 .review-summary {
@@ -1893,7 +1893,7 @@ main {
 
 .review-summary h2 {
   margin: 0;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.015em;
@@ -1901,7 +1901,7 @@ main {
 
 .review-summary p {
   margin: 4px 0 0;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 11.5px;
   line-height: 1.6;
 }
@@ -1915,7 +1915,7 @@ main {
 
 .review-evidence-grid .fact {
   padding: 11px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-sm);
 }
 
@@ -1930,9 +1930,9 @@ main {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--bf-color-surface-tertiary);
+  background: var(--openbitfun-color-surface-tertiary);
 }
 
 .review-screenshots img {
@@ -1940,7 +1940,7 @@ main {
   aspect-ratio: 16 / 9;
   display: block;
   object-fit: contain;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
 }
 
 .review-screenshots figcaption {
@@ -1948,7 +1948,7 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 7px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 9px;
 }
 
@@ -1963,11 +1963,11 @@ main {
   display: grid;
   gap: 5px;
   border-radius: var(--radius-sm);
-  background: var(--bf-color-surface-tertiary);
+  background: var(--openbitfun-color-surface-tertiary);
 }
 
 .hash-block span {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10px;
 }
 
@@ -1978,23 +1978,23 @@ main {
 
 .source-browser {
   overflow: hidden;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--radius-md);
 }
 
 .source-tabs {
   display: flex;
   overflow-x: auto;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
-  background: var(--bf-color-surface-tertiary);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+  background: var(--openbitfun-color-surface-tertiary);
 }
 
 .source-mode {
   padding: 7px;
   display: flex;
   gap: 5px;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
-  background: var(--bf-color-surface-panel);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+  background: var(--openbitfun-color-surface-panel);
 }
 
 .source-mode button,
@@ -2008,30 +2008,30 @@ main {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11px;
 }
 
 .source-mode button.active {
-  border-color: var(--bf-color-border-default);
-  background: var(--bf-color-surface-tertiary);
-  color: var(--bf-color-content-primary);
+  border-color: var(--openbitfun-color-border-default);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .source-tabs button {
   min-height: 34px;
   padding-inline: 10px;
   border: 0;
-  border-right: 1px solid var(--bf-color-border-subtle);
+  border-right: 1px solid var(--openbitfun-color-border-subtle);
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10px;
   white-space: nowrap;
 }
 
 .source-tabs button.active {
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-accent-default);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-accent-default);
 }
 
 .source-browser pre {
@@ -2039,15 +2039,15 @@ main {
   margin: 0;
   padding: 16px;
   overflow: auto;
-  background: var(--bf-color-content-on-light);
-  color: var(--bf-color-content-on-dark);
+  background: var(--openbitfun-color-content-on-light);
+  color: var(--openbitfun-color-content-on-dark);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   line-height: 1.6;
 }
 
 .source-browser pre.diff-view {
-  color: var(--bf-color-content-on-dark);
+  color: var(--openbitfun-color-content-on-dark);
 }
 
 .moderation-panel {
@@ -2056,9 +2056,9 @@ main {
   display: flex;
   align-items: end;
   gap: 10px;
-  border: 1px solid var(--bf-color-status-danger-border);
+  border: 1px solid var(--openbitfun-color-status-danger-border);
   border-radius: var(--radius-md);
-  background: var(--bf-color-status-danger-surface);
+  background: var(--openbitfun-color-status-danger-surface);
 }
 
 .moderation-panel label {
@@ -2066,12 +2066,12 @@ main {
   flex: 1;
   display: grid;
   gap: 6px;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-size: 11px;
 }
 
 .danger-action {
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .review-actions {
@@ -2094,7 +2094,7 @@ main {
   place-items: center;
   align-content: center;
   gap: 10px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-size: 11.5px;
 }
 
@@ -2111,7 +2111,7 @@ main {
 }
 
 .muted {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 footer {
@@ -2122,8 +2122,8 @@ footer {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 20px;
-  border-top: 1px solid var(--bf-color-border-subtle);
-  color: var(--bf-color-content-muted);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+  color: var(--openbitfun-color-content-muted);
   font-size: 10.5px;
 }
 
@@ -2135,7 +2135,7 @@ footer a {
 }
 
 .footer-brand {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-weight: 600;
 }
 
@@ -2151,7 +2151,7 @@ footer a {
 }
 
 footer a:hover {
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
 }
 
 .sr-only {
@@ -2245,7 +2245,7 @@ footer a:hover {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 6px;
     border-right: 0;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   }
 }
 
@@ -2311,7 +2311,7 @@ footer a:hover {
   }
 
   .trust-row > div + div {
-    border-top: 1px solid var(--bf-color-border-subtle);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
     border-left: 0;
   }
 
@@ -2532,7 +2532,7 @@ footer a:hover {
 @media (prefers-reduced-transparency: reduce) {
   .topbar,
   .surface {
-    background: var(--bf-color-surface-panel);
+    background: var(--openbitfun-color-surface-panel);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

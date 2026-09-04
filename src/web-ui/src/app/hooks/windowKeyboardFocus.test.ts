@@ -16,7 +16,7 @@ describe('restoreWindowKeyboardFocus', () => {
     const setWebviewFocus = vi.fn().mockResolvedValue(undefined);
     const windowFocus = vi.spyOn(window, 'focus').mockImplementation(() => {});
     const appRoot = document.createElement('div');
-    appRoot.className = 'bitfun-app-layout';
+    appRoot.className = 'openbitfun-app-layout';
     document.body.appendChild(appRoot);
 
     const focusTarget: WindowKeyboardFocusTarget = {

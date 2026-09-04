@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { AlertTriangle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ProminentToolCard, ProminentToolCardSummary } from '@bitfun/ui/flow-chat';
+import { ProminentToolCard, ProminentToolCardSummary } from '@openbitfun/ui/flow-chat';
 import { getToolCardConfig } from './toolCardMetadata';
 import { flowChatStore } from '../store/FlowChatStore';
 import { CodePreview } from '../components/CodePreview';
@@ -11,7 +11,7 @@ import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext'
 import { i18nService } from '@/infrastructure/i18n';
 import { openCanvasArtifactTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
-import { CanvasPreflight, type CanvasPreflightStatus } from '@/tools/bitfun-canvas/CanvasPreflight';
+import { CanvasPreflight, type CanvasPreflightStatus } from '@/tools/openbitfun-canvas/CanvasPreflight';
 import './CanvasToolCard.scss';
 
 const log = createLogger('CanvasToolCard');
@@ -72,7 +72,7 @@ function canvasTitle(result: CanvasToolResult | null, fallback: unknown): string
       return fromInput.trim();
     }
   }
-  return 'BitFun Canvas';
+  return 'OpenBitFun Canvas';
 }
 
 const TERMINAL_STATUSES = new Set(['completed', 'error', 'cancelled', 'rejected']);
@@ -187,16 +187,16 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
     <ProminentToolCardSummary
       icon={<span className="canvas-tool-card__icon"><Icon name="creative" size="md" /></span>}
       action={toolDisplayName}
-      content={<span data-bf-component="canvas-tool-card" data-bf-part="title" className="canvas-tool-card__title">{title}</span>}
+      content={<span data-openbitfun-component="canvas-tool-card" data-openbitfun-part="title" className="canvas-tool-card__title">{title}</span>}
       extra={(
-        <div data-bf-component="canvas-tool-card" data-bf-part="extra" className="canvas-tool-card__extra">
+        <div data-openbitfun-component="canvas-tool-card" data-openbitfun-part="extra" className="canvas-tool-card__extra">
           {diagnostics.length > 0 && (
-            <span data-bf-component="canvas-tool-card" data-bf-part="diagnostics" className="canvas-tool-card__diagnostics">
+            <span data-openbitfun-component="canvas-tool-card" data-openbitfun-part="diagnostics" className="canvas-tool-card__diagnostics">
               <AlertTriangle size={13} />
               {diagnostics.length}
             </span>
           )}
-          <span data-bf-component="canvas-tool-card" data-bf-part="status" className="canvas-tool-card__status">
+          <span data-openbitfun-component="canvas-tool-card" data-openbitfun-part="status" className="canvas-tool-card__status">
             {isLoading
               ? (isSourceVisuallyStreaming ? 'Writing source' : 'Rendering')
               : renderValidated
@@ -216,9 +216,9 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
   );
 
   const body = (
-    <div data-bf-component="canvas-tool-card" data-bf-part="body" className="canvas-tool-card__body">
+    <div data-openbitfun-component="canvas-tool-card" data-openbitfun-part="body" className="canvas-tool-card__body">
       {showSourcePreview && (
-        <div data-bf-component="canvas-tool-card" data-bf-part="sourcePreview" className="canvas-tool-card__source-preview">
+        <div data-openbitfun-component="canvas-tool-card" data-openbitfun-part="sourcePreview" className="canvas-tool-card__source-preview">
           <CodePreview
             content={sourceDisplayContent}
             language="tsx"
@@ -229,11 +229,11 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
           />
         </div>
       )}
-      <div data-bf-component="canvas-tool-card" data-bf-part="meta" className="canvas-tool-card__meta">
+      <div data-openbitfun-component="canvas-tool-card" data-openbitfun-part="meta" className="canvas-tool-card__meta">
         <span>{metaText}</span>
       </div>
       {diagnostics.length > 0 && (
-        <ul data-bf-component="canvas-tool-card" data-bf-part="diagnosticList" className="canvas-tool-card__diagnostic-list">
+        <ul data-openbitfun-component="canvas-tool-card" data-openbitfun-part="diagnosticList" className="canvas-tool-card__diagnostic-list">
           {diagnostics.slice(0, 3).map((diagnostic, index) => (
             <li key={`${diagnostic.code || diagnostic.message || 'diagnostic'}-${index}`}>
               {diagnostic.message || diagnostic.code || 'Canvas diagnostic'}
@@ -246,9 +246,9 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
 
   return (
     <div
-      data-bf-component="canvas-tool-card"
-      data-bf-part="root"
-      data-bf-state={[isOpenable && 'clickable', isFailed && 'failed', isLoading && 'loading'].filter(Boolean).join(' ')}
+      data-openbitfun-component="canvas-tool-card"
+      data-openbitfun-part="root"
+      data-openbitfun-state={[isOpenable && 'clickable', isFailed && 'failed', isLoading && 'loading'].filter(Boolean).join(' ')}
     >
       {status === 'completed' && resultData?.compiled && !renderValidated && artifactReference ? (
         <CanvasPreflight

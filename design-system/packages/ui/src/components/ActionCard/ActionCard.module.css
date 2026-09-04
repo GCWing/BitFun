@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .trigger,
   .leading,
@@ -14,46 +14,46 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    border: var(--bf-border-width-default) solid transparent;
-    border-radius: var(--bf-control-action-card-radius);
-    color: var(--bf-color-action-neutral-content);
-    background: var(--bf-color-action-neutral-surface);
+    border: var(--openbitfun-border-width-default) solid transparent;
+    border-radius: var(--openbitfun-control-action-card-radius);
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-action-neutral-surface);
     transition:
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-size="sm"] {
-    min-block-size: var(--bf-control-action-card-sm-min-block-size);
+    min-block-size: var(--openbitfun-control-action-card-sm-min-block-size);
   }
 
   .root[data-size="md"] {
-    min-block-size: var(--bf-control-action-card-md-min-block-size);
+    min-block-size: var(--openbitfun-control-action-card-md-min-block-size);
   }
 
-  .root:not([data-disabled="true"]):is(:hover, :has(.trigger[data-bf-preview-state="hover"])) {
-    border-color: var(--bf-color-border-default);
-    background: var(--bf-color-action-neutral-surface-hover);
+  .root:not([data-disabled="true"]):is(:hover, :has(.trigger[data-openbitfun-preview-state="hover"])) {
+    border-color: var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
-  .root:not([data-disabled="true"]):is(:active, :has(.trigger[data-bf-preview-state="active"])) {
-    background: var(--bf-color-action-neutral-surface-pressed);
+  .root:not([data-disabled="true"]):is(:active, :has(.trigger[data-openbitfun-preview-state="active"])) {
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .root[data-selected="true"] {
-    border-color: var(--bf-color-border-default);
-    background: var(--bf-color-selection-surface);
+    border-color: var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-selection-surface);
   }
 
   .root:has(.trigger:focus-visible) {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .root[data-disabled="true"] {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
-    opacity: var(--bf-opacity-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
   }
 
   .trigger {
@@ -63,10 +63,10 @@
     align-self: stretch;
     min-inline-size: 0;
     min-block-size: inherit;
-    gap: var(--bf-control-action-card-gap);
+    gap: var(--openbitfun-control-action-card-gap);
     margin: 0;
-    padding-block: var(--bf-control-action-card-padding-block);
-    padding-inline: var(--bf-control-action-card-padding-inline);
+    padding-block: var(--openbitfun-control-action-card-padding-block);
+    padding-inline: var(--openbitfun-control-action-card-padding-inline);
     border: 0;
     outline: 0;
     color: inherit;
@@ -82,20 +82,20 @@
 
   .leading {
     display: inline-flex;
-    flex: 0 0 var(--bf-control-action-card-leading-size);
+    flex: 0 0 var(--openbitfun-control-action-card-leading-size);
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-control-action-card-leading-size);
-    block-size: var(--bf-control-action-card-leading-size);
-    border-radius: var(--bf-radius-pill);
-    color: var(--bf-color-content-secondary);
+    inline-size: var(--openbitfun-control-action-card-leading-size);
+    block-size: var(--openbitfun-control-action-card-leading-size);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .leading > :where(svg, img),
-  .leading > [data-bf-component="icon"] {
+  .leading > [data-openbitfun-component="icon"] {
     display: block;
-    inline-size: var(--bf-control-action-card-icon-size);
-    block-size: var(--bf-control-action-card-icon-size);
+    inline-size: var(--openbitfun-control-action-card-icon-size);
+    block-size: var(--openbitfun-control-action-card-icon-size);
   }
 
   .content {
@@ -103,7 +103,7 @@
     flex: 1 1 auto;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-control-action-card-content-gap);
+    gap: var(--openbitfun-control-action-card-content-gap);
   }
 
   .title,
@@ -115,21 +115,21 @@
   }
 
   .title {
-    color: var(--bf-color-content-primary);
-    font-family: var(--bf-type-heading-card-font-family);
-    font-size: var(--bf-type-heading-card-font-size);
-    font-weight: var(--bf-type-heading-card-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-heading-card-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-heading-card-font-family);
+    font-size: var(--openbitfun-type-heading-card-font-size);
+    font-weight: var(--openbitfun-type-heading-card-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
   }
 
   .description {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   .actions {
@@ -137,8 +137,8 @@
     flex: 0 0 auto;
     align-items: center;
     align-self: stretch;
-    gap: var(--bf-control-action-card-actions-gap);
-    padding-inline-end: var(--bf-control-action-card-actions-padding-inline-end);
+    gap: var(--openbitfun-control-action-card-actions-gap);
+    padding-inline-end: var(--openbitfun-control-action-card-actions-padding-inline-end);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -159,7 +159,7 @@
     }
 
     .root:has(.trigger:focus-visible) {
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
   }
 }

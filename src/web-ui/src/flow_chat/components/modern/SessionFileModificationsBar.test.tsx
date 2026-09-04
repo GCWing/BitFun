@@ -39,8 +39,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
-  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
+vi.mock('@openbitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-openbitfun-component="icon" data-openbitfun-name={name} />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

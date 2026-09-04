@@ -10,9 +10,9 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::miniapp_context_runtime::{
     is_virtual_context_path, requires_virtual_context_path, virtual_context_file,
 };
-use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
+use crate::agentic::tools::workspace_paths::is_openbitfun_tool_uri;
 use crate::agentic::tools::ToolPathOperation;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
 use log::{debug, warn};
@@ -186,18 +186,18 @@ impl FileReadTool {
         tail: bool,
         filesystem: &dyn crate::agentic::workspace::WorkspaceFileSystem,
         context: &ToolUseContext,
-    ) -> BitFunResult<(ReadFileResult, DocumentReadMetadata)> {
+    ) -> OpenBitFunResult<(ReadFileResult, DocumentReadMetadata)> {
         let bytes = filesystem
             .read_file_bounded(resolved_path, MAX_DOCUMENT_INPUT_BYTES)
             .await
             .map_err(|error| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "Failed to read document {}: {:#}",
                     logical_path, error
                 ))
             })?
             .ok_or_else(|| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "Document {} is larger than the {} MiB Read limit",
                     logical_path,
                     MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024)
@@ -226,7 +226,7 @@ impl FileReadTool {
                 DOCUMENT_CONVERSION_TIMEOUT.as_millis(),
                 elapsed_ms_u64(conversion_started_at)
             );
-            BitFunError::tool(format!(
+            OpenBitFunError::tool(format!(
                 "Document conversion did not finish within {} seconds: {}",
                 DOCUMENT_CONVERSION_TIMEOUT.as_secs(),
                 logical_path
@@ -268,7 +268,7 @@ impl FileReadTool {
                 self.max_total_chars,
             )
         }
-        .map_err(BitFunError::tool)?;
+        .map_err(OpenBitFunError::tool)?;
 
         Ok((
             read_result,
@@ -284,7 +284,7 @@ impl FileReadTool {
         logical_path: &str,
         resolved_path: &str,
         error: DocumentConversionError,
-    ) -> BitFunError {
+    ) -> OpenBitFunError {
         let ocr_hint = (error.code() == "unsupported"
             && Path::new(resolved_path)
                 .extension()
@@ -294,7 +294,7 @@ impl FileReadTool {
             " Text PDFs are supported, but scanned or image-only PDFs require an OCR workflow.",
         )
         .unwrap_or_default();
-        BitFunError::tool(format!(
+        OpenBitFunError::tool(format!(
             "Failed to convert document {} to Markdown ({}): {}.{}",
             logical_path,
             error.code(),
@@ -310,7 +310,7 @@ impl Tool for FileReadTool {
         "Read"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         #[cfg(feature = "document-read")]
         let document_summary = " Office documents, OpenDocument files, RTF, EPUB, and PDFs are converted locally to GitHub-Flavored Markdown before reading.";
         #[cfg(not(feature = "document-read"))]
@@ -331,7 +331,7 @@ impl Tool for FileReadTool {
             r#"Reads a file from the current workspace filesystem.{document_summary} If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
 
 Usage:
-- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool.
+- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `openbitfun://...` URI returned by another tool.
 - Do not read host roots or placeholder paths such as `/workspace`.
 {document_guidance}- By default, it reads up to {} lines starting from the beginning of the file. When you plan to Edit a file, prefer this default full read so you see the exact bytes you will need to match.
 - You can optionally specify an offset and limit. offset is a 1-based line number. Use a range only when you already know the target lines; the range must include every line you will copy into Edit `old_string`.
@@ -361,7 +361,7 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The file to read. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
+                    "description": "The file to read. Use a workspace-relative path, an absolute path inside the current workspace, or an exact openbitfun:// URI returned by another tool."
                 },
                 "offset": {
                     "type": "number",
@@ -414,11 +414,11 @@ Usage:
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let file_path = input
             .get("file_path")
             .and_then(Value::as_str)
-            .ok_or_else(|| BitFunError::validation("file_path is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::validation("file_path is required".to_string()))?;
         file_permission_intents("read", [file_path], context)
     }
 
@@ -470,11 +470,11 @@ Usage:
                 }
             }
             None => {
-                if is_bitfun_tool_uri(file_path) {
+                if is_openbitfun_tool_uri(file_path) {
                     return ValidationResult {
                         result: false,
                         message: Some(
-                            "Tool context is required to resolve BitFun URIs".to_string(),
+                            "Tool context is required to resolve OpenBitFun URIs".to_string(),
                         ),
                         error_code: Some(400),
                         meta: None,
@@ -570,7 +570,7 @@ Usage:
                     meta: None,
                 };
             };
-            if metadata.kind != bitfun_runtime_ports::WorkspacePathKind::File {
+            if metadata.kind != openbitfun_runtime_ports::WorkspacePathKind::File {
                 return ValidationResult {
                     result: false,
                     message: Some(format!("Path is not a file: {}", resolved.logical_path)),
@@ -599,15 +599,15 @@ Usage:
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let file_path = input
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("file_path is required".to_string()))?;
 
-        let tail = Self::read_tail_mode(input).map_err(BitFunError::tool)?;
-        let render_mode = Self::read_render_mode(input).map_err(BitFunError::tool)?;
-        let start_line = Self::read_window_start_line(input).map_err(BitFunError::tool)?;
+        let tail = Self::read_tail_mode(input).map_err(OpenBitFunError::tool)?;
+        let render_mode = Self::read_render_mode(input).map_err(OpenBitFunError::tool)?;
+        let start_line = Self::read_window_start_line(input).map_err(OpenBitFunError::tool)?;
 
         let limit = input
             .get("limit")
@@ -619,7 +619,7 @@ Usage:
         #[cfg(feature = "tools-miniapp")]
         if is_virtual_context_path(context, &resolved) {
             let content = virtual_context_file(context, &resolved).ok_or_else(|| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "MiniApp context file is unavailable: {}",
                     resolved.logical_path
                 ))
@@ -635,7 +635,7 @@ Usage:
                     self.max_total_chars,
                 )
             }
-            .map_err(BitFunError::tool)?;
+            .map_err(OpenBitFunError::tool)?;
             let presentation =
                 build_read_file_presentation(&resolved.logical_path, &read_file_result);
             return Ok(vec![ToolResult::Result {
@@ -657,7 +657,7 @@ Usage:
         }
         #[cfg(feature = "tools-miniapp")]
         if requires_virtual_context_path(context) {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "MiniApp context file is unavailable: {}",
                 resolved.logical_path
             )));
@@ -678,7 +678,7 @@ Usage:
         };
         #[cfg(not(feature = "document-read"))]
         if reads_document_representation {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "Document Markdown conversion is not available in this product build: {}. Use a product that includes document-read, or render=source for text-based formats.",
                 resolved.logical_path
             )));
@@ -727,7 +727,7 @@ Usage:
                 .open_read(&resolved.resolved_path)
                 .await
                 .map_err(|error| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "Failed to open file {}: {:#}",
                         resolved.logical_path, error
                     ))
@@ -759,7 +759,7 @@ Usage:
                     elapsed_ms_u64(read_started_at),
                     error
                 );
-                BitFunError::tool(error)
+                OpenBitFunError::tool(error)
             })?;
             debug!("Workspace file stream read completed: path={} start_line={} end_line={} total_lines={} hit_total_char_limit={} duration_ms={}",
                 resolved.logical_path, result.start_line, result.end_line, result.total_lines,
@@ -850,8 +850,8 @@ mod tests {
         publish_agent_context_snapshot, remove_agent_context_snapshot, MiniAppAgentContextInput,
     };
     use async_trait::async_trait;
-    use bitfun_runtime_ports::ToolRuntimeHandles;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::ToolRuntimeHandles;
+    use openbitfun_runtime_ports::{
         WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
         WorkspaceServices, WorkspaceShell,
     };
@@ -891,7 +891,7 @@ mod tests {
         async fn open_read(
             &self,
             _path: &str,
-        ) -> anyhow::Result<bitfun_runtime_ports::WorkspaceReader> {
+        ) -> anyhow::Result<openbitfun_runtime_ports::WorkspaceReader> {
             Ok(Box::new(std::io::Cursor::new(self.bytes.clone())))
         }
 
@@ -899,9 +899,9 @@ mod tests {
             &self,
             _path: &str,
             _follow_symlinks: bool,
-        ) -> anyhow::Result<Option<bitfun_runtime_ports::WorkspaceMetadata>> {
-            Ok(Some(bitfun_runtime_ports::WorkspaceMetadata {
-                kind: bitfun_runtime_ports::WorkspacePathKind::File,
+        ) -> anyhow::Result<Option<openbitfun_runtime_ports::WorkspaceMetadata>> {
+            Ok(Some(openbitfun_runtime_ports::WorkspaceMetadata {
+                kind: openbitfun_runtime_ports::WorkspacePathKind::File,
                 size: Some(self.bytes.len() as u64),
                 modified: None,
                 permissions: None,
@@ -1037,7 +1037,7 @@ mod tests {
 
     #[tokio::test]
     async fn long_line_read_is_explicit_but_cannot_claim_full_content_freshness() {
-        use bitfun_agent_runtime::file_read_state::{
+        use openbitfun_agent_runtime::file_read_state::{
             assert_file_not_unexpectedly_modified, validate_prior_read_state, FileMutationKind,
             FileReadState,
         };

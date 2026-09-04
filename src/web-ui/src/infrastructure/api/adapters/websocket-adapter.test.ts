@@ -90,7 +90,7 @@ describe('resolveWsMethod', () => {
     // Read-only config operations: agent-profile canonicalizer + AI model
     // configs + single/batched config-path reads. `get_config`/`get_configs`
     // carry the not-found -> undefined contract the frontend `ConfigAPI`
-    // depends on (the app-server surfaces the `BitFunError::NotFound` Display
+    // depends on (the app-server surfaces the `OpenBitFunError::NotFound` Display
     // text as the JSON-RPC `message`). `get_skill_configs` still arrives
     // later (workspace dependency).
     expect(resolveWsMethod('get_agent_profile_configs')).toBe(

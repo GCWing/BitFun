@@ -1,4 +1,4 @@
-.bitfun-reasoning-config-panel {
+.openbitfun-reasoning-config-panel {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -14,35 +14,35 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     min-height: 52px;
-    padding: var(--bf-space-2) var(--bf-space-4);
-    border-top: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-canvas);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-4);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   &__error {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: var(--bf-space-1);
-    color: var(--bf-color-status-warning-content);
-    font-size: var(--bf-type-meta-font-size);
+    gap: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-status-warning-content);
+    font-size: var(--openbitfun-type-meta-font-size);
   }
 
   &__actions {
     display: flex;
     flex-shrink: 0;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 }
 
 @media (max-width: 480px) {
-  .bitfun-reasoning-config-panel {
+  .openbitfun-reasoning-config-panel {
     &__footer {
       align-items: stretch;
       flex-direction: column;
-      padding: var(--bf-space-3);
+      padding: var(--openbitfun-space-3);
     }
 
     &__actions {

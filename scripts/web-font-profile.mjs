@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const WEB_FONT_PROFILE_ENV = 'BITFUN_WEB_FONT_PROFILE';
+export const WEB_FONT_PROFILE_ENV = 'OPENBITFUN_WEB_FONT_PROFILE';
 export const APPLE_SYSTEM_FONT_PROFILE = 'apple-system';
 export const HARMONY_BUNDLED_FONT_PROFILE = 'harmony-bundled';
 

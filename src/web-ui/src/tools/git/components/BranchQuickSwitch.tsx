@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { Loader2 } from 'lucide-react';
 
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -199,7 +199,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
 
   useEffect(() => {
     const items = listRef.current?.querySelectorAll<HTMLElement>(
-      '[data-bf-part="option"]',
+      '[data-openbitfun-part="option"]',
     );
     const selectedItem = items?.[selectedIndex];
     if (typeof selectedItem?.scrollIntoView === 'function') {
@@ -421,9 +421,9 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     <div
       ref={panelRef}
       className="branch-quick-switch"
-      data-bf-product-component="branch-quick-switch"
-      data-bf-product-part="root"
-      data-bf-placement={popoverLayout?.placement ?? 'top'}
+      data-openbitfun-product-component="branch-quick-switch"
+      data-openbitfun-product-part="root"
+      data-openbitfun-placement={popoverLayout?.placement ?? 'top'}
       data-testid="branch-quick-switch"
       role="dialog"
       aria-label={t('quickSwitch.menuLabel')}
@@ -436,8 +436,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     >
       <div
         className="branch-quick-switch__search"
-        data-bf-product-component="branch-quick-switch"
-        data-bf-product-part="search"
+        data-openbitfun-product-component="branch-quick-switch"
+        data-openbitfun-product-part="search"
       >
         <SearchField
           ref={inputRef}
@@ -453,8 +453,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
           onCompositionEnd={() => {
             inputCompositionActiveRef.current = false;
           }}
-          data-bf-product-component="branch-quick-switch"
-          data-bf-product-part="input"
+          data-openbitfun-product-component="branch-quick-switch"
+          data-openbitfun-product-part="input"
         />
       </div>
       <Listbox
@@ -466,8 +466,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
         {isLoading && branches.length === 0 ? (
           <ListboxEmpty
             className="branch-quick-switch__loading"
-            data-bf-product-component="branch-quick-switch"
-            data-bf-product-part="loading"
+            data-openbitfun-product-component="branch-quick-switch"
+            data-openbitfun-product-part="loading"
           >
             <Loader2 size={16} className="branch-quick-switch__spinner" aria-hidden />
             <span>{t('quickSwitch.loading')}</span>
@@ -475,8 +475,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
         ) : loadFailed && branches.length === 0 ? (
           <ListboxEmpty
             className="branch-quick-switch__empty"
-            data-bf-product-component="branch-quick-switch"
-            data-bf-product-part="empty"
+            data-openbitfun-product-component="branch-quick-switch"
+            data-openbitfun-product-part="empty"
             aria-live="polite"
           >
             {t('quickSwitch.errors.loadFailed')}
@@ -484,8 +484,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
         ) : filteredBranches.length === 0 ? (
           <ListboxEmpty
             className="branch-quick-switch__empty"
-            data-bf-product-component="branch-quick-switch"
-            data-bf-product-part="empty"
+            data-openbitfun-product-component="branch-quick-switch"
+            data-openbitfun-product-part="empty"
           >
             {searchTerm ? t('empty.noMatchingBranches') : t('empty.noBranches')}
           </ListboxEmpty>
@@ -495,7 +495,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
               active={index === selectedIndex}
               className="branch-quick-switch__item"
               data-index={index}
-              data-bf-state={branch.current ? 'current' : undefined}
+              data-openbitfun-state={branch.current ? 'current' : undefined}
               data-testid={`branch-quick-switch-option-${branch.name}`}
               disabled={isSwitching}
               indicator={switchingBranch === branch.name

@@ -33,7 +33,7 @@ impl WorkspaceIdentityWatchService {
         }
     }
 
-    pub async fn set_event_emitter(&self, emitter: Arc<dyn EventEmitter>) -> BitFunResult<()> {
+    pub async fn set_event_emitter(&self, emitter: Arc<dyn EventEmitter>) -> OpenBitFunResult<()> {
         {
             let mut emitter_guard = self.emitter.lock().await;
             *emitter_guard = Some(emitter);
@@ -42,7 +42,7 @@ impl WorkspaceIdentityWatchService {
         self.sync_watched_workspaces().await
     }
 
-    pub async fn sync_watched_workspaces(&self) -> BitFunResult<()> {
+    pub async fn sync_watched_workspaces(&self) -> OpenBitFunResult<()> {
         let assistant_workspaces = self.workspace_service.get_assistant_workspaces().await;
         let next_paths: HashMap<PathBuf, String> = assistant_workspaces
             .into_iter()
@@ -80,7 +80,7 @@ impl WorkspaceIdentityWatchService {
         Ok(())
     }
 
-    async fn create_watcher(&self) -> BitFunResult<()> {
+    async fn create_watcher(&self) -> OpenBitFunResult<()> {
         let watched_paths = self.watched_paths.read().await;
 
         if watched_paths.is_empty() {
@@ -91,7 +91,7 @@ impl WorkspaceIdentityWatchService {
 
         let (tx, rx) = std::sync::mpsc::channel();
         let mut watcher = RecommendedWatcher::new(tx, Config::default()).map_err(|e| {
-            BitFunError::service(format!("Failed to create identity watcher: {}", e))
+            OpenBitFunError::service(format!("Failed to create identity watcher: {}", e))
         })?;
 
         let mut watched_count = 0usize;
@@ -111,7 +111,7 @@ impl WorkspaceIdentityWatchService {
         }
 
         if watched_count == 0 {
-            return Err(BitFunError::service(
+            return Err(OpenBitFunError::service(
                 "Failed to watch any identity directories".to_string(),
             ));
         }

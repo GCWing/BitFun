@@ -1,9 +1,9 @@
 /* Coding Selfie — daily coding snapshot.
  * Design system reference:
- *   palette  ─ Inherits BitFun host theme (--bitfun-* tokens). Surfaces,
+ *   palette  ─ Inherits OpenBitFun host theme (--openbitfun-* tokens). Surfaces,
  *              text and borders all proxy through host vars so the dashboard
- *              reads as a native BitFun panel under both bitfun-dark and
- *              bitfun-light. The host contract owns first-paint defaults.
+ *              reads as a native OpenBitFun panel under both openbitfun-dark and
+ *              openbitfun-light. The host contract owns first-paint defaults.
  *   accent   ─ host primary (cool blue / slate) for hero/streak/heatmap
  *              accents. Diff stats keep semantic green/red so additions and
  *              deletions stay glanceable.
@@ -12,43 +12,43 @@
 :root {
   color-scheme: dark;
 
-  --cs-bg:        var(--bitfun-bg);
-  --cs-card:      var(--bitfun-bg-secondary);
-  --cs-card-2:    var(--bitfun-bg-tertiary);
+  --cs-bg:        var(--openbitfun-bg);
+  --cs-card:      var(--openbitfun-bg-secondary);
+  --cs-card-2:    var(--openbitfun-bg-tertiary);
 
-  --cs-border:        var(--bitfun-border-subtle);
-  --cs-border-strong: var(--bitfun-border);
+  --cs-border:        var(--openbitfun-border-subtle);
+  --cs-border-strong: var(--openbitfun-border);
 
-  --cs-text:       var(--bitfun-text);
-  --cs-text-2:     var(--bitfun-text-secondary);
-  --cs-text-muted: var(--bitfun-text-muted);
+  --cs-text:       var(--openbitfun-text);
+  --cs-text-2:     var(--openbitfun-text-secondary);
+  --cs-text-muted: var(--openbitfun-text-muted);
 
   /* Primary accent now follows the host (cool blue in dark, slate in light)
-   * so the dashboard stops fighting BitFun's neutral palette. The previous
+   * so the dashboard stops fighting OpenBitFun's neutral palette. The previous
    * "run green" is preserved as a secondary semantic color (--cs-add). */
-  --cs-accent:      var(--bitfun-accent);
-  --cs-accent-2:    var(--bitfun-accent-hover);
+  --cs-accent:      var(--openbitfun-accent);
+  --cs-accent-2:    var(--openbitfun-accent-hover);
   --cs-accent-soft: color-mix(in srgb, var(--cs-accent) 14%, transparent);
   --cs-accent-glow: 0 0 20px color-mix(in srgb, var(--cs-accent) 20%, transparent);
 
   /* Diff / activity semantics — kept on green/red regardless of host accent
    * because additions and deletions must stay universally readable. */
-  --cs-add:  var(--bitfun-success);
-  --cs-del:  var(--bitfun-error);
-  --cs-warn: var(--bitfun-warning);
+  --cs-add:  var(--openbitfun-success);
+  --cs-del:  var(--openbitfun-error);
+  --cs-warn: var(--openbitfun-warning);
 
   --cs-bg-grad:
     radial-gradient(ellipse at top, color-mix(in srgb, var(--cs-accent) 5%, transparent), transparent 60%),
-    radial-gradient(ellipse at bottom right, color-mix(in srgb, var(--bitfun-accent-secondary) 4%, transparent), transparent 50%),
+    radial-gradient(ellipse at bottom right, color-mix(in srgb, var(--openbitfun-accent-secondary) 4%, transparent), transparent 50%),
     var(--cs-bg);
 
-  --cs-radius:    var(--bitfun-radius-lg);
-  --cs-radius-sm: var(--bitfun-radius);
-  --cs-mono: var(--bitfun-font-mono);
-  --cs-sans: var(--bitfun-font-sans);
+  --cs-radius:    var(--openbitfun-radius-lg);
+  --cs-radius-sm: var(--openbitfun-radius);
+  --cs-mono: var(--openbitfun-font-mono);
+  --cs-sans: var(--openbitfun-font-sans);
 }
 
-[data-bf-appearance-mode="light"] {
+[data-openbitfun-appearance-mode="light"] {
   color-scheme: light;
   --cs-accent-glow: none;
 }
@@ -162,7 +162,7 @@ html, body {
   padding: clamp(10px, 1.5vh, 16px) clamp(14px, 1.8vw, 20px);
   background:
     radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--cs-accent) 10%, transparent), transparent 55%),
-    radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--bitfun-accent-secondary) 5%, transparent), transparent 50%),
+    radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--openbitfun-accent-secondary) 5%, transparent), transparent 50%),
     var(--cs-card);
   justify-content: center;
 }
@@ -611,7 +611,7 @@ html, body {
   font-size: 12.5px;
   line-height: 1.35;
   white-space: nowrap;
-  box-shadow: var(--bitfun-shadow-overlay);
+  box-shadow: var(--openbitfun-shadow-overlay);
 }
 
 .cs-heatmap-legend {

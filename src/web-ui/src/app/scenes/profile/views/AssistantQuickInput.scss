@@ -1,6 +1,6 @@
 .aqi {
   // Horizontal inset: shadow fade + align with .acp-sessions-area
-  padding: var(--bf-space-4) var(--bf-space-6) var(--bf-space-5);
+  padding: var(--openbitfun-space-4) var(--openbitfun-space-6) var(--openbitfun-space-5);
 
   &__composer {
     width: 100%;
@@ -14,7 +14,7 @@
   &__footer-left {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     min-width: 0;
     flex: 1 1 auto;
   }
@@ -24,8 +24,8 @@
   }
 
   &__hint {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.72;
     user-select: none;
     white-space: nowrap;

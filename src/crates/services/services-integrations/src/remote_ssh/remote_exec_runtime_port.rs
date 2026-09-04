@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bitfun_runtime_ports as ports;
+use openbitfun_runtime_ports as ports;
 use tokio::sync::mpsc;
 
 use super::{

@@ -8,9 +8,9 @@ export const workspaceSessionBatchModalAppearanceDescriptor: AppearanceSurfaceDe
     { id: 'rowCheck' }, { id: 'rowContent' }, { id: 'footer' },
   ],
   states: [
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'child', selector: { kind: 'self', suffix: '[data-bf-state~="child"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'child', selector: { kind: 'self', suffix: '[data-openbitfun-state~="child"]' } },
   ],
 };

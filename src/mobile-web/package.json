@@ -1,6 +1,6 @@
 {
-  "name": "bitfun-mobile-web",
-  "version": "0.2.19",
+  "name": "openbitfun-mobile-web",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@bitfun/theme-bitfun": "workspace:^",
+    "@openbitfun/theme-openbitfun": "workspace:^",
     "@noble/ciphers": "^2.1.1",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",

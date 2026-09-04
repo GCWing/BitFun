@@ -12,25 +12,25 @@
     },
     "projectHooks": {
       "label": "啟用專案 Hook 檔案",
-      "description": "讀取並執行工作區內的 .bitfun/config/hooks.json；僅對可信任的儲存庫開啟。"
+      "description": "讀取並執行工作區內的 .openbitfun/config/hooks.json；僅對可信任的儲存庫開啟。"
     }
   },
   "projectHooksRisk": {
     "title": "允許工作區程式碼執行 Hook？",
-    "message": "啟用後，工作區「{{workspace}}」中的 .bitfun/config/hooks.json 可以用你的使用者權限執行命令。只應為你信任且已檢查 Hook 檔案的工作區開啟。",
+    "message": "啟用後，工作區「{{workspace}}」中的 .openbitfun/config/hooks.json 可以用你的使用者權限執行命令。只應為你信任且已檢查 Hook 檔案的工作區開啟。",
     "currentWorkspace": "目前工作區",
     "confirm": "我已檢查，繼續啟用"
   },
   "locations": {
     "title": "Hook 宣告位置",
-    "description": "修改 hooks.json 後立即生效，無需重新啟動 BitFun。",
+    "description": "修改 hooks.json 後立即生效，無需重新啟動 OpenBitFun。",
     "userFile": {
       "label": "使用者 Hook 檔案",
-      "description": "BitFun 使用者設定目錄中的 config/hooks.json。"
+      "description": "OpenBitFun 使用者設定目錄中的 config/hooks.json。"
     },
     "projectFile": {
       "label": "專案 Hook 檔案",
-      "description": "目前工作區中的 .bitfun/config/hooks.json；需開啟「啟用專案 Hook 檔案」。"
+      "description": "目前工作區中的 .openbitfun/config/hooks.json；需開啟「啟用專案 Hook 檔案」。"
     }
   },
   "imports": {
@@ -77,15 +77,15 @@
     "storeInvalid": "匯入 Hook 狀態需要修復",
     "reset": "重設受管理狀態",
     "removeTitle": "移除已匯入的 Hooks？",
-    "removeSourceUntouched": "只會移除 BitFun 的受管理副本，不會修改 Claude Code 或 Codex 的來源檔案。",
+    "removeSourceUntouched": "只會移除 OpenBitFun 的受管理副本，不會修改 Claude Code 或 Codex 的來源檔案。",
     "removeConfirm": "移除受管理副本",
     "resetTitle": "重設無效的匯入 Hook 狀態？",
-    "resetWarning": "這會移除目前範圍內無效的 BitFun 受管理索引，不會修改來源應用程式的檔案。",
+    "resetWarning": "這會移除目前範圍內無效的 OpenBitFun 受管理索引，不會修改來源應用程式的檔案。",
     "resetConfirm": "重設受管理狀態"
   },
   "compatibility": {
     "title": "Codex 相容",
-    "description": "BitFun 使用 Codex Hooks 合約，可直接執行相容的 Hook 指令碼。",
+    "description": "OpenBitFun 使用 Codex Hooks 合約，可直接執行相容的 Hook 指令碼。",
     "reference": {
       "label": "事件與載荷參考",
       "open": "開啟文件"

@@ -1,4 +1,4 @@
-use bitfun_services_core::session_usage::{
+use openbitfun_services_core::session_usage::{
     classify_tool_usage, display_workspace_relative_path, render_usage_report_terminal,
     SessionUsageReport, UsageToolCategory,
 };
@@ -16,8 +16,8 @@ fn usage_classifier_preserves_git_command_detection() {
 #[test]
 fn usage_path_redaction_preserves_workspace_relative_display() {
     let label = display_workspace_relative_path(
-        Some("D:/workspace/bitfun"),
-        "D:/workspace/bitfun/src/main.rs",
+        Some("D:/workspace/openbitfun"),
+        "D:/workspace/openbitfun/src/main.rs",
     );
 
     assert_eq!(label.value, "src/main.rs");

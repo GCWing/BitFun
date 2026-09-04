@@ -11,16 +11,16 @@ title_en: "Detached Dispatch"
 
 > 功能 / Feature
 
-把可持续运行的任务派发到另一台 BitFun 主机；控制端可以断开，目标主机继续执行并保留记录。
+把可持续运行的任务派发到另一台 OpenBitFun 主机；控制端可以断开，目标主机继续执行并保留记录。
 
-Dispatch durable work to another BitFun host; the controller may disconnect while the target continues and keeps the record.
+Dispatch durable work to another OpenBitFun host; the controller may disconnect while the target continues and keeps the record.
 
 ## 完整功能清单 / Everything included
 
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 列出可派发目标并探测版本、连接和运行能力
   - List dispatch targets and probe their version, connectivity, and runtime capabilities
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为目标主机配置运行环境并安装或更新 BitFun CLI
-  - Provision the target runtime and install or update the BitFun CLI
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为目标主机配置运行环境并安装或更新 OpenBitFun CLI
+  - Provision the target runtime and install or update the OpenBitFun CLI
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在提交任务前同步目标所需的模型配置
   - Synchronize required model configuration before submitting a job
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 把包含工作区、会话、模型和权限策略的持久任务提交到目标
@@ -43,13 +43,13 @@ Dispatch durable work to another BitFun host; the controller may disconnect whil
 3. 提交任务后在任务状态中跟踪
    Submit the work and follow its job status
 
-入口 / Entry: BitFun 内的对应控制界面
+入口 / Entry: OpenBitFun 内的对应控制界面
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

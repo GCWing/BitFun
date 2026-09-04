@@ -221,7 +221,7 @@ pub fn export_diagnostics_bundle() -> Result<DiagnosticsBundleInfo, String> {
         .map_err(|error| format!("Failed to create diagnostics directory: {}", error))?;
 
     let filename = format!(
-        "bitfun-diagnostics-{}.zip",
+        "openbitfun-diagnostics-{}.zip",
         Local::now().format("%Y%m%dT%H%M%S")
     );
     let bundle_path = diagnostics_dir.join(filename);
@@ -464,7 +464,7 @@ mod tests {
     #[test]
     fn detects_previous_unclean_run_state_with_crash_report() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "bitfun-crash-diagnostics-test-{}",
+            "openbitfun-crash-diagnostics-test-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system time should be after unix epoch")
@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn ignores_previous_clean_run_state() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "bitfun-crash-diagnostics-clean-test-{}",
+            "openbitfun-crash-diagnostics-clean-test-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system time should be after unix epoch")
@@ -535,7 +535,7 @@ mod tests {
     #[test]
     fn records_unclean_shutdown_without_startup_notification_when_no_crash_report() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "bitfun-crash-diagnostics-unclean-test-{}",
+            "openbitfun-crash-diagnostics-unclean-test-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system time should be after unix epoch")

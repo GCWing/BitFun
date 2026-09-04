@@ -15,7 +15,7 @@ import {
   NavigationPanelContent,
   NavigationPanelHeader,
   Tooltip,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { List, FilePlus, FolderPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
@@ -39,20 +39,20 @@ const FileViewerNav: React.FC = () => {
 
   return (
     <NavigationPanel
-      data-bf-component="file-viewer-nav"
-      data-bf-part="root"
-      className="bitfun-file-viewer-nav"
+      data-openbitfun-component="file-viewer-nav"
+      data-openbitfun-part="root"
+      className="openbitfun-file-viewer-nav"
     >
-      <NavigationPanelHeader className="bitfun-file-viewer-nav__panel-header">
-        <div className="bitfun-file-viewer-nav__header" data-bf-component="file-viewer-nav" data-bf-part="header">
-        <span className="bitfun-file-viewer-nav__icon" data-bf-component="file-viewer-nav" data-bf-part="icon" aria-hidden="true">
+      <NavigationPanelHeader className="openbitfun-file-viewer-nav__panel-header">
+        <div className="openbitfun-file-viewer-nav__header" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="header">
+        <span className="openbitfun-file-viewer-nav__icon" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="icon" aria-hidden="true">
           <Icon name="folder" size="sm" />
         </span>
-        <span className="bitfun-file-viewer-nav__label" data-bf-component="file-viewer-nav" data-bf-part="label">
+        <span className="openbitfun-file-viewer-nav__label" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="label">
           {t('nav.items.project')}
         </span>
         {currentWorkspace?.rootPath && (
-        <span className="bitfun-file-viewer-nav__actions" data-bf-component="file-viewer-nav" data-bf-part="actions">
+        <span className="openbitfun-file-viewer-nav__actions" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="actions">
             {viewMode === 'tree' && explorerToolbar && (
               <>
                 <Tooltip content={tTools('fileTree.newFile')} placement="bottom">
@@ -96,8 +96,8 @@ const FileViewerNav: React.FC = () => {
         )}
         </div>
       </NavigationPanelHeader>
-      <NavigationPanelBody className="bitfun-file-viewer-nav__body">
-        <NavigationPanelContent className="bitfun-file-viewer-nav__content">
+      <NavigationPanelBody className="openbitfun-file-viewer-nav__body">
+        <NavigationPanelContent className="openbitfun-file-viewer-nav__content">
           <FilesPanel
             workspacePath={currentWorkspace?.rootPath}
             hideHeader

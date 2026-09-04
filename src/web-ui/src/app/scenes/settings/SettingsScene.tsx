@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ConfirmDialog } from '@bitfun/ui';
+import { ConfirmDialog } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { NavigationTransitionBoundary } from '@/app/navigation/NavigationTransitionBoundary';
 import {
@@ -20,16 +20,16 @@ import './SettingsScene.scss';
 function SettingsSceneLoading() {
   return (
     <div
-      className="bitfun-settings-scene__loading"
+      className="openbitfun-settings-scene__loading"
       aria-busy="true"
       aria-hidden="true"
-      data-bf-scene="settings"
-      data-bf-part="loading"
+      data-openbitfun-scene="settings"
+      data-openbitfun-part="loading"
     >
-      <div className="bitfun-settings-scene__loading-line bitfun-settings-scene__loading-line--title" />
-      <div className="bitfun-settings-scene__loading-line" />
-      <div className="bitfun-settings-scene__loading-line" />
-      <div className="bitfun-settings-scene__loading-block" />
+      <div className="openbitfun-settings-scene__loading-line openbitfun-settings-scene__loading-line--title" />
+      <div className="openbitfun-settings-scene__loading-line" />
+      <div className="openbitfun-settings-scene__loading-line" />
+      <div className="openbitfun-settings-scene__loading-block" />
     </div>
   );
 }
@@ -82,25 +82,25 @@ const SettingsScene: React.FC<SettingsSceneProps> = ({ isActive = true }) => {
 
   return (
     <div
-      className="bitfun-settings-scene"
+      className="openbitfun-settings-scene"
       data-testid="settings-scene"
       data-settings-page={activePageId}
-      data-bf-scene="settings"
-      data-bf-part="root"
-      data-bf-page={activePageId}
+      data-openbitfun-scene="settings"
+      data-openbitfun-part="root"
+      data-openbitfun-page={activePageId}
     >
       {Content ? (
         <NavigationTransitionBoundary
           transitionKey={activePageId}
           motion={shouldAnimatePageTransition ? 'pointer' : 'none'}
-          className="bitfun-settings-scene__content-transition"
-          layerClassName="bitfun-settings-scene__content-wrapper"
+          className="openbitfun-settings-scene__content-transition"
+          layerClassName="openbitfun-settings-scene__content-wrapper"
         >
           <div
             data-testid="settings-scene-content"
-            data-bf-scene="settings"
-            data-bf-part="content"
-            data-bf-page={activePageId}
+            data-openbitfun-scene="settings"
+            data-openbitfun-part="content"
+            data-openbitfun-page={activePageId}
           >
             <Suspense fallback={<SettingsSceneLoading />}>
               <Content
@@ -122,7 +122,7 @@ const SettingsScene: React.FC<SettingsSceneProps> = ({ isActive = true }) => {
               count: pendingNavigation?.resourceLabels.length ?? 0,
             })}
         preview={pendingNavigation?.resourceLabels.length ? (
-          <ul className="bitfun-settings-scene__draft-list">
+          <ul className="openbitfun-settings-scene__draft-list">
             {pendingNavigation.resourceLabels.map((label, index) => (
               <li key={`${label}:${index}`}>{label}</li>
             ))}

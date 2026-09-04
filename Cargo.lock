@@ -724,1010 +724,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitfun-acp"
-version = "0.2.19"
-dependencies = [
- "agent-client-protocol",
- "async-trait",
- "bitfun-agent-runtime",
- "bitfun-agent-tools",
- "bitfun-core",
- "bitfun-core-types",
- "bitfun-events",
- "chrono",
- "dashmap",
- "dirs 6.0.0",
- "futures",
- "log",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-agent-content"
-version = "0.2.19"
-
-[[package]]
-name = "bitfun-agent-runtime"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-agent-stream",
- "bitfun-agent-tools",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-runtime-ports",
- "bitfun-runtime-services",
- "dashmap",
- "hex",
- "log",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "thiserror 2.0.19",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-agent-runtime-ipc"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "bitfun-transport",
- "dunce",
- "fs2",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "uuid",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "bitfun-agent-stream"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitfun-agent-tools",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-tool-call-jsonrepair",
- "futures",
- "log",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-agent-tools"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-core-types",
- "bitfun-runtime-ports",
- "indexmap 2.14.0",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "bitfun-agent-workflows"
-version = "0.2.19"
-dependencies = [
- "regex",
-]
-
-[[package]]
-name = "bitfun-ai-adapters"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bitfun-agent-stream",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-services-core",
- "chrono",
- "dirs 6.0.0",
- "eventsource-stream",
- "fs2",
- "futures",
- "hex",
- "keyring-core",
- "libc",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "urlencoding",
- "uuid",
- "windows-native-keyring-store",
- "zbus-secret-service-keyring-store",
-]
-
-[[package]]
-name = "bitfun-app-server"
-version = "0.2.19"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "async-trait",
- "bitfun-agent-runtime",
- "bitfun-app-server-client",
- "bitfun-app-server-protocol",
- "bitfun-core",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "dunce",
- "log",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "bitfun-app-server-client"
-version = "0.2.19"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "bitfun-app-server-protocol",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "bitfun-app-server-protocol"
-version = "0.2.19"
-dependencies = [
- "agent-client-protocol",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
-name = "bitfun-claude-code-adapter"
-version = "0.2.19"
-dependencies = [
- "bitfun-product-domains",
- "bitfun-services-core",
- "bitfun-static-hook-support",
- "dirs 6.0.0",
- "dunce",
- "hex",
- "log",
- "regex",
- "serde_json",
- "serde_yaml",
- "sha2",
- "tempfile",
- "url",
-]
-
-[[package]]
-name = "bitfun-cli"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "arboard",
- "async-trait",
- "base64 0.22.1",
- "bitfun-acp",
- "bitfun-agent-runtime",
- "bitfun-agent-runtime-ipc",
- "bitfun-agent-tools",
- "bitfun-app-server",
- "bitfun-core",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "bitfun-runtime-services",
- "bitfun-services-core",
- "chrono",
- "clap",
- "crossterm",
- "dirs 6.0.0",
- "dunce",
- "flate2",
- "fs2",
- "futures-util",
- "hex",
- "image 0.25.10",
- "libc",
- "minisign-verify",
- "once_cell",
- "portable-pty 0.8.1",
- "portable-pty 0.9.0",
- "pulldown-cmark",
- "ratatui",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "shlex 1.3.0",
- "similar",
- "syntect",
- "tar",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tokio-util",
- "toml 0.9.12+spec-1.1.0",
- "tracing",
- "tracing-subscriber",
- "unicode-width 0.2.0",
- "url",
- "uuid",
- "windows 0.61.3",
- "winsplit",
-]
-
-[[package]]
-name = "bitfun-codex-adapter"
-version = "0.2.19"
-dependencies = [
- "bitfun-product-domains",
- "bitfun-services-core",
- "bitfun-static-hook-support",
- "dirs 6.0.0",
- "dunce",
- "hex",
- "serde_json",
- "sha2",
- "tempfile",
- "toml 0.9.12+spec-1.1.0",
- "url",
-]
-
-[[package]]
-name = "bitfun-core"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bitfun-agent-content",
- "bitfun-agent-runtime",
- "bitfun-agent-stream",
- "bitfun-agent-tools",
- "bitfun-agent-workflows",
- "bitfun-ai-adapters",
- "bitfun-claude-code-adapter",
- "bitfun-codex-adapter",
- "bitfun-core-types",
- "bitfun-dsh-adapter",
- "bitfun-events",
- "bitfun-external-sources",
- "bitfun-opencode-adapter",
- "bitfun-opencode-plugin-host",
- "bitfun-plugin-runtime-client",
- "bitfun-product-capabilities",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "bitfun-runtime-services",
- "bitfun-services-core",
- "bitfun-services-integrations",
- "bitfun-tool-packs",
- "chrono",
- "chrono-tz",
- "cron",
- "dashmap",
- "dirs 6.0.0",
- "dunce",
- "filetime",
- "flate2",
- "fluent-bundle",
- "fs2",
- "futures",
- "hex",
- "image 0.25.10",
- "include_dir",
- "indexmap 2.14.0",
- "log",
- "md5",
- "notify",
- "regex",
- "reqwest",
- "rusqlite",
- "semver",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "similar",
- "tempfile",
- "terminal-core",
- "thiserror 2.0.19",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
- "tool-runtime",
- "ts-rs",
- "unic-langid",
- "urlencoding",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-core-types"
-version = "0.2.19"
-dependencies = [
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
-name = "bitfun-desktop"
-version = "0.2.19"
-dependencies = [
- "alloc-no-stdlib",
- "alloc-stdlib",
- "anyhow",
- "async-trait",
- "atspi",
- "axum",
- "base64 0.22.1",
- "bitflags 2.11.1",
- "bitfun-acp",
- "bitfun-agent-runtime",
- "bitfun-agent-tools",
- "bitfun-core",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-relay-service",
- "bitfun-runtime-ports",
- "bitfun-services-integrations",
- "bitfun-transport",
- "bitfun-webdriver",
- "brotli-decompressor",
- "bzip2 0.5.2",
- "chrono",
- "core-foundation 0.9.4",
- "core-graphics 0.23.2",
- "dark-light",
- "dirs 6.0.0",
- "dispatch",
- "enigo",
- "flate2",
- "foreign-types 0.5.0",
- "futures",
- "ignore",
- "image 0.25.10",
- "keepawake",
- "leptess",
- "libc",
- "log",
- "mime_guess",
- "notify-rust",
- "objc2 0.6.4",
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-vision",
- "regex",
- "reqwest",
- "resvg",
- "screenshots",
- "semver",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "similar",
- "tar",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-log",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tauri-plugin-window-state",
- "tempfile",
- "thiserror 2.0.19",
- "time",
- "tokio",
- "tower-http",
- "urlencoding",
- "uuid",
- "webview2-com",
- "win32job",
- "windows 0.61.3",
- "windows-core 0.61.2",
- "xz2",
- "zip 4.6.1",
- "zstd",
-]
-
-[[package]]
-name = "bitfun-dsh-adapter"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-plugin-runtime-client",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "hex",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "tokio",
- "urlencoding",
-]
-
-[[package]]
-name = "bitfun-events"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitfun-core-types",
- "chrono",
- "log",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-external-sources"
-version = "0.2.19"
-dependencies = [
- "bitfun-product-domains",
- "futures",
- "log",
- "tokio",
-]
-
-[[package]]
-name = "bitfun-miniapp-market-server"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "axum",
- "bitfun-miniapp-market-service",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "bitfun-miniapp-market-service"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "bitfun-product-domains",
- "bitfun-services-core",
- "chrono",
- "hex",
- "image 0.25.10",
- "rand 0.8.7",
- "reqwest",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "similar",
- "sqlx",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "uuid",
- "zip 4.6.1",
-]
-
-[[package]]
-name = "bitfun-opencode-adapter"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-plugin-runtime-client",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "bitfun-services-core",
- "bitfun-services-integrations",
- "bitfun-static-hook-support",
- "dirs 6.0.0",
- "dunce",
- "globset",
- "hex",
- "log",
- "oxc",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "url",
- "urlencoding",
-]
-
-[[package]]
-name = "bitfun-opencode-plugin-host"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "bitfun-runtime-ports",
- "bitfun-services-core",
- "log",
- "rand 0.8.7",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "url",
- "urlencoding",
-]
-
-[[package]]
-name = "bitfun-page-function-runtime"
-version = "0.2.19"
-dependencies = [
- "rquickjs",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "bitfun-plugin-runtime-client"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-runtime-ports",
- "tokio",
-]
-
-[[package]]
-name = "bitfun-product-capabilities"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-agent-runtime",
- "bitfun-runtime-ports",
- "bitfun-runtime-services",
- "bitfun-tool-packs",
- "tokio",
-]
-
-[[package]]
-name = "bitfun-product-domains"
-version = "0.2.19"
-dependencies = [
- "dirs 6.0.0",
- "hex",
- "hmac",
- "log",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "ts-rs",
- "url",
- "which 8.0.5",
-]
-
-[[package]]
-name = "bitfun-relay-server"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "axum",
- "bitfun-relay-service",
- "chrono",
- "clap",
- "rpassword",
- "serde_json",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "bitfun-relay-service"
-version = "0.2.19"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "argon2",
- "axum",
- "base64 0.22.1",
- "bitfun-page-function-runtime",
- "chrono",
- "dashmap",
- "futures-util",
- "libsqlite3-sys",
- "rand 0.8.7",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "subtle",
- "tempfile",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-runtime-ports"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitfun-core-types",
- "bitfun-product-domains",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
- "ts-rs",
-]
-
-[[package]]
-name = "bitfun-runtime-services"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitfun-events",
- "bitfun-runtime-ports",
- "log",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
-]
-
-[[package]]
-name = "bitfun-sdk-host"
-version = "0.2.19"
-dependencies = [
- "async-trait",
- "bitfun-agent-runtime",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-runtime-ports",
- "futures-util",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
- "ts-rs",
- "uuid",
-]
-
-[[package]]
-name = "bitfun-sdk-host-app"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitfun-agent-runtime",
- "bitfun-core",
- "bitfun-sdk-host",
- "bitfun-services-core",
- "bitfun-transport",
- "futures-util",
- "rustls",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "bitfun-server"
-version = "0.2.19"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "axum",
- "base64 0.22.1",
- "bitfun-agent-runtime",
- "bitfun-app-server",
- "bitfun-core",
- "bitfun-events",
- "chrono",
- "clap",
- "dirs 6.0.0",
- "futures",
- "futures-util",
- "log",
- "serde",
- "serde_json",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "bitfun-services-core"
-version = "0.2.19"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "chrono",
- "chrono-tz",
- "dunce",
- "filetime",
- "fs2",
- "git2",
- "globset",
- "ignore",
- "libc",
- "log",
- "rand 0.8.7",
- "regex",
- "rusqlite",
- "rustls",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "similar",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "which 8.0.5",
- "win32job",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "bitfun-services-integrations"
-version = "0.2.19"
-dependencies = [
- "aes",
- "aes-gcm",
- "anyhow",
- "argon2",
- "async-trait",
- "base64 0.22.1",
- "bitfun-agent-runtime",
- "bitfun-agent-tools",
- "bitfun-agent-workflows",
- "bitfun-core-types",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "bitfun-services-core",
- "bzip2 0.5.2",
- "chrono",
- "dirs 6.0.0",
- "dunce",
- "fs2",
- "futures",
- "futures-util",
- "git2",
- "hex",
- "hostname",
- "image 0.25.10",
- "keyring-core",
- "libc",
- "local-ip-address",
- "log",
- "mac_address",
- "md5",
- "minisign-verify",
- "notify",
- "oxc",
- "qrcode",
- "rand 0.8.7",
- "regex",
- "reqwest",
- "rmcp",
- "russh",
- "russh-keys",
- "russh-sftp",
- "rustls",
- "rustls-native-certs",
- "schannel",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "shellexpand",
- "sherpa-onnx",
- "sse-stream",
- "ssh_config",
- "tar",
- "tempfile",
- "terminal-core",
- "thiserror 2.0.19",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
- "ts-rs",
- "url",
- "urlencoding",
- "uuid",
- "which 8.0.5",
- "windows 0.61.3",
- "windows-native-keyring-store",
- "x25519-dalek",
- "zbus-secret-service-keyring-store",
- "zip 4.6.1",
-]
-
-[[package]]
-name = "bitfun-skin-market-server"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "axum",
- "bitfun-skin-market-service",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "bitfun-skin-market-service"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "bitfun-product-domains",
- "bitfun-services-core",
- "chrono",
- "hex",
- "hmac",
- "image 0.25.10",
- "reqwest",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "tempfile",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "uuid",
- "zip 4.6.1",
-]
-
-[[package]]
-name = "bitfun-static-hook-support"
-version = "0.2.19"
-dependencies = [
- "bitfun-product-domains",
- "bitfun-services-core",
- "hex",
- "serde_json",
- "sha2",
- "tempfile",
- "toml 0.9.12+spec-1.1.0",
-]
-
-[[package]]
-name = "bitfun-tool-call-jsonrepair"
-version = "0.2.19"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "bitfun-tool-packs"
-version = "0.2.19"
-
-[[package]]
-name = "bitfun-transport"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitfun-events",
- "log",
- "serde",
- "serde_json",
- "tauri",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "bitfun-webdriver"
-version = "0.2.19"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "block2 0.6.2",
- "glib",
- "gtk",
- "image 0.25.10",
- "log",
- "objc2 0.6.4",
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-web-kit",
- "serde",
- "serde_json",
- "tauri",
- "tempfile",
- "tokio",
- "uuid",
- "webkit2gtk",
- "webview2-com",
- "windows 0.61.3",
- "windows-core 0.61.2",
-]
-
-[[package]]
 name = "blake2"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6576,6 +5572,1011 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbitfun-acp"
+version = "1.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "async-trait",
+ "chrono",
+ "dashmap",
+ "dirs 6.0.0",
+ "futures",
+ "log",
+ "openbitfun-agent-runtime",
+ "openbitfun-agent-tools",
+ "openbitfun-core",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-agent-content"
+version = "1.0.0"
+
+[[package]]
+name = "openbitfun-agent-runtime"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "dashmap",
+ "hex",
+ "log",
+ "openbitfun-agent-stream",
+ "openbitfun-agent-tools",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-runtime-ports",
+ "openbitfun-runtime-services",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-agent-runtime-ipc"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "dunce",
+ "fs2",
+ "openbitfun-events",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "openbitfun-transport",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "uuid",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "openbitfun-agent-stream"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "log",
+ "openbitfun-agent-tools",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-tool-call-jsonrepair",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-agent-tools"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "indexmap 2.14.0",
+ "openbitfun-core-types",
+ "openbitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "openbitfun-agent-workflows"
+version = "1.0.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
+name = "openbitfun-ai-adapters"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "dirs 6.0.0",
+ "eventsource-stream",
+ "fs2",
+ "futures",
+ "hex",
+ "keyring-core",
+ "libc",
+ "log",
+ "openbitfun-agent-stream",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-services-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "urlencoding",
+ "uuid",
+ "windows-native-keyring-store",
+ "zbus-secret-service-keyring-store",
+]
+
+[[package]]
+name = "openbitfun-app-server"
+version = "1.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "async-trait",
+ "dunce",
+ "log",
+ "openbitfun-agent-runtime",
+ "openbitfun-app-server-client",
+ "openbitfun-app-server-protocol",
+ "openbitfun-core",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "openbitfun-app-server-client"
+version = "1.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "openbitfun-app-server-protocol",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "openbitfun-app-server-protocol"
+version = "1.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "openbitfun-claude-code-adapter"
+version = "1.0.0"
+dependencies = [
+ "dirs 6.0.0",
+ "dunce",
+ "hex",
+ "log",
+ "openbitfun-product-domains",
+ "openbitfun-services-core",
+ "openbitfun-static-hook-support",
+ "regex",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "openbitfun-cli"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "crossterm",
+ "dirs 6.0.0",
+ "dunce",
+ "flate2",
+ "fs2",
+ "futures-util",
+ "hex",
+ "image 0.25.10",
+ "libc",
+ "minisign-verify",
+ "once_cell",
+ "openbitfun-acp",
+ "openbitfun-agent-runtime",
+ "openbitfun-agent-runtime-ipc",
+ "openbitfun-agent-tools",
+ "openbitfun-app-server",
+ "openbitfun-core",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "openbitfun-runtime-services",
+ "openbitfun-services-core",
+ "portable-pty 0.8.1",
+ "portable-pty 0.9.0",
+ "pulldown-cmark",
+ "ratatui",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shlex 1.3.0",
+ "similar",
+ "syntect",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-util",
+ "toml 0.9.12+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width 0.2.0",
+ "url",
+ "uuid",
+ "windows 0.61.3",
+ "winsplit",
+]
+
+[[package]]
+name = "openbitfun-codex-adapter"
+version = "1.0.0"
+dependencies = [
+ "dirs 6.0.0",
+ "dunce",
+ "hex",
+ "openbitfun-product-domains",
+ "openbitfun-services-core",
+ "openbitfun-static-hook-support",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
+ "url",
+]
+
+[[package]]
+name = "openbitfun-core"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "dashmap",
+ "dirs 6.0.0",
+ "dunce",
+ "filetime",
+ "flate2",
+ "fluent-bundle",
+ "fs2",
+ "futures",
+ "hex",
+ "image 0.25.10",
+ "include_dir",
+ "indexmap 2.14.0",
+ "log",
+ "md5",
+ "notify",
+ "openbitfun-agent-content",
+ "openbitfun-agent-runtime",
+ "openbitfun-agent-stream",
+ "openbitfun-agent-tools",
+ "openbitfun-agent-workflows",
+ "openbitfun-ai-adapters",
+ "openbitfun-claude-code-adapter",
+ "openbitfun-codex-adapter",
+ "openbitfun-core-types",
+ "openbitfun-dsh-adapter",
+ "openbitfun-events",
+ "openbitfun-external-sources",
+ "openbitfun-opencode-adapter",
+ "openbitfun-opencode-plugin-host",
+ "openbitfun-plugin-runtime-client",
+ "openbitfun-product-capabilities",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "openbitfun-runtime-services",
+ "openbitfun-services-core",
+ "openbitfun-services-integrations",
+ "openbitfun-tool-packs",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "similar",
+ "tempfile",
+ "terminal-core",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tool-runtime",
+ "ts-rs",
+ "unic-langid",
+ "urlencoding",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-core-types"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
+name = "openbitfun-desktop"
+version = "1.0.0"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "anyhow",
+ "async-trait",
+ "atspi",
+ "axum",
+ "base64 0.22.1",
+ "bitflags 2.11.1",
+ "brotli-decompressor",
+ "bzip2 0.5.2",
+ "chrono",
+ "core-foundation 0.9.4",
+ "core-graphics 0.23.2",
+ "dark-light",
+ "dirs 6.0.0",
+ "dispatch",
+ "enigo",
+ "flate2",
+ "foreign-types 0.5.0",
+ "futures",
+ "ignore",
+ "image 0.25.10",
+ "keepawake",
+ "leptess",
+ "libc",
+ "log",
+ "mime_guess",
+ "notify-rust",
+ "objc2 0.6.4",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-vision",
+ "openbitfun-acp",
+ "openbitfun-agent-runtime",
+ "openbitfun-agent-tools",
+ "openbitfun-core",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-product-domains",
+ "openbitfun-relay-service",
+ "openbitfun-runtime-ports",
+ "openbitfun-services-integrations",
+ "openbitfun-transport",
+ "openbitfun-webdriver",
+ "regex",
+ "reqwest",
+ "resvg",
+ "screenshots",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "similar",
+ "tar",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-log",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tauri-plugin-window-state",
+ "tempfile",
+ "thiserror 2.0.19",
+ "time",
+ "tokio",
+ "tower-http",
+ "urlencoding",
+ "uuid",
+ "webview2-com",
+ "win32job",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+ "xz2",
+ "zip 4.6.1",
+ "zstd",
+]
+
+[[package]]
+name = "openbitfun-dsh-adapter"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "openbitfun-plugin-runtime-client",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tokio",
+ "urlencoding",
+]
+
+[[package]]
+name = "openbitfun-events"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "log",
+ "openbitfun-core-types",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-external-sources"
+version = "1.0.0"
+dependencies = [
+ "futures",
+ "log",
+ "openbitfun-product-domains",
+ "tokio",
+]
+
+[[package]]
+name = "openbitfun-miniapp-market-server"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "openbitfun-miniapp-market-service",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "openbitfun-miniapp-market-service"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "image 0.25.10",
+ "openbitfun-product-domains",
+ "openbitfun-services-core",
+ "rand 0.8.7",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "similar",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "uuid",
+ "zip 4.6.1",
+]
+
+[[package]]
+name = "openbitfun-opencode-adapter"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "dirs 6.0.0",
+ "dunce",
+ "globset",
+ "hex",
+ "log",
+ "openbitfun-plugin-runtime-client",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "openbitfun-services-core",
+ "openbitfun-services-integrations",
+ "openbitfun-static-hook-support",
+ "oxc",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "openbitfun-opencode-plugin-host"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "log",
+ "openbitfun-runtime-ports",
+ "openbitfun-services-core",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "openbitfun-page-function-runtime"
+version = "1.0.0"
+dependencies = [
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "openbitfun-plugin-runtime-client"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "openbitfun-runtime-ports",
+ "tokio",
+]
+
+[[package]]
+name = "openbitfun-product-capabilities"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "openbitfun-agent-runtime",
+ "openbitfun-runtime-ports",
+ "openbitfun-runtime-services",
+ "openbitfun-tool-packs",
+ "tokio",
+]
+
+[[package]]
+name = "openbitfun-product-domains"
+version = "1.0.0"
+dependencies = [
+ "dirs 6.0.0",
+ "hex",
+ "hmac",
+ "log",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "ts-rs",
+ "url",
+ "which 8.0.5",
+]
+
+[[package]]
+name = "openbitfun-relay-server"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "openbitfun-relay-service",
+ "rpassword",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "openbitfun-relay-service"
+version = "1.0.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "argon2",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "dashmap",
+ "futures-util",
+ "libsqlite3-sys",
+ "openbitfun-page-function-runtime",
+ "rand 0.8.7",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "subtle",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-runtime-ports"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "openbitfun-core-types",
+ "openbitfun-product-domains",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "ts-rs",
+]
+
+[[package]]
+name = "openbitfun-runtime-services"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "log",
+ "openbitfun-events",
+ "openbitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+]
+
+[[package]]
+name = "openbitfun-sdk-host"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "openbitfun-agent-runtime",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-runtime-ports",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
+name = "openbitfun-sdk-host-app"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures-util",
+ "openbitfun-agent-runtime",
+ "openbitfun-core",
+ "openbitfun-sdk-host",
+ "openbitfun-services-core",
+ "openbitfun-transport",
+ "rustls",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "openbitfun-server"
+version = "1.0.0"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "dirs 6.0.0",
+ "futures",
+ "futures-util",
+ "log",
+ "openbitfun-agent-runtime",
+ "openbitfun-app-server",
+ "openbitfun-core",
+ "openbitfun-events",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "openbitfun-services-core"
+version = "1.0.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "dunce",
+ "filetime",
+ "fs2",
+ "git2",
+ "globset",
+ "ignore",
+ "libc",
+ "log",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "rand 0.8.7",
+ "regex",
+ "rusqlite",
+ "rustls",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "similar",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "which 8.0.5",
+ "win32job",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "openbitfun-services-integrations"
+version = "1.0.0"
+dependencies = [
+ "aes",
+ "aes-gcm",
+ "anyhow",
+ "argon2",
+ "async-trait",
+ "base64 0.22.1",
+ "bzip2 0.5.2",
+ "chrono",
+ "dirs 6.0.0",
+ "dunce",
+ "fs2",
+ "futures",
+ "futures-util",
+ "git2",
+ "hex",
+ "hostname",
+ "image 0.25.10",
+ "keyring-core",
+ "libc",
+ "local-ip-address",
+ "log",
+ "mac_address",
+ "md5",
+ "minisign-verify",
+ "notify",
+ "openbitfun-agent-runtime",
+ "openbitfun-agent-tools",
+ "openbitfun-agent-workflows",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "openbitfun-services-core",
+ "oxc",
+ "qrcode",
+ "rand 0.8.7",
+ "regex",
+ "reqwest",
+ "rmcp",
+ "russh",
+ "russh-keys",
+ "russh-sftp",
+ "rustls",
+ "rustls-native-certs",
+ "schannel",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shellexpand",
+ "sherpa-onnx",
+ "sse-stream",
+ "ssh_config",
+ "tar",
+ "tempfile",
+ "terminal-core",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "ts-rs",
+ "url",
+ "urlencoding",
+ "uuid",
+ "which 8.0.5",
+ "windows 0.61.3",
+ "windows-native-keyring-store",
+ "x25519-dalek",
+ "zbus-secret-service-keyring-store",
+ "zip 4.6.1",
+]
+
+[[package]]
+name = "openbitfun-skin-market-server"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "openbitfun-skin-market-service",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "openbitfun-skin-market-service"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "hmac",
+ "image 0.25.10",
+ "openbitfun-product-domains",
+ "openbitfun-services-core",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "uuid",
+ "zip 4.6.1",
+]
+
+[[package]]
+name = "openbitfun-static-hook-support"
+version = "1.0.0"
+dependencies = [
+ "hex",
+ "openbitfun-product-domains",
+ "openbitfun-services-core",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "openbitfun-tool-call-jsonrepair"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "openbitfun-tool-packs"
+version = "1.0.0"
+
+[[package]]
+name = "openbitfun-transport"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "log",
+ "openbitfun-events",
+ "serde",
+ "serde_json",
+ "tauri",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "openbitfun-webdriver"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "block2 0.6.2",
+ "glib",
+ "gtk",
+ "image 0.25.10",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "webkit2gtk",
+ "webview2-com",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+]
+
+[[package]]
 name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10322,11 +10323,10 @@ dependencies = [
 
 [[package]]
 name = "terminal-core"
-version = "0.2.19"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitfun-runtime-ports",
  "chardetng",
  "chrono",
  "dashmap",
@@ -10335,6 +10335,7 @@ dependencies = [
  "futures",
  "libc",
  "log",
+ "openbitfun-runtime-ports",
  "portable-pty 0.8.1",
  "portable-pty 0.9.0",
  "rand 0.8.7",
@@ -10753,12 +10754,9 @@ checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
 name = "tool-runtime"
-version = "0.2.19"
+version = "1.0.0"
 dependencies = [
  "anydoc",
- "bitfun-agent-tools",
- "bitfun-events",
- "bitfun-runtime-ports",
  "dashmap",
  "dunce",
  "globset",
@@ -10768,6 +10766,10 @@ dependencies = [
  "ignore",
  "legible",
  "log",
+ "openbitfun-agent-tools",
+ "openbitfun-core-types",
+ "openbitfun-events",
+ "openbitfun-runtime-ports",
  "readability-js",
  "regex",
  "serde",

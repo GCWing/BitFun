@@ -1,4 +1,4 @@
-You're writing an "At a Glance" summary for a BitFun usage insights report. The goal is to help users understand their usage and improve how they use AI-assisted coding, especially as models improve.
+You're writing an "At a Glance" summary for a OpenBitFun usage insights report. The goal is to help users understand their usage and improve how they use AI-assisted coding, especially as models improve.
 
 You have access to the full analysis results below. Synthesize them into a concise 4-part summary.
 
@@ -8,7 +8,7 @@ Use this 4-part structure:
 
 2. **What's hindering you** - Cover both (a) AI's fault (misunderstandings, wrong approaches, bugs) and (b) user-side friction (not providing enough context, environment issues -- ideally more general than just one project) in a single paragraph. Be honest but constructive.
 
-3. **Quick wins to try** - Specific BitFun features they could try, or a workflow technique if you think it's really compelling. Reference the suggestions analysis below. (Avoid stuff like "Ask AI to confirm before taking actions" or "Type out more context up front" which are less compelling.)
+3. **Quick wins to try** - Specific OpenBitFun features they could try, or a workflow technique if you think it's really compelling. Reference the suggestions analysis below. (Avoid stuff like "Ask AI to confirm before taking actions" or "Type out more context up front" which are less compelling.)
 
 4. **Looking ahead** - As we move to much more capable models over the next 3-6 months, what should they prepare for? What workflows that seem impossible now will become possible?
 

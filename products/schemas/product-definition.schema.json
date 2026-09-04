@@ -1,13 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openbitfun.com/schemas/product-definition-v1.json",
-  "title": "BitFun product definition C0a",
+  "title": "OpenBitFun product definition",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "localeRoot", "members"],
+  "required": ["schemaVersion", "productId", "dataNamespace", "localeRoot", "members"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
+    "productId": { "$ref": "#/$defs/stableId" },
+    "dataNamespace": { "$ref": "#/$defs/stableId" },
     "localeRoot": { "type": "string", "minLength": 1 },
     "members": {
       "type": "object",
@@ -20,6 +22,11 @@
     }
   },
   "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 63
+    },
     "binaryName": {
       "type": "string",
       "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9_-])?$"

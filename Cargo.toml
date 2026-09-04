@@ -49,15 +49,15 @@ members = [
 ]
 
 exclude = [
-    "BitFun-Installer/src-tauri",
+    "OpenBitFun-Installer/src-tauri",
 ]
 
 resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.19" # x-release-please-version
-authors = ["BitFun Team"]
+version = "1.0.0" # x-release-please-version
+authors = ["OpenBitFun Team"]
 edition = "2021"
 
 [workspace.lints.rust]

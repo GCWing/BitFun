@@ -4,7 +4,7 @@ $config-input-height: 32px;
 
 
 
-.bitfun-config-form {
+.openbitfun-config-form {
   display: flex;
   flex-direction: column;
   gap: $config-section-gap;
@@ -16,7 +16,7 @@ $config-input-height: 32px;
 
 
 
-.bitfun-config-form__group {
+.openbitfun-config-form__group {
   display: flex;
   flex-direction: column;
   gap: $config-form-gap;
@@ -28,7 +28,7 @@ $config-input-height: 32px;
   }
 }
 
-.bitfun-config-form__row {
+.openbitfun-config-form__row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: $config-form-gap;
@@ -36,17 +36,17 @@ $config-input-height: 32px;
 
 
 
-.bitfun-config-form__label {
-  font-size: var(--bf-type-label-selected-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-label-selected-line-height);
-  letter-spacing: var(--bf-type-label-selected-letter-spacing);
+.openbitfun-config-form__label {
+  font-size: var(--openbitfun-type-label-selected-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-label-selected-line-height);
+  letter-spacing: var(--openbitfun-type-label-selected-letter-spacing);
   overflow-wrap: break-word;
   display: flex;
   align-items: center;
-  gap: var(--bf-space-2);
-  margin-bottom: var(--bf-space-1);
+  gap: var(--openbitfun-space-2);
+  margin-bottom: var(--openbitfun-space-1);
   user-select: none;
   list-style: none;
   
@@ -58,74 +58,74 @@ $config-input-height: 32px;
 
 }
 
-.bitfun-config-form__hint {
-  font-size: var(--bf-type-support-font-size);
-  font-weight: var(--bf-type-support-font-weight);
-  color: var(--bf-color-content-secondary);
-  margin-top: var(--bf-space-1);
-  line-height: var(--bf-type-modifier-leading-support-line-height);
-  letter-spacing: var(--bf-type-support-letter-spacing);
+.openbitfun-config-form__hint {
+  font-size: var(--openbitfun-type-support-font-size);
+  font-weight: var(--openbitfun-type-support-font-weight);
+  color: var(--openbitfun-color-content-secondary);
+  margin-top: var(--openbitfun-space-1);
+  line-height: var(--openbitfun-type-modifier-leading-support-line-height);
+  letter-spacing: var(--openbitfun-type-support-letter-spacing);
   overflow-wrap: break-word;
 }
 
 
 
-.bitfun-config-form__input,
-.bitfun-config-form__select,
-.bitfun-config-form__textarea {
+.openbitfun-config-form__input,
+.openbitfun-config-form__select,
+.openbitfun-config-form__textarea {
   width: 100%;
   padding: 0 12px !important;
-  font-size: var(--bf-type-label-md-font-size) !important;
-  line-height: var(--bf-type-label-md-line-height) !important;
-  color: var(--bf-color-content-primary) !important;
+  font-size: var(--openbitfun-type-label-md-font-size) !important;
+  line-height: var(--openbitfun-type-label-md-line-height) !important;
+  color: var(--openbitfun-color-content-primary) !important;
   background: transparent !important;
-  border: 1px solid var(--bf-color-border-default) !important;
-  border-radius: var(--bf-radius-sm) !important;
+  border: 1px solid var(--openbitfun-color-border-default) !important;
+  border-radius: var(--openbitfun-radius-sm) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-              background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard) !important;
+  transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+              background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard) !important;
   outline: none !important;
-  font-family:var(--bf-type-body-sm-font-family);
+  font-family:var(--openbitfun-type-body-sm-font-family);
   transform: none !important;
   box-shadow: none !important;
 
   &:focus {
-    border-color: var(--bf-color-accent-default) !important;
+    border-color: var(--openbitfun-color-accent-default) !important;
     background: transparent !important;
     box-shadow: none !important;
     transform: none !important;
   }
 
   &:hover:not(:focus):not(:disabled) {
-    border-color: var(--bf-color-field-border-hover) !important;
+    border-color: var(--openbitfun-color-field-border-hover) !important;
     background: transparent !important;
     transform: none !important;
   }
 
   &:disabled {
-    opacity: var(--bf-opacity-disabled) !important;
+    opacity: var(--openbitfun-opacity-disabled) !important;
     cursor: default !important;
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) !important;
-    border-color: var(--bf-color-border-subtle) !important;
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent) !important;
+    border-color: var(--openbitfun-color-border-subtle) !important;
   }
 }
 
 
 
-.bitfun-config-form__input {
+.openbitfun-config-form__input {
   height: $config-input-height;
 
   &::placeholder {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.6;
     font-style: italic;
   }
 
   
   &[type="password"] {
-    font-family:var(--bf-type-code-md-font-family);
-    letter-spacing: var(--bf-type-modifier-tracking-caps-letter-spacing);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-caps-letter-spacing);
   }
 
   
@@ -151,13 +151,13 @@ $config-input-height: 32px;
 
 
 
-.bitfun-config-form__select {
+.openbitfun-config-form__select {
   height: $config-input-height !important;
-  line-height: var(--bf-type-label-md-line-height) !important;
+  line-height: var(--openbitfun-type-label-md-line-height) !important;
   cursor: pointer !important;
   background-image:
-    linear-gradient(45deg, transparent 50%, color-mix(in srgb, var(--bf-color-content-muted) 80%, transparent) 50%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bf-color-content-muted) 80%, transparent) 50%, transparent 50%) !important;
+    linear-gradient(45deg, transparent 50%, color-mix(in srgb, var(--openbitfun-color-content-muted) 80%, transparent) 50%),
+    linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-content-muted) 80%, transparent) 50%, transparent 50%) !important;
   background-position:
     calc(100% - 16px) 50%,
     calc(100% - 11px) 50% !important;
@@ -172,30 +172,30 @@ $config-input-height: 32px;
   vertical-align: middle !important;
 
   option {
-    background: var(--bf-color-surface-panel) !important;
-    color: var(--bf-color-content-primary) !important;
+    background: var(--openbitfun-color-surface-panel) !important;
+    color: var(--openbitfun-color-content-primary) !important;
     padding: 6px 10px !important;
-    font-size: var(--bf-type-label-md-font-size) !important;
-    line-height: var(--bf-type-body-sm-line-height) !important;
+    font-size: var(--openbitfun-type-label-md-font-size) !important;
+    line-height: var(--openbitfun-type-body-sm-line-height) !important;
   }
 }
 
 
 
-.bitfun-config-form__textarea {
+.openbitfun-config-form__textarea {
   min-height: 80px;
   resize: vertical;
-  font-family:var(--bf-type-body-sm-font-family);
+  font-family:var(--openbitfun-type-body-sm-font-family);
 
   &::placeholder {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.8;
   }
 }
 
 
 
-.bitfun-config-form__checkbox {
+.openbitfun-config-form__checkbox {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -205,7 +205,7 @@ $config-input-height: 32px;
 }
 
 
-.bitfun-config-form__checkbox-wrapper {
+.openbitfun-config-form__checkbox-wrapper {
   position: relative;
   width: 16px;
   height: 16px;
@@ -213,7 +213,7 @@ $config-input-height: 32px;
   margin-top: 1px;
 }
 
-.bitfun-config-form__checkbox-input {
+.openbitfun-config-form__checkbox-input {
   position: absolute;
   top: 0;
   left: 0;
@@ -225,14 +225,14 @@ $config-input-height: 32px;
   z-index: 1;
 }
 
-.bitfun-config-form__checkbox-mark {
+.openbitfun-config-form__checkbox-mark {
   position: absolute;
   top: 0;
   left: 0;
   width: 16px;
   height: 16px;
   background: transparent;
-  border: 1.5px solid var(--bf-color-field-border-hover);
+  border: 1.5px solid var(--openbitfun-color-field-border-hover);
   border-radius: 3px;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -250,7 +250,7 @@ $config-input-height: 32px;
     content: '';
     width: 4px;
     height: 8px;
-    border: solid var(--bf-color-content-on-dark);
+    border: solid var(--openbitfun-color-content-on-dark);
     border-width: 0 1.5px 1.5px 0;
     transform: rotate(45deg) scale(0.8);
     opacity: 0;
@@ -260,9 +260,9 @@ $config-input-height: 32px;
   }
 }
 
-.bitfun-config-form__checkbox-input:checked + .bitfun-config-form__checkbox-mark {
-  background: var(--bf-color-accent-default);
-  border-color: var(--bf-color-accent-default);
+.openbitfun-config-form__checkbox-input:checked + .openbitfun-config-form__checkbox-mark {
+  background: var(--openbitfun-color-accent-default);
+  border-color: var(--openbitfun-color-accent-default);
   box-shadow: none;
 
   &::after {
@@ -271,55 +271,55 @@ $config-input-height: 32px;
   }
 }
 
-.bitfun-config-form__checkbox-input:focus + .bitfun-config-form__checkbox-mark {
-  border-color: var(--bf-color-accent-default);
+.openbitfun-config-form__checkbox-input:focus + .openbitfun-config-form__checkbox-mark {
+  border-color: var(--openbitfun-color-accent-default);
   box-shadow: none;
 }
 
-.bitfun-config-form__checkbox:hover .bitfun-config-form__checkbox-mark {
-  border-color: var(--bf-color-border-strong);
+.openbitfun-config-form__checkbox:hover .openbitfun-config-form__checkbox-mark {
+  border-color: var(--openbitfun-color-border-strong);
 }
 
-.bitfun-config-form__checkbox:hover .bitfun-config-form__checkbox-input:checked + .bitfun-config-form__checkbox-mark {
-  background: var(--bf-color-accent-hover);
-  border-color: var(--bf-color-accent-hover);
+.openbitfun-config-form__checkbox:hover .openbitfun-config-form__checkbox-input:checked + .openbitfun-config-form__checkbox-mark {
+  background: var(--openbitfun-color-accent-hover);
+  border-color: var(--openbitfun-color-accent-hover);
   box-shadow: none;
 }
 
-.bitfun-config-form__checkbox-content {
+.openbitfun-config-form__checkbox-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.bitfun-config-form__checkbox-title {
-  font-size: var(--bf-type-label-selected-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-label-selected-line-height);
-  letter-spacing: var(--bf-type-label-selected-letter-spacing);
+.openbitfun-config-form__checkbox-title {
+  font-size: var(--openbitfun-type-label-selected-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-label-selected-line-height);
+  letter-spacing: var(--openbitfun-type-label-selected-letter-spacing);
   overflow-wrap: break-word;
 }
 
-.bitfun-config-form__checkbox-description {
-  font-size: var(--bf-type-support-font-size);
-  font-weight: var(--bf-type-support-font-weight);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-modifier-leading-support-line-height);
-  letter-spacing: var(--bf-type-support-letter-spacing);
+.openbitfun-config-form__checkbox-description {
+  font-size: var(--openbitfun-type-support-font-size);
+  font-weight: var(--openbitfun-type-support-font-weight);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-modifier-leading-support-line-height);
+  letter-spacing: var(--openbitfun-type-support-letter-spacing);
   overflow-wrap: break-word;
 }
 
 
 
-.bitfun-config-form__actions {
+.openbitfun-config-form__actions {
   display: flex;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
   justify-content: flex-end;
-  margin-top: var(--bf-space-5);
-  padding-top: var(--bf-space-4);
-  border-top: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 30%, transparent);
+  margin-top: var(--openbitfun-space-5);
+  padding-top: var(--openbitfun-space-4);
+  border-top: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 30%, transparent);
 
   &--start {
     justify-content: flex-start;
@@ -336,49 +336,49 @@ $config-input-height: 32px;
 
 
 
-.bitfun-config-form__status {
+.openbitfun-config-form__status {
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-space-3);
-  padding: var(--bf-space-3) var(--bf-space-4);
-  border-radius: var(--bf-radius-base);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  gap: var(--openbitfun-space-3);
+  padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+  border-radius: var(--openbitfun-radius-base);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  margin-top: var(--bf-space-4);
+  margin-top: var(--openbitfun-space-4);
 
   &--success {
-    background: var(--bf-color-status-success-surface);
-    border: 1px solid var(--bf-color-status-success-border);
-    color: var(--bf-color-status-success-content);
+    background: var(--openbitfun-color-status-success-surface);
+    border: 1px solid var(--openbitfun-color-status-success-border);
+    color: var(--openbitfun-color-status-success-content);
   }
 
   &--error {
-    background: var(--bf-color-status-danger-surface);
-    border: 1px solid var(--bf-color-status-danger-border);
-    color: var(--bf-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-surface);
+    border: 1px solid var(--openbitfun-color-status-danger-border);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   &--warning {
-    background: var(--bf-color-status-warning-surface);
-    border: 1px solid var(--bf-color-status-warning-border);
-    color: var(--bf-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-surface);
+    border: 1px solid var(--openbitfun-color-status-warning-border);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   &--info {
-    background: var(--bf-color-status-info-surface);
-    border: 1px solid var(--bf-color-status-info-border);
-    color: var(--bf-color-status-info-content);
+    background: var(--openbitfun-color-status-info-surface);
+    border: 1px solid var(--openbitfun-color-status-info-border);
+    color: var(--openbitfun-color-status-info-content);
   }
 }
 
 
 
-.bitfun-config-form__section {
+.openbitfun-config-form__section {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-5);
+  gap: var(--openbitfun-space-5);
   padding: 0;
   background: transparent;
   border: none;
@@ -390,44 +390,44 @@ $config-input-height: 32px;
   overflow: visible;
 }
 
-.bitfun-config-form__section-content {
+.openbitfun-config-form__section-content {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
 }
 
-.bitfun-config-form__section-title {
-  font-size: var(--bf-type-heading-section-font-size);
-  font-weight: var(--bf-type-heading-section-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-heading-section-line-height);
-  letter-spacing: var(--bf-type-heading-section-letter-spacing);
+.openbitfun-config-form__section-title {
+  font-size: var(--openbitfun-type-heading-section-font-size);
+  font-weight: var(--openbitfun-type-heading-section-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-heading-section-line-height);
+  letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
   overflow-wrap: break-word;
-  margin: 0 0 var(--bf-space-3) 0;
+  margin: 0 0 var(--openbitfun-space-3) 0;
   display: flex;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
 }
 
-.bitfun-config-form__section-description {
-  font-size: var(--bf-type-body-sm-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
-  color: var(--bf-color-content-primary);
-  margin: 0 0 var(--bf-space-5) 0;
-  line-height: var(--bf-type-body-sm-line-height);
-  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+.openbitfun-config-form__section-description {
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  margin: 0 0 var(--openbitfun-space-5) 0;
+  line-height: var(--openbitfun-type-body-sm-line-height);
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   overflow-wrap: break-word;
 }
 
 
 
 @media (max-width: 768px) {
-  .bitfun-config-form__row {
+  .openbitfun-config-form__row {
     grid-template-columns: 1fr;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
   
-  .bitfun-config-form__actions {
+  .openbitfun-config-form__actions {
     flex-direction: column;
     align-items: stretch;
 
@@ -441,28 +441,28 @@ $config-input-height: 32px;
 
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-config-form__input,
-  .bitfun-config-form__select,
-  .bitfun-config-form__textarea,
-  .bitfun-config-form__checkbox-mark {
+  .openbitfun-config-form__input,
+  .openbitfun-config-form__select,
+  .openbitfun-config-form__textarea,
+  .openbitfun-config-form__checkbox-mark {
     transition: none;
   }
   
-  .bitfun-config-form__group {
+  .openbitfun-config-form__group {
     animation: none;
   }
 }
 
 
-.bitfun-config-form__input:focus-visible,
-.bitfun-config-form__select:focus-visible,
-.bitfun-config-form__textarea:focus-visible {
-  outline: 2px solid var(--bf-color-accent-default);
+.openbitfun-config-form__input:focus-visible,
+.openbitfun-config-form__select:focus-visible,
+.openbitfun-config-form__textarea:focus-visible {
+  outline: 2px solid var(--openbitfun-color-accent-default);
   outline-offset: 2px;
 }
 
-.bitfun-config-form__checkbox-input:focus-visible + .bitfun-config-form__checkbox-mark {
-  outline: 2px solid var(--bf-color-accent-default);
+.openbitfun-config-form__checkbox-input:focus-visible + .openbitfun-config-form__checkbox-mark {
+  outline: 2px solid var(--openbitfun-color-accent-default);
   outline-offset: 2px;
 }
 
@@ -470,19 +470,19 @@ $config-input-height: 32px;
 
 
 .config-form {
-  @extend .bitfun-config-form;
+  @extend .openbitfun-config-form;
 }
 
 .config-form-group {
-  @extend .bitfun-config-form__group;
+  @extend .openbitfun-config-form__group;
 }
 
 .config-form-row {
-  @extend .bitfun-config-form__row;
+  @extend .openbitfun-config-form__row;
 }
 
 .config-form-label {
-  @extend .bitfun-config-form__label;
+  @extend .openbitfun-config-form__label;
   list-style: none !important;
   
   &::before,
@@ -495,13 +495,13 @@ $config-input-height: 32px;
 .config-form-label__text {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
 }
 
 .config-form-label__required {
-  color: var(--bf-color-content-required-indicator);
-  font-size: var(--bf-type-label-selected-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-required-indicator);
+  font-size: var(--openbitfun-type-label-selected-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 @media (forced-colors: active) {
@@ -511,95 +511,95 @@ $config-input-height: 32px;
 }
 
 .config-form-hint {
-  @extend .bitfun-config-form__hint;
+  @extend .openbitfun-config-form__hint;
 }
 
 .config-form-input {
-  @extend .bitfun-config-form__input;
+  @extend .openbitfun-config-form__input;
 }
 
 .config-form-select {
-  @extend .bitfun-config-form__select;
+  @extend .openbitfun-config-form__select;
 }
 
 .config-form-textarea {
-  @extend .bitfun-config-form__textarea;
+  @extend .openbitfun-config-form__textarea;
 }
 
 .config-form-checkbox {
-  @extend .bitfun-config-form__checkbox;
+  @extend .openbitfun-config-form__checkbox;
 }
 
 .config-form-checkbox-wrapper {
-  @extend .bitfun-config-form__checkbox-wrapper;
+  @extend .openbitfun-config-form__checkbox-wrapper;
 }
 
 .config-form-checkbox-input {
-  @extend .bitfun-config-form__checkbox-input;
+  @extend .openbitfun-config-form__checkbox-input;
 }
 
 .config-form-checkbox-mark {
-  @extend .bitfun-config-form__checkbox-mark;
+  @extend .openbitfun-config-form__checkbox-mark;
 }
 
 .config-form-checkbox-content {
-  @extend .bitfun-config-form__checkbox-content;
+  @extend .openbitfun-config-form__checkbox-content;
 }
 
 .config-form-checkbox-title {
-  @extend .bitfun-config-form__checkbox-title;
+  @extend .openbitfun-config-form__checkbox-title;
 }
 
 .config-form-checkbox-description {
-  @extend .bitfun-config-form__checkbox-description;
+  @extend .openbitfun-config-form__checkbox-description;
 }
 
 .config-form-actions {
-  @extend .bitfun-config-form__actions;
+  @extend .openbitfun-config-form__actions;
   
   &.start {
-    @extend .bitfun-config-form__actions--start;
+    @extend .openbitfun-config-form__actions--start;
   }
   
   &.center {
-    @extend .bitfun-config-form__actions--center;
+    @extend .openbitfun-config-form__actions--center;
   }
   
   &.between {
-    @extend .bitfun-config-form__actions--between;
+    @extend .openbitfun-config-form__actions--between;
   }
 }
 
 .config-form-status {
-  @extend .bitfun-config-form__status;
+  @extend .openbitfun-config-form__status;
   
   &.success {
-    @extend .bitfun-config-form__status--success;
+    @extend .openbitfun-config-form__status--success;
   }
   
   &.error {
-    @extend .bitfun-config-form__status--error;
+    @extend .openbitfun-config-form__status--error;
   }
   
   &.warning {
-    @extend .bitfun-config-form__status--warning;
+    @extend .openbitfun-config-form__status--warning;
   }
   
   &.info {
-    @extend .bitfun-config-form__status--info;
+    @extend .openbitfun-config-form__status--info;
   }
 }
 
 .config-form-section {
-  @extend .bitfun-config-form__section;
+  @extend .openbitfun-config-form__section;
 }
 
 .config-section-content {
-  @extend .bitfun-config-form__section-content;
+  @extend .openbitfun-config-form__section-content;
 }
 
 .config-form-section-title {
-  @extend .bitfun-config-form__section-title;
+  @extend .openbitfun-config-form__section-title;
   width: fit-content;
   padding: 0;
   border: 0;
@@ -616,9 +616,9 @@ $config-input-height: 32px;
 
 .config-form-section-chevron {
   margin-left: 8px;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-body-md-font-size);
-  transition: transform 150ms var(--bf-motion-easing-standard);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  transition: transform 150ms var(--openbitfun-motion-easing-standard);
 }
 
 .config-form-section-title[aria-expanded='false'] .config-form-section-chevron {
@@ -630,7 +630,7 @@ $config-input-height: 32px;
   grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows 180ms var(--bf-motion-easing-standard),
+    grid-template-rows 180ms var(--openbitfun-motion-easing-standard),
     opacity 120ms ease;
 
   &[data-open='true'] {
@@ -645,7 +645,7 @@ $config-input-height: 32px;
 }
 
 .config-form-section-description {
-  @extend .bitfun-config-form__section-description;
+  @extend .openbitfun-config-form__section-description;
 }
 
 @media (prefers-reduced-motion: reduce) {

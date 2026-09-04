@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption } from '@bitfun/ui';
+import { Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption } from '@openbitfun/ui';
 import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
@@ -205,8 +205,8 @@ const InsightsScene: React.FC = () => {
   }
 
   return (
-    <div className="insights-scene" data-bf-scene="insights" data-bf-part="root" data-bf-view="list">
-      <div className="insights-scene__header" data-bf-scene="insights" data-bf-part="header">
+    <div className="insights-scene" data-openbitfun-scene="insights" data-openbitfun-part="root" data-openbitfun-view="list">
+      <div className="insights-scene__header" data-openbitfun-scene="insights" data-openbitfun-part="header">
         <div className="insights-scene__header-identity">
           <h2 className="insights-scene__header-title">{t('insights.title')}</h2>
           <p className="insights-scene__header-subtitle">{t('insights.subtitle')}</p>
@@ -268,7 +268,7 @@ const InsightsScene: React.FC = () => {
       </div>
 
       {error && (
-        <div className="insights-scene__error" data-bf-scene="insights" data-bf-part="error">
+        <div className="insights-scene__error" data-openbitfun-scene="insights" data-openbitfun-part="error">
           <AlertTriangle size={14} />
           <span>{error}</span>
           <IconButton
@@ -282,7 +282,7 @@ const InsightsScene: React.FC = () => {
 
       {generating && <GenerationPanel progress={progress} />}
 
-      <ScrollArea className="insights-scene__history" data-bf-scene="insights" data-bf-part="content">
+      <ScrollArea className="insights-scene__history" data-openbitfun-scene="insights" data-openbitfun-part="content">
         <div className="insights-scene__history-inner">
           <div className="insights-scene__history-header">
             <div className="insights-scene__history-label">
@@ -294,11 +294,11 @@ const InsightsScene: React.FC = () => {
             <span className="insights-scene__history-hint">{t('insights.keepLatest5')}</span>
           </div>
           {loadingMetas ? (
-            <div className="insights-scene__loading" data-bf-scene="insights" data-bf-part="loading">
+            <div className="insights-scene__loading" data-openbitfun-scene="insights" data-openbitfun-part="loading">
               <Loader2 size={16} className="insights-scene__spinner" />
             </div>
           ) : reportMetas.length === 0 ? (
-            <div className="insights-scene__empty" data-bf-scene="insights" data-bf-part="empty">{t('insights.noReports')}</div>
+            <div className="insights-scene__empty" data-openbitfun-scene="insights" data-openbitfun-part="empty">{t('insights.noReports')}</div>
           ) : (
             <div className="insights-scene__report-list">
               {reportMetas.map((meta) => (
@@ -543,8 +543,8 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
   const dateEnd = report.date_range.end.slice(0, 10);
 
   return (
-    <div className="insights-scene insights-scene--report" data-bf-scene="insights" data-bf-part="root" data-bf-view="report">
-      <div className="insights-report-header" data-bf-scene="insights" data-bf-part="header">
+    <div className="insights-scene insights-scene--report" data-openbitfun-scene="insights" data-openbitfun-part="root" data-openbitfun-view="report">
+      <div className="insights-report-header" data-openbitfun-scene="insights" data-openbitfun-part="header">
         <Button
           variant="outline"
           size="sm"
@@ -571,7 +571,7 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
         </div>
       </div>
 
-      <ScrollArea className="insights-report-content" ref={bodyRef} data-bf-scene="insights" data-bf-part="content">
+      <ScrollArea className="insights-report-content" ref={bodyRef} data-openbitfun-scene="insights" data-openbitfun-part="content">
         <div className="insights-report-body">
           <div className="insights-report-body-inner">
             <header className="insights-report-hero">
@@ -605,7 +605,7 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
             )}
           <BasicCharts stats={report.stats} />
 
-          {/* How You Use BitFun */}
+          {/* How You Use OpenBitFun */}
           {report.interaction_style.narrative && <div data-section="usage"><InteractionStyleSection report={report} /></div>}
           <div data-section="usage">
             <UsageCharts stats={report.stats} />
@@ -1003,9 +1003,9 @@ const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) 
 
 // Bar chart palette (default + semantic roles)
 const CHART_COLORS = {
-  blue: 'var(--bf-color-accent-default)',      // default / primary series
+  blue: 'var(--openbitfun-color-accent-default)',      // default / primary series
   green: APPEARANCE_DOMAIN_TOKENS.insights.positive,     // positive / success
-  purple: 'var(--bf-color-accent-secondary)',    // distribution / category
+  purple: 'var(--openbitfun-color-accent-secondary)',    // distribution / category
   indigo: APPEARANCE_DOMAIN_TOKENS.insights.time,    // time-related
   orange: APPEARANCE_DOMAIN_TOKENS.insights.neutral,    // time-of-day / neutral
   red: APPEARANCE_DOMAIN_TOKENS.insights.issue,       // issues / errors
@@ -1046,7 +1046,7 @@ const SuggestionsSection: React.FC<{ report: InsightsReport }> = ({ report }) =>
   const { suggestions } = report;
   const { t } = useI18n('common');
   const hasSuggestions =
-    suggestions.bitfun_md_additions.length > 0 ||
+    suggestions.openbitfun_md_additions.length > 0 ||
     suggestions.features_to_try.length > 0 ||
     suggestions.usage_patterns.length > 0;
 
@@ -1056,10 +1056,10 @@ const SuggestionsSection: React.FC<{ report: InsightsReport }> = ({ report }) =>
     <section className="insights-section">
       <h3>{t('insights.suggestions')}</h3>
 
-      {suggestions.bitfun_md_additions.length > 0 && (
+      {suggestions.openbitfun_md_additions.length > 0 && (
         <div className="insights-md-list">
           <h4>{t('insights.mdAdditions')}</h4>
-          {suggestions.bitfun_md_additions.map((md, i) => (
+          {suggestions.openbitfun_md_additions.map((md, i) => (
             <div key={i} className="insights-md-row">
               <div className="insights-md-row__header">
                 {md.section && <span className="insights-md-row__badge">{md.section}</span>}

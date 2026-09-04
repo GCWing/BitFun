@@ -11,11 +11,11 @@ use agent_client_protocol::schema::{
 };
 use agent_client_protocol::{Client, ConnectionTo, Error, Result};
 use async_trait::async_trait;
-use bitfun_agent_runtime::sdk::{AgentRuntime, PortErrorKind, RuntimeError};
-use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use bitfun_core::util::errors::BitFunError;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use openbitfun_agent_runtime::sdk::{AgentRuntime, PortErrorKind, RuntimeError};
+use openbitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
+use openbitfun_core::util::errors::OpenBitFunError;
 
 use crate::server::{AcpRuntime, AcpServer};
 
@@ -28,7 +28,7 @@ mod replay;
 mod session;
 mod thinking;
 
-pub struct BitfunAcpRuntime {
+pub struct OpenBitFunAcpRuntime {
     pub(crate) agent_runtime: AgentRuntime,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) sessions: DashMap<String, AcpSessionState>,
@@ -39,7 +39,7 @@ pub struct BitfunAcpRuntime {
 #[derive(Clone)]
 pub(crate) struct AcpSessionState {
     pub(crate) acp_session_id: String,
-    pub(crate) bitfun_session_id: String,
+    pub(crate) openbitfun_session_id: String,
     pub(crate) cwd: String,
     pub(crate) mode_id: String,
     pub(crate) model_id: String,
@@ -78,7 +78,7 @@ impl Drop for AcpSessionTransition<'_> {
     }
 }
 
-impl BitfunAcpRuntime {
+impl OpenBitFunAcpRuntime {
     pub fn new(agent_runtime: AgentRuntime, compatibility: CoreAgentRuntimeCompatibility) -> Self {
         Self {
             agent_runtime,
@@ -162,11 +162,11 @@ impl BitfunAcpRuntime {
         }
     }
 
-    pub(crate) fn session_core_error(session_id: &str, error: BitFunError) -> Error {
+    pub(crate) fn session_core_error(session_id: &str, error: OpenBitFunError) -> Error {
         match error {
-            BitFunError::NotFound(_) => Error::resource_not_found(Some(session_id.to_string())),
-            BitFunError::Validation(message) => Error::invalid_params().data(message),
-            BitFunError::SessionInUse { session_id } => Self::session_in_use_error(format!(
+            OpenBitFunError::NotFound(_) => Error::resource_not_found(Some(session_id.to_string())),
+            OpenBitFunError::Validation(message) => Error::invalid_params().data(message),
+            OpenBitFunError::SessionInUse { session_id } => Self::session_in_use_error(format!(
                 "Session is already open for writing: {session_id}"
             )),
             other => Self::internal_error(other),
@@ -209,7 +209,7 @@ impl BitfunAcpRuntime {
 }
 
 #[async_trait]
-impl AcpRuntime for BitfunAcpRuntime {
+impl AcpRuntime for OpenBitFunAcpRuntime {
     async fn initialize(&self, _request: InitializeRequest) -> Result<InitializeResponse> {
         Ok(InitializeResponse::new(ProtocolVersion::V1)
             .agent_capabilities(
@@ -226,7 +226,8 @@ impl AcpRuntime for BitfunAcpRuntime {
                     ),
             )
             .agent_info(
-                Implementation::new("bitfun-acp", env!("CARGO_PKG_VERSION")).title("BitFun"),
+                Implementation::new("openbitfun-acp", env!("CARGO_PKG_VERSION"))
+                    .title("OpenBitFun"),
             ))
     }
 
@@ -287,15 +288,15 @@ impl AcpRuntime for BitfunAcpRuntime {
 #[cfg(test)]
 mod tests {
     use agent_client_protocol::schema::ErrorCode;
-    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
-    use bitfun_core::util::errors::BitFunError;
     use dashmap::DashMap;
+    use openbitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+    use openbitfun_core::util::errors::OpenBitFunError;
 
-    use super::{AcpSessionTransition, BitfunAcpRuntime};
+    use super::{AcpSessionTransition, OpenBitFunAcpRuntime};
 
     #[test]
     fn invalid_runtime_request_remains_invalid_params_at_the_protocol_boundary() {
-        let error = BitfunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
+        let error = OpenBitFunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
             PortErrorKind::InvalidRequest,
             "unknown session mode",
         )));
@@ -306,7 +307,7 @@ mod tests {
 
     #[test]
     fn missing_runtime_session_remains_resource_not_found_at_the_protocol_boundary() {
-        let error = BitfunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
+        let error = OpenBitFunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
             PortErrorKind::NotFound,
             "Session not found: session-404",
         )));
@@ -317,7 +318,7 @@ mod tests {
 
     #[test]
     fn session_writer_conflict_is_actionable_at_the_protocol_boundary() {
-        let error = BitfunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
+        let error = OpenBitFunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
             PortErrorKind::SessionInUse,
             "Session is already open for writing: session-1",
         )));
@@ -331,9 +332,9 @@ mod tests {
 
     #[test]
     fn compatibility_restore_preserves_session_writer_conflicts() {
-        let error = BitfunAcpRuntime::session_core_error(
+        let error = OpenBitFunAcpRuntime::session_core_error(
             "session-1",
-            BitFunError::SessionInUse {
+            OpenBitFunError::SessionInUse {
                 session_id: "session-1".to_string(),
             },
         );
@@ -347,7 +348,7 @@ mod tests {
 
     #[test]
     fn session_runtime_error_uses_the_requested_resource_id() {
-        let error = BitfunAcpRuntime::session_runtime_error(
+        let error = OpenBitFunAcpRuntime::session_runtime_error(
             "session-404",
             RuntimeError::Port(PortError::new(
                 PortErrorKind::NotFound,
@@ -364,7 +365,7 @@ mod tests {
 
     #[test]
     fn backend_runtime_failure_stays_internal_at_the_protocol_boundary() {
-        let error = BitfunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
+        let error = OpenBitFunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
             PortErrorKind::Backend,
             "storage unavailable",
         )));
@@ -403,7 +404,7 @@ mod tests {
 
     #[test]
     fn incomplete_close_error_exposes_retry_and_ownership_state() {
-        let error = BitfunAcpRuntime::session_close_incomplete_error(
+        let error = OpenBitFunAcpRuntime::session_close_incomplete_error(
             "session-1",
             "ephemeral MCP cleanup",
             "server stop failed",

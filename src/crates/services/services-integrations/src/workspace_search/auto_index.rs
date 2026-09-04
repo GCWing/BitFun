@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use bitfun_services_core::process_manager;
+use openbitfun_services_core::process_manager;
 use tokio::task::spawn_blocking;
 
 pub(crate) const DEFAULT_AUTO_INDEX_MIN_FILES: usize = 2_000;
@@ -195,9 +195,9 @@ mod tests {
         process_manager::create_command("git")
             .args([
                 "-c",
-                "user.name=BitFun Test",
+                "user.name=OpenBitFun Test",
                 "-c",
-                "user.email=bitfun-test@example.invalid",
+                "user.email=openbitfun-test@example.invalid",
                 "commit",
                 "--quiet",
                 "-m",

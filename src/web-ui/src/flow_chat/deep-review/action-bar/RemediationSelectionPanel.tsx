@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
-import { Checkbox, Icon } from '@bitfun/ui';
+import { Checkbox, Icon } from '@openbitfun/ui';
 import type { ReviewRemediationItem } from '../../utils/codeReviewRemediation';
 import { REMEDIATION_GROUP_ORDER } from '../../utils/codeReviewRemediation';
 import type { RemediationGroupId } from '../../utils/codeReviewReport';
@@ -28,10 +28,10 @@ interface RemediationSelectionPanelProps {
 const EMPTY_FIXING_REMEDIATION_IDS = new Set<string>();
 
 const GROUP_PRIORITY_META: Record<RemediationGroupId, { color: string }> = {
-  must_fix: { color: 'var(--bf-color-status-danger-content)' },
-  should_improve: { color: 'var(--bf-color-status-warning-content)' },
-  needs_decision: { color: 'var(--bf-color-accent-default)' },
-  verification: { color: 'var(--bf-color-status-success-content)' },
+  must_fix: { color: 'var(--openbitfun-color-status-danger-content)' },
+  should_improve: { color: 'var(--openbitfun-color-status-warning-content)' },
+  needs_decision: { color: 'var(--openbitfun-color-accent-default)' },
+  verification: { color: 'var(--openbitfun-color-status-success-content)' },
 };
 
 const stopNestedScrollPropagation = (event: React.WheelEvent | React.TouchEvent) => {

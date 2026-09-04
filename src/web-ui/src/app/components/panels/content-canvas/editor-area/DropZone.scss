@@ -22,7 +22,7 @@
       content: '';
       position: absolute;
       inset: 2px;
-      border: 1px dashed color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      border: 1px dashed color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
       border-radius: 4px;
       pointer-events: none;
       z-index: 5;
@@ -57,7 +57,7 @@
     content: '';
     position: absolute;
     inset: 4px;
-    border: 1px dashed var(--bf-color-accent-default);
+    border: 1px dashed var(--openbitfun-color-accent-default);
     border-radius: 4px;
     opacity: 0.4;
     transition:
@@ -77,8 +77,8 @@
       opacity: 1;
       border-style: solid;
       border-width: 2px;
-      border-color: var(--bf-color-accent-default);
-      background: var(--bf-color-action-secondary-background);
+      border-color: var(--openbitfun-color-accent-default);
+      background: var(--openbitfun-color-action-secondary-background);
     }
   }
 
@@ -88,10 +88,10 @@
     justify-content: center;
     gap: 6px;
     padding: 6px 14px;
-    background: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
     border: none;
     border-radius: 4px;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
     opacity: 0.85;
     transform: scale(1);
     transition:
@@ -102,24 +102,24 @@
     pointer-events: none;
 
     span {
-      font-size: var(--bf-type-label-sm-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-on-dark);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-on-dark);
       white-space: nowrap;
-      text-shadow: 0 1px 2px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
+      text-shadow: 0 1px 2px color-mix(in srgb, var(--openbitfun-color-content-on-light) 20%, transparent);
     }
   }
 
   &:hover &__indicator {
     opacity: 1;
     transform: scale(1.05);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent);
   }
 
   &.is-active &__indicator {
     opacity: 1;
     transform: scale(1.1);
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent);
   }
 
   &--center {

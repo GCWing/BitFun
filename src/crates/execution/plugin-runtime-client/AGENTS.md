@@ -2,7 +2,7 @@
 
 Scope: this guide applies to `src/crates/execution/plugin-runtime-client`.
 
-`bitfun-plugin-runtime-client` is the default implementation of the existing,
+`openbitfun-plugin-runtime-client` is the default implementation of the existing,
 portable `PluginRuntimeClient` port. The current implementation validates request
 identity and responses, serializes the same logical plugin instance, applies
 deadlines, caches responses by `idempotency_key`, and returns explicit diagnostics
@@ -17,9 +17,9 @@ process on the other side of the injected ports.
 
 ## Guardrails
 
-- Depend only on stable contracts such as `bitfun-runtime-ports`.
-- Do not depend on `bitfun-core`, product assembly, app crates, Tauri, concrete
-  services, concrete adapters, `bitfun-opencode-adapter`, or UI code.
+- Depend only on stable contracts such as `openbitfun-runtime-ports`.
+- Do not depend on `openbitfun-core`, product assembly, app crates, Tauri, concrete
+  services, concrete adapters, `openbitfun-opencode-adapter`, or UI code.
 - Physical Plugin Host health, Job Objects/process groups, resource budgets, and
   process-tree termination belong to the services implementation behind the existing
   `ScriptToolRuntime` boundary.
@@ -48,6 +48,6 @@ process on the other side of the injected ports.
 ## Verification
 
 ```bash
-cargo test -p bitfun-plugin-runtime-client
+cargo test -p openbitfun-plugin-runtime-client
 node scripts/check-core-boundaries.mjs
 ```

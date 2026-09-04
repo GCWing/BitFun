@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Github, Loader2, LogOut } from 'lucide-react';
@@ -170,9 +170,9 @@ export function MarketAccountControls({
   return (
     <div
       className={['market-account-controls', className].filter(Boolean).join(' ')}
-      data-bf-component="market-account-controls"
-      data-bf-part="root"
-      data-bf-state={account.status}
+      data-openbitfun-component="market-account-controls"
+      data-openbitfun-part="root"
+      data-openbitfun-state={account.status}
     >
       {account.me ? (
         <div className="market-account-controls__menu-root" ref={menuRef}>
@@ -180,8 +180,8 @@ export function MarketAccountControls({
             ref={menuTriggerRef}
             type="button"
             className="market-account-controls__identity-trigger"
-            data-bf-component="market-account-controls"
-            data-bf-part="identityTrigger"
+            data-openbitfun-component="market-account-controls"
+            data-openbitfun-part="identityTrigger"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label={t('market.account.menuLabel', { login: account.me.user.login })}
@@ -204,8 +204,8 @@ export function MarketAccountControls({
             >
               <div
                 className="market-account-controls__profile"
-                data-bf-component="market-account-controls"
-                data-bf-part="profile"
+                data-openbitfun-component="market-account-controls"
+                data-openbitfun-part="profile"
               >
                 <Avatar size="md" src={account.me.user.avatarUrl} alt={account.me.user.login} />
                 <div>
@@ -253,8 +253,8 @@ export function MarketAccountControls({
         <DialogBody>
         <div
           className="market-account-login"
-          data-bf-component="market-account-controls"
-          data-bf-part="login"
+          data-openbitfun-component="market-account-controls"
+          data-openbitfun-part="login"
         >
           <div className="market-account-login__mark" aria-hidden="true">
             <Github size={28} />
@@ -267,8 +267,8 @@ export function MarketAccountControls({
             <div
               className="market-account-login__waiting"
               role="status"
-              data-bf-component="market-account-controls"
-              data-bf-part="waiting"
+              data-openbitfun-component="market-account-controls"
+              data-openbitfun-part="waiting"
             >
               <Loader2 size={16} className="market-account-controls__spinner" />
               <span>{t('market.account.waiting')}</span>
@@ -278,16 +278,16 @@ export function MarketAccountControls({
             <p
               className="market-account-login__error"
               role="alert"
-              data-bf-component="market-account-controls"
-              data-bf-part="error"
+              data-openbitfun-component="market-account-controls"
+              data-openbitfun-part="error"
             >
               {errorText}
             </p>
           )}
           <div
             className="market-account-login__actions"
-            data-bf-component="market-account-controls"
-            data-bf-part="actions"
+            data-openbitfun-component="market-account-controls"
+            data-openbitfun-part="actions"
           >
             <Button variant="outline" onClick={closeLogin}>
               {t('market.account.cancel')}

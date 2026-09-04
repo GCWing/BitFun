@@ -1,7 +1,7 @@
 //! Announcement system Tauri commands.
 
 use crate::api::app_state::AppState;
-use bitfun_core::service::announcement::{AnnouncementCard, CardType};
+use openbitfun_core::service::announcement::{AnnouncementCard, CardType};
 use serde::Deserialize;
 use tauri::State;
 
@@ -132,7 +132,7 @@ pub async fn get_announcement_tips(
         .filter(|c| {
             matches!(
                 c.card_type,
-                bitfun_core::service::announcement::types::CardType::Tip
+                openbitfun_core::service::announcement::types::CardType::Tip
             )
         })
         .collect();

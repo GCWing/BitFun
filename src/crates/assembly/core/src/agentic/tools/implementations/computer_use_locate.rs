@@ -7,40 +7,42 @@ use crate::agentic::tools::computer_use_host::{
 use crate::agentic::tools::framework::{ToolResult, ToolUseContext};
 use crate::agentic::tools::implementations::computer_use_tool::computer_use_augment_result_json;
 use crate::service::config::global::GlobalConfigManager;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use serde_json::{json, Value};
 
 /// Runs native UI locate (AX / UIA / AT-SPI) for the foreground app -- `ComputerUse` `action: "locate"`.
 pub(crate) async fn execute_computer_use_locate(
     input: &Value,
     context: &ToolUseContext,
-) -> BitFunResult<Vec<ToolResult>> {
+) -> OpenBitFunResult<Vec<ToolResult>> {
     if context.is_remote() {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "ComputerUse action locate cannot run while the session workspace is remote (SSH)."
                 .to_string(),
         ));
     }
     if !computer_use_desktop_available() {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "Computer use is not available on this host.".to_string(),
         ));
     }
     let Ok(service) = GlobalConfigManager::get_service().await else {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "Computer use configuration is unavailable.".to_string(),
         ));
     };
     let ai: crate::service::config::types::AIConfig =
         service.get_config(Some("ai")).await.unwrap_or_default();
     if !ai.computer_use_enabled {
-        return Err(BitFunError::tool(
-            "Computer use is disabled in BitFun settings.".to_string(),
+        return Err(OpenBitFunError::tool(
+            "Computer use is disabled in OpenBitFun settings.".to_string(),
         ));
     }
 
     let host = context.computer_use_host.as_ref().ok_or_else(|| {
-        BitFunError::tool("Computer use is only available in the BitFun desktop app.".to_string())
+        OpenBitFunError::tool(
+            "Computer use is only available in the OpenBitFun desktop app.".to_string(),
+        )
     })?;
 
     let query = UiElementLocateQuery {

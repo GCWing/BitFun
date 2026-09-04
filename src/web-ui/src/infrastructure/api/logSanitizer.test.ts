@@ -10,7 +10,7 @@ describe('API log sanitizer', () => {
         request: {
           method: 'net.fetch',
           params: {
-            url: 'https://api.github.com/repos/GCWing/BitFun/pulls',
+            url: 'https://api.github.com/repos/GCWing/OpenBitFun/pulls',
             headers: {
               Authorization: token,
               'X-GitHub-Token': 'github_pat_11SECRETSECRETSECRET',

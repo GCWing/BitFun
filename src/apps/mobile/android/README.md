@@ -1,4 +1,4 @@
-# BitFun Android
+# OpenBitFun Android
 
 Android application entrypoint over the Kotlin Multiplatform shared core.
 
@@ -13,6 +13,6 @@ Build debug and unsigned release artifacts with:
 JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' ./gradlew :app:assembleDebug :app:assembleRelease
 ```
 
-For a signed release, set `BITFUN_ANDROID_KEYSTORE`,
-`BITFUN_ANDROID_KEYSTORE_PASSWORD`, `BITFUN_ANDROID_KEY_ALIAS`, and
-`BITFUN_ANDROID_KEY_PASSWORD`. Release builds enable R8 and resource shrinking.
+For a signed release, set `OPENBITFUN_ANDROID_KEYSTORE`,
+`OPENBITFUN_ANDROID_KEYSTORE_PASSWORD`, `OPENBITFUN_ANDROID_KEY_ALIAS`, and
+`OPENBITFUN_ANDROID_KEY_PASSWORD`. Release builds enable R8 and resource shrinking.

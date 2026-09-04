@@ -52,9 +52,9 @@ const RESUME_BLOCKING_CATEGORIES = new Set([
 
 const RESULT_RECOVERY_MESSAGES: Record<DeepReviewResultRecoveryReason, string> = {
   missing_submit_code_review:
-    'Strict review completed, but BitFun did not receive a structured submit_code_review result.',
+    'Strict review completed, but OpenBitFun did not receive a structured submit_code_review result.',
   invalid_submit_code_review:
-    'Strict review submitted a structured result that BitFun could not read.',
+    'Strict review submitted a structured result that OpenBitFun could not read.',
   wrong_review_mode:
     'Strict review submitted a standard Review result instead of a strict review result.',
 };

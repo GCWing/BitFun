@@ -3,7 +3,7 @@
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     min-width: 0;
   }
 
@@ -14,7 +14,7 @@
   &__heading-actions {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     min-width: 0;
   }
 
@@ -32,7 +32,7 @@
     overflow-x: auto;
     scrollbar-width: thin;
 
-    > [data-bf-part='segment'] {
+    > [data-openbitfun-part='segment'] {
       flex: 0 0 auto;
       white-space: nowrap;
     }
@@ -41,7 +41,7 @@
   &__list {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     min-width: 0;
   }
 
@@ -51,35 +51,35 @@
     .gallery-skeleton-card {
       width: 100%;
       min-height: 126px;
-      border-radius: var(--bf-radius-xl);
+      border-radius: var(--openbitfun-radius-xl);
     }
   }
 
   &__list--continuation {
-    margin-top: var(--bf-space-3);
+    margin-top: var(--openbitfun-space-3);
   }
 
   &__load-more {
     display: flex;
     justify-content: center;
-    padding-top: var(--bf-space-4);
+    padding-top: var(--openbitfun-space-4);
   }
 
   &__market-error {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    min-height: var(--bf-control-height-md);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border: 1px solid var(--bf-color-status-warning-border);
-    border-radius: var(--bf-radius-lg);
-    background: var(--bf-color-status-warning-surface);
-    color: var(--bf-color-status-warning-content);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    min-height: var(--openbitfun-control-height-md);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border: 1px solid var(--openbitfun-color-status-warning-border);
+    border-radius: var(--openbitfun-radius-lg);
+    background: var(--openbitfun-color-status-warning-surface);
+    color: var(--openbitfun-color-status-warning-content);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
 
     > span {
       min-width: 0;
@@ -93,16 +93,16 @@
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-xl);
-  background: var(--bf-color-surface-raised);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-xl);
+  background: var(--openbitfun-color-surface-raised);
   transition:
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:has(&__details:focus-visible) {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   &__details {
@@ -126,9 +126,9 @@
     min-width: 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border-block-end: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-tertiary);
-    color: var(--bf-color-content-muted);
+    border-block-end: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-tertiary);
+    color: var(--openbitfun-color-content-muted);
 
     img {
       position: absolute;
@@ -150,18 +150,18 @@
 
   &__summary {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) var(--bf-type-meta-line-height);
-    gap: var(--bf-space-1);
+    grid-template-rows: auto minmax(0, 1fr) var(--openbitfun-type-meta-line-height);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
     block-size: 126px;
     box-sizing: border-box;
-    padding: var(--bf-space-3) var(--bf-space-4);
+    padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
   }
 
   &__title-row {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     min-width: 0;
     overflow: hidden;
   }
@@ -174,12 +174,12 @@
   &__name {
     min-width: 0;
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-family: var(--bf-type-heading-card-font-family);
-    font-size: var(--bf-type-heading-card-font-size);
-    font-weight: var(--bf-type-heading-card-font-weight);
-    line-height: var(--bf-type-heading-card-line-height);
-    letter-spacing: var(--bf-type-heading-card-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-heading-card-font-family);
+    font-size: var(--openbitfun-type-heading-card-font-size);
+    font-weight: var(--openbitfun-type-heading-card-font-weight);
+    line-height: var(--openbitfun-type-heading-card-line-height);
+    letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -188,12 +188,12 @@
     display: -webkit-box;
     min-width: 0;
     overflow: hidden;
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-support-font-family);
-    font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-type-support-font-weight);
-    line-height: var(--bf-type-support-line-height);
-    letter-spacing: var(--bf-type-support-letter-spacing);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-support-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-support-line-height);
+    letter-spacing: var(--openbitfun-type-support-letter-spacing);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
@@ -202,29 +202,29 @@
     display: flex;
     align-items: center;
     align-self: end;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     min-width: 0;
-    block-size: var(--bf-type-meta-line-height);
+    block-size: var(--openbitfun-type-meta-line-height);
     overflow: hidden;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
     font-variant-numeric: tabular-nums;
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
   }
 
   &__meta-item {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
 
     > svg {
       flex: 0 0 auto;
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
 
     > span {
@@ -242,7 +242,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
     overflow: hidden;
   }
@@ -258,9 +258,9 @@
     align-self: end;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     min-width: 0;
-    padding: 0 var(--bf-space-4) var(--bf-space-4);
+    padding: 0 var(--openbitfun-space-4) var(--openbitfun-space-4);
   }
 
   &__primary {
@@ -272,8 +272,8 @@
 
 @media (hover: hover) and (pointer: fine) {
   .miniapp-library-row:hover {
-    border-color: var(--bf-color-border-default);
-    background: var(--bf-color-action-quiet-hover);
+    border-color: var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-action-quiet-hover);
   }
 }
 
@@ -287,11 +287,11 @@
 
     &__showcase {
       border-block-end: 0;
-      border-inline-end: 1px solid var(--bf-color-border-subtle);
+      border-inline-end: 1px solid var(--openbitfun-color-border-subtle);
     }
 
     &__actions {
-      padding: var(--bf-space-2) var(--bf-space-4);
+      padding: var(--openbitfun-space-2) var(--openbitfun-space-4);
     }
   }
 }
@@ -318,22 +318,22 @@
 
 .miniapp-market-detail {
   display: grid;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
 
   &__loading {
     display: flex;
     min-height: 240px;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   section {
     display: grid;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
 
     h4,
     p,
@@ -342,41 +342,41 @@
     }
 
     h4 {
-      color: var(--bf-color-content-primary);
-      font-family: var(--bf-type-heading-card-font-family);
-      font-size: var(--bf-type-heading-card-font-size);
-      font-weight: var(--bf-type-heading-card-font-weight);
-      line-height: var(--bf-type-heading-card-line-height);
-      letter-spacing: var(--bf-type-heading-card-letter-spacing);
+      color: var(--openbitfun-color-content-primary);
+      font-family: var(--openbitfun-type-heading-card-font-family);
+      font-size: var(--openbitfun-type-heading-card-font-size);
+      font-weight: var(--openbitfun-type-heading-card-font-weight);
+      line-height: var(--openbitfun-type-heading-card-line-height);
+      letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
     }
 
     p,
     li {
-      color: var(--bf-color-content-secondary);
-      font-family: var(--bf-type-body-sm-font-family);
-      font-size: var(--bf-type-body-sm-font-size);
-      font-weight: var(--bf-type-body-sm-font-weight);
-      line-height: var(--bf-type-body-sm-line-height);
-      letter-spacing: var(--bf-type-body-sm-letter-spacing);
+      color: var(--openbitfun-color-content-secondary);
+      font-family: var(--openbitfun-type-body-sm-font-family);
+      font-size: var(--openbitfun-type-body-sm-font-size);
+      font-weight: var(--openbitfun-type-body-sm-font-weight);
+      line-height: var(--openbitfun-type-body-sm-line-height);
+      letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
     }
   }
 
   &__installed-state {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-space-1);
-    color: var(--bf-color-status-success-content);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    gap: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-status-success-content);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     white-space: nowrap;
   }
 
   &__screenshots {
     display: flex;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     overflow-x: auto;
     scroll-snap-type: x mandatory;
 
@@ -385,8 +385,8 @@
       height: auto;
       aspect-ratio: 16 / 9;
       flex: 0 0 auto;
-      border: 1px solid var(--bf-color-border-subtle);
-      border-radius: var(--bf-radius-lg);
+      border: 1px solid var(--openbitfun-color-border-subtle);
+      border-radius: var(--openbitfun-radius-lg);
       object-fit: cover;
       scroll-snap-align: start;
     }
@@ -395,71 +395,71 @@
   &__warning {
     display: flex;
     align-items: flex-start;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3);
-    border: 1px solid var(--bf-color-status-warning-border);
-    border-radius: var(--bf-radius-lg);
-    background: var(--bf-color-status-warning-surface);
-    color: var(--bf-color-status-warning-content);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
+    border: 1px solid var(--openbitfun-color-status-warning-border);
+    border-radius: var(--openbitfun-radius-lg);
+    background: var(--openbitfun-color-status-warning-surface);
+    color: var(--openbitfun-color-status-warning-content);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   &__rating {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
 
     &-action {
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     span {
-      margin-inline-start: var(--bf-space-2);
-      color: var(--bf-color-content-muted);
-      font-family: var(--bf-type-meta-font-family);
-      font-size: var(--bf-type-meta-font-size);
-      font-weight: var(--bf-type-meta-font-weight);
+      margin-inline-start: var(--openbitfun-space-2);
+      color: var(--openbitfun-color-content-muted);
+      font-family: var(--openbitfun-type-meta-font-family);
+      font-size: var(--openbitfun-type-meta-font-size);
+      font-weight: var(--openbitfun-type-meta-font-weight);
       font-variant-numeric: tabular-nums;
-      line-height: var(--bf-type-meta-line-height);
-      letter-spacing: var(--bf-type-meta-letter-spacing);
+      line-height: var(--openbitfun-type-meta-line-height);
+      letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     }
   }
 
   &__releases {
     display: grid;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
 
     > div {
       display: grid;
       grid-template-columns: 72px minmax(0, 1fr) auto;
       align-items: center;
-      padding: var(--bf-space-2) var(--bf-space-3);
-      border: 1px solid var(--bf-color-border-subtle);
-      border-radius: var(--bf-radius-base);
-      color: var(--bf-color-content-secondary);
-      font-family: var(--bf-type-body-sm-font-family);
-      font-size: var(--bf-type-body-sm-font-size);
-      font-weight: var(--bf-type-body-sm-font-weight);
+      padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+      border: 1px solid var(--openbitfun-color-border-subtle);
+      border-radius: var(--openbitfun-radius-base);
+      color: var(--openbitfun-color-content-secondary);
+      font-family: var(--openbitfun-type-body-sm-font-family);
+      font-size: var(--openbitfun-type-body-sm-font-size);
+      font-weight: var(--openbitfun-type-body-sm-font-weight);
       font-variant-numeric: tabular-nums;
-      line-height: var(--bf-type-body-sm-line-height);
-      letter-spacing: var(--bf-type-body-sm-letter-spacing);
+      line-height: var(--openbitfun-type-body-sm-line-height);
+      letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
     }
   }
 
   &__releases-toggle {
-    margin-top: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
+    margin-top: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
   }
 }
 
 /* Positioning-only overrides; the design-system Menu owns the surface look. */
 .miniapp-gallery__import-menu {
   position: fixed;
-  z-index: var(--bf-layer-popover);
+  z-index: var(--openbitfun-layer-popover);
   min-inline-size: 196px;
 }
 

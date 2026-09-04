@@ -29,13 +29,13 @@ Choose a browser, inspect connection status, and configure CDP and startup conne
 3. 选择浏览器并检查连接状态
    Choose a browser and inspect its connection status
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

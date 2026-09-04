@@ -3,20 +3,20 @@
   margin: 0 !important;
   border: 0 !important;
   outline: 0 !important;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   background: transparent !important;
   box-shadow: none !important;
-  font-family:var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-code-line-height);
+  font-family:var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-code-line-height);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .terminal-output-renderer {
   overflow: hidden;
-  border-radius: var(--bf-radius-sm);
-  background: var(--bf-color-surface-scene);
+  border-radius: var(--openbitfun-radius-sm);
+  background: var(--openbitfun-color-surface-scene);
 
   .xterm {
     height: 100%;
@@ -27,7 +27,7 @@
     }
 
     &:not(.allow-transparency) .xterm-viewport {
-      background-color: var(--bf-color-surface-scene);
+      background-color: var(--openbitfun-color-surface-scene);
     }
 
     .xterm-screen {

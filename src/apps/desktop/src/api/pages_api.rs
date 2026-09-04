@@ -1,6 +1,6 @@
-//! BitFun Page Tauri commands (Save Version → Deploy).
+//! OpenBitFun Page Tauri commands (Save Version → Deploy).
 
-use bitfun_services_integrations::remote_connect::{
+use openbitfun_services_integrations::remote_connect::{
     create_page_open_link_on_relay, delete_page_from_relay, delete_page_version_on_relay,
     deploy_page_version_on_relay, list_page_versions_from_relay, list_pages_from_relay,
     publish_page_to_relay, save_page_version_to_relay, unpublish_page_from_relay,

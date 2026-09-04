@@ -1,4 +1,4 @@
-use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem};
+use openbitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem};
 use std::collections::VecDeque;
 
 #[derive(Clone)]
@@ -10,7 +10,7 @@ pub(crate) struct DirectoryIgnore {
 
 pub(crate) async fn add_directory_ignores(
     fs: &dyn WorkspaceFileSystem,
-    entries: &[bitfun_runtime_ports::WorkspaceDirEntry],
+    entries: &[openbitfun_runtime_ports::WorkspaceDirEntry],
     depth: usize,
     rules: &mut Vec<DirectoryIgnore>,
 ) -> Result<(), String> {

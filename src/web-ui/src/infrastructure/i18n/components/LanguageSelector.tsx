@@ -2,7 +2,7 @@
 
 import React, { useCallback } from 'react';
 
-import { ActionItem, Button, Select, Tooltip, Icon } from '@bitfun/ui';
+import { ActionItem, Button, Select, Tooltip, Icon } from '@openbitfun/ui';
 import { useLanguageSelector } from '../hooks/useI18n';
 import type { LocaleId } from '../types';
 import './LanguageSelector.scss';
@@ -38,12 +38,12 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     return (
       <div
         className={`language-selector language-selector--icon-only ${className}`}
-        data-bf-component="language-selector"
-        data-bf-part="root"
-        data-bf-mode="icon-only"
-        data-bf-state={isChanging ? 'changing' : undefined}
+        data-openbitfun-component="language-selector"
+        data-openbitfun-part="root"
+        data-openbitfun-mode="icon-only"
+        data-openbitfun-state={isChanging ? 'changing' : undefined}
       >
-        <span data-bf-component="language-selector" data-bf-part="trigger">
+        <span data-openbitfun-component="language-selector" data-openbitfun-part="trigger">
           <Tooltip content={currentLocale?.nativeName || currentLanguage}>
             <Button
               aria-label={currentLocale?.nativeName || currentLanguage}
@@ -52,15 +52,15 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
               size="sm"
               disabled={isChanging}
               leadingIcon={(
-                <span data-bf-component="language-selector" data-bf-part="icon">
+                <span data-openbitfun-component="language-selector" data-openbitfun-part="icon">
                   <Icon name="browser" size="md" />
                 </span>
               )}
             >
               <span
                 className="language-selector__code"
-                data-bf-component="language-selector"
-                data-bf-part="code"
+                data-openbitfun-component="language-selector"
+                data-openbitfun-part="code"
               >
                 {currentLanguage.split('-')[0].toUpperCase()}
               </span>
@@ -69,8 +69,8 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
         </span>
         <div
           className="language-selector__dropdown"
-          data-bf-component="language-selector"
-          data-bf-part="menu"
+          data-openbitfun-component="language-selector"
+          data-openbitfun-part="menu"
         >
           {supportedLocales.map(locale => (
             <ActionItem
@@ -78,21 +78,21 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
               className={`language-selector__option ${locale.id === currentLanguage ? 'language-selector__option--active' : ''}`}
               onClick={() => handleChange(locale.id)}
               disabled={isChanging}
-              data-bf-component="language-selector"
-              data-bf-part="option"
-              data-bf-state={locale.id === currentLanguage ? 'active' : undefined}
+              data-openbitfun-component="language-selector"
+              data-openbitfun-part="option"
+              data-openbitfun-state={locale.id === currentLanguage ? 'active' : undefined}
               metadata={locale.id === currentLanguage ? (
                 <span
                   className="language-selector__check"
-                  data-bf-component="language-selector"
-                  data-bf-part="check"
+                  data-openbitfun-component="language-selector"
+                  data-openbitfun-part="check"
                 >✓</span>
               ) : undefined}
             >
               <span
                 className="language-selector__option-name"
-                data-bf-component="language-selector"
-                data-bf-part="optionLabel"
+                data-openbitfun-component="language-selector"
+                data-openbitfun-part="optionLabel"
               >
                 {showNativeName ? locale.nativeName : locale.englishName}
               </span>
@@ -107,10 +107,10 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     return (
       <div
         className={`language-selector language-selector--inline ${className}`}
-        data-bf-component="language-selector"
-        data-bf-part="root"
-        data-bf-mode="inline"
-        data-bf-state={isChanging ? 'changing' : undefined}
+        data-openbitfun-component="language-selector"
+        data-openbitfun-part="root"
+        data-openbitfun-mode="inline"
+        data-openbitfun-state={isChanging ? 'changing' : undefined}
       >
         {supportedLocales.map(locale => (
           <Button
@@ -120,9 +120,9 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             size="sm"
             onClick={() => handleChange(locale.id)}
             disabled={isChanging}
-            data-bf-component="language-selector"
-            data-bf-part="option"
-            data-bf-state={locale.id === currentLanguage ? 'active' : undefined}
+            data-openbitfun-component="language-selector"
+            data-openbitfun-part="option"
+            data-openbitfun-state={locale.id === currentLanguage ? 'active' : undefined}
           >
             {showNativeName ? locale.nativeName : locale.englishName}
           </Button>
@@ -135,10 +135,10 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   return (
     <div
       className={`language-selector language-selector--dropdown ${className}`}
-      data-bf-component="language-selector"
-      data-bf-part="root"
-      data-bf-mode="dropdown"
-      data-bf-state={isChanging ? 'changing' : undefined}
+      data-openbitfun-component="language-selector"
+      data-openbitfun-part="root"
+      data-openbitfun-mode="dropdown"
+      data-openbitfun-state={isChanging ? 'changing' : undefined}
     >
       <Select
         className="language-selector__select"
@@ -153,9 +153,9 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       {isChanging && (
         <span
           className="language-selector__loading"
-          data-bf-component="language-selector"
-          data-bf-part="loading"
-          data-bf-state="changing"
+          data-openbitfun-component="language-selector"
+          data-openbitfun-part="loading"
+          data-openbitfun-state="changing"
         >...</span>
       )}
     </div>

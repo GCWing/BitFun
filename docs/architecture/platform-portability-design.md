@@ -1,6 +1,6 @@
 # HarmonyOS PC 原生 CLI/TUI 平台规约
 
-本文只定义 BitFun 面向 HarmonyOS PC 的产品边界、已知问题、后续工作域、风险与证据口径。稳定产品和运行时边界以
+本文只定义 OpenBitFun 面向 HarmonyOS PC 的产品边界、已知问题、后续工作域、风险与证据口径。稳定产品和运行时边界以
 [产品运行时架构](product-architecture.md)为准，CLI 产品语义以
 [CLI 产品线设计](cli-product-line-design.md)为准。
 
@@ -9,8 +9,8 @@
 
 ## 1. 产品裁决
 
-HarmonyOS PC 是 BitFun CLI/TUI 的目标平台之一，TUI 优先于 HarmonyOS PC GUI。目标产品是用户在
-HarmonyOS PC 真实系统终端中安装并本地执行的原生 `bitfun`（`bitfun-cli` 仅为废弃兼容入口）：
+HarmonyOS PC 是 OpenBitFun CLI/TUI 的目标平台之一，TUI 优先于 HarmonyOS PC GUI。目标产品是用户在
+HarmonyOS PC 真实系统终端中安装并本地执行的原生 `openbitfun`：
 
 - TUI 直接使用真实 TTY；
 - Agent Runtime、模型访问、工作区文件和命令执行均在该 PC 本机运行；
@@ -88,7 +88,7 @@ HarmonyOS PC 真实系统终端中安装并本地执行的原生 `bitfun`（`bit
 ## 5. 当前问题清单
 
 本清单基于上游 `ecad4f843`（2026-07-16）与
-Cargo package `bitfun-cli` 的 `aarch64-unknown-linux-ohos` 目标依赖解析。依赖解析成功只表示问题已经可见，不表示可以编译、
+Cargo package `openbitfun-cli` 的 `aarch64-unknown-linux-ohos` 目标依赖解析。依赖解析成功只表示问题已经可见，不表示可以编译、
 运行或交付。
 
 | 问题域 | 当前识别结果 | 主要风险 | 后续专题需要回答 |

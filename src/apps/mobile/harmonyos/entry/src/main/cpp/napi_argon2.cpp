@@ -160,7 +160,7 @@ napi_value argon2idRaw(napi_env env, napi_callback_info info) {
     }
 
     napi_value resourceName = nullptr;
-    if (napi_create_string_utf8(env, "BitFunArgon2id", NAPI_AUTO_LENGTH, &resourceName) != napi_ok ||
+    if (napi_create_string_utf8(env, "OpenBitFunArgon2id", NAPI_AUTO_LENGTH, &resourceName) != napi_ok ||
         napi_create_async_work(env, nullptr, resourceName, executeArgon2, completeArgon2, work,
             &work->asyncWork) != napi_ok) {
         clearWorkSecrets(work);
@@ -191,12 +191,12 @@ static napi_module module = {
     .nm_flags = 0,
     .nm_filename = nullptr,
     .nm_register_func = init,
-    .nm_modname = "bitfun_crypto",
+    .nm_modname = "openbitfun_crypto",
     .nm_priv = nullptr,
     .reserved = {0},
 };
 EXTERN_C_END
 
-extern "C" __attribute__((constructor)) void RegisterBitfunCrypto(void) {
+extern "C" __attribute__((constructor)) void RegisterOpenBitFunCrypto(void) {
     napi_module_register(&module);
 }

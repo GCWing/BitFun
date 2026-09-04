@@ -33,26 +33,26 @@
     z-index: 1;
     width: max(6px, calc(var(--subagent-avatar-size) * 0.24));
     height: max(6px, calc(var(--subagent-avatar-size) * 0.24));
-    border: 1.5px solid var(--bf-color-surface-raised);
+    border: 1.5px solid var(--openbitfun-color-surface-raised);
     border-radius: 50%;
-    background: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-content-muted);
   }
 
   &--running &__status,
   &--finishing &__status {
-    background: var(--bf-color-status-success-content);
+    background: var(--openbitfun-color-status-success-content);
   }
 
   &--waiting &__status {
-    background: var(--bf-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-content);
   }
 
   &--error &__status,
   &--cancelled &__status {
-    background: var(--bf-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-content);
   }
 
   &--completed &__status {
-    background: var(--bf-color-status-info-content);
+    background: var(--openbitfun-color-status-info-content);
   }
 }

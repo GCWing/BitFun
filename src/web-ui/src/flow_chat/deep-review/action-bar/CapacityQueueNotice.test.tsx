@@ -12,8 +12,8 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('@bitfun/ui', () => ({
-  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
+vi.mock('@openbitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-openbitfun-component="icon" data-openbitfun-name={name} />,
   Button: ({
     children,
   }: {
@@ -44,7 +44,7 @@ describe('CapacityQueueNotice', () => {
     );
 
     expect(html).toContain('Waiting for model capacity');
-    expect(html).toContain('BitFun is waiting for temporary model capacity.');
+    expect(html).toContain('OpenBitFun is waiting for temporary model capacity.');
     expect(html).toContain('Reason: model concurrency limit');
     expect(html).toContain('The model provider rejected another concurrent review request.');
     expect(html).toContain('Waited 12s of 1m 0s');

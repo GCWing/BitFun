@@ -1,4 +1,4 @@
-//! BitFun Page: versioned publish + Page Functions serve.
+//! OpenBitFun Page: versioned publish + Page Functions serve.
 //!
 //! Flow: upload draft → freeze version → deploy production pointer.
 //! Preview: `/p/{user}/{slug}/@v/{version}/...`
@@ -10,10 +10,10 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use bitfun_page_function_runtime::{
+use dashmap::DashMap;
+use openbitfun_page_function_runtime::{
     run_fetch, FetchRequest, PageFunctionError, PageMeta, DEFAULT_TIMEOUT, WORKER_ENTRY_PATH,
 };
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -50,7 +50,7 @@ const MAX_PAGE_BROWSER_GRANTS: usize = 8192;
 const MAX_PAGE_BROWSER_GRANTS_PER_USER: usize = 512;
 const MAX_PAGE_LOGIN_REQUESTS: usize = 4096;
 const MAX_PAGE_LOGIN_EXCHANGES: usize = 4096;
-const PAGE_ACCESS_COOKIE: &str = "bitfun_page_access";
+const PAGE_ACCESS_COOKIE: &str = "openbitfun_page_access";
 const PAGE_UPLOAD_SESSION_TTL: Duration = Duration::from_secs(15 * 60);
 const MAX_PAGE_UPLOAD_SESSIONS: usize = 4096;
 const MAX_PAGE_UPLOAD_SESSIONS_PER_USER: usize = 64;
@@ -1318,16 +1318,16 @@ fn page_login_form_response(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>需要登录 · BitFun Page</title>
+  <title>需要登录 · OpenBitFun Page</title>
   <style>{}</style>
 </head>
 <body>
   <main>
     <div class="mark" aria-hidden="true">B</div>
-    <p class="eyebrow">BITFUN PAGE</p>
+    <p class="eyebrow">OPENBITFUN PAGE</p>
     <h1>登录后访问</h1>
-    <p>此页面受访问权限保护，请使用 BitFun 账号登录。</p>
-    <p class="secondary">This Page is protected. Sign in with your BitFun account.</p>
+    <p>此页面受访问权限保护，请使用 OpenBitFun 账号登录。</p>
+    <p class="secondary">This Page is protected. Sign in with your OpenBitFun account.</p>
     <p class="access">{access_description}</p>
     <form data-page-login-form{login_state_attribute}>
       <label class="field">

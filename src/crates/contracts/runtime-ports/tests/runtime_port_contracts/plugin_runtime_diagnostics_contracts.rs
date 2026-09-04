@@ -1,4 +1,4 @@
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PermissionPromptDenyState, PermissionPromptDescriptor, PermissionPromptEffectKind,
     PluginArtifactRef, PluginAuditRef, PluginCapabilityRef, PluginConfigValidationIssue,
     PluginConfigValidationState, PluginConfigValidationStatus, PluginDiagnostic,
@@ -47,7 +47,7 @@ fn log_ref() -> PluginArtifactRef {
         artifact_id: "log-1".to_string(),
         artifact_kind: "host_log".to_string(),
         display_name: "Plugin host dispatch log".to_string(),
-        uri: Some("bitfun://logs/plugin-host/diag-1".to_string()),
+        uri: Some("openbitfun://logs/plugin-host/diag-1".to_string()),
     }
 }
 

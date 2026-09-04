@@ -5,53 +5,53 @@
   }
 
   &__title {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     overflow-wrap: anywhere;
   }
 
   &__description {
-    margin-top: var(--bf-space-1);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-flow-support-line-height);
+    margin-top: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
   &__fields {
     display: grid;
-    gap: var(--bf-space-1);
-    margin: var(--bf-space-2) 0 0;
-    padding-top: var(--bf-space-2);
-    border-top: 1px solid var(--bf-color-border-subtle);
+    gap: var(--openbitfun-space-1);
+    margin: var(--openbitfun-space-2) 0 0;
+    padding-top: var(--openbitfun-space-2);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__field {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     align-items: baseline;
 
     dt {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-label-sm-font-size);
-      line-height: var(--bf-type-modifier-leading-ui-line-height);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     }
 
     dd {
       min-width: 0;
       margin: 0;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-label-sm-font-size);
-      line-height: var(--bf-type-modifier-leading-ui-line-height);
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
       overflow-wrap: anywhere;
       text-align: right;
     }
   }
 
   .is-monospace {
-    font-family:var(--bf-type-code-md-font-family);
+    font-family:var(--openbitfun-type-code-md-font-family);
   }
 }

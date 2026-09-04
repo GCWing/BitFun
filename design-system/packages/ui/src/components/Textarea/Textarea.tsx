@@ -91,7 +91,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     <span
       className={classNames(styles.root, className)}
       data-auto-resize={autoResize ? "true" : "false"}
-      data-bf-component="textarea"
+      data-openbitfun-component="textarea"
       data-field-surface={fieldSurface}
       data-font={font}
       data-invalid={resolvedInvalid ? "true" : "false"}
@@ -100,10 +100,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       data-variant={variant}
     >
       {label && (
-        <label className={styles.label} data-bf-part="label" htmlFor={resolvedId}>
+        <label className={styles.label} data-openbitfun-part="label" htmlFor={resolvedId}>
           {label}
           {required && (
-            <span aria-hidden="true" className={styles.required} data-bf-part="required">
+            <span aria-hidden="true" className={styles.required} data-openbitfun-part="required">
               *
             </span>
           )}
@@ -114,7 +114,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         aria-describedby={hasSupport ? supportId : ariaDescribedBy}
         aria-invalid={resolvedInvalid || undefined}
         className={styles.textarea}
-        data-bf-part="input"
+        data-openbitfun-part="input"
         id={resolvedId}
         maxLength={maxLength}
         onChange={handleChange}
@@ -132,9 +132,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         value={value}
       />
       {hasSupport && (
-        <span className={styles.support} data-bf-part="support" id={supportId}>
-          <span className={resolvedInvalid ? styles.error : styles.hint} data-bf-part="message">{resolvedInvalid ? errorMessage : hint}</span>
-          {showCount && <span className={styles.count} data-bf-part="count">{count}{maxLength ? ` / ${maxLength}` : ""}</span>}
+        <span className={styles.support} data-openbitfun-part="support" id={supportId}>
+          <span className={resolvedInvalid ? styles.error : styles.hint} data-openbitfun-part="message">{resolvedInvalid ? errorMessage : hint}</span>
+          {showCount && <span className={styles.count} data-openbitfun-part="count">{count}{maxLength ? ` / ${maxLength}` : ""}</span>}
         </span>
       )}
     </span>

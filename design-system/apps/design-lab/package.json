@@ -1,8 +1,8 @@
 {
-  "name": "@bitfun/design-lab",
+  "name": "@openbitfun/design-lab",
   "version": "0.1.0",
   "private": true,
-  "description": "Standalone authoring and preview application for the BitFun design system",
+  "description": "Standalone authoring and preview application for the OpenBitFun design system",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 4178 --strictPort",
@@ -11,15 +11,15 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@bitfun/design-tokens": "workspace:^",
-    "@bitfun/theme-bitfun": "workspace:^",
-    "@bitfun/ui": "workspace:^",
+    "@openbitfun/design-tokens": "workspace:^",
+    "@openbitfun/theme-openbitfun": "workspace:^",
+    "@openbitfun/ui": "workspace:^",
     "lucide-react": "^0.541.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@bitfun/token-engine": "workspace:*",
+    "@openbitfun/token-engine": "workspace:*",
     "@types/node": "^20.10.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

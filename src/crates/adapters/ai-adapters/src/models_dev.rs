@@ -1,6 +1,6 @@
 //! models.dev parsing, provider/model matching, and reasoning preset projection.
 
-use bitfun_core_types::{
+use openbitfun_core_types::{
     ModelsDevCatalogSource, ModelsDevReasoningCatalog, ModelsDevReasoningModel,
     ModelsDevReasoningProvider, ProviderCatalogModelCapabilities, ProviderCatalogModelLimits,
     ProviderCatalogModelPricing, ReasoningCapabilityStatus, ReasoningCatalogBinding,
@@ -1281,7 +1281,7 @@ mod tests {
         project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
     };
     use crate::providers::shared::GENERIC_REASONING_PROVIDER_ID;
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         ModelsDevCatalogSource, ReasoningCapabilityStatus, ReasoningCatalogBinding,
         ReasoningConfig, ReasoningPreset, ReasoningPresetAction, ReasoningPresetSource,
     };

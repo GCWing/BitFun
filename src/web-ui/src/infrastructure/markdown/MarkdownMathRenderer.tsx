@@ -25,7 +25,7 @@ export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
   remarkAutolinkComputerFileLinks,
   urlTransform,
 }) => (
-  <div data-bf-component="markdown" data-bf-part="math">
+  <div data-openbitfun-component="markdown" data-openbitfun-part="math">
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}

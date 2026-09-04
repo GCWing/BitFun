@@ -1,11 +1,11 @@
-@layer bf.components {
+@layer openbitfun.components {
   .button {
-    --_icon-button-background: var(--bf-color-surface-tertiary);
-    --_icon-button-background-hover: var(--bf-color-action-neutral-surface);
-    --_icon-button-background-active: var(--bf-color-action-neutral-surface-pressed);
-    --_icon-button-content: var(--bf-color-action-neutral-content);
+    --_icon-button-background: var(--openbitfun-color-surface-tertiary);
+    --_icon-button-background-hover: var(--openbitfun-color-action-neutral-surface);
+    --_icon-button-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
+    --_icon-button-content: var(--openbitfun-color-action-neutral-content);
     --_icon-button-icon-size: 14px;
-    --_icon-button-size: var(--bf-control-height-sm);
+    --_icon-button-size: var(--openbitfun-control-height-sm);
 
     position: relative;
     display: inline-flex;
@@ -17,12 +17,12 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     color: var(--_icon-button-content);
-    background: var(--bf-color-surface-tertiary);
+    background: var(--openbitfun-color-surface-tertiary);
     cursor: pointer;
     isolation: isolate;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .button::before {
@@ -33,79 +33,79 @@
     background: var(--_icon-button-background);
     content: "";
     pointer-events: none;
-    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
-  .button:is(:hover, [data-bf-preview-state="hover"]):not(:disabled)::before {
+  .button:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled)::before {
     background: var(--_icon-button-background-hover);
   }
 
-  .button:is(:active, [data-bf-preview-state="active"]):not(:disabled)::before {
+  .button:is(:active, [data-openbitfun-preview-state="active"]):not(:disabled)::before {
     background: var(--_icon-button-background-active);
   }
 
   .button:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .button:disabled {
-    --_icon-button-content: var(--bf-color-action-neutral-content-disabled);
+    --_icon-button-content: var(--openbitfun-color-action-neutral-content-disabled);
 
     cursor: not-allowed;
   }
 
-  .button[data-bf-variant="fill"] {
-    --_icon-button-background: var(--bf-color-action-neutral-surface);
-    --_icon-button-background-hover: var(--bf-color-action-neutral-surface-hover);
+  .button[data-openbitfun-variant="fill"] {
+    --_icon-button-background: var(--openbitfun-color-action-neutral-surface);
+    --_icon-button-background-hover: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
-  .button[data-bf-variant="primary"] {
-    --_icon-button-background: var(--bf-color-action-primary-background);
-    --_icon-button-background-hover: var(--bf-color-action-primary-hover);
-    --_icon-button-background-active: var(--bf-color-action-primary-pressed);
-    --_icon-button-content: var(--bf-color-action-primary-content);
+  .button[data-openbitfun-variant="primary"] {
+    --_icon-button-background: var(--openbitfun-color-action-primary-background);
+    --_icon-button-background-hover: var(--openbitfun-color-action-primary-hover);
+    --_icon-button-background-active: var(--openbitfun-color-action-primary-pressed);
+    --_icon-button-content: var(--openbitfun-color-action-primary-content);
   }
 
-  .button[data-bf-variant="primary"]:disabled {
-    --_icon-button-background: var(--bf-color-action-neutral-surface);
-    --_icon-button-content: var(--bf-color-action-neutral-content-disabled);
+  .button[data-openbitfun-variant="primary"]:disabled {
+    --_icon-button-background: var(--openbitfun-color-action-neutral-surface);
+    --_icon-button-content: var(--openbitfun-color-action-neutral-content-disabled);
   }
 
-  .button[data-bf-tone="danger"] {
-    --_icon-button-background-hover: var(--bf-color-status-danger-surface);
-    --_icon-button-background-active: var(--bf-color-status-danger-surface);
-    --_icon-button-content: var(--bf-color-status-danger-content);
+  .button[data-openbitfun-tone="danger"] {
+    --_icon-button-background-hover: var(--openbitfun-color-status-danger-surface);
+    --_icon-button-background-active: var(--openbitfun-color-status-danger-surface);
+    --_icon-button-content: var(--openbitfun-color-status-danger-content);
   }
 
-  .button[data-bf-tone="danger"][data-bf-variant="fill"] {
-    --_icon-button-background: var(--bf-color-status-danger-surface);
+  .button[data-openbitfun-tone="danger"][data-openbitfun-variant="fill"] {
+    --_icon-button-background: var(--openbitfun-color-status-danger-surface);
   }
 
-  .button[data-bf-tone="danger"][data-bf-variant="primary"] {
-    --_icon-button-background: var(--bf-color-status-danger-content);
-    --_icon-button-background-hover: var(--bf-color-status-danger-content);
-    --_icon-button-background-active: var(--bf-color-status-danger-content);
-    --_icon-button-content: var(--bf-color-content-inverse);
+  .button[data-openbitfun-tone="danger"][data-openbitfun-variant="primary"] {
+    --_icon-button-background: var(--openbitfun-color-status-danger-content);
+    --_icon-button-background-hover: var(--openbitfun-color-status-danger-content);
+    --_icon-button-background-active: var(--openbitfun-color-status-danger-content);
+    --_icon-button-content: var(--openbitfun-color-content-inverse);
   }
 
-  .button[data-bf-shape="circle"] {
-    border-radius: var(--bf-radius-pill);
+  .button[data-openbitfun-shape="circle"] {
+    border-radius: var(--openbitfun-radius-pill);
   }
 
   .button[data-size="xs"] {
-    --_icon-button-icon-size: var(--bf-control-icon-button-xs-icon-size);
-    --_icon-button-size: var(--bf-control-icon-button-xs-size);
+    --_icon-button-icon-size: var(--openbitfun-control-icon-button-xs-icon-size);
+    --_icon-button-size: var(--openbitfun-control-icon-button-xs-size);
   }
 
   .button[data-size="md"] {
     --_icon-button-icon-size: 16px;
-    --_icon-button-size: var(--bf-control-height-md);
+    --_icon-button-size: var(--openbitfun-control-height-md);
   }
 
   .button[data-size="lg"] {
     --_icon-button-icon-size: 20px;
-    --_icon-button-size: var(--bf-control-height-lg);
+    --_icon-button-size: var(--openbitfun-control-height-lg);
   }
 
   .icon,
@@ -120,7 +120,7 @@
   }
 
   .icon > :where(svg, img),
-  .icon > [data-bf-component="icon"] {
+  .icon > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -129,7 +129,7 @@
   .progress {
     border: 2px solid currentColor;
     border-inline-end-color: transparent;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     opacity: 0;
   }
 
@@ -139,10 +139,10 @@
 
   .button[data-loading="true"] .progress {
     opacity: 1;
-    animation: bf-icon-button-progress var(--bf-motion-duration-loop) linear infinite;
+    animation: openbitfun-icon-button-progress var(--openbitfun-motion-duration-loop) linear infinite;
   }
 
-  @keyframes bf-icon-button-progress {
+  @keyframes openbitfun-icon-button-progress {
     to {
       transform: rotate(360deg);
     }
@@ -163,7 +163,7 @@
 
   @media (forced-colors: active) {
     .button {
-      border: var(--bf-border-width-default) solid ButtonText;
+      border: var(--openbitfun-border-width-default) solid ButtonText;
     }
 
     .button:focus-visible {

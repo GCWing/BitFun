@@ -23,7 +23,7 @@ Product-source boundary:
   Skill paths are current read-only live sources. Configured Skill URLs remain
   unsupported and must never be fetched. Full plugin directories and package specs
   remain target work rather than executable production sources. Source files need
-  no BitFun import. Low-risk declarative results follow the
+  no OpenBitFun import. Low-risk declarative results follow the
   user's auto-apply/ask preference; executable sources require a source, plugin,
   and execution-domain
   decision before first import. Broader pre-import execution permissions and
@@ -66,8 +66,8 @@ Product-source boundary:
 
 ## Boundary Rules
 
-- Depend on stable contracts such as `bitfun-runtime-ports` and the
-  `PluginRuntimeAdapter` boundary trait, not `bitfun-core`, app crates, Tauri
+- Depend on stable contracts such as `openbitfun-runtime-ports` and the
+  `PluginRuntimeAdapter` boundary trait, not `openbitfun-core`, app crates, Tauri
   APIs, product UI, or concrete service managers.
 - Keep OpenCode config JSON, source ordering, loader compatibility, and argument
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
@@ -110,30 +110,30 @@ Product-source boundary:
   lifecycle owner.
 - The reviewed product assembly entrypoint selects and constructs the compiled
   OpenCode adapter/provider. External-source providers and configured Skill-root
-  facts are projected through `bitfun-core/external_sources`; managed-package
+  facts are projected through `openbitfun-core/external_sources`; managed-package
   bindings are injected into PluginRuntimeClient. Product consumers do not
   import the adapter directly. The composition layer does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
-  such as `bitfun-core/plugin_runtime`, `bitfun-core/external_sources`,
-  `bitfun-core/instruction_sources`, or the OpenCode-specific
-  `bitfun-core/plugin_host` composition path; boundary
+  such as `openbitfun-core/plugin_runtime`, `openbitfun-core/external_sources`,
+  `openbitfun-core/instruction_sources`, or the OpenCode-specific
+  `openbitfun-core/plugin_host` composition path; boundary
   guards and focused assembly-path tests must change with any additional consumer.
 - This crate must not depend on Codex, Claude Code, or another ecosystem adapter.
   New ecosystems are sibling adapters registered by Product Assembly, not modes of
   this adapter.
-- Production crates must not depend on `bitfun_opencode_adapter` internals.
+- Production crates must not depend on `openbitfun_opencode_adapter` internals.
   Unsupported capabilities must return diagnostics or typed unsupported states
   instead of failing at runtime on external plugin content.
 
 ## Verification
 
-- `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
-- `cargo test -p bitfun-opencode-adapter --test opencode_mcp_adapter`
-- `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_command_adapter::`
-- `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_subagent_adapter::`
-- `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
-- `cargo test -p bitfun-opencode-adapter --lib p0_c2_fixture`
-- `cargo test -p bitfun-opencode-adapter --lib plugin_config_projection`
-- `cargo test -p bitfun-opencode-adapter --lib client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_source_adapter`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_mcp_adapter`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_static_source_contracts opencode_command_adapter::`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_static_source_contracts opencode_subagent_adapter::`
+- `cargo test -p openbitfun-opencode-adapter --test tool_source_contracts`
+- `cargo test -p openbitfun-opencode-adapter --lib p0_c2_fixture`
+- `cargo test -p openbitfun-opencode-adapter --lib plugin_config_projection`
+- `cargo test -p openbitfun-opencode-adapter --lib client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

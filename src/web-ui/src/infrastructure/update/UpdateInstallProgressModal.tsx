@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useMemo } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { UpdateDownloadProgressPayload } from './installUpdateWithProgress';
@@ -63,27 +63,27 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
   let body: React.ReactNode = null;
   if (errorMessage) {
     body = (
-      <div data-bf-component="update" data-bf-part="alert">
+      <div data-openbitfun-component="update" data-openbitfun-part="alert">
         <Alert
           tone="error"
           message={errorMessage}
           showIcon
-          className="bitfun-update-progress__alert"
+          className="openbitfun-update-progress__alert"
         />
       </div>
     );
   } else if (installed) {
     body = (
       <>
-        <div data-bf-component="update" data-bf-part="alert">
+        <div data-openbitfun-component="update" data-openbitfun-part="alert">
           <Alert
             tone="success"
             message={t('update.installedMessage')}
             showIcon
-            className="bitfun-update-progress__alert"
+            className="openbitfun-update-progress__alert"
           />
         </div>
-        <div className="bitfun-update-progress__actions" data-bf-component="update" data-bf-part="actions">
+        <div className="openbitfun-update-progress__actions" data-openbitfun-component="update" data-openbitfun-part="actions">
           <Button variant="outline" size="md" onClick={onCloseInstalled}>
             {t('update.restartLater')}
           </Button>
@@ -97,33 +97,33 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
     body = (
       <>
         <div
-          className="bitfun-update-progress__bar"
+          className="openbitfun-update-progress__bar"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={pct ?? undefined}
           aria-label={t('update.downloadingTitle')}
-          data-bf-component="update"
-          data-bf-part="progressBar"
+          data-openbitfun-component="update"
+          data-openbitfun-part="progressBar"
         >
           <div
             className={
               pct != null
-                ? 'bitfun-update-progress__fill'
-                : 'bitfun-update-progress__fill bitfun-update-progress__fill--indeterminate'
+                ? 'openbitfun-update-progress__fill'
+                : 'openbitfun-update-progress__fill openbitfun-update-progress__fill--indeterminate'
             }
             style={pct != null ? { transform: `scaleX(${pct / 100})` } : undefined}
-            data-bf-component="update"
-            data-bf-part="progressFill"
-            data-bf-state={pct == null ? 'indeterminate' : undefined}
+            data-openbitfun-component="update"
+            data-openbitfun-part="progressFill"
+            data-openbitfun-state={pct == null ? 'indeterminate' : undefined}
           />
         </div>
-        <p className="bitfun-update-progress__hint" data-bf-component="update" data-bf-part="progressHint">
+        <p className="openbitfun-update-progress__hint" data-openbitfun-component="update" data-openbitfun-part="progressHint">
           {pct != null
             ? t('update.progressPercent', { percent: String(pct) })
             : t('update.progressUnknown')}
         </p>
-        <p className="bitfun-update-progress__restart" data-bf-component="update" data-bf-part="restartHint">{t('update.restartHint')}</p>
+        <p className="openbitfun-update-progress__restart" data-openbitfun-component="update" data-openbitfun-part="restartHint">{t('update.restartHint')}</p>
       </>
     );
   }
@@ -142,10 +142,10 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
       </DialogHeader>
       <DialogBody inset="none">
       <div
-        className="bitfun-update-progress"
-        data-bf-component="update"
-        data-bf-part="progressRoot"
-        data-bf-status={error ? 'error' : installed ? 'installed' : 'downloading'}
+        className="openbitfun-update-progress"
+        data-openbitfun-component="update"
+        data-openbitfun-part="progressRoot"
+        data-openbitfun-status={error ? 'error' : installed ? 'installed' : 'downloading'}
       >
         {body}
       </div>

@@ -1,13 +1,13 @@
 //! Review platform Tauri commands.
 
 use crate::api::app_state::AppState;
-use bitfun_core::service::review_platform::{
+use log::error;
+use openbitfun_core::service::review_platform::{
     ReviewPlatformCiLog, ReviewPlatformDetailSection, ReviewPlatformError,
     ReviewPlatformIssueEvidence, ReviewPlatformKind, ReviewPlatformPullRequestDetail,
     ReviewPlatformPullRequestDetailPage, ReviewPlatformPullRequestReviewTarget,
     ReviewPlatformService, ReviewPlatformWorkspaceSnapshot,
 };
-use log::error;
 use serde::Deserialize;
 use tauri::State;
 

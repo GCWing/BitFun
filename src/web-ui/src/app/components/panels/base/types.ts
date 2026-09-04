@@ -33,7 +33,7 @@ export type PanelContentType =
   | 'review-platform-pr-detail'
   | 'terminal'
   | 'generative-widget'
-  | 'bitfun-canvas'
+  | 'openbitfun-canvas'
   | 'browser'
   | 'html-preview';
 

@@ -1,7 +1,7 @@
 /**
  * The IDE-facing ACP server app: the default agent spine
  * ({@link @deepseek-ai/dsh-agent-spine-demo}), JSONL session persistence, and the
- * {@link @bitfun/dsh-acp/bridge} protocol bridge, owned through one ordered
+ * {@link @openbitfun/dsh-acp/bridge} protocol bridge, owned through one ordered
  * lifecycle so ACP sessions quiesce before persistence detaches.
  *
  * Forked from `@deepseek-ai/dsh-acp-demo`
@@ -14,7 +14,7 @@
  * avoid stdout loggers. Named exports are required so Loader retains this
  * plugin's `Config` schema.
  *
- * @module @bitfun/dsh-acp
+ * @module @openbitfun/dsh-acp
  */
 
 import type { Context } from '@deepseek-ai/cordis'

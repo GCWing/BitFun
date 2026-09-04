@@ -39,7 +39,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   FormSection: ({
     children,

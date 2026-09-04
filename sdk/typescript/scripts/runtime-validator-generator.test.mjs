@@ -9,7 +9,7 @@ import ts from "typescript";
 import { generateRuntimeValidators } from "./runtime-validator-generator.mjs";
 
 test("generated validators enforce nested ts-rs wire structures", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
+  const directory = await mkdtemp(join(tmpdir(), "openbitfun-wire-validator-"));
   try {
     await Promise.all([
       writeFile(join(directory, "Kind.ts"), 'export type Kind = "local" | "remote";\n'),
@@ -76,7 +76,7 @@ test("generated validators enforce nested ts-rs wire structures", async () => {
 });
 
 test("generated validators reject missing required fields", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
+  const directory = await mkdtemp(join(tmpdir(), "openbitfun-wire-validator-"));
   try {
     await writeFile(
       join(directory, "Required.ts"),
@@ -93,7 +93,7 @@ test("generated validators reject missing required fields", async () => {
 });
 
 test("generated validators accept JSON values without accepting arbitrary runtime values", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
+  const directory = await mkdtemp(join(tmpdir(), "openbitfun-wire-validator-"));
   try {
     await writeFile(
       join(directory, "JsonPayload.ts"),
@@ -118,7 +118,7 @@ test("generated validators accept JSON values without accepting arbitrary runtim
 });
 
 test("generation fails closed for unsupported type syntax", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
+  const directory = await mkdtemp(join(tmpdir(), "openbitfun-wire-validator-"));
   try {
     await writeFile(
       join(directory, "Unsupported.ts"),
@@ -135,7 +135,7 @@ test("generation fails closed for unsupported type syntax", async () => {
 });
 
 test("generation rejects declarations outside the ts-rs type surface", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "bitfun-wire-validator-"));
+  const directory = await mkdtemp(join(tmpdir(), "openbitfun-wire-validator-"));
   try {
     await writeFile(
       join(directory, "Unexpected.ts"),

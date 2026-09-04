@@ -1,5 +1,5 @@
 use agent_client_protocol::{Builder, HandleDispatchFrom};
-use bitfun_core::service::git::GitService;
+use openbitfun_core::service::git::GitService;
 
 use crate::agent::git_service_error;
 use crate::role::{AppClient, AppServer};

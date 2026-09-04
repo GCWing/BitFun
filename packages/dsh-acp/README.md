@@ -1,4 +1,4 @@
-# @bitfun/dsh-acp
+# @openbitfun/dsh-acp
 
 An Agent Client Protocol server for [DeepSeek Harness](https://github.com/deepseek-ai)
 (`dsh`), written for an IDE rather than for automation.
@@ -6,41 +6,41 @@ An Agent Client Protocol server for [DeepSeek Harness](https://github.com/deepse
 The harness ships no ACP entry point of its own. The published
 `@deepseek-ai/dsh-acp` is an automation surface: it deliberately withholds tool
 calls, reasoning, and mode selection, because a script does not need to watch an
-agent think. An IDE needs exactly those, so BitFun ships this bridge and runs it
+agent think. An IDE needs exactly those, so OpenBitFun ships this bridge and runs it
 inside the harness the user already installed.
 
 ## For users
 
-Three steps, and BitFun stores none of your DeepSeek configuration:
+Three steps, and OpenBitFun stores none of your DeepSeek configuration:
 
-1. Install the harness — `npm install -g @deepseek-ai/dsh` (BitFun's agent
+1. Install the harness — `npm install -g @deepseek-ai/dsh` (OpenBitFun's agent
    settings page has a one-click button that runs the same thing). It is a Node
    program and needs **Node 20.12 or newer** — its own toolchain targets Node 22
    LTS. dsh declares no `engines`, so npm installs it onto an older Node without
    complaint and it then fails to boot with a `SyntaxError` about
-   `util.parseEnv`; BitFun checks the version up front and says so instead.
+   `util.parseEnv`; OpenBitFun checks the version up front and says so instead.
 2. Configure a model and an API key inside dsh, e.g. through `dsh web`'s Models
    page. That writes `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml`.
-3. Pick **DeepSeek Harness** in BitFun and start a session.
+3. Pick **DeepSeek Harness** in OpenBitFun and start a session.
 
 The model and the key stay where you put them. This bridge reads them through
 the harness's own `dsh-settings-file`, `dsh-credentials-local`, and
 `dsh-agent-default-model` services, so switching models in dsh switches them in
-BitFun too. BitFun writes no DeepSeek credentials of its own.
+OpenBitFun too. OpenBitFun writes no DeepSeek credentials of its own.
 
 A session also opens with a model picker of its own: the bridge publishes every
 model your dsh providers advertise as the `model` session config option,
 grouped by provider, starting on the default above. Picking one applies from
 the next message and lasts that session — it does not rewrite your dsh default.
 
-## How BitFun launches it
+## How OpenBitFun launches it
 
-BitFun runs `dsh --profile bitfun-acp`. A dsh profile is just a directory under
-`$DSH_HOME/profiles/`, and BitFun materializes this one on first use — see
+OpenBitFun runs `dsh --profile openbitfun-acp`. A dsh profile is just a directory under
+`$DSH_HOME/profiles/`, and OpenBitFun materializes this one on first use — see
 `src/crates/interfaces/acp/src/client/dsh_profile.rs`.
 
 ```
-$DSH_HOME/profiles/bitfun-acp/
+$DSH_HOME/profiles/openbitfun-acp/
   package.json            dsh.profile.bundles: []  — an empty root, so the
                           harness's default tool rows cannot leak into a
                           preset that asked to be minimal
@@ -49,7 +49,7 @@ $DSH_HOME/profiles/bitfun-acp/
   lib/**                  the compiled bridge
   presets/**              the modes the session offers
   node_modules/           only what the harness closure does NOT already carry
-  .bitfun-bridge.json     build stamp; BitFun re-syncs when it changes
+  .openbitfun-bridge.json     build stamp; OpenBitFun re-syncs when it changes
 ```
 
 Everything else resolves out of the user's own dsh: on every launch the harness
@@ -58,13 +58,13 @@ which ordinary Node parent-directory lookup finds from inside the profile. That
 is why this package vendors almost nothing and never installs a second copy of
 the harness.
 
-A remote workspace works the same way: BitFun packs the profile above into a tar
-stream and extracts it into `$DSH_HOME/profiles/bitfun-acp/` on that host over
+A remote workspace works the same way: OpenBitFun packs the profile above into a tar
+stream and extracts it into `$DSH_HOME/profiles/openbitfun-acp/` on that host over
 the session's own transport — no SFTP, so container connections are covered too
 — and skips the upload when the stamp there already matches. `dsh` itself, the
 models, and the key are the remote host's, exactly as they are locally. Steps 1
 and 2 above therefore have to have been done on that host — including the Node
-version, which the same probe checks — and BitFun says so if they were not.
+version, which the same probe checks — and OpenBitFun says so if they were not.
 
 ## Reopening a conversation
 
@@ -112,7 +112,7 @@ both build steps. Official `desktop:build` ships `dist-profile/` as a Tauri
 resource; `desktop:dev` and `cargo check` do not compile it. A failure during
 packaging fails the desktop build: an app that silently ships no bridge is
 indistinguishable from a working one until a user starts a DeepSeek session.
-`BITFUN_SKIP_DSH_PROFILE=1` opts out on purpose.
+`OPENBITFUN_SKIP_DSH_PROFILE=1` opts out on purpose.
 
 Every `@deepseek-ai/*` dependency is pinned to the **`0.1.0-rc.6`** train — the
 set npm's `next` dist-tag points at. Half of these packages still carry a

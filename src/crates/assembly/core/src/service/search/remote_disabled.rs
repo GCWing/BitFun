@@ -1,6 +1,6 @@
 //! Disabled remote-search facade for builds without concrete SSH support.
 
-use bitfun_services_integrations::workspace_search::{
+use openbitfun_services_integrations::workspace_search::{
     ContentSearchRequest, ContentSearchResult, GlobSearchRequest, GlobSearchResult,
 };
 

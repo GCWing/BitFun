@@ -2,7 +2,7 @@
 
 [中文](./feishu-bot-setup.zh-CN.md)
 
-Use this guide to pair BitFun through a Feishu bot.
+Use this guide to pair OpenBitFun through a Feishu bot.
 
 ## Setup Steps
 
@@ -36,7 +36,7 @@ Credentials & Basic Info - App ID and App Secret
 
 ### Step 6
 
-Open BitFun and start the Feishu bot connection:
+Open OpenBitFun and start the Feishu bot connection:
 
 Remote Connect - IM Bot - Feishu Bot - Fill in App ID and App Secret - Connect
 
@@ -74,4 +74,4 @@ Open Feishu, search for the bot name, open the chat, enter any message, and send
 
 ### Step 12
 
-Enter the 6-digit pairing code shown in BitFun Desktop, send it, and wait for the connection to succeed.
+Enter the 6-digit pairing code shown in OpenBitFun Desktop, send it, and wait for the connection to succeed.

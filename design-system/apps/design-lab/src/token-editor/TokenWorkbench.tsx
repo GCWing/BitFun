@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { themes } from "@bitfun/theme-bitfun";
-import { Icon } from "@bitfun/ui";
+import { themes } from "@openbitfun/theme-openbitfun";
+import { Icon } from "@openbitfun/ui";
 import { Clipboard, RotateCcw, Save } from "lucide-react";
-import { componentRegistry } from "@bitfun/ui/registry";
+import { componentRegistry } from "@openbitfun/ui/registry";
 import { useI18n, type MessageKey } from "../i18n";
 import {
   editableTokenCatalog,
@@ -21,7 +21,7 @@ import {
   type TokenDrafts,
   type TokenEditorContext,
 } from "./model";
-const SOURCE_ENDPOINT = "/__bitfun-design-lab/token-source";
+const SOURCE_ENDPOINT = "/__openbitfun-design-lab/token-source";
 
 type CollectionFilter = "all" | TokenCollection;
 type CategoryFilter =
@@ -282,14 +282,14 @@ export function TokenWorkbench({
 
   function exportDraft() {
     const payload = JSON.stringify(
-      { changes, contract: "@bitfun/token-draft@1" },
+      { changes, contract: "@openbitfun/token-draft@1" },
       null,
       2,
     );
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.download = "bitfun-token-draft.json";
+    link.download = "openbitfun-token-draft.json";
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);

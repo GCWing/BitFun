@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import {
   cssVariables as systemCssVariables,
   tokens as systemTokens,
-} from '@bitfun/design-tokens';
-import { themeCssVariables } from '@bitfun/theme-bitfun';
+} from '@openbitfun/design-tokens';
+import { themeCssVariables } from '@openbitfun/theme-openbitfun';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
@@ -22,17 +22,17 @@ const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--bg-primary',
   '--text-primary',
   '--accent-primary',
-  '--bf-appearance-token-color-bg-primary',
-  '--bf-appearance-token-color-text-primary',
-  '--bf-appearance-token-color-accent-500',
-  '--bf-appearance-token-btn-primary-bg',
-  '--bf-color-accent-default-rgb',
-  '--bf-color-status-success-content-bg',
-  '--bf-color-status-success-content-border',
-  '--bf-color-status-warning-content-bg',
-  '--bf-color-status-warning-content-border',
-  '--bf-color-status-danger-content-bg',
-  '--bf-color-status-danger-content-border',
+  '--openbitfun-appearance-token-color-bg-primary',
+  '--openbitfun-appearance-token-color-text-primary',
+  '--openbitfun-appearance-token-color-accent-500',
+  '--openbitfun-appearance-token-btn-primary-bg',
+  '--openbitfun-color-accent-default-rgb',
+  '--openbitfun-color-status-success-content-bg',
+  '--openbitfun-color-status-success-content-border',
+  '--openbitfun-color-status-warning-content-bg',
+  '--openbitfun-color-status-warning-content-border',
+  '--openbitfun-color-status-danger-content-bg',
+  '--openbitfun-color-status-danger-content-border',
 ] as const;
 
 function readPayloadWithHostValues(hostValues: Record<string, string> = {}) {
@@ -67,8 +67,8 @@ describe('generated widget appearance payload contract', () => {
     }).toEqual({
       count: 124,
       hash: CANONICAL_THEME_VARIABLE_NAMES_HASH,
-      first: '--bf-color-accent-border',
-      last: '--bf-shadow-xs',
+      first: '--openbitfun-color-accent-border',
+      last: '--openbitfun-shadow-xs',
     });
   });
 
@@ -81,39 +81,39 @@ describe('generated widget appearance payload contract', () => {
       ...WIDGET_APPEARANCE_VAR_NAMES,
       ...WIDGET_TYPOGRAPHY_VARIABLE_NAMES,
     ].sort());
-    expect(WIDGET_APPEARANCE_FALLBACK_VARS['--bf-color-surface-canvas']).toBe('transparent');
+    expect(WIDGET_APPEARANCE_FALLBACK_VARS['--openbitfun-color-surface-canvas']).toBe('transparent');
   });
 
   it('exports canonical state and status semantics without legacy aliases', () => {
     expect(WIDGET_APPEARANCE_VAR_NAMES).toEqual(expect.arrayContaining([
-      '--bf-color-action-primary-background',
-      '--bf-color-action-primary-hover',
-      '--bf-color-action-primary-pressed',
-      '--bf-color-code-change-added',
-      '--bf-color-code-change-removed',
-      '--bf-color-status-success-content',
-      '--bf-color-status-success-surface',
-      '--bf-color-status-success-border',
-      '--bf-color-status-warning-surface',
-      '--bf-color-status-danger-surface',
-      '--bf-color-status-info-surface',
+      '--openbitfun-color-action-primary-background',
+      '--openbitfun-color-action-primary-hover',
+      '--openbitfun-color-action-primary-pressed',
+      '--openbitfun-color-code-change-added',
+      '--openbitfun-color-code-change-removed',
+      '--openbitfun-color-status-success-content',
+      '--openbitfun-color-status-success-surface',
+      '--openbitfun-color-status-success-border',
+      '--openbitfun-color-status-warning-surface',
+      '--openbitfun-color-status-danger-surface',
+      '--openbitfun-color-status-info-surface',
     ]));
     expect(WIDGET_APPEARANCE_VAR_NAMES).not.toEqual(
       expect.arrayContaining(RETIRED_WIDGET_VARIABLE_NAMES),
     );
-    expect(WIDGET_APPEARANCE_VAR_NAMES.some(name => name.startsWith('--bf-appearance-token-')))
+    expect(WIDGET_APPEARANCE_VAR_NAMES.some(name => name.startsWith('--openbitfun-appearance-token-')))
       .toBe(false);
   });
 
   it('passes canonical host overrides through unchanged', () => {
     const hostValues = {
-      '--bf-color-action-primary-background': 'linear-gradient(test-primary)',
-      '--bf-color-action-primary-content': '#101010',
-      '--bf-color-action-primary-hover': 'linear-gradient(test-hover)',
-      '--bf-color-action-primary-pressed': '#202020',
-      '--bf-color-status-danger-surface': 'rgba(200, 0, 0, 0.12)',
-      '--bf-color-status-danger-border': '#303030',
-      '--bf-shadow-raised': '0 1px 2px #404040',
+      '--openbitfun-color-action-primary-background': 'linear-gradient(test-primary)',
+      '--openbitfun-color-action-primary-content': '#101010',
+      '--openbitfun-color-action-primary-hover': 'linear-gradient(test-hover)',
+      '--openbitfun-color-action-primary-pressed': '#202020',
+      '--openbitfun-color-status-danger-surface': 'rgba(200, 0, 0, 0.12)',
+      '--openbitfun-color-status-danger-border': '#303030',
+      '--openbitfun-shadow-raised': '0 1px 2px #404040',
     };
 
     expect(readPayloadWithHostValues(hostValues)?.vars).toMatchObject(hostValues);

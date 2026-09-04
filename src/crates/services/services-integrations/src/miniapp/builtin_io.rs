@@ -1,10 +1,10 @@
 //! Built-in MiniApp seed and marker filesystem IO.
 
-use bitfun_product_domains::miniapp::builtin::{
+use openbitfun_product_domains::miniapp::builtin::{
     build_builtin_package_json, build_builtin_seed_meta, builtin_source_files,
     parse_builtin_install_marker, preserved_builtin_created_at, serialize_builtin_install_marker,
     BuiltinInstallMarker, BuiltinMiniAppBundle, BUILTIN_INSTALL_MARKER,
-    BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
+    BUILTIN_PLACEHOLDER_COMPILED_HTML,
 };
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -93,13 +93,6 @@ pub async fn write_builtin_install_marker(
     write_text_file(path, &content).await
 }
 
-pub async fn write_legacy_builtin_version_marker(
-    app_dir: &Path,
-    legacy_version: &str,
-) -> MiniAppBuiltinIoResult<()> {
-    write_text_file(&app_dir.join(LEGACY_BUILTIN_VERSION_MARKER), legacy_version).await
-}
-
 pub async fn prepare_builtin_seed_bundle_files(
     app_dir: &Path,
     app: &BuiltinMiniAppBundle,
@@ -164,14 +157,15 @@ pub fn builtin_marker_path(app_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::miniapp::builtin::BUILTIN_APPS;
+    use openbitfun_product_domains::miniapp::builtin::BUILTIN_APPS;
 
     fn scratch_dir(label: &str) -> PathBuf {
         let unique = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before unix epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("bitfun-miniapp-builtin-io-{label}-{unique}"));
+        let path =
+            std::env::temp_dir().join(format!("openbitfun-miniapp-builtin-io-{label}-{unique}"));
         std::fs::create_dir_all(&path).expect("create scratch dir");
         path
     }

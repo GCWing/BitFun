@@ -1,21 +1,21 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{Builder, HandleDispatchFrom};
-use bitfun_agent_runtime::sdk::{AgentUserAnswersRequest, DialogSteerOutcome};
-use bitfun_app_server_protocol::agent::{
+use openbitfun_agent_runtime::sdk::{AgentUserAnswersRequest, DialogSteerOutcome};
+use openbitfun_app_server_protocol::agent::{
     ListAgentModesRequest, RunUserShellCommandRequest, RunUserShellCommandResponse,
     SteerTurnRequest, SteerTurnResponse, SubmitUserAnswersRequest, SubmitUserAnswersResponse,
 };
 
 use super::capability::management_handler;
-use crate::agent::{runtime_call, BitfunAppRuntime};
+use crate::agent::{runtime_call, OpenBitFunAppRuntime};
 use crate::management::{AppManagementService, MODES_CAPABILITY};
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
 use crate::server::wire;
 
 pub(in crate::server) fn builder(
-    runtime: Arc<BitfunAppRuntime>,
+    runtime: Arc<OpenBitFunAppRuntime>,
     management: Option<Arc<AppManagementService>>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
@@ -77,7 +77,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(SubmitTurnResponse)
                             .map_err(|err| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, err)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, err)
                             }),
                     )
                 }
@@ -96,7 +96,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(wire::submit_dialog_turn_response)
                             .map_err(|err| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, err)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, err)
                             }),
                     )
                 }
@@ -145,7 +145,7 @@ pub(in crate::server) fn builder(
                                 }
                             })
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -164,7 +164,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(RunUserShellCommandResponse)
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }

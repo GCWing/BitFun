@@ -4,7 +4,7 @@
 
 Scope: this guide applies to `src/crates/interfaces/acp`.
 
-`bitfun-acp` owns the Agent Client Protocol surface over the assembled product
+`openbitfun-acp` owns the Agent Client Protocol surface over the assembled product
 runtime. Keep ACP protocol/client details here or in app-surface adapters;
 share only stable capability facts through contract crates.
 
@@ -27,7 +27,7 @@ Keep these role features additive and do not replace either closure with
   selection are ACP/app-surface behavior. Do not move them into `core-types`,
   `runtime-ports`, or `agent-tools`.
 - ACP external-agent tool naming, schema, validation, presentation, and result
-  shape are portable contracts owned by `bitfun-agent-tools`; ACP should call
+  shape are portable contracts owned by `openbitfun-agent-tools`; ACP should call
   those helpers instead of redefining them locally.
 - Keep ACP stdio/connection ownership and protocol notification projection in
   this crate. Shared runtime facts may cross the SDK boundary; ACP protocol
@@ -38,7 +38,7 @@ Keep these role features additive and do not replace either closure with
 ## Verification
 
 ```bash
-cargo check -p bitfun-acp --no-default-features --features client
-cargo check -p bitfun-acp --no-default-features --features server
-cargo test -p bitfun-acp
+cargo check -p openbitfun-acp --no-default-features --features client
+cargo check -p openbitfun-acp --no-default-features --features server
+cargo test -p openbitfun-acp
 ```

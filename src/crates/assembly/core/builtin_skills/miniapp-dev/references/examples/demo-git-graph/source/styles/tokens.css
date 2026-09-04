@@ -1,30 +1,30 @@
-/* Git Graph MiniApp — theme tokens (host --bitfun-* when running in BitFun) */
+/* Git Graph MiniApp — theme tokens (host --openbitfun-* when running in OpenBitFun) */
 :root {
-  --bg:          var(--bitfun-bg);
-  --bg-surface:  var(--bitfun-bg-secondary);
-  --bg-hover:    var(--bitfun-element-hover);
-  --bg-active:   var(--bitfun-element-bg);
-  --border:      var(--bitfun-border);
-  --border-light: var(--bitfun-border-subtle);
-  --text:        var(--bitfun-text);
-  --text-sec:    var(--bitfun-text-secondary);
-  --text-dim:    var(--bitfun-text-muted);
-  --accent:      var(--bitfun-accent);
-  --accent-dim:  var(--bitfun-accent-hover);
-  --green:       var(--bitfun-success);
-  --red:         var(--bitfun-error);
-  --orange:      var(--bitfun-warning);
-  --purple:      var(--bitfun-accent-secondary);
-  --branch-1:    var(--bitfun-accent);
-  --branch-2:    var(--bitfun-success);
-  --branch-3:    var(--bitfun-accent-secondary);
-  --branch-4:    var(--bitfun-warning);
+  --bg:          var(--openbitfun-bg);
+  --bg-surface:  var(--openbitfun-bg-secondary);
+  --bg-hover:    var(--openbitfun-element-hover);
+  --bg-active:   var(--openbitfun-element-bg);
+  --border:      var(--openbitfun-border);
+  --border-light: var(--openbitfun-border-subtle);
+  --text:        var(--openbitfun-text);
+  --text-sec:    var(--openbitfun-text-secondary);
+  --text-dim:    var(--openbitfun-text-muted);
+  --accent:      var(--openbitfun-accent);
+  --accent-dim:  var(--openbitfun-accent-hover);
+  --green:       var(--openbitfun-success);
+  --red:         var(--openbitfun-error);
+  --orange:      var(--openbitfun-warning);
+  --purple:      var(--openbitfun-accent-secondary);
+  --branch-1:    var(--openbitfun-accent);
+  --branch-2:    var(--openbitfun-success);
+  --branch-3:    var(--openbitfun-accent-secondary);
+  --branch-4:    var(--openbitfun-warning);
   --branch-5:    #f778ba;
   --branch-6:    #79c0ff;
   --branch-7:    #56d364;
-  --radius:      var(--bitfun-radius);
-  --radius-lg:   var(--bitfun-radius-lg);
-  --graph-node-stroke: var(--bitfun-bg);
+  --radius:      var(--openbitfun-radius);
+  --radius-lg:   var(--openbitfun-radius-lg);
+  --graph-node-stroke: var(--openbitfun-bg);
   --graph-uncommitted: var(--text-dim);
   --graph-lane-width: 18px;
   --graph-row-height: 28px;
@@ -33,7 +33,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--bitfun-font-sans);
+  font-family: var(--openbitfun-font-sans);
   font-size: 13px;
   color: var(--text);
   background: var(--bg);

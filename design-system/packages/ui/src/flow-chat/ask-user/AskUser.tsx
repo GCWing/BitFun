@@ -183,16 +183,16 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
       <div
         {...props}
         className={classNames(styles.root, styles.statusOnly, className)}
-        data-bf-component="ask-user"
-        data-bf-part="root"
-        data-bf-state={state}
+        data-openbitfun-component="ask-user"
+        data-openbitfun-part="root"
+        data-openbitfun-state={state}
         ref={ref}
         role={state === "error" ? "alert" : "status"}
       >
-        <span className={styles.statusIcon} data-bf-part="status-icon">
+        <span className={styles.statusIcon} data-openbitfun-part="status-icon">
           <StatusIcon state={state} />
         </span>
-        <span className={styles.statusText} data-bf-part="status-label">
+        <span className={styles.statusText} data-openbitfun-part="status-label">
           {statusLabel}
         </span>
       </div>
@@ -211,11 +211,11 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="ask-user"
-      data-bf-expanded={resolvedExpanded ? "true" : "false"}
-      data-bf-has-summary={hasSummary ? "true" : "false"}
-      data-bf-part="root"
-      data-bf-state={state}
+      data-openbitfun-component="ask-user"
+      data-openbitfun-expanded={resolvedExpanded ? "true" : "false"}
+      data-openbitfun-has-summary={hasSummary ? "true" : "false"}
+      data-openbitfun-part="root"
+      data-openbitfun-state={state}
       data-disabled={disabled ? "true" : "false"}
       ref={ref}
     >
@@ -224,46 +224,46 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
           aria-controls={detailsId}
           aria-expanded={resolvedExpanded}
           className={styles.summaryButton}
-          data-bf-part="summary"
+          data-openbitfun-part="summary"
           onClick={() => setExpanded(!resolvedExpanded)}
           type="button"
         >
           <span className={styles.summaryLeading}>
-            <span className={styles.summaryIcon} data-bf-part="summary-icon">
+            <span className={styles.summaryIcon} data-openbitfun-part="summary-icon">
               <CircleCheck aria-hidden="true" />
             </span>
             <span className={styles.summaryCopy}>
-              <span className={styles.summaryLabel} data-bf-part="summary-label">
+              <span className={styles.summaryLabel} data-openbitfun-part="summary-label">
                 {summaryLabel}
               </span>
               {summaryDetail !== undefined && summaryDetail !== null && (
                 <>
                   <span aria-hidden="true" className={styles.summaryArrow}>→</span>
-                  <span className={styles.summaryDetail} data-bf-part="summary-detail">
+                  <span className={styles.summaryDetail} data-openbitfun-part="summary-detail">
                     {summaryDetail}
                   </span>
                 </>
               )}
             </span>
           </span>
-          <span className={styles.summaryAction} data-bf-part="summary-action">
+          <span className={styles.summaryAction} data-openbitfun-part="summary-action">
             {resolvedExpanded
               ? <ChevronUp aria-hidden="true" />
               : <ChevronDown aria-hidden="true" />}
           </span>
         </button>
       ) : header !== undefined && header !== null ? (
-        <div className={styles.header} data-bf-part="header">{header}</div>
+        <div className={styles.header} data-openbitfun-part="header">{header}</div>
       ) : null}
 
       <div
         aria-hidden={hasSummary && !resolvedExpanded ? true : undefined}
         className={styles.details}
-        data-bf-part="details"
+        data-openbitfun-part="details"
         id={detailsId}
       >
         <div className={styles.detailsInner}>
-          <div className={styles.body} data-bf-part="body">
+          <div className={styles.body} data-openbitfun-part="body">
             {questions.map((question, questionIndex) => {
               const multiple = question.selectionMode === "multiple";
               const selectedValues = answers[question.id] ?? [];
@@ -275,14 +275,14 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
               return (
                 <fieldset
                   className={styles.question}
-                  data-bf-part="question"
+                  data-openbitfun-part="question"
                   disabled={interactionDisabled}
                   key={question.id}
                 >
-                  <legend className={styles.prompt} data-bf-part="prompt">
+                  <legend className={styles.prompt} data-openbitfun-part="prompt">
                     {question.prompt}
                   </legend>
-                  <div className={styles.options} data-bf-part="options">
+                  <div className={styles.options} data-openbitfun-part="options">
                     {question.options.map((option, optionIndex) => {
                       const optionId = `${instanceId}-${questionIndex}-${optionIndex}`;
                       const selected = selectedValues.includes(option.value);
@@ -290,7 +290,7 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                       return (
                         <div
                           className={styles.option}
-                          data-bf-part="option"
+                          data-openbitfun-part="option"
                           data-selected={selected ? "true" : "false"}
                           key={option.value}
                         >
@@ -309,17 +309,17 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                             value={option.value}
                           />
                           <label className={styles.optionSelector} htmlFor={optionId}>
-                            <span className={styles.controlIcon} data-bf-part="control">
+                            <span className={styles.controlIcon} data-openbitfun-part="control">
                               <OptionControl checked={selected} multiple={multiple} />
                             </span>
                             <span className={styles.optionContent}>
-                              <span className={styles.optionLabel} data-bf-part="label">
+                              <span className={styles.optionLabel} data-openbitfun-part="label">
                                 {option.label}
                               </span>
                               {option.description !== undefined && option.description !== null && (
                                 <span
                                   className={styles.optionDescription}
-                                  data-bf-part="description"
+                                  data-openbitfun-part="description"
                                   title={descriptionTitle(option.description)}
                                 >
                                   {option.description}
@@ -341,7 +341,7 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                       return (
                         <div
                           className={styles.option}
-                          data-bf-part="option"
+                          data-openbitfun-part="option"
                           data-custom="true"
                           data-selected={customSelected ? "true" : "false"}
                         >
@@ -360,11 +360,11 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                             value={customOption.value}
                           />
                           <label className={styles.optionSelector} htmlFor={optionId}>
-                            <span className={styles.controlIcon} data-bf-part="control">
+                            <span className={styles.controlIcon} data-openbitfun-part="control">
                               <OptionControl checked={customSelected} multiple={multiple} />
                             </span>
                             <span className={styles.optionContent}>
-                              <span className={styles.optionLabel} data-bf-part="label">
+                              <span className={styles.optionLabel} data-openbitfun-part="label">
                                 {customOption.label}
                               </span>
                               {!customSelected
@@ -372,7 +372,7 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                                 && customOption.description !== null && (
                                   <span
                                     className={styles.optionDescription}
-                                    data-bf-part="description"
+                                    data-openbitfun-part="description"
                                     title={descriptionTitle(customOption.description)}
                                   >
                                     {customOption.description}
@@ -381,7 +381,7 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                             </span>
                           </label>
                           {customSelected && (
-                            <span className={styles.customInput} data-bf-part="custom-input">
+                            <span className={styles.customInput} data-openbitfun-part="custom-input">
                               <Input
                                 aria-label={inputLabel}
                                 autoFocus
@@ -427,13 +427,13 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
           {showFeedback && (
             <div
               className={styles.feedback}
-              data-bf-part="feedback"
+              data-openbitfun-part="feedback"
               role={state === "error" ? "alert" : "status"}
             >
-              <span className={styles.statusIcon} data-bf-part="status-icon">
+              <span className={styles.statusIcon} data-openbitfun-part="status-icon">
                 <StatusIcon state={state} />
               </span>
-              <span className={styles.statusText} data-bf-part="status-label">
+              <span className={styles.statusText} data-openbitfun-part="status-label">
                 {statusLabel}
               </span>
             </div>
@@ -442,9 +442,9 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
       </div>
 
       {showFooter && (
-        <div className={styles.footer} data-bf-part="footer">
+        <div className={styles.footer} data-openbitfun-part="footer">
           {submitLabel !== undefined && submitLabel !== null && (
-            <span className={styles.submit} data-bf-part="submit">
+            <span className={styles.submit} data-openbitfun-part="submit">
               <Button
                 disabled={interactionDisabled || submitDisabled}
                 leadingIcon={<ArrowUp aria-hidden="true" />}
@@ -461,11 +461,11 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
             </span>
           )}
           {statusLabel !== undefined && statusLabel !== null && (
-            <span className={styles.status} data-bf-part="status">
-              <span className={styles.statusIcon} data-bf-part="status-icon">
+            <span className={styles.status} data-openbitfun-part="status">
+              <span className={styles.statusIcon} data-openbitfun-part="status-icon">
                 <StatusIcon state={state} />
               </span>
-              <span className={styles.statusText} data-bf-part="status-label">
+              <span className={styles.statusText} data-openbitfun-part="status-label">
                 {statusLabel}
               </span>
             </span>

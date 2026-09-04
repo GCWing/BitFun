@@ -23,10 +23,10 @@ describe('SkillCard Appearance contract', () => {
       />,
     );
 
-    expect(html).toContain('data-bf-variant="market"');
-    expect(html).toContain('data-bf-part="meta"');
-    expect(html).toContain('data-bf-part="action"');
-    expect(html).toContain('data-bf-tone="primary"');
-    expect(html).toContain('data-bf-state="disabled"');
+    expect(html).toContain('data-openbitfun-variant="market"');
+    expect(html).toContain('data-openbitfun-part="meta"');
+    expect(html).toContain('data-openbitfun-part="action"');
+    expect(html).toContain('data-openbitfun-tone="primary"');
+    expect(html).toContain('data-openbitfun-state="disabled"');
   });
 });

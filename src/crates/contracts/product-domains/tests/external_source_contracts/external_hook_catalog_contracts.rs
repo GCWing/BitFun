@@ -1,17 +1,17 @@
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogEntry, ExternalHookCatalogSnapshotV1, ExternalHookHandlerKind,
     ExternalHookMapping, ExternalHookMatcherSummary, ExternalHookNativeActivation,
     ExternalHookProjectionStatus, ExternalHookProviderIdentity, ExternalHookProviderSnapshot,
     ExternalHookSource, ExternalHookSourceKind,
 };
-use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
-use bitfun_product_domains::external_hook_import::{
+use openbitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use openbitfun_product_domains::external_hook_import::{
     ExternalHookImportDependencyV1, ExternalHookImportDispositionV1, ExternalHookImportHandlerV1,
     ExternalHookImportPlanV1, ExternalHookImportSkippedV1, PreparedExternalHookAsset,
     PreparedExternalHookHandler, PreparedExternalHookImport, EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
     MANAGED_HOOK_ROOT_PLACEHOLDER,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceScope, ProviderId, SourceKey,
 };
@@ -77,7 +77,7 @@ fn catalog_wire_shape_is_redacted_and_uses_stable_names() {
 }
 
 #[test]
-fn only_mapped_entries_may_carry_a_reviewed_bitfun_hook_point() {
+fn only_mapped_entries_may_carry_a_reviewed_openbitfun_hook_point() {
     let mut invalid = entry("native-only");
     invalid.projection_status = ExternalHookProjectionStatus::NativeOnly;
     assert!(invalid.validate().is_err());

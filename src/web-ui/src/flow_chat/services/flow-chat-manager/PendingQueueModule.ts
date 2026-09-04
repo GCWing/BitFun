@@ -23,11 +23,7 @@ import {
 
 const log = createLogger('PendingQueueModule');
 
-const STORAGE_PREFIX = 'flowChat.pendingQueue.';
-// Keep peer records outside the legacy prefix. Older builds interpret every
-// key under STORAGE_PREFIX as a local session id, so nesting peer data there
-// would make a downgrade load encoded peer queues as bogus local sessions.
-const PEER_STORAGE_PREFIX = 'flowChat.peerPendingQueue.v1.';
+const STORAGE_PREFIX = 'openbitfun.flowChat.pendingQueue.v1.';
 const MAX_QUEUE_DEPTH = 20;
 
 const LIVE_TURN_STATUSES = new Set<DialogTurn['status']>([
@@ -121,11 +117,7 @@ class PendingQueueManager {
   }
 
   private storageKey(sessionId: string, surfaceId: DeviceSurfaceId): string {
-    if (surfaceId === 'local') {
-      // Keep the legacy local key so an older BitFun install can still read it.
-      return STORAGE_PREFIX + sessionId;
-    }
-    return PEER_STORAGE_PREFIX + encodeURIComponent(JSON.stringify([surfaceId, sessionId]));
+    return STORAGE_PREFIX + encodeURIComponent(JSON.stringify([surfaceId, sessionId]));
   }
 
   private sessionIdsForSurface(surfaceId: DeviceSurfaceId): string[] {
@@ -152,24 +144,19 @@ class PendingQueueManager {
     try {
       for (let i = 0; i < window.localStorage.length; i++) {
         const key = window.localStorage.key(i);
-        if (
-          !key
-          || (!key.startsWith(STORAGE_PREFIX) && !key.startsWith(PEER_STORAGE_PREFIX))
-        ) {
+        if (!key || !key.startsWith(STORAGE_PREFIX)) {
           continue;
         }
-        let surfaceId: DeviceSurfaceId = 'local';
-        let sessionId = key.slice(STORAGE_PREFIX.length);
-        if (key.startsWith(PEER_STORAGE_PREFIX)) {
-          const encoded = key.slice(PEER_STORAGE_PREFIX.length);
-          try {
-            [surfaceId, sessionId] = JSON.parse(decodeURIComponent(encoded)) as [string, string];
-            if (!surfaceId || !sessionId) {
-              continue;
-            }
-          } catch {
+        const encoded = key.slice(STORAGE_PREFIX.length);
+        let surfaceId: DeviceSurfaceId;
+        let sessionId: string;
+        try {
+          [surfaceId, sessionId] = JSON.parse(decodeURIComponent(encoded)) as [string, string];
+          if (!surfaceId || !sessionId) {
             continue;
           }
+        } catch {
+          continue;
         }
         const raw = window.localStorage.getItem(key);
         if (!raw) continue;

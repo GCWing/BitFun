@@ -30,16 +30,16 @@ describe('global scrollbar presentation', () => {
 
   it('keeps the thumb visible and the standard track channel transparent', () => {
     expect(stylesheet).toMatch(
-      /\*::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--bf-color-scrollbar-thumb\);/s,
+      /\*::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--openbitfun-color-scrollbar-thumb\);/s,
     );
     expect(stylesheet).toMatch(
-      /\*::-webkit-scrollbar-thumb:hover\s*\{[^}]*background:\s*var\(--bf-color-scrollbar-thumb-hover\);/s,
+      /\*::-webkit-scrollbar-thumb:hover\s*\{[^}]*background:\s*var\(--openbitfun-color-scrollbar-thumb-hover\);/s,
     );
     expect(stylesheet).toContain(
       '@supports (scrollbar-color: transparent transparent)',
     );
     expect(stylesheet).toMatch(
-      /\*\s*\{[^}]*scrollbar-color:\s*var\(--bf-color-scrollbar-thumb\)\s+transparent;/s,
+      /\*\s*\{[^}]*scrollbar-color:\s*var\(--openbitfun-color-scrollbar-thumb\)\s+transparent;/s,
     );
     expect(stylesheet).not.toMatch(
       /^\s*scrollbar-color:\s*transparent\s+transparent\s*;/m,

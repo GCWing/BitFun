@@ -6,10 +6,10 @@ use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
-pub use bitfun_agent_runtime::events::FinishReason;
-use bitfun_agent_tools::LoadedDeferredToolSpec;
-use bitfun_core_types::ModelRequestContext;
-use bitfun_runtime_ports::{
+pub use openbitfun_agent_runtime::events::FinishReason;
+use openbitfun_agent_tools::LoadedDeferredToolSpec;
+use openbitfun_core_types::ModelRequestContext;
+use openbitfun_runtime_ports::{
     DelegationPolicy, PermissionConstraintLayer, PermissionDelegationContext,
     PermissionRuntimeCeiling, RemoteExecPort, TerminalPort,
 };

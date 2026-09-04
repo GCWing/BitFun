@@ -386,7 +386,7 @@ async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Resu
 }
 
 /// Starts the Nous Portal device-code flow. It works when the browser and the
-/// BitFun execution host are on different machines.
+/// OpenBitFun execution host are on different machines.
 pub(crate) async fn begin_login(
     cancel: CancellationToken,
     expected_revision: u64,
@@ -436,7 +436,7 @@ pub(crate) async fn begin_login(
         authorization_url,
         user_code: Some(user_code),
         instructions:
-            "Open the Nous Portal verification link on any device, approve the code, then return to BitFun."
+            "Open the Nous Portal verification link on any device, approve the code, then return to OpenBitFun."
                 .to_string(),
         runner: Box::pin(runner),
     })
@@ -452,7 +452,7 @@ fn stored_credential_is_usable(
 
 async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64, String)> {
     // Nous refresh tokens rotate after one use. Collapse concurrent refreshes
-    // across BitFun processes before reading the latest durable revision.
+    // across OpenBitFun processes before reading the latest durable revision.
     let _refresh_lease = store::acquire_provider_refresh_lease(STORE_KEY).await?;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
@@ -480,7 +480,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64,
     let refreshed = match refresh(&refresh_token, options).await {
         Ok(tokens) => tokens,
         Err(error) => {
-            // A different BitFun process may have rotated and committed first.
+            // A different OpenBitFun process may have rotated and committed first.
             // Prefer its newer usable credential over a stale refresh error.
             if let Ok(current) = store::load_entry_with_revision(STORE_KEY).await {
                 if current.revision != snapshot.revision {

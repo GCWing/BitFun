@@ -54,7 +54,7 @@ function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
 
 function getEnabledOptions(root: HTMLElement) {
   return Array.from(
-    root.querySelectorAll<HTMLButtonElement>("[data-bf-listbox-option]"),
+    root.querySelectorAll<HTMLButtonElement>("[data-openbitfun-listbox-option]"),
   ).filter((option) => (
     option.closest('[role="listbox"]') === root
     && !option.disabled
@@ -64,7 +64,7 @@ function getEnabledOptions(root: HTMLElement) {
 
 function closestListboxOption(target: EventTarget | null) {
   return target && typeof (target as Element).closest === "function"
-    ? (target as Element).closest<HTMLButtonElement>("[data-bf-listbox-option]")
+    ? (target as Element).closest<HTMLButtonElement>("[data-openbitfun-listbox-option]")
     : null;
 }
 
@@ -183,9 +183,9 @@ export const Listbox = forwardRef<HTMLDivElement, ListboxProps>(function Listbox
       {...props}
       aria-multiselectable={multiple || undefined}
       className={classNames(styles.root, className)}
-      data-bf-component="listbox"
-      data-bf-focus-mode={focusMode}
-      data-bf-multiple={multiple ? "true" : "false"}
+      data-openbitfun-component="listbox"
+      data-openbitfun-focus-mode={focusMode}
+      data-openbitfun-multiple={multiple ? "true" : "false"}
       onFocusCapture={handleFocusCapture}
       onKeyDown={handleKeyDown}
       ref={setRootRef}
@@ -196,7 +196,7 @@ export const Listbox = forwardRef<HTMLDivElement, ListboxProps>(function Listbox
         orientation="vertical"
         scrollbarVisibility={scrollbarVisibility}
       >
-        <div className={styles.list} data-bf-part="list">{children}</div>
+        <div className={styles.list} data-openbitfun-part="list">{children}</div>
       </ScrollArea>
     </div>
   );
@@ -224,8 +224,8 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
         aria-selected={selected}
         className={classNames(styles.option, className)}
         data-active={active ? "true" : "false"}
-        data-bf-listbox-option=""
-        data-bf-part="option"
+        data-openbitfun-listbox-option=""
+        data-openbitfun-part="option"
         data-selected={selected ? "true" : "false"}
         data-value={value}
         disabled={disabled}
@@ -235,22 +235,22 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
         type="button"
       >
         {leading !== undefined && leading !== null && (
-          <span aria-hidden="true" className={styles.leading} data-bf-part="leading">
+          <span aria-hidden="true" className={styles.leading} data-openbitfun-part="leading">
             {leading}
           </span>
         )}
-        <span className={styles.content} data-bf-part="content">
-          <span className={styles.label} data-bf-part="label">{children}</span>
+        <span className={styles.content} data-openbitfun-part="content">
+          <span className={styles.label} data-openbitfun-part="label">{children}</span>
           {description !== undefined && description !== null && (
-            <span className={styles.description} data-bf-part="description">
+            <span className={styles.description} data-openbitfun-part="description">
               {description}
             </span>
           )}
         </span>
         {metadata !== undefined && metadata !== null && (
-          <span className={styles.metadata} data-bf-part="metadata">{metadata}</span>
+          <span className={styles.metadata} data-openbitfun-part="metadata">{metadata}</span>
         )}
-        <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
+        <span aria-hidden="true" className={styles.indicator} data-openbitfun-part="indicator">
           {indicator ?? (selected ? <Icon name="check-line" /> : null)}
         </span>
       </button>
@@ -267,16 +267,16 @@ export const ListboxGroup = forwardRef<HTMLDivElement, ListboxGroupProps>(
         {...props}
         aria-labelledby={labelId}
         className={classNames(styles.group, className)}
-        data-bf-part="group"
+        data-openbitfun-part="group"
         ref={ref}
         role="group"
       >
         {labelId && (
-          <div className={styles.groupLabel} data-bf-part="group-label" id={labelId}>
+          <div className={styles.groupLabel} data-openbitfun-part="group-label" id={labelId}>
             {label}
           </div>
         )}
-        <div className={styles.groupOptions} data-bf-part="group-options">{children}</div>
+        <div className={styles.groupOptions} data-openbitfun-part="group-options">{children}</div>
       </div>
     );
   },
@@ -288,7 +288,7 @@ export const ListboxEmpty = forwardRef<HTMLDivElement, ListboxEmptyProps>(
       <div
         {...props}
         className={classNames(styles.empty, className)}
-        data-bf-part="empty"
+        data-openbitfun-part="empty"
         ref={ref}
         role="status"
       />

@@ -1,7 +1,7 @@
 use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, UserContextPolicy};
 use crate::agentic::session::SystemPromptCacheIdentity;
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_runtime::custom_agent::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use openbitfun_agent_runtime::custom_agent::{
     custom_agent_save_markdown_file, CustomAgentDefinition, CustomAgentKind, CustomAgentLevel,
 };
 use sha2::{Digest, Sha256};
@@ -72,7 +72,7 @@ impl CustomAgentData {
     pub(crate) async fn build_prompt(
         &self,
         context: &PromptBuilderContext,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let prompt_builder = PromptBuilder::new(context.clone());
         prompt_builder
             .build_prompt_from_template(&self.prompt)
@@ -83,8 +83,8 @@ impl CustomAgentData {
         &self,
         model: Option<&str>,
         model_is_explicit: Option<bool>,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let definition = self.to_definition(model, model_is_explicit);
-        custom_agent_save_markdown_file(&self.path, &definition).map_err(BitFunError::Agent)
+        custom_agent_save_markdown_file(&self.path, &definition).map_err(OpenBitFunError::Agent)
     }
 }

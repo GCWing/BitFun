@@ -1862,7 +1862,7 @@ mod tests {
         let manager = ExecProcessManager::default();
         let response = manager
             .exec_command(ExecCommandRequest {
-                argv: shell_argv("echo bitfun_exec_test"),
+                argv: shell_argv("echo openbitfun_exec_test"),
                 cwd: std::env::current_dir().expect("current dir"),
                 env: HashMap::new(),
                 tty: false,
@@ -1876,7 +1876,7 @@ mod tests {
 
         assert_eq!(response.exit_code, Some(0));
         assert!(response.session_id.is_none());
-        assert!(response.output.contains("bitfun_exec_test"));
+        assert!(response.output.contains("openbitfun_exec_test"));
     }
 
     #[tokio::test]
@@ -2306,8 +2306,8 @@ mod tests {
                 .expect("system time should be after unix epoch")
                 .as_nanos()
         );
-        let pid_file = std::env::temp_dir().join(format!("bitfun-exec-child-{unique}.pid"));
-        let tick_file = std::env::temp_dir().join(format!("bitfun-exec-child-{unique}.tick"));
+        let pid_file = std::env::temp_dir().join(format!("openbitfun-exec-child-{unique}.pid"));
+        let tick_file = std::env::temp_dir().join(format!("openbitfun-exec-child-{unique}.tick"));
         let pid_path = pid_file.to_string_lossy();
         let tick_path = tick_file.to_string_lossy();
         let script = format!(
@@ -2500,13 +2500,15 @@ print("parent_exit", flush=True)"#;
 
     #[cfg(windows)]
     async fn assert_git_bash_npm_dev_control(action: ExecControlAction) {
-        let Ok(bash_path) = std::env::var("BITFUN_TEST_WINDOWS_GIT_BASH") else {
-            eprintln!("skipping git bash exec regression: BITFUN_TEST_WINDOWS_GIT_BASH is unset");
+        let Ok(bash_path) = std::env::var("OPENBITFUN_TEST_WINDOWS_GIT_BASH") else {
+            eprintln!(
+                "skipping git bash exec regression: OPENBITFUN_TEST_WINDOWS_GIT_BASH is unset"
+            );
             return;
         };
-        let Ok(fixture_dir) = std::env::var("BITFUN_TEST_WINDOWS_NPM_FIXTURE") else {
+        let Ok(fixture_dir) = std::env::var("OPENBITFUN_TEST_WINDOWS_NPM_FIXTURE") else {
             eprintln!(
-                "skipping git bash exec regression: BITFUN_TEST_WINDOWS_NPM_FIXTURE is unset"
+                "skipping git bash exec regression: OPENBITFUN_TEST_WINDOWS_NPM_FIXTURE is unset"
             );
             return;
         };

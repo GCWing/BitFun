@@ -39,7 +39,7 @@ pub fn maybe_start(app: AppHandle) {
         return;
     }
 
-    let Some(port) = std::env::var("BITFUN_WEBDRIVER_PORT")
+    let Some(port) = std::env::var("OPENBITFUN_WEBDRIVER_PORT")
         .ok()
         .and_then(|raw| raw.parse::<u16>().ok())
     else {
@@ -50,8 +50,8 @@ pub fn maybe_start(app: AppHandle) {
         return;
     }
 
-    let preferred_label =
-        std::env::var("BITFUN_WEBDRIVER_LABEL").unwrap_or_else(|_| DEFAULT_WEBDRIVER_LABEL.into());
+    let preferred_label = std::env::var("OPENBITFUN_WEBDRIVER_LABEL")
+        .unwrap_or_else(|_| DEFAULT_WEBDRIVER_LABEL.into());
     let state = shared_state(app, preferred_label, port);
     server::start(state);
 }

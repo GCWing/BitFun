@@ -1,10 +1,10 @@
-use bitfun_agent_runtime::native_hooks::RuntimeHookCommitToken;
-use bitfun_opencode_plugin_host::{
+use openbitfun_agent_runtime::native_hooks::RuntimeHookCommitToken;
+use openbitfun_opencode_plugin_host::{
     BackendDiagnostic, BackendDiagnosticError, BackendDiagnosticEvent, BackendDiagnosticSeverity,
     PluginDeclaration, PluginHost, PluginHostConfig, PluginHostShutdownPolicy,
     PluginHostShutdownReport, PluginPrepareRequest, GENERATION_FENCING_V1,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     HookFunctionDisposeRequest, HookFunctionGeneration, HookFunctionPluginDeclaration,
     HookFunctionRegistrationBatch, HookFunctionRegistrationSink, HookFunctionRuntime,
     HookFunctionStartRequest, PortError, PortErrorKind, PortResult,
@@ -19,7 +19,7 @@ use std::sync::Arc;
 //
 // `PluginHost` itself remains the adapter-owned process/IPC resource. Core
 // keeps only the product-level lifecycle assembly and logical instance/PTy
-// ownership needed to bind adapter callbacks to BitFun owners; these maps do
+// ownership needed to bind adapter callbacks to OpenBitFun owners; these maps do
 // not supervise a physical process tree or make trust/configuration policy.
 
 use terminal_core::{CloseSessionRequest, TerminalApi};
@@ -46,21 +46,21 @@ impl HookFunctionRegistrationSink for CapturedPluginGeneration {
 }
 
 impl CapturedPluginGeneration {
-    fn take(&self) -> crate::BitFunResult<HookFunctionRegistrationBatch> {
+    fn take(&self) -> crate::OpenBitFunResult<HookFunctionRegistrationBatch> {
         self.batch
             .lock()
             .expect("plugin generation lock poisoned")
             .take()
             .ok_or_else(|| {
-                crate::BitFunError::ProcessError(
+                crate::OpenBitFunError::ProcessError(
                     "Plugin runtime started without publishing its registration batch".to_string(),
                 )
             })
     }
 }
 
-const BUN_HOST_ENTRY_ENV: &str = "BITFUN_OPENCODE_BUN_HOST_ENTRY";
-const BUN_COMMAND_ENV: &str = "BITFUN_BUN_COMMAND";
+const BUN_HOST_ENTRY_ENV: &str = "OPENBITFUN_OPENCODE_BUN_HOST_ENTRY";
+const BUN_COMMAND_ENV: &str = "OPENBITFUN_BUN_COMMAND";
 const OPENCODE_PLUGIN_ECOSYSTEM: &str = "opencode";
 const OPENCODE_PLUGIN_RUNTIME_NAMESPACE: &str = "opencode-plugin";
 const OPENCODE_PLUGIN_ROUTE_OWNER: &str = "opencode-plugin-config";
@@ -112,13 +112,13 @@ impl Drop for PluginHostEnsureLease {
     }
 }
 
-async fn acquire_plugin_host_ensure_lease() -> crate::BitFunResult<PluginHostEnsureLease> {
+async fn acquire_plugin_host_ensure_lease() -> crate::OpenBitFunResult<PluginHostEnsureLease> {
     let lifecycle_lock = PLUGIN_HOST_LIFECYCLE_LOCK
         .get_or_init(|| async { Mutex::new(()) })
         .await;
     let _guard = lifecycle_lock.lock().await;
     if PLUGIN_HOST_SHUTDOWN_STARTED.load(Ordering::Acquire) {
-        return Err(crate::BitFunError::ProcessError(
+        return Err(crate::OpenBitFunError::ProcessError(
             "Plugin host is shutting down".to_string(),
         ));
     }
@@ -219,7 +219,7 @@ pub enum PluginHostLaunchPolicy {
     Disabled,
 }
 
-pub async fn configured_plugins_present() -> crate::BitFunResult<bool> {
+pub async fn configured_plugins_present() -> crate::OpenBitFunResult<bool> {
     use crate::service::config::{get_global_config_service, GlobalConfig};
 
     let config_service = get_global_config_service().await?;
@@ -229,14 +229,14 @@ pub async fn configured_plugins_present() -> crate::BitFunResult<bool> {
 
 pub async fn initialize_configured_plugin_host(
     launch_policy: PluginHostLaunchPolicy,
-) -> crate::BitFunResult<PluginHostStartup> {
+) -> crate::OpenBitFunResult<PluginHostStartup> {
     initialize_configured_plugin_host_with_log_file(launch_policy, None).await
 }
 
 pub async fn initialize_configured_plugin_host_with_log_file(
     launch_policy: PluginHostLaunchPolicy,
     log_file: Option<PathBuf>,
-) -> crate::BitFunResult<PluginHostStartup> {
+) -> crate::OpenBitFunResult<PluginHostStartup> {
     use crate::service::config::{get_global_config_service, GlobalConfig};
 
     if launch_policy == PluginHostLaunchPolicy::Disabled {
@@ -254,7 +254,7 @@ async fn initialize_configured_plugin_host_from_config(
     launch_policy: PluginHostLaunchPolicy,
     log_file: Option<PathBuf>,
     config: &crate::service::config::GlobalConfig,
-) -> crate::BitFunResult<PluginHostStartup> {
+) -> crate::OpenBitFunResult<PluginHostStartup> {
     if launch_policy == PluginHostLaunchPolicy::Disabled {
         return Ok(PluginHostStartup::Disabled);
     }
@@ -266,7 +266,7 @@ async fn initialize_configured_plugin_host_from_config(
         .await;
     let _lifecycle_guard = lifecycle_lock.lock().await;
     if PLUGIN_HOST_SHUTDOWN_STARTED.load(Ordering::Acquire) {
-        return Err(crate::BitFunError::ProcessError(
+        return Err(crate::OpenBitFunError::ProcessError(
             "Plugin host is shutting down".to_string(),
         ));
     }
@@ -276,14 +276,14 @@ async fn initialize_configured_plugin_host_from_config(
     let stale_host = {
         let mut host_state = host_state.lock().await;
         if PLUGIN_HOST_SHUTDOWN_STARTED.load(Ordering::Acquire) {
-            return Err(crate::BitFunError::ProcessError(
+            return Err(crate::OpenBitFunError::ProcessError(
                 "Plugin host is shutting down".to_string(),
             ));
         }
         if let Some(host) = host_state.as_mut() {
             if host
                 .is_connected()
-                .map_err(|error| crate::BitFunError::ProcessError(error.to_string()))?
+                .map_err(|error| crate::OpenBitFunError::ProcessError(error.to_string()))?
             {
                 return Ok(PluginHostStartup::AlreadyStarted);
             }
@@ -300,7 +300,7 @@ async fn initialize_configured_plugin_host_from_config(
     let log_file = log_file.unwrap_or_else(|| path_manager.logs_dir().join("plugin-host.log"));
     let entry = resolve_host_entry(launch_spec)?;
     let working_directory = entry.parent().ok_or_else(|| {
-        crate::BitFunError::config(format!(
+        crate::OpenBitFunError::config(format!(
             "{} plugin host entry has no parent directory: {}",
             launch_spec.runtime_name,
             entry.display()
@@ -318,7 +318,7 @@ async fn initialize_configured_plugin_host_from_config(
     })
     .await
     .map_err(|error| {
-        crate::BitFunError::ProcessError(format!(
+        crate::OpenBitFunError::ProcessError(format!(
             "Failed to initialize {} plugin host from {}: {error}",
             launch_spec.runtime_name,
             entry.display()
@@ -337,14 +337,14 @@ async fn initialize_configured_plugin_host_from_config(
     Ok(PluginHostStartup::Started)
 }
 
-pub async fn set_configured_plugin_host_log_level(level: &str) -> crate::BitFunResult<()> {
+pub async fn set_configured_plugin_host_log_level(level: &str) -> crate::OpenBitFunResult<()> {
     let host_state = PLUGIN_HOST.get_or_init(|| async { Mutex::new(None) }).await;
     let client = host_state.lock().await.as_ref().map(PluginHost::client);
     let Some(client) = client else {
         return Ok(());
     };
     client.set_log_level(level).await.map_err(|error| {
-        crate::BitFunError::ProcessError(format!(
+        crate::OpenBitFunError::ProcessError(format!(
             "Failed to update plugin host log level to {}: {}",
             level, error
         ))
@@ -398,7 +398,7 @@ pub async fn ensure_configured_plugin_instance(
     directory: PathBuf,
     worktree: PathBuf,
     project_id: Option<String>,
-) -> crate::BitFunResult<()> {
+) -> crate::OpenBitFunResult<()> {
     use crate::service::config::{get_global_config_service, GlobalConfig};
 
     if launch_policy == PluginHostLaunchPolicy::Disabled {
@@ -407,13 +407,13 @@ pub async fn ensure_configured_plugin_instance(
         return Ok(());
     }
     if directory.as_os_str().is_empty() || !directory.is_dir() {
-        return Err(crate::BitFunError::Validation(format!(
+        return Err(crate::OpenBitFunError::Validation(format!(
             "Plugin host instance directory does not exist: {}",
             directory.display()
         )));
     }
     let canonical_directory = dunce::canonicalize(&directory).map_err(|error| {
-        crate::BitFunError::Io(std::io::Error::other(format!(
+        crate::OpenBitFunError::Io(std::io::Error::other(format!(
             "Failed to canonicalize plugin host instance directory {}: {error}",
             directory.display()
         )))
@@ -446,7 +446,7 @@ pub async fn ensure_configured_plugin_instance(
 
     let config = serde_json::to_value(
         crate::plugin_runtime::opencode_config_snapshot(&canonical_directory).map_err(|error| {
-            crate::BitFunError::Validation(format!(
+            crate::OpenBitFunError::Validation(format!(
                 "Failed to load OpenCode config for plugin activation: {error}"
             ))
         })?,
@@ -456,7 +456,7 @@ pub async fn ensure_configured_plugin_instance(
         _ => unreachable!("OpenCodeConfigSnapshot must serialize as an object"),
     })
     .map_err(|error| {
-        crate::BitFunError::Validation(format!(
+        crate::OpenBitFunError::Validation(format!(
             "Failed to serialize OpenCode plugin config snapshot: {error}"
         ))
     })?;
@@ -470,13 +470,13 @@ pub async fn ensure_configured_plugin_instance(
             .as_ref()
             .map(|host| (host.client(), host.runtime()))
             .ok_or_else(|| {
-                crate::BitFunError::ProcessError(
+                crate::OpenBitFunError::ProcessError(
                     "Configured plugin host is not running".to_string(),
                 )
             })?
     };
     if !client.capabilities().supports(GENERATION_FENCING_V1) {
-        return Err(crate::BitFunError::ProcessError(
+        return Err(crate::OpenBitFunError::ProcessError(
             "Configured plugin host does not support generation-fencing-v1".to_string(),
         ));
     }
@@ -489,7 +489,7 @@ pub async fn ensure_configured_plugin_instance(
         .filter_map(plugin_declaration)
         .collect::<Vec<_>>();
     // Resolve the configured declarations directly. Plugin activation is an
-    // explicit BitFun configuration choice; no separate external-integration
+    // explicit OpenBitFun configuration choice; no separate external-integration
     // policy, safe-mode switch, or activation approval is required before the
     // host can load the configured plugins.
     let prepared = client
@@ -504,7 +504,7 @@ pub async fn ensure_configured_plugin_instance(
         )
         .await
         .map_err(|error| {
-            crate::BitFunError::ProcessError(format!(
+            crate::OpenBitFunError::ProcessError(format!(
                 "Failed to prepare plugins for workspace {}: {error}",
                 canonical_directory.display()
             ))
@@ -513,7 +513,7 @@ pub async fn ensure_configured_plugin_instance(
     let failed_count = prepared.failed_count;
     let reviewed_count = prepared.reviewed_count;
     if failed_count != 0 || prepared_count != reviewed_count {
-        return Err(crate::BitFunError::Validation(format!(
+        return Err(crate::OpenBitFunError::Validation(format!(
             "Configured OpenCode plugin preparation did not resolve the complete plugin graph: prepared={prepared_count}, failed={failed_count}, reviewed={reviewed_count}"
         )));
     }
@@ -525,7 +525,7 @@ pub async fn ensure_configured_plugin_instance(
     let workspace_config_fingerprint = serde_json::to_vec(&initial_config)
         .map(|bytes| hex::encode(Sha256::digest(bytes)))
         .map_err(|error| {
-            crate::BitFunError::Validation(format!(
+            crate::OpenBitFunError::Validation(format!(
                 "Failed to fingerprint workspace plugin config: {error}"
             ))
         })?;
@@ -533,7 +533,7 @@ pub async fn ensure_configured_plugin_instance(
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| {
             format!(
-                "bitfun-project-{}",
+                "openbitfun-project-{}",
                 hex::encode(Sha256::digest(canonical_directory_string.as_bytes()))
             )
         });
@@ -559,16 +559,16 @@ pub async fn ensure_configured_plugin_instance(
             != Some(instance.generation_key.as_str())
         {
             let registration_batch = instance.registration_batch.as_ref().ok_or_else(|| {
-                crate::BitFunError::ProcessError(
+                crate::OpenBitFunError::ProcessError(
                     "Reusable plugin instance is missing its typed registration batch".to_string(),
                 )
             })?;
-            let projection = bitfun_opencode_adapter::project_plugin_config(
+            let projection = openbitfun_opencode_adapter::project_plugin_config(
                 &canonical_directory,
                 &initial_config,
                 registration_batch,
             )
-            .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
+            .map_err(|error| crate::OpenBitFunError::Validation(error.to_string()))?;
             let publication = crate::plugin_capability_publication::prepare(
                 &canonical_directory,
                 &instance.generation_key,
@@ -596,7 +596,7 @@ pub async fn ensure_configured_plugin_instance(
         )
         .await
         {
-            return Err(crate::BitFunError::ProcessError(
+            return Err(crate::OpenBitFunError::ProcessError(
                 "Configured plugin Host faulted while retiring a superseded generation".to_string(),
             ));
         }
@@ -616,14 +616,14 @@ pub async fn ensure_configured_plugin_instance(
     )
     .await
     {
-        return Err(crate::BitFunError::ProcessError(
+        return Err(crate::OpenBitFunError::ProcessError(
             "Configured plugin host could not confirm closure of the previous workspace generation"
                 .to_string(),
         ));
     }
 
     let sequence = NEXT_INSTANCE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let instance_id = format!("bitfun:host:{}:{sequence}", client.generation());
+    let instance_id = format!("openbitfun:host:{}:{sequence}", client.generation());
     let revision = format!("revision-{sequence}");
     let generation_material =
         format!("{config_fingerprint}\n{workspace_config_fingerprint}\n{prepared_fingerprint}");
@@ -700,7 +700,7 @@ pub async fn ensure_configured_plugin_instance(
                 &generation,
             )
             .await;
-            return Err(crate::BitFunError::ProcessError(
+            return Err(crate::OpenBitFunError::ProcessError(
                 "Plugin runtime returned a different generation from the requested lease"
                     .to_string(),
             ));
@@ -714,7 +714,7 @@ pub async fn ensure_configured_plugin_instance(
                 &generation,
             )
             .await;
-            return Err(crate::BitFunError::ProcessError(format!(
+            return Err(crate::OpenBitFunError::ProcessError(format!(
                 "Failed to activate plugins for workspace {}: {error}",
                 canonical_directory.display()
             )));
@@ -734,12 +734,12 @@ pub async fn ensure_configured_plugin_instance(
             return Err(error);
         }
     };
-    let projected_config = bitfun_opencode_adapter::project_plugin_config(
+    let projected_config = openbitfun_opencode_adapter::project_plugin_config(
         &canonical_directory,
         &initial_config,
         &registration_batch,
     )
-    .map_err(|error| crate::BitFunError::Validation(error.to_string()));
+    .map_err(|error| crate::OpenBitFunError::Validation(error.to_string()));
     let config_publication = match projected_config.and_then(|projection| {
         crate::plugin_capability_publication::prepare(
             &canonical_directory,
@@ -787,7 +787,7 @@ pub async fn ensure_configured_plugin_instance(
                 &generation,
             )
             .await;
-            return Err(crate::BitFunError::ProcessError(format!(
+            return Err(crate::OpenBitFunError::ProcessError(format!(
                 "Failed to register plugin hooks for workspace {}: {error}",
                 canonical_directory.display()
             )));
@@ -857,7 +857,7 @@ pub async fn ensure_configured_plugin_instance(
                 &generation,
             )
             .await;
-            return Err(crate::BitFunError::ProcessError(
+            return Err(crate::OpenBitFunError::ProcessError(
                 "Plugin instance disappeared before generation publication".to_string(),
             ));
         }
@@ -887,7 +887,7 @@ pub async fn ensure_configured_plugin_instance(
     )
     .await
     {
-        return Err(crate::BitFunError::ProcessError(
+        return Err(crate::OpenBitFunError::ProcessError(
             "Configured plugin Host faulted while retiring a superseded generation".to_string(),
         ));
     }
@@ -896,7 +896,7 @@ pub async fn ensure_configured_plugin_instance(
 }
 
 async fn discard_opening_plugin_instance(
-    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    client: &openbitfun_opencode_plugin_host::PluginHostClient,
     runtime: Arc<dyn HookFunctionRuntime>,
     instances: &Mutex<HashMap<String, PluginHostInstance>>,
     instance_key: &str,
@@ -919,7 +919,7 @@ async fn discard_opening_plugin_instance(
 }
 
 async fn retire_workspace_instances_before_open(
-    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    client: &openbitfun_opencode_plugin_host::PluginHostClient,
     runtime: Arc<dyn HookFunctionRuntime>,
     instances: &Mutex<HashMap<String, PluginHostInstance>>,
     workspace_scope: &str,
@@ -1114,7 +1114,7 @@ async fn withdraw_faulted_plugin_host_generation(directory: &Path, expected_gene
     }
 }
 
-fn start_plugin_host_health_monitor(client: bitfun_opencode_plugin_host::PluginHostClient) {
+fn start_plugin_host_health_monitor(client: openbitfun_opencode_plugin_host::PluginHostClient) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -1179,7 +1179,7 @@ fn start_plugin_host_health_monitor(client: bitfun_opencode_plugin_host::PluginH
 }
 
 async fn retire_superseded_plugin_instances(
-    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    client: &openbitfun_opencode_plugin_host::PluginHostClient,
     runtime: Arc<dyn HookFunctionRuntime>,
     instances: &Mutex<HashMap<String, PluginHostInstance>>,
     active_key: &str,
@@ -1233,7 +1233,7 @@ async fn retire_superseded_plugin_instances(
 }
 
 fn schedule_plugin_instance_retirement(
-    client: bitfun_opencode_plugin_host::PluginHostClient,
+    client: openbitfun_opencode_plugin_host::PluginHostClient,
     runtime: Arc<dyn HookFunctionRuntime>,
     instance_key: String,
 ) {
@@ -1291,7 +1291,7 @@ fn schedule_plugin_instance_retirement(
 }
 
 async fn retire_plugin_instance(
-    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    client: &openbitfun_opencode_plugin_host::PluginHostClient,
     runtime: Arc<dyn HookFunctionRuntime>,
     instance: PluginHostInstance,
     workspace_scope: &str,
@@ -1339,7 +1339,7 @@ async fn retire_plugin_instance(
 }
 
 async fn dispose_plugin_generation(
-    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    client: &openbitfun_opencode_plugin_host::PluginHostClient,
     runtime: Arc<dyn HookFunctionRuntime>,
     generation: &HookFunctionGeneration,
     reason: &str,
@@ -1389,7 +1389,7 @@ pub(crate) async fn plugin_host_instance_by_id(instance_id: &str) -> Option<Plug
 pub(crate) async fn plugin_hook_generation_for_agent(
     workspace_scope: &str,
     runtime_agent_key: &str,
-) -> Option<bitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity> {
+) -> Option<openbitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity> {
     let instances = PLUGIN_HOST_INSTANCES.get()?;
     instances
         .lock()
@@ -1404,7 +1404,7 @@ pub(crate) async fn plugin_hook_generation_for_agent(
                     .any(|key| key == runtime_agent_key)
         })
         .map(
-            |instance| bitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity {
+            |instance| openbitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity {
                 instance_id: instance.instance_id.clone(),
                 generation_key: instance.generation_key.clone(),
                 revision: instance.revision.clone(),
@@ -1699,7 +1699,7 @@ pub(crate) fn instance_directories_equal(requested: &str, expected: &Path) -> bo
 }
 
 pub async fn shutdown_configured_plugin_host(
-) -> crate::BitFunResult<Option<PluginHostShutdownReport>> {
+) -> crate::OpenBitFunResult<Option<PluginHostShutdownReport>> {
     let shutdown_report = PLUGIN_HOST_SHUTDOWN_REPORT
         .get_or_init(|| async { Mutex::new(None) })
         .await;
@@ -1801,7 +1801,7 @@ async fn register_plugin_tools(
     config_fingerprint: &str,
     registration_batch: &HookFunctionRegistrationBatch,
     projection: &crate::plugin_capability_publication::PluginCapabilityPublicationPlan,
-) -> crate::BitFunResult<Vec<String>> {
+) -> crate::OpenBitFunResult<Vec<String>> {
     let tools = &registration_batch.tools;
     if tools.is_empty() {
         log::debug!(
@@ -1820,11 +1820,11 @@ async fn register_plugin_tools(
     let mut prepared = Vec::new();
     let mut seen_ids = std::collections::BTreeSet::new();
     for tool in tools {
-        let tool_ref = bitfun_opencode_adapter::project_plugin_tool_ref(tool)
-            .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
+        let tool_ref = openbitfun_opencode_adapter::project_plugin_tool_ref(tool)
+            .map_err(|error| crate::OpenBitFunError::Validation(error.to_string()))?;
         let allowed_runtime_agent_keys = projection.allowed_runtime_agent_keys_for_tool(&tool_ref);
         if !seen_ids.insert(tool.id.clone()) {
-            return Err(crate::BitFunError::Validation(format!(
+            return Err(crate::OpenBitFunError::Validation(format!(
                 "Plugin tool id is duplicated in the registration batch: {}",
                 tool.id
             )));
@@ -1878,14 +1878,14 @@ async fn register_plugin_tools(
     Ok(names)
 }
 
-fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::BitFunResult<PathBuf> {
+fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::OpenBitFunResult<PathBuf> {
     if let Some(entry) = std::env::var_os(spec.entry_env) {
         return absolutize_existing_entry(PathBuf::from(entry), spec);
     }
-    let executable = std::env::current_exe().map_err(crate::BitFunError::Io)?;
+    let executable = std::env::current_exe().map_err(crate::OpenBitFunError::Io)?;
     let executable_directory = executable.parent().ok_or_else(|| {
-        crate::BitFunError::config(format!(
-            "BitFun executable has no parent directory: {}",
+        crate::OpenBitFunError::config(format!(
+            "OpenBitFun executable has no parent directory: {}",
             executable.display()
         ))
     })?;
@@ -1897,7 +1897,7 @@ fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::BitFunResult<PathBuf
     if let Some(entry) = development_entry.filter(|entry| entry.is_file()) {
         return Ok(entry);
     }
-    Err(crate::BitFunError::NotFound(format!(
+    Err(crate::OpenBitFunError::NotFound(format!(
         "{} plugin host entry does not exist at {}. Set {} in development.",
         spec.runtime_name,
         bundled_entries
@@ -1966,7 +1966,7 @@ fn plugin_declaration(
 
 fn plugin_config_fingerprint(
     config: &crate::service::config::GlobalConfig,
-) -> crate::BitFunResult<String> {
+) -> crate::OpenBitFunResult<String> {
     let declarations = config
         .plugin
         .iter()
@@ -1992,16 +1992,16 @@ pub(crate) fn canonical_plugin_workspace_scope(path: &Path) -> Option<String> {
 fn absolutize_existing_entry(
     entry: PathBuf,
     spec: PluginHostLaunchSpec,
-) -> crate::BitFunResult<PathBuf> {
+) -> crate::OpenBitFunResult<PathBuf> {
     let entry = if entry.is_absolute() {
         entry
     } else {
         std::env::current_dir()
-            .map_err(crate::BitFunError::Io)?
+            .map_err(crate::OpenBitFunError::Io)?
             .join(entry)
     };
     if !entry.is_file() {
-        return Err(crate::BitFunError::NotFound(format!(
+        return Err(crate::OpenBitFunError::NotFound(format!(
             "{} plugin host entry does not exist: {}. Set {} in development.",
             spec.runtime_name,
             entry.display(),
@@ -2028,14 +2028,14 @@ mod tests {
 
         assert_eq!(spec.default_command, "bun");
         assert_eq!(spec.entry_filename, "extension-host.js");
-        assert_eq!(spec.command_env, "BITFUN_BUN_COMMAND");
-        assert_eq!(spec.entry_env, "BITFUN_OPENCODE_BUN_HOST_ENTRY");
+        assert_eq!(spec.command_env, "OPENBITFUN_BUN_COMMAND");
+        assert_eq!(spec.entry_env, "OPENBITFUN_OPENCODE_BUN_HOST_ENTRY");
     }
 
     #[test]
-    fn development_host_entry_is_owned_by_the_bitfun_repository() {
+    fn development_host_entry_is_owned_by_the_openbitfun_repository() {
         let spec = PluginHostLaunchSpec::bun();
-        let entry = development_host_entry(spec).expect("BitFun repository root");
+        let entry = development_host_entry(spec).expect("OpenBitFun repository root");
 
         assert!(entry.ends_with(
             Path::new("src")
@@ -2049,7 +2049,7 @@ mod tests {
     #[test]
     fn bundled_host_entry_supports_desktop_platform_layouts() {
         let entries = bundled_host_entry_candidates(
-            Path::new("product/bin/bitfun-desktop"),
+            Path::new("product/bin/openbitfun-desktop"),
             PluginHostLaunchSpec::bun(),
         );
 

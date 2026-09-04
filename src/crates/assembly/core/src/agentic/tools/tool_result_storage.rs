@@ -6,16 +6,16 @@
 
 use crate::agentic::core::ToolResult;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_tools::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use log::{debug, warn};
+use openbitfun_agent_tools::{
     build_persisted_tool_output_message, count_tool_result_lines, generate_tool_result_preview,
     sanitize_tool_result_file_component, select_tool_result_indices_for_persistence,
     tool_result_is_persisted_output, PersistedToolOutput, ToolResultPersistenceCandidate,
     ToolResultStoragePolicy, GET_TOOL_SPEC_TOOL_NAME,
 };
 #[cfg(test)]
-use bitfun_agent_tools::{DEFAULT_MAX_TOOL_RESULT_CHARS, PERSISTED_OUTPUT_TAG};
-use log::{debug, warn};
+use openbitfun_agent_tools::{DEFAULT_MAX_TOOL_RESULT_CHARS, PERSISTED_OUTPUT_TAG};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -154,7 +154,7 @@ async fn persist_and_render_replacement(
     context: &ToolUseContext,
     policy: ToolResultStoragePolicy,
     content_override: Option<String>,
-) -> BitFunResult<String> {
+) -> OpenBitFunResult<String> {
     let persisted =
         persist_tool_result(result, context, policy.preview_chars, content_override).await?;
     Ok(build_persisted_tool_output_message(
@@ -168,9 +168,9 @@ async fn persist_tool_result(
     context: &ToolUseContext,
     preview_chars: usize,
     content_override: Option<String>,
-) -> BitFunResult<PersistedToolOutput> {
+) -> OpenBitFunResult<PersistedToolOutput> {
     let session_id = context.session_id.as_deref().ok_or_else(|| {
-        BitFunError::tool("A session id is required to persist tool results".to_string())
+        OpenBitFunError::tool("A session id is required to persist tool results".to_string())
     })?;
 
     let (serialized, is_json) = if let Some(content) = content_override {
@@ -183,7 +183,7 @@ async fn persist_tool_result(
 
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to create tool result directory {}: {}",
                 parent.display(),
                 error
@@ -219,7 +219,7 @@ async fn persist_tool_result(
     })
 }
 
-async fn write_once(path: &Path, content: &str) -> BitFunResult<()> {
+async fn write_once(path: &Path, content: &str) -> OpenBitFunResult<()> {
     match tokio::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -229,7 +229,7 @@ async fn write_once(path: &Path, content: &str) -> BitFunResult<()> {
         Ok(mut file) => {
             use tokio::io::AsyncWriteExt;
             file.write_all(content.as_bytes()).await.map_err(|error| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to write tool result file {}: {}",
                     path.display(),
                     error
@@ -241,7 +241,7 @@ async fn write_once(path: &Path, content: &str) -> BitFunResult<()> {
             // an intermittent failure on macOS CI. flush() drains the buffer to
             // the OS so the persisted output is visible to later readers.
             file.flush().await.map_err(|error| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to flush tool result file {}: {}",
                     path.display(),
                     error
@@ -249,7 +249,7 @@ async fn write_once(path: &Path, content: &str) -> BitFunResult<()> {
             })
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(error) => Err(BitFunError::io(format!(
+        Err(error) => Err(OpenBitFunError::io(format!(
             "Failed to create tool result file {}: {}",
             path.display(),
             error
@@ -257,7 +257,7 @@ async fn write_once(path: &Path, content: &str) -> BitFunResult<()> {
     }
 }
 
-fn serialize_tool_result_content(result: &ToolResult) -> BitFunResult<(String, bool)> {
+fn serialize_tool_result_content(result: &ToolResult) -> OpenBitFunResult<(String, bool)> {
     if let Some(text) = result.result_for_assistant.as_ref() {
         return Ok((text.clone(), false));
     }
@@ -266,7 +266,7 @@ fn serialize_tool_result_content(result: &ToolResult) -> BitFunResult<(String, b
         .or_else(|_| serde_json::to_string(&result.result))
         .map(|text| (text, true))
         .map_err(|error| {
-            BitFunError::serialization(format!("Failed to serialize tool result: {}", error))
+            OpenBitFunError::serialization(format!("Failed to serialize tool result: {}", error))
         })
 }
 
@@ -352,7 +352,7 @@ mod tests {
     fn test_context(root: PathBuf) -> ToolUseContext {
         let mut custom_data = HashMap::new();
         custom_data.insert(
-            "__bitfun_test_runtime_root".to_string(),
+            "__openbitfun_test_runtime_root".to_string(),
             json!(root.join("runtime")),
         );
 
@@ -367,13 +367,13 @@ mod tests {
             custom_data,
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
     fn temp_workspace(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "bitfun-tool-result-storage-{}-{}",
+            "openbitfun-tool-result-storage-{}-{}",
             name,
             uuid::Uuid::new_v4()
         ))
@@ -486,7 +486,7 @@ mod tests {
         let context = test_context(root.clone());
         let result = tool_result(
             "mcp_call_1",
-            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            openbitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
             "x".repeat(DEFAULT_MAX_TOOL_RESULT_CHARS + 1),
         );
 
@@ -496,7 +496,7 @@ mod tests {
 
         assert_eq!(
             processed.tool_name,
-            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME
+            openbitfun_agent_tools::CALL_DEFERRED_TOOL_NAME
         );
         assert!(processed
             .result_for_assistant

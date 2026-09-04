@@ -23,7 +23,7 @@ pub(crate) struct EndpointInfo {
 /// API info endpoint
 pub(crate) async fn api_info(State(_state): State<AppState>) -> Json<ApiInfo> {
     Json(ApiInfo {
-        name: "BitFun Server API".to_string(),
+        name: "OpenBitFun Server API".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         endpoints: vec![
             EndpointInfo {

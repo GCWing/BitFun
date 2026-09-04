@@ -1,10 +1,10 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     display: flex;
     align-items: flex-start;
     min-inline-size: 0;
-    gap: var(--bf-space-5);
-    color: var(--bf-color-content-primary);
+    gap: var(--openbitfun-space-5);
+    color: var(--openbitfun-color-content-primary);
   }
 
   .root[data-align="center"] {
@@ -25,7 +25,7 @@
     min-inline-size: 0;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .root[data-align="center"] .content {
@@ -36,57 +36,57 @@
   .heading {
     margin: 0;
     color: inherit;
-    font-family: var(--bf-type-heading-page-font-family);
-    font-size: var(--bf-type-heading-page-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-heading-page-line-height);
-    letter-spacing: var(--bf-type-heading-page-letter-spacing);
+    font-family: var(--openbitfun-type-heading-page-font-family);
+    font-size: var(--openbitfun-type-heading-page-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-heading-page-line-height);
+    letter-spacing: var(--openbitfun-type-heading-page-letter-spacing);
   }
 
   .root[data-size="sm"] .heading {
-    font-family: var(--bf-type-heading-section-font-family);
-    font-size: var(--bf-type-heading-section-font-size);
-    font-weight: var(--bf-type-heading-section-font-weight);
-    line-height: var(--bf-type-heading-section-line-height);
-    letter-spacing: var(--bf-type-heading-section-letter-spacing);
+    font-family: var(--openbitfun-type-heading-section-font-family);
+    font-size: var(--openbitfun-type-heading-section-font-size);
+    font-weight: var(--openbitfun-type-heading-section-font-weight);
+    line-height: var(--openbitfun-type-heading-section-line-height);
+    letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
   }
 
   .root[data-size="lg"] .heading {
-    font-family: var(--bf-type-heading-display-font-family);
-    font-size: var(--bf-type-heading-display-font-size);
-    font-weight: var(--bf-type-heading-display-font-weight);
-    line-height: var(--bf-type-heading-display-line-height);
-    letter-spacing: var(--bf-type-heading-display-letter-spacing);
+    font-family: var(--openbitfun-type-heading-display-font-family);
+    font-size: var(--openbitfun-type-heading-display-font-size);
+    font-weight: var(--openbitfun-type-heading-display-font-weight);
+    line-height: var(--openbitfun-type-heading-display-line-height);
+    letter-spacing: var(--openbitfun-type-heading-display-letter-spacing);
   }
 
   .root[data-size="display"] .heading {
-    font-family: var(--bf-type-display-sm-font-family);
-    font-size: var(--bf-type-display-sm-font-size);
-    font-weight: var(--bf-type-display-sm-font-weight);
-    line-height: var(--bf-type-display-sm-line-height);
-    letter-spacing: var(--bf-type-display-sm-letter-spacing);
+    font-family: var(--openbitfun-type-display-sm-font-family);
+    font-size: var(--openbitfun-type-display-sm-font-size);
+    font-weight: var(--openbitfun-type-display-sm-font-weight);
+    line-height: var(--openbitfun-type-display-sm-line-height);
+    letter-spacing: var(--openbitfun-type-display-sm-letter-spacing);
   }
 
   .required {
-    margin-inline-start: var(--bf-space-1);
-    color: var(--bf-color-content-required-indicator);
+    margin-inline-start: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-required-indicator);
   }
 
   .description {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-lg-font-family);
-    font-size: var(--bf-type-body-lg-font-size);
-    font-weight: var(--bf-type-body-lg-font-weight);
-    line-height: var(--bf-type-body-lg-line-height);
-    letter-spacing: var(--bf-type-body-lg-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-lg-font-family);
+    font-size: var(--openbitfun-type-body-lg-font-size);
+    font-weight: var(--openbitfun-type-body-lg-font-weight);
+    line-height: var(--openbitfun-type-body-lg-line-height);
+    letter-spacing: var(--openbitfun-type-body-lg-letter-spacing);
   }
 
   .root[data-size="sm"] .description {
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   .action {

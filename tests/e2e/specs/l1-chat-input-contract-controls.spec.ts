@@ -95,12 +95,12 @@ describe('L1 Chat Input Contract Controls', () => {
 
     await addTrigger.click();
     const modeOptions = await $$([
-      '[data-bf-boost-item-kind="mode"]',
+      '[data-openbitfun-boost-item-kind="mode"]',
       ':not([aria-disabled="true"])',
     ].join(''));
     let selectedAlternativeMode = false;
     for (const option of modeOptions) {
-      const modeId = await option.getAttribute('data-bf-mode-id');
+      const modeId = await option.getAttribute('data-openbitfun-mode-id');
       if (modeId?.toLowerCase() === 'agentic') continue;
       await option.click();
       selectedAlternativeMode = true;
@@ -133,7 +133,7 @@ describe('L1 Chat Input Contract Controls', () => {
     expect(layout!.harnessX).toBeLessThan(layout!.modeX);
     await saveStepScreenshot('l1-chat-input-contract-controls-order');
 
-    const removeMode = await modeChip.$('[data-bf-part="modeChipRemove"]');
+    const removeMode = await modeChip.$('[data-openbitfun-part="modeChipRemove"]');
     if (await removeMode.isExisting()) {
       await removeMode.click();
       await modeChip.waitForExist({ timeout: 10000, reverse: true });
@@ -152,9 +152,9 @@ describe('L1 Chat Input Contract Controls', () => {
 
     const creativeProfile = await $('[data-testid="harness-profile-creative"]');
     await creativeProfile.waitForDisplayed({ timeout: 10000 });
-    expect(await creativeProfile.getAttribute('data-bf-state')).toBe('available');
+    expect(await creativeProfile.getAttribute('data-openbitfun-state')).toBe('available');
 
-    const creativeIcon = await creativeProfile.$('[data-bf-name="creative"]');
+    const creativeIcon = await creativeProfile.$('[data-openbitfun-name="creative"]');
     expect(await creativeIcon.isDisplayed()).toBe(true);
     await saveStepScreenshot('l1-chat-input-contract-controls-creative-harness');
 

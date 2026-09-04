@@ -1,4 +1,4 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
     ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
     ExternalMcpStaticStatus, ExternalMcpTimeouts, ExternalMcpTransportKind,
@@ -8,7 +8,7 @@ use bitfun_product_domains::external_sources::{
     PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
     MAX_EXTERNAL_MCP_TIMEOUT_MS,
 };
-use bitfun_static_hook_support::{
+use openbitfun_static_hook_support::{
     read_bounded_text, redacted_executable_preview, resolve_bounded_regular_file,
     BoundedFileResolveError, BoundedTextRead,
 };
@@ -502,7 +502,7 @@ fn bounded_file_error(error: BoundedFileResolveError) -> ExternalSourceProviderE
 
 fn materialize_server(
     context: &ExternalSourceContext,
-    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
+    revision_key: &openbitfun_product_domains::external_sources::ExternalMcpRevisionKey,
     effective_source: SourceKey,
     provenance: Vec<SourceKey>,
     name: String,
@@ -555,7 +555,7 @@ fn materialize_server(
         .then(|| {
             ExternalSourceDiagnostic::warning(
                 "codex.mcp.required_not_imported",
-                "BitFun does not adopt Codex required-startup failure semantics",
+                "OpenBitFun does not adopt Codex required-startup failure semantics",
                 Some(effective_source),
             )
             .with_asset_kind(ExternalSourceAssetKind::Mcp)
@@ -1248,7 +1248,7 @@ fn deep_merge(base: &mut Value, overlay: Value) {
 }
 
 fn behavior_version(
-    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
+    revision_key: &openbitfun_product_domains::external_sources::ExternalMcpRevisionKey,
     name: &str,
     value: &Value,
 ) -> String {
@@ -1269,7 +1269,7 @@ fn behavior_version(
 }
 
 fn content_version(
-    revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
+    revision_key: &openbitfun_product_domains::external_sources::ExternalMcpRevisionKey,
     path: &Path,
     content: &[u8],
 ) -> String {

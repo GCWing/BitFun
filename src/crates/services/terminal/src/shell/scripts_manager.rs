@@ -27,9 +27,9 @@ impl ScriptsManager {
     /// Create a new ScriptsManager with optional custom directory
     ///
     /// If `scripts_dir` is None, uses the default location:
-    /// - Linux: `~/.cache/bitfun_terminal/scripts/`
-    /// - Windows: `%LOCALAPPDATA%\bitfun_terminal\scripts\`
-    /// - macOS: `~/Library/Caches/bitfun_terminal/scripts/`
+    /// - Linux: `~/.cache/openbitfun_terminal/scripts/`
+    /// - Windows: `%LOCALAPPDATA%\openbitfun_terminal\scripts\`
+    /// - macOS: `~/Library/Caches/openbitfun_terminal/scripts/`
     pub fn new(scripts_dir: Option<PathBuf>) -> Self {
         let dir = scripts_dir.unwrap_or_else(Self::default_scripts_dir);
         Self { scripts_dir: dir }
@@ -39,7 +39,7 @@ impl ScriptsManager {
     fn default_scripts_dir() -> PathBuf {
         dirs::cache_dir()
             .unwrap_or_else(std::env::temp_dir)
-            .join("bitfun_terminal")
+            .join("openbitfun_terminal")
             .join("scripts")
     }
 

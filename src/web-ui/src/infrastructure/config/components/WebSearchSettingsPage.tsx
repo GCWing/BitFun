@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Input, Select, type SelectOption, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Select, type SelectOption, Tooltip } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { useSettingsDraft } from '@/infrastructure/config/settingsDraftRegistry';
@@ -18,22 +18,22 @@ import './WebSearchSettingsPage.scss';
 
 const log = createLogger('WebSearchSettings');
 
-type ProviderId = 'exa_mcp_free' | 'exa_search_api' | 'tavily' | 'bitfun_search_http';
+type ProviderId = 'exa_mcp_free' | 'exa_search_api' | 'tavily' | 'openbitfun_search_http';
 type HttpAuthMode = 'none' | 'bearer' | 'header';
 
 interface CredentialProviderConfig extends Record<string, unknown> {
   credentialId: string;
 }
 
-interface BitFunHttpAuthConfig extends Record<string, unknown> {
+interface OpenBitFunHttpAuthConfig extends Record<string, unknown> {
   mode: string;
   credentialId: string;
   headerName: string;
 }
 
-interface BitFunHttpConfig extends Record<string, unknown> {
+interface OpenBitFunHttpConfig extends Record<string, unknown> {
   endpoint: string;
-  auth: BitFunHttpAuthConfig;
+  auth: OpenBitFunHttpAuthConfig;
 }
 
 interface WebSearchConfig extends Record<string, unknown> {
@@ -41,7 +41,7 @@ interface WebSearchConfig extends Record<string, unknown> {
   providers: {
     exa_search_api: CredentialProviderConfig;
     tavily: CredentialProviderConfig;
-    bitfun_search_http: BitFunHttpConfig;
+    openbitfun_search_http: OpenBitFunHttpConfig;
     [key: string]: unknown;
   };
 }
@@ -51,27 +51,27 @@ const DEFAULT_CONFIG: WebSearchConfig = {
   providers: {
     exa_search_api: { credentialId: 'exa-search-api' },
     tavily: { credentialId: 'tavily-search-api' },
-    bitfun_search_http: {
+    openbitfun_search_http: {
       endpoint: '',
       auth: {
         mode: 'none',
-        credentialId: 'bitfun-search-http',
+        credentialId: 'openbitfun-search-http',
         headerName: '',
       },
     },
   },
 };
 
-const BITFUN_PROTOCOL_REQUEST_EXAMPLE = `POST <configured endpoint>
+const OPENBITFUN_PROTOCOL_REQUEST_EXAMPLE = `POST <configured endpoint>
 Content-Type: application/json
-Accept: application/vnd.bitfun.web-search.v1+json
+Accept: application/vnd.openbitfun.web-search.v1+json
 
 {
   "query": "Rust async runtime",
   "maxResults": 10
 }`;
 
-const BITFUN_PROTOCOL_SUCCESS_EXAMPLE = `{
+const OPENBITFUN_PROTOCOL_SUCCESS_EXAMPLE = `{
   "results": [
     {
       "title": "Rust Async Book",
@@ -82,7 +82,7 @@ const BITFUN_PROTOCOL_SUCCESS_EXAMPLE = `{
   ]
 }`;
 
-const BITFUN_PROTOCOL_ERROR_EXAMPLE = `{
+const OPENBITFUN_PROTOCOL_ERROR_EXAMPLE = `{
   "error": {
     "code": "rate_limited",
     "message": "try again later",
@@ -90,7 +90,7 @@ const BITFUN_PROTOCOL_ERROR_EXAMPLE = `{
   }
 }`;
 
-const BITFUN_PROTOCOL_ERROR_CODES = [
+const OPENBITFUN_PROTOCOL_ERROR_CODES = [
   'invalid_request',
   'authentication_failed',
   'permission_denied',
@@ -117,11 +117,11 @@ function normalizeConfig(value: unknown): WebSearchConfig {
   const rawTavily = rawProviders.tavily && typeof rawProviders.tavily === 'object'
     ? rawProviders.tavily as Partial<CredentialProviderConfig>
     : {};
-  const rawHttp = rawProviders.bitfun_search_http && typeof rawProviders.bitfun_search_http === 'object'
-    ? rawProviders.bitfun_search_http as Partial<BitFunHttpConfig>
+  const rawHttp = rawProviders.openbitfun_search_http && typeof rawProviders.openbitfun_search_http === 'object'
+    ? rawProviders.openbitfun_search_http as Partial<OpenBitFunHttpConfig>
     : {};
   const rawAuth = rawHttp.auth && typeof rawHttp.auth === 'object'
-    ? rawHttp.auth as Partial<BitFunHttpAuthConfig>
+    ? rawHttp.auth as Partial<OpenBitFunHttpAuthConfig>
     : {};
   return {
     ...DEFAULT_CONFIG,
@@ -138,11 +138,11 @@ function normalizeConfig(value: unknown): WebSearchConfig {
         ...DEFAULT_CONFIG.providers.tavily,
         ...rawTavily,
       },
-      bitfun_search_http: {
-        ...DEFAULT_CONFIG.providers.bitfun_search_http,
+      openbitfun_search_http: {
+        ...DEFAULT_CONFIG.providers.openbitfun_search_http,
         ...rawHttp,
         auth: {
-          ...DEFAULT_CONFIG.providers.bitfun_search_http.auth,
+          ...DEFAULT_CONFIG.providers.openbitfun_search_http.auth,
           ...rawAuth,
         },
       },
@@ -172,7 +172,7 @@ const WebSearchSettingsPage: React.FC = () => {
     { value: 'exa_mcp_free', label: t('providers.exaMcpFree') },
     { value: 'exa_search_api', label: t('providers.exaSearchApi') },
     { value: 'tavily', label: t('providers.tavily') },
-    { value: 'bitfun_search_http', label: t('providers.bitfunSearchHttp') },
+    { value: 'openbitfun_search_http', label: t('providers.openbitfunSearchHttp') },
   ], [t]);
   const authOptions = useMemo<SelectOption[]>(() => [
     { value: 'none', label: t('auth.none') },
@@ -181,14 +181,14 @@ const WebSearchSettingsPage: React.FC = () => {
   ], [t]);
 
   const selectedProvider = config.provider as ProviderId;
-  const httpConfig = config.providers.bitfun_search_http;
+  const httpConfig = config.providers.openbitfun_search_http;
   const hasUnsavedChanges = useMemo(
     () => JSON.stringify(config) !== JSON.stringify(savedConfig),
     [config, savedConfig],
   );
   const credentialRequired = selectedProvider === 'exa_search_api'
     || selectedProvider === 'tavily'
-    || (selectedProvider === 'bitfun_search_http' && !['', 'none'].includes(httpConfig.auth.mode));
+    || (selectedProvider === 'openbitfun_search_http' && !['', 'none'].includes(httpConfig.auth.mode));
 
   const refreshCredentialStatus = useCallback(async (provider: string, required: boolean) => {
     const requestId = ++credentialStatusRequestIdRef.current;
@@ -377,7 +377,7 @@ const WebSearchSettingsPage: React.FC = () => {
 
   if (loadFailed) {
     return (
-      <ConfigPageLayout data-bf-component="config" data-bf-part="root">
+      <ConfigPageLayout data-openbitfun-component="config" data-openbitfun-part="root">
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigRetryState
@@ -392,7 +392,7 @@ const WebSearchSettingsPage: React.FC = () => {
   }
 
   return (
-    <ConfigPageLayout data-bf-component="config" data-bf-part="root">
+    <ConfigPageLayout data-openbitfun-component="config" data-openbitfun-part="root">
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
@@ -433,7 +433,7 @@ const WebSearchSettingsPage: React.FC = () => {
           {null}
         </ConfigPageSection>
 
-        {selectedProvider === 'bitfun_search_http' ? (
+        {selectedProvider === 'openbitfun_search_http' ? (
           <ConfigPageSection
             title={t('sections.http.title')}
             description={t('sections.http.description')}
@@ -448,8 +448,8 @@ const WebSearchSettingsPage: React.FC = () => {
                   ...previous,
                   providers: {
                     ...previous.providers,
-                    bitfun_search_http: {
-                      ...previous.providers.bitfun_search_http,
+                    openbitfun_search_http: {
+                      ...previous.providers.openbitfun_search_http,
                       endpoint: event.target.value,
                     },
                   },
@@ -466,10 +466,10 @@ const WebSearchSettingsPage: React.FC = () => {
                   ...previous,
                   providers: {
                     ...previous.providers,
-                    bitfun_search_http: {
-                      ...previous.providers.bitfun_search_http,
+                    openbitfun_search_http: {
+                      ...previous.providers.openbitfun_search_http,
                       auth: {
-                        ...previous.providers.bitfun_search_http.auth,
+                        ...previous.providers.openbitfun_search_http.auth,
                         mode: normalizeSelectValue(value) as HttpAuthMode,
                       },
                     },
@@ -488,10 +488,10 @@ const WebSearchSettingsPage: React.FC = () => {
                     ...previous,
                     providers: {
                       ...previous.providers,
-                      bitfun_search_http: {
-                        ...previous.providers.bitfun_search_http,
+                      openbitfun_search_http: {
+                        ...previous.providers.openbitfun_search_http,
                         auth: {
-                          ...previous.providers.bitfun_search_http.auth,
+                          ...previous.providers.openbitfun_search_http.auth,
                           headerName: event.target.value,
                         },
                       },
@@ -529,7 +529,7 @@ const WebSearchSettingsPage: React.FC = () => {
           </ConfigPageSection>
         ) : null}
 
-        {selectedProvider === 'bitfun_search_http' ? (
+        {selectedProvider === 'openbitfun_search_http' ? (
           <ConfigPageSection
             title={t('sections.protocol.title')}
             description={t('sections.protocol.description')}
@@ -548,27 +548,27 @@ const WebSearchSettingsPage: React.FC = () => {
           >
             <div
               ref={protocolRef}
-              id="web-search-bitfun-protocol"
-              data-bf-component="config"
-              data-bf-part="collectionDetails"
+              id="web-search-openbitfun-protocol"
+              data-openbitfun-component="config"
+              data-openbitfun-part="collectionDetails"
             >
               <section>
                 <h4>{t('protocol.request.title')}</h4>
                 <p>{t('protocol.request.description')}</p>
-                <pre><code>{BITFUN_PROTOCOL_REQUEST_EXAMPLE}</code></pre>
+                <pre><code>{OPENBITFUN_PROTOCOL_REQUEST_EXAMPLE}</code></pre>
               </section>
               <section>
                 <h4>{t('protocol.success.title')}</h4>
                 <p>{t('protocol.success.description')}</p>
-                <pre><code>{BITFUN_PROTOCOL_SUCCESS_EXAMPLE}</code></pre>
+                <pre><code>{OPENBITFUN_PROTOCOL_SUCCESS_EXAMPLE}</code></pre>
               </section>
               <section>
                 <h4>{t('protocol.error.title')}</h4>
                 <p>{t('protocol.error.description')}</p>
-                <pre><code>{BITFUN_PROTOCOL_ERROR_EXAMPLE}</code></pre>
+                <pre><code>{OPENBITFUN_PROTOCOL_ERROR_EXAMPLE}</code></pre>
                 <p>
                   {t('protocol.error.codes')}{' '}
-                  {BITFUN_PROTOCOL_ERROR_CODES}
+                  {OPENBITFUN_PROTOCOL_ERROR_CODES}
                 </p>
               </section>
               <ul>

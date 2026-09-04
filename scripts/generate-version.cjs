@@ -59,13 +59,13 @@ function generateVersionInfo(buildEnv) {
   const buildDate = new Date().toISOString();
   const buildTimestamp = Date.now();
   const isDev = buildEnv === 'development';
-  const releaseChannel = process.env.BITFUN_RELEASE_CHANNEL || 'stable';
+  const releaseChannel = process.env.OPENBITFUN_RELEASE_CHANNEL || 'stable';
   if (!['stable', 'beta', 'nightly'].includes(releaseChannel)) {
-    throw new Error(`Unsupported BITFUN_RELEASE_CHANNEL: ${releaseChannel}`);
+    throw new Error(`Unsupported OPENBITFUN_RELEASE_CHANNEL: ${releaseChannel}`);
   }
   
   const versionInfo = {
-    name: packageJson.name === 'BitFun' ? 'BitFun' : packageJson.name,
+    name: packageJson.name === 'OpenBitFun' ? 'OpenBitFun' : packageJson.name,
     version: packageJson.version,
     buildDate,
     buildTimestamp,

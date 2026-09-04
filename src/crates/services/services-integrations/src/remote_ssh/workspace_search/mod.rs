@@ -6,6 +6,7 @@
 //! behind that provider boundary.
 
 use super::normalize_remote_workspace_path;
+use super::product_paths::product_data_path;
 use crate::workspace_search::flashgrep::{
     PathScope, SearchBackend, SearchModeConfig, SearchResults,
 };
@@ -30,7 +31,6 @@ pub(crate) const REMOTE_ARCHITECTURE_PROBES: &[&str] = &[
     "sh -c 'uname -m 2>/dev/null || arch 2>/dev/null'",
 ];
 
-const REMOTE_FLASHGREP_INSTALL_DIR: &str = ".bitfun/bin";
 const LINUX_X86_64_FLASHGREP_BUNDLES: &[&str] = &[
     "flashgrep-x86_64-unknown-linux-musl",
     "flashgrep-x86_64-unknown-linux-gnu",
@@ -95,14 +95,11 @@ fn normalize_remote_scope_path(repo_root: &str, search_path: &Path) -> Result<St
 }
 
 pub(crate) fn remote_flashgrep_install_dir(repo_root: &str) -> String {
-    join_remote_path(
-        &normalize_remote_workspace_path(repo_root),
-        REMOTE_FLASHGREP_INSTALL_DIR,
-    )
+    product_data_path(&normalize_remote_workspace_path(repo_root), &["bin"])
 }
 
 pub(crate) fn remote_workspace_search_storage_root(repo_root: &str) -> String {
-    join_remote_path(repo_root, ".bitfun/search/flashgrep-index")
+    product_data_path(repo_root, &["search", "flashgrep-index"])
 }
 
 pub(crate) fn looks_like_linux_workspace_root(path: &str) -> bool {
@@ -257,10 +254,14 @@ fn resolve_local_flashgrep_bundle(binary_name: &str) -> Option<PathBuf> {
             candidates.push(parent.join("resources/flashgrep").join(binary_name));
             candidates.push(parent.join("flashgrep").join(binary_name));
             candidates.push(parent.join("../Resources/flashgrep").join(binary_name));
-            candidates.push(parent.join("../share/bitfun/flashgrep").join(binary_name));
             candidates.push(
                 parent
-                    .join("../share/com.bitfun.desktop/flashgrep")
+                    .join("../share/openbitfun/flashgrep")
+                    .join(binary_name),
+            );
+            candidates.push(
+                parent
+                    .join("../share/com.openbitfun.desktop/flashgrep")
                     .join(binary_name),
             );
         }
@@ -295,11 +296,11 @@ mod tests {
     fn remote_workspace_search_paths_preserve_current_contract() {
         assert_eq!(
             remote_flashgrep_install_dir("/home/wgq/workspace/bot_detection"),
-            "/home/wgq/workspace/bot_detection/.bitfun/bin"
+            "/home/wgq/workspace/bot_detection/.openbitfun/bin"
         );
         assert_eq!(
             remote_workspace_search_storage_root("/home/wgq/workspace/bot_detection/"),
-            "/home/wgq/workspace/bot_detection/.bitfun/search/flashgrep-index"
+            "/home/wgq/workspace/bot_detection/.openbitfun/search/flashgrep-index"
         );
         assert_eq!(join_remote_path("/", "tmp/file.txt"), "/tmp/file.txt");
         assert_eq!(

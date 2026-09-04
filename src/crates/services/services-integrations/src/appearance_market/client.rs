@@ -1,4 +1,4 @@
-use bitfun_product_domains::appearance_market::{
+use openbitfun_product_domains::appearance_market::{
     AppearanceAdminSubmissionDetail, AppearanceCursorPage, AppearanceMarketListingDetail,
     AppearanceMarketListingSummary, AppearanceMarketSort, AppearanceMarketSubmission,
     AppearanceMarketSubmissionDraftRequest, AppearanceMarketSubmissionStatus,
@@ -37,7 +37,7 @@ pub struct AppearanceMarketClient {
 
 impl AppearanceMarketClient {
     pub async fn from_environment() -> Result<Self, MarketClientError> {
-        let base_url = std::env::var("BITFUN_APPEARANCE_MARKET_API_URL")
+        let base_url = std::env::var("OPENBITFUN_APPEARANCE_MARKET_API_URL")
             .unwrap_or_else(|_| DEFAULT_APPEARANCE_MARKET_API_URL.to_string());
         let identity = MarketClient::from_environment().await?;
         Self::with_identity(base_url, identity)
@@ -58,7 +58,7 @@ impl AppearanceMarketClient {
         let base_url = base_url.into().trim_end_matches('/').to_string();
         validate_market_url(&base_url)?;
         let client = crate::reqwest_client_builder()
-            .user_agent(format!("BitFun-Desktop/{}", env!("CARGO_PKG_VERSION")))
+            .user_agent(format!("OpenBitFun-Desktop/{}", env!("CARGO_PKG_VERSION")))
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| local_error("market_client_init_failed", error.to_string()))?;

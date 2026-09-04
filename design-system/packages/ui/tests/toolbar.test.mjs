@@ -25,14 +25,14 @@ test("Toolbar keeps leading, centered, and trailing regions independent", () => 
     }),
   );
 
-  assert.match(markup, /data-bf-component="toolbar"/);
+  assert.match(markup, /data-openbitfun-component="toolbar"/);
   assert.match(markup, /data-has-center="true"/);
-  assert.match(markup, /data-bf-part="leading"/);
-  assert.match(markup, /data-bf-part="center"/);
-  assert.match(markup, /data-bf-part="trailing"/);
-  assert.match(markup, /data-bf-part="badge"/);
-  assert.match(markup, /data-bf-part="value">18<\/span>/);
-  assert.match(markup, /data-bf-part="separator"/);
+  assert.match(markup, /data-openbitfun-part="leading"/);
+  assert.match(markup, /data-openbitfun-part="center"/);
+  assert.match(markup, /data-openbitfun-part="trailing"/);
+  assert.match(markup, /data-openbitfun-part="badge"/);
+  assert.match(markup, /data-openbitfun-part="value">18<\/span>/);
+  assert.match(markup, /data-openbitfun-part="separator"/);
   assert.match(markup, /aria-hidden="true"/);
 });
 
@@ -58,11 +58,11 @@ test("Toolbar exposes compact sizing and leading overflow without imposing produ
 test("Toolbar styles bind geometry and overflow treatment to public tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-layout-toolbar-sm-height/);
-  assert.match(styles, /--bf-layout-toolbar-md-height/);
-  assert.match(styles, /--bf-layout-toolbar-content-gap/);
-  assert.match(styles, /--bf-layout-toolbar-badge-size/);
-  assert.match(styles, /--bf-layout-toolbar-overflow-fade-extent/);
+  assert.match(styles, /--openbitfun-layout-toolbar-sm-height/);
+  assert.match(styles, /--openbitfun-layout-toolbar-md-height/);
+  assert.match(styles, /--openbitfun-layout-toolbar-content-gap/);
+  assert.match(styles, /--openbitfun-layout-toolbar-badge-size/);
+  assert.match(styles, /--openbitfun-layout-toolbar-overflow-fade-extent/);
   assert.match(styles, /overflow-x:auto/);
   assert.match(styles, /mask-image:linear-gradient/);
 });

@@ -7,50 +7,50 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: var(--bf-space-3);
-  width: min(300px, calc(100vw - var(--bf-space-6)));
-  padding: var(--bf-space-3) var(--bf-space-4);
-  background: var(--bf-color-surface-raised);
-  animation: bitfun-notification-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
-  font-family: var(--bf-type-body-sm-font-family);
+  gap: var(--openbitfun-space-3);
+  width: min(300px, calc(100vw - var(--openbitfun-space-6)));
+  padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+  background: var(--openbitfun-color-surface-raised);
+  animation: openbitfun-notification-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  font-family: var(--openbitfun-type-body-sm-font-family);
 
   
   &--success {
     
     .notification-item__icon {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
   }
 
   &--error {
     .notification-item__icon {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
   &--warning {
     .notification-item__icon {
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
   }
 
   &--info {
     .notification-item__icon {
-      color: var(--bf-color-status-info-content);
+      color: var(--openbitfun-color-status-info-content);
     }
   }
 
   
   &__icon {
-    flex: 0 0 var(--bf-control-icon-size-lg);
-    width: var(--bf-control-icon-size-lg);
-    height: var(--bf-control-icon-size-lg);
+    flex: 0 0 var(--openbitfun-control-icon-size-lg);
+    width: var(--openbitfun-control-icon-size-lg);
+    height: var(--openbitfun-control-icon-size-lg);
     display: flex;
     align-items: center;
     justify-content: center;
 
     > svg,
-    > [data-bf-component="icon"] {
+    > [data-openbitfun-component="icon"] {
       width: 100%;
       height: 100%;
     }
@@ -62,38 +62,38 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   &__title {
-    font-family: var(--bf-type-heading-card-font-family);
-    font-size: var(--bf-type-heading-card-font-size);
-    font-weight: var(--bf-type-heading-card-font-weight);
-    color: var(--bf-color-content-primary);
-    line-height: var(--bf-type-heading-card-line-height);
-    letter-spacing: var(--bf-type-heading-card-letter-spacing);
+    font-family: var(--openbitfun-type-heading-card-font-family);
+    font-size: var(--openbitfun-type-heading-card-font-size);
+    font-weight: var(--openbitfun-type-heading-card-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    line-height: var(--openbitfun-type-heading-card-line-height);
+    letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
   }
 
   &__message {
-    font-family: var(--bf-type-body-xs-font-family);
-    font-size: var(--bf-type-body-xs-font-size);
-    font-weight: var(--bf-type-body-xs-font-weight);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
-    letter-spacing: var(--bf-type-body-xs-letter-spacing);
+    font-family: var(--openbitfun-type-body-xs-font-family);
+    font-size: var(--openbitfun-type-body-xs-font-size);
+    font-weight: var(--openbitfun-type-body-xs-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
+    letter-spacing: var(--openbitfun-type-body-xs-letter-spacing);
     word-break: break-word;
   }
 
   &--closable {
     .notification-item__title {
-      padding-inline-end: var(--bf-space-6);
+      padding-inline-end: var(--openbitfun-space-6);
     }
   }
 
   &__close {
     position: absolute;
-    top: var(--bf-space-2);
-    right: var(--bf-space-2);
+    top: var(--openbitfun-space-2);
+    right: var(--openbitfun-space-2);
     display: inline-flex;
   }
 
@@ -104,32 +104,32 @@
     border: none;
     background: none;
     font: inherit;
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
     text-decoration: underline;
     text-align: left;
     cursor: pointer;
     word-break: break-all;
 
     &:hover {
-      color: var(--bf-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
     }
   }
 
   
   &__actions {
     display: flex;
-    gap: var(--bf-space-1);
-    margin-top: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
+    margin-top: var(--openbitfun-space-1);
   }
 
   &--exiting {
-    animation: bitfun-notification-exit 120ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: openbitfun-notification-exit 120ms cubic-bezier(0.23, 1, 0.32, 1) both;
     pointer-events: none;
   }
 }
 
 
-@keyframes bitfun-notification-enter {
+@keyframes openbitfun-notification-enter {
   from {
     opacity: 0;
     transform: translateX(-12px) scale(0.985);
@@ -141,7 +141,7 @@
 }
 
 
-@keyframes bitfun-notification-exit {
+@keyframes openbitfun-notification-exit {
   from {
     opacity: 1;
     transform: translateX(0) scale(1);

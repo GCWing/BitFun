@@ -35,7 +35,7 @@ pub use workspace_reference::{
     ExternalWorkspaceReferenceDiscoveryRequest, ExternalWorkspaceReferenceDiscoveryResult,
 };
 
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     prompt_command_conflict_key, EcosystemId, ExternalSourceCatalogEntry,
     ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,

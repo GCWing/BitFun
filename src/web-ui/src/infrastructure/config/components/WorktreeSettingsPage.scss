@@ -1,5 +1,5 @@
 // Worktree settings page presentation.
-@keyframes bitfun-worktree-results-enter {
+@keyframes openbitfun-worktree-results-enter {
   from {
     opacity: 0;
     transform: translate3d(0, 4px, 0);
@@ -11,7 +11,7 @@
   }
 }
 
-@keyframes bitfun-worktree-row-remove {
+@keyframes openbitfun-worktree-row-remove {
   from {
     opacity: 1;
     transform: translate3d(0, 0, 0);
@@ -23,7 +23,7 @@
   }
 }
 
-@keyframes bitfun-worktree-loading-pulse {
+@keyframes openbitfun-worktree-loading-pulse {
   0%,
   100% {
     opacity: 0.45;
@@ -34,7 +34,7 @@
   }
 }
 
-@keyframes bitfun-worktree-refresh-progress {
+@keyframes openbitfun-worktree-refresh-progress {
   from {
     transform: translate3d(-130%, 0, 0);
   }
@@ -44,26 +44,26 @@
   }
 }
 
-@keyframes bitfun-worktree-session-spin {
+@keyframes openbitfun-worktree-session-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.bitfun-worktree-settings {
+.openbitfun-worktree-settings {
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
-    padding-top: var(--bf-space-1);
+    gap: var(--openbitfun-space-2);
+    padding-top: var(--openbitfun-space-1);
   }
 
   &__projects {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-6);
-    animation: bitfun-worktree-results-enter 180ms var(--bf-motion-easing-standard) both;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    gap: var(--openbitfun-space-6);
+    animation: openbitfun-worktree-results-enter 180ms var(--openbitfun-motion-easing-standard) both;
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__results {
@@ -72,8 +72,8 @@
     overflow-anchor: none;
 
     &--refreshing {
-      .bitfun-worktree-settings__projects,
-      .bitfun-worktree-settings__empty {
+      .openbitfun-worktree-settings__projects,
+      .openbitfun-worktree-settings__empty {
         opacity: 0.7;
       }
     }
@@ -87,7 +87,7 @@
     left: 0;
     height: 2px;
     overflow: hidden;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     pointer-events: none;
 
     span {
@@ -95,9 +95,9 @@
       width: 28%;
       height: 100%;
       border-radius: inherit;
-      background: var(--bf-color-accent-default);
+      background: var(--openbitfun-color-accent-default);
       opacity: 0.7;
-      animation: bitfun-worktree-refresh-progress 900ms ease-in-out infinite;
+      animation: openbitfun-worktree-refresh-progress 900ms ease-in-out infinite;
     }
   }
 
@@ -109,15 +109,15 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: var(--bf-space-4);
-    padding: 0 var(--bf-space-1) var(--bf-space-2);
+    gap: var(--openbitfun-space-4);
+    padding: 0 var(--openbitfun-space-1) var(--openbitfun-space-2);
 
     span {
       display: block;
       height: 11px;
-      border-radius: var(--bf-radius-sm);
-      background: var(--bf-color-action-quiet-hover);
-      animation: bitfun-worktree-loading-pulse 1.2s ease-in-out infinite;
+      border-radius: var(--openbitfun-radius-sm);
+      background: var(--openbitfun-color-action-quiet-hover);
+      animation: openbitfun-worktree-loading-pulse 1.2s ease-in-out infinite;
 
       &:first-child {
         width: min(220px, 42%);
@@ -131,26 +131,26 @@
 
   &__skeleton-list {
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-md);
-    background: var(--bf-color-surface-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-md);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__skeleton-row {
     display: grid;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3) var(--bf-space-4);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
 
     & + & {
-      border-top: 1px solid var(--bf-color-border-subtle);
+      border-top: 1px solid var(--openbitfun-color-border-subtle);
     }
 
     span {
       display: block;
       height: 9px;
-      border-radius: var(--bf-radius-sm);
-      background: var(--bf-color-action-quiet-hover);
-      animation: bitfun-worktree-loading-pulse 1.2s ease-in-out infinite;
+      border-radius: var(--openbitfun-radius-sm);
+      background: var(--openbitfun-color-action-quiet-hover);
+      animation: openbitfun-worktree-loading-pulse 1.2s ease-in-out infinite;
 
       &:first-child {
         width: min(280px, 42%);
@@ -176,15 +176,15 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: var(--bf-space-4);
-    padding: 0 var(--bf-space-1) var(--bf-space-2);
+    gap: var(--openbitfun-space-4);
+    padding: 0 var(--openbitfun-space-1) var(--openbitfun-space-2);
 
     > span {
       flex-shrink: 0;
       padding-bottom: 1px;
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-label-sm-font-size);
-      line-height: var(--bf-type-body-sm-line-height);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      line-height: var(--openbitfun-type-body-sm-line-height);
     }
   }
 
@@ -193,10 +193,10 @@
 
     h4 {
       margin: 0;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-label-md-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      line-height: var(--bf-type-body-sm-line-height);
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      line-height: var(--openbitfun-type-body-sm-line-height);
     }
 
     code {
@@ -207,10 +207,10 @@
       border: 0;
       border-radius: 0;
       background: transparent;
-      color: var(--bf-color-content-muted);
-      font-family:var(--bf-type-code-md-font-family);
-      font-size: var(--bf-type-label-sm-font-size);
-      line-height: var(--bf-type-body-sm-line-height);
+      color: var(--openbitfun-color-content-muted);
+      font-family:var(--openbitfun-type-code-md-font-family);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      line-height: var(--openbitfun-type-body-sm-line-height);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -218,26 +218,26 @@
 
   &__worktree-list {
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-md);
-    background: var(--bf-color-surface-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-md);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__worktree {
-    padding: var(--bf-space-3) var(--bf-space-4);
-    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+    transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
 
     & + & {
-      border-top: 1px solid var(--bf-color-border-subtle);
+      border-top: 1px solid var(--openbitfun-color-border-subtle);
     }
 
     &--removing {
       pointer-events: none;
-      animation: bitfun-worktree-row-remove
+      animation: openbitfun-worktree-row-remove
         180ms
         cubic-bezier(0.4, 0, 1, 1)
         both;
@@ -248,7 +248,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   &__worktree-copy {
@@ -258,7 +258,7 @@
   &__worktree-heading {
     display: flex;
     align-items: baseline;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     min-width: 0;
   }
 
@@ -266,10 +266,10 @@
     min-width: 0;
     margin: 0;
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -278,10 +278,10 @@
     display: flex;
     flex-shrink: 0;
     flex-wrap: wrap;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
 
   &__path {
@@ -293,10 +293,10 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-    color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -304,12 +304,12 @@
   &__sessions-summary {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
-    margin-top: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    margin-top: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
 
     svg {
       flex-shrink: 0;
@@ -332,18 +332,18 @@
     border: 0;
     border-radius: 2px;
     background: transparent;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     font: inherit;
     line-height: inherit;
     vertical-align: bottom;
     cursor: pointer;
     transition:
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     & + & {
-      margin-left: var(--bf-space-2);
+      margin-left: var(--openbitfun-space-2);
     }
 
     > span:first-of-type {
@@ -353,7 +353,7 @@
     }
 
     &:hover:not(:disabled) {
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
       text-decoration: underline;
       text-underline-offset: 2px;
     }
@@ -369,14 +369,14 @@
 
   &__session-link-spinner {
     flex-shrink: 0;
-    margin-right: var(--bf-space-1);
-    animation: bitfun-worktree-session-spin 700ms linear infinite;
+    margin-right: var(--openbitfun-space-1);
+    animation: openbitfun-worktree-session-spin 700ms linear infinite;
   }
 
   &__session-link-state {
     flex-shrink: 0;
-    margin-left: var(--bf-space-1);
-    color: var(--bf-color-content-muted);
+    margin-left: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-muted);
 
     &::before {
       content: '(';
@@ -396,13 +396,13 @@
   &__empty {
     display: flex;
     align-items: flex-start;
-    gap: var(--bf-space-3);
-    padding: var(--bf-space-5);
-    border: 1px dashed var(--bf-color-border-default);
-    border-radius: var(--bf-radius-md);
-    color: var(--bf-color-content-muted);
-    animation: bitfun-worktree-results-enter 180ms var(--bf-motion-easing-standard) both;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-5);
+    border: 1px dashed var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-md);
+    color: var(--openbitfun-color-content-muted);
+    animation: openbitfun-worktree-results-enter 180ms var(--openbitfun-motion-easing-standard) both;
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     svg {
       flex-shrink: 0;
@@ -411,52 +411,52 @@
 
     h4 {
       margin: 0;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-label-md-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
-      line-height: var(--bf-type-body-sm-line-height);
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
+      line-height: var(--openbitfun-type-body-sm-line-height);
     }
 
     p {
-      margin: var(--bf-space-1) 0 0;
-      color: var(--bf-color-content-secondary);
-      font-size: var(--bf-type-label-sm-font-size);
-      line-height: var(--bf-type-body-lg-line-height);
+      margin: var(--openbitfun-space-1) 0 0;
+      color: var(--openbitfun-color-content-secondary);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      line-height: var(--openbitfun-type-body-lg-line-height);
     }
   }
 }
 
 @container config-panel (max-width: 520px) {
-  .bitfun-worktree-settings {
+  .openbitfun-worktree-settings {
     &__actions {
       justify-content: stretch;
 
-      .bitfun-worktree-settings__action {
+      .openbitfun-worktree-settings__action {
         flex: 1;
       }
     }
 
     &__projects {
-      gap: var(--bf-space-5);
+      gap: var(--openbitfun-space-5);
     }
 
     &__project-header {
       align-items: flex-start;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
     }
 
     &__worktree {
-      padding: var(--bf-space-3);
+      padding: var(--openbitfun-space-3);
     }
 
     &__worktree-heading {
       align-items: flex-start;
       flex-direction: column;
-      gap: var(--bf-space-1);
+      gap: var(--openbitfun-space-1);
     }
 
     &__metadata {
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
     }
 
     &__sessions-summary {
@@ -471,7 +471,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-worktree-settings {
+  .openbitfun-worktree-settings {
     &__projects,
     &__empty,
     &__worktree--removing,

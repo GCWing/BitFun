@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "31576ac07aa5a6ae4ff437630fb72d99a9097bba2e34815bf2786e31885d7647",
+  "catalogDigest": "e760eed82f192a25bb7b0fb296283e5edfb1ad8103d3aef460e58f2ae80f191c",
   "count": 212,
   "reasonCounts": {
     "externalAuth": 4,
@@ -1360,7 +1360,7 @@
         "sceneId": "session"
       },
       "evidence": [
-        "source:src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx#createCanvasElementContext"
+        "source:src/web-ui/src/tools/openbitfun-canvas/OpenBitFunCanvasPanel.tsx#createCanvasElementContext"
       ]
     },
     {
@@ -1377,7 +1377,7 @@
       },
       "evidence": [
         "command:report_canvas_runtime_error",
-        "source:src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx#canvas-runtime-auto-repair"
+        "source:src/web-ui/src/tools/openbitfun-canvas/OpenBitFunCanvasPanel.tsx#canvas-runtime-auto-repair"
       ]
     },
     {
@@ -1393,7 +1393,7 @@
         "sceneId": "session"
       },
       "evidence": [
-        "source:src/web-ui/src/tools/bitfun-canvas/canvasHtmlExportService.ts#export async function exportCanvasHtml"
+        "source:src/web-ui/src/tools/openbitfun-canvas/canvasHtmlExportService.ts#export async function exportCanvasHtml"
       ]
     },
     {
@@ -1859,7 +1859,7 @@
       "reasonEn": "“Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:remote_connect_get_methods",
@@ -1876,7 +1876,7 @@
       "reasonEn": "“Start or stop Remote Connect and inspect live status and device information” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:remote_connect_start",
@@ -1895,7 +1895,7 @@
       "reasonEn": "“Inspect LAN IP, network details, and shareable connection configuration” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:remote_connect_get_lan_ip",
@@ -1913,7 +1913,7 @@
       "reasonEn": "“Configure Feishu, Telegram, WeChat, and other bots, and stop a bot independently” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:remote_connect_configure_bot",
@@ -1934,7 +1934,7 @@
       "reasonEn": "“Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:relay_deploy_preflight",
@@ -1952,11 +1952,11 @@
       "titleZh": "登录、退出并查看账户状态和凭据提示",
       "titleEn": "Sign in, sign out, and inspect account status and credential hints",
       "reasonCode": "externalAuth",
-      "reasonZh": "BitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
-      "reasonEn": "BitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder.",
+      "reasonZh": "OpenBitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
+      "reasonEn": "OpenBitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:account_login",
@@ -1979,7 +1979,7 @@
       "reasonEn": "“List, connect, inspect online status, and remove same-account devices” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:account_list_devices",
@@ -2000,7 +2000,7 @@
       "reasonEn": "“Sync, export, import, delete, or send sessions to another device” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:account_sync_session",
@@ -2016,14 +2016,14 @@
     {
       "capabilityId": "feature.remote-connect",
       "itemId": "settings-sync",
-      "titleZh": "在设备间自动或手动同步 BitFun 设置",
-      "titleEn": "Synchronize BitFun settings across devices automatically or on demand",
+      "titleZh": "在设备间自动或手动同步 OpenBitFun 设置",
+      "titleEn": "Synchronize OpenBitFun settings across devices automatically or on demand",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“在设备间自动或手动同步 BitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Synchronize BitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
+      "reasonZh": "“在设备间自动或手动同步 OpenBitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+      "reasonEn": "“Synchronize OpenBitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:account_sync_settings",
@@ -2035,14 +2035,14 @@
     {
       "capabilityId": "feature.remote-connect",
       "itemId": "peer-device",
-      "titleZh": "进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面",
-      "titleEn": "Enter Peer Device Mode and use another BitFun device as the command and event data plane",
+      "titleZh": "进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面",
+      "titleEn": "Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Enter Peer Device Mode and use another BitFun device as the command and event data plane” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
+      "reasonZh": "“进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+      "reasonEn": "“Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
         "command:peer_control_attach",
@@ -2061,7 +2061,7 @@
       "reasonEn": "“List dispatch targets and probe their version, connectivity, and runtime capabilities” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2074,14 +2074,14 @@
     {
       "capabilityId": "feature.detached-dispatch",
       "itemId": "provision",
-      "titleZh": "为目标主机配置运行环境并安装或更新 BitFun CLI",
-      "titleEn": "Provision the target runtime and install or update the BitFun CLI",
+      "titleZh": "为目标主机配置运行环境并安装或更新 OpenBitFun CLI",
+      "titleEn": "Provision the target runtime and install or update the OpenBitFun CLI",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“为目标主机配置运行环境并安装或更新 BitFun CLI”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Provision the target runtime and install or update the BitFun CLI” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
+      "reasonZh": "“为目标主机配置运行环境并安装或更新 OpenBitFun CLI”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+      "reasonEn": "“Provision the target runtime and install or update the OpenBitFun CLI” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2103,7 +2103,7 @@
       "reasonEn": "“Synchronize required model configuration before submitting a job” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2122,7 +2122,7 @@
       "reasonEn": "“Submit a durable job with workspace, session, model, and permission policy to the target” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2141,7 +2141,7 @@
       "reasonEn": "“List dispatched jobs and query their status, result, and errors” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2162,7 +2162,7 @@
       "reasonEn": "“Save, append, and reload reconnectable execution transcripts” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2183,7 +2183,7 @@
       "reasonEn": "“Answer permission requests remotely and continue or cancel target-side work” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -2204,7 +2204,7 @@
       "reasonEn": "“Synchronize target-side results back without treating the controller as a remote-filesystem proxy” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -3219,11 +3219,11 @@
     {
       "capabilityId": "setting.tools.web-search",
       "itemId": "provider",
-      "titleZh": "在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务",
-      "titleEn": "Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider",
+      "titleZh": "在免费 Exa MCP、Exa Search API、Tavily 与 OpenBitFun Search HTTP Protocol 之间选择运行时服务",
+      "titleEn": "Choose free Exa MCP, Exa Search API, Tavily, or OpenBitFun Search HTTP Protocol as the runtime provider",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务”与各服务的配置状态相关，目前没有一个能安全完成选择、检查和保存整个流程的单一结构化 Command；Agent 会打开精确设置入口，由用户确认配置。",
-      "reasonEn": "“Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider” depends on provider-specific configuration state, and no single structured Command can safely complete selection, validation, and saving; the Agent opens the exact settings entry for user confirmation.",
+      "reasonZh": "“在免费 Exa MCP、Exa Search API、Tavily 与 OpenBitFun Search HTTP Protocol 之间选择运行时服务”与各服务的配置状态相关，目前没有一个能安全完成选择、检查和保存整个流程的单一结构化 Command；Agent 会打开精确设置入口，由用户确认配置。",
+      "reasonEn": "“Choose free Exa MCP, Exa Search API, Tavily, or OpenBitFun Search HTTP Protocol as the runtime provider” depends on provider-specific configuration state, and no single structured Command can safely complete selection, validation, and saving; the Agent opens the exact settings entry for user confirmation.",
       "presentationTarget": {
         "kind": "settings",
         "pageId": "tools.webSearch"
@@ -3235,11 +3235,11 @@
     {
       "capabilityId": "setting.tools.web-search",
       "itemId": "http-endpoint",
-      "titleZh": "为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
-      "titleEn": "Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol",
+      "titleZh": "为 OpenBitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
+      "titleEn": "Configure the endpoint, authentication mode, and restricted credential header for OpenBitFun Search HTTP Protocol",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header”包含 URL、安全限制和认证方式等关联字段，需要在设置页中一起校验并明确保存；Agent 会打开对应入口而不猜测端点配置。",
-      "reasonEn": "“Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol” combines URL, security restrictions, and authentication fields that must be validated and explicitly saved together in Settings; the Agent opens the corresponding entry instead of guessing endpoint configuration.",
+      "reasonZh": "“为 OpenBitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header”包含 URL、安全限制和认证方式等关联字段，需要在设置页中一起校验并明确保存；Agent 会打开对应入口而不猜测端点配置。",
+      "reasonEn": "“Configure the endpoint, authentication mode, and restricted credential header for OpenBitFun Search HTTP Protocol” combines URL, security restrictions, and authentication fields that must be validated and explicitly saved together in Settings; the Agent opens the corresponding entry instead of guessing endpoint configuration.",
       "presentationTarget": {
         "kind": "settings",
         "pageId": "tools.webSearch"
@@ -3272,11 +3272,11 @@
     {
       "capabilityId": "setting.tools.web-search",
       "itemId": "http-protocol",
-      "titleZh": "查看并复制 BitFun Search HTTP Protocol v1 的请求、响应和传输限制",
-      "titleEn": "Inspect and copy the request, response, and transport limits for BitFun Search HTTP Protocol v1",
+      "titleZh": "查看并复制 OpenBitFun Search HTTP Protocol v1 的请求、响应和传输限制",
+      "titleEn": "Inspect and copy the request, response, and transport limits for OpenBitFun Search HTTP Protocol v1",
       "reasonCode": "visualSelection",
-      "reasonZh": "协议说明仅在选中 BitFun Search HTTP Protocol 时显示，并由设置页提供完整可复制内容；Agent 会打开精确入口，避免用不完整摘要替代产品内协议。",
-      "reasonEn": "The protocol specification is shown only when BitFun Search HTTP Protocol is selected and the Settings page owns the complete copyable content; the Agent opens the exact entry instead of substituting an incomplete summary.",
+      "reasonZh": "协议说明仅在选中 OpenBitFun Search HTTP Protocol 时显示，并由设置页提供完整可复制内容；Agent 会打开精确入口，避免用不完整摘要替代产品内协议。",
+      "reasonEn": "The protocol specification is shown only when OpenBitFun Search HTTP Protocol is selected and the Settings page owns the complete copyable content; the Agent opens the exact entry instead of substituting an incomplete summary.",
       "presentationTarget": {
         "kind": "settings",
         "pageId": "tools.webSearch"

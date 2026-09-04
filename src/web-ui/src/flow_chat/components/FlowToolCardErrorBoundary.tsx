@@ -1,7 +1,7 @@
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import { AlertTriangle } from 'lucide-react';
 import { Component, type ReactNode } from 'react';
-import { AmbientToolCard, AmbientToolCardHeader } from '@bitfun/ui/flow-chat';
+import { AmbientToolCard, AmbientToolCardHeader } from '@openbitfun/ui/flow-chat';
 import type { FlowToolItem } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -87,9 +87,9 @@ function RenderFallback({
           >
             <div
               style={{
-                color: 'var(--bf-color-content-secondary)',
-                fontSize: 'var(--bf-type-flow-support-font-size)',
-                lineHeight: 'var(--bf-type-flow-support-line-height)',
+                color: 'var(--openbitfun-color-content-secondary)',
+                fontSize: 'var(--openbitfun-type-flow-support-font-size)',
+                lineHeight: 'var(--openbitfun-type-flow-support-line-height)',
               }}
             >
               {getFirstLine(error)}
@@ -114,9 +114,9 @@ function RenderFallback({
                   marginTop: 8,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  fontFamily: 'var(--bf-type-body-sm-font-family)',
-                  fontSize: 'var(--bf-type-flow-code-font-size)',
-                  lineHeight: 'var(--bf-type-flow-code-line-height)',
+                  fontFamily: 'var(--openbitfun-type-body-sm-font-family)',
+                  fontSize: 'var(--openbitfun-type-flow-code-font-size)',
+                  lineHeight: 'var(--openbitfun-type-flow-code-line-height)',
                   maxHeight: 220,
                   overflow: 'auto',
                 }}
@@ -133,9 +133,9 @@ function RenderFallback({
                     marginTop: 8,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontFamily: 'var(--bf-type-body-sm-font-family)',
-                    fontSize: 'var(--bf-type-flow-code-font-size)',
-                    lineHeight: 'var(--bf-type-flow-code-line-height)',
+                    fontFamily: 'var(--openbitfun-type-body-sm-font-family)',
+                    fontSize: 'var(--openbitfun-type-flow-code-font-size)',
+                    lineHeight: 'var(--openbitfun-type-flow-code-line-height)',
                     maxHeight: 260,
                     overflow: 'auto',
                   }}

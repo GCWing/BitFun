@@ -25,7 +25,7 @@ export function installerCommand(platform = process.platform) {
     };
   }
 
-  throw new Error(`Unsupported platform for BitFun CLI installation: ${platform}`);
+  throw new Error(`Unsupported platform for OpenBitFun CLI installation: ${platform}`);
 }
 
 function main() {

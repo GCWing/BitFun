@@ -21,7 +21,7 @@ const PanelViewScene: React.FC<PanelViewSceneProps> = ({ workspacePath }) => {
 
   return (
     <CanvasStoreModeContext.Provider value="panel-view">
-      <div className="bitfun-panel-view-scene" data-bf-scene="panel-view" data-bf-part="root">
+      <div className="openbitfun-panel-view-scene" data-openbitfun-scene="panel-view" data-openbitfun-part="root">
         <ContentCanvas
           workspacePath={workspacePath}
           mode="agent"

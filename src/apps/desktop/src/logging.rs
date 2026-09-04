@@ -1,7 +1,7 @@
 //! Logging Configuration
 
-use bitfun_core::infrastructure::get_path_manager_arc;
 use chrono::Local;
+use openbitfun_core::infrastructure::get_path_manager_arc;
 use serde::Serialize;
 use serde_json::Value;
 use std::fs::{self, File, OpenOptions};
@@ -91,7 +91,7 @@ impl EarlyFileLogger {
             return;
         };
         let line = format!(
-            "[{}][tid:{}][INFO][bitfun_desktop::logging] Early startup logging handoff completed: runtime_backend=tauri_plugin_log\n",
+            "[{}][tid:{}][INFO][openbitfun_desktop::logging] Early startup logging handoff completed: runtime_backend=tauri_plugin_log\n",
             Local::now().format("%Y-%m-%dT%H:%M:%S%.3f"),
             get_thread_id()
         );
@@ -209,20 +209,23 @@ pub struct LogConfig {
 
 pub(crate) fn is_embedded_webdriver_mode() -> bool {
     (cfg!(debug_assertions) || cfg!(feature = "devtools"))
-        && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some()
+        && std::env::var_os("OPENBITFUN_WEBDRIVER_PORT").is_some()
 }
 
 fn resolve_logs_root() -> PathBuf {
-    if let Some(path) = std::env::var_os("BITFUN_LOG_DIR").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("OPENBITFUN_LOG_DIR").map(PathBuf::from) {
         return path;
     }
 
-    if let Some(path) = std::env::var_os("BITFUN_E2E_LOG_DIR").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("OPENBITFUN_E2E_LOG_DIR").map(PathBuf::from) {
         return path;
     }
 
     if is_embedded_webdriver_mode() {
-        return std::env::temp_dir().join("bitfun-e2e-logs");
+        return std::env::temp_dir().join(format!(
+            "{}-e2e-logs",
+            openbitfun_core_types::product_identity::data_namespace()
+        ));
     }
 
     get_path_manager_arc().logs_dir()
@@ -629,16 +632,19 @@ fn configured_log_builder(log_targets: Vec<Target>) -> tauri_plugin_log::Builder
         // routing. Keep debug diagnostics, warnings, and errors, but avoid
         // drowning useful app traces in mechanical noise.
         .level_for(
-            "bitfun_core::agentic::events::queue",
+            "openbitfun_core::agentic::events::queue",
             log::LevelFilter::Debug,
         )
         .level_for(
-            "bitfun_core::agentic::events::router",
+            "openbitfun_core::agentic::events::router",
             log::LevelFilter::Debug,
         )
-        .level_for("bitfun_agent_runtime::event_queue", log::LevelFilter::Debug)
         .level_for(
-            "bitfun_agent_runtime::event_router",
+            "openbitfun_agent_runtime::event_queue",
+            log::LevelFilter::Debug,
+        )
+        .level_for(
+            "openbitfun_agent_runtime::event_router",
             log::LevelFilter::Debug,
         )
         .level_for("hyper_util", log::LevelFilter::Info)
@@ -782,14 +788,14 @@ mod tests {
         let logger = EarlyFileLogger::new(path.clone());
         let record = log::Record::builder()
             .level(log::Level::Error)
-            .target("bitfun_desktop::startup")
+            .target("openbitfun_desktop::startup")
             .args(format_args!("Startup failed: code={}", 7))
             .build();
 
         logger.write_record(&record);
 
         let content = fs::read_to_string(path).expect("read early log");
-        assert!(content.contains("[ERROR][bitfun_desktop::startup]"));
+        assert!(content.contains("[ERROR][openbitfun_desktop::startup]"));
         assert!(content.contains("Startup failed: code=7"));
     }
 

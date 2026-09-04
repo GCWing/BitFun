@@ -1,6 +1,6 @@
 # Rust 构建与依赖边界
 
-本文定义 BitFun Rust workspace 的 Cargo feature、第三方依赖、测试目标和验证职责边界。它是
+本文定义 OpenBitFun Rust workspace 的 Cargo feature、第三方依赖、测试目标和验证职责边界。它是
 [`product-architecture.md`](product-architecture.md) 的构建视图补充；运行时 owner、端口和产品分层仍以产品架构及最近的模块 `AGENTS.md` 为准。
 
 本文只记录长期规则，不记录当前 package 数量、重复版本数量或单次构建耗时。阶段性审计和迁移顺序保留在本地工作记录或对应 issue/PR，避免把过程文档和会变化的基线提交为可不断调高的门槛。
@@ -10,7 +10,7 @@
 以下改动必须同时遵守本文：
 
 - workspace 或 crate `Cargo.toml` 的 dependency、feature、target 和 profile 变更；
-- `bitfun-core`、Assembly 或产品入口的 capability 装配；
+- `openbitfun-core`、Assembly 或产品入口的 capability 装配；
 - 为降低构建/测试时间而做的 crate 拆分、owner 迁移或第三方库替换；
 - build script、proc-macro、TLS/crypto、系统库和其他重型原生依赖的引入或扩展；
 - integration test、example、binary 的 feature/target gate；
@@ -47,7 +47,7 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 
 ### 3.2 产品入口显式选择 Core 能力
 
-`src/apps/*`、`src/crates/interfaces/*` 和 installer app 直接依赖 `bitfun-core` 时必须声明非空
+`src/apps/*`、`src/crates/interfaces/*` 和 installer app 直接依赖 `openbitfun-core` 时必须声明非空
 `features` 列表。Core 的 `default` 由 Core 自身和边界检查保证为空，因此仓内 consumer 不重复声明
 `default-features = false`；能力边界仍由 consumer 的显式 feature 集合决定。
 
@@ -61,7 +61,7 @@ Core library 的默认 feature 集合为空；完整产品必须显式选择 `pr
 
 Core 的 `agent-runtime` 只承载 Agent 生命周期基线和明确的基线工具，不得再次把 MCP、Remote Connect、模型目录、Browser/Web、Git 或产品工具组藏成 capability union。具体 service 由同名 owner feature 选择，内置工具由 `tools-*` 选择；`product-full` 显式相加全部 owner，CLI/ACP 等窄入口则按真实命令与构造路径列出自己的闭包。
 
-执行层的 `bitfun-agent-runtime` 自身也保持空默认：完整生命周期由 `agent-runtime` 选择，DeepResearch 纯编号由 `deep-research` 选择，原生 Hook 配置解析与进程执行分别由 `native-hook-settings`、`native-hook-runtime` 选择。叶能力仍留在原 owner crate 内，不为依赖收敛新建 DTO/runtime crate；完整产品必须显式恢复真实 owner，不能依赖 workspace feature union 偶然补齐。
+执行层的 `openbitfun-agent-runtime` 自身也保持空默认：完整生命周期由 `agent-runtime` 选择，DeepResearch 纯编号由 `deep-research` 选择，原生 Hook 配置解析与进程执行分别由 `native-hook-settings`、`native-hook-runtime` 选择。叶能力仍留在原 owner crate 内，不为依赖收敛新建 DTO/runtime crate；完整产品必须显式恢复真实 owner，不能依赖 workspace feature union 偶然补齐。
 
 Owner feature 不等于“无前置依赖”。当实现确实调用较低层基线时，依赖必须按 `owner → baseline` 显式组合，禁止反向把 owner 藏回基线：例如 Core MCP 工具桥和 Remote Connect 依赖 Agent 生命周期，Workspace Search 依赖本地 Workspace Runtime。每个新增或调整后的 owner 闭包都必须单独 `cargo check`，避免被 Desktop/CLI 的 feature union 偶然补齐。
 

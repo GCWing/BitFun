@@ -1,5 +1,5 @@
 {
-  "name": "@bitfun/token-engine",
+  "name": "@openbitfun/token-engine",
   "version": "0.1.0",
   "private": true,
   "type": "module",

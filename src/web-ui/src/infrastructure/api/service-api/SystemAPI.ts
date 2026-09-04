@@ -229,7 +229,7 @@ export class SystemAPI {
     }
   }
 
-  /** Desktop only: whether BitFun should keep the local computer awake. */
+  /** Desktop only: whether OpenBitFun should keep the local computer awake. */
   async getPreventSleepEnabled(): Promise<boolean> {
     const result = await productControlAPI.get('setting.application.general');
     const enabled = result.currentOptionValues['prevent-sleep'];

@@ -36,7 +36,7 @@
       "rate_limit_per_minute": 120
     }
   },
-  "permission_rationale": "PPT Live stores only its own deck draft, runs hidden BitFun agent turns (ppt-design skill plus research tools such as WebSearch/WebFetch) only when the user asks it to generate or refine content, uses the model selected in the host's shared floating chat, and exports PPTX/PDF/PNG/HTML entirely inside the desktop WebView.",
+  "permission_rationale": "PPT Live stores only its own deck draft, runs hidden OpenBitFun agent turns (ppt-design skill plus research tools such as WebSearch/WebFetch) only when the user asks it to generate or refine content, uses the model selected in the host's shared floating chat, and exports PPTX/PDF/PNG/HTML entirely inside the desktop WebView.",
   "ai_context": {
     "original_prompt": "A built-in Live App for AI-assisted PPT generation, preview, and visual editing.",
     "conversation_id": null,

@@ -55,7 +55,7 @@ Examples: run codex (always yes), run evals (always yes), reduce scope on a comp
 3. **outside-voice sub-agent disagreements** — codex recommends differently and has a valid point.
 
 **User Challenge** — both models agree the user's stated direction should change.
-This is qualitatively different from taste decisions. When BitFun and outside-voice sub-agent both
+This is qualitatively different from taste decisions. When OpenBitFun and outside-voice sub-agent both
 recommend merging, splitting, adding, or removing features/skills/workflows that
 the user specified, this is a User Challenge. It is NEVER auto-decided.
 
@@ -125,7 +125,7 @@ State what you examined and why nothing was flagged (1-2 sentences minimum).
 
 ## Filesystem Boundary — outside-voice sub-agent Prompts
 
-All prompts sent to outside-voice sub-agent (via `BitFun Task outside-voice dispatch` or `BitFun Task outside-voice review`) MUST be prefixed with
+All prompts sent to outside-voice sub-agent (via `OpenBitFun Task outside-voice dispatch` or `OpenBitFun Task outside-voice review`) MUST be prefixed with
 this boundary instruction:
 
 > IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Stay focused on the repository code only.
@@ -142,10 +142,10 @@ instructions instead of reviewing the plan.
 Before doing anything, save the plan file's current state to an external file:
 
 ```bash
-SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.openbitfun/team/projects/$SLUG
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')
 DATETIME=$(date +%Y%m%d-%H%M%S)
-echo "RESTORE_PATH=$HOME/.bitfun/team/projects/$SLUG/${BRANCH}-autoplan-restore-${DATETIME}.md"
+echo "RESTORE_PATH=$HOME/.openbitfun/team/projects/$SLUG/${BRANCH}-autoplan-restore-${DATETIME}.md"
 ```
 
 Write the plan file's full contents to the restore path with this header:
@@ -167,25 +167,25 @@ Then prepend a one-line HTML comment to the plan file:
 ### Step 2: Read context
 
 - Read AGENTS.md, TODOS.md, git log -30, git diff against the base branch --stat
-- Discover design docs: `ls -t $HOME/.bitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null | head -1`
+- Discover design docs: `ls -t $HOME/.openbitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null | head -1`
 - Detect UI scope: grep the plan for view/rendering terms (component, screen, form,
   button, modal, layout, dashboard, sidebar, nav, dialog). Require 2+ matches. Exclude
   false positives ("page" alone, "UI" in acronyms).
 - Detect DX scope: grep the plan for developer-facing terms (API, endpoint, REST,
   GraphQL, gRPC, webhook, CLI, command, flag, argument, terminal, shell, SDK, library,
-  package, npm, pip, import, require, SKILL.md, skill template, BitFun, MCP, agent,
+  package, npm, pip, import, require, SKILL.md, skill template, OpenBitFun, MCP, agent,
   OpenClaw, action, developer docs, getting started, onboarding, integration, debug,
   implement, error message). Require 2+ matches. Also trigger DX scope if the product IS
   a developer tool (the plan describes something developers install, integrate, or build
-  on top of) or if an AI agent is the primary user (OpenClaw actions, BitFun skills,
+  on top of) or if an AI agent is the primary user (OpenClaw actions, OpenBitFun skills,
   MCP servers).
 
 ### Step 3: Load review skills
 
 Load each stable key with the Skill tool:
-- `user::bitfun-system::gstack-plan-ceo-review`
-- `user::bitfun-system::gstack-plan-design-review` (only if UI scope detected)
-- `user::bitfun-system::gstack-plan-eng-review`
+- `user::openbitfun-system::gstack-plan-ceo-review`
+- `user::openbitfun-system::gstack-plan-design-review` (only if UI scope detected)
+- `user::openbitfun-system::gstack-plan-eng-review`
 - `the relevant built-in developer-experience review methodology, if present` (only if DX scope detected)
 
 **Section skip list — when following a loaded skill file, SKIP these sections
@@ -212,7 +212,7 @@ Loaded review skills from disk. Starting full review pipeline with auto-decision
 
 ## Phase 1: CEO Review (Strategy & Scope)
 
-Load `user::bitfun-system::gstack-plan-ceo-review` with the Skill tool and follow all sections at full depth.
+Load `user::openbitfun-system::gstack-plan-ceo-review` with the Skill tool and follow all sections at full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
@@ -233,7 +233,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   **outside-voice sub-agent CEO voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   You are a CEO/founder advisor reviewing a development plan.
   Challenge the strategic foundations: Are the premises valid or assumed? Is this the
@@ -331,7 +331,7 @@ and the premise gate has been passed.
 
 ## Phase 2: Design Review (conditional — skip if no UI scope)
 
-Load `user::bitfun-system::gstack-plan-design-review` with the Skill tool and follow all 7 dimensions at full depth.
+Load `user::openbitfun-system::gstack-plan-design-review` with the Skill tool and follow all 7 dimensions at full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
@@ -344,7 +344,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   **outside-voice sub-agent design voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   Read the plan file at <plan_path>. Evaluate this plan's
   UI/UX design decisions.
@@ -409,7 +409,7 @@ Do NOT begin Phase 3 until all Phase 2 outputs (if run) are written to the plan 
 
 ## Phase 3: Eng Review + Dual Voices
 
-Load `user::bitfun-system::gstack-plan-eng-review` with the Skill tool and follow all sections at full depth.
+Load `user::openbitfun-system::gstack-plan-eng-review` with the Skill tool and follow all sections at full depth.
 Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
@@ -419,7 +419,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   **outside-voice sub-agent eng voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   Review this plan for architectural issues, missing edge cases,
   and hidden complexity. Be adversarial.
@@ -447,7 +447,7 @@ Use the BitFun Task tool to dispatch this prompt to a suitable independent read-
 
 - Architecture choices: explicit over clever (P5). If codex disagrees with valid reason → TASTE DECISION. Scope changes both models agree on → USER CHALLENGE.
 - Evals: always include all relevant suites (P1)
-- Test plan: generate artifact at `$HOME/.bitfun/team/projects/$SLUG/{user}-{branch}-test-plan-{datetime}.md`
+- Test plan: generate artifact at `$HOME/.openbitfun/team/projects/$SLUG/{user}-{branch}-test-plan-{datetime}.md`
 - TODOS.md: collect all deferred scope expansions from Phase 1, auto-write
 
 **Required execution checklist (Eng):**
@@ -534,7 +534,7 @@ Log: "Phase 3.5 skipped — no developer-facing scope detected."
   **outside-voice sub-agent DX voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   Read the plan file at <plan_path>. Evaluate this plan's developer experience.
 
@@ -657,7 +657,7 @@ produced. Check the plan file and conversation for each item.
 - [ ] Scope challenge with actual code analysis (not just "scope is fine")
 - [ ] Architecture ASCII diagram produced
 - [ ] Test diagram mapping codepaths to test coverage
-- [ ] Test plan artifact written to disk at $HOME/.bitfun/team/projects/$SLUG/
+- [ ] Test plan artifact written to disk at $HOME/.openbitfun/team/projects/$SLUG/
 - [ ] "NOT in scope" section written
 - [ ] "What already exists" section written
 - [ ] Failure modes registry with critical gap assessment
@@ -773,36 +773,36 @@ STATUS is "clean" if no unresolved issues, "issues_open" otherwise.
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null)
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 If Phase 2 ran (UI scope):
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 If Phase 3.5 ran (DX scope):
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 Dual voice logs (one per phase that ran):
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 If Phase 2 ran (UI scope), also log:
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 If Phase 3.5 ran (DX scope), also log:
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 SOURCE = "codex+subagent", "codex-only", "subagent-only", or "unavailable".

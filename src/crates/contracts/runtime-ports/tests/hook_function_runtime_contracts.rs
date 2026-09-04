@@ -1,7 +1,7 @@
 #![cfg(feature = "hook-function-runtime")]
 
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     HookFunctionAvailability, HookFunctionBeforeRequest, HookFunctionBeforeResult,
     HookFunctionCancelRequest, HookFunctionCancelResult, HookFunctionDisposeRequest,
     HookFunctionDisposeResult, HookFunctionGeneration, HookFunctionRegistrationBatch,
@@ -33,7 +33,7 @@ struct RejectingReverseSink;
 impl HookFunctionReverseSink for RejectingReverseSink {
     async fn metadata(
         &self,
-        _update: bitfun_runtime_ports::HookFunctionReverseMetadata,
+        _update: openbitfun_runtime_ports::HookFunctionReverseMetadata,
     ) -> PortResult<()> {
         Ok(())
     }
@@ -95,9 +95,9 @@ impl HookFunctionRuntime for ContractRuntime {
 
     async fn transform_tool_after(
         &self,
-        request: bitfun_runtime_ports::HookFunctionAfterRequest,
+        request: openbitfun_runtime_ports::HookFunctionAfterRequest,
         _deadline: Duration,
-    ) -> PortResult<bitfun_runtime_ports::HookFunctionAfterResult> {
+    ) -> PortResult<openbitfun_runtime_ports::HookFunctionAfterResult> {
         Ok(request.output)
     }
 

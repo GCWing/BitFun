@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use bitfun_page_function_runtime::{PageHost, PageMeta};
 use dashmap::DashMap;
+use openbitfun_page_function_runtime::{PageHost, PageMeta};
 use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::limits::Limit;
 use sha2::{Digest, Sha256};

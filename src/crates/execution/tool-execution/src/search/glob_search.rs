@@ -1,9 +1,9 @@
 use super::workspace_walk::{add_directory_ignores, WorkspaceFileWalker};
 use crate::util::string::shell_single_quote;
-use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
 use globset::GlobBuilder;
 use ignore::WalkBuilder;
 use log::{info, warn};
+use openbitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::path::{Component, Path, PathBuf};
@@ -265,9 +265,10 @@ pub fn derive_remote_walk_root(search_dir: &str, pattern: &str) -> (String, Stri
 }
 
 pub fn resolve_glob_config(pattern: &str) -> (bool, bool) {
-    let is_whitelisted = pattern.starts_with(".bitfun")
-        || pattern.contains("/.bitfun")
-        || pattern.contains("\\.bitfun");
+    let hidden_directory = openbitfun_core_types::product_identity::hidden_data_directory();
+    let is_whitelisted = pattern.starts_with(hidden_directory)
+        || pattern.contains(&format!("/{hidden_directory}"))
+        || pattern.contains(&format!("\\{hidden_directory}"));
 
     let apply_gitignore = !is_whitelisted;
     let ignore_hidden_files = !is_whitelisted;
@@ -742,7 +743,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time went backwards")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("bitfun-glob-search-{name}-{unique}"));
+        let dir = std::env::temp_dir().join(format!("openbitfun-glob-search-{name}-{unique}"));
         fs::create_dir_all(&dir).expect("temp dir should be created");
         TempTree { root: dir }
     }

@@ -7,7 +7,7 @@ export const appLayoutAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'windowModeTitle' }, { id: 'windowModeDetail' },
   ],
   states: [
-    { id: 'fullscreen', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="fullscreen"]' } },
-    { id: 'toolbar', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="toolbar"]' } },
+    { id: 'fullscreen', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="fullscreen"]' } },
+    { id: 'toolbar', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="toolbar"]' } },
   ],
 };

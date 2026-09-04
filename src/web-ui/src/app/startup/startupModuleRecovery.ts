@@ -1,4 +1,4 @@
-const STARTUP_MODULE_RELOAD_KEY = 'bitfun:startup-module-reload-attempted';
+const STARTUP_MODULE_RELOAD_KEY = 'openbitfun:startup-module-reload-attempted';
 
 const DYNAMIC_MODULE_LOAD_ERROR =
   /(?:importing a module script failed|failed to fetch dynamically imported module|error loading dynamically imported module|load failed)/i;

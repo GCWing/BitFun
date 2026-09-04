@@ -3,16 +3,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bitfun_product_domains::function_agents::git_func_agent::{
+use log::{debug, error, warn};
+use openbitfun_product_domains::function_agents::git_func_agent::{
     parse_commit_ai_response, prepare_commit_ai_prompt, AICommitAnalysis, CommitMessageOptions,
     ProjectContext,
 };
-use bitfun_product_domains::function_agents::ports::{
+use openbitfun_product_domains::function_agents::ports::{
     CommitAiAnalysisRequest, FunctionAgentAiPort, FunctionAgentFuture, FunctionAgentGitPort,
     GitCommitSnapshot,
 };
-use bitfun_services_integrations::function_agents::FunctionAgentGitService;
-use log::{debug, error, warn};
+use openbitfun_services_integrations::function_agents::FunctionAgentGitService;
 
 use crate::function_agents::common::{AgentError, AgentResult};
 use crate::infrastructure::ai::{AIClient, AIClientFactory};
@@ -139,7 +139,7 @@ impl FunctionAgentAiPort for CoreFunctionAgentAiAdapter {
 
 #[cfg(test)]
 mod tests {
-    use bitfun_product_domains::function_agents::ports::FunctionAgentGitPort;
+    use openbitfun_product_domains::function_agents::ports::FunctionAgentGitPort;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
@@ -216,7 +216,7 @@ mod tests {
     impl TestTempDir {
         fn new(label: &str) -> Self {
             let path = std::env::temp_dir().join(format!(
-                "bitfun-function-agent-port-{}-{}",
+                "openbitfun-function-agent-port-{}-{}",
                 label,
                 uuid::Uuid::new_v4()
             ));
@@ -296,7 +296,7 @@ mod tests {
     fn init_git_repo(repo: &std::path::Path) {
         git(repo, &["init", "-b", "main"]);
         git(repo, &["config", "user.email", "test@example.com"]);
-        git(repo, &["config", "user.name", "BitFun Test"]);
+        git(repo, &["config", "user.name", "OpenBitFun Test"]);
     }
 
     fn git(repo: &std::path::Path, args: &[&str]) {

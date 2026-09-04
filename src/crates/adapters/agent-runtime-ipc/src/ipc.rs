@@ -29,14 +29,14 @@ impl LocalIpcEndpoint {
         {
             let _ = runtime_root;
             Ok(Self {
-                discovery_value: format!(r"\\.\pipe\bitfun-agent-runtime-{suffix}"),
+                discovery_value: format!(r"\\.\pipe\openbitfun-agent-runtime-{suffix}"),
             })
         }
         #[cfg(unix)]
         {
             let root = dunce::canonicalize(runtime_root)
                 .map_err(RuntimeIpcTransportError::CanonicalizeRuntimeRoot)?;
-            let discovery_value = format!("bf-ar-{suffix}.sock");
+            let discovery_value = format!("openbitfun-ar-{suffix}.sock");
             let path = root.join(&discovery_value);
             validate_uds_path_length(&path)?;
             Ok(Self {

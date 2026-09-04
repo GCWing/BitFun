@@ -31,7 +31,7 @@ async function main() {
   );
   const destination = packageHostPath(process.platform, process.arch);
   await stageHost(resolve(source), destination);
-  process.stdout.write(`Staged BitFun SDK Host at ${destination}\n`);
+  process.stdout.write(`Staged OpenBitFun SDK Host at ${destination}\n`);
 }
 
 if (

@@ -2,7 +2,7 @@
 
 use crate::agentic::insights::types::{SessionFacet, SessionTranscript};
 use crate::infrastructure::get_path_manager_arc;
-use crate::util::errors::BitFunResult;
+use crate::util::errors::OpenBitFunResult;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -32,7 +32,7 @@ pub fn compute_fingerprint(transcript: &SessionTranscript) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-fn cache_file_path(transcript: &SessionTranscript) -> BitFunResult<std::path::PathBuf> {
+fn cache_file_path(transcript: &SessionTranscript) -> OpenBitFunResult<std::path::PathBuf> {
     let pm = get_path_manager_arc();
     let safe = transcript
         .session_id
@@ -52,7 +52,7 @@ fn cache_file_path(transcript: &SessionTranscript) -> BitFunResult<std::path::Pa
 
 pub async fn try_load_cached_facet(
     transcript: &SessionTranscript,
-) -> BitFunResult<Option<SessionFacet>> {
+) -> OpenBitFunResult<Option<SessionFacet>> {
     let path = match cache_file_path(transcript) {
         Ok(p) => p,
         Err(_) => return Ok(None),
@@ -75,7 +75,7 @@ pub async fn try_load_cached_facet(
 pub async fn save_cached_facet(
     transcript: &SessionTranscript,
     facet: &SessionFacet,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let path = cache_file_path(transcript)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;

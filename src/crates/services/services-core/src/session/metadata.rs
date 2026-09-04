@@ -4,7 +4,7 @@ use super::types::{
     DialogTurnData, DialogTurnKind, SessionMemoryMode, SessionMetadata, SessionRelationship,
     SessionRelationshipKind, StoredSessionIndexFile, TurnStatus,
 };
-use bitfun_core_types::{SessionExecutionTarget, SessionKind};
+use openbitfun_core_types::{SessionExecutionTarget, SessionKind};
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -408,7 +408,7 @@ fn fill_workspace_path_if_missing(metadata: &mut SessionMetadata, workspace_path
 mod tests {
     use super::*;
     use crate::session::{SessionRelationship, SessionRelationshipKind};
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         SessionContinuationPolicy, SessionExecutionTarget, SessionExecutionTargetKind,
         WorktreeLifecycle,
     };

@@ -12,7 +12,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
   animation: welcome-scene-reveal 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
   &__content {
@@ -22,14 +22,14 @@
     justify-content: center;
     min-width: 0;
     min-height: 0;
-    padding: clamp(var(--bf-space-6), 7vh, var(--bf-space-12)) var(--bf-space-6);
+    padding: clamp(var(--openbitfun-space-6), 7vh, var(--openbitfun-space-12)) var(--openbitfun-space-6);
   }
 
   &__greeting {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     max-width: 760px;
     text-align: center;
   }
@@ -38,13 +38,13 @@
     margin: 0;
     color: color-mix(
       in srgb,
-      var(--bf-color-content-primary) 66%,
-      var(--bf-color-content-secondary)
+      var(--openbitfun-color-content-primary) 66%,
+      var(--openbitfun-color-content-secondary)
     );
-    font-size: var(--bf-type-display-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+    font-size: var(--openbitfun-type-display-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
     text-wrap: balance;
   }
 
@@ -52,12 +52,12 @@
     margin: 0;
     color: color-mix(
       in srgb,
-      var(--bf-color-content-primary) 66%,
-      var(--bf-color-content-secondary)
+      var(--openbitfun-color-content-primary) 66%,
+      var(--openbitfun-color-content-secondary)
     );
-    font-size: var(--bf-type-flow-title-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-flow-support-line-height);
+    font-size: var(--openbitfun-type-flow-title-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     text-wrap: balance;
   }
 }
@@ -75,15 +75,15 @@
 @media (max-width: 700px) {
   .welcome-scene {
     &__content {
-      padding-inline: var(--bf-space-4);
+      padding-inline: var(--openbitfun-space-4);
     }
 
     &__title {
-      font-size: var(--bf-type-heading-display-font-size);
+      font-size: var(--openbitfun-type-heading-display-font-size);
     }
 
     &__greeting-label {
-      font-size: var(--bf-type-body-md-font-size);
+      font-size: var(--openbitfun-type-body-md-font-size);
     }
   }
 }

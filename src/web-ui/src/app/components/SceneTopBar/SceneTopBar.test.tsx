@@ -22,9 +22,9 @@ describe('SceneTopBar', () => {
   it('extends the Toolbar divider through both side gaps on the same pixel row', () => {
     expect(stylesheet).not.toContain('border-block-end: 0;');
     expect(stylesheet).toContain(
-      'inset-block-end: calc(0px - var(--bf-border-width-default));',
+      'inset-block-end: calc(0px - var(--openbitfun-border-width-default));',
     );
-    expect(stylesheet).toContain('width: var(--bf-space-4);');
+    expect(stylesheet).toContain('width: var(--openbitfun-space-4);');
     expect(stylesheet).toContain('inset-inline-end: 100%;');
     expect(stylesheet).toContain('inset-inline-start: 100%;');
   });
@@ -37,16 +37,16 @@ describe('SceneTopBar', () => {
     const maximize = vi.fn();
     try {
       act(() => root.render(<SceneTopBar onMinimize={vi.fn()} onMaximize={maximize} onClose={vi.fn()} />));
-      const toolbar = host.querySelector('[data-bf-component="toolbar"]')!;
-      expect(toolbar.getAttribute('data-bf-part')).toBe('topBar');
+      const toolbar = host.querySelector('[data-openbitfun-component="toolbar"]')!;
+      expect(toolbar.getAttribute('data-openbitfun-part')).toBe('topBar');
       expect(toolbar.getAttribute('data-size')).toBe('md');
       expect(toolbar.getAttribute('data-bordered')).toBe('true');
-      expect(toolbar.querySelector(':scope > [data-bf-part="leading"] [role="tablist"]')).not.toBeNull();
-      expect(toolbar.querySelector(':scope > [data-bf-part="trailing"] [data-bf-part="sceneActions"]')).not.toBeNull();
-      expect(toolbar.querySelector('[data-bf-part="controls"] button')).not.toBeNull();
+      expect(toolbar.querySelector(':scope > [data-openbitfun-part="leading"] [role="tablist"]')).not.toBeNull();
+      expect(toolbar.querySelector(':scope > [data-openbitfun-part="trailing"] [data-openbitfun-part="sceneActions"]')).not.toBeNull();
+      expect(toolbar.querySelector('[data-openbitfun-part="controls"] button')).not.toBeNull();
       act(() => toolbar.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
       expect(maximize).toHaveBeenCalledOnce();
-      act(() => toolbar.querySelector('[data-bf-part="sceneActions"] button')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+      act(() => toolbar.querySelector('[data-openbitfun-part="sceneActions"] button')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
       expect(maximize).toHaveBeenCalledOnce();
     } finally {
       act(() => root.unmount());
@@ -61,7 +61,7 @@ describe('SceneTopBar', () => {
     const root = createRoot(host);
     try {
       act(() => root.render(<SceneTopBar />));
-      expect(host.querySelector('[data-bf-component="toolbar"]')?.getAttribute('data-bordered'))
+      expect(host.querySelector('[data-openbitfun-component="toolbar"]')?.getAttribute('data-bordered'))
         .toBe('false');
     } finally {
       act(() => root.unmount());

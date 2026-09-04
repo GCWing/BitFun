@@ -2,7 +2,7 @@
 
 Scope: this guide applies to `src/crates/adapters/transport`.
 
-`bitfun-transport` owns the event delivery abstraction and the smallest
+`openbitfun-transport` owns the event delivery abstraction and the smallest
 protocol-neutral message mechanics reused by current product hosts. It bridges
 owned event projections to concrete delivery channels and caps JSON encoding
 without owning product logic or protocol plans. Its colocated TypeScript core
@@ -11,7 +11,7 @@ stdio and the WebSocket client.
 
 ## Guardrails
 
-- Do not depend on `bitfun-core`, API handlers, app crates, product domains,
+- Do not depend on `openbitfun-core`, API handlers, app crates, product domains,
   concrete services, AI providers, terminal, or tool-runtime implementations.
 - Keep host adapter features explicit. Retaining a production adapter requires
   a production construction point, a current consumer, and host lifecycle
@@ -34,7 +34,7 @@ stdio and the WebSocket client.
 ## Verification
 
 ```bash
-cargo check -p bitfun-transport
+cargo check -p openbitfun-transport
 pnpm --dir sdk/typescript test
 node scripts/check-core-boundaries.mjs
 ```

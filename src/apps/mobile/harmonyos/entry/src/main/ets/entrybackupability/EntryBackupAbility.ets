@@ -2,7 +2,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BackupExtensionAbility, BundleVersion } from '@kit.CoreFileKit';
 
 const DOMAIN = 0x0000;
-const TAG = 'BitFunRemote';
+const TAG = 'OpenBitFunRemote';
 
 export default class EntryBackupAbility extends BackupExtensionAbility {
   async onBackup() {

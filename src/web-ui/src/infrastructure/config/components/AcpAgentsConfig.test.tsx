@@ -33,8 +33,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   ConfirmDialog: ({
     confirmText,
     message,
@@ -275,7 +275,7 @@ describe('AcpAgentsConfig', () => {
     listSavedConnectionsMock.mockResolvedValue([]);
     probeClientRequirementsMock.mockResolvedValue([]);
     saveJsonConfigMock.mockImplementation(async () => {
-      window.dispatchEvent(new Event('bitfun:acp-clients-changed'));
+      window.dispatchEvent(new Event('openbitfun:acp-clients-changed'));
     });
     installClientCliMock.mockResolvedValue(undefined);
     predownloadClientAdapterMock.mockResolvedValue(undefined);
@@ -328,17 +328,17 @@ describe('AcpAgentsConfig', () => {
     });
 
     const row = Array.from(
-      container.querySelectorAll('.bitfun-acp-agents__registry-row'),
-    ).find(candidate => candidate.querySelector('.bitfun-acp-agents__registry-name')
+      container.querySelectorAll('.openbitfun-acp-agents__registry-row'),
+    ).find(candidate => candidate.querySelector('.openbitfun-acp-agents__registry-name')
       ?.textContent === 'opencode');
     expect(row).toBeTruthy();
 
     const status = row?.querySelector(
-      '[data-bf-component="status-pill"][data-bf-state="not_installed"]',
+      '[data-openbitfun-component="status-pill"][data-openbitfun-state="not_installed"]',
     );
 
-    expect(row?.querySelector('[data-bf-part="capabilities"]')).toBeNull();
-    expect(row?.querySelectorAll('[data-bf-component="status-pill"]')).toHaveLength(1);
+    expect(row?.querySelector('[data-openbitfun-part="capabilities"]')).toBeNull();
+    expect(row?.querySelectorAll('[data-openbitfun-component="status-pill"]')).toHaveLength(1);
     expect(status?.getAttribute('data-tone')).toBe('neutral');
   });
 
@@ -540,14 +540,14 @@ describe('AcpAgentsConfig', () => {
 
     expect(listSavedConnectionsMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain('Huawei Server');
-    expect(JSON.parse(localStorage.getItem('bitfun:settings:acp-agents:hidden-remote-connections:v1') || '[]'))
+    expect(JSON.parse(localStorage.getItem('openbitfun:settings:acp-agents:hidden-remote-connections:v1') || '[]'))
       .toEqual(['huawei-server']);
     expect(container.textContent).toContain('remote.showHiddenConnections');
   });
 
   it('restores a hidden remote server from the hidden list', async () => {
     localStorage.setItem(
-      'bitfun:settings:acp-agents:hidden-remote-connections:v1',
+      'openbitfun:settings:acp-agents:hidden-remote-connections:v1',
       JSON.stringify(['huawei-server'])
     );
     listSavedConnectionsMock.mockResolvedValue([{
@@ -588,14 +588,14 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
     });
 
-    expect(localStorage.getItem('bitfun:settings:acp-agents:hidden-remote-connections:v1'))
+    expect(localStorage.getItem('openbitfun:settings:acp-agents:hidden-remote-connections:v1'))
       .toBe('[]');
     expect(container.textContent).toContain('Huawei Server');
   });
 
   it('does not probe hidden remote servers until they are restored', async () => {
     localStorage.setItem(
-      'bitfun:settings:acp-agents:hidden-remote-connections:v1',
+      'openbitfun:settings:acp-agents:hidden-remote-connections:v1',
       JSON.stringify(['huawei-server'])
     );
     listSavedConnectionsMock.mockResolvedValue([{
@@ -703,7 +703,7 @@ describe('AcpAgentsConfig', () => {
     ];
     probeClientRequirementsMock.mockResolvedValue(healthyProbes);
     saveJsonConfigMock.mockImplementation(async () => {
-      window.dispatchEvent(new Event('bitfun:acp-clients-changed'));
+      window.dispatchEvent(new Event('openbitfun:acp-clients-changed'));
       loadJsonConfigMock.mockResolvedValue(JSON.stringify({
         acpClients: {
           opencode: {
@@ -824,8 +824,8 @@ describe('AcpAgentsConfig', () => {
     });
 
     expect(container.textContent).toContain('DeepSeek Harness');
-    // Unlike omp, the harness is a plain npm global, so BitFun installs it.
-    // The bridge is not a separate adapter — it ships inside BitFun.
+    // Unlike omp, the harness is a plain npm global, so OpenBitFun installs it.
+    // The bridge is not a separate adapter — it ships inside OpenBitFun.
     expect(container.textContent).not.toContain('registry.adapterMissing');
 
     const installButtons = Array.from(container.querySelectorAll('button'))
@@ -850,7 +850,7 @@ describe('AcpAgentsConfig', () => {
     );
   });
 
-  it('adds DeepSeek Harness as a launch of the profile BitFun materializes', async () => {
+  it('adds DeepSeek Harness as a launch of the profile OpenBitFun materializes', async () => {
     probeClientRequirementsMock.mockResolvedValue([
       {
         id: 'dsh',
@@ -872,8 +872,8 @@ describe('AcpAgentsConfig', () => {
     // and the preset list happen to produce, so "the last add button" belongs
     // to some other agent as often as not.
     const harnessRow = Array.from(
-      container.querySelectorAll('.bitfun-acp-agents__registry-row'),
-    ).find(row => row.querySelector('.bitfun-acp-agents__registry-name')
+      container.querySelectorAll('.openbitfun-acp-agents__registry-row'),
+    ).find(row => row.querySelector('.openbitfun-acp-agents__registry-name')
       ?.textContent === 'DeepSeek Harness');
     expect(harnessRow).toBeTruthy();
 
@@ -888,10 +888,10 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
     });
 
-    // The command has to name the profile BitFun materializes; a bare `dsh`
+    // The command has to name the profile OpenBitFun materializes; a bare `dsh`
     // would drop the user into the harness's own default composition, which
     // does not speak ACP at all.
-    expect(saveJsonConfigMock).toHaveBeenCalledWith(expect.stringContaining('bitfun-acp'));
+    expect(saveJsonConfigMock).toHaveBeenCalledWith(expect.stringContaining('openbitfun-acp'));
   });
 
   it('does not downgrade enabled agents on transient probe timeouts during refresh', async () => {

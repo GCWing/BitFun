@@ -2,7 +2,7 @@ use crate::agentic::image_analysis::{optimize_image_for_provider, ImageLimits};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
 use base64::Engine as _;
@@ -42,9 +42,9 @@ impl ViewImageTool {
         ctx.primary_model_facts().api_format.to_lowercase()
     }
 
-    fn require_multimodal_tool_output(ctx: &ToolUseContext) -> BitFunResult<()> {
+    fn require_multimodal_tool_output(ctx: &ToolUseContext) -> OpenBitFunResult<()> {
         if !ctx.primary_model_supports_image_understanding() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "view_image is not allowed because the primary model does not accept image inputs"
                     .to_string(),
             ));
@@ -58,7 +58,7 @@ impl ViewImageTool {
             return Ok(());
         }
 
-        Err(BitFunError::tool(
+        Err(OpenBitFunError::tool(
             "view_image returns images in tool results; set the primary model to Anthropic (Claude) or OpenAI-compatible API format. Other providers are not supported for view_image yet."
                 .to_string(),
         ))
@@ -69,9 +69,9 @@ impl ViewImageTool {
             && ctx.primary_model_facts().multimodal_tool_output_supported()
     }
 
-    fn mime_type_for_image(bytes: &[u8]) -> BitFunResult<&'static str> {
+    fn mime_type_for_image(bytes: &[u8]) -> OpenBitFunResult<&'static str> {
         let format = image::guess_format(bytes).map_err(|_| {
-            BitFunError::tool(
+            OpenBitFunError::tool(
                 "view_image can only attach supported image files: png, jpeg, gif, webp, or bmp"
                     .to_string(),
             )
@@ -83,30 +83,30 @@ impl ViewImageTool {
             image::ImageFormat::Gif => Ok("image/gif"),
             image::ImageFormat::WebP => Ok("image/webp"),
             image::ImageFormat::Bmp => Ok("image/bmp"),
-            other => Err(BitFunError::tool(format!(
+            other => Err(OpenBitFunError::tool(format!(
                 "view_image does not support image format {:?}; supported formats are png, jpeg, gif, webp, and bmp",
                 other
             ))),
         }
     }
 
-    fn path_from_input(input: &Value) -> BitFunResult<&str> {
+    fn path_from_input(input: &Value) -> OpenBitFunResult<&str> {
         input
             .get("path")
             .and_then(Value::as_str)
             .filter(|path| !path.trim().is_empty())
-            .ok_or_else(|| BitFunError::tool("path is required".to_string()))
+            .ok_or_else(|| OpenBitFunError::tool("path is required".to_string()))
     }
 
-    fn validate_detail(input: &Value) -> BitFunResult<()> {
+    fn validate_detail(input: &Value) -> OpenBitFunResult<()> {
         match input.get("detail") {
             None | Some(Value::Null) => Ok(()),
             Some(Value::String(value)) if value == "original" => Ok(()),
-            Some(Value::String(value)) => Err(BitFunError::tool(format!(
+            Some(Value::String(value)) => Err(OpenBitFunError::tool(format!(
                 "view_image.detail only supports `original`; omit `detail` for default behavior, got `{}`",
                 value
             ))),
-            Some(_) => Err(BitFunError::tool(
+            Some(_) => Err(OpenBitFunError::tool(
                 "view_image.detail must be the string `original` when provided".to_string(),
             )),
         }
@@ -115,11 +115,11 @@ impl ViewImageTool {
     fn resolve_path(
         input_path: &str,
         context: Option<&ToolUseContext>,
-    ) -> BitFunResult<ResolvedImagePath> {
+    ) -> OpenBitFunResult<ResolvedImagePath> {
         let local_path = Path::new(input_path);
         if !context.is_some_and(|ctx| ctx.is_remote())
             && local_path.is_absolute()
-            && !crate::agentic::tools::workspace_paths::is_bitfun_tool_uri(input_path)
+            && !crate::agentic::tools::workspace_paths::is_openbitfun_tool_uri(input_path)
         {
             return Ok(ResolvedImagePath::Local(local_path.to_path_buf()));
         }
@@ -140,7 +140,7 @@ impl ViewImageTool {
             None => {
                 let path = Path::new(input_path);
                 if !path.is_absolute() {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "path must be an absolute path when no tool context is available, got: {}",
                         input_path
                     )));
@@ -153,25 +153,25 @@ impl ViewImageTool {
     async fn read_image_bytes(
         resolved: &ResolvedImagePath,
         context: Option<&ToolUseContext>,
-    ) -> BitFunResult<Vec<u8>> {
+    ) -> OpenBitFunResult<Vec<u8>> {
         match resolved {
             ResolvedImagePath::Local(path) => {
                 let metadata = fs::metadata(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to locate image at {}: {}",
                         path.display(),
                         err
                     ))
                 })?;
                 if !metadata.is_file() {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "image path is not a file: {}",
                         path.display()
                     )));
                 }
 
                 fs::read(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to read image at {}: {}",
                         path.display(),
                         err
@@ -180,26 +180,26 @@ impl ViewImageTool {
             }
             ResolvedImagePath::RemoteWorkspace { path, logical_path } => {
                 let fs = context.and_then(|ctx| ctx.ws_fs()).ok_or_else(|| {
-                    BitFunError::tool(
+                    OpenBitFunError::tool(
                         "view_image cannot read remote workspace images because workspace filesystem services are unavailable"
                             .to_string(),
                     )
                 })?;
                 let is_file = fs.is_file(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to inspect remote image at {}: {}",
                         logical_path, err
                     ))
                 })?;
                 if !is_file {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "image path is not a file: {}",
                         logical_path
                     )));
                 }
 
                 fs.read_file(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to read remote image at {}: {}",
                         logical_path, err
                     ))
@@ -215,7 +215,7 @@ impl Tool for ViewImageTool {
         "view_image"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(
             "View an image from the filesystem. Use only when given an image path and the image is not already attached to the conversation."
                 .to_string(),
@@ -236,12 +236,12 @@ impl Tool for ViewImageTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Path to an image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI returned by another tool."
+                    "description": "Path to an image file. Use an absolute local path, a workspace-relative path, or an exact openbitfun:// URI returned by another tool."
                 },
                 "detail": {
                     "type": "string",
                     "enum": ["original"],
-                    "description": "Optional detail override. Supported value: original. BitFun preserves image detail when possible and may optimize bytes to fit the active provider limits."
+                    "description": "Optional detail override. Supported value: original. OpenBitFun preserves image detail when possible and may optimize bytes to fit the active provider limits."
                 }
             },
             "required": ["path"],
@@ -379,7 +379,7 @@ impl Tool for ViewImageTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         Self::require_multimodal_tool_output(context)?;
         Self::validate_detail(input)?;
 
@@ -390,11 +390,11 @@ impl Tool for ViewImageTool {
         let provider = Self::primary_api_format(context);
         let processed = optimize_image_for_provider(bytes, &provider, Some(original_mime_type))
             .map_err(|err| {
-                BitFunError::tool(format!("unable to prepare image for model vision: {}", err))
+                OpenBitFunError::tool(format!("unable to prepare image for model vision: {}", err))
             })?;
         let limits = ImageLimits::for_provider(&provider);
         if processed.data.len() > limits.max_size {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "image is too large for {} after optimization: {} bytes > {} bytes",
                 provider,
                 processed.data.len(),
@@ -531,7 +531,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -560,7 +560,7 @@ mod tests {
             "remote-session".to_string(),
             session_identity,
         ));
-        context.runtime_handles = bitfun_runtime_ports::ToolRuntimeHandles::new(
+        context.runtime_handles = openbitfun_runtime_ports::ToolRuntimeHandles::new(
             Some(WorkspaceServices {
                 fs: Arc::new(FakeRemoteFs),
                 shell: Arc::new(FakeShell),

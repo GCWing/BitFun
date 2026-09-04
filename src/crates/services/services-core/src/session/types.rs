@@ -1,10 +1,10 @@
 //! Types for session persistence
 
-use bitfun_core_types::ToolImageAttachment;
-use bitfun_core_types::{
+use openbitfun_core_types::ToolImageAttachment;
+use openbitfun_core_types::{
     AiErrorDetail, SessionContinuationPolicy, SessionExecutionTarget, SessionKind,
 };
-use bitfun_events::ModelRoundAttemptDiagnostic;
+use openbitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
@@ -795,7 +795,7 @@ pub struct ThinkingItemData {
         skip_serializing_if = "Option::is_none",
         alias = "reasoning_kind"
     )]
-    pub reasoning_kind: Option<bitfun_core_types::ReasoningContentKind>,
+    pub reasoning_kind: Option<openbitfun_core_types::ReasoningContentKind>,
     #[serde(alias = "is_streaming")]
     pub is_streaming: bool,
     #[serde(alias = "is_collapsed")]
@@ -1240,7 +1240,7 @@ mod tests {
         SessionRelationshipKind, SessionTurnWindowResponse, TextItemData, ThinkingItemData,
         ToolItemData, UserMessageData,
     };
-    use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
+    use openbitfun_core_types::{SessionContinuationPolicy, SessionKind};
 
     #[test]
     fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {

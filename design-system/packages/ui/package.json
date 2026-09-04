@@ -1,7 +1,7 @@
 {
-  "name": "@bitfun/ui",
+  "name": "@openbitfun/ui",
   "version": "0.1.0",
-  "description": "Theme-independent React components for BitFun product surfaces",
+  "description": "Theme-independent React components for OpenBitFun product surfaces",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -34,7 +34,7 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
-    "@bitfun/design-tokens": "workspace:^",
+    "@openbitfun/design-tokens": "workspace:^",
     "lucide-react": "^0.541.0"
   },
   "peerDependencies": {

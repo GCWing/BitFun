@@ -115,14 +115,14 @@ jobs:
       - name: Download bundled artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: bitfun-nightly-*-bundle
+          pattern: openbitfun-nightly-*-bundle
           path: release-assets
           merge-multiple: true
 
       - name: Download Linux binary artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: bitfun-linux-nightly-*
+          pattern: openbitfun-linux-nightly-*
           path: linux-release-assets
           merge-multiple: true
 
@@ -130,9 +130,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f linux-release-assets/bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
-          test -f linux-release-assets/bitfun-relay-server-aarch64-unknown-linux-gnu.tar.gz
-          for archive in linux-release-assets/bitfun-relay-server-*.tar.gz; do
+          test -f linux-release-assets/openbitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+          test -f linux-release-assets/openbitfun-relay-server-aarch64-unknown-linux-gnu.tar.gz
+          for archive in linux-release-assets/openbitfun-relay-server-*.tar.gz; do
             (cd linux-release-assets && sha256sum --check "$(basename "${archive}").sha256")
           done
           cp src/apps/relay-server/Dockerfile.release linux-release-assets/Dockerfile.release
@@ -157,7 +157,7 @@ jobs:
           NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
         run: |
           echo "asset_version=${NIGHTLY_VERSION%%+*}" >>"$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bitfun-relay-server" >>"$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openbitfun-relay-server" >>"$GITHUB_OUTPUT"
 
       - name: Build and push multi-platform Relay image
         id: relay-image
@@ -189,9 +189,9 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.relay-image.outputs.digest }}
           NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
           asset_version="${NIGHTLY_VERSION%%+*}"
@@ -276,9 +276,9 @@ jobs:
       - name: Sign installer packages
         shell: bash
         env:
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
           mapfile -t assets < <({
@@ -321,12 +321,12 @@ jobs:
             release-manual-assets/*.exe
             release-manual-assets/*.exe.sig
             release-assets/minisign.pub
-            release-assets/**/bitfun-cli-*-apple-darwin.tar.gz
-            release-assets/**/bitfun-cli-*-apple-darwin.tar.gz.sha256
-            linux-release-assets/bitfun-cli-*.tar.gz
-            linux-release-assets/bitfun-cli-*.tar.gz.sha256
-            linux-release-assets/bitfun-relay-server-*.tar.gz
-            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
+            release-assets/**/openbitfun-cli-*-apple-darwin.tar.gz
+            release-assets/**/openbitfun-cli-*-apple-darwin.tar.gz.sha256
+            linux-release-assets/openbitfun-cli-*.tar.gz
+            linux-release-assets/openbitfun-cli-*.tar.gz.sha256
+            linux-release-assets/openbitfun-relay-server-*.tar.gz
+            linux-release-assets/openbitfun-relay-server-*.tar.gz.sha256
             linux-release-assets/*.tar.gz.sig
             linux-release-assets/*.tar.gz.sha256.sig
             linux-release-assets/linux-binaries.json
@@ -368,7 +368,7 @@ jobs:
           ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
           RELEASE_ROOT="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${{ env.NIGHTLY_TAG }}"
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
-            archive="${RELEASE_ROOT}/bitfun-cli-${ASSET_VERSION}-${target}.tar.gz"
+            archive="${RELEASE_ROOT}/openbitfun-cli-${ASSET_VERSION}-${target}.tar.gz"
             curl -fsSL --retry 5 --retry-delay 3 "$archive" -o /dev/null
             curl -fsSL --retry 5 --retry-delay 3 "${archive}.sha256" -o /dev/null
             curl -fsSL --retry 5 --retry-delay 3 "${archive}.sig" -o /dev/null

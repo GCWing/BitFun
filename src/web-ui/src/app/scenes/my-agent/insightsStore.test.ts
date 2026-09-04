@@ -88,7 +88,7 @@ function report(generatedAt: number): InsightsReport {
     friction_intro: '',
     friction_categories: [],
     suggestions: {
-      bitfun_md_additions: [],
+      openbitfun_md_additions: [],
       features_to_try: [],
       usage_patterns: [],
     },

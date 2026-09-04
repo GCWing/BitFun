@@ -7,9 +7,9 @@
   position: relative;
   width: 100%;
   background: transparent;
-  font-family:var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
+  font-family:var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
   
   &__content {
     overflow-y: auto;
@@ -26,11 +26,11 @@
     }
     
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-color-scrollbar-thumb);
+      background: var(--openbitfun-color-scrollbar-thumb);
       border-radius: 3px;
 
       &:hover {
-        background: var(--bf-color-scrollbar-thumb-hover);
+        background: var(--openbitfun-color-scrollbar-thumb-hover);
       }
     }
   }
@@ -40,22 +40,22 @@
     align-items: center;
     justify-content: center;
     min-height: 60px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-control-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-control-font-size);
     font-style: italic;
   }
   
   &__placeholder {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     font-style: italic;
   }
 
   &__truncation-notice {
     padding: 0.25rem 0.625rem;
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
-    background: var(--bf-color-surface-tertiary);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
+    background: var(--openbitfun-color-surface-tertiary);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     font-style: italic;
   }
 }
@@ -64,7 +64,7 @@
   display: flex;
   align-items: stretch;
   min-height: 22px;
-  line-height: var(--bf-type-flow-code-line-height);
+  line-height: var(--openbitfun-type-flow-code-line-height);
   cursor: pointer;
   transition: background-color 0.15s ease;
   
@@ -76,33 +76,33 @@
     background: transparent;
     
     .diff-line__prefix {
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
   }
   
   &--added {
-    background: color-mix(in srgb, var(--bf-color-code-change-added) 10%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-code-change-added) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--bf-color-code-change-added) 15%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-code-change-added) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--bf-color-code-change-added);
-      font-weight: var(--bf-type-label-sm-font-weight);
+      color: var(--openbitfun-color-code-change-added);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
   }
 
   &--removed {
-    background: color-mix(in srgb, var(--bf-color-code-change-removed) 10%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 10%, transparent);
 
     .diff-line__gutter {
-      background: color-mix(in srgb, var(--bf-color-code-change-removed) 15%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 15%, transparent);
     }
 
     .diff-line__prefix {
-      color: var(--bf-color-code-change-removed);
-      font-weight: var(--bf-type-label-sm-font-weight);
+      color: var(--openbitfun-color-code-change-removed);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
     
     .diff-line__content {
@@ -112,17 +112,17 @@
   
   // Highlighted row (selected).
   &--highlighted {
-    background: var(--bf-color-action-secondary-hover) !important;
+    background: var(--openbitfun-color-action-secondary-hover) !important;
 
     .diff-line__gutter {
-      background: var(--bf-color-action-secondary-pressed) !important;
+      background: var(--openbitfun-color-action-secondary-pressed) !important;
     }
   }
   
   &--separator {
-    background: var(--bf-color-surface-tertiary);
+    background: var(--openbitfun-color-surface-tertiary);
     justify-content: center;
-    padding: var(--bf-control-flow-chat-inline-gap) 0;
+    padding: var(--openbitfun-control-flow-chat-inline-gap) 0;
     cursor: default;
     
     &:hover {
@@ -134,8 +134,8 @@
     }
     
     .diff-line__content--separator {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
       font-style: italic;
       text-align: center;
     }
@@ -147,9 +147,9 @@
     flex-shrink: 0;
     padding: 0 8px;
     gap: 0.125rem;
-    background: var(--bf-color-surface-panel);
+    background: var(--openbitfun-color-surface-panel);
     user-select: none;
-    border-right: 1px solid var(--bf-color-border-subtle);
+    border-right: 1px solid var(--openbitfun-color-border-subtle);
 
     &--single {
       padding: 0 4px;
@@ -166,12 +166,12 @@
     min-width: 32px;
     padding: 0 6px;
     text-align: right;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.6;
-    font-size: var(--bf-type-flow-support-font-size);
+    font-size: var(--openbitfun-type-flow-support-font-size);
 
     &--original {
-      border-right: 1px solid var(--bf-color-border-subtle);
+      border-right: 1px solid var(--openbitfun-color-border-subtle);
       padding-right: 8px;
     }
 
@@ -186,7 +186,7 @@
     justify-content: center;
     width: 18px;
     flex-shrink: 0;
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     user-select: none;
   }
   
@@ -214,59 +214,59 @@
     }
 
     code span[style] {
-      font-weight: var(--bf-type-body-sm-font-weight) !important;
+      font-weight: var(--openbitfun-type-body-sm-font-weight) !important;
     }
   }
 }
 
 // Light theme: softer, lower-saturation palette.
-:root[data-bf-appearance-mode="light"] .inline-diff-preview,
-:root[data-bf-appearance-mode="light"] .inline-diff-preview,
+:root[data-openbitfun-appearance-mode="light"] .inline-diff-preview,
+:root[data-openbitfun-appearance-mode="light"] .inline-diff-preview,
 .light .inline-diff-preview {
   .diff-line {
     &--added {
-      background: color-mix(in srgb, var(--bf-color-code-change-added) 10%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-code-change-added) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--bf-color-code-change-added) 18%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-code-change-added) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--bf-color-code-change-added);
+        color: var(--openbitfun-color-code-change-added);
       }
     }
 
     &--removed {
-      background: color-mix(in srgb, var(--bf-color-code-change-removed) 10%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 10%, transparent);
 
       .diff-line__gutter {
-        background: color-mix(in srgb, var(--bf-color-code-change-removed) 18%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 18%, transparent);
       }
 
       .diff-line__prefix {
-        color: var(--bf-color-code-change-removed);
+        color: var(--openbitfun-color-code-change-removed);
       }
     }
 
     &--highlighted {
-      background: var(--bf-color-action-secondary-hover) !important;
+      background: var(--openbitfun-color-action-secondary-hover) !important;
 
       .diff-line__gutter {
-        background: var(--bf-color-action-secondary-pressed) !important;
+        background: var(--openbitfun-color-action-secondary-pressed) !important;
       }
     }
   }
 
   .diff-line__gutter {
-    background: var(--bf-color-surface-subtle);
-    border-right-color: var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-surface-subtle);
+    border-right-color: var(--openbitfun-color-border-subtle);
   }
 
   .diff-line__num {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
 
     &--original {
-      border-right-color: var(--bf-color-border-subtle);
+      border-right-color: var(--openbitfun-color-border-subtle);
     }
   }
 }

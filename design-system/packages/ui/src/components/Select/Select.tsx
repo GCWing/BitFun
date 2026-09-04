@@ -95,7 +95,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   return (
     <span
       className={classNames(styles.root, className)}
-      data-bf-component="select"
+      data-openbitfun-component="select"
       data-disabled={disabled ? "true" : "false"}
       data-field-surface={fieldSurface}
       data-has-leading={leading !== undefined && leading !== null ? "true" : "false"}
@@ -103,7 +103,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       data-size={size}
     >
       {leading !== undefined && leading !== null && (
-        <span aria-hidden="true" className={styles.leading} data-bf-part="leading">
+        <span aria-hidden="true" className={styles.leading} data-openbitfun-part="leading">
           {leading}
         </span>
       )}
@@ -125,7 +125,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           <optgroup key={label} label={label}>{group.map(renderOption)}</optgroup>
         ))}
       </select>
-      <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
+      <span aria-hidden="true" className={styles.indicator} data-openbitfun-part="indicator">
         <Icon name="chevron-down" size="sm" />
       </span>
     </span>

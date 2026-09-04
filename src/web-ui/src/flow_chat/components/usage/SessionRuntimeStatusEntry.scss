@@ -5,18 +5,18 @@
   height: 24px;
   max-width: 96px;
   padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 52%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-default) 52%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 58%, transparent);
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 58%, transparent);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   cursor: pointer;
   min-width: 0;
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 82%, transparent);
+    color: var(--openbitfun-color-content-primary);
   }
 
   > svg {

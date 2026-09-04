@@ -4,9 +4,9 @@ use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolU
 use crate::agentic::tools::frontend_workbench_host::{
     frontend_workbench_host_available, invoke_frontend_workbench, FrontendWorkbenchHostRequest,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
-use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
+use openbitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use serde_json::{json, Value};
 
 pub struct FrontendWorkbenchTool;
@@ -45,8 +45,8 @@ impl Tool for FrontendWorkbenchTool {
         "FrontendWorkbench"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Safely customize the frontend of the running packaged BitFun desktop client. Creative mode only.
+    async fn description(&self) -> OpenBitFunResult<String> {
+        Ok(r#"Safely customize the frontend of the running packaged OpenBitFun desktop client. Creative mode only.
 
 Workflow: call prepare, edit only the returned draftPath using file tools, then call apply with draft_id set to the returned draftId. Apply opens immutable host recovery controls, hot-loads the candidate, waits for the real app shell to report readiness, and only then starts the authoritative 15-second confirmation countdown. The apply call resolves with the final confirmed or rolled-back outcome; it does not report success merely because navigation was requested. status exposes the confirmed active revision and any provisional preview separately. rollback explicitly restores the previous confirmed revision.
 
@@ -56,11 +56,11 @@ Actions:
 - apply: validate and provisionally activate a prepared draft; requires fresh permission.
 - rollback: restore the previous confirmed revision; requires fresh permission.
 
-This tool is unavailable for remote workspaces, remote-control turns, and non-desktop surfaces because the user must be able to inspect the visible local BitFun window."#.to_string())
+This tool is unavailable for remote workspaces, remote-control turns, and non-desktop surfaces because the user must be able to inspect the visible local OpenBitFun window."#.to_string())
     }
 
     fn short_description(&self) -> String {
-        "Draft and hot-apply the packaged BitFun frontend with 15-second rollback protection."
+        "Draft and hot-apply the packaged OpenBitFun frontend with 15-second rollback protection."
             .to_string()
     }
 
@@ -94,7 +94,7 @@ This tool is unavailable for remote workspaces, remote-control turns, and non-de
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let action = input.get("action").and_then(Value::as_str).unwrap_or("");
         if !matches!(action, "apply" | "rollback") {
             return Ok(Vec::new());
@@ -104,10 +104,10 @@ This tool is unavailable for remote workspaces, remote-control turns, and non-de
             input
                 .get("draft_id")
                 .and_then(Value::as_str)
-                .map(|id| format!("bitfun-frontend:draft:{id}"))
-                .unwrap_or_else(|| "bitfun-frontend:draft:<missing>".to_string())
+                .map(|id| format!("openbitfun-frontend:draft:{id}"))
+                .unwrap_or_else(|| "openbitfun-frontend:draft:<missing>".to_string())
         } else {
-            "bitfun-frontend:previous-confirmed-revision".to_string()
+            "openbitfun-frontend:previous-confirmed-revision".to_string()
         };
         let mut intent = PermissionIntent::new("frontend_workbench", vec![resource]);
         intent.save_resources.clear();
@@ -121,20 +121,20 @@ This tool is unavailable for remote workspaces, remote-control turns, and non-de
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if context.agent_type.as_deref() != Some("Creative") {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "FrontendWorkbench is restricted to Creative mode".to_string(),
             ));
         }
         if context.is_remote() {
-            return Err(BitFunError::tool(
-                "FrontendWorkbench cannot modify a remote workspace or remote BitFun host"
+            return Err(OpenBitFunError::tool(
+                "FrontendWorkbench cannot modify a remote workspace or remote OpenBitFun host"
                     .to_string(),
             ));
         }
         if is_remote_control_context(context) {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "FrontendWorkbench cannot run from a remote mobile or bot controller because the changed local desktop and its recovery controls are not visible there"
                     .to_string(),
             ));
@@ -143,7 +143,7 @@ This tool is unavailable for remote workspaces, remote-control turns, and non-de
         let action = input
             .get("action")
             .and_then(Value::as_str)
-            .ok_or_else(|| BitFunError::validation("Missing required field: action"))?;
+            .ok_or_else(|| OpenBitFunError::validation("Missing required field: action"))?;
         let draft_id = input
             .get("draft_id")
             .and_then(Value::as_str)
@@ -151,7 +151,7 @@ This tool is unavailable for remote workspaces, remote-control turns, and non-de
             .filter(|value| !value.is_empty())
             .map(str::to_string);
         if action == "apply" && draft_id.is_none() {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "draft_id is required when action is apply",
             ));
         }
@@ -161,10 +161,10 @@ This tool is unavailable for remote workspaces, remote-control turns, and non-de
             draft_id,
         })
         .await
-        .map_err(BitFunError::tool)?;
+        .map_err(OpenBitFunError::tool)?;
         let assistant = match (action, result.get("status").and_then(Value::as_str)) {
             ("apply", Some("confirmed")) => "The candidate rendered successfully and the user kept it; the returned activeRevision is confirmed.",
-            ("apply", Some("rolled_back")) => "The candidate was not kept. BitFun restored the previous confirmed frontend; inspect reason for whether this was user choice, readiness failure, or timeout.",
+            ("apply", Some("rolled_back")) => "The candidate was not kept. OpenBitFun restored the previous confirmed frontend; inspect reason for whether this was user choice, readiness failure, or timeout.",
             ("rollback", _) => "Frontend rollback completed.",
             ("prepare", _) => "Frontend draft prepared. Edit only draftPath, then apply the exact draftId.",
             _ => "Frontend workbench status returned.",

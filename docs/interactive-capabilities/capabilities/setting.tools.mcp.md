@@ -47,13 +47,13 @@ Add and manage Model Context Protocol servers, including tools, resources, promp
 3. 添加服务器并确认其权限与连接状态
    Add a server and review its permissions and connection state
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

@@ -7,9 +7,9 @@
  *
  * - Root node_modules missing → pnpm scripts fail with "node_modules missing,
  *   did you mean to install?"
- * - src/mobile-web/dist missing → cargo check -p bitfun-desktop and
+ * - src/mobile-web/dist missing → cargo check -p openbitfun-desktop and
  *   cargo check --workspace fail with "resource path '../../mobile-web/dist'
- *   doesn't exist" in the bitfun-desktop build script
+ *   doesn't exist" in the openbitfun-desktop build script
  * - OpenCode extension Host dist missing → Desktop, CLI, and app-server
  *   builds cannot bundle or launch the Bun plugin Host resources
  * - sherpa-onnx prebuilt libs missing → sherpa-onnx-sys build script attempts
@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT_DIR = __dirname;
 const DEFAULT_ROOT = join(SCRIPT_DIR, '..');
-const ROOT_DIR = process.env.BITFUN_BUILD_PREREQS_TEST_ROOT || DEFAULT_ROOT;
+const ROOT_DIR = process.env.OPENBITFUN_BUILD_PREREQS_TEST_ROOT || DEFAULT_ROOT;
 const FIX = process.argv.includes('--fix');
 
 // --- Check logic (extracted for re-use and testing) ---
@@ -49,12 +49,12 @@ function runChecks(rootDir) {
     });
   }
 
-  // --- Check 2: mobile-web dist (required by bitfun-desktop build script) ---
+  // --- Check 2: mobile-web dist (required by openbitfun-desktop build script) ---
   if (!existsSync(join(rootDir, 'src', 'mobile-web', 'dist', 'index.html'))) {
     errors.push({
       name: 'mobile-web dist',
       message:
-        "src/mobile-web/dist is missing. The bitfun-desktop Tauri build script references '../../mobile-web/dist' as a resource, so 'cargo check -p bitfun-desktop' and 'cargo check --workspace' will fail with \"resource path doesn't exist\".",
+        "src/mobile-web/dist is missing. The openbitfun-desktop Tauri build script references '../../mobile-web/dist' as a resource, so 'cargo check -p openbitfun-desktop' and 'cargo check --workspace' will fail with \"resource path doesn't exist\".",
       fix: ['pnpm', 'run', 'prepare:mobile-web'],
     });
   }

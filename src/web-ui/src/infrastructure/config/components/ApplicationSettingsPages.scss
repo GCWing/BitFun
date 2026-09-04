@@ -1,11 +1,11 @@
-.bitfun-application-settings__content {
+.openbitfun-application-settings__content {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-6);
+  gap: var(--openbitfun-space-6);
   padding: 0;
 }
 
-.bitfun-logging-config {
+.openbitfun-logging-config {
   &__content {
     display: flex;
     flex-direction: column;
@@ -18,7 +18,7 @@
     gap: 8px;
     width: 100%;
 
-    .bitfun-logging-config__path-box {
+    .openbitfun-logging-config__path-box {
       flex: 1;
       min-width: 0;
     }
@@ -36,18 +36,18 @@
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface);
-      border-color: var(--bf-color-border-subtle);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface);
+      border-color: var(--openbitfun-color-border-subtle);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &:disabled {
@@ -61,23 +61,23 @@
     padding: 10px 12px;
     border-radius: 6px;
     background: transparent;
-    border: 1px dashed var(--bf-color-border-default);
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
+    border: 1px dashed var(--openbitfun-color-border-default);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-sm-font-size);
     word-break: break-all;
     overflow-wrap: anywhere;
-    line-height: var(--bf-type-body-lg-line-height);
+    line-height: var(--openbitfun-type-body-lg-line-height);
     user-select: text;
   }
 }
 
 
-.bitfun-terminal-config {
+.openbitfun-terminal-config {
   &__content {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-6);
+    gap: var(--openbitfun-space-6);
   }
 
   &__shell-option,
@@ -103,21 +103,21 @@
   }
 
   &__shell-tooltip-name {
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__shell-tooltip-path {
     margin-top: 4px;
     overflow-wrap: anywhere;
-    font-family:var(--bf-type-code-md-font-family);
+    font-family:var(--openbitfun-type-code-md-font-family);
   }
 
   &__no-shells {
     width: 100%;
     padding: 12px 16px;
-    border: 1px dashed var(--bf-color-border-default);
-    border-radius: var(--bf-radius-sm);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-md-font-size);
+    border: 1px dashed var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-sm);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 }

@@ -1,5 +1,5 @@
 import { Encoding } from './Encoding';
-import bitfunCrypto from 'libbitfun_crypto.so';
+import openbitfunCrypto from 'libopenbitfun_crypto.so';
 
 export interface CloudAccountKdfParams {
   m: number;
@@ -17,7 +17,7 @@ export class CloudAccountCrypto {
   static async derivePasswordHash(password: string, salt: Uint8Array, params: CloudAccountKdfParams): Promise<Uint8Array> {
     CloudAccountCrypto.validateParams(params, salt);
     return CloudAccountCrypto.withTimeout(
-      bitfunCrypto.argon2idRaw(Encoding.utf8ToBytes(password), salt, params.m, params.t, params.p),
+      openbitfunCrypto.argon2idRaw(Encoding.utf8ToBytes(password), salt, params.m, params.t, params.p),
       CloudAccountCrypto.KDF_TIMEOUT_MS
     );
   }

@@ -3,7 +3,7 @@
 mod adapter;
 
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     validate_plugin_dispatch_response, validate_plugin_runtime_read_response, PluginAuditRef,
     PluginDiagnostic, PluginDiagnosticDetail, PluginDiagnosticSeverity, PluginDispatchEnvelope,
     PluginHostLifecyclePhase, PluginQuarantineClearCondition, PluginQuarantineReason,

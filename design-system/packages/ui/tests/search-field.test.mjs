@@ -15,7 +15,7 @@ test("SearchField composes search semantics with icon and shortcut slots", () =>
     }),
   );
 
-  assert.match(markup, /data-bf-component="search-field"/);
+  assert.match(markup, /data-openbitfun-component="search-field"/);
   assert.match(markup, /type="search"/);
   assert.match(markup, /data-icon="search"/);
   assert.match(markup, /Ctrl K/);
@@ -62,8 +62,8 @@ test("SearchField exposes a labeled clear action without hiding it from assistiv
   );
 
   assert.match(markup, /aria-label="Clear search"/);
-  assert.match(markup, /data-bf-component="icon-button"/);
-  assert.match(markup, /data-bf-shape="circle"/);
+  assert.match(markup, /data-openbitfun-component="icon-button"/);
+  assert.match(markup, /data-openbitfun-shape="circle"/);
   assert.match(markup, /data-size="xs"/);
 });
 
@@ -87,9 +87,9 @@ test("SearchField keeps its clear action inset, background-free, and focus-prese
 test("SearchField owns pill composition while reusing Input behavior", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /border-radius:var\(--bf-radius-pill\)/);
-  assert.match(styles, /--bf-type-label-md-font-size/);
-  assert.match(styles, /--bf-type-meta-font-size/);
+  assert.match(styles, /border-radius:var\(--openbitfun-radius-pill\)/);
+  assert.match(styles, /--openbitfun-type-label-md-font-size/);
+  assert.match(styles, /--openbitfun-type-meta-font-size/);
 });
 
 test("SearchField focus changes only the existing border color", async () => {
@@ -102,7 +102,7 @@ test("SearchField focus changes only the existing border color", async () => {
   )?.[1];
 
   assert.ok(focusRule);
-  assert.match(focusRule, /border-color: var\(--bf-color-content-primary\)/);
+  assert.match(focusRule, /border-color: var\(--openbitfun-color-content-primary\)/);
   assert.match(focusRule, /box-shadow: none/);
   assert.doesNotMatch(focusRule, /border-width|outline/);
 });

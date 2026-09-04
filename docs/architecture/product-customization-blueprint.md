@@ -1,6 +1,6 @@
 # 产品定制与跨界面组装设计
 
-本文定义 BitFun 如何从同一源码构建不同产品，以及产品内置扩展与用户插件如何共存。仓库级边界以
+本文定义 OpenBitFun 如何从同一源码构建不同产品，以及产品内置扩展与用户插件如何共存。仓库级边界以
 [产品架构](product-architecture.md)为准；主题规则见[主题设计](theme-token-optimization.md)；运行时扩展见
 [OpenCode 扩展兼容总览](extensions/opencode-extension-compatibility.md)和
 [插件运行时与 Plugin Host](extensions/plugin-runtime-design.md)。
@@ -18,15 +18,20 @@ C0a 实现一个构建期 JSONC 产品定义、严格解析器和确定性解析
 
 - Desktop build adapter：从解析结果覆盖 Tauri `productName`、`mainBinaryName` 与 bundle identifier；
 - CLI dev/build wrapper：从同一解析结果设置命令名、隔离定制构建缓存，并按成员 `binaryName` 暂存构建产物；
+- First-party Rust artifacts：Desktop/CLI build adapter 通过编译期环境注入 `productId`、
+  `dataNamespace` 与由其派生的隐藏目录名，`openbitfun-core-types::product_identity` 作为最小事实 owner，供数据路径、Runtime
+  ownership、Remote Connect 与 Detached Dispatch 复用；
 
 `product:check` / `product:explain` 只是构建作者的校验与解释工具，不计作产品字段的生产消费者。C0a 不生成无人读取的
-通用产品 manifest 或 locale projection；Desktop 与 CLI build adapter 直接消费同一次内存解析结果。
+通用产品 manifest 或 locale projection；Desktop 与 CLI build adapter 直接消费同一次内存解析结果，Rust consumer
+只读取随对应产品 artifact 编译进去的不可变事实，不在运行时重新选产品。
 
 产品定义 v1 仅包含已被这些消费者读取的字段，未知字段一律拒绝。localized 名称独立于技术 ID，并按共享 locale contract
 校验后交给各自 build adapter。
 
-C0a 不声称生成可独立发行的完整品牌产品。品牌资产、GUI/TUI 布局、插件/内置扩展选择、Installer/Store target、
-用户数据隔离、更新与签名、运行时全量品牌替换均延期；每一项必须在出现真实 owner 和消费者后独立扩展 schema 与组装结果。
+C0a 不声称生成可独立发行的完整品牌产品。`dataNamespace` 已隔离 first-party Rust consumer 的产品数据路径；品牌资产、
+GUI/TUI 布局、插件/内置扩展选择、Installer/Store target、更新与签名、运行时全量品牌替换仍需由各自真实 owner
+和消费者独立扩展 schema 与组装结果。
 
 ### 0.1 当前定义与解析契约
 
@@ -98,7 +103,7 @@ i18n locale 集合和 key parity。
 | 信任 | 产品构建、签名和发布链 | 当前用户、执行域和组织策略 |
 
 运行时配置或插件不能改变产品 ID、数据命名空间、签名根、更新渠道或未编译进产品的能力。产品签名也不能替代
-经 BitFun 能力接口的权限/审计、插件主机故障隔离或脚本执行域的真实操作系统边界。
+经 OpenBitFun 能力接口的权限/审计、插件主机故障隔离或脚本执行域的真实操作系统边界。
 
 ## 3. 逻辑视图
 
@@ -175,6 +180,7 @@ flowchart LR
 | GUI 宿主 | 注册 GUI 布局、场景、面板、主题和可访问性约束 | 解释 TUI 布局或 OpenCode TUI 组件 |
 | CLI/TUI 宿主 | 注册终端布局、命令、状态、键位和主题 | 读取 GUI 组件或 CSS 变量 |
 | Product Assembly | 使用组装结果选择已编译服务和默认值，再加载用户配置与插件 | 执行构建脚本或重新解析品牌资源 |
+| Product identity contract | 暴露构建期编译进 artifact 的 product ID 与 data namespace | 运行时选产品、读取产品定义或决定产品策略 |
 | `PluginRuntimeClient` + Plugin Host | 前者提供调用可靠性，后者在子进程执行用户插件；产品内置扩展是否进入同一边界由其真实执行方式决定 | 决定产品身份或能力上限 |
 
 品牌资源生成、locale 校验和图标转换继续由现有构建脚本完成。脚本输出进入品牌资源目录后，再由构建期校验器
@@ -221,17 +227,17 @@ GUI 主题由 Web/TS 主题模块定义，TUI 主题由 CLI/TUI 宿主定义，I
 产品内置扩展只表示“随产品交付”，不表示更高运行权限，也不表示同名用户插件必须被拒绝。三类来源的生命周期
 必须分开：
 
-| 维度 | 产品内置扩展 | BitFun 原生包 | OpenCode 标准来源 |
+| 维度 | 产品内置扩展 | OpenBitFun 原生包 | OpenCode 标准来源 |
 |---|---|---|---|
-| 版本 | 由产品组装结果固定版本和内容摘要 | 按现有 BitFun 包记录管理 | 按配置、目录、npm/file spec 和执行版本记录管理 |
+| 版本 | 由产品组装结果固定版本和内容摘要 | 按现有 OpenBitFun 包记录管理 | 按配置、目录、npm/file spec 和执行版本记录管理 |
 | 启用 | 由产品定义选择 | 保留现有来源确认和激活 | 标准来源自动发现；可执行插件首次按来源、插件身份、执行域和能力摘要确认，同一摘要下不逐层重复审批 |
 | 更新 | 随产品升级和回滚 | 用户或组织独立更新、停用和卸载 | 来源身份/完整性和更新策略允许时自动准备普通候选；软件包版本/完整性未获更新策略覆盖或能力扩大时等待确认；失败时只保留仍合规的健康旧进程，经内容摘要校验的旧版本副本仍存在时才重建 |
 | 权限 | 使用同一有效策略；直接脚本副作用受真实 OS/容器边界限制 | 同左 | 同左 |
 | 执行 | 与其他插件走同一进程隔离、期限、取消和恢复路径 | 同左 | 同左 |
-| 冲突 | 作为 BitFun 候选保留并在选择界面优先展示；少量产品保护项除外 | 与其他 BitFun 候选一并优先展示 | 生态内按 OpenCode 顺序；跨生态同名时由用户选择，不静默覆盖 |
+| 冲突 | 作为 OpenBitFun 候选保留并在选择界面优先展示；少量产品保护项除外 | 与其他 OpenBitFun 候选一并优先展示 | 生态内按 OpenCode 顺序；跨生态同名时由用户选择，不静默覆盖 |
 
 管理、停用和更新使用包含生态、来源类型、规范化来源地址和插件身份的来源限定运行实例身份；声明 `id` 只参与
-生态识别和贡献覆盖，不能单独作为管理键。因此同名产品内置、BitFun 原生和 OpenCode 来源可以共存，且状态与
+生态识别和贡献覆盖，不能单独作为管理键。因此同名产品内置、OpenBitFun 原生和 OpenCode 来源可以共存，且状态与
 更新互不串用。
 
 保护项必须少且具体，只用于产品身份、数据隔离、权限入口、故障恢复、升级/卸载完整性或法律要求。普通工具、
@@ -243,14 +249,14 @@ GUI 主题由 Web/TS 主题模块定义，TUI 主题由 CLI/TUI 宿主定义，I
 包含上段列出的具体系统项，不能用“产品已签名”把所有内置工具、命令、主题或 Agent 变成不可覆盖项。
 
 必需内置扩展缺失或摘要不匹配时构建失败；运行时不可用时明确报告产品无法启动或功能降级。可选扩展失败不
-阻止产品启动。产品内置扩展仍受用户或组织的有效策略约束，产品签名不能绕过经 BitFun 能力接口的权限/审计、
+阻止产品启动。产品内置扩展仍受用户或组织的有效策略约束，产品签名不能绕过经 OpenBitFun 能力接口的权限/审计、
 插件主机故障隔离或脚本执行域的真实操作系统边界。
 
 ## 9. 存储、发行与错误
 
 - product ID、bundle identifier 和 data namespace 在同一升级链内保持稳定；改变它们默认视为新产品。
 - 用户配置、data/cache/log、凭据引用、浏览器 profile、插件状态和更新状态按 data namespace 隔离。
-- `.bitfun` 中可跨产品共享的项目事实必须明确列出，不能携带用户授权或插件信任。
+- `.openbitfun` 中可跨产品共享的项目事实必须明确列出，不能携带用户授权或插件信任。
 - 签名私钥不进入产品定义、品牌资源、组装结果或运行时环境。
 - 品牌路径规范化后不得逃逸资源根；符号链接、Windows reparse point、控制字符和未声明文件必须被检查。
 
@@ -272,5 +278,5 @@ GUI 主题由 Web/TS 主题模块定义，TUI 主题由 CLI/TUI 宿主定义，I
 3. GUI/TUI 只消费各自布局和主题字段，一端字段不会进入另一端。
 4. 主应用、CLI、安装器和 updater 使用一致的产品身份、更新渠道和签名公钥引用。
 5. 两个产品的配置、日志、凭据引用、插件状态和更新状态保持隔离。
-6. 同名候选先展示 BitFun、再稳定展示其他生态；跨生态选择、保护冲突、停用、失败和恢复均可解释。
+6. 同名候选先展示 OpenBitFun、再稳定展示其他生态；跨生态选择、保护冲突、停用、失败和恢复均可解释。
 7. 用户配置和插件不能提高产品能力上限、改变产品身份或继承产品签名信任。

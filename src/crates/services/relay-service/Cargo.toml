@@ -1,12 +1,12 @@
 [package]
-name = "bitfun-relay-service"
-version = "0.2.19"
-authors = ["BitFun Team"]
+name = "openbitfun-relay-service"
+version = "1.0.0"
+authors = ["OpenBitFun Team"]
 edition = "2021"
-description = "Reusable relay runtime for BitFun Remote Connect"
+description = "Reusable relay runtime for OpenBitFun Remote Connect"
 
 [lib]
-name = "bitfun_relay_service"
+name = "openbitfun_relay_service"
 path = "src/lib.rs"
 
 [dependencies]
@@ -35,7 +35,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 argon2 = "0.5"
 aes-gcm = "0.10"
-bitfun-page-function-runtime = { path = "../page-function-runtime" }
+openbitfun-page-function-runtime = { path = "../page-function-runtime" }
 # Two SQLite drivers here is deliberate, not drift. They own disjoint databases:
 #
 #   sqlx     -> async access to the relay's own control-plane schema (`db.rs`),

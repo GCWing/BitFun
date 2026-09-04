@@ -4,46 +4,46 @@
 
 @use '@/shared/styles/surface-recipes' as surfaces;
 
-.bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
+.openbitfun-context-drop-zone.openbitfun-chat-input-drop-zone {
   position: absolute;
   flex: 0 0 auto;
-  bottom: var(--bf-space-6);
+  bottom: var(--openbitfun-space-6);
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
   height: auto;
   min-height: 0;
   max-width: 900px;
-  z-index: var(--bf-layer-overlay);
+  z-index: var(--openbitfun-layer-overlay);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0 var(--bf-space-2);
+  padding: 0 var(--openbitfun-space-2);
   pointer-events: auto !important;
 
-  &.bitfun-context-drop-zone--can-accept {
-    .bitfun-chat-input__composer {
-      outline: var(--bf-border-width-default) solid var(--bf-color-field-border-hover);
+  &.openbitfun-context-drop-zone--can-accept {
+    .openbitfun-chat-input__composer {
+      outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border-hover);
       box-shadow:
-        0 12px 32px color-mix(in srgb, var(--bf-color-content-on-light) 45%, transparent),
-        inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+        0 12px 32px color-mix(in srgb, var(--openbitfun-color-content-on-light) 45%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
     }
   }
 
-  &.bitfun-context-drop-zone--cannot-accept {
-    .bitfun-chat-input__composer {
-      outline: var(--bf-border-width-default) solid var(--bf-color-status-danger-border);
+  &.openbitfun-context-drop-zone--cannot-accept {
+    .openbitfun-chat-input__composer {
+      outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-status-danger-border);
       box-shadow:
-        0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent),
-        0 0 20px var(--bf-color-status-danger-content);
+        0 8px 24px color-mix(in srgb, var(--openbitfun-color-content-on-light) 40%, transparent),
+        0 0 20px var(--openbitfun-color-status-danger-content);
     }
   }
 }
 
-.bitfun-chat-input__voice-cluster {
+.openbitfun-chat-input__voice-cluster {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
   flex-shrink: 0;
   min-width: 24px;
 
@@ -56,32 +56,32 @@
   }
 }
 
-.bitfun-chat-input__voice-control-shell {
+.openbitfun-chat-input__voice-control-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 0;
 }
 
-.bitfun-chat-input__voice-control {
+.openbitfun-chat-input__voice-control {
   width: 24px;
   height: 24px;
   min-width: 24px;
   min-height: 24px;
   border-radius: 50%;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   flex-shrink: 0;
 
   &:not(:disabled):hover {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
-.bitfun-chat-input__voice-spinner {
-  animation: bitfun-voice-input-spin 0.9s linear infinite;
+.openbitfun-chat-input__voice-spinner {
+  animation: openbitfun-voice-input-spin 0.9s linear infinite;
 }
 
-.bitfun-chat-input__voice-pill {
+.openbitfun-chat-input__voice-pill {
   display: inline-flex;
   align-items: center;
   width: clamp(270px, 27vw, 320px);
@@ -90,16 +90,16 @@
   height: 32px;
   padding: 0 2px 0 9px;
   gap: 5px;
-  border: 1px solid var(--bf-color-border-default);
-  border-radius: var(--bf-radius-pill);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-action-neutral-surface));
+  border: 1px solid var(--openbitfun-color-border-default);
+  border-radius: var(--openbitfun-radius-pill);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 94%, var(--openbitfun-color-action-neutral-surface));
   box-shadow:
-    0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-  animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
+    0 1px 4px color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
+  animation: openbitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
 }
 
-.bitfun-chat-input__voice-setup-pill {
+.openbitfun-chat-input__voice-setup-pill {
   display: inline-flex;
   align-items: center;
   width: clamp(320px, 34vw, 390px);
@@ -108,104 +108,104 @@
   min-height: 34px;
   padding: 2px 3px 2px 10px;
   gap: 7px;
-  border: 1px solid var(--bf-color-border-default);
-  border-radius: var(--bf-radius-pill);
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-action-neutral-surface));
+  border: 1px solid var(--openbitfun-color-border-default);
+  border-radius: var(--openbitfun-radius-pill);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 94%, var(--openbitfun-color-action-neutral-surface));
   box-shadow:
-    0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-  animation: bitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
+    0 1px 4px color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
+  animation: openbitfun-voice-pill-in 220ms cubic-bezier(0.18, 0.9, 0.3, 1.18) both;
 }
 
-.bitfun-chat-input__voice-setup-icon {
+.openbitfun-chat-input__voice-setup-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
-.bitfun-chat-input__voice-setup-copy {
+.openbitfun-chat-input__voice-setup-copy {
   position: relative;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bitfun-chat-input__voice-setup-progress {
+.openbitfun-chat-input__voice-setup-progress {
   position: absolute;
   right: 0;
   bottom: -2px;
   left: 0;
   height: 2px;
   overflow: hidden;
-  border-radius: var(--bf-radius-pill);
-  background: var(--bf-color-border-subtle);
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-border-subtle);
 
   > span {
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
     transition: width 180ms ease;
   }
 }
 
-.bitfun-chat-input__voice-setup-action {
+.openbitfun-chat-input__voice-setup-action {
   flex: 0 0 auto;
 }
 
-.bitfun-chat-input__voice-setup-dismiss.icon-btn {
+.openbitfun-chat-input__voice-setup-dismiss.icon-btn {
   width: 24px;
   height: 24px;
   min-width: 24px;
   min-height: 24px;
   flex: 0 0 24px;
   border-radius: 50%;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
-.bitfun-chat-input__voice-pill-status {
+.openbitfun-chat-input__voice-pill-status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 12px;
   height: 12px;
   flex: 0 0 12px;
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
-.bitfun-chat-input__voice-pill-recording-dot {
+.openbitfun-chat-input__voice-pill-recording-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--bf-color-status-danger-content);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-status-danger-content) 9%, transparent);
-  animation: bitfun-voice-recording-dot 1.6s ease-in-out infinite;
+  background: var(--openbitfun-color-status-danger-content);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-status-danger-content) 9%, transparent);
+  animation: openbitfun-voice-recording-dot 1.6s ease-in-out infinite;
 }
 
-.bitfun-chat-input__voice-low-volume {
-  color: var(--bf-color-status-warning-content);
-  animation: bitfun-voice-low-volume 1.2s ease-in-out infinite;
+.openbitfun-chat-input__voice-low-volume {
+  color: var(--openbitfun-color-status-warning-content);
+  animation: openbitfun-voice-low-volume 1.2s ease-in-out infinite;
 }
 
-.bitfun-chat-input__voice-pill-time {
+.openbitfun-chat-input__voice-pill-time {
   min-width: 36px;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
   font-variant-numeric: tabular-nums;
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
 }
 
-.bitfun-chat-input__voice-pill-timeline {
+.openbitfun-chat-input__voice-pill-timeline {
   position: relative;
   display: grid;
   grid-template-columns: repeat(32, minmax(1px, 1fr));
@@ -215,57 +215,57 @@
   height: 18px;
   gap: 2px;
   overflow: hidden;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   pointer-events: none;
 
   &--paused { opacity: 0.58; }
 }
 
-.bitfun-chat-input__voice-pill-timeline-bar {
+.openbitfun-chat-input__voice-pill-timeline-bar {
   justify-self: center;
   width: min(2px, 100%);
   height: 18px;
-  border-radius: var(--bf-radius-pill);
+  border-radius: var(--openbitfun-radius-pill);
   background: currentColor;
   transform: scaleY(0.12);
   transform-origin: center;
   transition: transform 72ms linear, opacity 72ms linear;
 }
 
-.bitfun-chat-input__voice-pill-divider {
+.openbitfun-chat-input__voice-pill-divider {
   width: 1px;
   height: 16px;
   flex: 0 0 1px;
-  background: var(--bf-color-border-subtle);
+  background: var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-chat-input__voice-pill-action-shell {
+.openbitfun-chat-input__voice-pill-action-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  block-size: var(--bf-control-chat-composer-control-height);
+  block-size: var(--openbitfun-control-chat-composer-control-height);
   flex: 0 0 auto;
   line-height: 0;
 }
 
-.bitfun-chat-input__voice-pill-action[data-bf-component='icon-button'] {
+.openbitfun-chat-input__voice-pill-action[data-openbitfun-component='icon-button'] {
   transition:
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-  &.bitfun-chat-input__voice-pill-action--cancel:not(:disabled) {
-    color: var(--bf-color-content-muted);
+  &.openbitfun-chat-input__voice-pill-action--cancel:not(:disabled) {
+    color: var(--openbitfun-color-content-muted);
   }
 
-  &.bitfun-chat-input__voice-pill-action--transcribe:not(:disabled) {
-    color: var(--bf-color-content-secondary);
+  &.openbitfun-chat-input__voice-pill-action--transcribe:not(:disabled) {
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &:is(
-    .bitfun-chat-input__voice-pill-action--cancel,
-    .bitfun-chat-input__voice-pill-action--transcribe
+    .openbitfun-chat-input__voice-pill-action--cancel,
+    .openbitfun-chat-input__voice-pill-action--transcribe
   ):not(:disabled):hover {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &:active:not(:disabled) {
@@ -273,25 +273,25 @@
   }
 }
 
-@keyframes bitfun-voice-input-spin { to { transform: rotate(360deg); } }
-@keyframes bitfun-voice-pill-in {
+@keyframes openbitfun-voice-input-spin { to { transform: rotate(360deg); } }
+@keyframes openbitfun-voice-pill-in {
   from { opacity: 0; transform: scaleX(0.94) scaleY(0.88); }
   to { opacity: 1; transform: scale(1); }
 }
-@keyframes bitfun-voice-recording-dot {
+@keyframes openbitfun-voice-recording-dot {
   0%, 100% { transform: scale(0.92); opacity: 0.76; }
   50% { transform: scale(1.08); opacity: 1; }
 }
-@keyframes bitfun-voice-low-volume {
+@keyframes openbitfun-voice-low-volume {
   50% { opacity: 0.55; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-chat-input__voice-spinner,
-  .bitfun-chat-input__voice-pill,
-  .bitfun-chat-input__voice-setup-pill,
-  .bitfun-chat-input__voice-pill-recording-dot,
-  .bitfun-chat-input__voice-low-volume,
-  .bitfun-chat-input__voice-pill-action {
+  .openbitfun-chat-input__voice-spinner,
+  .openbitfun-chat-input__voice-pill,
+  .openbitfun-chat-input__voice-setup-pill,
+  .openbitfun-chat-input__voice-pill-recording-dot,
+  .openbitfun-chat-input__voice-low-volume,
+  .openbitfun-chat-input__voice-pill-action {
     animation: none;
     transition: none;
   }
@@ -299,31 +299,31 @@
 }
 
 @media (max-width: 640px) {
-  .bitfun-chat-input__voice-cluster--recording {
+  .openbitfun-chat-input__voice-cluster--recording {
     min-width: 220px;
   }
 
-  .bitfun-chat-input__voice-cluster--setup {
+  .openbitfun-chat-input__voice-cluster--setup {
     min-width: min(280px, 100%);
   }
 
-  .bitfun-chat-input__voice-pill {
+  .openbitfun-chat-input__voice-pill {
     width: min(100%, 240px);
     min-width: 220px;
   }
 
-  .bitfun-chat-input__voice-setup-pill {
+  .openbitfun-chat-input__voice-setup-pill {
     width: min(100%, 300px);
   }
 
-  .bitfun-chat-input__voice-pill-timeline {
+  .openbitfun-chat-input__voice-pill-timeline {
     min-width: 28px;
     gap: 1px;
   }
 
 }
 
-.bitfun-chat-input {
+.openbitfun-chat-input {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -336,9 +336,9 @@
     left: 0;
     right: 0;
     pointer-events: none;
-    color: color-mix(in srgb, var(--bf-color-content-muted) 52%, transparent);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: color-mix(in srgb, var(--openbitfun-color-content-muted) 52%, transparent);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -356,11 +356,11 @@
     transform: translateY(-50%);
   }
 
-  :root[data-bf-appearance-mode="light"] &,
-  :root[data-bf-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
   .light & {
     &__placeholder {
-      color: color-mix(in srgb, var(--bf-color-content-secondary) 48%, transparent);
+      color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 48%, transparent);
     }
   }
 
@@ -371,10 +371,10 @@
   &__space-key {
     display: inline-block;
     padding: 0 4px;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-subtle-letter-spacing);
     background: transparent;
     border: none;
     box-shadow: none;
@@ -384,10 +384,10 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
-    color: var(--bf-color-content-muted);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.72;
     white-space: nowrap;
     pointer-events: none;
@@ -397,47 +397,47 @@
     width: 1px;
     height: 14px;
     flex-shrink: 0;
-    background: color-mix(in srgb, var(--bf-color-content-muted) 28%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-muted) 28%, transparent);
     pointer-events: none;
   }
 
-  :root[data-bf-appearance-mode="light"] &,
-  :root[data-bf-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
   .light & {
-    .bitfun-chat-input__capsule-divider {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 20%, transparent);
+    .openbitfun-chat-input__capsule-divider {
+      background: color-mix(in srgb, var(--openbitfun-color-content-muted) 20%, transparent);
     }
   }
 
   // Non-agent scenes: high transparency to avoid obscuring content
   &--non-agent {
-    .bitfun-chat-input__input-area,
-    .bitfun-chat-input__actions-left,
-    .bitfun-chat-input__actions-right,
-    .bitfun-chat-input__recommendations {
+    .openbitfun-chat-input__input-area,
+    .openbitfun-chat-input__actions-left,
+    .openbitfun-chat-input__actions-right,
+    .openbitfun-chat-input__recommendations {
       opacity: 0.25;
       transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
     }
 
     &:hover,
     &:focus-within {
-      .bitfun-chat-input__input-area,
-      .bitfun-chat-input__actions-left,
-      .bitfun-chat-input__actions-right,
-      .bitfun-chat-input__recommendations {
+      .openbitfun-chat-input__input-area,
+      .openbitfun-chat-input__actions-left,
+      .openbitfun-chat-input__actions-right,
+      .openbitfun-chat-input__recommendations {
         opacity: 1;
       }
     }
   }
 
-  gap: var(--bf-control-flow-chat-control-gap);
+  gap: var(--openbitfun-control-flow-chat-control-gap);
 
   &__recommendations {
-    margin-bottom: var(--bf-control-flow-chat-card-gap);
+    margin-bottom: var(--openbitfun-control-flow-chat-card-gap);
   }
 
   &__cowork-examples {
-    margin-bottom: var(--bf-control-flow-chat-card-gap);
+    margin-bottom: var(--openbitfun-control-flow-chat-card-gap);
   }
 
   & > * {
@@ -449,7 +449,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--bf-control-flow-chat-card-gap);
+    gap: var(--openbitfun-control-flow-chat-card-gap);
     justify-content: center;
 
     .session-file-modifications-bar {
@@ -499,121 +499,121 @@
   // owns the 45px compact / 120px expanded surface geometry; Web UI owns concrete menus and
   // lifecycle states.
   &__composer-surface {
-    .bitfun-chat-input__actions-left,
-    .bitfun-chat-input__actions-right {
+    .openbitfun-chat-input__actions-left,
+    .openbitfun-chat-input__actions-right {
       display: flex;
       min-width: 0;
-      height: var(--bf-control-chat-composer-control-height);
+      height: var(--openbitfun-control-chat-composer-control-height);
       align-items: center;
       align-self: center;
       padding: 0;
     }
 
-    .bitfun-chat-input__actions-left {
+    .openbitfun-chat-input__actions-left {
       justify-content: flex-start;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
     }
 
-    .bitfun-chat-input__actions-right {
+    .openbitfun-chat-input__actions-right {
       justify-content: flex-end;
-      gap: var(--bf-space-1);
+      gap: var(--openbitfun-space-1);
     }
 
-    .bitfun-chat-input__model-usage-group,
-    .bitfun-model-selector {
+    .openbitfun-chat-input__model-usage-group,
+    .openbitfun-model-selector {
       display: flex;
       min-width: 0;
       align-items: center;
     }
 
-    .bitfun-model-selector {
+    .openbitfun-model-selector {
       box-sizing: border-box;
       gap: 2px;
-      height: var(--bf-control-chat-composer-control-height);
-      padding: 0 var(--bf-space-1) 0 0;
+      height: var(--openbitfun-control-chat-composer-control-height);
+      padding: 0 var(--openbitfun-space-1) 0 0;
       border: 0;
-      border-radius: var(--bf-radius-pill);
+      border-radius: var(--openbitfun-radius-pill);
       background: transparent;
 
       &:hover,
-      &[data-bf-state='open'] {
-        background: var(--bf-color-action-quiet-hover);
+      &[data-openbitfun-state='open'] {
+        background: var(--openbitfun-color-action-quiet-hover);
       }
     }
 
-    .bitfun-model-selector__trigger {
-      height: var(--bf-control-chat-composer-control-height);
-      padding: 0 var(--bf-space-1) 0 var(--bf-space-2);
+    .openbitfun-model-selector__trigger {
+      height: var(--openbitfun-control-chat-composer-control-height);
+      padding: 0 var(--openbitfun-space-1) 0 var(--openbitfun-space-2);
       border: 0;
-      border-radius: var(--bf-radius-pill);
+      border-radius: var(--openbitfun-radius-pill);
       background: transparent;
-      font-size: var(--bf-type-flow-control-font-size);
+      font-size: var(--openbitfun-type-flow-control-font-size);
       opacity: 1;
     }
 
-    .bitfun-model-selector__name {
+    .openbitfun-model-selector__name {
       max-width: 160px;
     }
 
-    .bitfun-reasoning-preset-selector[data-bf-presentation='label']
-      .bitfun-reasoning-preset-selector__trigger {
+    .openbitfun-reasoning-preset-selector[data-openbitfun-presentation='label']
+      .openbitfun-reasoning-preset-selector__trigger {
       width: auto;
       height: 20px;
       padding-inline: 2px;
-      border-radius: var(--bf-radius-sm);
+      border-radius: var(--openbitfun-radius-sm);
     }
 
-    .bitfun-chat-input__voice-control.icon-btn {
-      width: var(--bf-control-chat-composer-control-height) !important;
-      height: var(--bf-control-chat-composer-control-height) !important;
-      min-width: var(--bf-control-chat-composer-control-height) !important;
-      min-height: var(--bf-control-chat-composer-control-height) !important;
-      border-radius: var(--bf-radius-pill) !important;
+    .openbitfun-chat-input__voice-control.icon-btn {
+      width: var(--openbitfun-control-chat-composer-control-height) !important;
+      height: var(--openbitfun-control-chat-composer-control-height) !important;
+      min-width: var(--openbitfun-control-chat-composer-control-height) !important;
+      min-height: var(--openbitfun-control-chat-composer-control-height) !important;
+      border-radius: var(--openbitfun-radius-pill) !important;
     }
 
-    .bitfun-chat-input__voice-control.icon-btn {
+    .openbitfun-chat-input__voice-control.icon-btn {
       border: 0;
       background: transparent;
     }
 
-    .bitfun-chat-input__voice-control.icon-btn svg {
+    .openbitfun-chat-input__voice-control.icon-btn svg {
       width: 14px;
       height: 14px;
     }
 
-    .bitfun-chat-input__breathing-circle {
-      width: var(--bf-control-chat-composer-control-height) !important;
-      height: var(--bf-control-chat-composer-control-height) !important;
+    .openbitfun-chat-input__breathing-circle {
+      width: var(--openbitfun-control-chat-composer-control-height) !important;
+      height: var(--openbitfun-control-chat-composer-control-height) !important;
     }
 
-    &[data-bf-layout='compact'] {
-      .bitfun-chat-input__actions-left,
-      .bitfun-chat-input__actions-right {
+    &[data-openbitfun-layout='compact'] {
+      .openbitfun-chat-input__actions-left,
+      .openbitfun-chat-input__actions-right {
         height: 100%;
         align-self: stretch;
       }
 
-      .bitfun-chat-input__voice-cluster,
-      .bitfun-chat-input__voice-control-shell {
+      .openbitfun-chat-input__voice-cluster,
+      .openbitfun-chat-input__voice-control-shell {
         height: 100%;
       }
     }
 
-    &[data-bf-layout='expanded'] {
-      .bitfun-harness-selector__trigger {
-        height: var(--bf-control-chat-composer-control-height);
-        border-radius: var(--bf-radius-pill);
+    &[data-openbitfun-layout='expanded'] {
+      .openbitfun-harness-selector__trigger {
+        height: var(--openbitfun-control-chat-composer-control-height);
+        border-radius: var(--openbitfun-radius-pill);
       }
     }
   }
 
   &--capsule {
-    .bitfun-chat-input__content {
+    .openbitfun-chat-input__content {
       height: 100%;
       justify-content: center;
     }
 
-    .bitfun-chat-input__input-area {
+    .openbitfun-chat-input__input-area {
       height: 100%;
       min-height: 0;
       padding: 0;
@@ -621,27 +621,27 @@
 
       .rich-text-input {
         width: 100%;
-        min-height: var(--bf-control-chat-composer-compact-track-height) !important;
-        max-height: var(--bf-control-chat-composer-compact-track-height) !important;
+        min-height: var(--openbitfun-control-chat-composer-compact-track-height) !important;
+        max-height: var(--openbitfun-control-chat-composer-compact-track-height) !important;
         overflow: hidden;
         padding: 0 !important;
-        font-size: var(--bf-type-flow-control-font-size);
+        font-size: var(--openbitfun-type-flow-control-font-size);
         /* typography-audit: allow -- compact input uses the control track as its single-line box */
-        line-height: var(--bf-control-chat-composer-compact-track-height);
+        line-height: var(--openbitfun-control-chat-composer-compact-track-height);
         pointer-events: auto;
       }
     }
 
-    .bitfun-chat-input__cowork-examples,
-    .bitfun-chat-input__recommendations,
-    .bitfun-chat-input__target-switcher,
-    .bitfun-chat-input__image-strip {
+    .openbitfun-chat-input__cowork-examples,
+    .openbitfun-chat-input__recommendations,
+    .openbitfun-chat-input__target-switcher,
+    .openbitfun-chat-input__image-strip {
       display: none !important;
     }
   }
 
   &--multi-line {
-    .bitfun-chat-input__input-area {
+    .openbitfun-chat-input__input-area {
       min-height: 48px;
 
       .rich-text-input {
@@ -656,31 +656,31 @@
     gap: 0.125rem;
     padding-bottom: 7px;
     margin-bottom: 0.06rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-    animation: bitfun-chat-input-fade-in 0.1s ease-out;
+    border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
+    animation: openbitfun-chat-input-fade-in 0.1s ease-out;
   }
 
   &__target-switcher-label {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    padding: 0.12rem var(--bf-control-flow-chat-card-expanded-padding-block) 0.12rem 0;
-    margin-right: var(--bf-control-flow-chat-inline-gap);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    padding: 0.12rem var(--openbitfun-control-flow-chat-card-expanded-padding-block) 0.12rem 0;
+    margin-right: var(--openbitfun-control-flow-chat-inline-gap);
     flex-shrink: 0;
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     opacity: 0.72;
   }
 
   &__target-tab {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    padding: 0.12rem var(--bf-control-flow-chat-card-expanded-padding-block);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    padding: 0.12rem var(--openbitfun-control-flow-chat-card-expanded-padding-block);
     border: none;
     background: transparent;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     border-radius: 5px;
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -688,8 +688,8 @@
     outline: none;
 
     &:focus-visible {
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
-      color: var(--bf-color-content-primary);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &:active:not(:disabled) {
@@ -697,14 +697,14 @@
     }
 
     &:hover:not(#{&}--active) {
-      color: var(--bf-color-content-secondary);
-      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+      color: var(--openbitfun-color-content-secondary);
+      background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
     }
 
     &--active {
-      color: color-mix(in srgb, var(--bf-color-accent-default) 95%, var(--bf-color-content-primary));
-      font-weight: var(--bf-type-label-sm-font-weight);
-      background: color-mix(in srgb, var(--bf-color-accent-default) 9%, transparent);
+      color: color-mix(in srgb, var(--openbitfun-color-accent-default) 95%, var(--openbitfun-color-content-primary));
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 9%, transparent);
     }
   }
 
@@ -713,8 +713,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     opacity: 0.65;
 
     &::before {
@@ -736,15 +736,15 @@
     padding-bottom: 4px;
 
     .rich-text-input {
-      font-size: var(--bf-type-flow-control-font-size);
+      font-size: var(--openbitfun-type-flow-control-font-size);
     }
   }
 
   &__image-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--bf-control-flow-chat-inline-gap);
-    margin-bottom: var(--bf-control-flow-chat-inline-gap);
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    margin-bottom: var(--openbitfun-control-flow-chat-inline-gap);
     padding: 0.12rem 0;
   }
 
@@ -754,11 +754,11 @@
     height: 44px;
     border-radius: 6px;
     overflow: visible;
-    background: var(--bf-color-action-neutral-surface-hover);
-    border: 1px solid var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    border: 1px solid var(--openbitfun-color-border-subtle);
     flex-shrink: 0;
 
-    &:hover .bitfun-chat-input__image-chip-remove {
+    &:hover .openbitfun-chat-input__image-chip-remove {
       opacity: 1;
       transform: scale(1);
     }
@@ -775,7 +775,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
@@ -787,14 +787,14 @@
     height: 18px;
     border-radius: 50%;
     border: none;
-    background: var(--bf-color-surface-raised);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-surface-raised);
+    color: var(--openbitfun-color-content-primary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     padding: 0;
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 35%, transparent);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--openbitfun-color-content-on-light) 35%, transparent);
     opacity: 0;
     transform: scale(0.85);
     transition:
@@ -802,12 +802,12 @@
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &:focus-visible {
       opacity: 1;
-      outline: 2px solid var(--bf-color-accent-default);
+      outline: 2px solid var(--openbitfun-color-accent-default);
       outline-offset: 1px;
     }
   }
@@ -819,7 +819,7 @@
     border-radius: 50%;
     border: none;
     background: transparent;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -830,13 +830,13 @@
     padding: 0;
     opacity: 0.3;
 
-    .bitfun-chat-input__box:focus-within & {
+    .openbitfun-chat-input__box:focus-within & {
       opacity: 1;
     }
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
       opacity: 1;
     }
 
@@ -846,7 +846,7 @@
 
     &:focus-visible {
       opacity: 1;
-      outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
       outline-offset: 1px;
     }
   }
@@ -868,14 +868,14 @@
   }
 
   &__agent-boost-empty {
-    padding: var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-inline) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
     text-align: center;
-    line-height: var(--bf-type-flow-support-line-height);
+    line-height: var(--openbitfun-type-flow-support-line-height);
 
     &--inline {
-      padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
+      padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
       text-align: left;
     }
   }
@@ -887,7 +887,7 @@
 
   &__boost-submenu-panel {
     position: fixed;
-    z-index: calc(var(--bf-layer-dropdown) + 20);
+    z-index: calc(var(--openbitfun-layer-dropdown) + 20);
   }
 
   &__boost-submenu-loading,
@@ -896,31 +896,31 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-control-flow-chat-control-gap);
-    padding: var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
+    gap: var(--openbitfun-control-flow-chat-control-gap);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-inline) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__boost-submenu-spinner {
-    animation: bitfun-chat-input-spin 0.8s linear infinite;
-    color: var(--bf-color-accent-default);
+    animation: openbitfun-chat-input-spin 0.8s linear infinite;
+    color: var(--openbitfun-color-accent-default);
   }
 
   &__mode-pending-indicator {
-    font-size: var(--bf-type-flow-micro-font-size);
-    color: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, transparent);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 90%, transparent);
     margin-left: 4px;
     display: inline-flex;
     align-items: center;
-    font-weight: var(--bf-type-label-sm-font-weight);
-    line-height: var(--bf-type-flow-meta-line-height);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
     vertical-align: middle;
   }
 
   &__mode-dropdown {
     position: fixed;
-    z-index: var(--bf-layer-dropdown);
+    z-index: var(--openbitfun-layer-dropdown);
   }
 
   &__slash-command-picker {
@@ -930,10 +930,10 @@
     width: min(260px, calc(100vw - 16px));
     max-height: min(280px, calc(100vh - 16px));
     overflow: hidden;
-    z-index: var(--bf-layer-dropdown);
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-flow-control-font-size);
+    z-index: var(--openbitfun-layer-dropdown);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-flow-control-font-size);
     // Slash commands are opened by typing, so their keyboard path is instant.
     animation: none;
   }
@@ -942,21 +942,21 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-muted);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__slash-command-hint {
-    font-size: var(--bf-type-flow-meta-font-size);
-    color: var(--bf-color-content-muted);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-size: var(--openbitfun-type-flow-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     text-transform: none;
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   &__slash-command-list {
@@ -973,11 +973,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
       border-radius: 2px;
 
       &:hover {
-        background: color-mix(in srgb, var(--bf-color-content-on-dark) 25%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 25%, transparent);
       }
     }
   }
@@ -986,40 +986,40 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px var(--bf-control-flow-chat-card-expanded-padding-inline) 4px;
+    padding: 8px var(--openbitfun-control-flow-chat-card-expanded-padding-inline) 4px;
   }
 
   &__slash-command-section-line {
     flex: 1;
     min-width: 16px;
     height: 1px;
-    background: var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-border-subtle);
   }
 
   &__slash-command-section-title {
     flex: 0 0 auto;
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__slash-command-item {
     display: flex;
     align-items: flex-start;
-    gap: var(--bf-control-flow-chat-control-gap);
-    padding: var(--bf-control-flow-chat-inline-gap) var(--bf-control-flow-chat-card-expanded-padding-inline);
+    gap: var(--openbitfun-control-flow-chat-control-gap);
+    padding: var(--openbitfun-control-flow-chat-inline-gap) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     min-width: 0;
 
     &:hover {
-      background: var(--bf-color-action-quiet-hover);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &--selected {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &:active {
@@ -1027,17 +1027,17 @@
     }
 
     &--active {
-      .bitfun-chat-input__slash-command-name {
-        color: color-mix(in srgb, var(--bf-color-accent-default) 95%, var(--bf-color-content-primary));
+      .openbitfun-chat-input__slash-command-name {
+        color: color-mix(in srgb, var(--openbitfun-color-accent-default) 95%, var(--openbitfun-color-content-primary));
       }
     }
   }
 
   &__slash-command-name {
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
-    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, var(--openbitfun-color-content-primary));
+    font-family:var(--openbitfun-type-code-md-font-family);
     flex: 0 0 112px;
     min-width: 0;
     overflow: hidden;
@@ -1046,11 +1046,11 @@
   }
 
   &__slash-command-label {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-secondary);
     flex: 1;
     min-width: 0;
-    line-height: var(--bf-type-meta-line-height);
+    line-height: var(--openbitfun-type-meta-line-height);
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -1065,12 +1065,12 @@
   }
 
   &__slash-command-current {
-    font-size: var(--bf-type-flow-meta-font-size);
+    font-size: var(--openbitfun-type-flow-meta-font-size);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
-    color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
-    font-weight: var(--bf-type-label-sm-font-weight);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 15%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, var(--openbitfun-color-content-primary));
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     flex: 0 0 auto;
   }
 
@@ -1080,29 +1080,29 @@
    * hints the TUI command menu appends to its descriptions.
    */
   &__slash-command-status {
-    font-size: var(--bf-type-flow-meta-font-size);
+    font-size: var(--openbitfun-type-flow-meta-font-size);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     flex: 0 0 auto;
     white-space: nowrap;
 
     &--restricted {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
-      color: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, var(--bf-color-content-primary));
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
+      color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 90%, var(--openbitfun-color-content-primary));
     }
 
     &--choose {
-      background: var(--bf-color-surface-tertiary);
-      color: var(--bf-color-content-secondary);
+      background: var(--openbitfun-color-surface-tertiary);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
   &__slash-command-empty {
-    padding: var(--bf-space-4) var(--bf-control-flow-chat-card-expanded-padding-inline);
+    padding: var(--openbitfun-space-4) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
     text-align: center;
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
 
     &--retry {
       width: 100%;
@@ -1111,37 +1111,37 @@
       cursor: pointer;
 
       &:hover {
-        background: var(--bf-color-action-neutral-surface-hover);
-        color: var(--bf-color-content-secondary);
+        background: var(--openbitfun-color-action-neutral-surface-hover);
+        color: var(--openbitfun-color-content-secondary);
       }
     }
   }
 
   // Popovers: heavy blur + dark shadows read as gray/black on light theme
-  :root[data-bf-appearance-mode="light"] &,
-  :root[data-bf-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
+  :root[data-openbitfun-appearance-mode="light"] &,
   .light & {
-    &__mode-option:not(.bitfun-chat-input__mode-option--disabled):hover {
-      background: var(--bf-color-action-quiet-hover);
+    &__mode-option:not(.openbitfun-chat-input__mode-option--disabled):hover {
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &__mode-submenu-content {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 4%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-content-muted) 4%, transparent);
 
-      .bitfun-chat-input__mode-option:hover:not(.bitfun-chat-input__mode-option--disabled) {
-        background: var(--bf-color-action-quiet-hover);
+      .openbitfun-chat-input__mode-option:hover:not(.openbitfun-chat-input__mode-option--disabled) {
+        background: var(--openbitfun-color-action-quiet-hover);
       }
     }
 
     &__mode-submenu-trigger:hover {
-      background: var(--bf-color-action-quiet-hover);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &__slash-command-list::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-content-muted) 8%, transparent);
 
       &:hover {
-        background: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-content-muted) 12%, transparent);
       }
     }
   }
@@ -1151,15 +1151,15 @@
   // surface that is switching between compact and expanded layouts.
   &__actions-left {
     display: flex;
-    height: var(--bf-control-chat-composer-control-height);
+    height: var(--openbitfun-control-chat-composer-control-height);
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
   }
 
   &__model-usage-group {
     display: inline-flex;
-    height: var(--bf-control-chat-composer-control-height);
+    height: var(--openbitfun-control-chat-composer-control-height);
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
@@ -1168,8 +1168,8 @@
   &__actions-right {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-1);
-    height: var(--bf-control-chat-composer-control-height);
+    gap: var(--openbitfun-space-1);
+    height: var(--openbitfun-control-chat-composer-control-height);
   }
 
   &__split-actions {
@@ -1203,7 +1203,7 @@
     transform: none !important;
     cursor: pointer;
 
-    .bitfun-chat-input__box:focus-within &,
+    .openbitfun-chat-input__box:focus-within &,
     &:hover {
       background: transparent !important;
       border: none !important;
@@ -1211,14 +1211,14 @@
       transform: none !important;
     }
 
-    &:hover .bitfun-chat-input__breathing-circle {
+    &:hover .openbitfun-chat-input__breathing-circle {
       filter: none;
-      background: var(--bf-color-action-primary-hover);
-      border-color: color-mix(in srgb, var(--bf-color-action-primary-content) 24%, transparent);
-      box-shadow: var(--bf-shadow-base);
+      background: var(--openbitfun-color-action-primary-hover);
+      border-color: color-mix(in srgb, var(--openbitfun-color-action-primary-content) 24%, transparent);
+      box-shadow: var(--openbitfun-shadow-base);
 
       &::after {
-        background: var(--bf-color-action-primary-content);
+        background: var(--openbitfun-color-action-primary-content);
         box-shadow: none;
       }
     }
@@ -1229,8 +1229,8 @@
     inset: 1.5px;
     border-radius: 50%;
     border: 1px solid transparent;
-    border-top-color: var(--bf-color-action-primary-content);
-    animation: bitfun-chat-input-spin 0.8s linear infinite;
+    border-top-color: var(--openbitfun-color-action-primary-content);
+    animation: openbitfun-chat-input-spin 0.8s linear infinite;
   }
 
   /* Stop keeps the same action surface so state changes do not shift hierarchy. */
@@ -1245,7 +1245,7 @@
     align-items: center;
     justify-content: center;
     transition: opacity 120ms ease;
-    background: var(--bf-color-action-primary-background);
+    background: var(--openbitfun-color-action-primary-background);
     border: 1px solid transparent;
     box-shadow: none;
 
@@ -1254,7 +1254,7 @@
       width: 9px;
       height: 9px;
       border-radius: 2px;
-      background: var(--bf-color-action-primary-content);
+      background: var(--openbitfun-color-action-primary-content);
       box-shadow: none;
       transition:
         background 0.18s ease,
@@ -1270,26 +1270,26 @@
     height: 11px;
     padding: 0 3px;
     border-radius: 999px;
-    background: var(--bf-color-status-danger-content);
-    color: var(--bf-color-content-on-dark);
+    background: var(--openbitfun-color-status-danger-content);
+    color: var(--openbitfun-color-content-on-dark);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    box-shadow: 0 0 0 1px var(--bf-color-surface-panel);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+    box-shadow: 0 0 0 1px var(--openbitfun-color-surface-panel);
     pointer-events: none;
   }
 }
 
-@keyframes bitfun-chat-input-spin {
+@keyframes openbitfun-chat-input-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes bitfun-chat-input-fade-in {
+@keyframes openbitfun-chat-input-fade-in {
   from {
     opacity: 0;
     transform: translateY(4px);
@@ -1301,27 +1301,27 @@
 }
 
 @media (hover: none), (pointer: coarse) {
-  .bitfun-chat-input__voice-pill-action:not(:disabled):hover,
-  .bitfun-chat-input__voice-pill-send:not(:disabled):hover {
+  .openbitfun-chat-input__voice-pill-action:not(:disabled):hover,
+  .openbitfun-chat-input__voice-pill-send:not(:disabled):hover {
     transform: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-chat-input,
-  .bitfun-chat-input__input-area,
-  .bitfun-chat-input__actions-left,
-  .bitfun-chat-input__actions-right,
-  .bitfun-chat-input__recommendations,
-  .bitfun-chat-input__action-button,
-  .bitfun-chat-input__send-button,
-  .bitfun-chat-input__breathing-circle,
-  .bitfun-chat-input__slash-command-item {
+  .openbitfun-chat-input,
+  .openbitfun-chat-input__input-area,
+  .openbitfun-chat-input__actions-left,
+  .openbitfun-chat-input__actions-right,
+  .openbitfun-chat-input__recommendations,
+  .openbitfun-chat-input__action-button,
+  .openbitfun-chat-input__send-button,
+  .openbitfun-chat-input__breathing-circle,
+  .openbitfun-chat-input__slash-command-item {
     transition-duration: 0ms;
   }
 
-  .bitfun-chat-input__loading-spinner,
-  .bitfun-chat-input__boost-submenu-spinner {
+  .openbitfun-chat-input__loading-spinner,
+  .openbitfun-chat-input__boost-submenu-spinner {
     animation: none;
   }
 }

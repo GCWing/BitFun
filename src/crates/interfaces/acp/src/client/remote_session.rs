@@ -36,7 +36,7 @@ pub(super) fn preferred_resume_strategies(
     if has_remote_session_id {
         // Prefer loading saved session state over resuming a live stream. Some
         // ACP clients continue an unfinished prompt on resume, and ACP update
-        // notifications are only scoped to the remote session, not a BitFun turn.
+        // notifications are only scoped to the remote session, not a OpenBitFun turn.
         if capabilities
             .map(|capabilities| capabilities.load_session)
             .unwrap_or(false)

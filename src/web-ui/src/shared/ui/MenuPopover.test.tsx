@@ -2,7 +2,7 @@
 import React, { act, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesignSystemProvider, MenuPopover, ThemeRoot, type MenuEntry } from '@bitfun/ui';
+import { DesignSystemProvider, MenuPopover, ThemeRoot, type MenuEntry } from '@openbitfun/ui';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,7 +44,7 @@ describe('public MenuPopover', () => {
 
   it('portals inside the theme scope, supports typeahead and dispatches after focus return', async () => {
     const trigger = open();
-    expect(host.querySelector('[role="menu"]')?.closest('[data-bf-design-system-root]')).not.toBeNull();
+    expect(host.querySelector('[role="menu"]')?.closest('[data-openbitfun-design-system-root]')).not.toBeNull();
     expect(document.activeElement?.textContent).toBe('Copy');
     key('s'); expect(document.activeElement?.textContent).toBe('Share');
     key('Home'); key('Enter', true); expect(selected).not.toHaveBeenCalled();

@@ -1,4 +1,4 @@
-.bitfun-git-scene-graph {
+.openbitfun-git-scene-graph {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -8,7 +8,7 @@
   &--empty {
     align-items: center;
     justify-content: center;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 }

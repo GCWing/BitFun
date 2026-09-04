@@ -25,11 +25,11 @@ describe('FontPreferenceService', () => {
 
     service.applyPreference({ uiSize: { level: 'default' } });
 
-    expect(document.documentElement.style.getPropertyValue('--bf-font-size-base')).toBe('14px');
-    expect(document.documentElement.style.getPropertyValue('--bf-font-size-meta')).toBe('11px');
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-font-size-base')).toBe('14px');
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-font-size-meta')).toBe('11px');
     // typography-audit: negative-test-start -- verifies retired Appearance and FlowChat variables stay unwritten
-    expect(document.documentElement.style.getPropertyValue('--bf-appearance-token-font-size-base')).toBe('');
-    expect(document.documentElement.style.getPropertyValue('--bf-appearance-token-flowchat-font-size-base')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-appearance-token-font-size-base')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-appearance-token-flowchat-font-size-base')).toBe('');
     // typography-audit: negative-test-end
   });
 
@@ -43,9 +43,9 @@ describe('FontPreferenceService', () => {
     await service.initialize();
 
     expect(service.getPreference()).toEqual({ uiSize: { level: 'large' } });
-    expect(document.documentElement.style.getPropertyValue('--bf-font-size-base')).toBe('16px');
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-font-size-base')).toBe('16px');
     // typography-audit: negative-test-start -- verifies persisted legacy data cannot restore the retired variable
-    expect(document.documentElement.style.getPropertyValue('--bf-appearance-token-flowchat-font-size-base')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-appearance-token-flowchat-font-size-base')).toBe('');
     // typography-audit: negative-test-end
   });
 });

@@ -49,7 +49,7 @@ export interface MenuPopoverParts {
 }
 
 function ownItems(menu: HTMLElement) {
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>("[data-bf-menu-item]"))
+  return Array.from(menu.querySelectorAll<HTMLButtonElement>("[data-openbitfun-menu-item]"))
     .filter(item => item.closest('[role="menu"]') === menu && !item.disabled && item.getAttribute("aria-disabled") !== "true");
 }
 
@@ -69,7 +69,7 @@ export function MenuPopover({ items, open, onClose, anchorRef, position, placeme
   useDismissibleLayer({
     branchRefs,
     containsTarget: (target) => target instanceof Element
-      && target.closest("[data-bf-menu-tree]")?.getAttribute("data-bf-menu-tree") === treeId,
+      && target.closest("[data-openbitfun-menu-tree]")?.getAttribute("data-openbitfun-menu-tree") === treeId,
     enabled: open,
     layerRef: menuRef,
     onDismiss: closeAndRestoreFocus,
@@ -201,7 +201,7 @@ function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, pos
 
   return <>
     <MenuSurface {...props} ref={node => { (menuRef as { current: HTMLDivElement | null }).current = node; }} className={classNames(styles.popup, className)} autoFocusFirstItem={open && autoFocusFirstItem && Boolean(layout)} tabIndex={-1}
-      style={{ ...layout?.style, ...style, visibility: layout ? undefined : "hidden" }} data-bf-menu-tree={treeId} data-placement={layout?.placement ?? placement} data-state={phase}
+      style={{ ...layout?.style, ...style, visibility: layout ? undefined : "hidden" }} data-openbitfun-menu-tree={treeId} data-placement={layout?.placement ?? placement} data-state={phase}
       aria-hidden={!open || undefined} {...(!open ? { inert: "" } : {})} onContextMenu={event => event.preventDefault()}>
       {items.map(item => item.separator ? <Separator key={item.id} /> : <Item key={item.id} data-menu-id={item.id} leading={item.icon ? <Leading>{item.icon}</Leading> : undefined} shortcut={item.shortcut ? <Shortcut>{item.shortcut}</Shortcut> : undefined} tone={item.tone} role={item.role} checked={item.checked}
         disabled={item.disabled} aria-disabled={item.disabled || undefined} aria-haspopup={item.submenu?.length ? "menu" : undefined} aria-expanded={item.submenu?.length ? activeEntry?.id === item.id : undefined}

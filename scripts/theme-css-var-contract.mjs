@@ -18,23 +18,23 @@ function readDesignSystemTokenDocument(relativePath) {
 const designSystemTokens = resolveTokens(readDesignSystemTokenDocument(
   'design-system/packages/design-tokens/src/system.tokens.json',
 ));
-const bitfunThemeTokens = resolveTokens(mergeTokenDocuments(
-  readDesignSystemTokenDocument('design-system/packages/theme-bitfun/src/reference.tokens.json'),
-  readDesignSystemTokenDocument('design-system/packages/theme-bitfun/src/light.tokens.json'),
+const openbitfunThemeTokens = resolveTokens(mergeTokenDocuments(
+  readDesignSystemTokenDocument('design-system/packages/theme-openbitfun/src/reference.tokens.json'),
+  readDesignSystemTokenDocument('design-system/packages/theme-openbitfun/src/light.tokens.json'),
 ));
 const publicThemePrefixes = ['color.', 'effect.', 'opacity.', 'shadow.'];
 
 export const PACKAGE_CSS_VAR_DEFINITION_CONTRACTS = Object.freeze([
   Object.freeze({
     owner: 'design-system/packages/design-tokens/src/system.tokens.json',
-    packageName: '@bitfun/design-tokens',
+    packageName: '@openbitfun/design-tokens',
     variables: Object.freeze(Object.keys(designSystemTokens).map(name => tokenNameToCssVariable(name))),
   }),
   Object.freeze({
-    owner: 'design-system/packages/theme-bitfun/src/light.tokens.json',
-    packageName: '@bitfun/theme-bitfun',
+    owner: 'design-system/packages/theme-openbitfun/src/light.tokens.json',
+    packageName: '@openbitfun/theme-openbitfun',
     variables: Object.freeze(
-      Object.keys(bitfunThemeTokens)
+      Object.keys(openbitfunThemeTokens)
         .filter(name => publicThemePrefixes.some(prefix => name.startsWith(prefix)))
         .map(name => tokenNameToCssVariable(name)),
     ),
@@ -47,7 +47,7 @@ export const PACKAGE_CSS_VAR_DEFINITION_CONTRACTS = Object.freeze([
  * the canonical token package after the Web UI Sass token owner is removed.
  */
 export const CANONICAL_THEME_COLOR_TOKENS = Object.freeze(
-  Object.entries(bitfunThemeTokens)
+  Object.entries(openbitfunThemeTokens)
     .filter(([name, token]) => (
       publicThemePrefixes.some(prefix => name.startsWith(prefix))
       && token.type === 'color'
@@ -62,16 +62,16 @@ export const CANONICAL_THEME_COLOR_TOKENS = Object.freeze(
 
 export const PACKAGE_CSS_VAR_IMPORT_CONTRACTS = Object.freeze([
   Object.freeze({
-    specifier: '@bitfun/design-tokens/tokens.css',
-    packageNames: Object.freeze(['@bitfun/design-tokens']),
+    specifier: '@openbitfun/design-tokens/tokens.css',
+    packageNames: Object.freeze(['@openbitfun/design-tokens']),
   }),
   Object.freeze({
-    specifier: '@bitfun/theme-bitfun/default.css',
-    packageNames: Object.freeze(['@bitfun/design-tokens', '@bitfun/theme-bitfun']),
+    specifier: '@openbitfun/theme-openbitfun/default.css',
+    packageNames: Object.freeze(['@openbitfun/design-tokens', '@openbitfun/theme-openbitfun']),
   }),
   Object.freeze({
-    specifier: '@bitfun/theme-bitfun/themes.css',
-    packageNames: Object.freeze(['@bitfun/theme-bitfun']),
+    specifier: '@openbitfun/theme-openbitfun/themes.css',
+    packageNames: Object.freeze(['@openbitfun/theme-openbitfun']),
   }),
 ]);
 
@@ -93,33 +93,33 @@ export const COLOR_EXTENSIONS = new Set([
 ]);
 
 export const TOKEN_PATH_PARTS = [
-  'BitFun-Installer/src/theme',
+  'OpenBitFun-Installer/src/theme',
   'design-system/packages/design-tokens/src',
-  'design-system/packages/theme-bitfun/src',
+  'design-system/packages/theme-openbitfun/src',
 ];
 
 export const TOKEN_ALIAS_SOURCE_PATH_PARTS = [
-  'design-system/packages/theme-bitfun/src',
+  'design-system/packages/theme-openbitfun/src',
 ];
 
 export const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'BitFun-Installer/src/theme/installerThemeRuntime.ts',
+  'OpenBitFun-Installer/src/theme/installerThemeRuntime.ts',
   'design-system/packages/design-tokens/src',
-  'design-system/packages/theme-bitfun/src',
+  'design-system/packages/theme-openbitfun/src',
   'infrastructure/appearance',
   'src/mobile-web/src/styles/global.scss',
-  'tools/bitfun-canvas/runtime/styles',
+  'tools/openbitfun-canvas/runtime/styles',
   'tools/generative-widget/appearancePayload.ts',
 ];
 
 export const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
   'design-system/packages/design-tokens/src',
-  'design-system/packages/theme-bitfun/src',
+  'design-system/packages/theme-openbitfun/src',
   'src/mobile-web/src/styles/global.scss',
 ];
 
 export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'BitFun-Installer/src/theme/installerThemeRuntime.ts',
+  'OpenBitFun-Installer/src/theme/installerThemeRuntime.ts',
   'infrastructure/appearance',
 ];
 
@@ -146,7 +146,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'themePreset',
     label: 'Appearance palettes',
-    pathParts: ['BitFun-Installer/src/theme', 'infrastructure/appearance/builtins', 'theme/presets'],
+    pathParts: ['OpenBitFun-Installer/src/theme', 'infrastructure/appearance/builtins', 'theme/presets'],
   },
   {
     key: 'themeRuntime',
@@ -156,7 +156,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'tokenContract',
     label: 'Token contracts',
-    pathParts: ['design-system/packages/design-tokens', 'design-system/packages/theme-bitfun'],
+    pathParts: ['design-system/packages/design-tokens', 'design-system/packages/theme-openbitfun'],
   },
   {
     key: 'generatedWidget',
@@ -164,9 +164,9 @@ export const COLOR_DOMAIN_RULES = [
     pathParts: ['tools/generative-widget'],
   },
   {
-    key: 'bitfunCanvas',
-    label: 'BitFun Canvas',
-    pathParts: ['tools/bitfun-canvas'],
+    key: 'openbitfunCanvas',
+    label: 'OpenBitFun Canvas',
+    pathParts: ['tools/openbitfun-canvas'],
   },
   {
     key: 'mermaid',
@@ -238,7 +238,7 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'themePreset',
-    owner: 'src/web-ui/src/infrastructure/appearance/builtins; BitFun-Installer/src/theme',
+    owner: 'src/web-ui/src/infrastructure/appearance/builtins; OpenBitFun-Installer/src/theme',
     reason: 'Builtin appearances own primitive palette mapping and must keep per-appearance personality instead of being folded into shared app tokens.',
     mergePolicy: 'Only merge exact duplicate primitive values after confirming the theme still exposes distinct semantic roles.',
   },
@@ -250,7 +250,7 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'tokenContract',
-    owner: 'design-system/packages/design-tokens/src; design-system/packages/theme-bitfun/src',
+    owner: 'design-system/packages/design-tokens/src; design-system/packages/theme-openbitfun/src',
     reason: 'Independent token packages own canonical system scales and semantic theme values for every product surface.',
     mergePolicy: 'Keep token values in their canonical package and reject Web UI aliases or surface-local duplicate definitions.',
   },
@@ -261,9 +261,9 @@ export const COLOR_DOMAIN_CONTRACTS = [
     mergePolicy: 'Derive fallback values from a builtin Appearance package and keep iframe payload keys canonical.',
   },
   {
-    key: 'bitfunCanvas',
-    owner: 'src/web-ui/src/tools/bitfun-canvas',
-    reason: 'BitFun Canvas renders generated TSX inside a dedicated iframe runtime with an SDK palette that must stay isolated from app chrome tokens.',
+    key: 'openbitfunCanvas',
+    owner: 'src/web-ui/src/tools/openbitfun-canvas',
+    reason: 'OpenBitFun Canvas renders generated TSX inside a dedicated iframe runtime with an SDK palette that must stay isolated from app chrome tokens.',
     mergePolicy: 'Keep Canvas iframe and SDK colors in the Canvas Appearance contract; promote only reusable host chrome roles to shared app tokens.',
   },
   {
@@ -326,17 +326,17 @@ export const SURFACE_TOKEN_RENAME_CONTRACTS = [];
 
 export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   {
-    prefix: '--bf-appearance-asset-',
+    prefix: '--openbitfun-appearance-asset-',
     owner: 'src/web-ui/src/infrastructure/appearance/compiler/AppearanceCompiler.ts; src/web-ui/src/infrastructure/appearance/runtime/AppearanceRuntime.ts',
     reason: 'Appearance package image ids are validated by the package schema, then projected to host-created blob URL variables for registered component parts.',
   },
   {
-    prefix: '--bitfun-canvas-',
-    owner: 'src/web-ui/src/tools/bitfun-canvas/runtime/canvasRuntimeInstaller.ts; src/web-ui/src/tools/bitfun-canvas/runtime/styles/canvas-runtime.scss',
-    reason: 'BitFun Canvas iframe runtime receives host Appearance values through a scoped CSS variable family that must stay isolated from app root tokens.',
+    prefix: '--openbitfun-canvas-',
+    owner: 'src/web-ui/src/tools/openbitfun-canvas/runtime/canvasRuntimeInstaller.ts; src/web-ui/src/tools/openbitfun-canvas/runtime/styles/canvas-runtime.scss',
+    reason: 'OpenBitFun Canvas iframe runtime receives host Appearance values through a scoped CSS variable family that must stay isolated from app root tokens.',
   },
   {
-    prefix: '--bf-font-size-',
+    prefix: '--openbitfun-font-size-',
     owner: 'src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
     reason: 'Font preference runtime overrides the canonical design-system font-size primitives so every semantic role follows one global scale.',
   },

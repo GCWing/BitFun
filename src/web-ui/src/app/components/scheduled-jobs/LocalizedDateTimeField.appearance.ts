@@ -6,6 +6,6 @@ export const localizedDateTimeFieldAppearanceDescriptor: AppearanceSurfaceDescri
     { id: 'root' },
   ],
   states: [
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
   ],
 };

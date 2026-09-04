@@ -10,8 +10,8 @@ pub const SDK_HOST_WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 /// Installs process-global prerequisites before any service or descendant starts.
 pub fn initialize_process_runtime() -> std::io::Result<()> {
-    bitfun_services_core::process_manager::contain_current_process_tree()?;
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::process_manager::contain_current_process_tree()?;
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     Ok(())
 }
 
@@ -22,7 +22,7 @@ where
     F: FnOnce() -> T + Send + 'static,
 {
     std::thread::Builder::new()
-        .name("bitfun-sdk-host".to_string())
+        .name("openbitfun-sdk-host".to_string())
         .stack_size(SDK_HOST_WORKER_STACK_BYTES)
         .spawn(task)
 }

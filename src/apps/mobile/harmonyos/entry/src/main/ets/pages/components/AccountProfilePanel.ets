@@ -429,7 +429,7 @@ export struct AccountProfilePanel {
   }
 
   private profileName(): string {
-    return this.accountUsername || RemoteI18n.t('remote.settings.bitfunUser');
+    return this.accountUsername || RemoteI18n.t('remote.settings.openbitfunUser');
   }
 
   private profileIdentifier(): string {

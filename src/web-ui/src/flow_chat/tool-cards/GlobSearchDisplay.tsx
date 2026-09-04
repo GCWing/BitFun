@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { GlobSearchToolCard } from '@bitfun/ui/flow-chat';
+import { GlobSearchToolCard } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -126,7 +126,7 @@ export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
   }
 
   return (
-    <div ref={cardRootRef} data-bf-adapter="glob-search" data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-openbitfun-adapter="glob-search" data-tool-card-id={toolId ?? ''}>
       <GlobSearchToolCard
         action={renderAction()}
         status={status}

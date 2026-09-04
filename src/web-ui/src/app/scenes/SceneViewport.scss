@@ -1,7 +1,7 @@
 /**
  * SceneViewport styles — scene container.
  */
-.bitfun-scene-viewport {
+.openbitfun-scene-viewport {
   flex: 1;
   position: relative;
   overflow: hidden;
@@ -9,7 +9,7 @@
   min-height: 0;
   border: 0;
   border-radius: 0;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
   box-shadow: none;
 
   &__clip {
@@ -86,7 +86,7 @@
   }
 
   &__clip[data-scene-motion-phase='preparing'] {
-    .bitfun-scene-viewport__scene--incoming {
+    .openbitfun-scene-viewport__scene--incoming {
       opacity: 0.5;
       transition: none;
     }
@@ -94,12 +94,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-scene-viewport__scene--incoming {
+  .openbitfun-scene-viewport__scene--incoming {
     transition: none;
   }
 
-  .bitfun-scene-viewport__clip[data-scene-motion-phase='preparing'] {
-    .bitfun-scene-viewport__scene--incoming {
+  .openbitfun-scene-viewport__clip[data-scene-motion-phase='preparing'] {
+    .openbitfun-scene-viewport__scene--incoming {
       opacity: 1;
     }
   }

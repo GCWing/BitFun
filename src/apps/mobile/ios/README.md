@@ -1,4 +1,4 @@
-# BitFun iOS
+# OpenBitFun iOS
 
 Native SwiftUI client for the mobile conversation surface. The initial iOS
 entrypoint is intentionally small, but it is a real Xcode application and uses
@@ -8,16 +8,16 @@ floating composer with 52pt collapsed height.
 
 ## Project layout
 
-- `BitFun/App/`: lifecycle, launch configuration, and composition root.
-- `BitFun/Features/Chat/`: conversation home, header, timeline bubbles, and composer.
-- `BitFun/Features/Remote/`: remote conversation home surfaces.
-- `BitFun/Features/Settings/`: app settings composition and reusable settings cards.
-- `BitFun/Features/Pairing/`: pairing sheet flow.
-- `BitFun/Features/Account/`: account settings and device rows.
-- `BitFun/Features/Shell/`: theme tokens, drawer, shell layout, and remote supporting surfaces.
-- `BitFun/Infrastructure/`: observable state, failure copy, and platform adapters.
-- `BitFun/Presentation/Models/`: SwiftUI-facing presentation DTOs.
-- `BitFun/Resources.xcassets/`: app icon and future native assets.
+- `OpenBitFun/App/`: lifecycle, launch configuration, and composition root.
+- `OpenBitFun/Features/Chat/`: conversation home, header, timeline bubbles, and composer.
+- `OpenBitFun/Features/Remote/`: remote conversation home surfaces.
+- `OpenBitFun/Features/Settings/`: app settings composition and reusable settings cards.
+- `OpenBitFun/Features/Pairing/`: pairing sheet flow.
+- `OpenBitFun/Features/Account/`: account settings and device rows.
+- `OpenBitFun/Features/Shell/`: theme tokens, drawer, shell layout, and remote supporting surfaces.
+- `OpenBitFun/Infrastructure/`: observable state, failure copy, and platform adapters.
+- `OpenBitFun/Presentation/Models/`: SwiftUI-facing presentation DTOs.
+- `OpenBitFun/Resources.xcassets/`: app icon and future native assets.
 
 ## Build and run
 
@@ -27,15 +27,15 @@ Xcode copy in `~/Downloads` when it is the compatible version:
 ```bash
 export DEVELOPER_DIR="$HOME/Downloads/Xcode.app/Contents/Developer"
 "$DEVELOPER_DIR/usr/bin/xcodebuild" \
-  -project BitFun.xcodeproj -scheme BitFun \
+  -project OpenBitFun.xcodeproj -scheme OpenBitFun \
   -destination 'platform=iOS Simulator,id=1D7E5AA6-1AE9-4CAB-966B-A83B5F113B4A' \
-  -derivedDataPath /tmp/BitFun-iOS-Derived \
+  -derivedDataPath /tmp/OpenBitFun-iOS-Derived \
   CODE_SIGNING_ALLOWED=YES CODE_SIGNING_IDENTITY=- build
 ```
 
 `MobileAppModel` is kept in `Infrastructure` so the SwiftUI views do not know
 about transport or persistence. Local chat, pairing, and remote session state
-are supplied by the generated `BitFunMobileCore` framework from
+are supplied by the generated `OpenBitFunMobileCore` framework from
 `src/apps/mobile/shared/core-feature`; SwiftUI only maps the typed state to its
 presentation model. Pairing accepts the desktop connection URL through the
 connection sheet (the camera scanner remains a native adapter concern).
@@ -56,7 +56,7 @@ toolchain before opening the Xcode project:
 export JAVA_HOME="/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home"
 export PATH="$JAVA_HOME/bin:$PATH"
 export DEVELOPER_DIR="$HOME/Downloads/Xcode.app/Contents/Developer"
-../../../../gradlew :core-feature:assembleBitFunMobileCoreDebugXCFramework
+../../../../gradlew :core-feature:assembleOpenBitFunMobileCoreDebugXCFramework
 ```
 
 The shell includes both product surfaces already: Local opens the HarmonyOS

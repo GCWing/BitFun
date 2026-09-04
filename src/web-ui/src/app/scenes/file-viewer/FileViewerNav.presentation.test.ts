@@ -42,20 +42,20 @@ function declarations(rules: CSSStyleRule[], selector: string): CSSStyleDeclarat
 describe('FileViewerNav surface ownership', () => {
   it('hosts the files panel inside the shared NavigationPanel shell', () => {
     expect(navSource).toContain('<NavigationPanel');
-    expect(navSource).toContain('className="bitfun-file-viewer-nav"');
+    expect(navSource).toContain('className="openbitfun-file-viewer-nav"');
     expect(navSource).toMatch(
       /<NavigationPanelContent[^>]*>[\s\S]*?<FilesPanel[\s\S]*?<\/NavigationPanelContent>/,
     );
-    expect(declarations(navRules, '.bitfun-file-viewer-nav').background).toBe('transparent');
+    expect(declarations(navRules, '.openbitfun-file-viewer-nav').background).toBe('transparent');
   });
 
   it('lets tree and search containers inherit the navigation background', () => {
     for (const selector of [
-      '.bitfun-files-panel',
-      '.bitfun-files-panel__content',
-      '.bitfun-files-panel__explorer',
-      '.bitfun-files-panel__search-results.bitfun-search-results',
-      '.bitfun-files-panel__search-results.bitfun-search-results .bitfun-search-results__header',
+      '.openbitfun-files-panel',
+      '.openbitfun-files-panel__content',
+      '.openbitfun-files-panel__explorer',
+      '.openbitfun-files-panel__search-results.openbitfun-search-results',
+      '.openbitfun-files-panel__search-results.openbitfun-search-results .openbitfun-search-results__header',
     ]) {
       expect(declarations(filesPanelRules, selector).background).toBe('transparent');
     }

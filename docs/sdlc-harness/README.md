@@ -1,6 +1,6 @@
-# BitFun 可配置开发体验与工程治理总览
+# OpenBitFun 可配置开发体验与工程治理总览
 
-> 范围：BitFun 加载外部软件工程后的产品需求、架构边界、执行安全、渐进质量治理和复杂项目支撑能力。
+> 范围：OpenBitFun 加载外部软件工程后的产品需求、架构边界、执行安全、渐进质量治理和复杂项目支撑能力。
 > 用途：作为拆分后的入口文档。产品需求文档回答产品定位和体验要求，设计文档回答架构边界，实施计划回答阶段落地，子模块文档回答局部契约。
 
 ## 文档结构
@@ -18,11 +18,11 @@
 | [features/configurable-policy-profile.md](features/configurable-policy-profile.md) | 配置化策略 | 任务、操作、环境、项目和团队配置如何共同决定内部策略画像、提示、验证和审查 |
 | [architecture/evidence-pack.md](architecture/evidence-pack.md) | 证据包设计 | 证据包负责人、状态、生命周期、风险接受和 PR/审查/回放投影契约 |
 | [governance/metrics-spec.md](governance/metrics-spec.md) | 指标规格 | 开发效率、安全提示、质量治理和阶段退出指标的公式、分母、窗口和负责人 |
-| [governance/self-governance-notes.md](governance/self-governance-notes.md) | 自身治理说明 | 记录 BitFun 仓库自身作为内部验证项目暴露出的文档、边界和治理问题 |
+| [governance/self-governance-notes.md](governance/self-governance-notes.md) | 自身治理说明 | 记录 OpenBitFun 仓库自身作为内部验证项目暴露出的文档、边界和治理问题 |
 
 ## 核心定位
 
-BitFun 面向任意目标项目提供可配置的智能体开发体验。产品定位和需求以 [product-requirements.md](product-requirements.md) 为准，本文只保留文档导航和稳定边界。
+OpenBitFun 面向任意目标项目提供可配置的智能体开发体验。产品定位和需求以 [product-requirements.md](product-requirements.md) 为准，本文只保留文档导航和稳定边界。
 
 - **快速开发**：质量保障要求较低、探索性、演示、文档和低风险改动优先完成任务，只给必要提示和轻量结果摘要。
 - **上下文保障**：核心路径、权限、网络、数据迁移、发布或团队 PR 等场景触发验证建议、风险说明和审查人建议。
@@ -58,7 +58,7 @@ BitFun 面向任意目标项目提供可配置的智能体开发体验。产品�
 ## 阅读建议
 
 1. 先读调研文档，确认市场正在从单点 AI IDE 走向仓库指令、路径规则、沙箱、异步智能体和可选审查/治理。
-2. 再读产品需求，确认 BitFun 的默认体验、用户画像、产品规格、关键边界、平台差异和成功指标。
+2. 再读产品需求，确认 OpenBitFun 的默认体验、用户画像、产品规格、关键边界、平台差异和成功指标。
 3. 需要架构边界时读设计文档。
 4. 需要落地顺序时读实施计划。
 5. 需要检查覆盖关系时读追踪矩阵。

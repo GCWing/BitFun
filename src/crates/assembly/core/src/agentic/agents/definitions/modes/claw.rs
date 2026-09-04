@@ -98,7 +98,7 @@ impl Agent for ClawMode {
 mod tests {
     use super::ClawMode;
     use crate::agentic::agents::{Agent, PromptBuilderContext};
-    use bitfun_agent_runtime::prompt::UserContextSection;
+    use openbitfun_agent_runtime::prompt::UserContextSection;
 
     #[test]
     fn claw_mode_excludes_creation_only_tools_from_defaults() {

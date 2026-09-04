@@ -8,7 +8,7 @@ import {
   Select,
   StatusPill,
   Textarea,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AlertTriangle, Camera, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
@@ -55,7 +55,7 @@ async function loadCurrentClientVersion(): Promise<string | undefined> {
   try {
     return await systemAPI.getAppVersion();
   } catch (error) {
-    log.warn('Failed to load current BitFun version for MiniApp submission defaults', error);
+    log.warn('Failed to load current OpenBitFun version for MiniApp submission defaults', error);
     return undefined;
   }
 }
@@ -93,7 +93,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
     try {
       const [installed, currentClientVersion] = await Promise.all([
         miniAppAPI.listMiniApps(),
-        draft.minBitfunVersion ? Promise.resolve(undefined) : loadCurrentClientVersion(),
+        draft.minOpenBitFunVersion ? Promise.resolve(undefined) : loadCurrentClientVersion(),
       ]);
       setApps(installed);
       if (currentClientVersion) {
@@ -299,13 +299,13 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
       <div
         className="miniapp-submissions__workspace"
-        data-bf-component="miniapp-submissions-view"
-        data-bf-part="root"
+        data-openbitfun-component="miniapp-submissions-view"
+        data-openbitfun-part="root"
       >
         <form
           className="miniapp-submissions__form"
-          data-bf-component="miniapp-submissions-view"
-          data-bf-part="form"
+          data-openbitfun-component="miniapp-submissions-view"
+          data-openbitfun-part="form"
           onSubmit={(event) => void submit(event)}
         >
           <header className="miniapp-submissions__section-heading">
@@ -460,10 +460,10 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
                 </Field>
                 <Field label={t('market.submissions.minVersion')} controlWidth="fill" required>
                   <Input
-                    value={draft.minBitfunVersion}
+                    value={draft.minOpenBitFunVersion}
                     disabled={busy}
                     onChange={(event) =>
-                      setDraft({ ...draft, minBitfunVersion: event.target.value })
+                      setDraft({ ...draft, minOpenBitFunVersion: event.target.value })
                     }
                   />
                 </Field>
@@ -559,8 +559,8 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
         <section
           className="miniapp-submissions__history"
-          data-bf-component="miniapp-submissions-view"
-          data-bf-part="history"
+          data-openbitfun-component="miniapp-submissions-view"
+          data-openbitfun-part="history"
         >
           <header className="miniapp-submissions__section-heading">
             <h3>
@@ -574,8 +574,8 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
               {submissions.map((submission) => (
                 <article
                   key={submission.submissionId}
-                  data-bf-component="miniapp-submissions-view"
-                  data-bf-part="item"
+                  data-openbitfun-component="miniapp-submissions-view"
+                  data-openbitfun-part="item"
                 >
                   <div className="miniapp-submissions__list-head">
                     <span className="miniapp-submissions__app-icon">

@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bitfun_core::infrastructure::PathManager;
-use bitfun_core::service::dispatch::{
+use openbitfun_core::infrastructure::PathManager;
+use openbitfun_core::service::dispatch::{
     answer_device_dispatch, answer_dispatch, append_device_dispatch, append_dispatch,
     cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     continue_device_dispatch_job, continue_dispatch_job, get_device_dispatch_status,
@@ -24,7 +24,7 @@ use bitfun_core::service::dispatch::{
     DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTarget, DispatchTargetOption,
     DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
 };
-use bitfun_core::service::remote_ssh::dispatch_ssh::{
+use openbitfun_core::service::remote_ssh::dispatch_ssh::{
     self, DispatchInstallPoll, DispatchInstallStart, DispatchSshProbe,
 };
 use serde::{Deserialize, Serialize};
@@ -230,7 +230,7 @@ pub async fn dispatch_provision_target(
         )
         .await;
         let _ = super::remote_connect_api::remove_dispatch_account_device(&provisioning).await;
-        return Err(format!("provision persistent BitFun daemon: {error}"));
+        return Err(format!("provision persistent OpenBitFun daemon: {error}"));
     }
 
     if let Err(error) =

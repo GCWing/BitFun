@@ -1,8 +1,8 @@
-use bitfun_agent_runtime::deep_review::report::{
+use openbitfun_agent_runtime::deep_review::report::{
     deep_review_cache_from_completed_reviewers, fill_deep_review_packet_metadata,
     fill_deep_review_reliability_signals,
 };
-use bitfun_agent_runtime::deep_review::task_execution::{
+use openbitfun_agent_runtime::deep_review::task_execution::{
     capacity_decision_for_provider_error_facts, capacity_skip_result_for_local_queue_outcome,
     decide_blocked_reviewer_admission_queue_step, decide_provider_capacity_queue_step,
     deep_review_launch_batch_for_task, deep_review_packet_id_for_cache, deep_review_queue_state,
@@ -13,7 +13,7 @@ use bitfun_agent_runtime::deep_review::task_execution::{
     DeepReviewProviderCapacityErrorFacts, DeepReviewProviderCapacityQueueStepDecision,
     DeepReviewProviderCapacityQueueStepFacts, DeepReviewQueueStateInput,
 };
-use bitfun_agent_runtime::deep_review::{
+use openbitfun_agent_runtime::deep_review::{
     append_tool_use_context_data, apply_deep_review_queue_control,
     deep_review_queue_control_snapshot, record_deep_review_shared_context_tool_use,
     ChangeRiskFactors, DeepReviewBudgetTracker, DeepReviewCapacityQueueDecision,
@@ -22,7 +22,7 @@ use bitfun_agent_runtime::deep_review::{
     DeepReviewRunManifestGate, DeepReviewStrategyLevel, DeepReviewSubagentRole,
     DeepReviewToolParentContext, REVIEW_WORKER_AGENT_TYPE,
 };
-use bitfun_events::{DeepReviewQueueReason, DeepReviewQueueStatus};
+use openbitfun_events::{DeepReviewQueueReason, DeepReviewQueueStatus};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 

@@ -4,15 +4,15 @@ $_node-padding-x: 8px;
 $_icon-size: 16px;
 $_indent-width: 8px;
 
-.bitfun-file-explorer {
+.openbitfun-file-explorer {
   height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  background: var(--bf-color-surface-panel);
-  border-radius: var(--bf-radius-sm);
+  background: var(--openbitfun-color-surface-panel);
+  border-radius: var(--openbitfun-radius-sm);
   position: relative;
 
   &--empty {
@@ -21,10 +21,10 @@ $_indent-width: 8px;
   }
 }
 
-.bitfun-file-explorer__toolbar {
+.openbitfun-file-explorer__toolbar {
   position: absolute;
-  top: var(--bf-space-2);
-  right: var(--bf-space-1);
+  top: var(--openbitfun-space-2);
+  right: var(--openbitfun-space-1);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -33,7 +33,7 @@ $_indent-width: 8px;
   z-index: 10;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   background: transparent;
   border: none;
   border-radius: 0;
@@ -47,29 +47,29 @@ $_indent-width: 8px;
   
 }
 
-.bitfun-file-explorer__empty {
+.openbitfun-file-explorer__empty {
   text-align: center;
-  color: var(--bf-color-content-muted);
-  padding: var(--bf-space-8);
+  color: var(--openbitfun-color-content-muted);
+  padding: var(--openbitfun-space-8);
 }
 
-.bitfun-file-explorer__empty-icon {
-  margin-bottom: var(--bf-space-4);
-  opacity: var(--bf-opacity-disabled);
+.openbitfun-file-explorer__empty-icon {
+  margin-bottom: var(--openbitfun-space-4);
+  opacity: var(--openbitfun-opacity-disabled);
 }
 
-.bitfun-file-explorer__breadcrumb {
+.openbitfun-file-explorer__breadcrumb {
   display: flex;
   align-items: center;
   gap: 1px;
   padding: 4px 8px;
   height: 24px;
-  font-size: var(--bf-type-meta-font-size);
-  color: var(--bf-color-content-muted);
+  font-size: var(--openbitfun-type-meta-font-size);
+  color: var(--openbitfun-color-content-muted);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--bf-color-content-on-dark) 2.5%, transparent) 0%,
-    color-mix(in srgb, var(--bf-color-content-on-dark) 1.5%, transparent) 100%
+    color-mix(in srgb, var(--openbitfun-color-content-on-dark) 2.5%, transparent) 0%,
+    color-mix(in srgb, var(--openbitfun-color-content-on-dark) 1.5%, transparent) 100%
   );
   overflow: hidden;
   
@@ -78,14 +78,14 @@ $_indent-width: 8px;
     border-color 140ms ease;
 }
 
-.bitfun-file-explorer__breadcrumb-separator {
-  color: var(--bf-color-content-disabled);
+.openbitfun-file-explorer__breadcrumb-separator {
+  color: var(--openbitfun-color-content-disabled);
   flex-shrink: 0;
   opacity: 0.4;
   margin: 0 1px;
 }
 
-.bitfun-file-explorer__breadcrumb-item {
+.openbitfun-file-explorer__breadcrumb-item {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,88 +93,88 @@ $_indent-width: 8px;
   padding: 2px 2px 3px;
   border-radius: 3px;
   transition:
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   
   &--clickable {
     cursor: pointer;
     
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
     }
   }
   
   &:last-child {
-    color: var(--bf-color-content-secondary);
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
   }
 }
 
-.bitfun-file-explorer__tree {
+.openbitfun-file-explorer__tree {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--bf-space-2) 0;
+  padding: var(--openbitfun-space-2) 0;
   -webkit-overflow-scrolling: touch;
 
 }
 
-.bitfun-file-explorer__tree--virtual > div {
+.openbitfun-file-explorer__tree--virtual > div {
   scrollbar-gutter: stable;
 }
 
-.bitfun-file-explorer__node {
+.openbitfun-file-explorer__node {
   user-select: none;
 }
 
-.bitfun-file-explorer__node-content {
+.openbitfun-file-explorer__node-content {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
   padding: $_node-padding-y $_node-padding-x;
   cursor: pointer;
   min-height: $_node-height;
-  border-radius: var(--bf-radius-sm);
-  margin: 0 var(--bf-space-1);
+  border-radius: var(--openbitfun-radius-sm);
+  margin: 0 var(--openbitfun-space-1);
   position: relative;
   
   background: transparent;
   transition:
-    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
-  color: var(--bf-color-content-secondary);
+    background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
+  color: var(--openbitfun-color-content-secondary);
   
   &:focus {
     outline: none;
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-primary);
   }
   
   &:focus-visible {
-    outline: 1px solid var(--bf-color-accent-default);
+    outline: 1px solid var(--openbitfun-color-accent-default);
     outline-offset: -1px;
   }
 
   &:hover {
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &--selected {
-    background: var(--bf-domain-git-branch-background);
-    color: var(--bf-domain-git-branch);
+    background: var(--openbitfun-domain-git-branch-background);
+    color: var(--openbitfun-domain-git-branch);
 
-    .bitfun-file-explorer__node-name {
-      color: var(--bf-domain-git-branch);
-      font-weight: var(--bf-type-label-sm-font-weight);
+    .openbitfun-file-explorer__node-name {
+      color: var(--openbitfun-domain-git-branch);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
 
     &:hover {
-      background: var(--bf-domain-git-branch-background-hover);
-      color: var(--bf-domain-git-branch);
+      background: var(--openbitfun-domain-git-branch-background-hover);
+      color: var(--openbitfun-domain-git-branch);
     }
   }
 
@@ -182,7 +182,7 @@ $_indent-width: 8px;
     font-style: italic;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
   }
 
@@ -193,7 +193,7 @@ $_indent-width: 8px;
       inset: 0;
       z-index: 0;
       border-radius: inherit;
-      background: var(--bf-domain-git-branch-background);
+      background: var(--openbitfun-domain-git-branch-background);
       pointer-events: none;
       animation: file-node-highlight-fade 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
     }
@@ -203,9 +203,9 @@ $_indent-width: 8px;
       z-index: 1;
     }
     
-    .bitfun-file-explorer__node-name {
-      color: var(--bf-domain-git-branch);
-      font-weight: var(--bf-type-label-sm-font-weight);
+    .openbitfun-file-explorer__node-name {
+      color: var(--openbitfun-domain-git-branch);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
   }
 }
@@ -215,58 +215,58 @@ $_indent-width: 8px;
   to { opacity: 0; }
 }
 
-.bitfun-file-explorer__expand-icon {
+.openbitfun-file-explorer__expand-icon {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   width: $_icon-size;
   height: $_icon-size;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   flex-shrink: 0;
   min-width: $_icon-size;
 
-  > svg:not(.bitfun-file-explorer__loading-icon) {
+  > svg:not(.openbitfun-file-explorer__loading-icon) {
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
-  &--expanded > svg:not(.bitfun-file-explorer__loading-icon) {
+  &--expanded > svg:not(.openbitfun-file-explorer__loading-icon) {
     transform: rotate(90deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-file-explorer__node-content--highlighted::after {
+  .openbitfun-file-explorer__node-content--highlighted::after {
     opacity: 0.2;
     animation: none;
   }
 
-  .bitfun-file-explorer__expand-icon > svg {
+  .openbitfun-file-explorer__expand-icon > svg {
     transition: none;
   }
 }
 
-.bitfun-file-explorer__icon {
+.openbitfun-file-explorer__icon {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   transition:
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   min-width: $_icon-size;
 
   &--folder {
-    color: var(--bf-domain-git-branch);
+    color: var(--openbitfun-domain-git-branch);
   }
 
   &--folder-open {
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
   }
 
   &--file {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &--code,
@@ -280,49 +280,49 @@ $_indent-width: 8px;
   &--java,
   &--c-cpp,
   &--font {
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
   }
 
   &--html,
   &--css,
   &--sass,
   &--markdown {
-    color: var(--bf-color-accent-secondary);
+    color: var(--openbitfun-color-accent-secondary);
   }
 
   &--image,
   &--audio,
   &--video {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 
   &--config,
   &--json,
   &--database,
   &--archive {
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   &--text,
   &--binary {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 }
 
-.bitfun-file-explorer__node-wrapper {
+.openbitfun-file-explorer__node-wrapper {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   flex: 1;
   min-width: 0;
 }
 
-.bitfun-file-explorer__node-name {
+.openbitfun-file-explorer__node-name {
   flex: 1;
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -331,85 +331,85 @@ $_indent-width: 8px;
   color: inherit;
 }
 
-.bitfun-file-explorer__rename-input-wrapper {
+.openbitfun-file-explorer__rename-input-wrapper {
   flex: 1;
   min-width: 0;
   z-index: 10;
 }
 
-.bitfun-file-explorer__rename-input {
+.openbitfun-file-explorer__rename-input {
   width: 100%;
 }
 
-.bitfun-file-explorer__compressed-path {
+.openbitfun-file-explorer__compressed-path {
   font-style: italic;
   opacity: 0.85;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
-.bitfun-file-explorer__node-size {
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-muted);
+.openbitfun-file-explorer__node-size {
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-muted);
   opacity: 0.7;
   flex-shrink: 0;
   position: relative;
   z-index: 2;
 }
 
-.bitfun-file-explorer__node-modified {
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-muted);
+.openbitfun-file-explorer__node-modified {
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-muted);
   opacity: 0.7;
   flex-shrink: 0;
   position: relative;
   z-index: 2;
 }
 
-.bitfun-file-explorer__node-actions {
+.openbitfun-file-explorer__node-actions {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
   opacity: 0;
-  transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   position: relative;
   z-index: 2;
 
-  .bitfun-file-explorer__node-content:hover & {
+  .openbitfun-file-explorer__node-content:hover & {
     opacity: 1;
   }
 }
 
-.bitfun-file-explorer__node-children {
+.openbitfun-file-explorer__node-children {
   // Indentation is computed in JS via paddingLeft; avoid additional spacing here.
   position: relative;
 }
 
-.bitfun-file-explorer__load-more {
+.openbitfun-file-explorer__load-more {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--bf-space-2);
-  width: calc(100% - var(--bf-space-2));
-  margin: 0 var(--bf-space-1);
+  gap: var(--openbitfun-space-2);
+  width: calc(100% - var(--openbitfun-space-2));
+  margin: 0 var(--openbitfun-space-1);
   min-height: $_node-height;
   padding: $_node-padding-y $_node-padding-x;
   border: none;
-  border-radius: var(--bf-radius-sm);
+  border-radius: var(--openbitfun-radius-sm);
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   text-align: left;
   transition:
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover:not(:disabled) {
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &:disabled {
@@ -418,33 +418,33 @@ $_indent-width: 8px;
   }
 }
 
-.bitfun-file-explorer__empty-message {
+.openbitfun-file-explorer__empty-message {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  padding: var(--bf-space-8);
-  color: var(--bf-color-content-muted);
+  padding: var(--openbitfun-space-8);
+  color: var(--openbitfun-color-content-muted);
   font-style: italic;
 }
 
 @media (max-width: 767px) {
-  .bitfun-file-explorer__node-content {
+  .openbitfun-file-explorer__node-content {
     padding: 6px $_node-padding-x;
     min-height: 32px;
   }
 
-  .bitfun-file-explorer__node-name {
-    font-size: var(--bf-type-body-md-font-size);
+  .openbitfun-file-explorer__node-name {
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 
-  .bitfun-file-explorer__node-size,
-  .bitfun-file-explorer__node-modified {
+  .openbitfun-file-explorer__node-size,
+  .openbitfun-file-explorer__node-modified {
     display: none;
   }
 }
 
-// .file-explorer { @extend .bitfun-file-explorer; }
-// .file-tree { @extend .bitfun-file-explorer__tree; }
-// .file-tree-node { @extend .bitfun-file-explorer__node; }
-// .node-content { @extend .bitfun-file-explorer__node-content; }
+// .file-explorer { @extend .openbitfun-file-explorer; }
+// .file-tree { @extend .openbitfun-file-explorer__tree; }
+// .file-tree-node { @extend .openbitfun-file-explorer__node; }
+// .node-content { @extend .openbitfun-file-explorer__node-content; }

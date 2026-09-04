@@ -172,11 +172,11 @@ describeWithJsdom('AgentControlToolCard', () => {
         );
       });
 
-      const card = container.querySelector<HTMLElement>('[data-bf-tool-card="agent-control"]');
-      const identity = card?.querySelector<HTMLElement>('[data-bf-part="agentIdentity"]');
-      const openButton = card?.querySelector<HTMLButtonElement>('[data-bf-part="openAgentButton"]');
-      const toggle = card?.querySelector<HTMLElement>('[data-bf-part="surface"]');
-      expect(card?.getAttribute('data-bf-attention')).toBe('prominent');
+      const card = container.querySelector<HTMLElement>('[data-openbitfun-tool-card="agent-control"]');
+      const identity = card?.querySelector<HTMLElement>('[data-openbitfun-part="agentIdentity"]');
+      const openButton = card?.querySelector<HTMLButtonElement>('[data-openbitfun-part="openAgentButton"]');
+      const toggle = card?.querySelector<HTMLElement>('[data-openbitfun-part="surface"]');
+      expect(card?.getAttribute('data-openbitfun-attention')).toBe('prominent');
       expect(identity?.textContent?.trim()).toBeTruthy();
       expect(identity?.textContent).toContain(
         toolName === 'AgentSpawn' ? 'Parser review worker 2' : 'Agent 1',
@@ -184,12 +184,12 @@ describeWithJsdom('AgentControlToolCard', () => {
       expect(identity?.textContent).not.toContain(
         toolName === 'AgentSpawn' ? 'parser_review-worker_2' : 'agent-1',
       );
-      expect(card?.querySelector('[data-bf-part="avatar"] [data-bf-component="subagent-avatar"]')).not.toBeNull();
-      expect(container.querySelector('[data-bf-part="type"]')).toBeNull();
+      expect(card?.querySelector('[data-openbitfun-part="avatar"] [data-openbitfun-component="subagent-avatar"]')).not.toBeNull();
+      expect(container.querySelector('[data-openbitfun-part="type"]')).toBeNull();
       expect(container.textContent).not.toContain('SwarmWorker');
       expect(container.textContent).toContain('Running');
-      expect(card?.querySelector('[data-bf-part="affordanceButton"]')).not.toBeNull();
-      expect(card?.querySelector('[data-bf-part="processing"]')).not.toBeNull();
+      expect(card?.querySelector('[data-openbitfun-part="affordanceButton"]')).not.toBeNull();
+      expect(card?.querySelector('[data-openbitfun-part="processing"]')).not.toBeNull();
       expect(container.textContent).not.toContain(
         toolName === 'AgentSpawn'
           ? 'Inspect the parser flow and report findings.'
@@ -237,14 +237,14 @@ describeWithJsdom('AgentControlToolCard', () => {
       );
     });
 
-    const avatar = container.querySelector('[data-bf-component="subagent-avatar"]');
+    const avatar = container.querySelector('[data-openbitfun-component="subagent-avatar"]');
     const presentation = resolveSubagentAvatarPresentation('child-session');
-    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe(presentation.avatarId);
-    expect(avatar?.getAttribute('data-bf-avatar-color-id')).toBe(presentation.colorId);
+    expect(avatar?.getAttribute('data-openbitfun-avatar-id')).toBe(presentation.avatarId);
+    expect(avatar?.getAttribute('data-openbitfun-avatar-color-id')).toBe(presentation.colorId);
     expect(avatar?.getAttribute('style')).toContain(
       `--subagent-avatar-hue-shift: ${presentation.hueShiftDegrees}deg`,
     );
-    expect(container.querySelector('[data-bf-part="avatar"] > svg')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="avatar"] > svg')).toBeNull();
     expect(container.textContent).toContain('Agent 1');
   });
 
@@ -260,7 +260,7 @@ describeWithJsdom('AgentControlToolCard', () => {
     });
     await act(async () => {
       container
-        .querySelector<HTMLElement>('[data-bf-tool-card="agent-control"] [data-bf-part="surface"]')!
+        .querySelector<HTMLElement>('[data-openbitfun-tool-card="agent-control"] [data-openbitfun-part="surface"]')!
         .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
     expect(container.textContent).toContain('Inspect the parser flow and report findings.');
@@ -287,14 +287,14 @@ describeWithJsdom('AgentControlToolCard', () => {
 
     expect(
       container
-        .querySelector('[data-bf-tool-card="agent-control"] [data-bf-part="surface"]')
-        ?.getAttribute('data-bf-interactive'),
+        .querySelector('[data-openbitfun-tool-card="agent-control"] [data-openbitfun-part="surface"]')
+        ?.getAttribute('data-openbitfun-interactive'),
     ).toBe('false');
-    expect(container.querySelector('[data-bf-part="affordanceButton"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="affordanceButton"]')).toBeNull();
     expect(container.textContent).not.toContain('Inspect the parser flow and report findings.');
     expect(
-      container.querySelector('[data-bf-part="expandedCollapse"]')?.getAttribute('aria-hidden'),
+      container.querySelector('[data-openbitfun-part="expandedCollapse"]')?.getAttribute('aria-hidden'),
     ).toBe('true');
-    expect(container.querySelector('[data-bf-tool-card="agent-control"][data-bf-status="streaming"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-tool-card="agent-control"][data-openbitfun-status="streaming"]')).not.toBeNull();
   });
 });

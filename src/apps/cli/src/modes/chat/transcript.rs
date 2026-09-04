@@ -13,7 +13,7 @@ pub(super) struct MarkdownTranscriptOptions {
 pub(super) enum ExportPathError {
     #[error("Enter a relative Markdown file path")]
     Empty,
-    #[error("Export paths must be relative to the directory where BitFun was started")]
+    #[error("Export paths must be relative to the directory where OpenBitFun was started")]
     Absolute,
     #[error("Export paths cannot contain '..'")]
     ParentTraversal,
@@ -69,7 +69,7 @@ pub(super) fn render_session_markdown(
         .collect::<Vec<_>>()
         .join(" ");
     let title = if title.is_empty() {
-        "BitFun Session"
+        "OpenBitFun Session"
     } else {
         title.as_str()
     };

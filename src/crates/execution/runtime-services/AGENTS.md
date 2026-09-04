@@ -2,13 +2,13 @@
 
 Scope: this guide applies to `src/crates/execution/runtime-services`.
 
-`bitfun-runtime-services` owns typed runtime service assembly. It connects
+`openbitfun-runtime-services` owns typed runtime service assembly. It connects
 runtime-facing ports to injected providers without becoming a concrete platform
 implementation layer.
 
 ## Guardrails
 
-- Depend on `bitfun-runtime-ports`; avoid dependencies on `bitfun-core`, app
+- Depend on `openbitfun-runtime-ports`; avoid dependencies on `openbitfun-core`, app
   crates, Tauri, concrete desktop adapters, or product UI.
 - Builders should assemble explicit typed service bundles and capability
   availability. Do not introduce untyped maps, global mutable registries, or
@@ -23,7 +23,7 @@ implementation layer.
 ## Verification
 
 ```bash
-cargo test -p bitfun-runtime-services
+cargo test -p openbitfun-runtime-services
 node scripts/check-core-boundaries.mjs
 ```
 

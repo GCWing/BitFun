@@ -1,9 +1,9 @@
 //! Session-scoped file read state used to gate Edit/Write reliability.
 
-use bitfun_agent_tools::{
+use dashmap::DashMap;
+use openbitfun_agent_tools::{
     file_read_facts_are_fresh, file_read_facts_content_matches, FileReadFreshnessFacts,
 };
-use dashmap::DashMap;
 use std::sync::Arc;
 
 pub const FILE_UNEXPECTEDLY_MODIFIED_ERROR: &str =

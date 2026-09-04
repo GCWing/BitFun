@@ -16,6 +16,6 @@ export const filesPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'transferFill' },
   ],
   facets: [
-    { id: 'searchMode', attribute: 'data-bf-search-mode', values: ['content', 'filenames'] },
+    { id: 'searchMode', attribute: 'data-openbitfun-search-mode', values: ['content', 'filenames'] },
   ],
 };

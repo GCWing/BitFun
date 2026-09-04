@@ -61,7 +61,7 @@ function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
 
 function getEnabledItems(root: HTMLElement) {
   return Array.from(
-    root.querySelectorAll<HTMLButtonElement>("[data-bf-menu-item]"),
+    root.querySelectorAll<HTMLButtonElement>("[data-openbitfun-menu-item]"),
   ).filter((item) => item.closest('[role="menu"]') === root && !item.disabled && item.getAttribute("aria-disabled") !== "true");
 }
 
@@ -121,7 +121,7 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
     if (event.defaultPrevented) return;
 
     const target = (event.target as Element).closest
-      ? (event.target as Element).closest<HTMLButtonElement>("[data-bf-menu-item]")
+      ? (event.target as Element).closest<HTMLButtonElement>("[data-openbitfun-menu-item]")
       : null;
     if (!target || !event.currentTarget.contains(target)) return;
 
@@ -135,7 +135,7 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
     if (event.defaultPrevented || isImeOwnedKeyboardEvent(event)) return;
 
     const target = (event.target as Element).closest
-      ? (event.target as Element).closest<HTMLButtonElement>("[data-bf-menu-item]")
+      ? (event.target as Element).closest<HTMLButtonElement>("[data-openbitfun-menu-item]")
       : null;
     if (!target || !event.currentTarget.contains(target)) return;
 
@@ -186,7 +186,7 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="menu"
+      data-openbitfun-component="menu"
       onFocusCapture={handleFocusCapture}
       onKeyDown={handleKeyDown}
       ref={setRootRef}
@@ -197,7 +197,7 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
         orientation="vertical"
         scrollbarVisibility={scrollbarVisibility}
       >
-        <div className={styles.list} data-bf-part="list">{children}</div>
+        <div className={styles.list} data-openbitfun-part="list">{children}</div>
       </ScrollArea>
     </div>
   );
@@ -215,7 +215,7 @@ export const MenuItem = forwardRef<HTMLButtonElement, MenuItemProps>(function Me
       {...props}
       aria-checked={role === "menuitem" ? undefined : checked}
       className={classNames(styles.item, className)}
-      data-bf-menu-item=""
+      data-openbitfun-menu-item=""
       ref={ref}
       role={role}
       tabIndex={tabIndex}
@@ -242,20 +242,20 @@ export const MenuSection = forwardRef<HTMLDivElement, MenuSectionProps>(function
       aria-label={ariaLabel}
       aria-labelledby={resolvedLabelledBy}
       className={classNames(styles.section, className)}
-      data-bf-part="section"
+      data-openbitfun-part="section"
       ref={ref}
       role="group"
     >
       {headingId && (
-        <div className={styles.heading} data-bf-part="heading" id={headingId}>
-          <span className={styles.headingLabel} data-bf-part="heading-label">{title}</span>
+        <div className={styles.heading} data-openbitfun-part="heading" id={headingId}>
+          <span className={styles.headingLabel} data-openbitfun-part="heading-label">{title}</span>
           {actions.length > 0 && (
-            <span className={styles.headingActions} data-bf-part="heading-actions">
+            <span className={styles.headingActions} data-openbitfun-part="heading-actions">
               {actions.map((action) => (
                 <IconButton
                   aria-label={action.label}
                   className={styles.headingAction}
-                  data-bf-menu-item=""
+                  data-openbitfun-menu-item=""
                   disabled={action.disabled}
                   icon={action.icon}
                   key={action.id}
@@ -271,7 +271,7 @@ export const MenuSection = forwardRef<HTMLDivElement, MenuSectionProps>(function
           )}
         </div>
       )}
-      <div className={styles.items} data-bf-part="section-items">
+      <div className={styles.items} data-openbitfun-part="section-items">
         {children}
       </div>
     </div>
@@ -284,7 +284,7 @@ export const MenuSeparator = forwardRef<HTMLDivElement, MenuSeparatorProps>(
       <div
         {...props}
         className={classNames(styles.separator, className)}
-        data-bf-part="separator"
+        data-openbitfun-part="separator"
         ref={ref}
         role="separator"
       />

@@ -13,8 +13,8 @@ use super::types::{SessionMetadata, StoredSessionIndexFile, StoredSessionMetadat
 use super::SessionMetadataPage;
 use crate::file_lock::{FileLock, FileLockError, FileLockMode};
 use crate::json_store::{JsonFileStore, JsonFileStoreError};
-use bitfun_core_types::validate_session_id;
 use log::warn;
+use openbitfun_core_types::validate_session_id;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -255,7 +255,7 @@ impl SessionMetadataStore {
 
     /// Load the rebuildable Session index while the caller owns both index locks.
     ///
-    /// Per-session `metadata.json` files are authoritative. Older BitFun versions
+    /// Per-session `metadata.json` files are authoritative. Older OpenBitFun versions
     /// can leave `index.json` missing, empty, or truncated if the machine stops
     /// during the Windows direct-overwrite fallback. Treat only index
     /// deserialization failures as recoverable; real filesystem errors must still
@@ -525,16 +525,17 @@ mod tests {
 
     #[test]
     fn index_lock_child_holds_the_cross_process_guard() {
-        if std::env::var_os("BITFUN_SESSION_INDEX_LOCK_CHILD").is_none() {
+        if std::env::var_os("OPENBITFUN_SESSION_INDEX_LOCK_CHILD").is_none() {
             return;
         }
-        let sessions_root =
-            PathBuf::from(std::env::var_os("BITFUN_SESSION_INDEX_ROOT").expect("index lock root"));
+        let sessions_root = PathBuf::from(
+            std::env::var_os("OPENBITFUN_SESSION_INDEX_ROOT").expect("index lock root"),
+        );
         let ready_path = PathBuf::from(
-            std::env::var_os("BITFUN_SESSION_INDEX_READY").expect("index lock ready path"),
+            std::env::var_os("OPENBITFUN_SESSION_INDEX_READY").expect("index lock ready path"),
         );
         let release_path = PathBuf::from(
-            std::env::var_os("BITFUN_SESSION_INDEX_RELEASE").expect("index lock release path"),
+            std::env::var_os("OPENBITFUN_SESSION_INDEX_RELEASE").expect("index lock release path"),
         );
         std::fs::create_dir_all(&sessions_root).expect("sessions root");
         let _guard = FileLock::acquire(&sessions_root.join(".index.lock"), FileLockMode::Exclusive)
@@ -563,10 +564,10 @@ mod tests {
             .arg("--exact")
             .arg("session::metadata_store::tests::index_lock_child_holds_the_cross_process_guard")
             .arg("--nocapture")
-            .env("BITFUN_SESSION_INDEX_LOCK_CHILD", "1")
-            .env("BITFUN_SESSION_INDEX_ROOT", dir.path())
-            .env("BITFUN_SESSION_INDEX_READY", &ready_path)
-            .env("BITFUN_SESSION_INDEX_RELEASE", &release_path)
+            .env("OPENBITFUN_SESSION_INDEX_LOCK_CHILD", "1")
+            .env("OPENBITFUN_SESSION_INDEX_ROOT", dir.path())
+            .env("OPENBITFUN_SESSION_INDEX_READY", &ready_path)
+            .env("OPENBITFUN_SESSION_INDEX_RELEASE", &release_path)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -866,7 +867,7 @@ mod tests {
             .expect("save visible metadata");
 
         let mut hidden = metadata("hidden", 30);
-        hidden.session_kind = bitfun_core_types::SessionKind::Subagent;
+        hidden.session_kind = openbitfun_core_types::SessionKind::Subagent;
         store
             .save_metadata(&hidden)
             .await
@@ -895,7 +896,7 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let store = SessionMetadataStore::new(dir.path());
         let mut hidden = metadata("hidden", 30);
-        hidden.session_kind = bitfun_core_types::SessionKind::Subagent;
+        hidden.session_kind = openbitfun_core_types::SessionKind::Subagent;
         hidden.status = SessionStatus::Active;
         hidden.relationship = Some(crate::session::SessionRelationship {
             kind: Some(crate::session::SessionRelationshipKind::Subagent),

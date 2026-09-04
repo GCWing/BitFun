@@ -1,6 +1,6 @@
-use bitfun_events::EventEmitter;
 use log::{debug, error};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use openbitfun_events::EventEmitter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::future::Future;
@@ -368,7 +368,7 @@ impl FileWatchService {
         // runtimes wait forever during shutdown. Emitter delivery is handed to
         // the runtime-owned dispatch queue configured by `set_emitter`.
         let worker = std::thread::Builder::new()
-            .name("bitfun-file-watch".to_string())
+            .name("openbitfun-file-watch".to_string())
             .spawn(move || {
                 let poll = std::time::Duration::from_millis(50);
                 let mut last_event_time: Option<std::time::Instant> = None;
@@ -700,8 +700,8 @@ mod tests {
 
     #[test]
     fn backend_canonical_paths_are_projected_to_the_registered_namespace() {
-        let registered_root = Path::new("/var/folders/bitfun-skills").to_path_buf();
-        let backend_root = Path::new("/private/var/folders/bitfun-skills").to_path_buf();
+        let registered_root = Path::new("/var/folders/openbitfun-skills").to_path_buf();
+        let backend_root = Path::new("/private/var/folders/openbitfun-skills").to_path_buf();
         let backend_event = backend_root.join("example/SKILL.md");
         let watched_paths = StdRwLock::new(HashMap::from([(
             registered_root.clone(),
@@ -723,8 +723,8 @@ mod tests {
 
     #[test]
     fn a_direct_registered_path_wins_a_canonical_alias_at_equal_depth() {
-        let alias_root = Path::new("/var/folders/bitfun-skills").to_path_buf();
-        let direct_root = Path::new("/private/var/folders/bitfun-skills").to_path_buf();
+        let alias_root = Path::new("/var/folders/openbitfun-skills").to_path_buf();
+        let direct_root = Path::new("/private/var/folders/openbitfun-skills").to_path_buf();
         let watched_paths = HashMap::from([
             (
                 alias_root,
@@ -751,9 +751,9 @@ mod tests {
 
     #[test]
     fn canonical_alias_fallback_is_deterministic() {
-        let first_alias = Path::new("/aliases/first/bitfun-skills").to_path_buf();
-        let second_alias = Path::new("/aliases/second/bitfun-skills").to_path_buf();
-        let backend_root = Path::new("/private/var/folders/bitfun-skills").to_path_buf();
+        let first_alias = Path::new("/aliases/first/openbitfun-skills").to_path_buf();
+        let second_alias = Path::new("/aliases/second/openbitfun-skills").to_path_buf();
+        let backend_root = Path::new("/private/var/folders/openbitfun-skills").to_path_buf();
         let watched_paths = HashMap::from([
             (
                 second_alias,

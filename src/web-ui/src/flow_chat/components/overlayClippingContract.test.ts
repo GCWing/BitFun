@@ -30,7 +30,7 @@ describe('shared Combobox clipping contract', () => {
     const source = readSource('../../../../../design-system/packages/ui/src/components/Combobox/Combobox.tsx');
     const positioner = readSource('../../../../../design-system/packages/ui/src/internal/useAnchoredLayer.ts');
     const portal = readSource('../../../../../design-system/packages/ui/src/overlay/Portal.tsx');
-    const designSystemHost = readSource('../../infrastructure/design-system/BitFunDesignSystemProvider.tsx');
+    const designSystemHost = readSource('../../infrastructure/design-system/OpenBitFunDesignSystemProvider.tsx');
     expect(source).toContain('import { Portal }');
     expect(source).toContain('<Portal');
     expect(source).toContain('useAnchoredLayer');

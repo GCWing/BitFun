@@ -12,25 +12,25 @@
     },
     "projectHooks": {
       "label": "Enable project hook file",
-      "description": "Reads and runs .bitfun/config/hooks.json from the workspace. Enable only for trusted repositories."
+      "description": "Reads and runs .openbitfun/config/hooks.json from the workspace. Enable only for trusted repositories."
     }
   },
   "projectHooksRisk": {
     "title": "Allow workspace code to run Hooks?",
-    "message": "When enabled, .bitfun/config/hooks.json in “{{workspace}}” can run commands with your user permissions. Enable this only for a workspace you trust after reviewing its Hook file.",
+    "message": "When enabled, .openbitfun/config/hooks.json in “{{workspace}}” can run commands with your user permissions. Enable this only for a workspace you trust after reviewing its Hook file.",
     "currentWorkspace": "the current workspace",
     "confirm": "I reviewed it, enable Hooks"
   },
   "locations": {
     "title": "Where hooks are declared",
-    "description": "Changes to hooks.json take effect without restarting BitFun.",
+    "description": "Changes to hooks.json take effect without restarting OpenBitFun.",
     "userFile": {
       "label": "User hook file",
-      "description": "config/hooks.json in the BitFun user config directory."
+      "description": "config/hooks.json in the OpenBitFun user config directory."
     },
     "projectFile": {
       "label": "Project hook file",
-      "description": ".bitfun/config/hooks.json in the current workspace. Requires Enable project hook file."
+      "description": ".openbitfun/config/hooks.json in the current workspace. Requires Enable project hook file."
     }
   },
   "imports": {
@@ -77,15 +77,15 @@
     "storeInvalid": "Imported hook state needs repair",
     "reset": "Reset managed state",
     "removeTitle": "Remove imported hooks?",
-    "removeSourceUntouched": "Only BitFun's managed copy is removed. The Claude Code or Codex source is not changed.",
+    "removeSourceUntouched": "Only OpenBitFun's managed copy is removed. The Claude Code or Codex source is not changed.",
     "removeConfirm": "Remove managed copy",
     "resetTitle": "Reset invalid imported hook state?",
-    "resetWarning": "This removes the invalid BitFun-managed index for this scope. Source application files are not changed.",
+    "resetWarning": "This removes the invalid OpenBitFun-managed index for this scope. Source application files are not changed.",
     "resetConfirm": "Reset managed state"
   },
   "compatibility": {
     "title": "Codex compatibility",
-    "description": "BitFun uses the Codex Hooks contract and can run compatible hook scripts directly.",
+    "description": "OpenBitFun uses the Codex Hooks contract and can run compatible hook scripts directly.",
     "reference": {
       "label": "Event and payload reference",
       "open": "Open docs"

@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .select,
   .leading,
@@ -7,28 +7,28 @@
   }
 
   .root {
-    --_select-height: var(--bf-control-height-md);
+    --_select-height: var(--openbitfun-control-height-md);
     --_select-leading-space: 0px;
 
     position: relative;
     display: inline-grid;
     min-inline-size: 0;
     inline-size: 100%;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   .root[data-size="sm"] {
-    --_select-height: var(--bf-control-height-sm);
+    --_select-height: var(--openbitfun-control-height-sm);
   }
 
   .root[data-size="lg"] {
-    --_select-height: var(--bf-control-height-lg);
+    --_select-height: var(--openbitfun-control-height-lg);
   }
 
   .root[data-has-leading="true"] {
     --_select-leading-space: calc(
-      var(--bf-control-select-indicator-size)
-      + var(--bf-control-select-content-gap)
+      var(--openbitfun-control-select-indicator-size)
+      + var(--openbitfun-control-select-content-gap)
     );
   }
 
@@ -40,58 +40,58 @@
     margin: 0;
     padding-block: 0;
     padding-inline-start: calc(
-      var(--bf-control-select-padding-inline)
+      var(--openbitfun-control-select-padding-inline)
       + var(--_select-leading-space)
     );
     padding-inline-end: calc(
-      var(--bf-control-select-trailing-inset)
-      + var(--bf-control-select-indicator-size)
-      + var(--bf-control-select-content-gap)
+      var(--openbitfun-control-select-trailing-inset)
+      + var(--openbitfun-control-select-indicator-size)
+      + var(--openbitfun-control-select-content-gap)
     );
-    border: var(--bf-border-width-default) solid var(--bf-color-field-border);
-    border-radius: var(--bf-control-select-radius);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border);
+    border-radius: var(--openbitfun-control-select-radius);
     outline: 0;
     color: inherit;
-    background: var(--bf-color-field-background);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    background: var(--openbitfun-color-field-background);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     appearance: none;
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
-  .select:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
-    border-color: var(--bf-color-field-border-hover);
-    background: var(--bf-color-field-background-hover);
+  .select:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
+    border-color: var(--openbitfun-color-field-border-hover);
+    background: var(--openbitfun-color-field-background-hover);
   }
 
   .root[data-field-surface="ambient"] .select,
-  .root[data-field-surface="ambient"] .select:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+  .root[data-field-surface="ambient"] .select:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
     background: transparent;
   }
 
-  .select:is(:focus-visible, [data-bf-preview-state="focus-visible"]) {
-    border-color: var(--bf-color-field-border-focus);
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  .select:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+    border-color: var(--openbitfun-color-field-border-focus);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .root[data-invalid="true"] .select {
-    border-color: var(--bf-color-status-danger-border);
+    border-color: var(--openbitfun-color-status-danger-border);
   }
 
-  .root[data-invalid="true"] .select:is(:focus-visible, [data-bf-preview-state="focus-visible"]) {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-status-danger-surface);
+  .root[data-invalid="true"] .select:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-status-danger-surface);
   }
 
   .root[data-disabled="true"] {
-    color: var(--bf-color-content-disabled);
-    opacity: var(--bf-opacity-disabled);
+    color: var(--openbitfun-color-content-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
   }
 
   .select:disabled {
@@ -106,25 +106,25 @@
     align-self: center;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-control-select-indicator-size);
-    block-size: var(--bf-control-select-indicator-size);
-    color: var(--bf-color-content-muted);
+    inline-size: var(--openbitfun-control-select-indicator-size);
+    block-size: var(--openbitfun-control-select-indicator-size);
+    color: var(--openbitfun-color-content-muted);
     pointer-events: none;
   }
 
   .leading {
     justify-self: start;
-    margin-inline-start: var(--bf-control-select-leading-inset);
+    margin-inline-start: var(--openbitfun-control-select-leading-inset);
   }
 
   .indicator {
     justify-self: end;
-    margin-inline-end: var(--bf-control-select-trailing-inset);
+    margin-inline-end: var(--openbitfun-control-select-trailing-inset);
   }
 
   .leading > :where(svg, img),
-  .leading > [data-bf-component="icon"],
-  .indicator > [data-bf-component="icon"] {
+  .leading > [data-openbitfun-component="icon"],
+  .indicator > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -145,7 +145,7 @@
 
     .select:focus-visible {
       border-color: Highlight;
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
   }
 }

@@ -800,7 +800,7 @@ mod tests {
             GitError::CommandFailed(_)
         ));
 
-        let missing = existing.join("bitfun-trust-test-absent-directory");
+        let missing = existing.join("openbitfun-trust-test-absent-directory");
         assert!(matches!(
             classify_repository_open_error(&missing, &corrupt),
             GitError::RepositoryNotFound(_)

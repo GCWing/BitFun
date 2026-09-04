@@ -260,7 +260,7 @@ fn nested_local_sources_flow_through_one_control_plane_without_stale_winners() {
 fn command_subagent_and_mcp_share_creation_safe_watch_roots() {
     let fixture = Fixture::new();
     let context = fixture.context();
-    let as_map = |roots: Vec<bitfun_product_domains::external_sources::ExternalWatchRoot>| {
+    let as_map = |roots: Vec<openbitfun_product_domains::external_sources::ExternalWatchRoot>| {
         roots
             .into_iter()
             .map(|root| (root.path, root.recursive))

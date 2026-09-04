@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const CODE_CHANGE_TOKENS = [
-  '--bf-color-code-change-added',
-  '--bf-color-code-change-removed',
+  '--openbitfun-color-code-change-added',
+  '--openbitfun-color-code-change-removed',
 ] as const;
 
 const PRIMARY_CODE_CHANGE_SURFACES = [
@@ -15,9 +15,9 @@ const PRIMARY_CODE_CHANGE_SURFACES = [
   '../../tools/editor/components/DiffEditor.scss',
   '../../tools/git/components/BranchQuickSwitch.scss',
   '../../tools/git/components/GitDiffView/GitDiffView.scss',
-  '../../tools/bitfun-canvas/runtime/sdk/data-display.tsx',
-  '../../tools/bitfun-canvas/runtime/canvasRuntimeInstaller.ts',
-  '../../tools/bitfun-canvas/runtime/styles/canvas-runtime.scss',
+  '../../tools/openbitfun-canvas/runtime/sdk/data-display.tsx',
+  '../../tools/openbitfun-canvas/runtime/canvasRuntimeInstaller.ts',
+  '../../tools/openbitfun-canvas/runtime/styles/canvas-runtime.scss',
   '../../app/components/panels/review-platform/ReviewPlatformPanel.scss',
 ] as const;
 
@@ -40,7 +40,7 @@ describe('code-change color integration', () => {
     ]) {
       const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 
-      expect(source).not.toMatch(/--bf-domain-git-(?:added|deleted|staged)/);
+      expect(source).not.toMatch(/--openbitfun-domain-git-(?:added|deleted|staged)/);
     }
   });
 });

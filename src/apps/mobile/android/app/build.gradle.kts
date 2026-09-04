@@ -5,10 +5,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val releaseKeystorePath = providers.environmentVariable("BITFUN_ANDROID_KEYSTORE").orNull
-val releaseKeystorePassword = providers.environmentVariable("BITFUN_ANDROID_KEYSTORE_PASSWORD").orNull
-val releaseKeyAlias = providers.environmentVariable("BITFUN_ANDROID_KEY_ALIAS").orNull
-val releaseKeyPassword = providers.environmentVariable("BITFUN_ANDROID_KEY_PASSWORD").orNull
+val releaseKeystorePath = providers.environmentVariable("OPENBITFUN_ANDROID_KEYSTORE").orNull
+val releaseKeystorePassword = providers.environmentVariable("OPENBITFUN_ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("OPENBITFUN_ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("OPENBITFUN_ANDROID_KEY_PASSWORD").orNull
 val hasReleaseSigning = listOf(
     releaseKeystorePath,
     releaseKeystorePassword,
@@ -17,12 +17,12 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.bitfun.mobile.app"
+    namespace = "com.openbitfun.mobile.app"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
     defaultConfig {
-        // Same family as com.bitfun.desktop; see the implementation plan section 3.
-        applicationId = "com.bitfun.mobile"
+        // Same family as com.openbitfun.desktop; see the implementation plan section 3.
+        applicationId = "com.openbitfun.mobile"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
@@ -67,7 +67,7 @@ android {
 dependencies {
     // The only shared module an app may name. Everything below it — transport,
     // crypto, persistence — is reached through UiState and Intent or not at all.
-    implementation("com.bitfun.mobile:core-feature")
+    implementation("com.openbitfun.mobile:core-feature")
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -18,7 +18,7 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
       createdAt: now,
       messageCount: 0,
       workspacePath: '',
-      workspaceName: 'BitFun'
+      workspaceName: 'OpenBitFun'
     };
     return session;
   }
@@ -82,7 +82,7 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
       return [
         '我可以作为手机端助手处理图片。',
         '',
-        '当前是 mock 流程：我会模拟图片理解、重点提取和后续追问；接入 BitFun harness 后，这里会真正把图片内容交给视觉模型分析。',
+        '当前是 mock 流程：我会模拟图片理解、重点提取和后续追问；接入 OpenBitFun harness 后，这里会真正把图片内容交给视觉模型分析。',
         '',
         '你可以继续问我：这张图里有什么、帮我提取文字、总结界面问题，或者让它和一个文件/网页一起分析。'
       ].join('\n');
@@ -91,7 +91,7 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
       return [
         '我可以帮你做网络搜索和资料整理。',
         '',
-        '当前是 mock 搜索流程：我会先判断搜索关键词，再模拟抓取多来源信息，最后给你摘要、要点和可继续追问的问题。接入 BitFun harness 后，这里会真正调用搜索工具并返回带来源的结果。',
+        '当前是 mock 搜索流程：我会先判断搜索关键词，再模拟抓取多来源信息，最后给你摘要、要点和可继续追问的问题。接入 OpenBitFun harness 后，这里会真正调用搜索工具并返回带来源的结果。',
         '',
         '建议的处理方式：',
         '1. 先搜索权威来源和最近资料。',
@@ -105,21 +105,21 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
         '',
         '如果只是要通用建议，我可以先给排查路径；如果要看本地仓库、改代码或运行命令，就应该从侧栏进入远程。',
         '',
-        '当前是 mock 回复。接入 BitFun harness 后，普通聊天会给出真实模型建议，远程模块会继续负责本地 workspace 和工具执行。'
+        '当前是 mock 回复。接入 OpenBitFun harness 后，普通聊天会给出真实模型建议，远程模块会继续负责本地 workspace 和工具执行。'
       ].join('\n');
     }
     if (normalized.indexOf('图片') >= 0 || normalized.toLowerCase().indexOf('image') >= 0) {
       return [
         '我可以帮你分析图片。',
         '',
-        '手机端助手可以覆盖看图解释、OCR 提取、界面走查、截图问题定位和图片内容总结。当前是 mock 回复；接入 BitFun harness 后会把图片交给真实视觉模型处理。'
+        '手机端助手可以覆盖看图解释、OCR 提取、界面走查、截图问题定位和图片内容总结。当前是 mock 回复；接入 OpenBitFun harness 后会把图片交给真实视觉模型处理。'
       ].join('\n');
     }
     if (normalized.indexOf('文件') >= 0 || normalized.toLowerCase().indexOf('file') >= 0) {
       return [
         '我可以帮你处理文件。',
         '',
-        '手机端助手适合做文件总结、重点提取、改写、翻译、生成待办和跨文件对比。当前是 mock 回复；接入 BitFun harness 后会对真实附件内容进行处理。'
+        '手机端助手适合做文件总结、重点提取、改写、翻译、生成待办和跨文件对比。当前是 mock 回复；接入 OpenBitFun harness 后会对真实附件内容进行处理。'
       ].join('\n');
     }
     if (MockGeneralChatAdapter.looksLikeWritingTask(normalized)) {
@@ -130,14 +130,14 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
       ].join('\n');
     }
     if (normalized.length === 0) {
-      return '你可以直接问 BitFun。';
+      return '你可以直接问 OpenBitFun。';
     }
     return [
       `我收到了：${normalized}`,
       '',
-      '在手机端，BitFun 不应该只是普通聊天框，而是一个通用助手入口：可以问答、搜索资料、分析图片、处理文件、写作改写，也可以在需要本地项目能力时引导进入远程。',
+      '在手机端，OpenBitFun 不应该只是普通聊天框，而是一个通用助手入口：可以问答、搜索资料、分析图片、处理文件、写作改写，也可以在需要本地项目能力时引导进入远程。',
       '',
-      '当前回复是 mock，用来验证移动端交互和流式 UI。下一步把这个 backend 替换为 BitFun harness 的普通聊天接口后，就会返回真实模型结果。'
+      '当前回复是 mock，用来验证移动端交互和流式 UI。下一步把这个 backend 替换为 OpenBitFun harness 的普通聊天接口后，就会返回真实模型结果。'
     ].join('\n');
   }
 

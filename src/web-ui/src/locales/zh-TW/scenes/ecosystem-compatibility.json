@@ -78,7 +78,7 @@
   },
   "import": {
     "title": "匯入與複用",
-    "description": "查看 {{name}} 可與 BitFun 搭配使用的內容。可匯入的內容可以直接加入，其餘內容會顯示目前支援狀態。",
+    "description": "查看 {{name}} 可與 OpenBitFun 搭配使用的內容。可匯入的內容可以直接加入，其餘內容會顯示目前支援狀態。",
     "columns": {
       "item": "內容",
       "type": "類型",
@@ -102,16 +102,16 @@
     "importingAction": "匯入中",
     "undetectedItem": "未發現{{type}}",
     "undetectedDescription": "目前沒有發現可用內容",
-    "notAdaptedDescription": "BitFun 暫不支援使用 {{name}} 的{{type}}",
-    "ownerAdaptedDescription": "{{type}}已可在 BitFun 中直接使用，無需匯入",
+    "notAdaptedDescription": "OpenBitFun 暫不支援使用 {{name}} 的{{type}}",
+    "ownerAdaptedDescription": "{{type}}已可在 OpenBitFun 中直接使用，無需匯入",
     "notifications": {
-      "success": "{{name}} 已匯入 BitFun",
+      "success": "{{name}} 已匯入 OpenBitFun",
       "stale": "來源內容已更新，請確認最新狀態後重試",
       "failed": "匯入 {{name}} 失敗"
     }
   },
   "run": {
-    "title": "在 BitFun 中使用",
+    "title": "在 OpenBitFun 中使用",
     "description": "可用 {{name}} 新增獨立工作階段，也可將它設為子 Agent，由主 Agent 在合適的任務中呼叫。",
     "session": {
       "title": "建立獨立工作階段",

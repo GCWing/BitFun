@@ -1,4 +1,4 @@
-import { Button, NumberInput } from '@bitfun/ui';
+import { Button, NumberInput } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';

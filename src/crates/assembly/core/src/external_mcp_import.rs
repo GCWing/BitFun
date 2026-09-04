@@ -1,7 +1,7 @@
 //! Thin orchestration for explicitly copying external MCP declarations into
 //! the existing native user configuration owner.
 
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpImportApplyOutcomeV1, ExternalMcpImportApplyRequestV1,
     ExternalMcpImportApplyResultV1, ExternalMcpImportDispositionV1, ExternalMcpImportPlanItemV1,
     ExternalMcpImportPlanV1, ExternalMcpImportedItemV1, ExternalMcpServerDefinition,
@@ -9,7 +9,7 @@ use bitfun_product_domains::external_sources::{
     ExternalSourceOperationResult, PreparedExternalMcpImportServer,
     PreparedExternalMcpImportTransport, EXTERNAL_MCP_IMPORT_SCHEMA_V1,
 };
-use bitfun_services_integrations::mcp::config::{
+use openbitfun_services_integrations::mcp::config::{
     MCPImportError, MCPImportServer, MCPImportTransport, MCPUserImportSnapshot,
 };
 use sha2::{Digest, Sha256};
@@ -491,7 +491,7 @@ fn operation_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::external_sources::{
+    use openbitfun_product_domains::external_sources::{
         ExternalMcpTransportKind, SourceKey, SourceQualifiedMcpServerId,
     };
 

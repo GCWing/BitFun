@@ -1,6 +1,6 @@
 use crate::ui::composer::ComposerDraft;
-use bitfun_agent_runtime::sdk::AgentWorkspaceReference;
 use fs2::FileExt;
+use openbitfun_agent_runtime::sdk::AgentWorkspaceReference;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -280,7 +280,7 @@ fn lock_is_contended(error: &std::io::Error) -> bool {
 mod tests {
     use super::*;
     use crate::ui::composer::{ComposerDraft, ComposerImage};
-    use bitfun_agent_runtime::sdk::{
+    use openbitfun_agent_runtime::sdk::{
         AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferenceSourceRange,
     };
     use std::io::Write;

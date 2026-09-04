@@ -2,7 +2,7 @@
 set -euo pipefail
 
 target="${1:?usage: verify-macos-signing.sh <target-triple>}"
-if [[ "${BITFUN_APPLE_SIGNING_CONFIGURED:-false}" != "true" ]]; then
+if [[ "${OPENBITFUN_APPLE_SIGNING_CONFIGURED:-false}" != "true" ]]; then
   echo "Apple signing is not configured; skipping macOS signature verification."
   exit 0
 fi

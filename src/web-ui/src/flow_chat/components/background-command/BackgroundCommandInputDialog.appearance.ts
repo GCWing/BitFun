@@ -7,7 +7,7 @@ export const backgroundCommandInputDialogAppearanceDescriptor: AppearanceSurface
     { id: 'options' }, { id: 'note' }, { id: 'actions' },
   ],
   states: [
-    { id: 'sending', selector: { kind: 'self', suffix: '[data-bf-state~="sending"]' } },
-    { id: 'masked', selector: { kind: 'self', suffix: '[data-bf-state~="masked"]' } },
+    { id: 'sending', selector: { kind: 'self', suffix: '[data-openbitfun-state~="sending"]' } },
+    { id: 'masked', selector: { kind: 'self', suffix: '[data-openbitfun-state~="masked"]' } },
   ],
 };

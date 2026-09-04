@@ -1,7 +1,6 @@
 import type { AppearanceRegistry } from '../registry/AppearanceRegistry';
 import { appearancePackageValidator } from '../schema/AppearancePackageValidator';
 import { AppearancePackageValidationError } from '../schema/AppearancePackageValidationError';
-import { migrateAppearancePackage } from '../schema/migrateAppearancePackage';
 import { getAppearanceCompositionLayers } from '../builtins/composeAppearancePackage';
 import type {
   AppearanceDiagnostic,
@@ -173,20 +172,13 @@ export class AppearanceCompiler {
       ]),
     );
     const rawCompositionLayers = getAppearanceCompositionLayers(pkg);
-    const compositionLayers = rawCompositionLayers ? {
-      base: migrateAppearancePackage(
-        rawCompositionLayers.base as unknown as Record<string, unknown>,
-      ) as unknown as AppearancePackage,
-      override: migrateAppearancePackage(
-        rawCompositionLayers.override as unknown as Record<string, unknown>,
-      ) as unknown as AppearancePackage,
-    } : undefined;
+    const compositionLayers = rawCompositionLayers;
     const componentResult = this.compileSurfaceLayers(
       compositionLayers
         ? [compositionLayers.base.components ?? {}, compositionLayers.override.components ?? {}]
         : [pkg.components ?? {}],
       id => this.registry.getComponent(id),
-      'data-bf-component',
+      'data-openbitfun-component',
       materials,
       context,
     );
@@ -195,12 +187,12 @@ export class AppearanceCompiler {
         ? [compositionLayers.base.scenes ?? {}, compositionLayers.override.scenes ?? {}]
         : [pkg.scenes ?? {}],
       id => this.registry.getScene(id),
-      'data-bf-scene',
+      'data-openbitfun-scene',
       materials,
       context,
     );
 
-    const rootSelector = `:root[data-bf-appearance="${pkg.id}"][data-bf-appearance-revision="${revision}"]`;
+    const rootSelector = `:root[data-openbitfun-appearance="${pkg.id}"][data-openbitfun-appearance-revision="${revision}"]`;
     const appearanceRules = [
       `${rootSelector}{${globalDeclarations}}`,
       ...componentResult.rules.map(rule => this.renderRule(rule)),
@@ -239,7 +231,7 @@ export class AppearanceCompiler {
   private compileSurfaceLayers(
     layers: Record<string, AppearanceSurfaceDefinition>[],
     getDescriptor: (id: string) => AppearanceSurfaceDescriptor | undefined,
-    surfaceAttribute: 'data-bf-component' | 'data-bf-scene',
+    surfaceAttribute: 'data-openbitfun-component' | 'data-openbitfun-scene',
     materials: Record<string, ResolvedAppearanceStyle>,
     context: CompileContext,
   ): { surfaces: Record<string, ResolvedAppearanceSurface>; rules: CompiledRule[] } {
@@ -279,7 +271,7 @@ export class AppearanceCompiler {
   private compileSurfaces(
     definitions: Record<string, AppearanceSurfaceDefinition>,
     getDescriptor: (id: string) => AppearanceSurfaceDescriptor | undefined,
-    surfaceAttribute: 'data-bf-component' | 'data-bf-scene',
+    surfaceAttribute: 'data-openbitfun-component' | 'data-openbitfun-scene',
     materials: Record<string, ResolvedAppearanceStyle>,
     context: CompileContext,
   ): { surfaces: Record<string, ResolvedAppearanceSurface>; rules: CompiledRule[] } {
@@ -288,15 +280,15 @@ export class AppearanceCompiler {
     Object.entries(definitions).forEach(([surfaceId, definition]) => {
       const descriptor = getDescriptor(surfaceId);
       if (!descriptor) return;
-      const resolvedSurfaceAttribute = surfaceAttribute === 'data-bf-component'
+      const resolvedSurfaceAttribute = surfaceAttribute === 'data-openbitfun-component'
         ? descriptor.componentAttribute ?? surfaceAttribute
         : surfaceAttribute;
-      const partAttribute = resolvedSurfaceAttribute === 'data-bf-product-component'
-        ? 'data-bf-product-part'
-        : 'data-bf-part';
+      const partAttribute = resolvedSurfaceAttribute === 'data-openbitfun-product-component'
+        ? 'data-openbitfun-product-part'
+        : 'data-openbitfun-part';
       const resolvedParts: Record<string, ResolvedAppearanceStyle[]> = {};
       Object.entries(definition.parts).forEach(([partId, partRule]) => {
-        const baseSelector = `:root[data-bf-appearance="${context.pkg.id}"][data-bf-appearance-revision="${context.revision}"] [${resolvedSurfaceAttribute}="${surfaceId}"][${partAttribute}="${partId}"]`;
+        const baseSelector = `:root[data-openbitfun-appearance="${context.pkg.id}"][data-openbitfun-appearance-revision="${context.revision}"] [${resolvedSurfaceAttribute}="${surfaceId}"][${partAttribute}="${partId}"]`;
         const compiled = this.compilePart(baseSelector, partRule, descriptor, materials, context);
         resolvedParts[partId] = compiled.map(rule => rule.style);
         rules.push(...compiled);
@@ -315,7 +307,7 @@ export class AppearanceCompiler {
   ): CompiledRule[] {
     const rules: CompiledRule[] = [];
     const important = rule.cascade === 'override';
-    const surfaceMatch = /^(.*) \[(data-bf-(?:component|product-component|scene))="([^"]+)"\]\[(data-bf-(?:part|product-part))="([^"]+)"\]$/.exec(baseSelector);
+    const surfaceMatch = /^(.*) \[(data-openbitfun-(?:component|product-component|scene))="([^"]+)"\]\[(data-openbitfun-(?:part|product-part))="([^"]+)"\]$/.exec(baseSelector);
     if (!surfaceMatch) throw new Error(`Invalid host Appearance selector: ${baseSelector}`);
     const [, rootSelector, surfaceAttribute, surfaceId, partAttribute, partId] = surfaceMatch;
     const partDescriptor = descriptor.parts.find(candidate => candidate.id === partId);
@@ -555,11 +547,11 @@ export class AppearanceCompiler {
   }
 
   private referenceToVariable(path: string): string {
-    return `--bf-appearance-${path.replace(/^globals\./, '').replace(/\./g, '-')}`;
+    return `--openbitfun-appearance-${path.replace(/^globals\./, '').replace(/\./g, '-')}`;
   }
 
   private assetVariable(assetId: string): string {
-    return `--bf-appearance-asset-${assetId.replace(/\./g, '-')}`;
+    return `--openbitfun-appearance-asset-${assetId.replace(/\./g, '-')}`;
   }
 
   private serializeAssetReference(value: unknown, context: CompileContext): string {
@@ -631,7 +623,7 @@ export class AppearanceCompiler {
   }
 
   private resolveConcreteCssValue(value: string, context: CompileContext): string {
-    const match = /^var\((--bf-appearance-[^)]+)\)$/.exec(value);
+    const match = /^var\((--openbitfun-appearance-[^)]+)\)$/.exec(value);
     if (!match) return value;
     const path = [...context.globals.keys()].find(candidate => this.referenceToVariable(candidate) === match[1]);
     return path ? this.resolveConcreteReference(path, context, new Set()) : value;

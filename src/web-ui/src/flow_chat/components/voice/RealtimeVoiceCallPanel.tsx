@@ -1,4 +1,4 @@
-import { Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { Bot, Loader2, MicOff, PhoneOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
@@ -18,53 +18,53 @@ export function RealtimeVoiceCallPanel() {
 
   return (
     <section
-      className="bitfun-realtime-call"
-      data-bf-component="realtime-voice-call"
-      data-bf-part="root"
-      data-bf-phase={controller.phase}
+      className="openbitfun-realtime-call"
+      data-openbitfun-component="realtime-voice-call"
+      data-openbitfun-part="root"
+      data-openbitfun-phase={controller.phase}
       role="region"
       aria-label={t('voiceCall.call.title')}
       aria-live="polite"
     >
       <header
-        className="bitfun-realtime-call__header"
-        data-bf-component="realtime-voice-call"
-        data-bf-part="header"
+        className="openbitfun-realtime-call__header"
+        data-openbitfun-component="realtime-voice-call"
+        data-openbitfun-part="header"
       >
         <span
-          className="bitfun-realtime-call__avatar"
-          data-bf-component="realtime-voice-call"
-          data-bf-part="avatar"
+          className="openbitfun-realtime-call__avatar"
+          data-openbitfun-component="realtime-voice-call"
+          data-openbitfun-part="avatar"
           aria-hidden="true"
         >
-          {connecting ? <Loader2 size={18} className="bitfun-realtime-call__spinner" /> : <Bot size={18} />}
+          {connecting ? <Loader2 size={18} className="openbitfun-realtime-call__spinner" /> : <Bot size={18} />}
         </span>
         <span
-          className="bitfun-realtime-call__heading"
-          data-bf-component="realtime-voice-call"
-          data-bf-part="heading"
+          className="openbitfun-realtime-call__heading"
+          data-openbitfun-component="realtime-voice-call"
+          data-openbitfun-part="heading"
         >
           <strong>{t('voiceCall.call.title')}</strong>
           <small>{controller.status}</small>
         </span>
         <span
-          className="bitfun-realtime-call__live-dot"
-          data-bf-component="realtime-voice-call"
-          data-bf-part="liveIndicator"
+          className="openbitfun-realtime-call__live-dot"
+          data-openbitfun-component="realtime-voice-call"
+          data-openbitfun-part="liveIndicator"
           aria-hidden="true"
         />
       </header>
 
       <div
-        className="bitfun-realtime-call__conversation"
-        data-bf-component="realtime-voice-call"
-        data-bf-part="conversation"
+        className="openbitfun-realtime-call__conversation"
+        data-openbitfun-component="realtime-voice-call"
+        data-openbitfun-part="conversation"
       >
         {controller.userTranscript ? (
           <div
-            className="bitfun-realtime-call__utterance bitfun-realtime-call__utterance--user"
-            data-bf-component="realtime-voice-call"
-            data-bf-part="utterance"
+            className="openbitfun-realtime-call__utterance openbitfun-realtime-call__utterance--user"
+            data-openbitfun-component="realtime-voice-call"
+            data-openbitfun-part="utterance"
           >
             <Icon name="user" size="lg" style={{ width: 14, height: 14 }} aria-hidden="true" />
             <span>{controller.userTranscript}</span>
@@ -72,9 +72,9 @@ export function RealtimeVoiceCallPanel() {
         ) : null}
         {controller.assistantTranscript ? (
           <div
-            className="bitfun-realtime-call__utterance bitfun-realtime-call__utterance--assistant"
-            data-bf-component="realtime-voice-call"
-            data-bf-part="utterance"
+            className="openbitfun-realtime-call__utterance openbitfun-realtime-call__utterance--assistant"
+            data-openbitfun-component="realtime-voice-call"
+            data-openbitfun-part="utterance"
           >
             <Bot size={14} aria-hidden="true" />
             <span>{controller.assistantTranscript}</span>
@@ -82,9 +82,9 @@ export function RealtimeVoiceCallPanel() {
         ) : null}
         {!controller.userTranscript && !controller.assistantTranscript ? (
           <div
-            className="bitfun-realtime-call__empty"
-            data-bf-component="realtime-voice-call"
-            data-bf-part="empty"
+            className="openbitfun-realtime-call__empty"
+            data-openbitfun-component="realtime-voice-call"
+            data-openbitfun-part="empty"
           >
             {t('voiceCall.call.empty')}
           </div>
@@ -93,12 +93,12 @@ export function RealtimeVoiceCallPanel() {
 
       {controller.taskPhase ? (
         <div
-          className="bitfun-realtime-call__task"
-          data-bf-component="realtime-voice-call"
-          data-bf-part="task"
-          data-bf-state={controller.taskPhase.replace(/_/g, '-')}
+          className="openbitfun-realtime-call__task"
+          data-openbitfun-component="realtime-voice-call"
+          data-openbitfun-part="task"
+          data-openbitfun-state={controller.taskPhase.replace(/_/g, '-')}
         >
-          <span className="bitfun-realtime-call__task-pulse" aria-hidden="true" />
+          <span className="openbitfun-realtime-call__task-pulse" aria-hidden="true" />
           <span>
             {controller.taskProgressText || t(`voiceCall.call.taskPhases.${controller.taskPhase}`)}
           </span>
@@ -106,9 +106,9 @@ export function RealtimeVoiceCallPanel() {
       ) : null}
 
       <div
-        className="bitfun-realtime-call__meter"
-        data-bf-component="realtime-voice-call"
-        data-bf-part="meter"
+        className="openbitfun-realtime-call__meter"
+        data-openbitfun-component="realtime-voice-call"
+        data-openbitfun-part="meter"
         aria-hidden="true"
       >
         {Array.from({ length: 18 }, (_, index) => {
@@ -121,16 +121,16 @@ export function RealtimeVoiceCallPanel() {
       </div>
 
       <footer
-        className="bitfun-realtime-call__controls"
-        data-bf-component="realtime-voice-call"
-        data-bf-part="controls"
+        className="openbitfun-realtime-call__controls"
+        data-openbitfun-component="realtime-voice-call"
+        data-openbitfun-part="controls"
       >
         <Tooltip content={controller.muted ? t('voiceCall.call.unmute') : t('voiceCall.call.mute')}>
           <IconButton
             size="md"
-            className="bitfun-realtime-call__control"
-            data-bf-component="realtime-voice-call"
-            data-bf-part="control"
+            className="openbitfun-realtime-call__control"
+            data-openbitfun-component="realtime-voice-call"
+            data-openbitfun-part="control"
             aria-label={controller.muted ? t('voiceCall.call.unmute') : t('voiceCall.call.mute')}
             disabled={connecting}
             onClick={controller.toggleMute}
@@ -142,9 +142,9 @@ export function RealtimeVoiceCallPanel() {
         <Tooltip content={t('voiceCall.call.settings')}>
           <IconButton
             size="md"
-            className="bitfun-realtime-call__control"
-            data-bf-component="realtime-voice-call"
-            data-bf-part="control"
+            className="openbitfun-realtime-call__control"
+            data-openbitfun-component="realtime-voice-call"
+            data-openbitfun-part="control"
             aria-label={t('voiceCall.call.settings')}
             onClick={controller.openSettings}
             icon={<Icon name="settings" size="lg" style={{ width: 18, height: 18 }} />}
@@ -153,9 +153,9 @@ export function RealtimeVoiceCallPanel() {
         <Tooltip content={t('voiceCall.call.hangUp')}>
           <IconButton
             size="md"
-            className="bitfun-realtime-call__control bitfun-realtime-call__control--end"
-            data-bf-component="realtime-voice-call"
-            data-bf-part="control"
+            className="openbitfun-realtime-call__control openbitfun-realtime-call__control--end"
+            data-openbitfun-component="realtime-voice-call"
+            data-openbitfun-part="control"
             aria-label={t('voiceCall.call.hangUp')}
             disabled={controller.phase === 'ending'}
             onClick={controller.end}

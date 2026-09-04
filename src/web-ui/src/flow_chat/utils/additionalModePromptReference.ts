@@ -1,4 +1,4 @@
-const TOKEN_PATTERN = /\[\[bitfun-additional-mode:([a-z][a-z0-9-]*)\]\]/g;
+const TOKEN_PATTERN = /\[\[openbitfun-additional-mode:([a-z][a-z0-9-]*)\]\]/g;
 
 const ADDITIONAL_MODE_DEFINITIONS = {
   review: {
@@ -22,13 +22,13 @@ function isAdditionalModeId(value: string): value is AdditionalModePromptReferen
 export function createAdditionalModePromptReferenceToken(
   id: AdditionalModePromptReferenceId,
 ): string {
-  return `[[bitfun-additional-mode:${id}]]`;
+  return `[[openbitfun-additional-mode:${id}]]`;
 }
 
 export function parseAdditionalModePromptReferenceToken(
   token: string,
 ): AdditionalModePromptReferencePayload | null {
-  const match = token.match(/^\[\[bitfun-additional-mode:([a-z][a-z0-9-]*)\]\]$/);
+  const match = token.match(/^\[\[openbitfun-additional-mode:([a-z][a-z0-9-]*)\]\]$/);
   const id = match?.[1];
   if (!id || !isAdditionalModeId(id)) {
     return null;

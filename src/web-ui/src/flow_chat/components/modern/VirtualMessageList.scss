@@ -16,8 +16,8 @@
    */
   .explore-region__content,
   .thinking-content,
-  [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'],
-  [data-bf-component='flow-chat-tool-card'][data-bf-part='error'],
+  [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='expanded'],
+  [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='error'],
   .subagent-items-container,
   .subagent-projection-container--expanded {
     margin-inline-start: 0;
@@ -49,9 +49,9 @@
     -webkit-mask-image: linear-gradient(
       to bottom,
       var(--_flow-chat-top-mask-start),
-      var(--bf-color-content-on-light) var(--bf-space-12),
-      var(--bf-color-content-on-light) calc(
-        100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
+      var(--openbitfun-color-content-on-light) var(--openbitfun-space-12),
+      var(--openbitfun-color-content-on-light) calc(
+        100% - var(--_flow-chat-input-overlay-inset) - var(--openbitfun-space-12)
       ),
       transparent calc(100% - var(--_flow-chat-input-overlay-inset)),
       transparent 100%
@@ -59,9 +59,9 @@
     mask-image: linear-gradient(
       to bottom,
       var(--_flow-chat-top-mask-start),
-      var(--bf-color-content-on-light) var(--bf-space-12),
-      var(--bf-color-content-on-light) calc(
-        100% - var(--_flow-chat-input-overlay-inset) - var(--bf-space-12)
+      var(--openbitfun-color-content-on-light) var(--openbitfun-space-12),
+      var(--openbitfun-color-content-on-light) calc(
+        100% - var(--_flow-chat-input-overlay-inset) - var(--openbitfun-space-12)
       ),
       transparent calc(100% - var(--_flow-chat-input-overlay-inset)),
       transparent 100%
@@ -75,7 +75,7 @@
   // At the actual scroll start there is no content entering from above, so
   // show the first pixels immediately instead of keeping a phantom top fade.
   &__scroller[data-scroll-at-start='true'] {
-    --_flow-chat-top-mask-start: var(--bf-color-content-on-light) 0;
+    --_flow-chat-top-mask-start: var(--openbitfun-color-content-on-light) 0;
   }
 
   /*
@@ -101,12 +101,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bf-color-surface-scene); /* FlowChat background. */
+    background: var(--openbitfun-color-surface-scene); /* FlowChat background. */
   }
 
   .empty-state {
     text-align: center;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     padding: 2rem;
   }
 
@@ -128,12 +128,12 @@
     max-width: calc(100% - 32px);
     margin: 0 auto 8px;
     padding: 4px 10px;
-    border: 1px solid var(--bf-color-border-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
     border-radius: 6px;
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-align: center;
     overflow-wrap: anywhere;
     pointer-events: none;
@@ -147,9 +147,9 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     pointer-events: none;
     overflow-anchor: none;
     visibility: hidden;

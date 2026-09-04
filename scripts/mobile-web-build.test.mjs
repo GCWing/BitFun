@@ -33,17 +33,17 @@ test('mobile-web lifecycle prepares its generated design-system package entries'
 });
 
 test('requests a mobile-web rebuild when a theme source changes', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-mobile-web-build-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'openbitfun-mobile-web-build-'));
   const mobileWebDir = path.join(root, 'src/mobile-web');
   const output = write(root, 'src/mobile-web/dist/index.html', '<main>old</main>');
   const marker = write(
     root,
-    'src/mobile-web/node_modules/.cache/bitfun-mobile-web-build-marker',
+    'src/mobile-web/node_modules/.cache/openbitfun-mobile-web-build-marker',
     'old build\n',
   );
   const themeSource = write(
     root,
-    'design-system/packages/theme-bitfun/src/light.tokens.json',
+    'design-system/packages/theme-openbitfun/src/light.tokens.json',
     '{}\n',
   );
   const now = Date.now() / 1000;
@@ -54,22 +54,22 @@ test('requests a mobile-web rebuild when a theme source changes', async () => {
   const plan = getMobileWebRebuildPlan(mobileWebDir, false, root);
 
   assert.equal(plan.shouldBuild, true);
-  assert.match(plan.reason, /design-system[\\/]packages[\\/]theme-bitfun[\\/]src[\\/]light\.tokens\.json/);
+  assert.match(plan.reason, /design-system[\\/]packages[\\/]theme-openbitfun[\\/]src[\\/]light\.tokens\.json/);
 });
 
 test('reuses mobile-web output when only generated design-system output is newer', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-mobile-web-build-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'openbitfun-mobile-web-build-'));
   const mobileWebDir = path.join(root, 'src/mobile-web');
   const mobileSource = write(root, 'src/mobile-web/src/main.tsx', 'export {};\n');
   const output = write(root, 'src/mobile-web/dist/index.html', '<main>current</main>');
   const marker = write(
     root,
-    'src/mobile-web/node_modules/.cache/bitfun-mobile-web-build-marker',
+    'src/mobile-web/node_modules/.cache/openbitfun-mobile-web-build-marker',
     'current build\n',
   );
   const generatedTheme = write(
     root,
-    'design-system/packages/theme-bitfun/dist/index.js',
+    'design-system/packages/theme-openbitfun/dist/index.js',
     'export {};\n',
   );
   const now = Date.now() / 1000;
@@ -80,12 +80,12 @@ test('reuses mobile-web output when only generated design-system output is newer
 
   assert.deepEqual(getMobileWebRebuildPlan(mobileWebDir, false, root), {
     shouldBuild: false,
-    reason: 'mobile-web dist is up to date; skipping clean/install/build (use --force or BITFUN_MOBILE_WEB_FORCE_BUILD=1 to rebuild)',
+    reason: 'mobile-web dist is up to date; skipping clean/install/build (use --force or OPENBITFUN_MOBILE_WEB_FORCE_BUILD=1 to rebuild)',
   });
 });
 
 test('cleans stale mobile-web resources from native and explicit target profiles', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-mobile-web-clean-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'openbitfun-mobile-web-clean-'));
   const native = write(root, 'target/release/mobile-web/dist/index.html', 'native');
   const targeted = write(
     root,

@@ -80,6 +80,8 @@ export interface DispatchWorkspaceProbe {
 }
 
 export interface DispatchProtocolProbe {
+  productId: string;
+  dataNamespace: string;
   protocolVersion: number;
   cliVersion: string;
   os: string;

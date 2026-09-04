@@ -43,7 +43,7 @@ export const Toolbar = forwardRef<HTMLDivElement, ToolbarProps>(function Toolbar
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="toolbar"
+      data-openbitfun-component="toolbar"
       data-bordered={bordered ? "true" : "false"}
       data-has-center={hasCenter ? "true" : "false"}
       data-size={size}
@@ -52,17 +52,17 @@ export const Toolbar = forwardRef<HTMLDivElement, ToolbarProps>(function Toolbar
       {leading !== undefined && leading !== null && (
         <div
           className={styles.leading}
-          data-bf-part="leading"
+          data-openbitfun-part="leading"
           data-overflow={leadingOverflow}
         >
           {leading}
         </div>
       )}
       {hasCenter && (
-        <div className={styles.center} data-bf-part="center">{center}</div>
+        <div className={styles.center} data-openbitfun-part="center">{center}</div>
       )}
       {trailing !== undefined && trailing !== null && (
-        <div className={styles.trailing} data-bf-part="trailing">{trailing}</div>
+        <div className={styles.trailing} data-openbitfun-part="trailing">{trailing}</div>
       )}
     </div>
   );
@@ -74,7 +74,7 @@ export const ToolbarGroup = forwardRef<HTMLDivElement, ToolbarGroupProps>(
       <div
         {...props}
         className={classNames(styles.group, className)}
-        data-bf-part="group"
+        data-openbitfun-part="group"
         data-gap={gap}
         ref={ref}
       >
@@ -87,7 +87,7 @@ export const ToolbarGroup = forwardRef<HTMLDivElement, ToolbarGroupProps>(
 export const ToolbarBadge = forwardRef<HTMLSpanElement, ToolbarBadgeProps>(
   function ToolbarBadge({ children, className, ...props }, ref) {
     return (
-      <NumberBadge {...props} className={classNames(styles.badge, className)} data-bf-part="badge" ref={ref} value={children} />
+      <NumberBadge {...props} className={classNames(styles.badge, className)} data-openbitfun-part="badge" ref={ref} value={children} />
     );
   },
 );
@@ -99,7 +99,7 @@ export const ToolbarSeparator = forwardRef<HTMLSpanElement, ToolbarSeparatorProp
         {...props}
         aria-hidden="true"
         className={classNames(styles.separator, className)}
-        data-bf-part="separator"
+        data-openbitfun-part="separator"
         ref={ref}
       />
     );

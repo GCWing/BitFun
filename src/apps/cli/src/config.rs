@@ -3,8 +3,8 @@
 /// CLI uses core's GlobalConfig system directly.
 /// Only CLI-specific configuration is kept here (UI, shortcuts, etc.)
 use anyhow::Result;
-use bitfun_core::infrastructure::try_get_path_manager_arc;
 use fs2::FileExt;
+use openbitfun_core::infrastructure::try_get_path_manager_arc;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -117,7 +117,7 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             theme: "dark".to_string(),
-            theme_id: "bitfun-dark".to_string(),
+            theme_id: "openbitfun-dark".to_string(),
             show_tips: true,
             animation: true,
             color_scheme: "default".to_string(),
@@ -169,25 +169,9 @@ impl CliConfig {
     }
 
     fn resolve_config_dir() -> Result<PathBuf> {
-        let e2e_storage_guard = matches!(
-            std::env::var("BITFUN_E2E_STORAGE_GUARD").ok().as_deref(),
-            Some("1") | Some("true") | Some("TRUE")
-        );
-        if e2e_storage_guard {
-            let path_manager =
-                try_get_path_manager_arc().map_err(|error| anyhow::anyhow!(error.to_string()))?;
-            return Ok(path_manager.user_root_dir().to_path_buf());
-        }
-
-        if cfg!(target_os = "windows") {
-            dirs::config_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))
-                .map(|path| path.join("bitfun"))
-        } else {
-            dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))
-                .map(|path| path.join(".config").join("bitfun"))
-        }
+        let path_manager =
+            try_get_path_manager_arc().map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        Ok(path_manager.user_root_dir().to_path_buf())
     }
 
     /// Get configuration file path
@@ -306,7 +290,7 @@ mod tests {
         let serialized = toml::to_string(&config).unwrap();
 
         assert_eq!(config.ui.theme, "dark");
-        assert_eq!(config.ui.theme_id, "bitfun-dark");
+        assert_eq!(config.ui.theme_id, "openbitfun-dark");
         assert!(config.ui.show_tips);
         assert!(config.ui.animation);
         assert_eq!(config.ui.color_scheme, "default");

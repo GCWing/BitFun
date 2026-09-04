@@ -10,17 +10,17 @@ const log = createLogger('widgetInteraction');
 
 export type WidgetBridgeEvent =
   | {
-      type: 'bitfun-widget:prompt';
+      type: 'openbitfun-widget:prompt';
       widgetId?: string;
       text?: string;
     }
   | {
-      type: 'bitfun-widget:event';
+      type: 'openbitfun-widget:event';
       widgetId?: string;
       payload?: unknown;
     }
   | {
-      type: 'bitfun-widget:open-file';
+      type: 'openbitfun-widget:open-file';
       widgetId?: string;
       filePath?: string;
       line?: number;
@@ -76,7 +76,7 @@ export function handleWidgetBridgeEvent(
 
   const sessionId = getActiveSessionId();
 
-  if (event.type === 'bitfun-widget:prompt') {
+  if (event.type === 'openbitfun-widget:prompt') {
     const text = typeof event.text === 'string' ? event.text.trim() : '';
     if (!text) return;
 
@@ -99,7 +99,7 @@ export function handleWidgetBridgeEvent(
     return;
   }
 
-  if (event.type === 'bitfun-widget:open-file') {
+  if (event.type === 'openbitfun-widget:open-file') {
     const filePath = typeof event.filePath === 'string' ? event.filePath.trim() : '';
     if (!filePath) return;
 
@@ -158,7 +158,7 @@ export function handleWidgetBridgeEvent(
     return;
   }
 
-  if (event.type === 'bitfun-widget:event' && event.payload !== undefined) {
+  if (event.type === 'openbitfun-widget:event' && event.payload !== undefined) {
     emitInteraction({
       sessionId,
       widgetId: event.widgetId,

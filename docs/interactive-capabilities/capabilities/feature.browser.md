@@ -11,14 +11,14 @@ title_en: "Built-in browser"
 
 > 功能 / Feature
 
-在 BitFun 内打开网页和本地服务；Agent 可直接读取页面、选择元素并点击、填写、滚动或截图。
+在 OpenBitFun 内打开网页和本地服务；Agent 可直接读取页面、选择元素并点击、填写、滚动或截图。
 
-Open webpages and local services inside BitFun, where an agent can inspect the page and select, click, fill, scroll, or capture elements directly.
+Open webpages and local services inside OpenBitFun, where an agent can inspect the page and select, click, fill, scroll, or capture elements directly.
 
 ## 完整功能清单 / Everything included
 
-- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 输入完整网址、本地域名或开发服务端口并在 BitFun 内打开
-  - Open full URLs, local hostnames, or development-service ports inside BitFun
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 输入完整网址、本地域名或开发服务端口并在 OpenBitFun 内打开
+  - Open full URLs, local hostnames, or development-service ports inside OpenBitFun
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `WebSearch` / `WebFetch` · 让 Agent 搜索网页并按需读取指定页面正文
   - Let an agent search the web and fetch selected page content on demand
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `ControlHub` · 使用后退、前进和地址栏浏览页面历史
@@ -51,13 +51,13 @@ Open webpages and local services inside BitFun, where an agent can inspect the p
 3. Agent 先读取页面，再用元素引用执行操作
    The agent inspects the page, then acts through element refs
 
-入口 / Entry: BitFun 功能入口
+入口 / Entry: OpenBitFun 功能入口
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| ControlHub · 1 | 用户给出网址时，用 browser.open_builtin 打开并取得内置页面的 session_id；用户只要求显示内置浏览器且没有网址时，改用 BitFunControl 打开 feature.browser 能力根入口，不得臆造 about:blank | When the user supplies a URL, open it with browser.open_builtin and keep the returned built-in session_id; when they only want the built-in browser surface, open the feature.browser capability root with BitFunControl and never invent about:blank |
+| ControlHub · 1 | 用户给出网址时，用 browser.open_builtin 打开并取得内置页面的 session_id；用户只要求显示内置浏览器且没有网址时，改用 OpenBitFunControl 打开 feature.browser 能力根入口，不得臆造 about:blank | When the user supplies a URL, open it with browser.open_builtin and keep the returned built-in session_id; when they only want the built-in browser surface, open the feature.browser capability root with OpenBitFunControl and never invent about:blank |
 | ControlHub · 2 | 对同一个 session_id 指定 target 为 builtin，也可用 target_url 或 target_title 定位；快照、点击、填写、滚动和截图等动作与外部 CDP 浏览器共用同一套契约 | Address that session_id with target set to builtin, or locate it by target_url or target_title; snapshots, clicks, fills, scrolling, screenshots, and other portable actions share the external CDP contract |
 | ControlHub · 3 | 页面变化后重新快照并使用最新元素引用；只有网络追踪、原始 CDP 和文件输入等协议扩展才切换到 external | Take a new snapshot after page changes and use fresh element refs; switch to external only for protocol extensions such as network tracing, raw CDP, or file-input injection |
 

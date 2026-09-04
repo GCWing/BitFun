@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
@@ -336,10 +336,10 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       data-expanded={isExpanded ? 'true' : 'false'}
       data-reasoning-kind={thinkingItem.reasoningKind ?? 'reasoning'}
       className={wrapperClassName}
-     data-bf-component="model-thinking-display" data-bf-part="root" data-bf-context={displayContext} data-bf-state={[isExpanded && 'expanded', isVisuallyStreaming && 'streaming'].filter(Boolean).join(' ')}>
+     data-openbitfun-component="model-thinking-display" data-openbitfun-part="root" data-openbitfun-context={displayContext} data-openbitfun-state={[isExpanded && 'expanded', isVisuallyStreaming && 'streaming'].filter(Boolean).join(' ')}>
       <div
-        data-bf-component="model-thinking-display"
-        data-bf-part="header"
+        data-openbitfun-component="model-thinking-display"
+        data-openbitfun-part="header"
         data-testid="chat-thinking-toggle"
         className="thinking-collapsed-header"
         onClick={handleToggleClick}
@@ -347,16 +347,16 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
         <span
           aria-hidden="true"
           className="thinking-leading-icon"
-          data-bf-component="model-thinking-display"
-          data-bf-part="leadingIcon"
+          data-openbitfun-component="model-thinking-display"
+          data-openbitfun-part="leadingIcon"
         >
           <Icon name="thinking" size="sm" className="thinking-leading-icon__default" />
           <Icon name="chevron-right" size="sm" className="thinking-leading-icon__collapsed-hover" />
           <Icon name="chevron-down" size="sm" className="thinking-leading-icon__expanded" />
         </span>
         <span
-          data-bf-component="model-thinking-display"
-          data-bf-part="label"
+          data-openbitfun-component="model-thinking-display"
+          data-openbitfun-part="label"
           className="thinking-label"
           title={isSummary && !isExpanded ? headerLabel : undefined}
         >
@@ -369,14 +369,14 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
           'thinking-expand-container',
           isExpanded ? 'thinking-expand-container--open' : '',
         ].filter(Boolean).join(' ')}
-        data-bf-component="model-thinking-display"
-        data-bf-part="expandContainer"
+        data-openbitfun-component="model-thinking-display"
+        data-openbitfun-part="expandContainer"
       >
-        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`} data-bf-component="model-thinking-display" data-bf-part="contentWrapper">
+        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`} data-openbitfun-component="model-thinking-display" data-openbitfun-part="contentWrapper">
           <div
             ref={contentRef}
-            data-bf-component="model-thinking-display"
-            data-bf-part="content"
+            data-openbitfun-component="model-thinking-display"
+            data-openbitfun-part="content"
             data-testid="chat-thinking-content"
             data-status={status}
             data-streaming={isActive ? 'true' : 'false'}

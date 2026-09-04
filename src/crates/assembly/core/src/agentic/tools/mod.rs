@@ -1,8 +1,6 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
 pub mod account_login_capability;
-pub mod bitfun_control_config;
-pub mod bitfun_control_host;
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 pub mod computer_use_capability;
@@ -19,6 +17,8 @@ pub mod implementations;
 pub mod manifest_resolver;
 #[cfg(feature = "tools-miniapp")]
 pub(crate) mod miniapp_context_runtime;
+pub mod openbitfun_control_config;
+pub mod openbitfun_control_host;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_deploy_host;
 #[cfg(feature = "tools-miniapp")]
@@ -37,7 +37,7 @@ pub(crate) mod tool_context_runtime;
 pub(crate) mod tool_result_storage;
 pub mod user_input_manager;
 pub mod workspace_paths;
-pub use bitfun_agent_tools::input_validator;
+pub use openbitfun_agent_tools::input_validator;
 
 pub use framework::{
     PortableToolContextProvider, Tool, ToolContextFacts, ToolResult, ToolUseContext,

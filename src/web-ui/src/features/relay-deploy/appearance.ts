@@ -9,7 +9,7 @@ export const relayDeployAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'error' },
   ],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'completed', selector: { kind: 'self', suffix: '[data-bf-state~="completed"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'completed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="completed"]' } },
   ],
 };

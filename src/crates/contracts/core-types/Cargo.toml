@@ -1,12 +1,12 @@
 [package]
-name = "bitfun-core-types"
+name = "openbitfun-core-types"
 version.workspace = true
 edition.workspace = true
-description = "BitFun shared low-level product DTOs"
+description = "OpenBitFun shared low-level product DTOs"
 autotests = false
 
 [lib]
-name = "bitfun_core_types"
+name = "openbitfun_core_types"
 crate-type = ["rlib"]
 
 [[test]]
@@ -23,7 +23,7 @@ default = []
 # Derive `ts_rs::TS` on the wire types so downstream crates (runtime-ports,
 # app-server) can export TypeScript bindings for types that reference them.
 # Orthogonal to the existing serde contract; pulls no extra integration
-# dependency. Mirrors the `ts` feature in `bitfun-product-domains`.
+# dependency. Mirrors the `ts` feature in `openbitfun-product-domains`.
 ts = ["dep:ts-rs"]
 
 [lints]

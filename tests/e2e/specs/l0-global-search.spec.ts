@@ -14,7 +14,7 @@ describe('L0 Global Search', () => {
   let fixtureRoot = '';
 
   before(async () => {
-    fixtureRoot = await mkdtemp(path.join(tmpdir(), 'bitfun-global-search-e2e-'));
+    fixtureRoot = await mkdtemp(path.join(tmpdir(), 'openbitfun-global-search-e2e-'));
     const fixturePaths = ['project-alpha', 'project-beta', 'project-gamma']
       .map((name) => path.join(fixtureRoot, name));
 
@@ -28,7 +28,7 @@ describe('L0 Global Search', () => {
     const searchTrigger = await $('[data-testid="nav-search-trigger"]');
     await searchTrigger.waitForDisplayed({ timeout: 10000 });
 
-    const searchLabel = await searchTrigger.$('.bitfun-nav-panel__search-trigger__label');
+    const searchLabel = await searchTrigger.$('.openbitfun-nav-panel__search-trigger__label');
     expect(await searchLabel.getText()).toMatch(/^(搜索一切|搜尋一切|Search everything)$/);
 
     const shortcutHint = await searchTrigger.$('[data-testid="nav-search-shortcut"]');
@@ -37,7 +37,7 @@ describe('L0 Global Search', () => {
     expect(await shortcutHint.getAttribute('aria-hidden')).toBe('true');
 
     const presentation = await browser.execute(() => {
-      const label = document.querySelector<HTMLElement>('.bitfun-nav-panel__search-trigger__label');
+      const label = document.querySelector<HTMLElement>('.openbitfun-nav-panel__search-trigger__label');
       if (!label) return null;
 
       const style = window.getComputedStyle(label);

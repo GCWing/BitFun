@@ -33,7 +33,7 @@ import {
   type DensityMode,
   type IconName,
   type TokenOverrides,
-} from "@bitfun/ui";
+} from "@openbitfun/ui";
 import { useI18n, type MessageKey } from "../i18n";
 import { NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern } from "./ReferencePatterns";
 
@@ -81,7 +81,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </header>
 
         <PatternSection description={t("patterns.settings.description")} index="01" title={t("patterns.settings.title")}>
-          <Card appearance="raised" className="pattern-settings" data-bf-pattern="settings-form" padding="md" radius="md">
+          <Card appearance="raised" className="pattern-settings" data-openbitfun-pattern="settings-form" padding="md" radius="md">
             <PageHeader description={t("components.preview.appearanceDescription")} level={3} size="lg" title={t("components.preview.appearance")} />
             <CardBody>
               <FormSection description={t("patterns.settings.description")} headingAs="h4" title={t("components.preview.appearance")}>
@@ -117,7 +117,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </PatternSection>
 
         <PatternSection description={t("patterns.navigation.description")} index="02" title={t("patterns.navigation.title")}>
-          <div className="pattern-navigation-stage" data-bf-pattern="navigation-panel">
+          <div className="pattern-navigation-stage" data-openbitfun-pattern="navigation-panel">
             <NavigationPanel
               aria-label={t("patterns.navigation.title")}
             >
@@ -127,8 +127,8 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
               <NavigationPanelBody>
                 <NavigationPanelContent>
                   <NavigationPanelSection title={t("patterns.navigation.workspace")}>
-                    <NavigationPanelItem leading={<Icon name="folder" />} selected>Open-BitFun</NavigationPanelItem>
-                    <NavigationPanelItem leading={<Icon name="star" />}>BitFun UI</NavigationPanelItem>
+                    <NavigationPanelItem leading={<Icon name="folder" />} selected>Open-OpenBitFun</NavigationPanelItem>
+                    <NavigationPanelItem leading={<Icon name="star" />}>OpenBitFun UI</NavigationPanelItem>
                   </NavigationPanelSection>
                   <Disclosure defaultOpen leading={<Icon name="extension" />} summary={t("patterns.navigation.tools")}>
                     <NavigationPanelItem leading={<Icon name="browser" />}>{t("patterns.actions.openBrowser")}</NavigationPanelItem>
@@ -152,7 +152,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </PatternSection>
 
         <PatternSection description={t("patterns.search.description")} index="03" title={t("patterns.search.title")}>
-          <Card appearance="raised" className="pattern-command" data-bf-pattern="search-command-surface" gap="md" padding="md" radius="md">
+          <Card appearance="raised" className="pattern-command" data-openbitfun-pattern="search-command-surface" gap="md" padding="md" radius="md">
             <CardHeader actions={<SegmentedControl onValueChange={setScope} options={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />} description={t("patterns.search.description")} title={t("patterns.search.title")} />
             <SearchField aria-label={t("patterns.search.searchPlaceholder")} clearLabel={t("components.preview.close")} leadingIcon={<Icon name="search" />} onClear={() => setQuery("")} onValueChange={setQuery} placeholder={t("patterns.search.searchPlaceholder")} shortcut={<KeyHint>Ctrl K</KeyHint>} value={query} />
             <CardBody>
@@ -169,7 +169,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </PatternSection>
 
         <PatternSection description={t("patterns.device.description")} index="04" title={t("patterns.device.title")}>
-          <Card appearance="subtle" className="pattern-device-card" data-bf-pattern="device-card" gap="md" padding="md" radius="md">
+          <Card appearance="subtle" className="pattern-device-card" data-openbitfun-pattern="device-card" gap="md" padding="md" radius="md">
             <CardHeader actions={<IconButton aria-label={t("patterns.device.refresh")} icon={<Icon name="refresh" />} size="sm" variant="quiet" />} description="macOS · 127.0.0.1" leading={<span className="pattern-device-icon"><Icon name="device-mac" size="lg" /></span>} title="MacBook Pro" />
             <CardBody><StatusPill leading={<Icon name="unselected" />} tone="success">{t("patterns.device.online")}</StatusPill></CardBody>
             <Button leadingIcon={<Icon name="link" />} size="sm" variant="fill">{t("patterns.device.connect")}</Button>

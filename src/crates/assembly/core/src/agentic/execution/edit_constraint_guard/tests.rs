@@ -816,7 +816,7 @@ fn telemetry_requires_explicit_opt_in_value() {
 #[test]
 fn successful_mutation_telemetry_is_persisted_as_jsonl() {
     let root = std::env::temp_dir().join(format!(
-        "bitfun-edit-constraint-telemetry-{}",
+        "openbitfun-edit-constraint-telemetry-{}",
         Uuid::new_v4()
     ));
     fs::create_dir_all(&root).expect("create temp workspace");
@@ -839,7 +839,7 @@ fn successful_mutation_telemetry_is_persisted_as_jsonl() {
 #[test]
 fn local_recursive_delete_fallback_finds_protected_descendant() {
     let root = std::env::temp_dir().join(format!(
-        "bitfun-edit-constraint-recursive-delete-{}",
+        "openbitfun-edit-constraint-recursive-delete-{}",
         Uuid::new_v4()
     ));
     let target = root.join("parent");
@@ -856,7 +856,7 @@ fn local_recursive_delete_fallback_finds_protected_descendant() {
         custom_data: HashMap::new(),
         computer_use_host: None,
         runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
     };
     let state = EditConstraintState {
         constraints: vec![constraint(
@@ -885,8 +885,8 @@ fn local_recursive_delete_fallback_finds_protected_descendant() {
 #[ignore = "requires explicit archived input and report paths"]
 fn complete_shell_archive_replay() {
     use tool_runtime::shell_analysis::analyze;
-    let input = std::env::var("BITFUN_SHELL_REPLAY_INPUT").expect("input JSONL path");
-    let output = std::env::var("BITFUN_SHELL_REPLAY_OUTPUT").expect("output report path");
+    let input = std::env::var("OPENBITFUN_SHELL_REPLAY_INPUT").expect("input JSONL path");
+    let output = std::env::var("OPENBITFUN_SHELL_REPLAY_OUTPUT").expect("output report path");
     let source = fs::read_to_string(input).unwrap();
     let mut rows = vec![];
     for line in source.lines() {
@@ -936,8 +936,9 @@ fn complete_shell_archive_replay() {
 #[test]
 #[ignore = "requires explicit non-failure sample paths; pure analysis only"]
 fn complete_shell_normal_sample_replay() {
-    let source = fs::read_to_string(std::env::var("BITFUN_SHELL_NORMAL_INPUT").unwrap()).unwrap();
-    let output = std::env::var("BITFUN_SHELL_NORMAL_OUTPUT").unwrap();
+    let source =
+        fs::read_to_string(std::env::var("OPENBITFUN_SHELL_NORMAL_INPUT").unwrap()).unwrap();
+    let output = std::env::var("OPENBITFUN_SHELL_NORMAL_OUTPUT").unwrap();
     let mut rows = vec![];
     for line in source.lines() {
         let row: Value = serde_json::from_str(line).unwrap();

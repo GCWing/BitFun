@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     --_dot-size: 2px;
     --_dot-gap: 2px;
@@ -28,24 +28,24 @@
     inline-size: var(--_dot-size);
     block-size: var(--_dot-size);
     flex: 0 0 auto;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     background: currentColor;
-    animation: bf-flow-chat-processing-dot var(--bf-motion-duration-loop) var(--bf-motion-easing-standard) infinite;
+    animation: openbitfun-flow-chat-processing-dot var(--openbitfun-motion-duration-loop) var(--openbitfun-motion-easing-standard) infinite;
   }
 
   .dot:nth-child(2) {
-    animation-delay: var(--bf-motion-duration-fast);
+    animation-delay: var(--openbitfun-motion-duration-fast);
   }
 
   .dot:nth-child(3) {
-    animation-delay: var(--bf-motion-duration-base);
+    animation-delay: var(--openbitfun-motion-duration-base);
   }
 
-  @keyframes bf-flow-chat-processing-dot {
+  @keyframes openbitfun-flow-chat-processing-dot {
     0%,
     60%,
     100% {
-      opacity: var(--bf-opacity-disabled);
+      opacity: var(--openbitfun-opacity-disabled);
       transform: translateY(0);
     }
 
@@ -58,7 +58,7 @@
   @media (prefers-reduced-motion: reduce) {
     .dot {
       animation: none;
-      opacity: var(--bf-opacity-hover);
+      opacity: var(--openbitfun-opacity-hover);
       transform: none;
     }
   }

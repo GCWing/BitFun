@@ -8,8 +8,10 @@ use atspi::proxy::accessible::AccessibleProxy;
 use atspi::proxy::proxy_ext::ProxyExt;
 use atspi::AccessibilityConnection;
 use atspi::CoordType;
-use bitfun_core::agentic::tools::computer_use_host::{UiElementLocateQuery, UiElementLocateResult};
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::agentic::tools::computer_use_host::{
+    UiElementLocateQuery, UiElementLocateResult,
+};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::collections::VecDeque;
 
 async fn component_extents_screen(acc: &AccessibleProxy<'_>) -> Option<(i32, i32, i32, i32)> {
@@ -31,11 +33,11 @@ async fn role_match_string(acc: &AccessibleProxy<'_>) -> String {
 /// Registry application roots → BFS until first match with non-empty screen extents.
 pub(super) async fn locate_ui_element_center(
     query: UiElementLocateQuery,
-) -> BitFunResult<UiElementLocateResult> {
+) -> OpenBitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(&query)?;
 
     if query.node_idx.is_some() {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "[AX_IDX_NOT_SUPPORTED] node_idx lookup is only implemented on macOS. \
              Fall back to `text_contains` / `title_contains` + `role_substring` on this host."
                 .to_string(),
@@ -47,17 +49,17 @@ pub(super) async fn locate_ui_element_center(
 
     let conn = AccessibilityConnection::new()
         .await
-        .map_err(|e| BitFunError::tool(format!("AT-SPI connection: {}.", e)))?;
+        .map_err(|e| OpenBitFunError::tool(format!("AT-SPI connection: {}.", e)))?;
 
     let registry_root = conn
         .root_accessible_on_registry()
         .await
-        .map_err(|e| BitFunError::tool(format!("AT-SPI registry root: {}.", e)))?;
+        .map_err(|e| OpenBitFunError::tool(format!("AT-SPI registry root: {}.", e)))?;
 
     let children = registry_root
         .get_children()
         .await
-        .map_err(|e| BitFunError::tool(format!("AT-SPI get_children (registry): {}.", e)))?;
+        .map_err(|e| OpenBitFunError::tool(format!("AT-SPI get_children (registry): {}.", e)))?;
 
     let mut queue = VecDeque::new();
     for c in children {
@@ -72,7 +74,7 @@ pub(super) async fn locate_ui_element_center(
         }
         visited += 1;
         if visited > max_nodes {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "AT-SPI search limit reached; narrow title/role/identifier filters.".to_string(),
             ));
         }
@@ -134,7 +136,7 @@ pub(super) async fn locate_ui_element_center(
         }
     }
 
-    Err(BitFunError::tool(
+    Err(OpenBitFunError::tool(
         "No AT-SPI accessible matched the query (try different substrings, enable desktop accessibility services, or use ComputerUse screenshot). Locate uses the same AT-SPI accessibility session as other automation."
             .to_string(),
     ))

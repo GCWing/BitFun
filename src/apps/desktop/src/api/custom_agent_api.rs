@@ -1,10 +1,10 @@
 use crate::api::app_state::AppState;
-use bitfun_core::agentic::agents::{
+use log::{debug, warn};
+use openbitfun_core::agentic::agents::{
     custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
     default_custom_agent_user_context_policy, CustomAgentDetail, CustomAgentKind, CustomAgentLevel,
     CustomMode, CustomSubagent, UserContextPolicy, UserContextSection,
 };
-use log::{debug, warn};
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -397,7 +397,7 @@ pub async fn delete_custom_agent(
     if let Err(error) = config_service
         .update_config(
             "",
-            |config: &mut bitfun_core::service::config::GlobalConfig| {
+            |config: &mut openbitfun_core::service::config::GlobalConfig| {
                 config.ai.agent_profiles.remove(&agent_id);
                 if config.app.flow_chat.default_mode_id.as_deref() == Some(agent_id.as_str()) {
                     config.app.flow_chat.default_mode_id = None;
@@ -415,7 +415,7 @@ pub async fn delete_custom_agent(
         crate::api::remote_connect_api::notify_settings_changed();
     }
 
-    if let Err(error) = bitfun_core::service::config::reload_global_config().await {
+    if let Err(error) = openbitfun_core::service::config::reload_global_config().await {
         warn!(
             "Failed to reload global config after custom agent deletion: agent_id={}, error={}",
             agent_id, error

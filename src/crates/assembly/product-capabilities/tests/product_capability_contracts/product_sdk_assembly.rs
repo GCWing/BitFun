@@ -1,15 +1,15 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use bitfun_agent_runtime::runtime::AgentRuntimeBuilder;
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::runtime::AgentRuntimeBuilder;
+use openbitfun_agent_runtime::sdk::{
     AgentEventStream, AgentRunRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
     AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     PortResult, RuntimeServiceCapability, SessionSelector,
 };
-use bitfun_product_capabilities::{DeliveryProfile, ProductAssembler, ProductAssemblyInput};
-use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
-use bitfun_runtime_services::{
+use openbitfun_product_capabilities::{DeliveryProfile, ProductAssembler, ProductAssemblyInput};
+use openbitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
+use openbitfun_runtime_services::{
     RuntimeServiceMarkerPort, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesProvider,
 };
 
@@ -63,7 +63,7 @@ fn product_full_compatible_services() -> RuntimeServices {
 }
 
 #[tokio::test]
-async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core() {
+async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_openbitfun_core() {
     let parts = ProductAssembler::new()
         .assemble(ProductAssemblyInput::new(
             DeliveryProfile::Sdk,
@@ -71,7 +71,7 @@ async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun
         ))
         .expect("SDK delivery profile should assemble with its shared runtime services");
     let cli_plan =
-        bitfun_product_capabilities::product_assembly_plan_for_profile(DeliveryProfile::Cli);
+        openbitfun_product_capabilities::product_assembly_plan_for_profile(DeliveryProfile::Cli);
 
     assert_eq!(parts.plan().profile(), DeliveryProfile::Sdk);
     assert_eq!(

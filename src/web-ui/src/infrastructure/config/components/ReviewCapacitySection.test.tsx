@@ -44,7 +44,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),

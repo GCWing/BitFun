@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PPT Live — UI entry point
 //
-// This is the entry point for build-bitfun.mjs. All src/*.js modules and npm
+// This is the entry point for build-openbitfun.mjs. All src/*.js modules and npm
 // dependencies are bundled into dist/ui.bundle.js at build time.
 //
-// After editing this file or any src/*.js file, run:  node build-bitfun.mjs
+// After editing this file or any src/*.js file, run:  node build-openbitfun.mjs
 // ─────────────────────────────────────────────────────────────────────────────
 import { translate as t, getLocale } from './src/i18n.js';
 import {
@@ -48,9 +48,9 @@ import {
 import { downloadBase64File, downloadHtmlDeck, fileSafe } from './src/export-html.js';
 import { exportFormatIcon, exportFormatTone } from './src/export-format-icons.js';
 import {
-  installBitFunBackendAdapter,
+  installOpenBitFunBackendAdapter,
   PPT_DESIGN_SKILL_KEY,
-} from './src/bitfun-backend-adapter.js';
+} from './src/openbitfun-backend-adapter.js';
 import {
   DeckProjectContractError,
   buildDeckRunRequestInput,
@@ -76,7 +76,7 @@ let historyItems = [];
 let lastHistoryWriteAt = 0;
 const $ = (id) => document.getElementById(id);
 const runtime = () => window.app || {};
-installBitFunBackendAdapter(runtime());
+installOpenBitFunBackendAdapter(runtime());
 const STORAGE_TIMEOUT_MS = 2500;
 const memoryStorage = new Map();
 
@@ -3668,7 +3668,7 @@ function bindExportModal() {
 }
 
 /* ============================================
-   HOST APPEARANCE — follow BitFun light/dark mode
+   HOST APPEARANCE — follow OpenBitFun light/dark mode
    ============================================ */
 function resolveAppearanceMode(mode) {
   if (mode === 'dark' || mode === 'light') return mode;
@@ -3677,7 +3677,7 @@ function resolveAppearanceMode(mode) {
 }
 
 function getHostAppearanceMode() {
-  const attributeMode = document.documentElement.getAttribute('data-bf-appearance-mode');
+  const attributeMode = document.documentElement.getAttribute('data-openbitfun-appearance-mode');
   if (attributeMode === 'dark' || attributeMode === 'light') return attributeMode;
   const runtimeMode = runtime().appearanceMode;
   if (runtimeMode === 'dark' || runtimeMode === 'light') return runtimeMode;
@@ -3687,7 +3687,7 @@ function getHostAppearanceMode() {
 function applyAppearanceMode(mode) {
   const resolved = resolveAppearanceMode(mode);
   const root = document.documentElement;
-  root.setAttribute('data-bf-appearance-mode', resolved);
+  root.setAttribute('data-openbitfun-appearance-mode', resolved);
   root.style.colorScheme = resolved;
   ensureCanvasFitted();
   rerender();

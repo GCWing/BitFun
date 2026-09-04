@@ -12,7 +12,7 @@ use crate::agentic::core::{
     MessageSemanticKind,
 };
 use crate::service::session::TranscriptLineRange;
-use crate::util::errors::BitFunResult;
+use crate::util::errors::OpenBitFunResult;
 use log::{debug, trace};
 use std::borrow::Cow;
 
@@ -104,7 +104,7 @@ impl ContextCompressor {
         runtime_messages: &[Message],
         context_window: usize,
         recent_target_tokens: usize,
-    ) -> BitFunResult<Option<CompressionPlan>> {
+    ) -> OpenBitFunResult<Option<CompressionPlan>> {
         self.plan_compression_internal(
             session_id,
             None,
@@ -121,7 +121,7 @@ impl ContextCompressor {
         runtime_messages: &[Message],
         context_window: usize,
         recent_target_tokens: usize,
-    ) -> BitFunResult<Option<CompressionPlan>> {
+    ) -> OpenBitFunResult<Option<CompressionPlan>> {
         self.plan_compression_internal(
             session_id,
             Some(current_turn_id),
@@ -138,7 +138,7 @@ impl ContextCompressor {
         runtime_messages: &[Message],
         context_window: usize,
         recent_target_tokens: usize,
-    ) -> BitFunResult<Option<CompressionPlan>> {
+    ) -> OpenBitFunResult<Option<CompressionPlan>> {
         let runtime_messages = if runtime_messages.iter().any(|message| {
             message
                 .internal_reminder_kind()
@@ -379,7 +379,7 @@ impl ContextCompressor {
         plan: CompressionPlan,
         contract: Option<CompressionContract>,
         model_summary: Option<String>,
-    ) -> BitFunResult<CompressionResult> {
+    ) -> OpenBitFunResult<CompressionResult> {
         let turns = MessageHelper::group_messages_by_turns(plan.summary_messages);
         let turns = turns.into_iter().map(TurnWithTokens::new).collect();
         let mut summary_artifact = match model_summary {
@@ -1190,7 +1190,7 @@ mod tests {
             render_system_reminder(ContextCompressor::COMPRESSION_CONTINUATION_REMINDER)
         );
 
-        let uri = "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt";
+        let uri = "openbitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt";
         let index_range = TranscriptLineRange {
             start_line: 1,
             end_line: 14,

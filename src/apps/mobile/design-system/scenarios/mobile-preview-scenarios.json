@@ -12,7 +12,7 @@
         { "role": "user", "text": "三端的组件和样式可以保持一致吗？" },
         { "role": "assistant", "text": "可以。共享视觉契约，三端继续使用原生渲染。" }
       ],
-      "composer": { "draft": "", "placeholder": "向 BitFun 提问", "phase": "connected", "streaming": false }
+      "composer": { "draft": "", "placeholder": "向 OpenBitFun 提问", "phase": "connected", "streaming": false }
     },
     {
       "id": "streaming-dark",

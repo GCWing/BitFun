@@ -1,30 +1,30 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     min-inline-size: 0;
-    color: var(--bf-color-action-neutral-content);
+    color: var(--openbitfun-color-action-neutral-content);
   }
 
   .header {
     display: flex;
     align-items: center;
-    min-block-size: var(--bf-layout-disclosure-trigger-min-block-size);
-    border-radius: var(--bf-layout-disclosure-trigger-radius);
+    min-block-size: var(--openbitfun-layout-disclosure-trigger-min-block-size);
+    border-radius: var(--openbitfun-layout-disclosure-trigger-radius);
     background: transparent;
-    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root:not([data-disabled="true"]) .header:hover,
-  .root:not([data-disabled="true"])[data-bf-preview-state="hover"] .header {
-    background: var(--bf-color-action-neutral-surface);
+  .root:not([data-disabled="true"])[data-openbitfun-preview-state="hover"] .header {
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   .root[data-open="true"]:not([data-disabled="true"]) .header {
-    background: var(--bf-color-action-neutral-surface-pressed);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .header:has(.trigger:focus-visible),
-  .root[data-bf-preview-state="focus-visible"] .header {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  .root[data-openbitfun-preview-state="focus-visible"] .header {
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .trigger {
@@ -33,10 +33,10 @@
     align-items: center;
     min-inline-size: 0;
     min-block-size: inherit;
-    gap: var(--bf-layout-disclosure-trigger-gap);
+    gap: var(--openbitfun-layout-disclosure-trigger-gap);
     margin: 0;
-    padding-block: var(--bf-layout-disclosure-trigger-padding-block);
-    padding-inline: var(--bf-layout-disclosure-trigger-padding-inline);
+    padding-block: var(--openbitfun-layout-disclosure-trigger-padding-block);
+    padding-inline: var(--openbitfun-layout-disclosure-trigger-padding-inline);
     border: 0;
     outline: 0;
     color: inherit;
@@ -47,7 +47,7 @@
   }
 
   .trigger:disabled {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
   }
 
@@ -57,14 +57,14 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-layout-disclosure-indicator-size);
-    block-size: var(--bf-layout-disclosure-indicator-size);
+    inline-size: var(--openbitfun-layout-disclosure-indicator-size);
+    block-size: var(--openbitfun-layout-disclosure-indicator-size);
   }
 
   .indicator {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     transform: rotate(0deg);
-    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-open="true"] .indicator {
@@ -75,35 +75,35 @@
     display: grid;
     flex: 1 1 auto;
     min-inline-size: 0;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   .summary {
     overflow: hidden;
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .description {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-support-font-family);
-    font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-type-support-font-weight);
-    line-height: var(--bf-type-support-line-height);
-    letter-spacing: var(--bf-type-support-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-support-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-support-line-height);
+    letter-spacing: var(--openbitfun-type-support-letter-spacing);
   }
 
   .actions {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: var(--bf-layout-disclosure-actions-gap);
-    padding-inline-end: var(--bf-layout-disclosure-trigger-padding-inline);
+    gap: var(--openbitfun-layout-disclosure-actions-gap);
+    padding-inline-end: var(--openbitfun-layout-disclosure-trigger-padding-inline);
   }
 
   .content {
@@ -112,9 +112,9 @@
     visibility: hidden;
     opacity: 0;
     transition:
-      grid-template-rows var(--bf-motion-duration-normal) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      visibility 0s linear var(--bf-motion-duration-normal);
+      grid-template-rows var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      visibility 0s linear var(--openbitfun-motion-duration-normal);
   }
 
   .root[data-open="true"] .content {
@@ -128,12 +128,12 @@
     min-block-size: 0;
     overflow: hidden;
     padding-block: 0;
-    padding-inline: var(--bf-layout-disclosure-content-padding-inline);
-    transition: padding-block var(--bf-motion-duration-normal) var(--bf-motion-easing-standard);
+    padding-inline: var(--openbitfun-layout-disclosure-content-padding-inline);
+    transition: padding-block var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-open="true"] .contentInner {
-    padding-block: var(--bf-layout-disclosure-content-padding-block);
+    padding-block: var(--openbitfun-layout-disclosure-content-padding-block);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -147,7 +147,7 @@
 
   @media (forced-colors: active) {
     .header:has(.trigger:focus-visible) {
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
 
     .root[data-open="true"]:not([data-disabled="true"]) .header {

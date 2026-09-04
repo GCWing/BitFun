@@ -1,25 +1,25 @@
 .copyable-text-preview {
   flex: 1;
   min-width: 0;
-  font-family:var(--bf-type-code-md-font-family);
+  font-family:var(--openbitfun-type-code-md-font-family);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .copyable-text-preview.copyable-text-preview--theme-font {
-  font-family:var(--bf-type-body-sm-font-family);
+  font-family:var(--openbitfun-type-body-sm-font-family);
 }
 
 .copyable-text-preview--compact {
-  font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
-  font-weight: var(--bf-type-body-sm-font-weight);
-  color: var(--bf-color-content-muted);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .copyable-text-preview__empty {
-  color: color-mix(in srgb, var(--bf-color-status-danger-content) 72%, var(--bf-color-content-on-dark));
+  color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 72%, var(--openbitfun-color-content-on-dark));
   font-style: italic;
 }
 
@@ -27,10 +27,10 @@
   max-width: 100%;
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-space-2);
-  font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  gap: var(--openbitfun-space-2);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .copyable-text-preview-tooltip-content__text {
@@ -41,7 +41,7 @@
 }
 
 .copyable-text-preview-tooltip {
-  .bitfun-tooltip__content {
+  .openbitfun-tooltip__content {
     max-width: min(960px, calc(100vw - 32px));
   }
 }
@@ -49,7 +49,7 @@
 .copyable-text-preview-tooltip__copy {
   flex: none;
   margin-top: 1px;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 
   &.icon-btn--xs {
     width: 18px;
@@ -63,6 +63,6 @@
   }
 
   &.copied {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 }

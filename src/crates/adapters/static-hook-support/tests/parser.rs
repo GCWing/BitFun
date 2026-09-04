@@ -1,7 +1,7 @@
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookMatcherSummary,
 };
-use bitfun_static_hook_support::{
+use openbitfun_static_hook_support::{
     parse_hook_document, prepare_static_hook_command, read_bounded_file,
     redacted_parse_content_version, regular_file_exists, visit_hook_document, BoundedFileRead,
     StaticHookAssetError, StaticHookDocumentFormat, StaticHookHandlerRule, StaticHookParseIssue,
@@ -243,19 +243,19 @@ fn static_hook_command_copies_only_referenced_assets_and_marks_external_paths() 
 
     assert!(prepared
         .command
-        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+        .contains("__OPENBITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
     assert_eq!(
         assets.get(std::path::Path::new("hooks/check.py")).unwrap(),
         b"print('checked')"
     );
     assert!(prepared.dependencies.iter().any(|dependency| matches!(
         dependency,
-        bitfun_product_domains::external_hook_import::ExternalHookImportDependencyV1::Managed { relative_path }
+        openbitfun_product_domains::external_hook_import::ExternalHookImportDependencyV1::Managed { relative_path }
             if relative_path == "hooks/check.py"
     )));
     assert!(prepared.dependencies.iter().any(|dependency| matches!(
         dependency,
-        bitfun_product_domains::external_hook_import::ExternalHookImportDependencyV1::External { location }
+        openbitfun_product_domains::external_hook_import::ExternalHookImportDependencyV1::External { location }
             if location.replace('\\', "/") == external_text
     )));
 }

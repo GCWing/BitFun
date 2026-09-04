@@ -2,7 +2,7 @@ use super::*;
 
 /// Reserved turn metadata/context key used to carry a provider-neutral JSON
 /// output schema through persistence and interrupted-turn recovery.
-pub const OUTPUT_SCHEMA_CONTEXT_KEY: &str = "bitfun_output_schema";
+pub const OUTPUT_SCHEMA_CONTEXT_KEY: &str = "openbitfun_output_schema";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -1831,7 +1831,7 @@ pub trait AgentSessionUsagePort: Send + Sync {
     async fn generate_session_usage(
         &self,
         request: AgentSessionUsageRequest,
-    ) -> PortResult<bitfun_core_types::SessionUsageReport>;
+    ) -> PortResult<openbitfun_core_types::SessionUsageReport>;
 }
 
 #[async_trait::async_trait]
@@ -2562,7 +2562,7 @@ mod tests {
                 "rootPath": "/worktrees/session_1",
                 "baseRef": "main",
                 "baseCommit": "0123456789abcdef",
-                "branch": "bitfun/session_1",
+                "branch": "openbitfun/session_1",
                 "lifecycle": "managed"
             }
         }))
@@ -2954,7 +2954,7 @@ mod tests {
         let contract = CompressionContract {
             touched_files: vec!["src/lib.rs".to_string()],
             verification_commands: vec![CompressionContractItem {
-                target: "cargo test -p bitfun-runtime-ports".to_string(),
+                target: "cargo test -p openbitfun-runtime-ports".to_string(),
                 status: "passed".to_string(),
                 summary: "runtime ports contract tests passed".to_string(),
                 error_kind: None,
@@ -2974,7 +2974,7 @@ mod tests {
         assert!(rendered.contains("Touched files:"));
         assert!(rendered.contains("- src/lib.rs"));
         assert!(rendered.contains(
-            "- cargo test -p bitfun-runtime-ports [passed]: runtime ports contract tests passed"
+            "- cargo test -p openbitfun-runtime-ports [passed]: runtime ports contract tests passed"
         ));
         assert!(
             rendered.contains("- cargo check [failed]: compile error before migration (compile)")

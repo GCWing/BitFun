@@ -1,11 +1,11 @@
 use crate::refresh::{CompletedDeferredDiscovery, DiscoveryRequest};
 use crate::{DeferredDiscovery, DiscoveryBatch, DiscoveryLane};
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogSnapshotV1, ExternalHookProviderIdentity, ExternalHookProviderSnapshot,
     ExternalHookSourceProvider, EXTERNAL_HOOK_CATALOG_SCHEMA_V1,
 };
-use bitfun_product_domains::external_hook_import::PreparedExternalHookImport;
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_hook_import::PreparedExternalHookImport;
+use openbitfun_product_domains::external_sources::{
     ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceDiagnosticSeverity, ExternalSourceProviderError, ProviderId, SourceKey,
 };

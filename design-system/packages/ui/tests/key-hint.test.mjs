@@ -13,11 +13,11 @@ test("KeyHint preserves keyboard semantics and optional icon anatomy", () => {
   );
 
   assert.match(markup, /^<kbd/);
-  assert.match(markup, /data-bf-component="key-hint"/);
-  assert.match(markup, /data-bf-part="icon"/);
+  assert.match(markup, /data-openbitfun-component="key-hint"/);
+  assert.match(markup, /data-openbitfun-part="icon"/);
   assert.match(markup, /aria-hidden="true"/);
   assert.match(markup, /data-icon="command"/);
-  assert.match(markup, /data-bf-part="label">K<\/span>/);
+  assert.match(markup, /data-openbitfun-part="label">K<\/span>/);
 });
 
 test("KeyHint preserves textual platform modifiers in the icon slot", () => {
@@ -25,21 +25,21 @@ test("KeyHint preserves textual platform modifiers in the icon slot", () => {
     createElement(KeyHint, { icon: "Ctrl" }, "K"),
   );
 
-  assert.match(markup, /data-bf-part="icon">Ctrl<\/span>/);
-  assert.match(markup, /data-bf-part="label">K<\/span>/);
+  assert.match(markup, /data-openbitfun-part="icon">Ctrl<\/span>/);
+  assert.match(markup, /data-openbitfun-part="label">K<\/span>/);
 });
 
 test("KeyHint styles use the shared micro typography role", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-color-key-hint-background/);
-  assert.match(styles, /--bf-color-action-neutral-surface/);
-  assert.match(styles, /--bf-color-content-muted/);
-  assert.match(styles, /--bf-type-micro-font-family/);
-  assert.match(styles, /--bf-type-micro-font-size/);
-  assert.match(styles, /--bf-type-micro-letter-spacing/);
-  assert.match(styles, /--bf-type-micro-line-height/);
-  assert.match(styles, /--bf-radius-xs/);
-  assert.match(styles, /--bf-radius-sm/);
+  assert.match(styles, /--openbitfun-color-key-hint-background/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface/);
+  assert.match(styles, /--openbitfun-color-content-muted/);
+  assert.match(styles, /--openbitfun-type-micro-font-family/);
+  assert.match(styles, /--openbitfun-type-micro-font-size/);
+  assert.match(styles, /--openbitfun-type-micro-letter-spacing/);
+  assert.match(styles, /--openbitfun-type-micro-line-height/);
+  assert.match(styles, /--openbitfun-radius-xs/);
+  assert.match(styles, /--openbitfun-radius-sm/);
   assert.match(styles, /flex:\s*0 0 auto/);
 });

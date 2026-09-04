@@ -3,7 +3,7 @@
  * Keep footer spacer and overlay controls aligned on the same geometric model.
  */
 
-/** Matches `.bitfun-chat-input-drop-zone { bottom: $size-gap-6 }` — viewport inset under the composer. */
+/** Matches `.openbitfun-chat-input-drop-zone { bottom: $size-gap-6 }` — viewport inset under the composer. */
 export const CHAT_INPUT_DROP_ZONE_BOTTOM_PX = 24;
 
 /** Space between the top edge of the input block and the end of scroll content */

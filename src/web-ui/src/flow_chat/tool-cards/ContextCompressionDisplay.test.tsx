@@ -71,13 +71,13 @@ describe('ContextCompressionDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-bf-part="action"]')?.textContent).toBe('Context compression:');
-    expect(container.querySelector('[data-bf-part="content"]')?.textContent).toBe(
+    expect(container.querySelector('[data-openbitfun-part="action"]')?.textContent).toBe('Context compression:');
+    expect(container.querySelector('[data-openbitfun-part="content"]')?.textContent).toBe(
       'Compressed context length 31,000 (compression ratio 75%)',
     );
-    expect(container.querySelector('[data-bf-part="tokenChange"]')).toBeNull();
-    expect(container.querySelector('[data-bf-part="savings"]')).toBeNull();
-    expect(container.querySelector('[data-bf-part="meta"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="tokenChange"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="savings"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="meta"]')).toBeNull();
     expect(container.textContent).not.toContain('124,000');
     expect(container.textContent).not.toContain('Compression #3');
   });

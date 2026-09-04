@@ -10,12 +10,12 @@ use crate::{
     ExternalWorkspaceReferenceCoordinator, ExternalWorkspaceReferenceDiscoveryRequest,
     ExternalWorkspaceReferenceDiscoveryResult,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalSourceContext,
     ExternalToolSourceProvider, PromptCommandSourceProvider,
 };
-use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
-use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceSourceProvider;
+use openbitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
+use openbitfun_product_domains::workspace_references::ExternalWorkspaceReferenceSourceProvider;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};

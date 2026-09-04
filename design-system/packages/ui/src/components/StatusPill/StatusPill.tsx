@@ -33,16 +33,16 @@ export const StatusPill = forwardRef<HTMLSpanElement, StatusPillProps>(
       <span
         {...props}
         className={classNames(styles.root, className)}
-        data-bf-component="status-pill"
+        data-openbitfun-component="status-pill"
         data-tone={tone}
         ref={ref}
       >
         {leading !== undefined && leading !== null && (
-          <span aria-hidden="true" className={styles.leading} data-bf-part="leading">
+          <span aria-hidden="true" className={styles.leading} data-openbitfun-part="leading">
             {leading}
           </span>
         )}
-        <span className={styles.label} data-bf-part="label">{children}</span>
+        <span className={styles.label} data-openbitfun-part="label">{children}</span>
       </span>
     );
   },

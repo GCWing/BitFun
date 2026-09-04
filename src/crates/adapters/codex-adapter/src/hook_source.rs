@@ -1,19 +1,19 @@
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogEntry, ExternalHookHandlerKind, ExternalHookMapping,
     ExternalHookMatcherSummary, ExternalHookNativeActivation, ExternalHookProjectionStatus,
     ExternalHookProviderIdentity, ExternalHookProviderSnapshot, ExternalHookSource,
     ExternalHookSourceKind, ExternalHookSourceProvider,
 };
-use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
-use bitfun_product_domains::external_hook_import::{
+use openbitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use openbitfun_product_domains::external_hook_import::{
     ExternalHookImportSkippedV1, PreparedExternalHookAsset, PreparedExternalHookHandler,
     PreparedExternalHookImport,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceScope, SourceKey,
 };
-use bitfun_static_hook_support::{
+use openbitfun_static_hook_support::{
     bounded_project_ancestors, importable_hook_matcher, optional_hook_string,
     optional_positive_hook_u64, parse_hook_document, prepare_static_hook_command,
     read_bounded_file, redacted_parse_content_version, regular_file_exists, required_hook_string,
@@ -489,7 +489,7 @@ fn prepare_codex_import(
 }
 
 fn codex_handler(
-    candidate: &bitfun_static_hook_support::StaticHookHandlerRef<'_>,
+    candidate: &openbitfun_static_hook_support::StaticHookHandlerRef<'_>,
     source_stable_key: &str,
     source_config_dir: &Path,
     assets: &mut BTreeMap<PathBuf, Vec<u8>>,
@@ -903,7 +903,8 @@ fn hook_warning(code: &str, message: &str, source: Option<SourceKey>) -> Externa
 
 fn hook_info(code: &str, message: &str, source: Option<SourceKey>) -> ExternalSourceDiagnostic {
     ExternalSourceDiagnostic {
-        severity: bitfun_product_domains::external_sources::ExternalSourceDiagnosticSeverity::Info,
+        severity:
+            openbitfun_product_domains::external_sources::ExternalSourceDiagnosticSeverity::Info,
         asset_kind: ExternalSourceAssetKind::Hook,
         code: code.to_string(),
         message: message.to_string(),
