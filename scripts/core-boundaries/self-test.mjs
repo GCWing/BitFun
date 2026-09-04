@@ -4841,7 +4841,7 @@ export function runManifestParserSelfTest({
         'SSHConnectionManager',
         'russh::client::connect_stream',
         'SftpSession',
-        'retains_legacy_password_connection_and_workspace_without_vault_entry',
+        'retains_password_connection_and_workspace_without_vault_entry',
       ],
     },
     {
