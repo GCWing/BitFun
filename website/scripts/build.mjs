@@ -60,7 +60,7 @@ async function main() {
   const designTokensSource = await readFile(designTokensCssPath, 'utf8');
   const themeSource = await readFile(themeCssPath, 'utf8');
   const buildSource = await readFile(buildScriptPath);
-  const logoPath = path.join(repositoryRoot, 'src/apps/desktop/icons/Logo-ICON.png');
+  const logoPath = path.join(repositoryRoot, 'src/apps/desktop/icons/openbitfun-app-icon.png');
   const logoSource = await readFile(logoPath);
   const socialImage = path.join(sourceRoot, 'og.png');
   let socialSource = Buffer.alloc(0);
