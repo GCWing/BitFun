@@ -1246,6 +1246,7 @@ pub(crate) fn resolve_external_tool_for_context(
     router().resolve_registered_tool_for_context(tool, context)
 }
 
+#[cfg(test)]
 pub(crate) fn external_tool_route_root(
     workspace_root: Option<&Path>,
     is_remote: bool,
