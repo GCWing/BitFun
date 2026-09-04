@@ -1,5 +1,7 @@
 import type { DialogTurn, Session, TokenUsage } from '../types/flow-chat';
 import { LONG_CONTEXT_WARNING_THRESHOLD_TOKENS } from '@/shared/constants/modelContext';
+import { i18nService } from '@/infrastructure/i18n';
+import { formatTokenCount } from '@/shared/utils/tokenUsageFormatting';
 
 export const DEFAULT_MAX_CONTEXT_TOKENS = 128128;
 
@@ -36,14 +38,10 @@ const AUTOMATIC_MAX_OUTPUT_TOKEN_TIERS = [8_000, 16_000, 24_000, 32_000, 64_000]
 const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS = 10_000;
 
 export function formatCompactTokenCount(value: number): string {
-  const safeValue = Math.max(0, Math.round(value));
-  if (safeValue >= 1_000_000) {
-    return `${formatCompactNumber(safeValue / 1_000_000)}M`;
-  }
-  if (safeValue >= 1_000) {
-    return `${formatCompactNumber(safeValue / 1_000)}K`;
-  }
-  return String(safeValue);
+  return formatTokenCount(
+    value,
+    (number, options) => i18nService.formatNumber(number, options),
+  );
 }
 
 function automaticMaxOutputTokens(contextWindow: number): number {

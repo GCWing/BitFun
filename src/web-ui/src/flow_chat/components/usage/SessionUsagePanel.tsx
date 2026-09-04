@@ -18,6 +18,7 @@ import {
   formatHitRatePercent,
   formatUsageDuration,
   formatUsageNumber,
+  formatTokenCount,
   formatUsagePercent,
   formatUsageTimestamp,
   getAccountingLabel,
@@ -607,7 +608,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
       key: 'tokens',
       icon: Database,
       label: t('usage.metrics.tokens'),
-      value: formatUsageNumber(report.tokens.totalTokens, t),
+      value: formatTokenCount(report.tokens.totalTokens, t),
     },
     {
       key: 'files',
@@ -698,7 +699,7 @@ function UsageModels({ report, sessionId }: { report: SessionUsageReport; sessio
       emptyDescription={t('usage.empty.modelsDescription')}
       headers={headers}
       rows={report.models.map((model, index) => {
-        const cached = formatUsageNumber(model.cachedTokens, t);
+        const cached = formatTokenCount(model.cachedTokens, t);
         const source = model.modelIdSource ?? (model.modelId === 'unknown_model' ? 'legacy_missing' : undefined);
         const modelHelp = getModelHelp(source, t, model.modelId);
         const modelLabel = getModelLabel(model.modelId, t, source);
@@ -724,8 +725,8 @@ function UsageModels({ report, sessionId }: { report: SessionUsageReport; sessio
           );
         }
         cells.push(
-          formatUsageNumber(model.inputTokens, t),
-          formatUsageNumber(model.outputTokens, t),
+          formatTokenCount(model.inputTokens, t),
+          formatTokenCount(model.outputTokens, t),
           report.tokens.cacheCoverage === 'unavailable'
             ? { value: t('usage.status.cacheNotReported'), help: t('usage.help.cachedTokens') }
             : cached,

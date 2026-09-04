@@ -617,7 +617,7 @@ describe('Session usage report UI components', () => {
 
     expect(container.querySelector('.session-usage-report-card--compact')).not.toBeNull();
     expect(container.querySelector('.session-usage-report-card__compact-token-value')?.textContent)
-      .toContain('5,396,217');
+      .toContain('5.4M');
     expect(container.textContent).toContain('Tokens usage');
     expect(container.textContent).toContain('deepseek-v4-flash');
     expect(container.textContent).toContain('68 calls');
@@ -661,9 +661,9 @@ describe('Session usage report UI components', () => {
 
     const cachedMetric = Array.from(container.querySelectorAll('.session-usage-report-card__metric'))
       .find(metric => metric.textContent?.includes('Cached'));
-    // Cached number AND inline (NN%) hit rate must both appear.
-    expect(cachedMetric?.textContent).toMatch(/1,?200/);
-    expect(cachedMetric?.textContent).toContain('(80%)');
+    // Cached number AND inline two-decimal hit rate must both appear.
+    expect(cachedMetric?.textContent).toContain('1.2K');
+    expect(cachedMetric?.textContent).toContain('(80.00%)');
     expect(cachedMetric?.textContent).not.toContain('Cache not reported');
   });
 
@@ -838,7 +838,7 @@ describe('Session usage report UI components', () => {
     expect(container.textContent).not.toContain('src/features');
     expect(container.textContent).not.toContain('/.../');
     expect(container.querySelector(`[data-tooltip="${longPath}"]`)).not.toBeNull();
-    expect(container.textContent).toContain('1,500 tokens');
+    expect(container.textContent).toContain('1.5K tokens');
     expect(refWarnings).toEqual([]);
   });
 

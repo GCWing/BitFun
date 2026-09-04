@@ -125,7 +125,7 @@ const SAMPLE_STATS: UsageStatistics = {
       attributionStatus: 'resolved',
       requests: 47,
       tokens: 4_800_000,
-      cacheHitRate: 0.95,
+      cacheHitRate: 0.95679,
     },
   ],
   byGroup: [
@@ -225,7 +225,9 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelectorAll('[data-bf-part="distributions"] th[scope="row"]')).toHaveLength(3);
     expect(container.querySelector('[data-bf-part="trendPanel"] svg[role="img"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="trendPanel"] table.bitfun-sr-only')).not.toBeNull();
-    // Hit rate is truncated to two decimals, never rounded up.
+    expect(container.textContent).toContain('4.8M');
+    // Hit rate rounds down and always keeps two decimal places.
+    expect(container.textContent).toContain('95.67%');
     expect(container.textContent).toContain('95.00%');
   });
 

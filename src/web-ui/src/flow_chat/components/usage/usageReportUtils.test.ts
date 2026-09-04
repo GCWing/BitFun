@@ -5,6 +5,7 @@ import {
   coerceSessionUsageReport,
   formatHitRatePercent,
   formatHitRateSuffix,
+  formatTokenCount,
   getFileSummaryLabel,
   getModelHelp,
   getModelLabel,
@@ -117,6 +118,13 @@ function usageReport(overrides: Partial<SessionUsageReport> = {}): SessionUsageR
 }
 
 describe('usageReportUtils', () => {
+  it('formats token counts with compact units', () => {
+    expect(formatTokenCount(999, t)).toBe('999');
+    expect(formatTokenCount(1_234, t)).toBe('1.23K');
+    expect(formatTokenCount(12_345, t)).toBe('12.35K');
+    expect(formatTokenCount(1_000_000_000, t)).toBe('1B');
+  });
+
   it('only accepts structured usage report metadata', () => {
     expect(coerceSessionUsageReport(usageReport())?.reportId).toBe('usage-session-1');
     expect(coerceSessionUsageReport({ reportId: 'usage-1' })).toBeUndefined();
@@ -246,9 +254,9 @@ describe('usageReportUtils', () => {
 
   describe('formatHitRateSuffix', () => {
     it('formats a finite ratio as a parenthesised percentage with leading space', () => {
-      expect(formatHitRateSuffix(0.8, t)).toBe(' (80%)');
-      expect(formatHitRateSuffix(0, t)).toBe(' (0%)');
-      expect(formatHitRateSuffix(1, t)).toBe(' (100%)');
+      expect(formatHitRateSuffix(0.8, t)).toBe(' (80.00%)');
+      expect(formatHitRateSuffix(0, t)).toBe(' (0.00%)');
+      expect(formatHitRateSuffix(1, t)).toBe(' (100.00%)');
     });
 
     it('returns an empty string for missing or non-finite values', () => {
@@ -258,17 +266,16 @@ describe('usageReportUtils', () => {
       expect(formatHitRateSuffix(Number.POSITIVE_INFINITY, t)).toBe('');
     });
 
-    it('rounds the displayed percent to the nearest integer', () => {
-      // 0.804 → 80.4% → "80%"; 0.806 → 80.6% → "81%"
-      expect(formatHitRateSuffix(0.804, t)).toBe(' (80%)');
-      expect(formatHitRateSuffix(0.806, t)).toBe(' (81%)');
+    it('rounds the displayed percent down to two decimal places', () => {
+      expect(formatHitRateSuffix(0.80404, t)).toBe(' (80.40%)');
+      expect(formatHitRateSuffix(0.80409, t)).toBe(' (80.40%)');
     });
   });
 
   describe('formatHitRatePercent', () => {
     it('formats a finite ratio as a bare percentage cell', () => {
-      expect(formatHitRatePercent(0.5, t)).toBe('50%');
-      expect(formatHitRatePercent(1, t)).toBe('100%');
+      expect(formatHitRatePercent(0.5, t)).toBe('50.00%');
+      expect(formatHitRatePercent(1, t)).toBe('100.00%');
     });
 
     it('returns a dash for missing or non-finite values', () => {

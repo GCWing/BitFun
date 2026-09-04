@@ -908,10 +908,22 @@
       if (value === null || value === undefined || Number.isNaN(value)) {
         return "-";
       }
-      return new Intl.NumberFormat("zh-CN", {
-        notation: "compact",
-        maximumFractionDigits: 1
-      }).format(value);
+      const units = [
+        { divisor: 1_000, suffix: "K" },
+        { divisor: 1_000_000, suffix: "M" },
+        { divisor: 1_000_000_000, suffix: "B" }
+      ];
+      const safeValue = Math.max(0, value);
+      if (safeValue < 1_000) {
+        return formatNumber(safeValue);
+      }
+      let unitIndex = safeValue >= 1_000_000_000 ? 2 : safeValue >= 1_000_000 ? 1 : 0;
+      let scaledValue = Math.round((safeValue / units[unitIndex].divisor + Number.EPSILON) * 100) / 100;
+      if (scaledValue >= 1_000 && unitIndex < units.length - 1) {
+        unitIndex += 1;
+        scaledValue = Math.round((safeValue / units[unitIndex].divisor + Number.EPSILON) * 100) / 100;
+      }
+      return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(scaledValue)}${units[unitIndex].suffix}`;
     }
 
     function formatPercent(value) {
@@ -1321,10 +1333,10 @@
           <tr>
             <td>${formatNumber(row.sequence)}</td>
             <td>${escapeHtml(formatDate(row.recorded_at))}</td>
-            <td>${formatNumber(row[peakMetricKey])}</td>
-            <td>${formatNumber(row[detailKeys[0]])}</td>
-            <td>${formatNumber(row[detailKeys[1]])}</td>
-            <td>${formatNumber(row[detailKeys[2]])}</td>
+            <td>${formatCompact(row[peakMetricKey])}</td>
+            <td>${formatCompact(row[detailKeys[0]])}</td>
+            <td>${formatCompact(row[detailKeys[1]])}</td>
+            <td>${formatCompact(row[detailKeys[2]])}</td>
             <td>${escapeHtml(row.model_id || "-")}</td>
           </tr>
         `).join("")
@@ -1347,7 +1359,7 @@
             <td>${formatNumber(row.sequence)}</td>
             <td>${escapeHtml(formatDate(row.recorded_at))}</td>
             <td>${escapeHtml(row.response_kind || "-")}</td>
-            <td>${formatNumber(row.prompt_tokens)}</td>
+            <td>${formatCompact(row.prompt_tokens)}</td>
             <td>${row.has_usage ? "yes" : "no"}</td>
           </tr>
         `).join("")
@@ -1549,7 +1561,7 @@
       const viewportStart = chartRows[viewport.start]?.sequence ?? "-";
       const viewportEnd = chartRows[viewport.end]?.sequence ?? "-";
       elements.chartSubtitle.textContent =
-        `${rows.length} 条筛选记录，其中可绘制 ${formatNumber(chartRows.length)} 条；当前视窗 ${formatNumber(viewportRows.length)} 条，请求 ${formatNumber(viewportStart)} - ${formatNumber(viewportEnd)}，来源：${state.sourceLabel || "usage-summary.csv"}，最大值 ${formatNumber(maxValue)} tokens`;
+        `${rows.length} 条筛选记录，其中可绘制 ${formatNumber(chartRows.length)} 条；当前视窗 ${formatNumber(viewportRows.length)} 条，请求 ${formatNumber(viewportStart)} - ${formatNumber(viewportEnd)}，来源：${state.sourceLabel || "usage-summary.csv"}，最大值 ${formatCompact(maxValue)} tokens`;
 
       bindChartInteractions({
         svg,
@@ -1679,7 +1691,7 @@
           <div>kind: ${escapeHtml(nearest.row.response_kind || "-")}</div>
           <div>capture: ${escapeHtml(nearest.row.capture_mode || "-")}</div>
           ${nearest.series.map(item => `
-            <div style="color:${item.color}">${escapeHtml(item.label)}: ${formatNumber(item.value)}</div>
+            <div style="color:${item.color}">${escapeHtml(item.label)}: ${formatCompact(item.value)}</div>
           `).join("")}
         `;
       };

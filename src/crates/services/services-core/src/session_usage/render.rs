@@ -45,9 +45,9 @@ pub fn render_usage_report_terminal(report: &SessionUsageReport) -> String {
     ));
     out.push(format!(
         "Tokens: input {}, output {}, total {}",
-        format_optional_number(report.tokens.input_tokens),
-        format_optional_number(report.tokens.output_tokens),
-        format_optional_number(report.tokens.total_tokens)
+        format_optional_token_count(report.tokens.input_tokens),
+        format_optional_token_count(report.tokens.output_tokens),
+        format_optional_token_count(report.tokens.total_tokens)
     ));
     out.push(format!(
         "Cached tokens: {}",
@@ -175,15 +175,15 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
     ));
     out.push_str(&format!(
         "| Input | {} |\n",
-        format_optional_number(report.tokens.input_tokens)
+        format_optional_token_count(report.tokens.input_tokens)
     ));
     out.push_str(&format!(
         "| Output | {} |\n",
-        format_optional_number(report.tokens.output_tokens)
+        format_optional_token_count(report.tokens.output_tokens)
     ));
     out.push_str(&format!(
         "| Total | {} |\n",
-        format_optional_number(report.tokens.total_tokens)
+        format_optional_token_count(report.tokens.total_tokens)
     ));
     out.push_str(&format!(
         "| Cached | {} |\n\n",
@@ -214,18 +214,18 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
                     escape_markdown(&model.model_id),
                     model.call_count,
                     format_optional_duration(model.duration_ms),
-                    format_optional_number(model.input_tokens),
-                    format_optional_number(model.output_tokens),
-                    format_optional_number(model.total_tokens)
+                    format_optional_token_count(model.input_tokens),
+                    format_optional_token_count(model.output_tokens),
+                    format_optional_token_count(model.total_tokens)
                 ));
             } else {
                 out.push_str(&format!(
                     "| {} | {} | {} | {} | {} |\n",
                     escape_markdown(&model.model_id),
                     model.call_count,
-                    format_optional_number(model.input_tokens),
-                    format_optional_number(model.output_tokens),
-                    format_optional_number(model.total_tokens)
+                    format_optional_token_count(model.input_tokens),
+                    format_optional_token_count(model.output_tokens),
+                    format_optional_token_count(model.total_tokens)
                 ));
             }
         }
@@ -377,7 +377,46 @@ fn format_optional_number(value: Option<u64>) -> String {
         .unwrap_or_else(|| "unavailable".to_string())
 }
 
-/// Format the "cached tokens" cell with an optional ` (NN%)` hit-rate suffix.
+fn format_optional_token_count(value: Option<u64>) -> String {
+    value
+        .map(format_token_count)
+        .unwrap_or_else(|| "unavailable".to_string())
+}
+
+fn format_token_count(value: u64) -> String {
+    let (mut divisor, mut suffix) = if value >= 1_000_000_000 {
+        (1_000_000_000_u64, "B")
+    } else if value >= 1_000_000 {
+        (1_000_000_u64, "M")
+    } else if value >= 1_000 {
+        (1_000_u64, "K")
+    } else {
+        return value.to_string();
+    };
+
+    let mut rounded_hundredths =
+        (u128::from(value) * 100 + u128::from(divisor) / 2) / u128::from(divisor);
+    if rounded_hundredths >= 100_000 && divisor < 1_000_000_000 {
+        (divisor, suffix) = if divisor == 1_000 {
+            (1_000_000, "M")
+        } else {
+            (1_000_000_000, "B")
+        };
+        rounded_hundredths =
+            (u128::from(value) * 100 + u128::from(divisor) / 2) / u128::from(divisor);
+    }
+    let whole = rounded_hundredths / 100;
+    let fraction = rounded_hundredths % 100;
+    if fraction == 0 {
+        format!("{whole}{suffix}")
+    } else if fraction % 10 == 0 {
+        format!("{whole}.{}{suffix}", fraction / 10)
+    } else {
+        format!("{whole}.{fraction:02}{suffix}")
+    }
+}
+
+/// Format the "cached tokens" cell with an optional ` (NN.NN%)` hit-rate suffix.
 /// Falls back to "not reported" when coverage is unavailable, regardless of
 /// whether the hit-rate field happens to be set.
 fn format_cached_with_hit_rate(
@@ -388,9 +427,12 @@ fn format_cached_with_hit_rate(
     match coverage {
         UsageCacheCoverage::Unavailable => "not reported".to_string(),
         UsageCacheCoverage::Available | UsageCacheCoverage::Partial => {
-            let base = format_optional_number(cached_tokens);
+            let base = format_optional_token_count(cached_tokens);
             match hit_rate {
-                Some(rate) => format!("{} ({:.0}%)", base, rate * 100.0),
+                Some(rate) => {
+                    let rounded_down_percentage = (rate.clamp(0.0, 1.0) * 10_000.0).floor() / 100.0;
+                    format!("{} ({rounded_down_percentage:.2}%)", base)
+                }
                 None => base,
             }
         }
@@ -555,15 +597,25 @@ mod tests {
     fn render_appends_hit_rate_suffix_to_cached_cell() {
         let mut report = test_report();
         // Pretend a session covered cache and 80% of input came from cache.
-        report.tokens.cached_tokens = Some(800);
+        report.tokens.cached_tokens = Some(1_234);
         report.tokens.cache_coverage = UsageCacheCoverage::Available;
-        report.tokens.cache_hit_rate = Some(0.8);
+        report.tokens.cache_hit_rate = Some(0.80409);
 
         let terminal = render_usage_report_terminal(&report);
         let markdown = render_usage_report_markdown(&report);
 
-        assert!(terminal.contains("Cached tokens: 800 (80%)"));
-        assert!(markdown.contains("| Cached | 800 (80%) |"));
+        assert!(terminal.contains("Cached tokens: 1.23K (80.40%)"));
+        assert!(markdown.contains("| Cached | 1.23K (80.40%) |"));
+    }
+
+    #[test]
+    fn token_counts_use_compact_k_m_b_units_with_normal_rounding() {
+        assert_eq!(format_token_count(999), "999");
+        assert_eq!(format_token_count(1_234), "1.23K");
+        assert_eq!(format_token_count(1_235), "1.24K");
+        assert_eq!(format_token_count(999_999), "1M");
+        assert_eq!(format_token_count(5_396_217), "5.4M");
+        assert_eq!(format_token_count(1_000_000_000), "1B");
     }
 
     #[test]
