@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@openbitfun/ui';
+import type { TurnRailCapsulePreview } from '@/shared/types/session-history';
+import { MessageReferenceCapsule } from './MessageReferenceCapsule';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import {
   FLOWCHAT_TURN_RAIL_ROW_HEIGHT_PX,
@@ -17,6 +19,7 @@ export interface FlowChatTurnRailItem {
   ordinal: number;
   turnIndex: number;
   content: string | null;
+  capsulePreview?: TurnRailCapsulePreview;
 }
 
 interface FlowChatTurnRailProps {
@@ -275,6 +278,7 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
             const content = turn.content === null
               ? null
               : turn.content.trim() || untitledTurnLabel;
+            const capsulePreview = turn.capsulePreview;
 
             return (
               <Tooltip
@@ -285,7 +289,26 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
                 content={(
                   <span className="flowchat-turn-rail__tooltip-content" data-openbitfun-component="flow-chat-turn-rail" data-openbitfun-part="tooltipContent">
                     <span className="flowchat-turn-rail__tooltip-turn" data-openbitfun-component="flow-chat-turn-rail" data-openbitfun-part="tooltipTurn">{turnLabel}</span>
-                    {content !== null ? (
+                    {capsulePreview ? (
+                      <span className="flowchat-turn-rail__tooltip-message" data-openbitfun-component="flow-chat-turn-rail" data-openbitfun-part="tooltipMessage">
+                        {capsulePreview.segments.map((segment, index) => segment.kind === 'text' ? (
+                          <React.Fragment key={`text-${index}`}>{segment.text}</React.Fragment>
+                        ) : segment.kind === 'inlineToken' ? (
+                          <MessageReferenceCapsule
+                            key={`token-${index}`}
+                            type={segment.tokenType}
+                            label={segment.label}
+                          />
+                        ) : (
+                          <MessageReferenceCapsule
+                            key={`context-${index}`}
+                            type={segment.contextType}
+                            label={segment.label}
+                            title={segment.title}
+                          />
+                        ))}
+                      </span>
+                    ) : content !== null ? (
                       <span className="flowchat-turn-rail__tooltip-message" data-openbitfun-component="flow-chat-turn-rail" data-openbitfun-part="tooltipMessage">{content}</span>
                     ) : null}
                   </span>

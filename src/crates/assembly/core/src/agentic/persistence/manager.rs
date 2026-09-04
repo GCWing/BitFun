@@ -30,7 +30,8 @@ use crate::service::remote_ssh::workspace_state::{
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
     SessionTurnCatalog, SessionTurnCatalogEntry, SessionTurnWindowResponse, TranscriptLineRange,
-    SESSION_STORAGE_SCHEMA_VERSION, SESSION_TURN_CATALOG_SCHEMA_VERSION,
+    TurnRailCapsulePreview, TurnRailCapsuleSegment, SESSION_STORAGE_SCHEMA_VERSION,
+    SESSION_TURN_CATALOG_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -71,6 +72,10 @@ const COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS: usize = 32;
 const TOKEN_ANCHOR_SCHEMA_VERSION: u32 = 1;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 const SESSION_TURN_CATALOG_PREVIEW_CHAR_LIMIT: usize = 320;
+const TURN_RAIL_CAPSULE_MAX_SEGMENTS: usize = 64;
+const TURN_RAIL_CAPSULE_TEXT_LIMIT: usize = 320;
+const TURN_RAIL_CAPSULE_LABEL_LIMIT: usize = 160;
+const TURN_RAIL_CAPSULE_TITLE_LIMIT: usize = 320;
 const SESSION_TURN_WINDOW_MAX_BEFORE: usize = 4;
 const SESSION_TURN_WINDOW_MAX_TARGET_AND_AFTER: usize = 12;
 pub const SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT: usize = 60_000;
@@ -181,6 +186,57 @@ fn truncate_turn_catalog_preview(content: &str) -> (String, bool) {
     (preview, chars.next().is_some())
 }
 
+fn bounded_display_text(value: &str, limit: usize) -> String {
+    value.chars().take(limit).collect()
+}
+
+fn turn_rail_capsule_preview(turn: &DialogTurnData) -> Option<TurnRailCapsulePreview> {
+    let metadata = turn.user_message.metadata.as_ref()?.as_object()?;
+    let presentation = metadata.get("composerPresentation")?.as_object()?;
+    if presentation.get("version")?.as_u64()? != 1 {
+        return None;
+    }
+    let raw_segments = presentation.get("segments")?.as_array()?;
+    let mut segments = Vec::new();
+    for raw in raw_segments.iter().take(TURN_RAIL_CAPSULE_MAX_SEGMENTS) {
+        let segment = raw.as_object()?;
+        match segment.get("kind")?.as_str()? {
+            "text" => {
+                let text = segment.get("text")?.as_str()?;
+                if !text.is_empty() {
+                    segments.push(TurnRailCapsuleSegment::Text {
+                        text: bounded_display_text(text, TURN_RAIL_CAPSULE_TEXT_LIMIT),
+                    });
+                }
+            }
+            "context" => {
+                let context = segment.get("context")?.as_object()?;
+                let context_type = context.get("type")?.as_str()?;
+                let label = segment.get("label")?.as_str()?;
+                let title = segment
+                    .get("title")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|value| bounded_display_text(value, TURN_RAIL_CAPSULE_TITLE_LIMIT));
+                segments.push(TurnRailCapsuleSegment::Context {
+                    context_type: bounded_display_text(context_type, 40),
+                    label: bounded_display_text(label, TURN_RAIL_CAPSULE_LABEL_LIMIT),
+                    title,
+                });
+            }
+            "inline-token" => {
+                let token_type = segment.get("tokenType")?.as_str()?;
+                let label = segment.get("label")?.as_str()?;
+                segments.push(TurnRailCapsuleSegment::InlineToken {
+                    token_type: bounded_display_text(token_type, 40),
+                    label: bounded_display_text(label, TURN_RAIL_CAPSULE_LABEL_LIMIT),
+                });
+            }
+            _ => return None,
+        }
+    }
+    (!segments.is_empty()).then_some(TurnRailCapsulePreview { segments })
+}
+
 fn turn_catalog_entry(turn: &DialogTurnData, ordinal: usize) -> SessionTurnCatalogEntry {
     let (preview, preview_truncated) =
         truncate_turn_catalog_preview(&transcript_display_user_content(turn));
@@ -190,6 +246,7 @@ fn turn_catalog_entry(turn: &DialogTurnData, ordinal: usize) -> SessionTurnCatal
         turn_id: Some(turn.turn_id.clone()),
         preview: Some(preview),
         preview_truncated,
+        capsule_preview: turn_rail_capsule_preview(turn),
     }
 }
 
@@ -203,6 +260,7 @@ fn placeholder_turn_catalog_entry(
         turn_id: None,
         preview: None,
         preview_truncated: false,
+        capsule_preview: None,
     }
 }
 
@@ -5259,6 +5317,59 @@ mod tests {
         let (preview, truncated) = truncate_turn_catalog_preview(&exact);
         assert_eq!(preview, exact);
         assert!(!truncated);
+    }
+
+    #[test]
+    fn turn_rail_capsule_preview_keeps_only_display_facts() {
+        let mut turn = DialogTurnData::new(
+            "turn-capsule".to_string(),
+            0,
+            "session-capsule".to_string(),
+            UserMessageData {
+                id: "user-capsule".to_string(),
+                content: "[$pdf] #file: auth.ts".to_string(),
+                timestamp: 0,
+                metadata: Some(serde_json::json!({
+                    "composerPresentation": {
+                        "version": 1,
+                        "segments": [
+                            { "kind": "inline-token", "token": "[$pdf]", "tokenType": "skill", "label": "pdf" },
+                            { "kind": "text", "text": " " },
+                            {
+                                "kind": "context",
+                                "context": {
+                                    "id": "file-1",
+                                    "type": "file",
+                                    "filePath": "E:/workspace/auth.ts",
+                                    "fileName": "auth.ts",
+                                    "selectedText": "large secret payload that must not enter catalog"
+                                },
+                                "tag": "#file: auth.ts",
+                                "label": "auth.ts",
+                                "title": "E:/workspace/auth.ts"
+                            }
+                        ]
+                    }
+                })),
+            },
+        );
+        let entry = turn_catalog_entry(&turn, 0);
+        let preview = entry.capsule_preview.expect("capsule preview");
+        assert_eq!(preview.segments.len(), 3);
+        let encoded = serde_json::to_string(&preview).expect("preview should serialize");
+        let encoded_json: serde_json::Value =
+            serde_json::from_str(&encoded).expect("preview JSON should parse");
+        assert_eq!(encoded_json["segments"][0]["kind"], "inlineToken");
+        assert_eq!(encoded_json["segments"][0]["tokenType"], "skill");
+        assert!(encoded_json["segments"][0].get("token_type").is_none());
+        assert_eq!(encoded_json["segments"][2]["kind"], "context");
+        assert_eq!(encoded_json["segments"][2]["contextType"], "file");
+        assert!(encoded_json["segments"][2].get("context_type").is_none());
+        assert!(encoded.contains("auth.ts"));
+        assert!(!encoded.contains("large secret payload"));
+        assert!(!encoded.contains("filePath"));
+        turn.user_message.metadata = None;
+        assert!(turn_catalog_entry(&turn, 0).capsule_preview.is_none());
     }
 
     #[tokio::test]
