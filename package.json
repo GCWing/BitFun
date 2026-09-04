@@ -76,7 +76,7 @@
     "check:core-boundaries": "node scripts/check-core-boundaries.mjs",
     "check:core-boundaries:test": "node --test scripts/check-core-boundaries.test.mjs",
     "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs && node --test scripts/check-github-config.test.mjs",
-    "test:release-packaging": "node --test scripts/release-channel.test.mjs scripts/desktop-tauri-build.test.mjs scripts/server-build.test.mjs scripts/version-generation.test.mjs scripts/generate-frontend-revision.test.mjs scripts/tauri-release-manifest.test.mjs OpenBitFun-Installer/scripts/build-installer.test.cjs",
+    "test:release-packaging": "node --test scripts/release-channel.test.mjs scripts/desktop-tauri-build.test.mjs scripts/server-build.test.mjs scripts/version-generation.test.mjs scripts/generate-frontend-revision.test.mjs scripts/generate-brand-assets.test.mjs scripts/tauri-release-manifest.test.mjs OpenBitFun-Installer/scripts/build-installer.test.cjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",
     "lint:rs": "cargo clippy --workspace --exclude openbitfun-desktop --all-targets",
     "lint:rs:desktop": "pnpm run prepare:mobile-web && cargo clippy -p openbitfun-desktop --all-targets",

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { canonicalizeIcns } from './icns-container.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SCRIPT_DIR, '..');
@@ -171,7 +172,7 @@ async function generateTauriContainers(applicationIcon) {
 
     return {
       ico: await readFile(path.join(tempDir, 'icon.ico')),
-      icns: await readFile(path.join(tempDir, 'icon.icns')),
+      icns: canonicalizeIcns(await readFile(path.join(tempDir, 'icon.icns'))),
     };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
