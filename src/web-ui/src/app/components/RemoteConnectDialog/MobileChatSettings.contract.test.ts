@@ -5,16 +5,19 @@ const chatSource = readFileSync(
   new URL('../../../../../mobile-web/src/pages/ChatPage.tsx', import.meta.url),
   'utf8',
 );
+const modelControlsSource = readFileSync(
+  new URL('../../../../../mobile-web/src/components/ChatModelControls.tsx', import.meta.url),
+  'utf8',
+);
 
 describe('mobile chat settings interaction contracts', () => {
   it('dismisses model and reasoning menus before starting a remote write', () => {
-    const modelSelector = chatSource.slice(
-      chatSource.indexOf('const ModelSelectorPill'),
-      chatSource.indexOf('const ReasoningPresetPill'),
+    const modelSelector = modelControlsSource.slice(
+      modelControlsSource.indexOf('export const ModelSelectorPill'),
+      modelControlsSource.indexOf('export const ReasoningPresetPill'),
     );
-    const reasoningSelector = chatSource.slice(
-      chatSource.indexOf('const ReasoningPresetPill'),
-      chatSource.indexOf('// ─── ChatPage'),
+    const reasoningSelector = modelControlsSource.slice(
+      modelControlsSource.indexOf('export const ReasoningPresetPill'),
     );
 
     for (const selector of [modelSelector, reasoningSelector]) {

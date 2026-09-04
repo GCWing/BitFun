@@ -11,6 +11,10 @@ const sessionListSource = readFileSync(
   new URL('../../../../../mobile-web/src/pages/SessionListPage.tsx', import.meta.url),
   'utf8',
 );
+const sessionDashboardSource = readFileSync(
+  new URL('../../../../../mobile-web/src/components/SessionDashboardSections.tsx', import.meta.url),
+  'utf8',
+);
 const chatSource = readFileSync(
   new URL('../../../../../mobile-web/src/pages/ChatPage.tsx', import.meta.url),
   'utf8',
@@ -47,11 +51,11 @@ describe('mobile control-target UI ownership contracts', () => {
       'if (creating || targetInitializingRef.current) return;',
     );
     expect(sessionListSource).toContain('disabled={creating || targetInitializing}');
-    expect(sessionListSource).toMatch(
-      /className="session-list__search-input"[\s\S]*?disabled=\{targetInitializing\}/,
+    expect(sessionDashboardSource).toMatch(
+      /inputClassName="session-list__search-input"[\s\S]*?disabled=\{targetInitializing\}/,
     );
-    expect(sessionListSource).not.toMatch(
-      /className="session-list__search-input"[\s\S]*?disabled=\{loading\}/,
+    expect(sessionDashboardSource).not.toMatch(
+      /inputClassName="session-list__search-input"[\s\S]*?disabled=\{loading\}/,
     );
     expect(sessionListSource).toContain('if (loading || loadingMore || !hasMore) return;');
 
