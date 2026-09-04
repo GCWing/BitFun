@@ -1,6 +1,5 @@
-import { Button, StatusPill, type StatusPillTone } from '@bitfun/ui';
+import { Button, Icon, StatusPill, type StatusPillTone } from '@bitfun/ui';
 import {
-  Download,
   GalleryHorizontalEnd,
   HardDrive,
   Package,
@@ -161,7 +160,7 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
             ) : null}
             {downloadCount ? (
               <span className="miniapp-library-row__meta-item">
-                <Download size={13} strokeWidth={1.8} aria-hidden="true" />
+                <Icon name="arrow-down" size="xs" aria-hidden />
                 <span>{downloadCount}</span>
               </span>
             ) : null}

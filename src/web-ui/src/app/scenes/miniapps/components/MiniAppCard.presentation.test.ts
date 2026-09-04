@@ -134,7 +134,7 @@ describe('Mini App card presentation', () => {
     expect(row).toContain('<Package size={13}');
     expect(row).toContain('<UserRound size={13}');
     expect(row).toContain('<Star size={13}');
-    expect(row).toContain('<Download size={13}');
+    expect(row).toContain('<Icon name="arrow-down" size="xs"');
     expect(row).toContain('<HardDrive size={13}');
     expect(stylesheet).toMatch(
       /&__summary \{[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\) var\(--bf-type-meta-line-height\);[\s\S]*?block-size: 126px;[\s\S]*?padding: var\(--bf-space-3\) var\(--bf-space-4\);/,
