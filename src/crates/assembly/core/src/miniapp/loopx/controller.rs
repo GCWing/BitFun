@@ -2713,6 +2713,37 @@ impl LoopxController {
                 .await;
             if yielded_repository {
                 self.suppress_pending_task_rerun(&updated.task_id).await;
+            } else if matches!(
+                final_state,
+                LoopxTaskState::RecoveryRequired | LoopxTaskState::WaitingForUser
+            ) {
+                // Nothing queued could take the freed slot. Surface what the
+                // remaining repository tasks are stuck in so a stalled line
+                // shows up in the log instead of silent idling.
+                let stalled: Vec<String> = {
+                    let state = self.state.read().await;
+                    state
+                        .tasks
+                        .iter()
+                        .filter(|task| {
+                            task.task_id != updated.task_id
+                                && task.identity.item.repository.canonical_id()
+                                    == updated.identity.item.repository.canonical_id()
+                                && !matches!(
+                                    task.state,
+                                    LoopxTaskState::Completed
+                                        | LoopxTaskState::Archived
+                                        | LoopxTaskState::Stopped
+                                )
+                        })
+                        .map(|task| format!("{} {:?}", task.task_id, task.state))
+                        .collect()
+                };
+                log::warn!(
+                    "LoopX repository queue stalled after parking task {}: remaining non-terminal tasks {:?}",
+                    updated.task_id,
+                    stalled
+                );
             }
         }
         if should_requeue_after_settlement(final_state, yielded_repository) {
@@ -3417,8 +3448,15 @@ impl LoopxController {
                 .tasks
                 .iter()
                 .find(|task| {
-                    task.state == LoopxTaskState::Queued
-                        && task.identity.item.repository.canonical_id() == repository_id
+                    // Preparing joins Queued as schedulable: a reserved task
+                    // whose drive never completed would otherwise stall the
+                    // whole repository line once the running slot frees up.
+                    // Re-driving it is safe — reserve_repository bounces the
+                    // task back to Queued when the slot is still taken.
+                    matches!(
+                        task.state,
+                        LoopxTaskState::Queued | LoopxTaskState::Preparing
+                    ) && task.identity.item.repository.canonical_id() == repository_id
                         && exclude_task_id != Some(task.task_id.as_str())
                 })
                 .map(|task| task.task_id.clone())
