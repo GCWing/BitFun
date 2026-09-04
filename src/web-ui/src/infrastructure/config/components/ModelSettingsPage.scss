@@ -146,10 +146,13 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    border: 1px solid var(--openbitfun-color-border-default);
-    border-radius: var(--openbitfun-radius-sm);
+    border: 0;
+    border-radius: var(--openbitfun-layout-field-group-radius);
     overflow: hidden;
-    background: transparent;
+    // Own one adaptive surface for both the provider header and its model rows,
+    // so expanded content remains distinct from the surrounding page in light
+    // and dark themes.
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   &__provider-group-header {
@@ -160,10 +163,7 @@
     // Keep the leading inset inside the toggle so the space beside the chevron is clickable.
     padding-block: 0;
     padding-inline: 0 var(--openbitfun-space-4);
-    // Provider rows are persistent grouped content, matching the surface used by
-    // the other settings sections. The translucent subtle tint is reserved for
-    // local feedback because it reads too bright over the dark scene surface.
-    background: var(--openbitfun-color-surface-tertiary);
+    background: transparent;
 
     &[data-expanded='true'] {
       border-bottom: 1px solid var(--openbitfun-color-border-subtle);
@@ -226,10 +226,6 @@
 
     > .openbitfun-collection-item {
       border-radius: 0;
-
-      &:not(:last-child) {
-        border-bottom: 1px solid var(--openbitfun-color-border-subtle);
-      }
     }
 
     .openbitfun-collection-item__row {

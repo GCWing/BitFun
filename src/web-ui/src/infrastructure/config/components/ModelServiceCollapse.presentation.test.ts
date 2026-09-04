@@ -14,6 +14,10 @@ const modelSettingsStyles = readFileSync(
   fileURLToPath(new URL('./ModelSettingsPage.scss', import.meta.url)),
   'utf8',
 );
+const collectionItemStyles = readFileSync(
+  fileURLToPath(new URL('./common/ConfigCollectionItem.scss', import.meta.url)),
+  'utf8',
+);
 
 describe('model service collapsed presentation', () => {
   it('starts provider groups collapsed and exposes an accessible user toggle', () => {
@@ -34,10 +38,29 @@ describe('model service collapsed presentation', () => {
     );
   });
 
-  it('matches provider rows to the persistent surface used by other settings groups', () => {
+  it('matches the subscription group radius without an outer border', () => {
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-header\s*\{[\s\S]*?background:\s*var\(--bf-color-surface-tertiary\)/,
+      /&__provider-group\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-radius:\s*var\(--openbitfun-layout-field-group-radius\)/,
     );
+  });
+
+  it('keeps provider headers and models on one theme-adaptive grouped surface', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group\s*\{[^}]*background:\s*var\(--openbitfun-color-surface-tertiary\)/,
+    );
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group-header\s*\{[^}]*background:\s*transparent/,
+    );
+  });
+
+  it('draws one consistent divider between provider headers and model rows', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&\[data-expanded='true'\]\s*\{[^}]*border-bottom:\s*1px solid var\(--openbitfun-color-border-subtle\)/,
+    );
+    expect(collectionItemStyles).toMatch(
+      /& \+ \.openbitfun-collection-item\s*\{[^}]*border-top:\s*1px solid var\(--openbitfun-color-border-subtle\)/,
+    );
+    expect(modelSettingsStyles).not.toContain('&:not(:last-child)');
   });
 
   it('marks the primary model slot as required in both label and control semantics', () => {
