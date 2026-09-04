@@ -22,6 +22,11 @@ import {
 } from './common';
 import './UsageStatisticsConfig.scss';
 import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@bitfun/ui';
+import {
+  formatCacheHitRate,
+  formatTokenCount,
+  type LocalizedNumberFormatter,
+} from '@/shared/utils/tokenUsageFormatting';
 
 // ---------------------------------------------------------------------------
 // Chart palette — appearance tokens only (literal vars so the theme color
@@ -51,31 +56,13 @@ const DONUT_PALETTE = [
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-type NumberFormatter = (
-  value: number,
-  options?: Intl.NumberFormatOptions,
-) => string;
-
-function formatTokens(value: number, formatNumber: NumberFormatter): string {
-  if (Math.abs(value) < 1_000) return formatNumber(value);
-  return formatNumber(value, {
-    notation: 'compact',
-    compactDisplay: 'short',
-    maximumFractionDigits: Math.abs(value) >= 1_000_000 ? 2 : 1,
-  });
+function formatTokens(value: number, formatNumber: LocalizedNumberFormatter): string {
+  return formatTokenCount(value, formatNumber);
 }
 
-function formatHitRate(value: number | null, formatNumber: NumberFormatter): string {
+function formatHitRate(value: number | null, formatNumber: LocalizedNumberFormatter): string {
   if (value === null || !Number.isFinite(value)) return '–';
-  // Only a true full hit (cached == reported input) shows as 100%.
-  if (value >= 1) return formatNumber(1, { style: 'percent', maximumFractionDigits: 0 });
-  // Truncate to two decimals — never round up.
-  const truncated = Math.floor(value * 10_000) / 10_000;
-  return formatNumber(truncated, {
-    style: 'percent',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatCacheHitRate(value, formatNumber);
 }
 
 function formatBucketLabel(

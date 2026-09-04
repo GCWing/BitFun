@@ -12,6 +12,7 @@ import {
   formatHitRateSuffix,
   formatUsageDuration,
   formatUsageNumber,
+  formatTokenCount,
   formatUsageTimestamp,
   getCoverageLabel,
   getCoverageTone,
@@ -173,7 +174,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
   const tokenTotal = report.tokens.totalTokens;
   const cachedTokenText = report.tokens.cacheCoverage === 'unavailable'
     ? t('usage.status.cacheNotReported')
-    : `${formatUsageNumber(report.tokens.cachedTokens, t)}${formatHitRateSuffix(report.tokens.cacheHitRate, t)}`;
+    : `${formatTokenCount(report.tokens.cachedTokens, t)}${formatHitRateSuffix(report.tokens.cacheHitRate, t)}`;
   const cachedTokenHelp = report.tokens.cacheCoverage === 'unavailable'
     ? t('usage.help.cachedTokens')
     : report.tokens.cacheCoverage === 'partial'
@@ -286,7 +287,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
               <span>{t('usage.card.tokenUsage')}</span>
             </div>
             <div className="session-usage-report-card__compact-token-value">
-              {formatUsageNumber(tokenTotal, t)}
+              {formatTokenCount(tokenTotal, t)}
             </div>
             <div className="session-usage-report-card__compact-model">
               {primaryModelHelp ? (
@@ -399,7 +400,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
     {
       key: 'tokens',
       label: t('usage.metrics.tokens'),
-      value: formatUsageNumber(tokenTotal, t),
+      value: formatTokenCount(tokenTotal, t),
       icon: Database,
     },
     {
@@ -518,8 +519,8 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             const help = getModelHelp(source, t, model.modelId);
             const label = getModelLabel(model.modelId, t, source);
             const tokenValue = typeof model.totalTokens === 'number' && Number.isFinite(model.totalTokens)
-              ? t('usage.card.tokens', { value: formatUsageNumber(model.totalTokens, t) })
-              : formatUsageNumber(model.totalTokens, t);
+              ? t('usage.card.tokens', { value: formatTokenCount(model.totalTokens, t) })
+              : formatTokenCount(model.totalTokens, t);
             return {
               label: help ? { value: label, help } : label,
               value: tokenValue,

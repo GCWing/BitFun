@@ -12,6 +12,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { notificationService } from '@/shared/notification-system';
 import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
+import { formatTokenCount } from '@/shared/utils/tokenUsageFormatting';
 import '@/app/components/GalleryLayout/GalleryLayout.scss';
 import './InsightsScene.scss';
 
@@ -335,16 +336,16 @@ const ReportMetaCard: React.FC<{
   const generationModels = meta.generation_models || [];
   const sessionTokenTitle = hasSessionUsage
     ? [
-        `${t('insights.inputTokens')}: ${formatNumber(sessionUsage.input_tokens)}`,
-        `${t('insights.outputTokens')}: ${formatNumber(sessionUsage.output_tokens)}`,
+        `${t('insights.inputTokens')}: ${formatTokenCount(sessionUsage.input_tokens, formatNumber)}`,
+        `${t('insights.outputTokens')}: ${formatTokenCount(sessionUsage.output_tokens, formatNumber)}`,
         `${t('insights.tokenCoverage')}: ${sessionUsage.turns_with_usage}/${sessionUsage.total_turns}`,
       ].join('\n')
     : t('insights.sessionTokensUnavailable');
   const generationTokenTitle = hasGenerationUsage
     ? [
-        `${t('insights.inputTokens')}: ${formatNumber(generationUsage.input_tokens)}`,
-        `${t('insights.outputTokens')}: ${formatNumber(generationUsage.output_tokens)}`,
-        `${t('insights.cachedTokens')}: ${formatNumber(generationUsage.cached_input_tokens)}`,
+        `${t('insights.inputTokens')}: ${formatTokenCount(generationUsage.input_tokens, formatNumber)}`,
+        `${t('insights.outputTokens')}: ${formatTokenCount(generationUsage.output_tokens, formatNumber)}`,
+        `${t('insights.cachedTokens')}: ${formatTokenCount(generationUsage.cached_input_tokens, formatNumber)}`,
       ].join('\n')
     : t('insights.tokensUnavailable');
 
@@ -363,7 +364,7 @@ const ReportMetaCard: React.FC<{
           <span>
             <strong>
               {hasSessionUsage
-                ? formatNumber(sessionUsage.total_tokens, { notation: 'compact', maximumFractionDigits: 1 })
+                ? formatTokenCount(sessionUsage.total_tokens, formatNumber)
                 : '--'}
             </strong>
             {t('insights.sessionTokens')}
@@ -414,7 +415,7 @@ const ReportMetaCard: React.FC<{
               <Icon name="spark" size="2xs" />
               {t('insights.insightsGenerationTokens')}:
               {' '}{hasGenerationUsage
-                ? formatNumber(generationUsage.total_tokens, { notation: 'compact', maximumFractionDigits: 1 })
+                ? formatTokenCount(generationUsage.total_tokens, formatNumber)
                 : '--'} {t('insights.tokens')}
               {!generationUsageComplete && ` · ${t('insights.partialUsage')}`}
             </span>

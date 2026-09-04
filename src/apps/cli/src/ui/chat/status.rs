@@ -1,15 +1,34 @@
 use crate::chat_state::ModelTokenUsageSnapshot;
 
 fn format_token_count(value: usize) -> String {
-    let digits = value.to_string();
-    let mut formatted = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index) % 3 == 0 {
-            formatted.push(',');
-        }
-        formatted.push(digit);
+    let (mut divisor, mut suffix) = if value >= 1_000_000_000 {
+        (1_000_000_000_usize, "B")
+    } else if value >= 1_000_000 {
+        (1_000_000_usize, "M")
+    } else if value >= 1_000 {
+        (1_000_usize, "K")
+    } else {
+        return value.to_string();
+    };
+
+    let mut rounded_hundredths = (value as u128 * 100 + divisor as u128 / 2) / divisor as u128;
+    if rounded_hundredths >= 100_000 && divisor < 1_000_000_000 {
+        (divisor, suffix) = if divisor == 1_000 {
+            (1_000_000, "M")
+        } else {
+            (1_000_000_000, "B")
+        };
+        rounded_hundredths = (value as u128 * 100 + divisor as u128 / 2) / divisor as u128;
     }
-    formatted
+    let whole = rounded_hundredths / 100;
+    let fraction = rounded_hundredths % 100;
+    if fraction == 0 {
+        format!("{whole}{suffix}")
+    } else if fraction % 10 == 0 {
+        format!("{whole}.{}{suffix}", fraction / 10)
+    } else {
+        format!("{whole}.{fraction:02}{suffix}")
+    }
 }
 
 fn context_window_metrics(usage: &ModelTokenUsageSnapshot) -> Option<(usize, f64)> {
@@ -169,11 +188,11 @@ mod status_tests {
         assert_eq!(context_status_text(None), None);
         assert_eq!(
             context_status_text(Some(&usage(Some(128_000)))),
-            Some("Context: 82,000 / 128,000 (64.1%)".to_string())
+            Some("Context: 82K / 128K (64.1%)".to_string())
         );
         assert_eq!(
             context_status_text(Some(&usage(None))),
-            Some("Last request: 82,000 tokens".to_string())
+            Some("Last request: 82K tokens".to_string())
         );
     }
 
@@ -196,7 +215,7 @@ mod status_tests {
         state.last_primary_model_usage = Some(usage(Some(128_000)));
         assert_eq!(
             default_chat_status_text(&state),
-            "Messages: 3 | Tool calls: 2 | Context: 82,000 / 128,000 (64.1%)"
+            "Messages: 3 | Tool calls: 2 | Context: 82K / 128K (64.1%)"
         );
     }
 
@@ -230,11 +249,11 @@ mod status_tests {
             "Last primary model request",
             "Effective model: example-model",
             "Model config: model-config-1",
-            "Input: 80,000 tokens",
-            "Output: 2,000 tokens",
-            "Cached input: 10,000 tokens",
-            "Total: 82,000 tokens",
-            "Context window: 82,000 / 128,000 tokens (64.1%)",
+            "Input: 80K tokens",
+            "Output: 2K tokens",
+            "Cached input: 10K tokens",
+            "Total: 82K tokens",
+            "Context window: 82K / 128K tokens (64.1%)",
             "For cumulative session usage, use /usage.",
         ] {
             assert!(
@@ -271,5 +290,15 @@ mod status_tests {
                 "missing {expected:?} in:\n{status}"
             );
         }
+    }
+
+    #[test]
+    fn token_counts_use_compact_k_m_b_units_with_normal_rounding() {
+        assert_eq!(format_token_count(999), "999");
+        assert_eq!(format_token_count(1_234), "1.23K");
+        assert_eq!(format_token_count(1_235), "1.24K");
+        assert_eq!(format_token_count(999_999), "1M");
+        assert_eq!(format_token_count(5_396_217), "5.4M");
+        assert_eq!(format_token_count(1_000_000_000), "1B");
     }
 }

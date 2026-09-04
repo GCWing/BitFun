@@ -11,6 +11,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Target } from 'lucide-react';
 import { Textarea } from '@bitfun/ui';
+import { i18nService } from '@/infrastructure/i18n';
+import { formatTokenCount } from '@/shared/utils/tokenUsageFormatting';
 import type { ThreadGoalController } from '../../hooks/useThreadGoalController';
 import type { ThreadGoalUiAction } from '../../services/threadGoalActions';
 import {
@@ -31,8 +33,14 @@ function formatUsageLine(
   if (goal.tokenBudget != null) {
     parts.push(
       t('threadGoal.usageTokens', {
-        used: goal.tokensUsed ?? 0,
-        budget: goal.tokenBudget,
+        used: formatTokenCount(
+          goal.tokensUsed ?? 0,
+          (number, options) => i18nService.formatNumber(number, options),
+        ),
+        budget: formatTokenCount(
+          goal.tokenBudget,
+          (number, options) => i18nService.formatNumber(number, options),
+        ),
       })
     );
   }

@@ -1,5 +1,9 @@
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { i18nService } from '@/infrastructure/i18n';
+import {
+  formatCacheHitRate,
+  formatTokenCount as formatLocalizedTokenCount,
+} from '@/shared/utils/tokenUsageFormatting';
 
 type Translator = (key: string, options?: Record<string, unknown>) => string;
 type ModelIdentitySource = SessionUsageReport['models'][number]['modelIdSource'];
@@ -44,6 +48,16 @@ export function formatUsageNumber(value: number | undefined, t: Translator): str
     return t('usage.unavailable');
   }
   return i18nService.formatNumber(value);
+}
+
+export function formatTokenCount(value: number | undefined, t: Translator): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return t('usage.unavailable');
+  }
+  return formatLocalizedTokenCount(
+    value,
+    (number, options) => i18nService.formatNumber(number, options),
+  );
 }
 
 export function formatUsageDuration(value: number | undefined, t: Translator): string {
@@ -94,26 +108,32 @@ export function formatUsagePercent(value: number | undefined, t: Translator): st
 }
 
 /**
- * Render a 0..1 hit-rate ratio as ` (NN%)` (with a leading space for inline
+ * Render a 0..1 hit-rate ratio as ` (NN.NN%)` (with a leading space for inline
  * use after a token count). Returns an empty string for null/undefined/NaN,
  * so callers can unconditionally append the result.
  */
-export function formatHitRateSuffix(rate: number | undefined | null, t: Translator): string {
+export function formatHitRateSuffix(rate: number | undefined | null, _t: Translator): string {
   if (typeof rate !== 'number' || !Number.isFinite(rate)) {
     return '';
   }
-  return ` (${t('usage.percent', { value: Math.round(rate * 100) })})`;
+  return ` (${formatCacheHitRate(
+    rate,
+    (number, options) => i18nService.formatNumber(number, options),
+  )})`;
 }
 
 /**
- * Render a 0..1 hit-rate ratio as a bare percentage cell (`80%`).
+ * Render a 0..1 hit-rate ratio as a bare percentage cell (`80.00%`).
  * Falls back to the dash placeholder when the rate is null/undefined/NaN.
  */
-export function formatHitRatePercent(rate: number | undefined | null, t: Translator): string {
+export function formatHitRatePercent(rate: number | undefined | null, _t: Translator): string {
   if (typeof rate !== 'number' || !Number.isFinite(rate)) {
     return '-';
   }
-  return t('usage.percent', { value: Math.round(rate * 100) });
+  return formatCacheHitRate(
+    rate,
+    (number, options) => i18nService.formatNumber(number, options),
+  );
 }
 
 export function calculateShare(part: number | undefined, denominator: number | undefined): number | undefined {
