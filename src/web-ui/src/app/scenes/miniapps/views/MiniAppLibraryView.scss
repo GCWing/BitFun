@@ -255,6 +255,7 @@
 
   &__actions {
     display: flex;
+    align-self: end;
     align-items: center;
     justify-content: flex-end;
     gap: var(--bf-space-2);

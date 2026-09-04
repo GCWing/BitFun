@@ -142,6 +142,9 @@ describe('Mini App card presentation', () => {
     expect(stylesheet).toMatch(
       /&__meta \{[\s\S]*?align-self: end;[\s\S]*?block-size: var\(--bf-type-meta-line-height\);/,
     );
+    expect(stylesheet).toMatch(
+      /&__actions \{[\s\S]*?align-self: end;[\s\S]*?align-items: center;/,
+    );
     expect(stylesheet).not.toContain("content: '·';");
   });
 
