@@ -3,6 +3,8 @@ export const miniAppGalleryViewAppearanceDescriptor: AppearanceSurfaceDescriptor
   id: 'miniapp-gallery-view',
   parts: [
     { id: 'root' }, { id: 'content' }, { id: 'categoryFilters' },
-    { id: 'categoryFilter' },
+    { id: 'categoryFilter' }, { id: 'item' }, { id: 'showcase' },
+    { id: 'summary' }, { id: 'meta' }, { id: 'actions' },
+    { id: 'error' }, { id: 'detail' },
   ],
 };
