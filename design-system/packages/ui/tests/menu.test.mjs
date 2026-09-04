@@ -94,9 +94,14 @@ test("Menu reserves space inside its scroll viewport for focus rings on all edge
   assert.doesNotMatch(styles, /overflow[^:]*:\s*visible/);
 });
 
-test("Menu keeps its scrollbar on the surface edge without changing the content inset", async () => {
+test("Menu keeps equal item insets while its scrollbar stays on the surface edge", async () => {
   const styles = await readFile(new URL("../src/components/Menu/Menu.module.css", import.meta.url), "utf8");
 
   assert.match(styles, /\.root\s*\{[^}]*padding-inline:\s*var\(--bf-overlay-menu-surface-padding\) 0/);
-  assert.match(styles, /\.list\s*\{[^}]*padding-inline-end:\s*calc\(var\(--bf-overlay-menu-surface-padding\) \+ var\(--bf-focus-width\)\)/);
+  assert.match(styles, /\.viewport\s*\{[^}]*padding-inline-end:\s*var\(--bf-overlay-menu-scrollbar-gap\);[^}]*scrollbar-gutter:\s*auto/);
+  assert.match(
+    styles,
+    /\.list\s*\{[^}]*padding-inline-end:\s*calc\(\s*var\(--bf-overlay-menu-surface-padding\)\s*\+ var\(--bf-focus-width\)\s*- var\(--bf-overlay-menu-scrollbar-gap\)\s*\)/,
+  );
+  assert.doesNotMatch(styles, /scrollbar-gutter:\s*stable/);
 });

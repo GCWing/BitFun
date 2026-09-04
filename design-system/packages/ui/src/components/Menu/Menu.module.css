@@ -32,11 +32,7 @@
       - var(--bf-overlay-menu-surface-padding)
     );
     padding-inline-end: var(--bf-overlay-menu-scrollbar-gap);
-    scrollbar-gutter: stable;
-  }
-
-  .viewport[data-bf-scrollbar-visibility="hidden"] {
-    padding-inline-end: 0;
+    /* Do not reserve an invisible one-sided track in menus that do not scroll. */
     scrollbar-gutter: auto;
   }
 
@@ -47,8 +43,12 @@
     gap: calc(var(--bf-space-1) / 2);
     /* Keep item focus rings inside the scroll viewport on every edge. */
     padding: var(--bf-focus-width);
-    /* Keep the content inset while the viewport scrollbar reaches the surface edge. */
-    padding-inline-end: calc(var(--bf-overlay-menu-surface-padding) + var(--bf-focus-width));
+    /* Balance the end inset with the start inset after the viewport scrollbar gap. */
+    padding-inline-end: calc(
+      var(--bf-overlay-menu-surface-padding)
+      + var(--bf-focus-width)
+      - var(--bf-overlay-menu-scrollbar-gap)
+    );
   }
 
   .section,
