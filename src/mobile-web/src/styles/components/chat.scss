@@ -364,6 +364,8 @@
 .chat-msg__menu-sheet {
   width: 100%;
   max-width: 440px;
+  max-height: 85dvh;
+  overflow-y: auto;
   background: var(--color-bg-elevated);
   border-radius: 20px 20px 0 0;
   padding: var(--size-gap-2) var(--size-gap-4) var(--size-gap-6);
@@ -428,6 +430,13 @@
   &--confirm {
     justify-content: center;
   }
+}
+
+.chat-msg__menu-note {
+  margin: 0;
+  padding: 0 var(--size-gap-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 // ── Rollback / edit confirmation ──────────────────────────────────
