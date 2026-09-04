@@ -20,6 +20,11 @@
     .user-message-item__timestamp {
       opacity: 1;
     }
+
+    .user-message-item__actions {
+      opacity: 1;
+      pointer-events: auto;
+    }
   }
 
   @media (max-width: 768px) {
@@ -62,28 +67,16 @@
   &:hover {
     background: var(--bf-color-action-quiet-hover);
     border-color: color-mix(in srgb, var(--bf-color-border-subtle) 56%, transparent);
-
-    .user-message-item__actions {
-      opacity: 1;
-    }
   }
 
   &:focus-within {
     border-color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent) 68%, var(--bf-color-border-default));
-
-    .user-message-item__actions {
-      opacity: 1;
-    }
   }
 
 }
 
 .user-message-item__timestamp {
-  position: absolute;
-  top: calc(100% + 0.12rem);
-  /* Align with the visible right edge of the rollback glyph: bubble padding
-     plus half of the 28px action hit area left outside its 14px icon. */
-  right: calc(0.68rem + 7px);
+  /* The timestamp shares the external meta row with the action cluster. */
   color: var(--bf-color-content-muted);
   font-family: var(--bf-type-flow-meta-font-family);
   font-size: var(--bf-type-flow-meta-font-size);
@@ -94,6 +87,24 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease;
+}
+
+.user-message-item__meta {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  box-sizing: border-box;
+  padding: 0.12rem 0 0;
+  min-height: 1rem;
+  // Keep the shell hovered while the pointer travels from the bubble to the
+  // timestamp/actions row, so the controls do not disappear before they can
+  // be reached.
+  pointer-events: auto;
 }
 
 .user-message-item__main {
@@ -133,19 +144,11 @@
   gap: 0.125rem;
   flex-shrink: 0;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 140ms ease;
-  /*
-   * The 28px hit targets are taller than the first-line box, and they keep that
-   * layout box while idle at `opacity: 0`. Left alone the cluster becomes the
-   * tallest item in `.user-message-item__main`, so `align-items: flex-start`
-   * pins a single-line message to the top of an over-tall row and the text
-   * reads as sitting above the bubble's centre. Collapsing the cluster to the
-   * first-line box hands the row height back to the text — restoring the
-   * bubble's symmetric vertical padding — and centres the buttons on the first
-   * line for taller messages.
-   */
-  margin-top: calc((var(--user-message-line-box) - 28px) / 2);
-  margin-bottom: calc((var(--user-message-line-box) - 28px) / 2);
+  /* Absolute positioning keeps the 28px hit targets out of the message row's
+     height, so moving them beside the timestamp cannot add bottom spacing. */
+  margin: 0;
 }
 
 .user-message-item__blocks {

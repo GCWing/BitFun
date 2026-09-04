@@ -4,7 +4,7 @@ export const userMessageItemAppearanceDescriptor: AppearanceSurfaceDescriptor = 
   id: 'user-message-item',
   parts: [
     { id: 'root' }, { id: 'main' }, { id: 'content' },
-    { id: 'steeringTag' }, { id: 'actions' }, { id: 'images' }, { id: 'image' },
+    { id: 'steeringTag' }, { id: 'meta' }, { id: 'actions' }, { id: 'images' }, { id: 'image' },
     { id: 'timestamp' }, { id: 'lightbox' }, { id: 'loading' },
   ],
   states: [
