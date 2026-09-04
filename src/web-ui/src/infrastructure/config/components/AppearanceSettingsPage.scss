@@ -28,7 +28,7 @@
 
   &__gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 240px));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--openbitfun-space-4);
     width: 100%;
     min-width: 0;
@@ -38,7 +38,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    width: min(240px, 100%);
+    width: 100%;
     height: 160px;
     overflow: hidden;
     border-radius: var(--openbitfun-radius-md);

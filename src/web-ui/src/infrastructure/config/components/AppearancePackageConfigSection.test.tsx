@@ -130,8 +130,11 @@ describe('AppearancePackageConfigSection', () => {
       resolve(process.cwd(), 'src', 'infrastructure', 'config', 'components', 'AppearanceSettingsPage.scss'),
       'utf8',
     );
+    const galleryRule = styles.match(/&__gallery \{([\s\S]*?)\n  \}/)?.[1] ?? '';
     const cardRule = styles.match(/&__card \{([\s\S]*?)\n  \}/)?.[1] ?? '';
 
+    expect(galleryRule).toContain('grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));');
+    expect(cardRule).toContain('width: 100%;');
     expect(cardRule).not.toContain('border:');
     expect(styles).toMatch(/&__card-body--inline \{\s*flex-direction: row;/);
     expect(styles).toMatch(/&__builtin-theme-select \{[\s\S]*?flex: 0 0 112px;/);
