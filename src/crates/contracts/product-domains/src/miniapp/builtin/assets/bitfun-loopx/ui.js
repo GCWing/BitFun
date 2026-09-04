@@ -180,6 +180,7 @@ const COPY = {
     pause: '暂停',
     resume: '恢复',
     resumeRepository: '恢复仓库任务（{value}）',
+    resumeTargetMissing: '恢复目标已失效，请刷新任务列表后重试',
     resumingRepository: '正在恢复异常任务…',
     repositorySerial: '同仓库串行执行',
     batchAction: '批量操作',
@@ -514,6 +515,7 @@ const COPY = {
     pause: 'Pause',
     resume: 'Resume',
     resumeRepository: 'Recover repository tasks ({value})',
+    resumeTargetMissing: 'Resume target is stale; refresh the task list and retry',
     resumingRepository: 'Recovering failed tasks...',
     repositorySerial: 'Runs serially per repository',
     batchAction: 'Batch action',
@@ -3556,7 +3558,10 @@ async function resetLoopx() {
 
 function openRepositoryResumeDialog() {
   const target = state.repositoryResumeTarget;
-  if (!target || !target.tasks.length) return;
+  if (!target || !target.tasks.length) {
+    showNotice(text('resumeTargetMissing'), 'error');
+    return;
+  }
   view.repositoryResumeMessage.textContent = text('resumeRepositoryMessage', {
     repository: repositoryLabel(target.repository),
     value: target.tasks.length,
@@ -3567,6 +3572,7 @@ function openRepositoryResumeDialog() {
 async function resumeRepository() {
   const target = state.repositoryResumeTarget;
   if (!target || !target.tasks.length || !state.snapshot) {
+    showNotice(text('resumeTargetMissing'), 'error');
     view.repositoryResumeDialog.close();
     return;
   }
