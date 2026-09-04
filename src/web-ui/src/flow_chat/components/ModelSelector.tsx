@@ -1047,7 +1047,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     allModels.length,
     configLoadState,
     externalCurrentModel,
-    externalCurrentModelId,
     externalSelectionIsUnavailable,
     externalSelection?.includeLocalCatalog,
     externalSelection?.models,
