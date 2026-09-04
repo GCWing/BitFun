@@ -1,11 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clearComposerForSubmission,
   failedSubmissionRecoveryTarget,
   shouldRecordContextMutation,
   successfulRetryCleanupTarget,
 } from './chatInputDraftRecovery';
 
 describe('ChatInput failed submission recovery', () => {
+  it('clears text and attachments in the same synchronous submission step', () => {
+    const draft = {
+      value: 'describe this image',
+      contextIds: ['image-1'],
+      pendingLargePastes: ['paste-1'],
+      queuedInput: 'describe this image' as string | null,
+    };
+
+    clearComposerForSubmission({
+      clearValue: () => { draft.value = ''; },
+      clearContexts: () => { draft.contextIds = []; },
+      clearPendingLargePastes: () => { draft.pendingLargePastes = []; },
+      clearQueuedInput: () => { draft.queuedInput = null; },
+    });
+
+    expect(draft).toEqual({
+      value: '',
+      contextIds: [],
+      pendingLargePastes: [],
+      queuedInput: null,
+    });
+  });
+
   it('restores the visible composer only when the same session is still unchanged', () => {
     expect(failedSubmissionRecoveryTarget('session-a', 'session-a', 4, 4)).toBe('current');
   });

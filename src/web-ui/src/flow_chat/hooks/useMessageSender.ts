@@ -82,6 +82,8 @@ interface UseMessageSenderReturn {
         value: string;
         pendingLargePastes: PendingLargePasteMap;
       };
+      /** Set false when the caller already cleared the full composer synchronously. */
+      clearContextsOnSuccess?: boolean;
       execution?: AgentDialogTurnExecution;
     }
   ) => Promise<void>;
@@ -112,6 +114,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         value: string;
         pendingLargePastes: PendingLargePasteMap;
       };
+      clearContextsOnSuccess?: boolean;
       execution?: AgentDialogTurnExecution;
     }
   ) => {
@@ -252,7 +255,9 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         }
       );
 
-      onClearContexts();
+      if (options?.clearContextsOnSuccess !== false) {
+        onClearContexts();
+      }
 
       // The one-off mode belongs to the submission that just left, not to the
       // next one the user types.
