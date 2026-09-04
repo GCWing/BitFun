@@ -554,7 +554,14 @@ export class SettingsController {
       return;
     }
     const selectionVersion = ++this.accountDeviceSelectionVersion;
-    if (deviceId === cloud.remoteState.controlTargetDeviceId && cloud.remoteState.connectionState === 'connected') {
+    // A QR room and an account-device link can identify the same physical
+    // desktop. Only short-circuit when the active transport is already the
+    // account path the user selected; otherwise this tap is an intentional
+    // room -> account migration and must replace the transport and persist the
+    // account target for the next launch.
+    if (cloud.remoteState.controlTargetType === 'account_device' &&
+      deviceId === cloud.remoteState.controlTargetDeviceId &&
+      cloud.remoteState.connectionState === 'connected') {
       cloud.hooks.closeConnectSheet();
       if (navigateHome) {
         cloud.hooks.navigateRemoteHome();

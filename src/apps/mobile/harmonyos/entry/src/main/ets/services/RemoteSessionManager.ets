@@ -49,12 +49,21 @@ export interface ProvisionedPeerDevice {
 const ACCOUNT_HANDSHAKE_TIMEOUT_MS: number = 15000;
 
 export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
-  private readonly roomClient: RelayHttpClient = new RelayHttpClient();
+  private readonly roomClient: RelayHttpClient;
   private transport?: RemoteCommandTransport;
   private transportGeneration: number = 0;
   private crypto?: RemoteCrypto;
   private workspace?: WorkspaceInfo;
   private roomRelayUrl: string = '';
+  private readonly cryptoFactory: () => RemoteCrypto;
+
+  constructor(
+    roomClient: RelayHttpClient = new RelayHttpClient(),
+    cryptoFactory: () => RemoteCrypto = () => new RemoteCrypto()
+  ) {
+    this.roomClient = roomClient;
+    this.cryptoFactory = cryptoFactory;
+  }
 
   reset(): void {
     this.transportGeneration += 1;
@@ -68,15 +77,21 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   async connect(descriptor: RemoteDescriptor, identity: PairIdentity, deviceId: string): Promise<InitialSyncResult> {
     this.transportGeneration += 1;
-    this.crypto = new RemoteCrypto();
-    this.roomRelayUrl = descriptor.relayUrl;
-    this.roomClient.bind(descriptor, this.crypto);
+    // A previous room transport owns this same RelayHttpClient. Reset it before
+    // binding the newly scanned descriptor; resetting afterwards would erase
+    // the new room and make every retry fail before the pairing HTTP request.
     this.transport?.reset();
+    this.crypto = undefined;
+    this.workspace = undefined;
+    this.roomRelayUrl = '';
+    this.crypto = this.cryptoFactory();
+    this.roomClient.bind(descriptor, this.crypto);
     this.transport = new RoomRemoteCommandTransport(this.roomClient);
     const initialSync = await this.roomClient.pair(deviceId, identity);
     // Account inheritance is optional for room pairing. A desktop without an
     // account, or an older desktop build, must not make normal QR control fail.
     await this.roomClient.requestDelegatedIdentity();
+    this.roomRelayUrl = descriptor.relayUrl;
     this.workspace = RemoteResponseMapper.workspaceFromInitialSync(initialSync);
     return {
       workspace: this.workspace,
@@ -141,6 +156,11 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
   ): Promise<InitialSyncResult> {
     this.transportGeneration += 1;
     this.transport?.reset();
+    // Account-device RPC replaces the room channel. Do not leave a failed or
+    // previous QR room advertised as usable after the transport has changed.
+    this.crypto = undefined;
+    this.workspace = undefined;
+    this.roomRelayUrl = '';
     this.transport = new AccountDeviceCommandTransport(accountClient, relayUrl, session, targetDeviceId);
     let workspaceResponse: WorkspaceInfoResponse;
     try {
