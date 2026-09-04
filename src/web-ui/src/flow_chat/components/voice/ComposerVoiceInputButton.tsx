@@ -240,7 +240,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
 
           <span className="bitfun-chat-input__voice-pill-divider" data-bf-component="composer-voice-input" data-bf-part="divider" aria-hidden="true" />
 
-          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="cancel" data-bf-state={transcribing ? 'disabled' : undefined}>
+          <span className="bitfun-chat-input__voice-pill-action-shell" data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="cancel" data-bf-state={transcribing ? 'disabled' : undefined}>
             <Tooltip content={controller.cancelTooltip}>
               <ChatComposerActionButton
                 aria-label={controller.cancelTooltip}
@@ -256,7 +256,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             </Tooltip>
           </span>
 
-          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="transcribe" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
+          <span className="bitfun-chat-input__voice-pill-action-shell" data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="transcribe" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
             <Tooltip content={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}>
               <ChatComposerActionButton
                 aria-label={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
@@ -276,7 +276,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             </Tooltip>
           </span>
 
-          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="send" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
+          <span className="bitfun-chat-input__voice-pill-action-shell" data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="send" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
             <Tooltip content={controlsDisabled ? controller.tooltip : controller.sendTooltip}>
               <ChatComposerActionButton
                 aria-label={controlsDisabled ? controller.tooltip : controller.sendTooltip}

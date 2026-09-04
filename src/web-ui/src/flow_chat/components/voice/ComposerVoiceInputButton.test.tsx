@@ -61,6 +61,12 @@ describe('ComposerVoiceInputButton', () => {
     const cancel = container.querySelector<HTMLButtonElement>('[data-bf-action="cancel"] button');
     const transcribe = container.querySelector<HTMLButtonElement>('[data-bf-action="transcribe"] button');
     const send = container.querySelector<HTMLButtonElement>('[data-bf-action="send"] button');
+    const actionShells = container.querySelectorAll<HTMLElement>('[data-bf-part="action"]');
+
+    expect(actionShells).toHaveLength(3);
+    actionShells.forEach((actionShell) => {
+      expect(actionShell.classList.contains('bitfun-chat-input__voice-pill-action-shell')).toBe(true);
+    });
 
     expect(cancel).toMatchObject({
       dataset: expect.objectContaining({

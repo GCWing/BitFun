@@ -239,6 +239,15 @@
   background: var(--bf-color-border-subtle);
 }
 
+.bitfun-chat-input__voice-pill-action-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: var(--bf-control-chat-composer-control-height);
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
 .bitfun-chat-input__voice-pill-action[data-bf-component='icon-button'] {
   transition:
     color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
