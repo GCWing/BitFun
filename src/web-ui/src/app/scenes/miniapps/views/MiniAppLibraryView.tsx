@@ -676,7 +676,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
                 && busyListingId
                 && busyListingId !== item.listing.listingId,
             );
-            const meta = item.listing
+            const metaLabel = item.listing
               ? t('market.library.marketMeta', {
                 owner: item.listing.owner.login,
                 rating: item.listing.ratingAverage.toFixed(1),
@@ -701,8 +701,14 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
                 category={categoryLabel(sourceCategory, t)}
                 description={description}
                 detailsLabel={t('market.library.viewDetails', { name })}
-                meta={meta}
+                downloadCount={item.listing
+                  ? formatNumber(item.listing.downloadCount)
+                  : undefined}
+                localMeta={item.listing ? undefined : t('market.library.localMeta')}
+                metaLabel={metaLabel}
                 name={name}
+                owner={item.listing?.owner.login}
+                rating={item.listing?.ratingAverage.toFixed(1)}
                 showcaseAlt={t('market.library.showcaseAlt', { name })}
                 showcaseFallbackLabel={t('market.library.showcaseFallback', { name })}
                 showcaseUrl={item.listing?.screenshotUrls[0]}
@@ -758,13 +764,6 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         subtitle={t('subtitle')}
         actions={(
           <div className="miniapp-gallery__header-actions">
-            <SearchField
-              leadingIcon={<Icon name="search" size="lg" aria-hidden />}
-              onValueChange={setQuery}
-              placeholder={t('searchPlaceholder')}
-              size="sm"
-              value={query}
-            />
             <MarketAccountControls
               loginOpen={loginOpen}
               onLoginOpenChange={setLoginOpen}
@@ -841,7 +840,23 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
       >
         <GalleryZone
           title={t('allApps')}
-          titleAdornment={<NumberBadge value={libraryItems.length} />}
+          titleAdornment={(
+            <span
+              className="miniapp-gallery__heading-actions"
+              data-bf-component="miniapp-gallery-view"
+              data-bf-part="tools"
+            >
+              <NumberBadge value={libraryItems.length} />
+              <SearchField
+                className="miniapp-gallery__search"
+                leadingIcon={<Icon name="search" size="lg" aria-hidden />}
+                onValueChange={setQuery}
+                placeholder={t('searchPlaceholder')}
+                size="sm"
+                value={query}
+              />
+            </span>
+          )}
           tools={(
             <Select
               className="miniapp-gallery__sort"

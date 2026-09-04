@@ -1,5 +1,12 @@
 import { Button, StatusPill, type StatusPillTone } from '@bitfun/ui';
-import { GalleryHorizontalEnd } from 'lucide-react';
+import {
+  Download,
+  GalleryHorizontalEnd,
+  HardDrive,
+  Package,
+  Star,
+  UserRound,
+} from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 import {
@@ -23,10 +30,14 @@ interface MiniAppLibraryRowProps {
   category: string;
   description: string;
   detailsLabel: string;
-  meta?: string;
+  downloadCount?: string;
+  localMeta?: string;
+  metaLabel?: string;
   name: string;
   onOpenDetails: () => void;
   onPrimaryAction: () => void;
+  owner?: string;
+  rating?: string;
   showcaseAlt: string;
   showcaseFallbackLabel: string;
   showcaseUrl?: string;
@@ -43,10 +54,14 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
   category,
   description,
   detailsLabel,
-  meta,
+  downloadCount,
+  localMeta,
+  metaLabel,
   name,
   onOpenDetails,
   onPrimaryAction,
+  owner,
+  rating,
   showcaseAlt,
   showcaseFallbackLabel,
   showcaseUrl,
@@ -110,23 +125,52 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
           data-bf-component="miniapp-gallery-view"
           data-bf-part="summary"
         >
-          <span className="miniapp-library-row__status-rail">
-            <span className="miniapp-library-row__category">{category}</span>
-            {statuses.map((status) => (
-              <StatusPill key={`${status.tone}:${status.label}`} tone={status.tone}>
-                {status.label}
-              </StatusPill>
-            ))}
+          <span
+            className="miniapp-library-row__title-row"
+            data-bf-component="miniapp-gallery-view"
+            data-bf-part="title"
+          >
+            <StatusPill className="miniapp-library-row__category" tone="neutral">
+              {category}
+            </StatusPill>
+            <strong className="miniapp-library-row__name">{name}</strong>
           </span>
-          <strong className="miniapp-library-row__name">{name}</strong>
           <span className="miniapp-library-row__description">{description}</span>
           <span
             className="miniapp-library-row__meta"
             data-bf-component="miniapp-gallery-view"
             data-bf-part="meta"
+            role="group"
+            aria-label={[version, metaLabel].filter(Boolean).join(', ')}
           >
-            <span>{version}</span>
-            {meta ? <span>{meta}</span> : null}
+            <span className="miniapp-library-row__meta-item">
+              <Package size={13} strokeWidth={1.8} aria-hidden="true" />
+              <span>{version}</span>
+            </span>
+            {owner ? (
+              <span className="miniapp-library-row__meta-item miniapp-library-row__meta-item--owner">
+                <UserRound size={13} strokeWidth={1.8} aria-hidden="true" />
+                <span>@{owner}</span>
+              </span>
+            ) : null}
+            {rating ? (
+              <span className="miniapp-library-row__meta-item">
+                <Star size={13} strokeWidth={1.8} aria-hidden="true" />
+                <span>{rating}</span>
+              </span>
+            ) : null}
+            {downloadCount ? (
+              <span className="miniapp-library-row__meta-item">
+                <Download size={13} strokeWidth={1.8} aria-hidden="true" />
+                <span>{downloadCount}</span>
+              </span>
+            ) : null}
+            {localMeta ? (
+              <span className="miniapp-library-row__meta-item miniapp-library-row__meta-item--local">
+                <HardDrive size={13} strokeWidth={1.8} aria-hidden="true" />
+                <span>{localMeta}</span>
+              </span>
+            ) : null}
           </span>
         </span>
       </button>
@@ -136,6 +180,23 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
         data-bf-component="miniapp-gallery-view"
         data-bf-part="actions"
       >
+        {statuses.length > 0 ? (
+          <div
+            className="miniapp-library-row__status-rail"
+            data-bf-component="miniapp-gallery-view"
+            data-bf-part="status"
+          >
+            {statuses.map((status) => (
+              <StatusPill
+                className="miniapp-library-row__status"
+                key={`${status.tone}:${status.label}`}
+                tone={status.tone}
+              >
+                {status.label}
+              </StatusPill>
+            ))}
+          </div>
+        ) : null}
         <Button
           className="miniapp-library-row__primary"
           size="sm"
