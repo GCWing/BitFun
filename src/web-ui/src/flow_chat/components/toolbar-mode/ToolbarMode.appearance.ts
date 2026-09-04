@@ -5,8 +5,8 @@ export const toolbarModeAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   parts: [
     { id: 'root' }, { id: 'header' }, { id: 'headerLeft' }, { id: 'title' },
     { id: 'headerActions' }, { id: 'overflowTrigger' }, { id: 'overflowMenu' },
-    { id: 'overflowItem' }, { id: 'collapsedActions' }, { id: 'content' },
-    { id: 'stream' }, { id: 'tool' }, { id: 'toolName' },
+    { id: 'overflowItem' }, { id: 'collapsedActions' }, { id: 'sessionSurface' },
+    { id: 'content' }, { id: 'stream' }, { id: 'tool' }, { id: 'toolName' },
     { id: 'toolSummary' }, { id: 'todo' }, { id: 'todoProgress' },
     { id: 'todoCurrent' }, { id: 'streamText' }, { id: 'controls' },
   ],

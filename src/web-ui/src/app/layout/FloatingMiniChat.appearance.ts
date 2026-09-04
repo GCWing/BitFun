@@ -4,7 +4,8 @@ export const floatingMiniChatAppearanceDescriptor: AppearanceSurfaceDescriptor =
   parts: [
     { id: 'root' }, { id: 'backdrop' }, { id: 'trigger' }, { id: 'triggerActivity' },
     { id: 'triggerIcon' }, { id: 'panel' }, { id: 'header' }, { id: 'sessionIcon' },
-    { id: 'headerAction' }, { id: 'title' }, { id: 'pending' }, { id: 'pendingIcon' },
+    { id: 'headerAction' }, { id: 'title' }, { id: 'body' },
+    { id: 'pending' }, { id: 'pendingIcon' },
   ],
   facets: [
     { id: 'mode', attribute: 'data-bf-mode', values: ['chat', 'miniapp'] },

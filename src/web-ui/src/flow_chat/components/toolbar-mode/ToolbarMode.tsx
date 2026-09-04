@@ -350,18 +350,21 @@ export const ToolbarMode: React.FC = () => {
       {isExpanded ? (
         /* ConversationModeSurface is also used by the Hello bubble. It owns
            text/voice mode while ChatPane remains the one shared chat surface. */
-        <ConversationModeSurface
+        <div
           className="bitfun-toolbar-mode__session-surface"
-          switchTestId="toolbar-realtime-voice-mode-switch"
+          data-bf-component="toolbar-mode"
+          data-bf-part="sessionSurface"
         >
-          <ChatPane
-            width={0}
-            isFullscreen={false}
-            isSceneActive
-            workspacePath={workspacePath}
-            showChatInput
-          />
-        </ConversationModeSurface>
+          <ConversationModeSurface switchTestId="toolbar-realtime-voice-mode-switch">
+            <ChatPane
+              width={0}
+              isFullscreen={false}
+              isSceneActive
+              workspacePath={workspacePath}
+              showChatInput
+            />
+          </ConversationModeSurface>
+        </div>
       ) : (
         <div className="bitfun-toolbar-mode__content-row" data-bf-component="toolbar-mode" data-bf-part="content">
           <div className="bitfun-toolbar-mode__stream-content" onClick={() => void handleToggleExpanded()} data-bf-component="toolbar-mode" data-bf-part="stream" data-bf-content-kind={currentStreamState.toolName ? 'tool' : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? 'todo' : 'text'} data-bf-state={currentStreamState.isStreaming ? 'streaming' : undefined}>

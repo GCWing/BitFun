@@ -655,52 +655,57 @@ export const FloatingMiniChat: React.FC = () => {
         {/* Main window session surface, reused as-is. Only mounted while the
             panel is open to avoid running a second VirtualMessageList and store
             sync in the background while the agent streams in another scene. */}
-        <ConversationModeSurface
+        <div
           className="bitfun-fmc__body"
-          voiceTarget={miniAppVoiceTarget}
-          voiceStartDisabled={isMiniAppBubbleIsolated && !miniAppVoiceTarget}
-          switchTestId="hello-realtime-voice-mode-switch"
+          data-bf-component="floating-mini-chat"
+          data-bf-part="body"
         >
-          {surfaceMounted && isMiniAppSessionReady && (
-            <ChatPane
-              width={0}
-              isFullscreen={false}
-              isSceneActive
-              workspacePath={
-                isMiniAppBubbleIsolated
-                  ? displayedSession?.workspacePath
-                  : workspacePath
-              }
-              showChatInput
-              chatInputRegistration={chatInputRegistration}
-              emptyState={activeComposerClaim ? (
-                <MiniAppBubbleWelcome
-                  appName={activeMiniAppName}
-                  appDescription={activeMiniAppDescription}
-                  appIcon={activeMiniAppIcon}
-                  customization={bubbleCustomization}
-                  workspacePath={displayedSession?.workspacePath}
-                  onSuggestion={handleMiniAppSuggestion}
-                />
-              ) : undefined}
-            />
-          )}
-          {surfaceMounted && isMiniAppBubbleIsolated && !isMiniAppSessionReady && (
-            <div className="bitfun-fmc__miniapp-session-pending" data-bf-component="floating-mini-chat" data-bf-part="pending">
-              <div
-                className="bitfun-fmc__miniapp-session-pending-icon"
-                data-bf-component="floating-mini-chat"
-                data-bf-part="pendingIcon"
-                aria-hidden="true"
-              >
-                {renderMiniAppIcon(activeMiniAppIcon, 22)}
+          <ConversationModeSurface
+            voiceTarget={miniAppVoiceTarget}
+            voiceStartDisabled={isMiniAppBubbleIsolated && !miniAppVoiceTarget}
+            switchTestId="hello-realtime-voice-mode-switch"
+          >
+            {surfaceMounted && isMiniAppSessionReady && (
+              <ChatPane
+                width={0}
+                isFullscreen={false}
+                isSceneActive
+                workspacePath={
+                  isMiniAppBubbleIsolated
+                    ? displayedSession?.workspacePath
+                    : workspacePath
+                }
+                showChatInput
+                chatInputRegistration={chatInputRegistration}
+                emptyState={activeComposerClaim ? (
+                  <MiniAppBubbleWelcome
+                    appName={activeMiniAppName}
+                    appDescription={activeMiniAppDescription}
+                    appIcon={activeMiniAppIcon}
+                    customization={bubbleCustomization}
+                    workspacePath={displayedSession?.workspacePath}
+                    onSuggestion={handleMiniAppSuggestion}
+                  />
+                ) : undefined}
+              />
+            )}
+            {surfaceMounted && isMiniAppBubbleIsolated && !isMiniAppSessionReady && (
+              <div className="bitfun-fmc__miniapp-session-pending" data-bf-component="floating-mini-chat" data-bf-part="pending">
+                <div
+                  className="bitfun-fmc__miniapp-session-pending-icon"
+                  data-bf-component="floating-mini-chat"
+                  data-bf-part="pendingIcon"
+                  aria-hidden="true"
+                >
+                  {renderMiniAppIcon(activeMiniAppIcon, 22)}
+                </div>
+                <span>
+                  {t('miniAppComposer.hint', { app: activeMiniAppName })}
+                </span>
               </div>
-              <span>
-                {t('miniAppComposer.hint', { app: activeMiniAppName })}
-              </span>
-            </div>
-          )}
-        </ConversationModeSurface>
+            )}
+          </ConversationModeSurface>
+        </div>
       </div>
     </div>
   );

@@ -173,8 +173,8 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(welcomeSource).toContain('WELCOME_CONTENT_BLOCK_PADDING_PX + inputClearance');
     expect(styles).toContain('overflow-y: auto;');
     // The ordinary project workspace remains valid only for the host session.
-    expect(source).toContain(
-      'isMiniAppBubbleIsolated\n                  ? displayedSession?.workspacePath\n                  : workspacePath'
+    expect(source).toMatch(
+      /workspacePath=\{\s*isMiniAppBubbleIsolated\s*\?\s*displayedSession\?\.workspacePath\s*:\s*workspacePath\s*\}/
     );
   });
 
