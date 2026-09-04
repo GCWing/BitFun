@@ -112,6 +112,9 @@ const COPY = {
     outputThinking: '思考',
     outputThinkingSummary: '思考过程 · {value} 字（点击展开）',
     decisionCardTitle: '需要你的决策',
+    decisionCardTitleRecovery: '工作段被中断，需要恢复',
+    decisionResume: '恢复重试',
+    decisionCardGateHint: '请在下方审批面板中批准或拒绝该请求。',
     decisionCardRecoveryHint: '本段工作已结束，但结算未能确认持久进展；可恢复重试一次，结论详情见下方最新进展。',
     outputTool: '工具',
     outputModel: '模型',
@@ -447,6 +450,9 @@ const COPY = {
     outputThinking: 'Thinking',
     outputThinkingSummary: 'Thinking · {value} chars (click to expand)',
     decisionCardTitle: 'Needs your decision',
+    decisionCardTitleRecovery: 'Work segment was interrupted and needs recovery',
+    decisionResume: 'Resume retry',
+    decisionCardGateHint: 'Approve or reject the request in the approval panel below.',
     decisionCardRecoveryHint: 'This segment finished but settlement could not validate durable progress. You can retry recovery once; see the summary below for the conclusion.',
     outputTool: 'Tool',
     outputModel: 'Model',
@@ -1786,8 +1792,39 @@ function taskSortPriority(task) {
 
 function sortedTaskList(tasks) {
   return [...tasks].sort((left, right) =>
-    taskSortPriority(left) - taskSortPriority(right)
-    || Number(right.updatedAt || 0) - Number(left.updatedAt || 0));
+    taskExecutionRank(left) - taskExecutionRank(right)
+    || executionTieBreak(left, right));
+}
+
+/// Rail and default-focus read in ACTUAL execution order: what is running
+/// first, then the queue in creation order, then parked tasks awaiting the
+/// owner, then finished work (most recent first).
+function taskExecutionRank(task) {
+  if (isResolvedUpstream(task)) return 40;
+  const rank = {
+    running: 0,
+    preparing: 1,
+    cancelling: 2,
+    queued: 3,
+    retry_wait: 4,
+    waiting_for_user: 5,
+    recovery_required: 6,
+    stopped: 7,
+    failed: 9,
+    completed: 20,
+    archived: 21,
+  };
+  return rank[(task && task.state) || ''] ?? 30;
+}
+
+function executionTieBreak(left, right) {
+  const leftRank = taskExecutionRank(left);
+  const rightRank = taskExecutionRank(right);
+  if (leftRank >= 20 || rightRank >= 20) {
+    return Number(right.updatedAt || 0) - Number(left.updatedAt || 0);
+  }
+  return Number(left.createdAt || left.updatedAt || 0)
+    - Number(right.createdAt || right.updatedAt || 0);
 }
 
 function progressItemLabel(task) {
@@ -2486,9 +2523,11 @@ function renderIssueApproval(task) {
 function renderIssueStatus(task) {
   const card = view.issueDecisionCard;
   if (!card) return;
+  const waiting = Boolean(task) && task.state === 'waiting_for_user';
+  const recovery = Boolean(task) && task.state === 'recovery_required';
   const show = Boolean(task)
     && !isResolvedUpstream(task)
-    && (task.state === 'waiting_for_user' || task.state === 'recovery_required');
+    && (waiting || recovery);
   card.hidden = !show;
   if (!show) {
     card.replaceChildren();
@@ -2496,12 +2535,18 @@ function renderIssueStatus(task) {
   }
   card.replaceChildren();
   const heading = document.createElement('strong');
-  heading.textContent = text('decisionCardTitle');
+  heading.textContent = text(waiting ? 'decisionCardTitle' : 'decisionCardTitleRecovery');
   const body = document.createElement('p');
   body.className = 'issue-decision-card__message';
   body.textContent = String(task.pendingGateMessage || '').trim()
-    || text('decisionCardRecoveryHint');
+    || text(waiting ? 'decisionCardGateHint' : 'decisionCardRecoveryHint');
   card.append(heading, body);
+  const actions = document.createElement('div');
+  actions.className = 'issue-decision-card__actions';
+  if (recovery) {
+    actions.append(makeActionButton(text('decisionResume'), 'resume', task, 'primary'));
+  }
+  card.append(actions);
 }
 
 function renderIssueBrief(task) {

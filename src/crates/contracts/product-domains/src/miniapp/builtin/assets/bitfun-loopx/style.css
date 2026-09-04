@@ -849,6 +849,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 }
 .issue-decision-card[hidden] { display: none; }
 .issue-decision-card__message { margin: 0; color: var(--lx-text); font-size: 13px; line-height: 1.5; }
+.issue-decision-card__actions { display: flex; gap: 8px; margin-top: 2px; }
 
 .output-block__thinking { margin-top: 6px; }
 .output-block__thinking summary {
