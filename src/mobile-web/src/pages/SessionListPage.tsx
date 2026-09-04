@@ -1,7 +1,19 @@
 import React, { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import HarnessProfilePicker from '../components/HarnessProfilePicker';
+import {
+  MobileButton,
+  MobileBanner,
+  MobileChoiceSheet,
+  MobileFloatingActions,
+  MobileIconButton,
+  MobileSection,
+  MobileSegmentedControl,
+  MobileStatus,
+  MobileTextField,
+} from '@bitfun/ui/mobile';
 import LanguageToggleButton from '../components/LanguageToggleButton';
+import SessionOverlays from '../components/SessionOverlays';
+import CompactSettingsSheet from '../components/CompactSettingsSheet';
+import { SessionHistoryPanel, SessionLaunchPanel } from '../components/SessionDashboardSections';
 import { useControlTargetEpoch } from '../hooks/useControlTargetEpoch';
 import { useI18n } from '../i18n';
 import {
@@ -21,11 +33,6 @@ import {
 } from '../services/RelayHttpClient';
 
 const PAGE_SIZE = 30;
-
-const isImeOwnedKey = (event: React.KeyboardEvent, compositionActive = false): boolean => {
-  const nativeEvent = event.nativeEvent as KeyboardEvent;
-  return compositionActive || nativeEvent.isComposing || nativeEvent.keyCode === 229;
-};
 
 type DisplayMode = 'pro' | 'assistant';
 
@@ -302,7 +309,6 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   onOpenDevices,
   onControlTargetChanged,
 }) => {
-  const renameInputCompositionActiveRef = useRef(false);
   const { t, formatDate } = useI18n();
   const {
     sessions,
@@ -1559,24 +1565,26 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       <div className="harmony-sidebar">
         <header className="harmony-sidebar__header">
           <h1>BitFun</h1>
-          <button
-            type="button"
+          <MobileIconButton
+            appearance="floating"
             className="harmony-sidebar__round-action"
             aria-label={t('shared.tools.search')}
+            icon={(
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m16.5 16.5 4 4" />
+              </svg>
+            )}
             onClick={() => {
               setCompactSearchOpen((open) => !open);
               if (compactSearchOpen) setSearchQuery('');
             }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m16.5 16.5 4 4" />
-            </svg>
-          </button>
+            selected={compactSearchOpen}
+          />
         </header>
 
         {compactSearchOpen && (
-          <input
+          <MobileTextField
             className="harmony-sidebar__search"
             type="search"
             value={searchQuery}
@@ -1587,18 +1595,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
         )}
 
         <div className="harmony-sidebar__scroll">
-          <section className="harmony-sidebar__section">
+          <MobileSection className="harmony-sidebar__section">
             <div className="harmony-sidebar__section-heading">
               <h2>{t('devices.title')}</h2>
               <span className="harmony-sidebar__heading-actions">
-                <button type="button" aria-label={t('devices.refresh')} onClick={() => void loadCompactDirectory()}>
-                  <svg className={compactDirectoryLoading ? 'is-spinning' : ''} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <MobileIconButton appearance="plain" size="sm" aria-label={t('devices.refresh')} loading={compactDirectoryLoading} onClick={() => void loadCompactDirectory()} icon={<svg className={compactDirectoryLoading ? 'is-spinning' : ''} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/>
-                  </svg>
-                </button>
-                <button type="button" aria-label={t('devices.title')} onClick={onOpenDevices}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
-                </button>
+                  </svg>} />
+                <MobileIconButton appearance="plain" size="sm" aria-label={t('devices.title')} onClick={onOpenDevices} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>} />
               </span>
             </div>
             <div className="harmony-sidebar__rows">
@@ -1606,8 +1610,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                 const isCurrent = device.device_id === compactSelectedDeviceId;
                 const isSwitching = device.device_id === compactSwitchingDeviceId;
                 return (
-                  <button
-                    type="button"
+                  <MobileButton
+                    appearance="plain"
+                    block
                     className={`harmony-sidebar__device-row${isCurrent ? ' is-current' : ''}`}
                     key={device.device_id}
                     disabled={!device.online || (!!compactSwitchingDeviceId && !isSwitching)}
@@ -1623,31 +1628,29 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                     <span className={`harmony-sidebar__chevron${isCurrent ? ' is-expanded' : ''}`} aria-hidden="true">
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 2.5 4.5 4.5-4.5 4.5"/></svg>
                     </span>
-                  </button>
+                  </MobileButton>
                 );
               })}
               {projectedCompactDevices.length > compactVisibleDeviceCount && (
-                <button type="button" className="harmony-sidebar__more-row" onClick={() => setCompactVisibleDeviceCount((count) => count + 3)}>
+                <MobileButton appearance="plain" block className="harmony-sidebar__more-row" onClick={() => setCompactVisibleDeviceCount((count) => count + 3)}>
                   <span>···</span>{t('shell.moreDevices', { count: projectedCompactDevices.length - compactVisibleDeviceCount })}
-                </button>
+                </MobileButton>
               )}
             </div>
-          </section>
+          </MobileSection>
 
           {compactSelectedDeviceId && (
-            <section className="harmony-sidebar__section harmony-sidebar__section--workspaces">
+            <MobileSection className="harmony-sidebar__section harmony-sidebar__section--workspaces">
               <div className="harmony-sidebar__section-heading">
                 <h2>{t('shared.features.workspace')}</h2>
-                <button type="button" aria-label={t('workspace.selectWorkspace')} onClick={onOpenWorkspace}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
-                </button>
+                <MobileIconButton appearance="plain" size="sm" aria-label={t('workspace.selectWorkspace')} onClick={onOpenWorkspace} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>} />
               </div>
               <div className="harmony-sidebar__rows">
                 {compactDirectoryLoading && compactWorkspaces.length === 0 && (
-                  <p className="harmony-sidebar__empty"><span className="spinner" />{t('common.loading')}</p>
+                  <MobileStatus className="harmony-sidebar__empty" loading title={t('common.loading')} />
                 )}
                 {!compactDirectoryLoading && compactWorkspaces.length === 0 && (
-                  <p className="harmony-sidebar__empty">{t('sessions.noWorkspaces')}</p>
+                  <MobileStatus className="harmony-sidebar__empty" description={t('sessions.noWorkspaces')} />
                 )}
                 {compactWorkspaces.slice(0, compactVisibleWorkspaceCount).map((workspace) => {
                   const key = compactWorkspaceKey(workspace);
@@ -1664,47 +1667,44 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                   return (
                     <div className="harmony-sidebar__workspace-group" key={key}>
                       <div className={`harmony-sidebar__workspace-row${current ? ' is-current' : ''}`}>
-                        <button type="button" className={`harmony-sidebar__workspace-disclosure${expanded ? ' is-expanded' : ''}`} onClick={() => void handleToggleCompactWorkspace(workspace)} aria-label={expanded ? t('common.close') : t('sessions.sessionHistory')}>
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 2.5 4.5 4.5-4.5 4.5"/></svg>
-                        </button>
-                        <button type="button" className="harmony-sidebar__workspace-main" onClick={() => void handleToggleCompactWorkspace(workspace)}>
+                        <MobileIconButton appearance="plain" size="sm" className={`harmony-sidebar__workspace-disclosure${expanded ? ' is-expanded' : ''}`} onClick={() => void handleToggleCompactWorkspace(workspace)} aria-label={expanded ? t('common.close') : t('sessions.sessionHistory')} icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 2.5 4.5 4.5-4.5 4.5"/></svg>} />
+                        <MobileButton appearance="plain" block className="harmony-sidebar__workspace-main" onClick={() => void handleToggleCompactWorkspace(workspace)}>
                           <span className="harmony-sidebar__folder-icon" aria-hidden="true">
                             <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4l2 2h7A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
                           </span>
                           <span className="harmony-sidebar__row-label">{workspace.name || workspace.path}</span>
-                        </button>
-                        <button type="button" className="harmony-sidebar__row-plus" onClick={() => requestHarnessCreate(workspace)} aria-label={t('shell.newChat')} disabled={creating}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 4v16M4 12h16"/></svg>
-                        </button>
+                        </MobileButton>
+                        <MobileIconButton appearance="plain" size="sm" className="harmony-sidebar__row-plus" onClick={() => requestHarnessCreate(workspace)} aria-label={t('shell.newChat')} disabled={creating} icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 4v16M4 12h16"/></svg>} />
                       </div>
                       {expanded && (
                         <div className="harmony-sidebar__workspace-sessions">
-                          {status === 'loading' && <p className="harmony-sidebar__workspace-message"><span className="spinner"/>{t('sessions.loadingSessions')}</p>}
-                          {status === 'failed' && <button type="button" className="harmony-sidebar__workspace-message" onClick={() => void handleRetryCompactWorkspace(workspace)}>{t('devices.retry')}</button>}
-                          {status === 'ready' && workspaceSessions.length === 0 && <p className="harmony-sidebar__workspace-message">{t('sessions.noSessions')}</p>}
+                          {status === 'loading' && <MobileStatus className="harmony-sidebar__workspace-message" loading title={t('sessions.loadingSessions')} />}
+                          {status === 'failed' && <MobileButton appearance="plain" block className="harmony-sidebar__workspace-message" onClick={() => void handleRetryCompactWorkspace(workspace)}>{t('devices.retry')}</MobileButton>}
+                          {status === 'ready' && workspaceSessions.length === 0 && <MobileStatus className="harmony-sidebar__workspace-message" description={t('sessions.noSessions')} />}
                           {workspaceSessions.slice(0, visibleCount).map((session) => (
                             <div
                               className={`harmony-sidebar__workspace-session${activeSessionId === session.session_id ? ' is-current' : ''}`}
                               key={session.session_id}
                               onContextMenu={(event) => { event.preventDefault(); setMenuSession(session); }}
                             >
-                              <button type="button" className="harmony-sidebar__session-main" onClick={(event) => handleSessionClick(session, event)}>
+                              <MobileButton appearance="plain" block className="harmony-sidebar__session-main" onClick={(event) => handleSessionClick(session, event)}>
                                 <span className="harmony-sidebar__session-icon" aria-hidden="true"><SessionTypeIcon agentType={session.agent_type}/></span>
                                 <span className="harmony-sidebar__row-label">{session.name || t('sessions.untitledSession')}</span>
-                              </button>
-                              <button
-                                type="button"
+                              </MobileButton>
+                              <MobileIconButton
+                                appearance="plain"
+                                size="sm"
                                 className="harmony-sidebar__session-more"
                                 aria-label={t('sessions.sessionActions')}
                                 onClick={(event) => { event.stopPropagation(); setMenuSession(session); }}
-                              >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></svg>
-                              </button>
+                                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></svg>}
+                              />
                             </div>
                           ))}
                           {(workspaceSessions.length > visibleCount || compactWorkspaceHasMore[key]) && (
-                            <button
-                              type="button"
+                            <MobileButton
+                              appearance="plain"
+                              block
                               className="harmony-sidebar__more-row harmony-sidebar__more-row--nested"
                               onClick={() => void handleLoadMoreCompactWorkspace(workspace)}
                               disabled={compactWorkspaceLoadingMore.has(key)}
@@ -1712,7 +1712,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                               {compactWorkspaceLoadingMore.has(key)
                                 ? <><span className="spinner"/>{t('sessions.loadingMore')}</>
                                 : <><span>···</span>{t('shell.moreConversations', { count: Math.max(workspaceSessions.length - visibleCount, 1) })}</>}
-                            </button>
+                            </MobileButton>
                           )}
                         </div>
                       )}
@@ -1720,20 +1720,20 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                   );
                 })}
                 {compactWorkspaces.length > compactVisibleWorkspaceCount && (
-                  <button type="button" className="harmony-sidebar__more-row" onClick={() => setCompactVisibleWorkspaceCount((count) => count + 3)}>
+                  <MobileButton appearance="plain" block className="harmony-sidebar__more-row" onClick={() => setCompactVisibleWorkspaceCount((count) => count + 3)}>
                     <span>···</span>{t('shell.moreWorkspaces', { count: compactWorkspaces.length - compactVisibleWorkspaceCount })}
-                  </button>
+                  </MobileButton>
                 )}
               </div>
-            </section>
+            </MobileSection>
           )}
 
-          <section className="harmony-sidebar__section harmony-sidebar__section--conversations">
+          <MobileSection className="harmony-sidebar__section harmony-sidebar__section--conversations">
             <div className="harmony-sidebar__section-heading harmony-sidebar__section-heading--plain">
               <h2>{t('shell.recentConversations')}</h2>
             </div>
             {visibleSessions.length === 0 ? (
-              <p className="harmony-sidebar__empty">{hasSearchQuery ? t('sessions.emptySearch') : t('sessions.noSessions')}</p>
+              <MobileStatus className="harmony-sidebar__empty" description={hasSearchQuery ? t('sessions.emptySearch') : t('sessions.noSessions')} />
             ) : (
               <div className="harmony-sidebar__rows">
                 {visibleSessions.slice(0, compactRecentVisibleCount).map((session) => (
@@ -1742,23 +1742,24 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                     key={session.session_id}
                     onContextMenu={(event) => { event.preventDefault(); setMenuSession(session); }}
                   >
-                    <button type="button" className="harmony-sidebar__session-main" onClick={(event) => handleSessionClick(session, event)}>
+                    <MobileButton appearance="plain" block className="harmony-sidebar__session-main" onClick={(event) => handleSessionClick(session, event)}>
                       <span className="harmony-sidebar__session-icon" aria-hidden="true"><SessionTypeIcon agentType={session.agent_type}/></span>
                       <span className="harmony-sidebar__row-label">{session.name || t('sessions.untitledSession')}</span>
-                    </button>
-                    <button
-                      type="button"
+                    </MobileButton>
+                    <MobileIconButton
+                      appearance="plain"
+                      size="sm"
                       className="harmony-sidebar__session-more"
                       aria-label={t('sessions.sessionActions')}
                       onClick={(event) => { event.stopPropagation(); setMenuSession(session); }}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18" cy="12" r="1.25"/></svg>
-                    </button>
+                      icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18" cy="12" r="1.25"/></svg>}
+                    />
                   </div>
                 ))}
                 {(visibleSessions.length > compactRecentVisibleCount || hasMore) && (
-                  <button
-                    type="button"
+                  <MobileButton
+                    appearance="plain"
+                    block
                     className="harmony-sidebar__more-row"
                     onClick={() => void handleLoadMoreRecent()}
                     disabled={loadingMore}
@@ -1766,246 +1767,66 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                     {loadingMore
                       ? <><span className="spinner"/>{t('sessions.loadingMore')}</>
                       : <><span>···</span>{t('shell.moreConversations', { count: Math.max(visibleSessions.length - compactRecentVisibleCount, 1) })}</>}
-                  </button>
+                  </MobileButton>
                 )}
               </div>
             )}
-          </section>
+          </MobileSection>
         </div>
 
-        <footer className="harmony-sidebar__footer">
-          <button type="button" className="harmony-sidebar__new-chat" onClick={() => isProMode ? requestHarnessCreate() : void handleCreate('claw')} disabled={creating || targetInitializing}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>
-            <span>{t('shell.newChat')}</span>
-          </button>
-          <button type="button" className="harmony-sidebar__settings" onClick={() => setCompactSettingsOpen(true)} aria-label={t('shared.features.settings')}>
-            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.09A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.09A1.7 1.7 0 0 0 15 4.2a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7 1z"/></svg>
-          </button>
-        </footer>
+        <MobileFloatingActions
+          className="harmony-sidebar__footer"
+          leading={(
+            <MobileButton appearance="secondary" className="harmony-sidebar__new-chat" onClick={() => isProMode ? requestHarnessCreate() : void handleCreate('claw')} disabled={creating || targetInitializing} leading={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>}>
+              <span>{t('shell.newChat')}</span>
+            </MobileButton>
+          )}
+          trailing={(
+            <MobileIconButton
+              appearance="floating"
+              className="harmony-sidebar__settings"
+              onClick={() => setCompactSettingsOpen(true)}
+              aria-label={t('shared.features.settings')}
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.09A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.09A1.7 1.7 0 0 0 15 4.2a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7 1z"/></svg>}
+            />
+          )}
+        />
 
-        {(menuSession || renameTarget || deleteConfirmTarget) && createPortal((
-          <>
-            {menuSession && !renameTarget && !deleteConfirmTarget && (
-              <div className="session-list__menu-overlay" onClick={() => setMenuSession(null)}>
-                <div className="session-list__menu-sheet" onClick={(event) => event.stopPropagation()}>
-                  <div className="session-list__menu-handle" />
-                  <div className="session-list__menu-title">
-                    {menuSession.name || t('sessions.untitledSession')}
-                  </div>
-                  <div className="session-list__menu-actions">
-                    <button
-                      className="session-list__menu-btn"
-                      onClick={() => {
-                        setRenameTarget(menuSession);
-                        setRenameValue(menuSession.name || '');
-                      }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      <span>{t('sessions.renameSession')}</span>
-                    </button>
-                    <button className="session-list__menu-btn session-list__menu-btn--danger" onClick={() => setDeleteConfirmTarget(menuSession)}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                      <span>{t('sessions.deleteSession')}</span>
-                    </button>
-                  </div>
-                  <button className="session-list__menu-cancel" onClick={() => setMenuSession(null)}>{t('sessions.cancel')}</button>
-                </div>
-              </div>
-            )}
+        <CompactSettingsSheet
+          accountLabel={authenticatedUserLabel}
+          devices={projectedCompactDevices}
+          isDark={isDark}
+          onClose={() => setCompactSettingsOpen(false)}
+          onDisconnectRequest={() => { setCompactSettingsOpen(false); setShowDisconnectConfirm(true); }}
+          onSelectDevice={(device) => void handleSelectCompactDevice(device)}
+          onToggleTheme={toggleTheme}
+          open={compactSettingsOpen}
+          renderDeviceIcon={(name) => <CompactDeviceIcon name={name} />}
+          selectedDeviceId={compactSelectedDeviceId}
+        />
 
-            {renameTarget && (
-              <div className="session-list__picker-overlay" onClick={() => !renaming && setRenameTarget(null)}>
-                <div className="session-list__rename-modal" onClick={(event) => event.stopPropagation()}>
-                  <h3 className="session-list__rename-title">{t('sessions.renameTitle')}</h3>
-                  <input
-                    className="session-list__rename-input"
-                    type="text"
-                    value={renameValue}
-                    onChange={(event) => setRenameValue(event.target.value)}
-                    placeholder={t('sessions.sessionNamePlaceholder')}
-                    autoFocus
-                    onKeyDown={(event) => {
-                      if (
-                        (event.key === 'Enter' || event.key === 'Escape')
-                        && isImeOwnedKey(event, renameInputCompositionActiveRef.current)
-                      ) {
-                        event.stopPropagation();
-                        return;
-                      }
-                      if (event.key === 'Enter') void handleRename();
-                      if (event.key === 'Escape') setRenameTarget(null);
-                    }}
-                    onCompositionStart={() => { renameInputCompositionActiveRef.current = true; }}
-                    onCompositionEnd={() => { renameInputCompositionActiveRef.current = false; }}
-                  />
-                  <div className="session-list__rename-actions">
-                    <button className="session-list__rename-btn session-list__rename-btn--cancel" onClick={() => setRenameTarget(null)} disabled={renaming}>{t('sessions.cancel')}</button>
-                    <button className="session-list__rename-btn session-list__rename-btn--save" onClick={() => void handleRename()} disabled={renaming || !renameValue.trim()}>
-                      {renaming ? '...' : t('sessions.save')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {deleteConfirmTarget && (
-              <div
-                className="session-list__picker-overlay"
-                onClick={() => !deleting && setDeleteConfirmTarget(null)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') setDeleteConfirmTarget(null);
-                  if (event.key === 'Enter' && !deleting) void handleDelete();
-                }}
-              >
-                <div className="session-list__confirm-modal" onClick={(event) => event.stopPropagation()}>
-                  <div className="session-list__confirm-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                  </div>
-                  <h3 className="session-list__confirm-title">{t('sessions.confirmDelete')}</h3>
-                  <p className="session-list__confirm-desc">
-                    "{deleteConfirmTarget.name || t('sessions.untitledSession')}"<br />
-                    {t('sessions.confirmDeleteDesc')}
-                  </p>
-                  <div className="session-list__confirm-actions">
-                    <button className="session-list__confirm-btn session-list__confirm-btn--cancel" onClick={() => setDeleteConfirmTarget(null)} disabled={deleting}>{t('sessions.cancel')}</button>
-                    <button className="session-list__confirm-btn session-list__confirm-btn--danger" onClick={() => void handleDelete()} disabled={deleting}>
-                      {deleting ? '...' : t('sessions.deleteSession')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        ), document.body)}
-
-        {compactSettingsOpen && createPortal((
-          <div className="harmony-sidebar__sheet-backdrop" onClick={() => setCompactSettingsOpen(false)}>
-            <section className="harmony-sidebar__settings-sheet" role="dialog" aria-modal="true" aria-labelledby="compact-settings-title" onClick={(event) => event.stopPropagation()}>
-              <header>
-                <h2 id="compact-settings-title">{t('shared.features.settings')}</h2>
-                <button type="button" onClick={() => setCompactSettingsOpen(false)} aria-label={t('common.close')}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
-                </button>
-              </header>
-              <div className="harmony-sidebar__settings-scroll">
-                <h3>{t('settings.accountSection')}</h3>
-                <div className="harmony-sidebar__account-card">
-                  <span className="harmony-sidebar__account-avatar" aria-hidden="true">
-                    {authenticatedUserLabel
-                      ? authenticatedUserLabel.slice(0, 1).toLocaleUpperCase()
-                      : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="4" width="18" height="13" rx="2" />
-                          <path d="M8 21h8M12 17v4" />
-                        </svg>
-                      )}
-                  </span>
-                  <span className="harmony-sidebar__account-copy">
-                    <strong>{authenticatedUserLabel ? t('settings.currentAccount') : t('settings.notSignedIn')}</strong>
-                    <small>{authenticatedUserLabel || t('settings.connectedByQr')}</small>
-                  </span>
-                  {authenticatedUserLabel && (
-                    <span className="harmony-sidebar__verified">{t('settings.signedIn')}</span>
-                  )}
-                </div>
-
-                <h3>{t('settings.generalSection')}</h3>
-                <div className="harmony-sidebar__settings-card">
-                  <button type="button" className="harmony-sidebar__settings-row" onClick={toggleTheme}>
-                    <span className="harmony-sidebar__settings-row-icon"><ThemeToggleIcon isDark={isDark}/></span>
-                    <span>{t('settings.appearance')}</span>
-                    <small>{isDark ? 'Dark' : 'Light'}</small>
-                    <span className="harmony-sidebar__settings-chevron">›</span>
-                  </button>
-                  <div className="harmony-sidebar__settings-row">
-                    <span className="harmony-sidebar__settings-row-icon" aria-hidden="true">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="9"/>
-                        <path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.45 3.3 5.45 3.3 9S14.2 18.55 12 21M12 3C9.8 5.45 8.7 8.45 8.7 12s1.1 6.55 3.3 9"/>
-                      </svg>
-                    </span>
-                    <span>{t('settings.language')}</span>
-                    <LanguageToggleButton className="harmony-sidebar__settings-language"/>
-                    <span className="harmony-sidebar__settings-chevron">›</span>
-                  </div>
-                </div>
-
-                <h3>{t('settings.modelSection')}</h3>
-                <div className="harmony-sidebar__settings-card">
-                  <div className="harmony-sidebar__settings-row">
-                    <span className="harmony-sidebar__settings-row-icon" aria-hidden="true">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
-                    </span>
-                    <span>{t('settings.defaultModel')}</span>
-                    <small>{t('settings.followDesktop')}</small>
-                  </div>
-                </div>
-
-                <h3>{t('settings.devicesSection')}</h3>
-                <div className="harmony-sidebar__settings-card harmony-sidebar__settings-card--devices">
-                  {projectedCompactDevices.map((device) => {
-                    const current = device.device_id === compactSelectedDeviceId;
-                    return (
-                      <button type="button" className={`harmony-sidebar__settings-device${current ? ' is-current' : ''}`} key={device.device_id} disabled={!device.online} onClick={() => void handleSelectCompactDevice(device)}>
-                        <span className="harmony-sidebar__settings-device-icon"><CompactDeviceIcon name={device.device_name || device.device_id}/></span>
-                        <span className="harmony-sidebar__account-copy">
-                          <strong>{device.device_name || device.device_id}</strong>
-                          <small>{current ? t('settings.currentDevice') : device.online ? t('devices.online') : t('devices.offline')}</small>
-                        </span>
-                        <span className={`harmony-sidebar__status${device.online ? ' is-online' : ''}`}/>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <h3>{t('settings.aboutSection')}</h3>
-                <div className="harmony-sidebar__settings-card">
-                  <div className="harmony-sidebar__settings-row harmony-sidebar__settings-row--static"><span>{t('shared.product.remote')}</span><small>{t('settings.platform')}</small></div>
-                </div>
-
-                <button type="button" className="harmony-sidebar__settings-disconnect" onClick={() => { setCompactSettingsOpen(false); setShowDisconnectConfirm(true); }}>
-                  {t('sessions.disconnect')}
-                </button>
-              </div>
-            </section>
-          </div>
-        ), document.body)}
-
-        {showDisconnectConfirm && createPortal((
-          <div
-            className="session-list__picker-overlay"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="compact-disconnect-confirm-title"
-            aria-describedby="compact-disconnect-confirm-desc"
-            onClick={() => setShowDisconnectConfirm(false)}
-          >
-            <div className="session-list__confirm-modal" onClick={(event) => event.stopPropagation()}>
-              <div className="session-list__confirm-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
-              </div>
-              <h3 id="compact-disconnect-confirm-title" className="session-list__confirm-title">{t('sessions.disconnect')}</h3>
-              <p id="compact-disconnect-confirm-desc" className="session-list__confirm-desc">{t('sessions.disconnectConfirm')}</p>
-              <div className="session-list__confirm-actions">
-                <button className="session-list__confirm-btn session-list__confirm-btn--cancel" onClick={() => setShowDisconnectConfirm(false)} autoFocus>{t('common.cancel')}</button>
-                <button className="session-list__confirm-btn session-list__confirm-btn--danger" onClick={() => { setShowDisconnectConfirm(false); onDisconnect(); }}>{t('sessions.disconnect')}</button>
-              </div>
-            </div>
-          </div>
-        ), document.body)}
-
-        <HarnessProfilePicker
-          open={harnessCreateRequest !== null}
-          onClose={() => setHarnessCreateRequest(null)}
-          onSelect={handleHarnessSelect}
+        <SessionOverlays
+          compact
+          deleteTarget={deleteConfirmTarget}
+          deleting={deleting}
+          harnessOpen={harnessCreateRequest !== null}
+          menuSession={menuSession}
+          onCloseDelete={() => !deleting && setDeleteConfirmTarget(null)}
+          onCloseDisconnect={() => setShowDisconnectConfirm(false)}
+          onCloseHarness={() => setHarnessCreateRequest(null)}
+          onCloseMenu={() => setMenuSession(null)}
+          onCloseRename={() => !renaming && setRenameTarget(null)}
+          onConfirmDelete={() => void handleDelete()}
+          onConfirmDisconnect={() => { setShowDisconnectConfirm(false); onDisconnect(); }}
+          onConfirmRename={() => void handleRename()}
+          onDeleteRequest={setDeleteConfirmTarget}
+          onHarnessSelect={handleHarnessSelect}
+          onRenameRequest={(session) => { setRenameTarget(session); setRenameValue(session.name || ''); }}
+          onRenameValueChange={setRenameValue}
+          renameTarget={renameTarget}
+          renameValue={renameValue}
+          renaming={renaming}
+          showDisconnectConfirm={showDisconnectConfirm}
         />
       </div>
     );
@@ -2033,28 +1854,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
         </div>
         <div className="session-list__header-actions">
           {onOpenDevices && (
-            <button
+            <MobileIconButton
+              appearance="plain"
               className={`session-list__devices-btn ${controlTarget && !controlTarget.isHome ? 'is-remote' : ''}`}
               onClick={onOpenDevices}
-              title={t('devices.title')} aria-label={t('devices.title')}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              title={t('devices.title')} aria-label={t('devices.title')} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                 <line x1="8" y1="21" x2="16" y2="21" />
                 <line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-            </button>
+              </svg>} />
           )}
           <LanguageToggleButton className="session-list__language-btn" />
-          <button className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
-            <ThemeToggleIcon isDark={isDark} />
-          </button>
-          <button className="session-list__disconnect-btn" onClick={() => setShowDisconnectConfirm(true)} aria-label={t('sessions.disconnect')} title={t('sessions.disconnect')}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <MobileIconButton appearance="plain" className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')} icon={<ThemeToggleIcon isDark={isDark} />} />
+          <MobileIconButton appearance="plain" className="session-list__disconnect-btn" onClick={() => setShowDisconnectConfirm(true)} aria-label={t('sessions.disconnect')} title={t('sessions.disconnect')} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
+            </svg>} />
         </div>
       </div>
 
@@ -2083,8 +1899,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
 
         {/* Resume Card — quick continue for the most recent session */}
         {showResumeCard && (
-          <button
-            type="button"
+          <MobileButton
+            appearance="secondary"
+            block
             className={`session-list__resume-card${activeSessionId === sessions[0].session_id ? ' is-selected' : ''}`}
             onClick={(e) => handleSessionClick(sessions[0], e)}
             onTouchStart={(e) => handleSessionTouchStart(sessions[0], e)}
@@ -2115,33 +1932,27 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
             <span className="session-list__resume-arrow">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </span>
-          </button>
+          </MobileButton>
         )}
 
         {/* Mode Toggle - Inline */}
-        <div className="session-list__mode-toggle">
-          <button
-            className={`session-list__mode-toggle-btn ${isProMode ? 'is-active' : ''}`}
-            onClick={() => handleSelectMode('pro')}
-            disabled={targetInitializing}
-          >
-            <ProModeIcon />
-            <span>{t('shared.modes.expert')}</span>
-          </button>
-          <button
-            className={`session-list__mode-toggle-btn ${!isProMode ? 'is-active' : ''}`}
-            onClick={() => handleSelectMode('assistant')}
-            disabled={targetInitializing}
-          >
-            <AssistantModeIcon />
-            <span>{t('shared.modes.assistant')}</span>
-          </button>
-        </div>
+        <MobileSegmentedControl
+          aria-label={t('shared.modes.expert')}
+          className="session-list__mode-toggle"
+          onChange={handleSelectMode}
+          options={[
+            { disabled: targetInitializing, label: <><ProModeIcon /><span>{t('shared.modes.expert')}</span></>, value: 'pro' },
+            { disabled: targetInitializing, label: <><AssistantModeIcon /><span>{t('shared.modes.assistant')}</span></>, value: 'assistant' },
+          ]}
+          value={displayMode}
+        />
 
         {/* Pro Mode: Workspace Selection Required */}
         {isProMode && (
           <>
-            <div
+            <MobileButton
+              appearance="plain"
+              block
               className="session-list__workspace-bar"
               onClick={() => {
                 if (targetInitializingRef.current) return;
@@ -2165,62 +1976,48 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
               <span className="session-list__workspace-switch" aria-label={t('sessions.switchWorkspace')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
               </span>
-            </div>
+            </MobileButton>
 
-            {/* Workspace Picker Modal */}
-            {showWorkspacePicker && (
-              <div className="session-list__picker-overlay" onClick={() => setShowWorkspacePicker(false)}>
-                <div className="session-list__picker-modal session-list__picker-modal--workspace" onClick={e => e.stopPropagation()}>
-                  <div className="session-list__picker-header">
-                    <h3>{t('sessions.selectWorkspace')}</h3>
-                    <button className="session-list__picker-close" onClick={() => setShowWorkspacePicker(false)}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
-                  <div className="session-list__picker-list">
-                    {workspaceList.length === 0 ? (
-                      <div className="session-list__picker-empty">{t('sessions.noWorkspaces')}</div>
-                    ) : (
-                      workspaceList.map((workspace, index) => {
-                        const isSelected =
-                          currentWorkspace?.path === workspace.path
-                          && (currentWorkspace?.remote_connection_id ?? undefined)
-                            === (workspace.remote_connection_id ?? undefined)
-                          && (currentWorkspace?.remote_ssh_host ?? undefined)
-                            === (workspace.remote_ssh_host ?? undefined);
-                        const itemKey = [
-                          workspace.remote_connection_id ?? 'local',
-                          workspace.remote_ssh_host ?? '',
-                          workspace.path || String(index),
-                        ].join(':');
-                        return (
-                        <button
-                          key={itemKey}
-                          className={`session-list__picker-item session-list__picker-item--workspace ${isSelected ? 'is-selected' : ''}`}
-                          onClick={() => handleSelectWorkspace(workspace)}
-                        >
-                          <span className="session-list__picker-item-icon">
-                            <WorkspaceIcon />
-                          </span>
-                          <span className="session-list__picker-item-name">{workspace.name}</span>
-                          {isSelected && (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                          )}
-                        </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+            <MobileChoiceSheet
+              className="session-list__picker-modal session-list__picker-modal--workspace"
+              emptyContent={<MobileStatus title={t('sessions.noWorkspaces')} />}
+              headerAction={<MobileIconButton appearance="plain" className="session-list__picker-close" onClick={() => setShowWorkspacePicker(false)} aria-label={t('common.close')} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>} />}
+              onOpenChange={() => setShowWorkspacePicker(false)}
+              onSelect={(value) => {
+                const workspace = workspaceList.find((candidate, index) => [
+                  candidate.remote_connection_id ?? 'local',
+                  candidate.remote_ssh_host ?? '',
+                  candidate.path || String(index),
+                ].join(':') === value);
+                if (workspace) void handleSelectWorkspace(workspace);
+              }}
+              open={showWorkspacePicker}
+              optionAppearance="plain"
+              options={workspaceList.map((workspace, index) => {
+                const selected = currentWorkspace?.path === workspace.path
+                  && (currentWorkspace?.remote_connection_id ?? undefined) === (workspace.remote_connection_id ?? undefined)
+                  && (currentWorkspace?.remote_ssh_host ?? undefined) === (workspace.remote_ssh_host ?? undefined);
+                return {
+                  className: `session-list__picker-item session-list__picker-item--workspace ${selected ? 'is-selected' : ''}`,
+                  label: workspace.name,
+                  leading: <span className="session-list__picker-item-icon"><WorkspaceIcon /></span>,
+                  trailing: selected ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> : undefined,
+                  value: [workspace.remote_connection_id ?? 'local', workspace.remote_ssh_host ?? '', workspace.path || String(index)].join(':'),
+                };
+              })}
+              selectedValue={currentWorkspace?.path ? [currentWorkspace.remote_connection_id ?? 'local', currentWorkspace.remote_ssh_host ?? '', currentWorkspace.path].join(':') : undefined}
+              showHandle={false}
+              title={t('sessions.selectWorkspace')}
+            />
           </>
         )}
 
         {/* Assistant Mode: Assistant Selection */}
         {!isProMode && (
           <>
-            <div
+            <MobileButton
+              appearance="plain"
+              block
               className="session-list__assistant-bar"
               onClick={() => {
                 if (targetInitializingRef.current) return;
@@ -2238,370 +2035,92 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
               <span className="session-list__assistant-switch" aria-label={t('sessions.switchAssistant')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
               </span>
-            </div>
+            </MobileButton>
 
-            {/* Assistant Picker Modal */}
-            {showAssistantPicker && (
-              <div className="session-list__picker-overlay" onClick={() => setShowAssistantPicker(false)}>
-                <div className="session-list__picker-modal" onClick={e => e.stopPropagation()}>
-                  <div className="session-list__picker-header">
-                    <h3>{t('sessions.selectAssistant')}</h3>
-                    <button className="session-list__picker-close" onClick={() => setShowAssistantPicker(false)}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
-                  <div className="session-list__picker-list">
-                    {assistantList.map((assistant, index) => (
-                      <button
-                        key={assistant.path || index}
-                        className={`session-list__picker-item ${currentAssistant?.path === assistant.path ? 'is-selected' : ''}`}
-                        onClick={() => handleSelectAssistant(assistant)}
-                      >
-                        <span className="session-list__picker-item-icon">
-                          <AssistantModeIcon />
-                        </span>
-                        <span className="session-list__picker-item-name">{assistant.name}</span>
-                        {currentAssistant?.path === assistant.path && (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            <MobileChoiceSheet
+              className="session-list__picker-modal"
+              headerAction={<MobileIconButton appearance="plain" className="session-list__picker-close" onClick={() => setShowAssistantPicker(false)} aria-label={t('common.close')} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>} />}
+              onOpenChange={() => setShowAssistantPicker(false)}
+              onSelect={(path) => {
+                const assistant = assistantList.find((candidate, index) => (candidate.path || String(index)) === path);
+                if (assistant) void handleSelectAssistant(assistant);
+              }}
+              open={showAssistantPicker}
+              optionAppearance="plain"
+              options={assistantList.map((assistant, index) => ({
+                className: `session-list__picker-item ${currentAssistant?.path === assistant.path ? 'is-selected' : ''}`,
+                label: assistant.name,
+                leading: <span className="session-list__picker-item-icon"><AssistantModeIcon /></span>,
+                trailing: currentAssistant?.path === assistant.path ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> : undefined,
+                value: assistant.path || String(index),
+              }))}
+              selectedValue={currentAssistant?.path}
+              showHandle={false}
+              title={t('sessions.selectAssistant')}
+            />
           </>
         )}
 
-            {/* Session Creation Options */}
-            <section className={`session-list__panel ${!isProMode ? 'session-list__panel--assistant' : ''}`}>
-              <div className="session-list__section-head">
-                <div>
-                  <div className="session-list__section-kicker">{t('sessions.launch')}</div>
-                  <div className="session-list__section-title">{t('sessions.startRemoteFlow')}</div>
-                </div>
-              </div>
+        <SessionLaunchPanel
+          creating={creating}
+          hasWorkspace={!!currentWorkspace}
+          isProMode={isProMode}
+          targetInitializing={targetInitializing}
+          onCreateClaw={() => void handleCreate('claw')}
+          onCreateCowork={() => void handleCreate('cowork')}
+          onRequestCodeHarness={() => requestHarnessCreate()}
+          renderSessionIcon={(agentType) => <SessionTypeIcon agentType={agentType} />}
+        />
 
-              {isProMode ? (
-                /* Pro Mode: Code / Cowork - only show if workspace selected */
-                currentWorkspace ? (
-                  <div className="session-list__create-row">
-                    <button
-                      className="session-list__create-btn session-list__create-btn--code"
-                      onClick={() => requestHarnessCreate()}
-                      disabled={creating || targetInitializing}
-                    >
-                      <div className="session-list__create-icon">
-                        <SessionTypeIcon agentType="code" />
-                      </div>
-                      <div className="session-list__create-copy">
-                        <span className="session-list__create-title">{t('shared.agents.code')}</span>
-                        <span className="session-list__create-desc">{t('sessions.codeSessionDesc')}</span>
-                      </div>
-                      <span className="session-list__create-arrow">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                      </span>
-                    </button>
-                    <button
-                      className="session-list__create-btn session-list__create-btn--cowork"
-                      onClick={() => handleCreate('cowork')}
-                      disabled={creating || targetInitializing}
-                    >
-                      <div className="session-list__create-icon">
-                        <SessionTypeIcon agentType="cowork" />
-                      </div>
-                      <div className="session-list__create-copy">
-                        <span className="session-list__create-title">{t('shared.agents.cowork')}</span>
-                        <span className="session-list__create-desc">{t('sessions.coworkSessionDesc')}</span>
-                      </div>
-                      <span className="session-list__create-arrow">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                      </span>
-                    </button>
-                  </div>
-                ) : null
-              ) : (
-                /* Assistant Mode: Claw */
-                <div className="session-list__create-row">
-                  <button
-                    className="session-list__create-btn session-list__create-btn--claw"
-                    onClick={() => handleCreate('claw')}
-                    disabled={creating || targetInitializing}
-                  >
-                    <div className="session-list__create-icon">
-                      <SessionTypeIcon agentType="claw" />
-                    </div>
-                    <div className="session-list__create-copy">
-                      <span className="session-list__create-title">{t('sessions.clawSession')}</span>
-                      <span className="session-list__create-desc">{t('sessions.clawSessionDesc')}</span>
-                    </div>
-                    <span className="session-list__create-arrow">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                    </span>
-                  </button>
-                </div>
-              )}
-            </section>
-
-            {/* Session History */}
-            <section className={`session-list__panel session-list__panel--sessions ${!isProMode ? 'session-list__panel--assistant' : ''}`}>
-              <div className="session-list__section-head">
-                <div>
-                  <div className="session-list__section-kicker">{t('sessions.recent')}</div>
-                  <div className="session-list__section-title">{t('sessions.sessionHistory')}</div>
-                </div>
-                <div className="session-list__section-meta">{t('common.itemCount', { count: sessions.length })}</div>
-              </div>
-
-              {/* Search */}
-              <div className="session-list__search">
-                <svg className="session-list__search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  className="session-list__search-input"
-                  type="search"
-                  placeholder={t('sessions.searchSessions')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  disabled={targetInitializing}
-                  enterKeyHint="search"
-                />
-                {searchQuery && (
-                  <button className="session-list__search-clear" onClick={() => setSearchQuery('')} aria-label="Clear" disabled={targetInitializing}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                )}
-              </div>
-
-              {(loading || targetInitializing) && sessions.length === 0 && (
-                <div className="session-list__empty">{t('sessions.loadingSessions')}</div>
-              )}
-              {!loading && !targetInitializing && sessions.length === 0 && !hasSearchQuery && (
-                <div className="session-list__empty">{t('sessions.noSessions')}</div>
-              )}
-              {!loading && !targetInitializing && sessions.length === 0 && hasSearchQuery && (
-                <div className="session-list__empty">{t('sessions.emptySearch')}</div>
-              )}
-
-              <div className="session-list__cards">
-                {sessions.slice(showResumeCard ? 1 : 0).map((s) => (
-                  <div
-                    key={s.session_id}
-                    className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}${activeSessionId === s.session_id ? ' is-selected' : ''}`}
-                    onClick={(e) => handleSessionClick(s, e)}
-                    onTouchStart={(e) => handleSessionTouchStart(s, e)}
-                    onTouchMove={handleSessionTouchMove}
-                    onTouchEnd={handleSessionTouchEnd}
-                    onTouchCancel={handleSessionTouchEnd}
-                    onContextMenu={(e) => { e.preventDefault(); setMenuSession(s); }}
-                  >
-                    <div className={`session-list__item-icon session-list__item-icon--${s.agent_type}`}>
-                      <SessionTypeIcon agentType={s.agent_type} />
-                    </div>
-                    <div className="session-list__item-body">
-                      <div className="session-list__item-top">
-                        <div className="session-list__item-name">{s.name || t('sessions.untitledSession')}</div>
-                        <span className={`session-list__agent-badge session-list__agent-badge--${s.agent_type}`}>
-                          {agentLabel(s.agent_type, t)}
-                        </span>
-                      </div>
-                      <div className="session-list__item-time">{formatTime(s.updated_at, formatDate, t)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {loadingMore && (
-                <div className="session-list__load-more">{t('sessions.loadingMore')}</div>
-              )}
-            </section>
+        <SessionHistoryPanel
+          activeSessionId={activeSessionId}
+          hasSearchQuery={hasSearchQuery}
+          isProMode={isProMode}
+          loading={loading}
+          loadingMore={loadingMore}
+          menuSessionId={menuSession?.session_id}
+          searchQuery={searchQuery}
+          sessions={sessions.slice(showResumeCard ? 1 : 0)}
+          totalSessionCount={sessions.length}
+          targetInitializing={targetInitializing}
+          onOpenMenu={setMenuSession}
+          onSearchQueryChange={setSearchQuery}
+          onSessionClick={handleSessionClick}
+          onSessionTouchEnd={handleSessionTouchEnd}
+          onSessionTouchMove={handleSessionTouchMove}
+          onSessionTouchStart={handleSessionTouchStart}
+          renderAgentLabel={(agentType) => agentLabel(agentType, t)}
+          renderSessionIcon={(agentType) => <SessionTypeIcon agentType={agentType} />}
+          renderSessionTime={(updatedAt) => formatTime(updatedAt, formatDate, t)}
+        />
       </div>
 
-      {/* Context Menu Bottom Sheet */}
-      {menuSession && !renameTarget && !deleteConfirmTarget && (
-        <div className="session-list__menu-overlay" onClick={() => setMenuSession(null)}>
-          <div className="session-list__menu-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="session-list__menu-handle" />
-            <div className="session-list__menu-title">
-              {menuSession.name || t('sessions.untitledSession')}
-            </div>
-            <div className="session-list__menu-actions">
-              <button
-                className="session-list__menu-btn"
-                onClick={() => {
-                  setRenameTarget(menuSession);
-                  setRenameValue(menuSession.name || '');
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                <span>{t('sessions.renameSession')}</span>
-              </button>
-              <button
-                className="session-list__menu-btn session-list__menu-btn--danger"
-                onClick={() => setDeleteConfirmTarget(menuSession)}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                <span>{t('sessions.deleteSession')}</span>
-              </button>
-            </div>
-            <button className="session-list__menu-cancel" onClick={() => setMenuSession(null)}>
-              {t('sessions.cancel')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Rename Modal */}
-      {renameTarget && (
-        <div className="session-list__picker-overlay" onClick={() => !renaming && setRenameTarget(null)}>
-          <div className="session-list__rename-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="session-list__rename-title">{t('sessions.renameTitle')}</h3>
-            <input
-              className="session-list__rename-input"
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              placeholder={t('sessions.sessionNamePlaceholder')}
-              autoFocus
-              onKeyDown={(e) => {
-                if (
-                  (e.key === 'Enter' || e.key === 'Escape')
-                  && isImeOwnedKey(e, renameInputCompositionActiveRef.current)
-                ) {
-                  e.stopPropagation();
-                  return;
-                }
-                if (e.key === 'Enter') handleRename();
-                if (e.key === 'Escape') setRenameTarget(null);
-              }}
-              onCompositionStart={() => {
-                renameInputCompositionActiveRef.current = true;
-              }}
-              onCompositionEnd={() => {
-                renameInputCompositionActiveRef.current = false;
-              }}
-            />
-            <div className="session-list__rename-actions">
-              <button
-                className="session-list__rename-btn session-list__rename-btn--cancel"
-                onClick={() => setRenameTarget(null)}
-                disabled={renaming}
-              >
-                {t('sessions.cancel')}
-              </button>
-              <button
-                className="session-list__rename-btn session-list__rename-btn--save"
-                onClick={handleRename}
-                disabled={renaming || !renameValue.trim()}
-              >
-                {renaming ? '...' : t('sessions.save')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation */}
-      {deleteConfirmTarget && (
-        <div className="session-list__picker-overlay" onClick={() => !deleting && setDeleteConfirmTarget(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setDeleteConfirmTarget(null);
-            if (e.key === 'Enter' && !deleting) handleDelete();
-          }}>
-          <div className="session-list__confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="session-list__confirm-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-            </div>
-            <h3 className="session-list__confirm-title">{t('sessions.confirmDelete')}</h3>
-            <p className="session-list__confirm-desc">
-              "{deleteConfirmTarget.name || t('sessions.untitledSession')}"
-              <br />
-              {t('sessions.confirmDeleteDesc')}
-            </p>
-            <div className="session-list__confirm-actions">
-              <button
-                className="session-list__confirm-btn session-list__confirm-btn--cancel"
-                onClick={() => setDeleteConfirmTarget(null)}
-                disabled={deleting}
-              >
-                {t('sessions.cancel')}
-              </button>
-              <button
-                className="session-list__confirm-btn session-list__confirm-btn--danger"
-                onClick={handleDelete}
-                disabled={deleting}
-              >
-                {deleting ? '...' : t('sessions.deleteSession')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Disconnect Confirmation */}
-      {showDisconnectConfirm && (
-        <div
-          className="session-list__picker-overlay"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="disconnect-confirm-title"
-          aria-describedby="disconnect-confirm-desc"
-          onClick={() => setShowDisconnectConfirm(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowDisconnectConfirm(false);
-          }}
-        >
-          <div className="session-list__confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="session-list__confirm-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </div>
-            <h3 id="disconnect-confirm-title" className="session-list__confirm-title">{t('sessions.disconnect')}</h3>
-            <p id="disconnect-confirm-desc" className="session-list__confirm-desc">{t('sessions.disconnectConfirm')}</p>
-            <div className="session-list__confirm-actions">
-              <button
-                className="session-list__confirm-btn session-list__confirm-btn--cancel"
-                onClick={() => setShowDisconnectConfirm(false)}
-                autoFocus
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                className="session-list__confirm-btn session-list__confirm-btn--danger"
-                onClick={() => { setShowDisconnectConfirm(false); onDisconnect(); }}
-              >
-                {t('sessions.disconnect')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <HarnessProfilePicker
-        open={harnessCreateRequest !== null}
-        onClose={() => setHarnessCreateRequest(null)}
-        onSelect={handleHarnessSelect}
+      <SessionOverlays
+        compact={false}
+        deleteTarget={deleteConfirmTarget}
+        deleting={deleting}
+        harnessOpen={harnessCreateRequest !== null}
+        menuSession={menuSession}
+        onCloseDelete={() => !deleting && setDeleteConfirmTarget(null)}
+        onCloseDisconnect={() => setShowDisconnectConfirm(false)}
+        onCloseHarness={() => setHarnessCreateRequest(null)}
+        onCloseMenu={() => setMenuSession(null)}
+        onCloseRename={() => !renaming && setRenameTarget(null)}
+        onConfirmDelete={() => void handleDelete()}
+        onConfirmDisconnect={() => { setShowDisconnectConfirm(false); onDisconnect(); }}
+        onConfirmRename={() => void handleRename()}
+        onDeleteRequest={setDeleteConfirmTarget}
+        onHarnessSelect={handleHarnessSelect}
+        onRenameRequest={(session) => { setRenameTarget(session); setRenameValue(session.name || ''); }}
+        onRenameValueChange={setRenameValue}
+        renameTarget={renameTarget}
+        renameValue={renameValue}
+        renaming={renaming}
+        showDisconnectConfirm={showDisconnectConfirm}
       />
 
       {/* Action Toast */}
-      {actionToast && (
-        <div className="session-list__toast" role="alert" aria-live="assertive">{actionToast}</div>
-      )}
+      {actionToast && <MobileBanner className="session-list__toast" role="alert" aria-live="assertive">{actionToast}</MobileBanner>}
     </div>
   );
 };

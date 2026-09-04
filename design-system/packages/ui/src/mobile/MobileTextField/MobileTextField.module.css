@@ -1,0 +1,89 @@
+@layer bf.components {
+  .root {
+    display: flex;
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: 44px;
+    align-items: center;
+    gap: var(--bf-space-2);
+    padding-inline: var(--bf-space-4);
+    border: var(--bf-border-width-default) solid transparent;
+    border-radius: var(--bf-radius-md);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-tertiary);
+    transition:
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .root[data-appearance="surface"] {
+    border-color: var(--bf-color-field-border);
+    background: var(--bf-color-field-background);
+    box-shadow: var(--bf-shadow-xs);
+  }
+
+  .root:focus-within {
+    border-color: var(--bf-color-field-border-focus);
+    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  }
+
+  .root[data-invalid="true"] {
+    border-color: var(--bf-color-status-danger-border);
+  }
+
+  .root[data-disabled="true"] {
+    color: var(--bf-color-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .input {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: 100%;
+    min-block-size: 42px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    caret-color: var(--bf-color-accent-default);
+    font: inherit;
+    font-size: var(--bf-type-body-md-font-size);
+  }
+
+  .input::placeholder {
+    color: var(--bf-color-content-muted);
+    opacity: 1;
+  }
+
+  .input:disabled { cursor: not-allowed; }
+
+  .slot {
+    display: grid;
+    box-sizing: border-box;
+    inline-size: 20px;
+    block-size: 20px;
+    flex: 0 0 20px;
+    place-items: center;
+    color: var(--bf-color-content-secondary);
+  }
+
+  .slot > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root { transition: none; }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: ButtonText; }
+    .root:focus-within { border-color: Highlight; }
+  }
+}

@@ -1,0 +1,23 @@
+@layer bf.components {
+  .sheet {
+    inline-size: min(100%, 520px);
+  }
+
+  .options {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+  }
+
+  .cancel {
+    min-block-size: 52px;
+    color: var(--bf-color-content-secondary);
+  }
+
+  @media (max-width: 359px) {
+    .options {
+      gap: var(--bf-space-1);
+    }
+  }
+}

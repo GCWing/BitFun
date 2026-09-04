@@ -1,0 +1,6 @@
+@layer bf.components {
+  .root { position: fixed; inset: 0; box-sizing: border-box; margin: 0; padding: 0; border: 0; background: var(--bf-color-overlay-scrim); cursor: default; touch-action: manipulation; transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard); }
+  .root[data-visible="false"] { pointer-events: none; opacity: 0; }
+  .root:focus-visible { outline: var(--bf-focus-width) solid var(--bf-color-focus-ring); outline-offset: calc(var(--bf-focus-offset) * -1); }
+  @media (prefers-reduced-motion: reduce) { .root { transition: none; } }
+}

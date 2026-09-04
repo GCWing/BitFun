@@ -1,0 +1,9 @@
+@layer bf.components {
+  .root { display: flex; box-sizing: border-box; inline-size: 100%; min-block-size: 44px; align-items: center; gap: var(--bf-space-3); padding: var(--bf-space-2) var(--bf-space-4); border: var(--bf-border-width-default) solid var(--bf-color-border-subtle); border-radius: var(--bf-radius-md); color: var(--bf-color-content-secondary); background: var(--bf-color-surface-subtle); font-size: var(--bf-type-body-sm-font-size); }
+  .root[data-tone="info"] { border-color: var(--bf-color-status-info-border); color: var(--bf-color-status-info-content); background: var(--bf-color-status-info-surface); }
+  .root[data-tone="warning"] { border-color: var(--bf-color-status-warning-border); color: var(--bf-color-status-warning-content); background: var(--bf-color-status-warning-surface); }
+  .root[data-tone="danger"] { border-color: var(--bf-color-status-danger-border); color: var(--bf-color-status-danger-content); background: var(--bf-color-status-danger-surface); }
+  .icon { display: grid; inline-size: 20px; block-size: 20px; flex: 0 0 20px; place-items: center; }
+  .content { min-inline-size: 0; flex: 1; }
+  .action { flex: 0 0 auto; }
+}

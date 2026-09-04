@@ -1,4 +1,5 @@
 import React from 'react';
+import { MobileButton, MobileStatus } from '@bitfun/ui/mobile';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -30,7 +31,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   render() {
     if (this.state.hasError) {
       return (
-        <div
+        <MobileStatus
+          action={<MobileButton appearance="primary" onClick={this.handleRetry}>Retry</MobileButton>}
+          description={this.state.error?.message || 'An unexpected error occurred.'}
+          icon={<span>⚠</span>}
+          title="Something went wrong"
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -43,40 +48,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             color: 'var(--bf-color-content-primary)',
             fontFamily: 'var(--bf-type-body-md-font-family)',
           }}
-        >
-          {/* typography-audit: allow -- warning glyph geometry, not product text */}
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠</div>
-          <h2 style={{
-            fontSize: 'var(--bf-type-flow-section-title-font-size)',
-            fontWeight: 'var(--bf-type-flow-section-title-font-weight)',
-            margin: '0 0 8px',
-          }}>
-            Something went wrong
-          </h2>
-          <p style={{
-            fontSize: 'var(--bf-type-body-sm-font-size)',
-            color: 'var(--bf-color-content-muted)',
-            margin: '0 0 24px',
-            maxWidth: '280px',
-          }}>
-            {this.state.error?.message || 'An unexpected error occurred.'}
-          </p>
-          <button
-            onClick={this.handleRetry}
-            style={{
-              padding: '12px 32px',
-              border: 'none',
-              borderRadius: '14px',
-              background: 'var(--bf-color-accent-default)',
-              color: 'var(--bf-color-action-primary-content)',
-              fontSize: 'var(--bf-type-body-lg-font-size)',
-              fontWeight: 'var(--bf-type-label-selected-font-weight)',
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        </div>
+        />
       );
     }
 

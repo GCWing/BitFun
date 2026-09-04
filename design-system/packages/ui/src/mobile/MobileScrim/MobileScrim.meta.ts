@@ -1,0 +1,2 @@
+import type { ComponentMeta } from "../../registry.types";
+export const mobileScrimMeta = { category: "mobile", description: "A dismissible mobile overlay scrim with consistent focus and motion behavior.", maturity: "stable", name: "MobileScrim", props: [{ name: "aria-label", type: "string" }, { defaultValue: "true", name: "visible", type: "boolean" }], states: ["visible", "hidden", "focus-visible"], tokens: ["color.overlay.scrim", "color.focus.ring", "motion.duration.base"] } as const satisfies ComponentMeta;

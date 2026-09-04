@@ -9,6 +9,16 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  MobileBadge,
+  MobileBanner,
+  MobileButton,
+  MobileCard,
+  MobileIconButton,
+  MobileListRow,
+  MobilePageHeader,
+  MobileStatus,
+} from '@bitfun/ui/mobile';
+import {
   RelayHttpClient,
   isDelegatedIdentityChangedError,
 } from '../services/RelayHttpClient';
@@ -256,9 +266,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
           const isSwitching = switchingId === d.device_id;
           const clickable = !d.room_route && d.online && !isCurrent && !switchingId;
           return (
-            <button
+            <MobileListRow
               key={d.device_id}
-              type="button"
+              appearance="surface"
               className={[
                 'devices-page__device',
                 d.online ? 'is-online' : 'is-offline',
@@ -267,9 +277,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
               ].filter(Boolean).join(' ')}
               disabled={!clickable}
               onClick={() => clickable && selectDevice(d)}
-            >
-              <span className="devices-page__device-icon"><DeviceIcon /></span>
-              <span className="devices-page__device-copy">
+              leading={<span className="devices-page__device-icon"><DeviceIcon /></span>}
+              label={(
                 <span className="devices-page__device-name-row">
                   <span className="devices-page__device-name">
                     {d.room_route
@@ -277,16 +286,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                       : d.device_name || t('devices.unknownDevice')}
                   </span>
                   {isCurrent && (
-                    <span className="devices-page__badge devices-page__badge--current">
+                    <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
                       {t('devices.current')}
-                    </span>
+                    </MobileBadge>
                   )}
                   {isHome && !isCurrent && (
-                    <span className="devices-page__badge">
+                    <MobileBadge className="devices-page__badge">
                       {t('devices.pairedDesktop')}
-                    </span>
+                    </MobileBadge>
                   )}
                 </span>
+              )}
+              supportingText={(
                 <span className="devices-page__device-meta">
                   <span className={`devices-page__status-dot ${d.online ? 'is-online' : 'is-offline'}`} />
                   {d.online
@@ -298,8 +309,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                     <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
                   )}
                 </span>
-              </span>
-              {isSwitching ? (
+              )}
+              trailing={isSwitching ? (
                 <span className="devices-page__device-spinner spinner" />
               ) : (
                 clickable && (
@@ -308,7 +319,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                   </svg>
                 )
               )}
-            </button>
+              selected={isCurrent}
+            />
           );
         })}
       </div>
@@ -319,10 +331,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       return (
         <>
           {sortedDevices.length > 0 && renderDeviceList()}
-          <div className="devices-page__loading">
-            <span className="spinner" />
-            {t('devices.loading')}
-          </div>
+          <MobileStatus className="devices-page__loading" loading title={t('devices.loading')} />
         </>
       );
     }
@@ -331,28 +340,25 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       return (
         <>
           {sortedDevices.length > 0 && renderDeviceList()}
-          <div className="devices-page__empty-card">
-            <span className="devices-page__empty-icon"><NoIdentityIcon /></span>
-            <p className="devices-page__empty-text">{t('devices.noDelegatedIdentity')}</p>
-            <button type="button" className="devices-page__retry-btn" onClick={handleManualRefresh}>
-              {t('devices.retry')}
-            </button>
-          </div>
+          <MobileCard appearance="elevated" className="devices-page__empty-card">
+            <MobileStatus
+              action={<MobileButton className="devices-page__retry-btn" onClick={handleManualRefresh}>{t('devices.retry')}</MobileButton>}
+              description={t('devices.noDelegatedIdentity')}
+              icon={<NoIdentityIcon />}
+            />
+          </MobileCard>
         </>
       );
     }
 
     if (loading && sortedDevices.length === 0) {
       return (
-        <div className="devices-page__loading">
-          <span className="spinner" />
-          {t('devices.loading')}
-        </div>
+        <MobileStatus className="devices-page__loading" loading title={t('devices.loading')} />
       );
     }
 
     if (sortedDevices.length === 0) {
-      return <div className="devices-page__empty">{t('devices.noDevices')}</div>;
+      return <MobileStatus className="devices-page__empty" description={t('devices.noDevices')} />;
     }
 
     return renderDeviceList();
@@ -360,24 +366,29 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
   return (
     <div className="devices-page">
-      <div className="devices-page__header">
-        <button type="button" className="devices-page__back-btn" onClick={onBack} aria-label={t('common.back')}>
-          <BackIcon />
-        </button>
-        <h2 className="devices-page__title">{t('devices.title')}</h2>
-        <button
-          type="button"
-          className={`devices-page__refresh-btn ${loading || identityChecking ? 'is-loading' : ''}`}
+      <MobilePageHeader
+        className="devices-page__header"
+        leading={<MobileIconButton
+          appearance="floating"
+          className="devices-page__back-btn"
+          icon={<BackIcon />}
+          onClick={onBack}
+          aria-label={t('common.back')}
+        />}
+        title={t('devices.title')}
+        actions={<MobileIconButton
+          appearance="floating"
+          className="devices-page__refresh-btn"
+          icon={<RefreshIcon />}
+          loading={loading || identityChecking}
           onClick={handleManualRefresh}
-          disabled={loading || identityChecking || !!switchingId}
+          disabled={!!switchingId}
           aria-label={t('devices.refresh')}
           title={t('devices.refresh')}
-        >
-          <RefreshIcon />
-        </button>
-      </div>
+        />}
+      />
 
-      {error && <div className="devices-page__error">{error}</div>}
+      {error && <MobileBanner className="devices-page__error" tone="danger">{error}</MobileBanner>}
 
       <div className="devices-page__body">
         {renderBody()}

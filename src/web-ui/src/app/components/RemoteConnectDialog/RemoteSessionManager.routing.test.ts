@@ -176,4 +176,30 @@ describe('mobile RemoteSessionManager target routing', () => {
       { retryable: true },
     );
   });
+
+  it('bounds a remote reasoning-setting write independently from long-running commands', async () => {
+    const client = new RelayHttpClient('https://relay.example.com', 'room');
+    client.homeDeviceId = 'home-device';
+    client.setPairedDeviceId('remote-device');
+    const remoteRequest = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue({
+      resp: 'session_model_updated',
+      session_id: 'session-a',
+      model_id: 'primary',
+      reasoning_preset: 'high',
+    });
+    const manager = new RemoteSessionManager(client);
+
+    await expect(manager.setSessionModelSelection('session-a', 'primary', 'high'))
+      .resolves.toEqual({ model_id: 'primary', reasoning_preset: 'high' });
+    expect(remoteRequest).toHaveBeenCalledWith(
+      'remote-device',
+      expect.objectContaining({
+        cmd: 'set_session_model',
+        session_id: 'session-a',
+        model_id: 'primary',
+        reasoning_preset: 'high',
+      }),
+      { retryable: false, timeoutMs: 20_000 },
+    );
+  });
 });

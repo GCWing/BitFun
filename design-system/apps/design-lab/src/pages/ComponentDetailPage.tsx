@@ -93,6 +93,31 @@ import {
   type ToolbarSize,
   type TokenOverrides,
 } from "@bitfun/ui";
+import {
+  MobileActionSheet,
+  MobileBadge,
+  MobileBanner,
+  MobileButton,
+  MobileCard,
+  MobileChoiceSheet,
+  MobileConfirmSheet,
+  MobileComposer,
+  MobileDisclosure,
+  MobileFileButton,
+  MobileFloatingActions,
+  MobileIconButton,
+  MobileLink,
+  MobileListRow,
+  MobileMessage,
+  MobilePageHeader,
+  MobileScrim,
+  MobileSection,
+  MobileSegmentedControl,
+  MobileSheet,
+  MobileStatus,
+  MobileTextField,
+  MobileTextarea,
+} from "@bitfun/ui/mobile";
 import type { ComponentMeta } from "@bitfun/ui/registry";
 import previewImage from "../assets/design-system-hero.webp";
 import { IconCompositionPreview } from "../preview/IconCompositionPreview";
@@ -332,6 +357,7 @@ export function ComponentDetailPage({
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const [mobileChoiceValue, setMobileChoiceValue] = useState("standard");
   const [menuShowScrollbar, setMenuShowScrollbar] = useState(true);
   const [navigationPanelShowScrollbar, setNavigationPanelShowScrollbar] = useState(true);
   const [composerShowContext, setComposerShowContext] = useState(false);
@@ -409,6 +435,18 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "MobileActionSheet") return `import { MobileActionSheet } from "@bitfun/ui/mobile";\n\n<MobileActionSheet\n  actions={[\n    { id: "rename", label: "${t("components.preview.modalSave")}" },\n    { id: "delete", label: "${t("components.preview.confirmDelete")}", tone: "danger" },\n  ]}\n  cancelLabel="${t("components.preview.modalCancel")}"\n  onAction={handleAction}\n  onOpenChange={() => setOpen(false)}\n  open={open}\n  title="${t("components.preview.session")}"\n/>`;
+    if (component.name === "MobileComposer") return `import { MobileComposer } from "@bitfun/ui/mobile";\n\n<MobileComposer\n  expanded={expanded}\n  leading={<AttachButton />}\n  startActions={<ModelControls />}\n  endActions={<SendButton />}\n>\n  <textarea />\n</MobileComposer>`;
+    if (component.name === "MobileChoiceSheet") return `import { MobileChoiceSheet } from "@bitfun/ui/mobile";\n\n<MobileChoiceSheet\n  cancelLabel="${t("components.preview.modalCancel")}"\n  onOpenChange={() => setOpen(false)}\n  onSelect={setMode}\n  open={open}\n  options={[\n    { label: "${t("components.preview.modeMinimal")}", value: "minimal" },\n    { label: "${t("components.preview.modeStandard")}", value: "standard" },\n    { label: "${t("components.preview.modeUltimate")}", value: "ultimate" },\n  ]}\n  selectedValue={mode}\n  title="${t("components.preview.selectExecutionMode")}"\n/>`;
+    if (component.name === "MobileConfirmSheet") return `import { MobileConfirmSheet } from "@bitfun/ui/mobile";\n\n<MobileConfirmSheet\n  cancelLabel="${t("components.preview.modalCancel")}"\n  confirmLabel="${t("components.preview.confirmDelete")}"\n  confirmTone="danger"\n  onConfirm={handleDelete}\n  onOpenChange={() => setOpen(false)}\n  open={open}\n  title="${t("components.preview.confirmTitle")}"\n/>`;
+    if (component.name === "MobileFloatingActions") return `import { MobileFloatingActions } from "@bitfun/ui/mobile";\n\n<MobileFloatingActions\n  leading={<NewChatButton />}\n  trailing={<SettingsButton />}\n/>`;
+    if (component.name === "MobileFileButton") return `import { MobileFileButton } from "@bitfun/ui/mobile";\n\n<MobileFileButton accept="image/*" onChange={handleFile}>\n  ${t("components.preview.add")}\n</MobileFileButton>`;
+    if (component.name === "MobileScrim") return `import { MobileScrim } from "@bitfun/ui/mobile";\n\n<MobileScrim\n  aria-label="${t("components.preview.close")}"\n  onClick={closeSidebar}\n/>`;
+    if (component.name === "MobileIconButton") return `import { Icon } from "@bitfun/ui";\nimport { MobileIconButton } from "@bitfun/ui/mobile";\n\n<MobileIconButton\n  appearance="floating"\n  aria-label="${t("components.preview.searchLabel")}"\n  icon={<Icon name="search" />}\n/>`;
+    if (component.name === "MobileLink") return `import { MobileLink } from "@bitfun/ui/mobile";\n\n<MobileLink href="https://example.com">\n  ${t("nav.docs")}\n</MobileLink>`;
+    if (component.name === "MobileTextField") return `import { MobileTextField } from "@bitfun/ui/mobile";\n\n<MobileTextField\n  aria-label="${t("components.preview.searchLabel")}"\n  placeholder="${t("components.preview.searchPlaceholder")}"\n/>`;
+    if (component.name === "MobileListRow") return `import { MobileListRow } from "@bitfun/ui/mobile";\n\n<MobileListRow\n  appearance="surface"\n  label="${t("components.preview.session")}"\n  supportingText="/workspace"\n/>`;
+    if (component.name === "MobileSheet") return `import { MobileSheet } from "@bitfun/ui/mobile";\n\n<MobileSheet\n  footer={<CancelButton />}\n  onOpenChange={() => setOpen(false)}\n  open={open}\n  title="${t("components.preview.modalTitle")}"\n>\n  <ActionList />\n</MobileSheet>`;
     if (component.name === "Textarea") return `import { Textarea } from "@bitfun/ui";\n\n<Textarea\n  label="${t("components.preview.inputLabel")}"\n  defaultValue="${t("components.preview.fieldValue")}"\n  hint="${t("components.preview.fieldDescription")}"\n  maxLength={200}\n  rows={3}\n  showCount\n/>`;
     if (component.name === "Alert") return `import { Alert } from "@bitfun/ui";\n\n<Alert tone="info" title="${t("components.preview.notifications")}" message="${t("components.preview.fieldDescription")}" />`;
     if (component.name === "Avatar") return 'import { Avatar } from "@bitfun/ui";\n\n<Avatar>BF</Avatar>';
@@ -471,6 +509,7 @@ export function ComponentDetailPage({
     if (component.name === "Icon") {
       return `import { Icon } from "@bitfun/ui";\n\n<Icon name="${iconName}" size="${iconSize}" tone="${iconTone}" />`;
     }
+
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
@@ -831,6 +870,131 @@ export function ComponentDetailPage({
 
     if (component.name === "Icon") {
       return <Icon name={iconName} size={iconSize} tone={iconTone} />;
+    }
+
+    if (component.name === "MobileButton") {
+      return <MobileButton data-bf-preview-state={state} disabled={state === "disabled"} loading={state === "loading"}>{t("components.preview.actionCardTitle")}</MobileButton>;
+    }
+
+    if (component.name === "MobileCard") {
+      const appearance = state === "plain" || state === "elevated" ? state : "surface";
+      return <MobileCard appearance={appearance}><strong>{t("components.preview.cardTitle")}</strong><p>{t("components.preview.cardDescription")}</p></MobileCard>;
+    }
+
+    if (component.name === "MobileDisclosure") {
+      return <MobileDisclosure disabled={state === "disabled"} onToggle={() => undefined} open={state === "open"} title={t("detail.loading")}>{t("components.preview.fieldDescription")}</MobileDisclosure>;
+    }
+
+    if (component.name === "MobileMessage") {
+      const roleType = state === "user" || state === "system" ? state : "assistant";
+      return <MobileMessage roleType={roleType}>{t("components.preview.cardDescription")}</MobileMessage>;
+    }
+
+    if (component.name === "MobileBadge") {
+      const tone = state === "info" || state === "success" || state === "warning" || state === "danger" ? state : "neutral";
+      return <MobileBadge dot tone={tone}>{t("components.preview.notifications")}</MobileBadge>;
+    }
+
+    if (component.name === "MobileBanner") {
+      const tone = state === "info" || state === "warning" || state === "danger" ? state : "neutral";
+      return <MobileBanner action={<MobileButton appearance="plain" size="sm">{t("components.preview.modalSave")}</MobileButton>} tone={tone}>{t("components.preview.fieldDescription")}</MobileBanner>;
+    }
+
+    if (component.name === "MobileComposer") {
+      const expanded = state === "expanded";
+      return (
+        <MobileComposer
+          aria-label={t("components.preview.composerPlaceholder")}
+          endActions={<MobileIconButton appearance="plain" aria-label={t("components.preview.flowChat.askUserSubmit")} icon={<Icon name="arrow-up" aria-hidden="true" />} size="sm" />}
+          expanded={expanded}
+          leading={<MobileIconButton appearance="plain" aria-label={t("components.preview.add")} icon={<Icon name="plus" aria-hidden="true" />} size="sm" />}
+          startActions={expanded ? <Button size="sm" variant="fill">k3-256k</Button> : undefined}
+        >
+          {expanded ? <textarea aria-label={t("components.preview.composerPlaceholder")} placeholder={t("components.preview.composerPlaceholder")} /> : <span>{t("components.preview.composerPlaceholder")}</span>}
+        </MobileComposer>
+      );
+    }
+
+    if (component.name === "MobileFloatingActions") {
+      return (
+        <MobileFloatingActions
+          leading={<Button size="sm" variant="fill">{t("components.preview.actionCardTitle")}</Button>}
+          trailing={<MobileIconButton appearance="floating" aria-label={t("components.preview.settings")} icon={<Icon name="gear" aria-hidden="true" />} />}
+        />
+      );
+    }
+
+    if (component.name === "MobileFileButton") {
+      return <MobileFileButton disabled={state === "disabled"} leading={<Icon name="plus" aria-hidden="true" />} loading={state === "loading"}>{t("components.preview.add")}</MobileFileButton>;
+    }
+
+    if (component.name === "MobileIconButton") {
+      return (
+        <MobileIconButton
+          appearance="floating"
+          aria-label={t("components.preview.searchLabel")}
+          data-bf-preview-state={state === "hover" || state === "active" || state === "focus-visible" ? state : undefined}
+          disabled={state === "disabled"}
+          icon={<Icon name="search" aria-hidden="true" />}
+          loading={state === "loading"}
+          selected={state === "selected"}
+        />
+      );
+    }
+
+    if (component.name === "MobileLink") {
+      return <MobileLink appearance={state === "surface" ? "surface" : "inline"} href="#mobile">{t("nav.docs")}</MobileLink>;
+    }
+
+    if (component.name === "MobileTextField") {
+      return (
+        <MobileTextField
+          aria-label={t("components.preview.searchLabel")}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          leading={<Icon name="search" aria-hidden="true" />}
+          placeholder={t("components.preview.searchPlaceholder")}
+        />
+      );
+    }
+
+    if (component.name === "MobileListRow") {
+      return (
+        <MobileListRow
+          appearance="surface"
+          data-bf-preview-state={state === "hover" || state === "active" || state === "focus-visible" ? state : undefined}
+          disabled={state === "disabled"}
+          label={t("components.preview.session")}
+          leading={<Icon name="session" aria-hidden="true" />}
+          selected={state === "selected"}
+          supportingText={t("components.preview.fieldDescription")}
+          trailing={<Icon name="chevron-right" aria-hidden="true" />}
+        />
+      );
+    }
+
+    if (component.name === "MobilePageHeader") {
+      return <MobilePageHeader actions={<MobileIconButton appearance="plain" aria-label={t("components.preview.more")} icon={<Icon name="more" aria-hidden="true" />} size="sm" />} centered={state === "centered"} leading={<MobileIconButton appearance="plain" aria-label={t("components.preview.close")} icon={<Icon name="chevron-left" aria-hidden="true" />} size="sm" />} subtitle={state === "with-subtitle" ? t("components.preview.fieldDescription") : undefined} title={t("components.preview.session")} />;
+    }
+
+    if (component.name === "MobileScrim") {
+      return <MobileScrim aria-label={t("components.preview.close")} style={{ blockSize: 120, inlineSize: "100%", position: "relative" }} visible={state !== "hidden"} />;
+    }
+
+    if (component.name === "MobileSection") {
+      return <MobileSection action={state === "with-action" ? <MobileButton appearance="plain" size="sm">{t("components.preview.more")}</MobileButton> : undefined} description={state === "content-only" ? undefined : t("components.preview.fieldDescription")} title={state === "content-only" ? undefined : t("components.preview.appearance")}><MobileCard>{t("components.preview.cardDescription")}</MobileCard></MobileSection>;
+    }
+
+    if (component.name === "MobileSegmentedControl") {
+      return <MobileSegmentedControl aria-label={t("components.preview.segmentedLabel")} onChange={() => undefined} options={[{ label: t("components.preview.segmentedChat"), value: "chat" }, { disabled: state === "disabled", label: t("components.preview.segmentedAgent"), value: "agent" }]} value={state === "selected" ? "agent" : "chat"} />;
+    }
+
+    if (component.name === "MobileStatus") {
+      return <MobileStatus action={state === "danger" ? <MobileButton size="sm">{t("components.preview.modalSave")}</MobileButton> : undefined} description={t("components.preview.fieldDescription")} loading={state === "loading"} title={t("components.preview.cardTitle")} tone={state === "danger" ? "danger" : state === "info" ? "info" : "neutral"} />;
+    }
+
+    if (component.name === "MobileTextarea") {
+      return <MobileTextarea aria-label={t("components.preview.composerPlaceholder")} disabled={state === "disabled"} invalid={state === "invalid"} placeholder={t("components.preview.composerPlaceholder")} />;
     }
 
     if (component.name === "Textarea") {
@@ -1494,6 +1658,82 @@ export function ComponentDetailPage({
 
     if (component.name === "Dialog") return renderDialogExample();
     if (component.name === "Sheet") return renderSheetExample();
+    if (component.name === "MobileActionSheet") {
+      return (
+        <>
+          <Button onClick={() => setOverlayOpen(true)} variant="fill">{t("components.preview.modalInteractionDemo")}</Button>
+          <MobileActionSheet
+            actions={[
+              { id: "rename", label: t("components.preview.modalSave") },
+              { id: "delete", label: t("components.preview.confirmDelete"), tone: "danger" },
+            ]}
+            cancelLabel={t("components.preview.modalCancel")}
+            onAction={() => setOverlayOpen(false)}
+            onOpenChange={() => setOverlayOpen(false)}
+            open={overlayOpen}
+            title={t("components.preview.session")}
+          />
+        </>
+      );
+    }
+
+    if (component.name === "MobileConfirmSheet") {
+      return (
+        <>
+          <Button onClick={() => setOverlayOpen(true)} variant="fill">{t("components.preview.modalInteractionDemo")}</Button>
+          <MobileConfirmSheet
+            cancelLabel={t("components.preview.modalCancel")}
+            confirmLabel={t("components.preview.confirmDelete")}
+            confirmTone="danger"
+            onConfirm={() => setOverlayOpen(false)}
+            onOpenChange={() => setOverlayOpen(false)}
+            open={overlayOpen}
+            pending={state === "pending"}
+            title={t("components.preview.confirmTitle")}
+          />
+        </>
+      );
+    }
+
+    if (component.name === "MobileSheet") {
+      return (
+        <>
+          <Button onClick={() => setOverlayOpen(true)} variant="fill">{t("components.preview.modalInteractionDemo")}</Button>
+          <MobileSheet
+            footer={<Button onClick={() => setOverlayOpen(false)} variant="fill">{t("components.preview.modalCancel")}</Button>}
+            onOpenChange={() => setOverlayOpen(false)}
+            open={overlayOpen}
+            title={t("components.preview.modalTitle")}
+          >
+            {renderDialogConfigurationContent()}
+          </MobileSheet>
+        </>
+      );
+    }
+
+    if (component.name === "MobileChoiceSheet") {
+      return (
+        <>
+          <Button onClick={() => setOverlayOpen(true)} variant="fill">{t("components.preview.modalInteractionDemo")}</Button>
+          <MobileChoiceSheet
+            cancelLabel={t("components.preview.modalCancel")}
+            onOpenChange={() => setOverlayOpen(false)}
+            onSelect={(value) => {
+              setMobileChoiceValue(value);
+              setOverlayOpen(false);
+            }}
+            open={overlayOpen}
+            options={[
+              { label: t("components.preview.modeMinimal"), value: "minimal" },
+              { disabled: state === "disabled", label: t("components.preview.modeStandard"), value: "standard" },
+              { label: t("components.preview.modeUltimate"), value: "ultimate" },
+            ]}
+            selectedValue={mobileChoiceValue}
+            title={t("components.preview.selectExecutionMode")}
+          />
+        </>
+      );
+    }
 
     if (component.name === "PageHeader") {
       return (
@@ -1933,6 +2173,33 @@ export function ComponentDetailPage({
                         </div>
                       ))}
                     </Fragment>
+                  ))}
+                </div>
+              ) : component.category === "mobile" ? (
+                <div
+                  className="component-preview-matrix"
+                  data-component={component.name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()}
+                  data-state-count={states.length}
+                >
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {stateLabel(state)}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">{component.name}</span>
+                  {states.map((state) => (
+                    <div
+                      className="component-preview-matrix__cell"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      {renderPreview(state)}
+                    </div>
                   ))}
                 </div>
               ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Combobox" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Listbox" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" || component.name === "Tooltip" ? (

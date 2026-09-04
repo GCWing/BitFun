@@ -1,0 +1,8 @@
+@layer bf.components {
+  .root { box-sizing: border-box; display: flex; inline-size: 100%; min-inline-size: 0; flex-direction: column; align-items: flex-start; color: var(--bf-color-content-primary); }
+  .content { min-inline-size: 0; max-inline-size: min(88%, 680px); }
+  .root[data-role="user"] { align-items: flex-end; }
+  .root[data-role="user"] .content { padding: var(--bf-space-3) var(--bf-space-4); border-radius: var(--bf-radius-xl); background: var(--bf-color-action-neutral-surface); }
+  .root[data-role="system"] .content { inline-size: 100%; color: var(--bf-color-content-muted); text-align: center; font-size: var(--bf-type-body-sm-font-size); }
+  .actions { display: flex; gap: var(--bf-space-1); margin-block-start: var(--bf-space-1); }
+}

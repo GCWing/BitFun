@@ -250,6 +250,9 @@ importers:
       '@bitfun/theme-bitfun':
         specifier: workspace:^
         version: link:../../design-system/packages/theme-bitfun
+      '@bitfun/ui':
+        specifier: workspace:^
+        version: link:../../design-system/packages/ui
       '@noble/ciphers':
         specifier: ^2.1.1
         version: 2.1.1

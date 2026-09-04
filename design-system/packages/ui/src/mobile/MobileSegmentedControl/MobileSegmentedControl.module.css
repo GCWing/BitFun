@@ -1,0 +1,9 @@
+@layer bf.components {
+  .root { display: inline-grid; box-sizing: border-box; min-block-size: 44px; grid-auto-columns: minmax(72px, 1fr); grid-auto-flow: column; gap: var(--bf-space-1); padding: var(--bf-space-1); border: var(--bf-border-width-default) solid var(--bf-color-border-subtle); border-radius: var(--bf-radius-pill); background: var(--bf-color-surface-panel); box-shadow: var(--bf-shadow-xs); }
+  .option { min-block-size: 36px; margin: 0; padding: 0 var(--bf-space-4); border: 0; border-radius: var(--bf-radius-pill); color: var(--bf-color-content-secondary); background: transparent; cursor: pointer; touch-action: manipulation; font: inherit; font-size: var(--bf-type-label-md-font-size); }
+  .option[data-selected="true"] { color: var(--bf-color-content-primary); background: var(--bf-color-action-neutral-surface); box-shadow: var(--bf-shadow-xs); }
+  .option:active:not(:disabled) { background: var(--bf-color-action-neutral-surface-pressed); }
+  .option:focus-visible { outline: var(--bf-focus-width) solid var(--bf-color-focus-ring); outline-offset: calc(var(--bf-focus-offset) * -1); }
+  .option:disabled { color: var(--bf-color-content-disabled); cursor: not-allowed; }
+  @media (prefers-reduced-motion: reduce) { .option { transition: none; } }
+}

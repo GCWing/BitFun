@@ -4,17 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare:design-system": "pnpm --dir ../../design-system run prepare:consumer-dev",
+    "prepare:design-system": "pnpm --dir ../../design-system run build:packages",
     "predev": "pnpm run prepare:design-system",
     "pretype-check": "pnpm run prepare:design-system",
     "prebuild": "pnpm run prepare:design-system",
     "dev": "vite",
+    "test:ui-components": "node --test tests/mobile-ui-components.test.mjs",
     "type-check": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@bitfun/theme-bitfun": "workspace:^",
+    "@bitfun/ui": "workspace:^",
     "@noble/ciphers": "^2.1.1",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",

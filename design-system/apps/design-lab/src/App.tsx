@@ -6,7 +6,7 @@ import {
 } from "react";
 import type { SystemTokenMode } from "@bitfun/design-tokens";
 import type { ThemeDataName } from "@bitfun/theme-bitfun";
-import { AppWindow, Blocks, BookOpen, Braces, CircleDashed, FileText, House, Languages, Menu, Moon, MousePointerClick, PanelTop, PanelsTopLeft, SquareTerminal, Sun, ToggleLeft, type LucideIcon } from "lucide-react";
+import { AppWindow, Blocks, BookOpen, Braces, CircleDashed, FileText, House, Languages, Menu, Moon, MousePointerClick, PanelTop, PanelsTopLeft, Smartphone, SquareTerminal, Sun, ToggleLeft, type LucideIcon } from "lucide-react";
 import { Icon as CatalogIcon,
   ThemeRoot,
   type ColorScheme,
@@ -53,6 +53,7 @@ type LabRoute =
   | { page: "overview" }
   | { page: "getting-started" }
   | { page: "components" }
+  | { page: "mobile" }
   | { page: "patterns" }
   | { page: "flow-chat" }
   | { page: "colors" }
@@ -84,8 +85,13 @@ const componentIcons: Record<string, LucideIcon> = {
 const flowChatComponents = componentRegistry.filter(
   (component) => component.category === "flow-chat",
 );
+const mobileComponents = componentRegistry.filter(
+  (component) => component.category === "mobile",
+);
 const standardComponents = componentRegistry.filter(
-  (component) => component.category !== "flow-chat" && component.name !== "Icon",
+  (component) => component.category !== "flow-chat"
+    && component.category !== "mobile"
+    && component.name !== "Icon",
 );
 
 function getComponentNavGroup(route: LabRoute): ComponentNavGroup | undefined {
@@ -137,6 +143,9 @@ function parseRoute(hash: string): LabRoute {
   }
   if (route === "components") {
     return { page: "components" };
+  }
+  if (route === "mobile") {
+    return { page: "mobile" };
   }
   if (route === "patterns") {
     return { page: "patterns" };
@@ -233,6 +242,13 @@ export function App() {
       keywords: `component library catalog ${t("nav.components")}`,
       label: t("nav.components"),
       route: { page: "components" },
+    },
+    {
+      detail: t("search.mobileDetail", { count: mobileComponents.length }),
+      icon: Smartphone,
+      keywords: `mobile touch phone foldable ${t("nav.mobile")}`,
+      label: t("nav.mobile"),
+      route: { page: "mobile" },
     },
     {
       detail: t("search.patternsDetail"),
@@ -398,8 +414,13 @@ export function App() {
   const isFlowChatRoute = route.page === "flow-chat"
     || activeComponent?.category === "flow-chat";
   const isIconRoute = activeComponent?.name === "Icon";
+  const isMobileRoute = route.page === "mobile"
+    || activeComponent?.category === "mobile";
   const isStandardComponentRoute = route.page === "components"
-    || Boolean(activeComponent && activeComponent.category !== "flow-chat" && !isIconRoute);
+    || Boolean(activeComponent
+      && activeComponent.category !== "flow-chat"
+      && activeComponent.category !== "mobile"
+      && !isIconRoute);
 
   return (
     <ThemeRoot
@@ -536,6 +557,18 @@ export function App() {
               );
             })}
           </div>
+          <a
+            aria-current={isMobileRoute ? "page" : undefined}
+            href="#mobile"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate({ page: "mobile" });
+            }}
+          >
+            <Smartphone aria-hidden="true" size={17} />
+            <span>{t("nav.mobile")}</span>
+            <small>{mobileComponents.length}</small>
+          </a>
           <a
             aria-current={isIconRoute ? "page" : undefined}
             href="#component/icon"
@@ -808,6 +841,18 @@ export function App() {
             />
           )}
 
+          {route.page === "mobile" && (
+            <ComponentsPage
+              category="mobile"
+              colorScheme={colorScheme}
+              contrast={contrast}
+              density={density}
+              onInspectTokens={() => openTokenPage()}
+              onOpenComponent={(name) => navigate({ componentName: name, page: "component" })}
+              tokenOverrides={tokenOverrides}
+            />
+          )}
+
           {route.page === "patterns" && (
             <PatternsPage
               colorScheme={colorScheme}
@@ -839,6 +884,8 @@ export function App() {
               onBack={() => navigate({
                 page: activeComponent.category === "flow-chat"
                   ? "flow-chat"
+                  : activeComponent.category === "mobile"
+                    ? "mobile"
                   : "components",
               })}
               onInspectTokens={openTokenPage}

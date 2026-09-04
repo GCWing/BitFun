@@ -211,8 +211,6 @@ textarea:focus-visible,
 .session-list__theme-btn,
 .session-list__disconnect-btn,
 .session-list__devices-btn,
-.devices-page__back-btn,
-.devices-page__refresh-btn,
 .workspace-page__back,
 .chat-page__back,
 .chat-page__theme-btn {
@@ -446,25 +444,11 @@ textarea:focus-visible,
   width: 100%;
 }
 
-.devices-page__device,
 .workspace-page__current-card,
-.workspace-page__recent-item,
 .workspace-page__no-workspace {
   border-color: var(--bf-color-border-subtle);
   background: var(--bf-color-surface-panel);
   box-shadow: var(--bf-shadow-xs);
-}
-
-.devices-page__device {
-  min-height: 68px;
-  padding: 11px 12px;
-  border-radius: 16px;
-
-  &.is-current {
-    border-color: var(--bf-color-border-strong);
-    background: var(--bf-color-surface-tertiary);
-    box-shadow: inset 3px 0 0 var(--bf-color-content-primary);
-  }
 }
 
 .devices-page__device-icon,
@@ -528,24 +512,6 @@ textarea:focus-visible,
   bottom: max(14px, env(safe-area-inset-bottom, 0px));
   max-width: 760px;
   padding: 0 16px;
-}
-
-.chat-page__input-box {
-  border: 1px solid var(--bf-color-border-subtle);
-  background: color-mix(in srgb, var(--bf-color-surface-panel) 94%, transparent);
-  box-shadow: 0 10px 34px color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
-}
-
-.chat-page__input-wrap:not(.is-expanded) .chat-page__input-box {
-  min-height: 48px;
-  max-height: 48px;
-  padding-left: 18px;
-  border-radius: 24px;
-}
-
-.chat-page__input-wrap.is-expanded .chat-page__input-box {
-  border-radius: 20px;
-  padding: 14px 10px 2px;
 }
 
 .chat-page__send-btn {
@@ -631,21 +597,18 @@ textarea:focus-visible,
     padding: 30px 28px 48px;
   }
 
-  .session-list__picker-overlay,
-  .session-list__menu-overlay {
+  .session-list__picker-overlay {
     align-items: center;
     padding: 24px;
   }
 
-  .session-list__picker-modal,
-  .session-list__menu-sheet {
+  .session-list__picker-modal {
     max-width: 420px;
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: 24px;
     box-shadow: var(--bf-shadow-xl);
   }
 
-  .session-list__menu-handle { display: none; }
 }
 
 @media (max-width: 899px) {
@@ -690,8 +653,7 @@ textarea:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .remote-home__workspace,
-  .chat-page__input-box {
+  .remote-home__workspace {
     transition: none;
   }
 }

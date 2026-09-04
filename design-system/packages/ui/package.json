@@ -21,6 +21,11 @@
       "types": "./dist/types/flow-chat.d.ts",
       "import": "./dist/flow-chat.js"
     },
+    "./mobile": {
+      "types": "./dist/types/mobile.d.ts",
+      "import": "./dist/mobile.js"
+    },
+    "./mobile.css": "./dist/mobile.css",
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },
@@ -28,7 +33,7 @@
     "**/*.css"
   ],
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.build.json",
+    "build": "vite build && vite build --config vite.mobile.config.ts && tsc -p tsconfig.build.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm run build && node --test tests/*.test.mjs",
     "prepack": "pnpm run build"

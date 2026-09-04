@@ -1,0 +1,13 @@
+@layer bf.components {
+  .root { box-sizing: border-box; min-inline-size: 0; color: var(--bf-color-content-primary); }
+  .trigger { display: flex; inline-size: 100%; min-block-size: 44px; align-items: center; gap: var(--bf-space-2); margin: 0; padding: var(--bf-space-2) 0; border: 0; color: inherit; background: transparent; cursor: pointer; text-align: start; font: inherit; }
+  .trigger:focus-visible { outline: var(--bf-focus-width) solid var(--bf-color-focus-ring); outline-offset: var(--bf-focus-offset); border-radius: var(--bf-radius-sm); }
+  .trigger:disabled { color: var(--bf-color-content-disabled); cursor: not-allowed; }
+  .leading { display: grid; inline-size: 20px; block-size: 20px; flex: 0 0 20px; place-items: center; }
+  .title { min-inline-size: 0; flex: 1; font-size: var(--bf-type-body-sm-font-size); font-weight: var(--bf-type-label-md-font-weight); }
+  .metadata { color: var(--bf-color-content-muted); font-size: var(--bf-type-body-xs-font-size); }
+  .chevron { inline-size: 16px; block-size: 16px; flex: 0 0 16px; transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard); }
+  .root[data-open="true"] .chevron { transform: rotate(90deg); }
+  .body { padding: 0 0 var(--bf-space-3) calc(20px + var(--bf-space-2)); }
+  @media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
+}

@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MobileIconButton, MobileStatus } from '@bitfun/ui/mobile';
+import PairingForm from '../components/PairingForm';
 import QrScannerSheet from '../components/QrScannerSheet';
 import { useI18n } from '../i18n';
 import { CloudAccountClient, CloudAccountRequestError } from '../services/CloudAccountClient';
+import {
+  loadMatchingCloudAccountSession,
+  saveCloudAccountSession,
+  type StoredCloudAccountSession,
+} from '../services/CloudAccountSessionStore';
 import { normalizeRelayUrl, validPairingSecret } from '../services/pairingLink';
 import { RelayHttpClient } from '../services/RelayHttpClient';
 import { RemoteSessionManager } from '../services/RemoteSessionManager';
@@ -9,6 +16,12 @@ import { useMobileStore } from '../services/store';
 
 interface PairingPageProps {
   onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => void;
+}
+
+interface PairAttemptOptions {
+  autoReconnect?: boolean;
+  installId?: string;
+  accountSession?: StoredCloudAccountSession;
 }
 
 const MOBILE_INSTALL_ID_KEY = 'bitfun.mobile.install_id';
@@ -120,6 +133,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [failureCount, setFailureCount] = useState(0);
@@ -135,7 +149,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const attemptPairRef = useRef<(
     providedUserId: string,
     providedPassword: string,
-    options?: { autoReconnect?: boolean; installId?: string },
+    options?: PairAttemptOptions,
   ) => Promise<void>>(async () => {});
   const onPairedRef = useRef(onPaired);
   onPairedRef.current = onPaired;
@@ -169,7 +183,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const attemptPair = useCallback(async (
     providedUserId: string,
     providedPassword: string,
-    options?: { autoReconnect?: boolean; installId?: string },
+    options?: PairAttemptOptions,
   ) => {
     const roomId = pairingTarget.room;
     const desktopPublicKey = pairingTarget.pk;
@@ -212,7 +226,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
       setConnectionStatus('error');
       return;
     }
-    if (requiresAccountAuth && !passwordValue) {
+    if (requiresAccountAuth && !passwordValue && !options?.accountSession) {
       if (!isCurrentAttempt()) return;
       setError(t('pairing.passwordRequired'));
       setConnectionStatus('error');
@@ -238,12 +252,20 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
       // same route but falls back to the first available desktop.
       if (requiresAccountAuth
         && (pairingTarget.directAccountLogin || !!pairingTarget.targetDeviceId)) {
-        const accountSession = await new CloudAccountClient().login(
-          httpBaseUrl,
-          userIdValue,
-          passwordValue,
-          currentInstallId,
-        );
+        const restoredAccount = options?.accountSession;
+        const accountSession = restoredAccount
+          ? {
+            token: restoredAccount.session.token,
+            userId: restoredAccount.session.userId,
+            masterKey: restoredAccount.session.masterKey.slice(),
+          }
+          : await new CloudAccountClient().login(
+            httpBaseUrl,
+            userIdValue,
+            passwordValue,
+            currentInstallId,
+          );
+        restoredAccount?.session.masterKey.fill(0);
         if (!isCurrentAttempt()) {
           accountSession.masterKey.fill(0);
           return;
@@ -251,6 +273,12 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
         client.installDirectAccountIdentity({
           ...accountSession,
           deviceId: currentInstallId,
+        });
+        saveCloudAccountSession({
+          relayUrl: httpBaseUrl,
+          username: userIdValue,
+          controllerDeviceId: currentInstallId,
+          session: accountSession,
         });
         accountSession.masterKey.fill(0);
 
@@ -390,7 +418,9 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
       if (!isCurrentAttempt()) return;
       const rawErrorMessage = e?.message || '';
       const status = e instanceof CloudAccountRequestError ? e.status : e?.status;
-      const errorMessage = rawErrorMessage.includes('timed out')
+      const errorMessage = status === 401 && !!options?.accountSession
+        ? t('pairing.accountSessionExpired')
+        : rawErrorMessage.includes('timed out')
         ? t('pairing.requestTimedOut')
         : status === 404 || rawErrorMessage.includes('HTTP 404')
           ? t('pairing.qrExpired')
@@ -452,8 +482,18 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   useEffect(() => {
     const savedUserId = localStorage.getItem(MOBILE_USER_ID_KEY)?.trim() ?? '';
     const qrUsername = pairingTarget.accountUsername?.trim() ?? '';
-    const prefilledUserId = qrUsername || savedUserId;
     const currentInstallId = getOrCreateInstallId();
+    // Reuse is scan-driven. A plain account landing page must stay idle after
+    // an explicit disconnect instead of immediately reconnecting itself.
+    const hasScannedAccountTarget = !!pairingTarget.targetDeviceId;
+    const restoredAccount = requiresAccountAuth && hasScannedAccountTarget
+      ? loadMatchingCloudAccountSession(
+        pairingTarget.httpBaseUrl,
+        qrUsername,
+        currentInstallId,
+      )
+      : null;
+    const prefilledUserId = qrUsername || restoredAccount?.username || savedUserId;
     const persistedFailureCount = Number(localStorage.getItem(MOBILE_FAILURE_COUNT_KEY) || '0');
     const persistedLockUntil = Number(localStorage.getItem(MOBILE_LOCK_UNTIL_KEY) || '0');
     const normalizedLockUntil = persistedLockUntil > Date.now() ? persistedLockUntil : null;
@@ -461,8 +501,10 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
       localStorage.removeItem(MOBILE_LOCK_UNTIL_KEY);
       localStorage.removeItem(MOBILE_FAILURE_COUNT_KEY);
     }
-    // Account mode always needs a password — never auto-reconnect without it.
-    const shouldAutoReconnect = !requiresAccountAuth
+    // A valid account session is already proof for a same-account QR. Legacy
+    // room pairing remains auto-reconnectable only in its passwordless mode.
+    const shouldRestoreAccount = !!restoredAccount;
+    const shouldRestoreRoom = !requiresAccountAuth
       && !!savedUserId
       && !!currentInstallId
       && !!pairingTarget.room
@@ -472,13 +514,14 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
     setLockUntil(normalizedLockUntil);
     setError(null);
 
-    if (shouldAutoReconnect) {
+    if (shouldRestoreAccount || shouldRestoreRoom) {
       // Show the spinner immediately; attemptPair also sets pairing when the
       // network attempt actually starts (after validation).
       setConnectionStatus('pairing');
-      void attemptPairRef.current(savedUserId, '', {
+      void attemptPairRef.current(prefilledUserId, '', {
         autoReconnect: true,
         installId: currentInstallId,
+        accountSession: restoredAccount ?? undefined,
       });
     } else {
       setConnectionStatus('idle');
@@ -558,162 +601,49 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
         <section className="pairing-page__panel">
           <header className="pairing-page__header">
             <span className="pairing-page__header-spacer" aria-hidden="true" />
-            <button
-              type="button"
+            <MobileIconButton
+              appearance="plain"
               className="pairing-page__back"
               onClick={() => history.length > 1 && history.back()}
               aria-label={t('common.close')}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
                 <path d="m6 6 12 12M18 6 6 18" />
-              </svg>
-            </button>
+              </svg>}
+            />
           </header>
 
           {showForm && (
-            <form className="pairing-page__form" onSubmit={(event) => { event.preventDefault(); handleConnect(); }}>
-              <div className="pairing-page__scroll">
-                <div className="pairing-page__form-content">
-                  <h1 className="pairing-page__title">
-                    {requiresAccountAuth ? t('pairing.loginTitle') : t('pairing.connectTitle')}
-                  </h1>
-                  <p className="pairing-page__intro">
-                    {requiresAccountAuth ? t('pairing.loginDescription') : t('pairing.note')}
-                  </p>
-                  <div className={`pairing-page__credentials${requiresAccountAuth ? '' : ' pairing-page__credentials--single'}`}>
-                    <label className="pairing-page__field">
-                      <span className="pairing-page__field-icon" aria-hidden="true">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>
-                      </span>
-                      <input
-                        ref={usernameInputRef}
-                        className="pairing-page__input pairing-page__input--username"
-                        type="text"
-                        value={userId}
-                        onChange={(e) => setUserId(e.target.value)}
-                        onAnimationStart={(e) => {
-                          if (e.animationName === 'pairingAutofillReconcile') {
-                            setUserId(e.currentTarget.value);
-                          }
-                        }}
-                        placeholder={requiresAccountAuth ? t('pairing.usernamePlaceholder') : t('pairing.placeholder')}
-                        autoCapitalize="off"
-                        autoCorrect="off"
-                        autoComplete="username"
-                        maxLength={128}
-                        disabled={submitting || isLocked}
-                      />
-                    </label>
-                    {requiresAccountAuth && (
-                      <div className="pairing-page__field pairing-page__password-field">
-                      <label className="pairing-page__sr-only" htmlFor="pairing-password">
-                        {t('pairing.passwordLabel')}
-                      </label>
-                      <span className="pairing-page__field-icon" aria-hidden="true">
-                        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-                      </span>
-                      <input
-                        ref={passwordInputRef}
-                        id="pairing-password"
-                        className="pairing-page__input pairing-page__input--password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        onAnimationStart={(e) => {
-                          if (e.animationName === 'pairingAutofillReconcile') {
-                            setPassword(e.currentTarget.value);
-                          }
-                        }}
-                        placeholder={t('pairing.passwordPlaceholder')}
-                        autoComplete="current-password"
-                        maxLength={1024}
-                        disabled={submitting || isLocked}
-                      />
-                      <button
-                        type="button"
-                        className="pairing-page__password-toggle"
-                        aria-label={showPassword ? t('pairing.hidePassword') : t('pairing.showPassword')}
-                        onClick={() => setShowPassword((visible) => !visible)}
-                      >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          {showPassword ? (
-                            <>
-                              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-                              <circle cx="12" cy="12" r="2.6" />
-                            </>
-                          ) : (
-                            <>
-                              <path d="m3 3 18 18" />
-                              <path d="M10.6 6.2A10.7 10.7 0 0 1 12 6c6.5 0 10 6 10 6a17.8 17.8 0 0 1-2.2 2.8" />
-                              <path d="M6.2 6.2C3.5 8 2 12 2 12s3.5 6 10 6a10 10 0 0 0 4-.8" />
-                            </>
-                          )}
-                        </svg>
-                      </button>
-                      </div>
-                    )}
-                  </div>
-                  <details className="pairing-page__advanced">
-                    <summary>
-                      <span className="pairing-page__advanced-icon" aria-hidden="true">
-                        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.4v-4h.09A1.7 1.7 0 0 0 4.2 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.6 4.2a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.4h4v.09A1.7 1.7 0 0 0 15 4.2a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.6a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09a1.7 1.7 0 0 0-1.7 1z"/></svg>
-                      </span>
-                      <span>{t('pairing.advancedOptions')}</span>
-                    </summary>
-                    <div className="pairing-page__advanced-actions">
-                      <label className="pairing-page__relay-field">
-                        <span>{t('pairing.loginServer')}</span>
-                        <input
-                          type="url"
-                          value={relayUrl}
-                          placeholder={t('pairing.relayUrlPlaceholder')}
-                          onChange={(event) => setRelayUrl(event.target.value)}
-                          disabled={submitting || isLocked}
-                        />
-                      </label>
-                    </div>
-                  </details>
-                  {error && <div className="pairing-page__error">{error}</div>}
-                </div>
-              </div>
-              <div className="pairing-page__action">
-                <button
-                  className="pairing-page__retry"
-                  type="submit"
-                  disabled={submitting || isLocked}
-                >
-                  {showSpinner && <span className="spinner spinner--sm" aria-hidden="true" />}
-                  {submitting
-                    ? t('pairing.connecting')
-                    : isLocked
-                      ? t('pairing.retryIn', { seconds: remainingLockSeconds })
-                      : requiresAccountAuth
-                        ? t('pairing.loginAction')
-                        : t('pairing.continue')}
-                </button>
-                {!pairingTarget.hasPairingDescriptor && (
-                  <button
-                    className="pairing-page__scan-action"
-                    type="button"
-                    onClick={() => setScannerOpen(true)}
-                    disabled={submitting}
-                  >
-                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
-                      <path d="M8 8h8v8H8z" />
-                    </svg>
-                    {t('pairing.scanAction')}
-                  </button>
-                )}
-              </div>
-            </form>
+            <PairingForm
+              advancedOpen={advancedOpen}
+              error={error}
+              hasPairingDescriptor={pairingTarget.hasPairingDescriptor}
+              isLocked={isLocked}
+              password={password}
+              passwordInputRef={passwordInputRef}
+              relayUrl={relayUrl}
+              remainingLockSeconds={remainingLockSeconds}
+              requiresAccountAuth={requiresAccountAuth}
+              showPassword={showPassword}
+              showSpinner={showSpinner}
+              submitting={submitting}
+              userId={userId}
+              usernameInputRef={usernameInputRef}
+              onAdvancedOpenChange={setAdvancedOpen}
+              onConnect={() => void handleConnect()}
+              onOpenScanner={() => setScannerOpen(true)}
+              onPasswordChange={setPassword}
+              onRelayUrlChange={setRelayUrl}
+              onShowPasswordChange={setShowPassword}
+              onUserIdChange={setUserId}
+            />
           )}
 
           {!showForm && (
-            <div className="pairing-page__progress" role="status">
-              <div className="spinner" />
-              <span>{connectionStatus === 'paired' ? t('pairing.pairedLoadingSessions') : t('pairing.connectingAndPairing')}</span>
-            </div>
+            <MobileStatus
+              className="pairing-page__progress"
+              loading
+              title={connectionStatus === 'paired' ? t('pairing.pairedLoadingSessions') : t('pairing.connectingAndPairing')}
+            />
           )}
         </section>
       </div>

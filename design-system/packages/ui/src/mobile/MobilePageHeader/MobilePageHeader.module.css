@@ -1,0 +1,10 @@
+@layer bf.components {
+  .root { box-sizing: border-box; display: grid; min-block-size: 56px; grid-template-columns: minmax(44px, auto) minmax(0, 1fr) minmax(44px, auto); align-items: center; gap: var(--bf-space-2); padding: var(--bf-space-2) var(--bf-space-4); color: var(--bf-color-content-primary); background: var(--bf-color-surface-canvas); }
+  .leading, .actions { display: flex; min-inline-size: 44px; align-items: center; gap: var(--bf-space-2); }
+  .actions { justify-content: flex-end; }
+  .copy { min-inline-size: 0; }
+  .root[data-centered="true"] .copy { text-align: center; }
+  .title { overflow: hidden; margin: 0; font-family: var(--bf-type-heading-page-font-family); font-size: var(--bf-type-heading-section-font-size); font-weight: var(--bf-type-heading-page-font-weight); line-height: var(--bf-type-heading-page-line-height); text-overflow: ellipsis; white-space: nowrap; }
+  .subtitle { overflow: hidden; margin-block-start: var(--bf-space-1); color: var(--bf-color-content-muted); font-size: var(--bf-type-body-xs-font-size); text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 479px) { .root { padding-inline: var(--bf-space-3); } }
+}

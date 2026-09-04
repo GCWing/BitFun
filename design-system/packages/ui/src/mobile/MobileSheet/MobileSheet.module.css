@@ -1,0 +1,139 @@
+@layer bf.components {
+  .overlay[data-bf-component="mobile-sheet"] {
+    position: fixed;
+    inset: 0;
+    z-index: var(--bf-layer-modal);
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    background: var(--bf-color-overlay-scrim);
+    animation: bf-mobile-sheet-overlay-enter var(--bf-motion-duration-base) var(--bf-motion-easing-enter) both;
+  }
+
+  .root {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    inline-size: min(100%, 520px);
+    max-inline-size: 520px;
+    max-block-size: min(88dvh, 760px);
+    flex-direction: column;
+    overflow: hidden;
+    margin-inline: auto;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-start-start-radius: var(--bf-radius-2xl);
+    border-start-end-radius: var(--bf-radius-2xl);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-panel);
+    box-shadow: var(--bf-shadow-overlay);
+    animation: bf-mobile-sheet-surface-enter var(--bf-motion-duration-base) var(--bf-motion-easing-enter) both;
+  }
+
+  .handle {
+    inline-size: 36px;
+    block-size: 4px;
+    flex: 0 0 auto;
+    align-self: center;
+    margin-block-start: var(--bf-space-2);
+    border-radius: var(--bf-radius-pill);
+    background: var(--bf-color-border-strong);
+  }
+
+  .header,
+  .body,
+  .footer {
+    box-sizing: border-box;
+    min-inline-size: 0;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--bf-space-3);
+    flex: 0 0 auto;
+    padding: var(--bf-space-3) var(--bf-space-4) var(--bf-space-2);
+    text-align: center;
+  }
+
+  .heading { min-inline-size: 0; flex: 1; }
+  .headerAction { flex: 0 0 auto; margin-block-start: calc(var(--bf-space-1) * -1); }
+
+  .title {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--bf-color-content-primary);
+    font-family: var(--bf-type-body-lg-font-family);
+    font-size: var(--bf-type-body-lg-font-size);
+    font-weight: var(--bf-type-label-selected-font-weight);
+    line-height: var(--bf-type-body-lg-line-height);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .description {
+    margin: 0;
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-type-body-sm-font-size);
+    line-height: var(--bf-type-body-sm-line-height);
+  }
+
+  .body {
+    display: flex;
+    min-block-size: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+    overflow: auto;
+    padding: 0 var(--bf-space-3) var(--bf-space-2);
+    overscroll-behavior: contain;
+  }
+
+  .footer {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+    padding: 0 var(--bf-space-3) var(--bf-space-3);
+  }
+
+  .overlay[data-state="exiting"] {
+    pointer-events: none;
+    animation: bf-mobile-sheet-overlay-exit var(--bf-motion-duration-base) var(--bf-motion-easing-exit) both;
+  }
+
+  .root[data-state="exiting"] {
+    animation: bf-mobile-sheet-surface-exit var(--bf-motion-duration-base) var(--bf-motion-easing-exit) both;
+  }
+
+  @keyframes bf-mobile-sheet-overlay-enter { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes bf-mobile-sheet-overlay-exit { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes bf-mobile-sheet-surface-enter { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes bf-mobile-sheet-surface-exit { from { transform: none; } to { transform: translateY(100%); } }
+
+  @media (min-width: 700px) {
+    .root {
+      margin-block-end: var(--bf-space-4);
+      border-radius: var(--bf-radius-2xl);
+    }
+  }
+
+  @media (max-width: 359px) {
+    .header { padding-inline: var(--bf-space-3); }
+    .body,
+    .footer { padding-inline: var(--bf-space-2); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .overlay,
+    .root { animation-duration: 1ms; }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: CanvasText; }
+  }
+}

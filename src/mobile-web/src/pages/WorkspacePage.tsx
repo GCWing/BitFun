@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { MobileBanner, MobileIconButton, MobileListRow, MobilePageHeader, MobileStatus } from '@bitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
 import {
@@ -71,10 +72,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady, onBa
   if (loading) {
     return (
       <div className="workspace-page">
-        <div className="workspace-page__loading">
-          <div className="spinner" />
-          <span>{t('workspace.loadingInfo')}</span>
-        </div>
+        <MobileStatus className="workspace-page__loading" loading title={t('workspace.loadingInfo')} />
       </div>
     );
   }
@@ -82,48 +80,51 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady, onBa
   return (
     <div className="workspace-page">
       <div className="workspace-page__sheet">
-        <header className="workspace-page__header">
-          <div className="workspace-page__heading-copy">
-            <h1>{t('workspace.selectWorkspace')}</h1>
-            {controlTarget?.deviceName && <p>{controlTarget.deviceName}</p>}
-          </div>
-          {onBack && (
-            <button type="button" className="workspace-page__close" onClick={onBack} aria-label={t('common.close')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-            </button>
-          )}
-        </header>
+        <MobilePageHeader
+          className="workspace-page__header"
+          title={t('workspace.selectWorkspace')}
+          subtitle={controlTarget?.deviceName}
+          actions={onBack ? (
+            <MobileIconButton
+              appearance="surface"
+              className="workspace-page__close"
+              icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>}
+              onClick={onBack}
+              size="sm"
+              aria-label={t('common.close')}
+            />
+          ) : undefined}
+        />
 
         <div className="workspace-page__divider" />
         <div className="workspace-page__content">
           {recentWorkspaces.length === 0 ? (
-            <div className="workspace-page__recent-empty">{t('workspace.noRecentWorkspaces')}</div>
+            <MobileStatus className="workspace-page__recent-empty" description={t('workspace.noRecentWorkspaces')} />
           ) : (
             <div className="workspace-page__recent-list">
               {recentWorkspaces.map((ws) => {
                 const selected = workspaceInfo?.path === ws.path;
                 return (
-                  <button
+                  <MobileListRow
                     key={`${ws.remote_connection_id ?? 'local'}:${ws.path}`}
+                    appearance="plain"
                     className={`workspace-page__recent-item${selected ? ' is-selected' : ''}`}
                     onClick={() => handleSelectWorkspace(ws)}
                     disabled={switching}
-                  >
-                    <span className="workspace-page__recent-item-icon" aria-hidden="true">
+                    selected={selected}
+                    leading={<span className="workspace-page__recent-item-icon" aria-hidden="true">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4l2 2h7A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
-                    </span>
-                    <span className="workspace-page__recent-item-copy">
-                      <span className="workspace-page__recent-item-name">{ws.name}</span>
-                      <span className="workspace-page__recent-item-path">{ws.path}</span>
-                    </span>
-                    <span className="workspace-page__recent-item-trailing" aria-hidden="true">{selected ? '✓' : '›'}</span>
-                  </button>
+                    </span>}
+                    label={<span className="workspace-page__recent-item-name">{ws.name}</span>}
+                    supportingText={<span className="workspace-page__recent-item-path">{ws.path}</span>}
+                    trailing={<span className="workspace-page__recent-item-trailing" aria-hidden="true">{selected ? '✓' : '›'}</span>}
+                  />
                 );
               })}
             </div>
           )}
-          {switching && <div className="workspace-page__switching"><div className="spinner spinner--sm" /></div>}
-          {error && <div className="workspace-page__error">{error}</div>}
+          {switching && <MobileStatus className="workspace-page__switching" loading />}
+          {error && <MobileBanner className="workspace-page__error" tone="danger">{error}</MobileBanner>}
         </div>
       </div>
     </div>

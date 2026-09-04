@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useState, useCallback, useRef, useEffect } from 'react';
+import { MobileBanner, MobileButton, MobileScrim, MobileStatus } from '@bitfun/ui/mobile';
 import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
@@ -403,13 +404,14 @@ const AppContent: React.FC = () => {
   return (
     <div className="mobile-app" data-layout={isWideLayout ? 'wide' : 'compact'}>
       {connectionHealth === 'unreachable' && page !== 'pairing' && (
-        <div className="mobile-reconnect-banner" role="alert">
+        <MobileBanner
+          action={<MobileButton appearance="plain" onClick={handleDisconnect} size="sm">{t('sessions.repair')}</MobileButton>}
+          className="mobile-reconnect-banner"
+          tone="danger"
+        >
           <span className="mobile-reconnect-spinner" />
           <span>{t('sessions.reconnecting')}</span>
-          <button type="button" onClick={handleDisconnect}>
-            {t('sessions.repair')}
-          </button>
-        </div>
+        </MobileBanner>
       )}
       {page === 'pairing' && <PairingPage onPaired={handlePaired} />}
       {page !== 'pairing' && isWideLayout && sessionMgrRef.current && (
@@ -460,15 +462,14 @@ const AppContent: React.FC = () => {
                   onControlTargetChanged={handleControlTargetChanged}
                 />
               </aside>
-              <button
-                type="button"
+              <MobileScrim
                 className="compact-remote-shell__scrim"
                 aria-label={t('common.close')}
                 onClick={() => setCompactSidebarOpen(false)}
               />
               <section className="compact-remote-shell__main">
                 {currentPage === 'chat' && activeSessionId ? (
-                  <Suspense fallback={<div className="spinner" aria-hidden="true" />}>
+                  <Suspense fallback={<MobileStatus loading title={t('workspace.loadingInfo')} />}>
                     <ChatPage
                       sessionMgr={sessionMgrRef.current}
                       sessionId={activeSessionId}

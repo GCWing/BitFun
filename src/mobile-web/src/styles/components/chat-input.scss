@@ -17,37 +17,10 @@
   &:not(.is-expanded) {
     max-width: 480px;
 
-    .chat-page__input-box {
-      min-height: 42px;
-      max-height: 42px;
-      padding: 0 8px 0 20px;
-      border-radius: 21px;
-      border: 1px solid var(--bf-color-border-subtle);
-      flex-direction: row;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      box-shadow: var(--bf-shadow-lg);
-
-      &:active {
-        background: var(--bf-color-surface-raised);
-        box-shadow: var(--bf-shadow-xl);
-        transform: translateY(-1px);
-      }
-    }
-
     .chat-page__input-area {
       flex: 1 1 auto;
       min-height: auto;
       min-width: 0;
-    }
-
-    .chat-page__input-actions-left { display: none; }
-
-    .chat-page__input-actions {
-      flex-shrink: 0;
-      padding: 0;
-      height: auto;
     }
 
     .chat-page__action-btn { display: none; }
@@ -58,34 +31,6 @@
       opacity: 0.35;
     }
   }
-
-  &.is-expanded {
-    .chat-page__input-box {
-      border-radius: 12px;
-      padding: 12px 8px 0;
-      border: 1px solid var(--bf-color-border-default);
-      flex-direction: column;
-      gap: 0;
-    }
-  }
-}
-
-.chat-page__input-box {
-  position: relative;
-  width: 100%;
-  display: flex;
-  pointer-events: auto;
-  background: var(--bf-color-surface-tertiary);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
-  transition: border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              min-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--bf-shadow-xl);
 }
 
 // ── Input area ───────────────────────────────────────────────────────────────
@@ -130,34 +75,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-// ── Actions bar (bottom row) ─────────────────────────────────────────────────
-
-.chat-page__input-actions {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  min-height: 24px;
-  padding: 0 0 7px;
-}
-
-.chat-page__input-actions-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.chat-page__input-actions-right {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  margin-left: auto;
-  flex-shrink: 0;
 }
 
 // ── Mode pill button (desktop style) ─────────────────────────────────────────

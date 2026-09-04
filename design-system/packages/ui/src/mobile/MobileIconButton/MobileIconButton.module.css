@@ -1,0 +1,123 @@
+@layer bf.components {
+  .root {
+    --_mobile-icon-button-size: 44px;
+    --_mobile-icon-size: 22px;
+
+    position: relative;
+    box-sizing: border-box;
+    display: inline-grid;
+    inline-size: var(--_mobile-icon-button-size);
+    block-size: var(--_mobile-icon-button-size);
+    min-inline-size: var(--_mobile-icon-button-size);
+    place-items: center;
+    flex: 0 0 var(--_mobile-icon-button-size);
+    margin: 0;
+    padding: 0;
+    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-radius-pill);
+    color: var(--bf-color-action-neutral-content);
+    background: var(--bf-color-surface-panel);
+    box-shadow: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .root[data-size="sm"] {
+    --_mobile-icon-button-size: 40px;
+    --_mobile-icon-size: 20px;
+  }
+
+  .root[data-appearance="plain"] {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .root[data-appearance="floating"] {
+    box-shadow: var(--bf-shadow-base);
+  }
+
+  .root[data-selected="true"] {
+    border-color: var(--bf-color-border-strong);
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+      color: var(--bf-color-content-primary);
+      background: var(--bf-color-action-neutral-surface-hover);
+      box-shadow: var(--bf-shadow-sm);
+    }
+  }
+
+  .root:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-neutral-surface-pressed);
+    transform: scale(0.94);
+  }
+
+  .root:is(:focus-visible, [data-bf-preview-state="focus-visible"]) {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .root:disabled {
+    color: var(--bf-color-action-neutral-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .icon,
+  .spinner {
+    position: absolute;
+    display: grid;
+    inline-size: var(--_mobile-icon-size);
+    block-size: var(--_mobile-icon-size);
+    place-items: center;
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .spinner {
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: var(--bf-radius-pill);
+    opacity: 0;
+  }
+
+  .root[data-loading="true"] .icon {
+    opacity: 0;
+  }
+
+  .root[data-loading="true"] .spinner {
+    opacity: 1;
+    animation: bf-mobile-icon-button-spin var(--bf-motion-duration-loop) linear infinite;
+  }
+
+  @keyframes bf-mobile-icon-button-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root { transition: none; }
+    .root[data-loading="true"] .spinner {
+      animation: none;
+      border-inline-end-color: currentColor;
+      opacity: var(--bf-opacity-hover);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: ButtonText; }
+    .root:focus-visible { outline-color: Highlight; }
+  }
+}

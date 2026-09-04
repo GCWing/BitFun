@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { MobileBanner, MobileButton, MobileFileButton, MobileIconButton, MobileSheet, MobileTextField } from '@bitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { parseScannedPairingLink } from '../services/pairingLink';
 
@@ -85,14 +86,6 @@ const QrScannerSheet: React.FC<QrScannerSheetProps> = ({ onClose, onDetected }) 
     };
   }, [acceptValue, t]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   const handleImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -111,18 +104,15 @@ const QrScannerSheet: React.FC<QrScannerSheetProps> = ({ onClose, onDetected }) 
   };
 
   return (
-    <div className="qr-scanner-sheet__backdrop" role="presentation">
-      <section className="qr-scanner-sheet" role="dialog" aria-modal="true" aria-labelledby="qr-scanner-title">
-        <header className="qr-scanner-sheet__header">
-          <div>
-            <h2 id="qr-scanner-title">{t('pairing.scanTitle')}</h2>
-            <p>{t('pairing.scanDescription')}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label={t('common.close')} autoFocus>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-          </button>
-        </header>
-
+    <MobileSheet
+      className="qr-scanner-sheet"
+      description={t('pairing.scanDescription')}
+      headerAction={<MobileIconButton appearance="plain" aria-label={t('common.close')} autoFocus icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>} onClick={onClose} size="sm" />}
+      onOpenChange={onClose}
+      open
+      showHandle={false}
+      title={t('pairing.scanTitle')}
+    >
         <div className="qr-scanner-sheet__content">
           <div className="qr-scanner-sheet__camera">
             <video ref={videoRef} muted playsInline aria-label={t('pairing.cameraPreview')} />
@@ -134,18 +124,23 @@ const QrScannerSheet: React.FC<QrScannerSheetProps> = ({ onClose, onDetected }) 
             {starting && <span className="qr-scanner-sheet__starting"><span className="spinner" />{t('pairing.scannerStarting')}</span>}
           </div>
 
-          {scanError && <div className="qr-scanner-sheet__error" role="alert">{scanError}</div>}
+          {scanError && <MobileBanner className="qr-scanner-sheet__error" tone="danger">{scanError}</MobileBanner>}
 
-          <label className="qr-scanner-sheet__image-action">
-            <input type="file" accept="image/*" onChange={handleImage} disabled={scanningImage} />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4L5 21"/></svg>
+          <MobileFileButton
+            accept="image/*"
+            className="qr-scanner-sheet__image-action"
+            leading={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4L5 21"/></svg>}
+            loading={scanningImage}
+            onChange={handleImage}
+          >
             {scanningImage ? t('pairing.scanningImage') : t('pairing.scanFromImage')}
-          </label>
+          </MobileFileButton>
 
           <div className="qr-scanner-sheet__manual">
             <label htmlFor="pairing-link-input">{t('pairing.pasteLink')}</label>
             <div>
-              <input
+              <MobileTextField
+                appearance="surface"
                 id="pairing-link-input"
                 type="url"
                 value={manualLink}
@@ -154,14 +149,13 @@ const QrScannerSheet: React.FC<QrScannerSheetProps> = ({ onClose, onDetected }) 
                 autoCapitalize="off"
                 autoCorrect="off"
               />
-              <button type="button" onClick={() => acceptValue(manualLink)} disabled={!manualLink.trim()}>
+              <MobileButton onClick={() => acceptValue(manualLink)} disabled={!manualLink.trim()}>
                 {t('pairing.connectScannedLink')}
-              </button>
+              </MobileButton>
             </div>
           </div>
         </div>
-      </section>
-    </div>
+    </MobileSheet>
   );
 };
 

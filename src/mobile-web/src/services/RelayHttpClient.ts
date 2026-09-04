@@ -71,6 +71,7 @@ const TRANSIENT_RELAY_STATUSES = new Set([408, 425, 500, 502, 503, 504]);
 
 type RelayRequestOptions = {
   retryable?: boolean;
+  timeoutMs?: number;
 };
 
 function equalBytesConstantTime(left: Uint8Array, right: Uint8Array): boolean {
@@ -476,6 +477,7 @@ export class RelayHttpClient {
 
     const body = JSON.stringify({ encrypted_data: encData, nonce: encNonce });
 
+    const timeoutMs = options.timeoutMs ?? (options.retryable ? 20_000 : 65_000);
     const resp = await (options.retryable ? this.fetchWithRetry : this.fetchWithTimeout).call(
       this,
       `${this.relayUrl}/api/rooms/${encodeURIComponent(this.roomId)}/command`,
@@ -484,7 +486,7 @@ export class RelayHttpClient {
         headers: { 'Content-Type': 'application/json' },
         body,
       },
-      options.retryable ? 20_000 : 65_000,
+      timeoutMs,
     );
 
     if (!resp.ok) {
@@ -710,6 +712,7 @@ export class RelayHttpClient {
         plaintext,
       );
 
+      const timeoutMs = options.timeoutMs ?? (options.retryable ? 20_000 : 130_000);
       const resp = await (options.retryable ? this.fetchWithRetry : this.fetchWithTimeout).call(
         this,
         `${this.relayUrl}/api/devices/${encodeURIComponent(targetDeviceId)}/rpc`,
@@ -721,7 +724,7 @@ export class RelayHttpClient {
           },
           body: JSON.stringify({ encrypted_data: encData, nonce: encNonce }),
         },
-        options.retryable ? 20_000 : 130_000,
+        timeoutMs,
       );
 
       if (!resp.ok) {
@@ -774,6 +777,11 @@ export class RelayHttpClient {
 
       const refreshed = await this.refreshDelegatedIdentityAfterUnauthorized(identity);
       if (!refreshed) {
+        // A browser-restored direct account session has no QR room from which
+        // it can refresh. Preserve the relay's 401 so the pairing surface can
+        // explicitly fall back to password login instead of reporting the
+        // unrelated "No delegated identity" state.
+        if (identity.source === 'direct') throw e;
         throw new Error('No delegated identity');
       }
       if (
