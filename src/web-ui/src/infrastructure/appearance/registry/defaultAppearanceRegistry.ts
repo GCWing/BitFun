@@ -131,6 +131,7 @@ import { backgroundCommandOutputPanelAppearanceDescriptor } from '@/flow_chat/co
 import { agentCompanionPetAppearanceDescriptor } from '@/flow_chat/components/AgentCompanionPet.appearance';
 import { fileMentionPickerAppearanceDescriptor } from '@/flow_chat/components/FileMentionPicker.appearance';
 import { sessionFileModificationsBarAppearanceDescriptor } from '@/flow_chat/components/modern/SessionFileModificationsBar.appearance';
+import { conversationModeSurfaceAppearanceDescriptor } from '@/flow_chat/components/voice/ConversationModeSurface.appearance';
 import { realtimeVoiceCallAppearanceDescriptor } from '@/flow_chat/components/voice/RealtimeVoiceCall.appearance';
 import { editorBreadcrumbAppearanceDescriptor } from '@/tools/editor/components/EditorBreadcrumb.appearance';
 import { gitBranchHistoryAppearanceDescriptor } from '@/tools/git/components/GitBranchHistoryView/GitBranchHistoryView.appearance';
@@ -381,6 +382,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(agentCompanionPetAppearanceDescriptor)
     .registerComponent(fileMentionPickerAppearanceDescriptor)
     .registerComponent(sessionFileModificationsBarAppearanceDescriptor)
+    .registerComponent(conversationModeSurfaceAppearanceDescriptor)
     .registerComponent(realtimeVoiceCallAppearanceDescriptor)
     .registerComponent(editorBreadcrumbAppearanceDescriptor)
     .registerComponent(gitBranchHistoryAppearanceDescriptor)

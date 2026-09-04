@@ -160,12 +160,12 @@ export async function persistDeckProjectSeed(fs, projectDir, seed) {
 }
 
 export function buildDeckRunRequestInput(baseInput, {
-  sessionId = '',
+  continueAfterInterruption = false,
   projectContractDiagnostic = null,
 } = {}) {
   return {
     ...baseInput,
-    ...(sessionId ? { continueAfterInterruption: true } : {}),
+    ...(continueAfterInterruption ? { continueAfterInterruption: true } : {}),
     ...(projectContractDiagnostic ? { projectContractDiagnostic } : {}),
   };
 }

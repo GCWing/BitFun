@@ -13,6 +13,13 @@ describe('unified project session creation', () => {
     const appLayout = source('../../layout/AppLayout.tsx');
     const helloLauncher = source('../../layout/FloatingMiniChat.tsx');
     const helloLauncherStyles = source('../../layout/FloatingMiniChat.scss');
+    const toolbarMode = source('../../../flow_chat/components/toolbar-mode/ToolbarMode.tsx');
+    const communicationSurface = source(
+      '../../../flow_chat/components/voice/ConversationModeSurface.tsx',
+    );
+    const communicationSurfaceStyles = source(
+      '../../../flow_chat/components/voice/ConversationModeSurface.scss',
+    );
     const voicePanel = source('../../../flow_chat/components/voice/RealtimeVoiceCallPanel.tsx');
     const workspaceItem = source('./sections/workspaces/WorkspaceItem.tsx');
     const utilityRowIndex = mainNav.indexOf('data-bf-part="utilityRow"');
@@ -33,19 +40,27 @@ describe('unified project session creation', () => {
     expect(helloLauncher).not.toContain('<Icon name="side-chat" size="md" />');
     expect(helloLauncher).toContain('onClick={handleOpen}');
     expect(helloLauncher).toContain('<ChatPane');
-    expect(helloLauncher).toContain('data-testid="hello-realtime-voice-mode-switch"');
-    expect(helloLauncher).toContain('onClick={isVoiceMode ? endVoiceCall : startVoiceCall}');
-    expect(helloLauncher).toContain('<Phone size={15} aria-hidden="true" />');
-    expect(helloLauncher).toContain('<RealtimeVoiceCallPanel />');
+    expect(helloLauncher).toContain('switchTestId="hello-realtime-voice-mode-switch"');
+    expect(helloLauncher).toContain('<ConversationModeSurface');
+    expect(helloLauncher).toContain('voiceTarget={miniAppVoiceTarget}');
+    expect(communicationSurface).toContain('onClick={handleModeSwitch}');
+    expect(communicationSurface).toContain('<Phone size={15} aria-hidden="true" />');
+    expect(communicationSurface).toContain('<RealtimeVoiceCallPanel />');
+    expect(toolbarMode).toContain('<ConversationModeSurface');
+    expect(toolbarMode).toContain('switchTestId="toolbar-realtime-voice-mode-switch"');
     expect(helloLauncher).toContain('<LauncherButton');
-    expect(helloLauncher).toContain('leadingIcon={<Icon name="mic" />}');
+    expect(helloLauncher).toContain(
+      'leadingIcon={<Phone size={16} aria-hidden="true" />}',
+    );
     expect(voicePanel).not.toContain('createPortal');
     expect(helloLauncherStyles).toContain('right: 0;');
     expect(helloLauncherStyles).toContain('bottom: 0;');
     expect(helloLauncherStyles).toContain(
       'z-index: calc(var(--bf-layer-overlay) + 1);',
     );
-    expect(helloLauncherStyles).toContain('.bitfun-fmc__mode-switch');
+    expect(communicationSurfaceStyles).toContain(
+      '.bitfun-conversation-mode-surface__switch',
+    );
     expect(mainNav).not.toContain('nav-new-code-session-btn');
     expect(mainNav).not.toContain('nav-new-cowork-session-btn');
     expect(workspaceItem).toContain('data-testid="nav-workspace-menu-create-session"');

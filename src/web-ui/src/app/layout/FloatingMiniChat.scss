@@ -79,6 +79,67 @@ $panel-height: 680px;
   }
 }
 
+// Keep the resting launcher no wider than a standard control so it does not
+// cover nearby composer actions on compact surfaces. Fine pointers reveal the
+// short label on deliberate hover; keyboard focus reveals it immediately.
+.bitfun-fmc__button--hello {
+  inline-size: var(--bf-control-launcher-button-block-size);
+  min-inline-size: var(--bf-control-launcher-button-block-size);
+  justify-content: flex-start;
+  gap: 0;
+  padding-inline: 0;
+  overflow: hidden;
+  transform-origin: bottom right;
+  transition:
+    inline-size var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+
+  > [data-bf-part='icon'] {
+    flex-basis: var(--bf-control-launcher-button-block-size);
+    inline-size: var(--bf-control-launcher-button-block-size);
+  }
+
+  > [data-bf-part='label'] {
+    flex: 0 0 auto;
+    padding-inline:
+      var(--bf-control-launcher-button-gap)
+      var(--bf-control-launcher-button-padding-inline);
+    opacity: 0;
+    transform: translateX(var(--bf-space-1));
+    transition:
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    inline-size: var(--bf-control-launcher-button-min-inline-size);
+    transition-duration: 0s;
+
+    > [data-bf-part='label'] {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-fmc__button--hello:hover {
+    inline-size: var(--bf-control-launcher-button-min-inline-size);
+
+    > [data-bf-part='label'] {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
 .bitfun-fmc__button--miniapp {
   display: inline-flex;
   width: $miniapp-button-size;
@@ -300,8 +361,7 @@ $panel-height: 680px;
   border-bottom: 1px solid var(--bf-color-border-subtle);
 }
 
-.bitfun-fmc__miniapp-session-icon,
-.bitfun-fmc__voice-mode-icon {
+.bitfun-fmc__miniapp-session-icon {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
@@ -312,10 +372,6 @@ $panel-height: 680px;
   border-radius: 7px;
   border: 1px solid var(--bf-color-border-subtle);
   background: var(--bf-color-surface-subtle);
-}
-
-.bitfun-fmc__voice-mode-icon {
-  color: var(--bf-color-status-success-content);
 }
 
 // ─── Title ─────────────────────────────────────────────────
@@ -390,77 +446,6 @@ $panel-height: 680px;
   }
 }
 
-// ─── Text / realtime voice mode switch ────────────────────
-.bitfun-fmc__mode-switch {
-  display: flex;
-  flex: 0 0 auto;
-  padding: var(--bf-space-2);
-  border-top: 1px solid var(--bf-color-border-subtle);
-  background: transparent;
-}
-
-.bitfun-fmc__mode-switch-button {
-  display: inline-flex;
-  width: 100%;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bf-space-2);
-  padding: var(--bf-space-2) var(--bf-space-3);
-  border: 0;
-  border-radius: var(--bf-radius-base);
-  background: transparent;
-  color: var(--bf-color-content-secondary);
-  font: inherit;
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-label-md-line-height);
-  cursor: pointer;
-  transition:
-    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-
-  @media (hover: hover) and (pointer: fine) {
-    &:hover:not(:disabled) {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-primary);
-    }
-
-    &.is-voice:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 13%, transparent);
-    }
-  }
-
-  &:active:not(:disabled) {
-    background: var(--bf-color-action-neutral-surface-hover);
-    transform: scale(0.985);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
-    outline-offset: 2px;
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: var(--bf-opacity-disabled);
-  }
-
-  &.is-voice {
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 9%, transparent);
-    color: var(--bf-color-content-primary);
-  }
-}
-
-.bitfun-fmc__mode-switch-spinner {
-  animation: fmc-mode-switch-spin 0.9s linear infinite;
-}
-
-@keyframes fmc-mode-switch-spin {
-  to { transform: rotate(360deg); }
-}
-
 .bitfun-fmc__miniapp-session-pending {
   flex: 1;
   min-height: 0;
@@ -491,14 +476,22 @@ $panel-height: 680px;
 .bitfun-fmc__miniapp-welcome {
   width: 100%;
   height: 100%;
-  min-height: 360px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  color: var(--bf-color-content-primary);
+}
+
+.bitfun-fmc__miniapp-welcome-content {
+  width: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
   box-sizing: border-box;
   padding: 36px 32px;
-  color: var(--bf-color-content-primary);
 
   h2 {
     max-width: 420px;
@@ -633,33 +626,28 @@ $panel-height: 680px;
     bottom: calc(#{$miniapp-button-offset} + 64px);
   }
 
-  .bitfun-fmc__miniapp-welcome {
-    padding: 32px 24px;
+  .bitfun-fmc__miniapp-welcome-content {
+    padding-top: 32px;
+    padding-inline: 24px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-fmc,
   .bitfun-fmc__button,
+  .bitfun-fmc__button--hello > [data-bf-part='label'],
   .bitfun-fmc__panel,
   .bitfun-fmc__header-btn,
-  .bitfun-fmc__miniapp-suggestion,
-  .bitfun-fmc__mode-switch-button {
+  .bitfun-fmc__miniapp-suggestion {
     transition: none;
   }
 
   .bitfun-fmc__button,
+  .bitfun-fmc__button--hello > [data-bf-part='label'],
   .bitfun-fmc__panel,
   .bitfun-fmc__header-btn,
   .bitfun-fmc__miniapp-suggestion {
     transform: none;
   }
 
-  .bitfun-fmc__mode-switch-spinner {
-    animation: none;
-  }
-
-  .bitfun-fmc__mode-switch-button:active:not(:disabled) {
-    transform: none;
-  }
 }

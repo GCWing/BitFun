@@ -28,6 +28,12 @@ describe.each(SURFACES)('$name session surface', ({ path }) => {
     expect(source).toContain('showChatInput');
   });
 
+  it('uses the shared text/realtime-voice capability surface', () => {
+    expect(source).toContain('ConversationModeSurface');
+    expect(source).toContain('<ConversationModeSurface');
+    expect(source).not.toContain('<RealtimeVoiceCallPanel');
+  });
+
   it('keeps no private conversation view or session composer of its own', () => {
     expect(source).not.toContain('ModernFlowChatContainer');
     expect(source).not.toContain('<input');
@@ -59,6 +65,19 @@ describe('session surface composition', () => {
     expect(chatPaneSource).toContain("from '../../../flow_chat/components/ChatInput'");
     expect(chatPaneSource).toContain('registration={chatInputRegistration}');
   });
+
+  it('keeps the voice panel and switch in one shared owner', () => {
+    const communicationSource = readSource('../voice/ConversationModeSurface.tsx');
+    const toolbarSource = readSource('./ToolbarMode.tsx');
+    const bubbleSource = readSource('../../../app/layout/FloatingMiniChat.tsx');
+
+    expect(communicationSource).toContain('<RealtimeVoiceCallPanel />');
+    expect(communicationSource).toContain('onClick={handleModeSwitch}');
+    expect(communicationSource).toContain("'voiceCall.call.switchToVoice'");
+    expect(communicationSource).toContain("'voiceCall.call.switchToChat'");
+    expect(toolbarSource).toContain('switchTestId="toolbar-realtime-voice-mode-switch"');
+    expect(bubbleSource).toContain('switchTestId="hello-realtime-voice-mode-switch"');
+  });
 });
 
 describe('floating mini chat bubble MiniApp registration', () => {
@@ -78,7 +97,7 @@ describe('floating mini chat bubble MiniApp registration', () => {
   });
 
   it('registers a token-scoped submit route without replacing ChatInput', () => {
-    expect(source).toContain('MINIAPP_COMPOSER_MESSAGE_EVENT');
+    expect(source).toContain('postMiniAppComposerMessage');
     // Routing is keyed by claim token, never by app id: one app can have two
     // live runners (installed app + draft preview) and only one owns the input.
     expect(source).toContain('token: activeComposerToken');
@@ -86,6 +105,14 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(source).toContain('contexts: submission.contexts');
     expect(source).toContain('registrationId: activeComposerClaim.token');
     expect(source).toContain('onSubmit: handleMiniAppSubmit');
+  });
+
+  it('routes realtime voice through the claimed MiniApp conversation', () => {
+    expect(source).toContain('miniAppVoiceTarget');
+    expect(source).toContain("kind: 'miniapp'");
+    expect(source).toContain('claimToken: activeComposerToken');
+    expect(source).toContain('sessionId: activeComposerSessionId');
+    expect(source).toContain('voiceTarget={miniAppVoiceTarget}');
   });
 
   it('prefills without sending when a MiniApp offers an example prompt', () => {
@@ -134,12 +161,17 @@ describe('floating mini chat bubble MiniApp registration', () => {
   });
 
   it('renders the MiniApp entry model against the topic session workspace', () => {
+    const welcomeSource = readSource('../../../app/layout/MiniAppBubbleWelcome.tsx');
     expect(source).toContain('<MiniAppBubbleWelcome');
     expect(source).toContain('customization={bubbleCustomization}');
     expect(source).toContain('workspacePath={displayedSession?.workspacePath}');
     expect(source).toContain('emptyState={activeComposerClaim ? (');
     expect(source).toContain('renderMiniAppIcon');
     expect(source).not.toContain('getMiniAppIconGradient');
+    expect(welcomeSource).toContain('computeFlowChatInputStackFooterPx(inputHeight)');
+    expect(welcomeSource).toContain('bitfun-fmc__miniapp-welcome-content');
+    expect(welcomeSource).toContain('WELCOME_CONTENT_BLOCK_PADDING_PX + inputClearance');
+    expect(styles).toContain('overflow-y: auto;');
     // The ordinary project workspace remains valid only for the host session.
     expect(source).toContain(
       'isMiniAppBubbleIsolated\n                  ? displayedSession?.workspacePath\n                  : workspacePath'
@@ -164,5 +196,9 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(bridgeSource).toContain(
       "typeof params.displayText === 'string' ? params.displayText : undefined"
     );
+    expect(bridgeSource).toContain("method === 'chat.completeUserMessage'");
+    expect(bridgeSource).toContain('completeMiniAppComposerMessage(');
+    expect(bridgeSource).toContain('requestId: detail.requestId');
+    expect(bridgeSource).toContain('source: detail.source');
   });
 });

@@ -194,7 +194,7 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 | 对话框 | `app.dialog.open/save/message` | Tauri dialog 插件 |
 | 剪贴板 | `app.clipboard.readText/writeText` | 宿主 navigator.clipboard |
 | Agent 会话 | `app.agent.run / cancel / turnText / cancelStaleRuns / onEvent` | 受 `permissions.agent.enabled` 限制；启动小应用自己的隐藏 agent 回合，事件只回流到发起的小应用。工具集按运行时档位收敛：市场小应用（`runtime_profile = market_strict`）保留 `WebSearch` / `WebFetch`，并可通过 `options.contextFiles` 注入有大小上限的只读上下文；宿主在 Agent Runtime 内为每次运行发布独立、不可变的 `.miniapp-context/<opaque-scope>` 虚拟快照、向 prompt 注入精确路径和“不可信数据”提示，并仅在本次请求有上下文时开放限定到该快照的 `Read` / `Grep`。虚拟路径不会落盘或回退到同名物理文件，Agent 仍碰不到其他文件、命令行和宿主控制面。内置 / `compatibility` 档位保留完整的 headless 工具集 |
-| 悬浮会话气泡 | `app.chat.claimComposer / releaseComposer / focusSession / setComposerDraft / onUserMessage` | 受 `permissions.agent.enabled` 限制；把内容和提交路由注册进右下角的标准悬浮聊天窗（输入器、附件、模型、权限、停止等仍由宿主共享组件拥有），并展示小应用自己的 Agent 过程（Agentic MiniApp 模式，样板间：`builtin-ppt-live`） |
+| 悬浮会话气泡 | `app.chat.claimComposer / releaseComposer / focusSession / setComposerDraft / onUserMessage` | 受 `permissions.agent.enabled` 限制；把内容和提交路由注册进右下角的标准悬浮聊天窗（输入器、附件、模型、权限、停止等仍由宿主共享组件拥有），并展示小应用自己的 Agent 过程。用户从该气泡启动实时语音时，未显式指定其他工作区的任务也经同一个 `onUserMessage` 路由进入小应用会话（Agentic MiniApp 模式，样板间：`builtin-ppt-live`） |
 | 幻灯片栅格化 | `app.deck.renderPage` | 在隐藏宿主 WebView 中渲染单页 HTML，返回 base64 PNG/PDF（导出用） |
 | 自定义后端 | `app.call('xxx', …)` + `worker.js` | 仅 `node.enabled = true` 时可用，自己实现业务逻辑 |
 | 主题 / i18n | `app.appearanceMode` / `app.locale` / `app.onAppearanceChange` / `app.onLocaleChange` / `app.t(...)` | 见对应章节 |
@@ -231,7 +231,7 @@ MiniApp UI 内通过 **window.app** 访问：
 | `app.storage.*` | 同上 |
 | `app.dialog.open/save/message` | 由 Bridge 转 Tauri dialog 插件 |
 | `app.agent.*` | 隐藏 agent 回合（`permissions.agent.enabled`），事件经 `app.agent.onEvent` 回流 |
-| `app.chat.*` | 标准悬浮聊天窗集成：`claimComposer({ title, composer: { placeholder }, welcome })` 注册有界内容与提交路由（不能替换/缩放输入器；当前 tab 为本小应用时，共享 ChatInput 的提交经 `onUserMessage` 送达）、`focusSession(sessionId)` 让气泡展示本小应用的 agent 会话、`setComposerDraft(text)` 展开气泡并预填共享输入器（不发送，供示例 prompt 使用）|
+| `app.chat.*` | 标准悬浮聊天窗集成：`claimComposer({ title, composer: { placeholder }, welcome })` 注册有界内容与提交路由（不能替换/缩放输入器；当前 tab 为本小应用时，共享 ChatInput 和从该气泡启动的实时语音任务均经 `onUserMessage` 送达）、`focusSession(sessionId)` 让气泡展示本小应用的 agent 会话、`setComposerDraft(text)` 展开气泡并预填共享输入器（不发送，供示例 prompt 使用）。`onUserMessage` payload 含唯一 `requestId` 及 `source: 'composer' | 'realtime_voice'`；处理器应返回覆盖 Agent 回合及小应用后处理的 Promise，供语音模式等待最终结果 |
 | 生命周期 / 事件 | 见 bridge_builder 生成的适配器 |
 
 ## 主题集成

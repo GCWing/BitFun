@@ -3,6 +3,8 @@ import { Icon, ScrollArea } from '@bitfun/ui';
 import { FolderOpen } from 'lucide-react';
 import type { MiniAppBubbleCustomization } from '@/app/scenes/miniapps/miniAppStore';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
+import { useChatInputState } from '@/flow_chat/store/chatInputStateStore';
+import { computeFlowChatInputStackFooterPx } from '@/flow_chat/utils/flowChatScrollLayout';
 
 interface MiniAppBubbleWelcomeProps {
   appName: string;
@@ -12,6 +14,9 @@ interface MiniAppBubbleWelcomeProps {
   workspacePath?: string;
   onSuggestion: (prompt: string) => void;
 }
+
+/** Keep aligned with the block padding on `.bitfun-fmc__miniapp-welcome-content`. */
+const WELCOME_CONTENT_BLOCK_PADDING_PX = 36;
 
 /**
  * Host-rendered empty state for an Agentic MiniApp session. MiniApps provide a
@@ -31,62 +36,71 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
   const description = welcome?.description || appDescription;
   const workspaceLabel = welcome?.workspaceLabel || (workspacePath ? appName : '');
   const suggestions = welcome?.suggestions || [];
+  const inputHeight = useChatInputState(state => state.inputHeight);
+  const inputClearance = computeFlowChatInputStackFooterPx(inputHeight);
 
   return (
     <ScrollArea className="bitfun-fmc__miniapp-welcome" data-bf-component="miniapp-bubble-welcome" data-bf-part="root">
       <div
-        className="bitfun-fmc__miniapp-welcome-icon"
-        data-bf-component="miniapp-bubble-welcome"
-        data-bf-part="icon"
-        aria-hidden="true"
+        className="bitfun-fmc__miniapp-welcome-content"
+        style={{
+          paddingBottom: `${WELCOME_CONTENT_BLOCK_PADDING_PX + inputClearance}px`,
+        }}
       >
-        {renderMiniAppIcon(appIcon, 28)}
-      </div>
-
-      {title !== appName && (
-        <div className="bitfun-fmc__miniapp-welcome-eyebrow" data-bf-component="miniapp-bubble-welcome" data-bf-part="eyebrow">{appName}</div>
-      )}
-      <h2 data-bf-component="miniapp-bubble-welcome" data-bf-part="title">{title}</h2>
-      {description && <p className="bitfun-fmc__miniapp-welcome-description" data-bf-component="miniapp-bubble-welcome" data-bf-part="description">{description}</p>}
-
-      {workspaceLabel && workspacePath && (
         <div
-          className="bitfun-fmc__miniapp-workspace"
+          className="bitfun-fmc__miniapp-welcome-icon"
           data-bf-component="miniapp-bubble-welcome"
-          data-bf-part="workspace"
-          title={workspacePath}
-          data-workspace-path={workspacePath}
+          data-bf-part="icon"
+          aria-hidden="true"
         >
-          <FolderOpen size={13} aria-hidden="true" />
-          <span>{workspaceLabel}</span>
+          {renderMiniAppIcon(appIcon, 28)}
         </div>
-      )}
 
-      {suggestions.length > 0 && (
-        <div className="bitfun-fmc__miniapp-suggestions" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestions">
-          {welcome?.suggestionsLabel && (
-            <div className="bitfun-fmc__miniapp-suggestions-label" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestionsLabel">
-              {welcome.suggestionsLabel}
-            </div>
-          )}
-          <div className="bitfun-fmc__miniapp-suggestions-list" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestionsList">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={`${suggestion.label}:${index}`}
-                type="button"
-                className="bitfun-fmc__miniapp-suggestion"
-                data-bf-component="miniapp-bubble-welcome"
-                data-bf-part="suggestion"
-                title={suggestion.prompt}
-                onClick={() => onSuggestion(suggestion.prompt)}
-              >
-                <span>{suggestion.label}</span>
-                <Icon name="arrow-up-right" size="xs" aria-hidden="true" />
-              </button>
-            ))}
+        {title !== appName && (
+          <div className="bitfun-fmc__miniapp-welcome-eyebrow" data-bf-component="miniapp-bubble-welcome" data-bf-part="eyebrow">{appName}</div>
+        )}
+        <h2 data-bf-component="miniapp-bubble-welcome" data-bf-part="title">{title}</h2>
+        {description && <p className="bitfun-fmc__miniapp-welcome-description" data-bf-component="miniapp-bubble-welcome" data-bf-part="description">{description}</p>}
+
+        {workspaceLabel && workspacePath && (
+          <div
+            className="bitfun-fmc__miniapp-workspace"
+            data-bf-component="miniapp-bubble-welcome"
+            data-bf-part="workspace"
+            title={workspacePath}
+            data-workspace-path={workspacePath}
+          >
+            <FolderOpen size={13} aria-hidden="true" />
+            <span>{workspaceLabel}</span>
           </div>
-        </div>
-      )}
+        )}
+
+        {suggestions.length > 0 && (
+          <div className="bitfun-fmc__miniapp-suggestions" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestions">
+            {welcome?.suggestionsLabel && (
+              <div className="bitfun-fmc__miniapp-suggestions-label" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestionsLabel">
+                {welcome.suggestionsLabel}
+              </div>
+            )}
+            <div className="bitfun-fmc__miniapp-suggestions-list" data-bf-component="miniapp-bubble-welcome" data-bf-part="suggestionsList">
+              {suggestions.map((suggestion, index) => (
+                <button
+                  key={`${suggestion.label}:${index}`}
+                  type="button"
+                  className="bitfun-fmc__miniapp-suggestion"
+                  data-bf-component="miniapp-bubble-welcome"
+                  data-bf-part="suggestion"
+                  title={suggestion.prompt}
+                  onClick={() => onSuggestion(suggestion.prompt)}
+                >
+                  <span>{suggestion.label}</span>
+                  <Icon name="arrow-up-right" size="xs" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </ScrollArea>
   );
 };

@@ -49,13 +49,21 @@ export interface VoiceTaskResult {
   conclusion: string;
 }
 
-interface RunVoiceTaskOptions {
-  workspace: WorkspaceInfo;
-  showSession?: boolean;
+interface ObserveVoiceTaskOptions {
   signal?: AbortSignal;
   onSessionCreated?: (sessionId: string) => void;
   onProgress?: (progress: VoiceTaskProgress) => void;
   onTextProgress?: (text: string) => void;
+}
+
+interface RunVoiceTaskOptions extends ObserveVoiceTaskOptions {
+  workspace: WorkspaceInfo;
+  showSession?: boolean;
+}
+
+interface RunMiniAppVoiceTaskOptions extends ObserveVoiceTaskOptions {
+  sessionId: string;
+  submit: (signal?: AbortSignal) => Promise<void>;
 }
 
 export class VoiceTaskCancelledError extends Error {
@@ -128,6 +136,17 @@ function normalizeConclusionText(text: string): string {
 
 function latestTurn(session: Session): DialogTurn | undefined {
   return session.dialogTurns[session.dialogTurns.length - 1];
+}
+
+export function selectVoiceTaskTurn(
+  session: Session,
+  baselineTurnIds: ReadonlySet<string>,
+): DialogTurn | undefined {
+  for (let index = session.dialogTurns.length - 1; index >= 0; index -= 1) {
+    const turn = session.dialogTurns[index];
+    if (!baselineTurnIds.has(turn.id)) return turn;
+  }
+  return undefined;
 }
 
 function truncateBriefText(text: string, maxChars: number): string {
@@ -326,78 +345,63 @@ export function extractVoiceTaskConclusion(session: Session): string {
   return summarizeVoiceTaskConclusion(finalText);
 }
 
-async function waitForSettledSession(sessionId: string): Promise<void> {
+async function waitForSettledSession(
+  sessionId: string,
+  baselineTurnIds: ReadonlySet<string>,
+): Promise<void> {
   const isSettled = () => {
     const state = stateMachineManager.getCurrentState(sessionId);
     if (state !== SessionExecutionState.IDLE && state !== SessionExecutionState.ERROR) {
       return false;
     }
     const session = FlowChatManager.getInstance().getFlowChatState().sessions.get(sessionId);
-    const turn = session ? latestTurn(session) : undefined;
+    const turn = session ? selectVoiceTaskTurn(session, baselineTurnIds) : undefined;
     return Boolean(turn && !['pending', 'processing', 'finishing', 'cancelling'].includes(turn.status));
   };
 
   if (isSettled()) return;
   await new Promise<void>((resolve, reject) => {
-    const subscription = { dispose: () => undefined as void };
+    const stateSubscription = { dispose: () => undefined as void };
+    const flowSubscription = { dispose: () => undefined as void };
     let finished = false;
     const finish = (activeTimeoutId: number) => {
       if (finished) return;
       finished = true;
       window.clearTimeout(activeTimeoutId);
-      subscription.dispose();
+      stateSubscription.dispose();
+      flowSubscription.dispose();
       resolve();
     };
     const timeoutId = window.setTimeout(() => {
       if (finished) return;
       finished = true;
-      subscription.dispose();
+      stateSubscription.dispose();
+      flowSubscription.dispose();
       reject(new Error('BitFun task timed out after 30 minutes'));
     }, TASK_TIMEOUT_MS);
-    subscription.dispose = stateMachineManager.subscribeGlobal((changedSessionId) => {
+    stateSubscription.dispose = stateMachineManager.subscribeGlobal((changedSessionId) => {
       if (changedSessionId !== sessionId || !isSettled()) return;
       finish(timeoutId);
     });
+    flowSubscription.dispose = FlowChatManager.getInstance().onFlowChatStateChange(() => {
+      if (isSettled()) finish(timeoutId);
+    });
     // Close the check/subscribe race: a very short task or cancellation can
     // settle after the first check and before the global listener is attached.
-    if (finished) subscription.dispose();
-    else if (isSettled()) finish(timeoutId);
+    if (finished) {
+      stateSubscription.dispose();
+      flowSubscription.dispose();
+    } else if (isSettled()) finish(timeoutId);
   });
 }
 
-/**
- * Delegation boundary between client-level Voice and workspace execution.
- *
- * This creates a regular `agentic` FlowChat session. That session follows the
- * same product assembly, workspace adapters, tool registry, plugin/MCP setup,
- * and permission flow as a task started from the normal UI. Voice supplies only
- * the complete task intent and target workspace, then observes progress,
- * cancellation, and the final public result.
- *
- * Do not copy the workspace Agent's tools into the Voice provider session and
- * do not proxy individual Agent tool calls through this bridge. If a new
- * workspace capability should be usable from Voice, implement it in the normal
- * Agent execution path; delegated sessions will inherit it automatically. Only
- * direct client-control operations need a new Voice function command.
- */
-export async function runBitFunVoiceTask(
-  task: string,
-  options: RunVoiceTaskOptions,
+async function observeVoiceTaskSession(
+  sessionId: string,
+  baselineTurnIds: ReadonlySet<string>,
+  options: ObserveVoiceTaskOptions,
+  startTask: () => Promise<void>,
 ): Promise<VoiceTaskResult> {
-  const normalizedTask = task.trim();
-  if (!normalizedTask) {
-    throw new Error('BitFun task description is empty');
-  }
-
   const manager = FlowChatManager.getInstance();
-  const sessionId = await manager.createChatSession(
-    flowChatSessionConfigForWorkspace(options.workspace),
-    'agentic',
-  );
-  options.onSessionCreated?.(sessionId);
-  if (options.showSession !== false) {
-    await openMainSession(sessionId);
-  }
 
   let lastUserUpdateAt = Date.now();
   const emitProgress = (phase: VoiceTaskProgressPhase) => {
@@ -443,7 +447,7 @@ export async function runBitFunVoiceTask(
   };
   const unsubscribeState = manager.onFlowChatStateChange(state => {
     const session = state.sessions.get(sessionId) as Session | undefined;
-    if (!session) return;
+    if (!session || !selectVoiceTaskTurn(session, baselineTurnIds)) return;
     extractVoiceTaskProgressTexts(session).forEach(update => {
       if (seenTextProgress.has(update.id)) return;
       seenTextProgress.add(update.id);
@@ -473,33 +477,33 @@ export async function runBitFunVoiceTask(
     if (options.signal?.aborted) {
       throw new VoiceTaskCancelledError(sessionId);
     }
-    await manager.sendMessage(
-      normalizedTask,
-      sessionId,
-      normalizedTask,
-      'agentic',
-      undefined,
-      { userMessageMetadata: { source: 'realtime_voice' } },
-    );
+    try {
+      await startTask();
+    } catch (error) {
+      if (!options.signal?.aborted) throw error;
+      await requestCancellation().catch(() => false);
+      throw new VoiceTaskCancelledError(sessionId);
+    }
     if (options.signal?.aborted) {
       await requestCancellation();
     }
-    await waitForSettledSession(sessionId);
+    await waitForSettledSession(sessionId, baselineTurnIds);
     const session = manager.getFlowChatState().sessions.get(sessionId);
     if (!session) {
       throw new Error('BitFun task session disappeared before completion');
     }
-    const turn = latestTurn(session);
+    const turn = selectVoiceTaskTurn(session, baselineTurnIds);
     if (!turn || turn.status === 'error') {
       throw new Error(turn?.error || session.error || 'BitFun task failed');
     }
     if (turn.status === 'cancelled') {
       throw new VoiceTaskCancelledError(sessionId);
     }
+    const taskSession = { ...session, dialogTurns: [turn] };
     return {
       sessionId,
-      summary: extractVoiceTaskSummary(session),
-      conclusion: extractVoiceTaskConclusion(session),
+      summary: extractVoiceTaskSummary(taskSession),
+      conclusion: extractVoiceTaskConclusion(taskSession),
     };
   } finally {
     options.signal?.removeEventListener('abort', handleAbort);
@@ -508,4 +512,81 @@ export async function runBitFunVoiceTask(
     unsubscribeState();
     unsubscribeActivity();
   }
+}
+
+/**
+ * Delegation boundary between client-level Voice and workspace execution.
+ *
+ * This creates a regular `agentic` FlowChat session. That session follows the
+ * same product assembly, workspace adapters, tool registry, plugin/MCP setup,
+ * and permission flow as a task started from the normal UI. Voice supplies only
+ * the complete task intent and target workspace, then observes progress,
+ * cancellation, and the final public result.
+ *
+ * Do not copy the workspace Agent's tools into the Voice provider session and
+ * do not proxy individual Agent tool calls through this bridge. If a new
+ * workspace capability should be usable from Voice, implement it in the normal
+ * Agent execution path; delegated sessions will inherit it automatically. Only
+ * direct client-control operations need a new Voice function command.
+ */
+export async function runBitFunVoiceTask(
+  task: string,
+  options: RunVoiceTaskOptions,
+): Promise<VoiceTaskResult> {
+  const normalizedTask = task.trim();
+  if (!normalizedTask) {
+    throw new Error('BitFun task description is empty');
+  }
+
+  const manager = FlowChatManager.getInstance();
+  const sessionId = await manager.createChatSession(
+    flowChatSessionConfigForWorkspace(options.workspace),
+    'agentic',
+  );
+  options.onSessionCreated?.(sessionId);
+  if (options.showSession !== false) {
+    await openMainSession(sessionId);
+  }
+
+  return observeVoiceTaskSession(sessionId, new Set(), options, () => (
+    manager.sendMessage(
+      normalizedTask,
+      sessionId,
+      normalizedTask,
+      'agentic',
+      undefined,
+      { userMessageMetadata: { source: 'realtime_voice' } },
+    )
+  ));
+}
+
+/**
+ * Reuses an Agentic MiniApp's already-bound topic session. Voice submits via
+ * the MiniApp chat contract rather than bypassing its domain prompt and file
+ * workflow, then observes only turns created after this request began.
+ */
+export async function runMiniAppVoiceTask(
+  task: string,
+  options: RunMiniAppVoiceTaskOptions,
+): Promise<VoiceTaskResult> {
+  const normalizedTask = task.trim();
+  if (!normalizedTask) {
+    throw new Error('BitFun task description is empty');
+  }
+
+  const session = FlowChatManager.getInstance()
+    .getFlowChatState()
+    .sessions
+    .get(options.sessionId);
+  if (!session) {
+    throw new Error('MiniApp task session is no longer available');
+  }
+  const baselineTurnIds = new Set(session.dialogTurns.map(turn => turn.id));
+  options.onSessionCreated?.(options.sessionId);
+  return observeVoiceTaskSession(
+    options.sessionId,
+    baselineTurnIds,
+    options,
+    () => options.submit(options.signal),
+  );
 }

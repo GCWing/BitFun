@@ -15,6 +15,10 @@ export const MINIAPP_COMPOSER_MESSAGE_EVENT = 'miniapp-composer-message';
 
 export interface MiniAppComposerMessageDetail {
   token: string;
+  /** Correlates one host submission with the owning iframe's completion acknowledgement. */
+  requestId?: string;
+  /** Identifies the host surface that produced the otherwise identical message contract. */
+  source?: 'composer' | 'realtime_voice';
   text: string;
   displayText?: string;
   contexts?: unknown[];
