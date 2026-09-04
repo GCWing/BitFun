@@ -75,6 +75,7 @@ import { useMiniAppActivity } from '../hooks/useMiniAppActivity';
 import { getMiniAppSceneId, stopMiniAppActivity } from '../miniAppActivity';
 import { useMiniAppStore } from '../miniAppStore';
 import { loadInstalledMarketOrigins } from '../utils/loadInstalledMarketOrigins';
+import { getMiniAppShowcaseAsset } from '../utils/miniAppIcons';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { buildMiniAppLibraryItems, type MiniAppLibraryItem } from './miniAppLibraryItems';
 import { buildReleaseHistory } from './miniAppReleaseHistory';
@@ -701,15 +702,18 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
                 category={categoryLabel(sourceCategory, t)}
                 description={description}
                 detailsLabel={t('market.library.viewDetails', { name })}
-                downloadCount={formatNumber(item.downloadCount)}
+                downloadCount={item.listing
+                  ? formatNumber(item.downloadCount)
+                  : undefined}
                 localMeta={item.listing ? undefined : t('market.library.localMeta')}
                 metaLabel={metaLabel}
                 name={name}
                 owner={item.listing?.owner.login}
-                rating={item.ratingAverage.toFixed(1)}
+                rating={item.listing ? item.ratingAverage.toFixed(1) : undefined}
                 showcaseAlt={t('market.library.showcaseAlt', { name })}
                 showcaseFallbackLabel={t('market.library.showcaseFallback', { name })}
-                showcaseUrl={item.listing?.screenshotUrls[0]}
+                showcaseUrl={item.listing?.screenshotUrls[0]
+                  ?? (item.app ? getMiniAppShowcaseAsset(item.app.id) : undefined)}
                 statuses={statuses}
                 version={t('market.library.version', { version: release })}
                 onOpenDetails={() => {

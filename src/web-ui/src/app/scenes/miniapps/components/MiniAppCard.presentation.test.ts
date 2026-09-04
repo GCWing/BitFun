@@ -159,12 +159,27 @@ describe('Mini App card presentation', () => {
     );
   });
 
+  it('uses local rating and download defaults for sorting without displaying them', () => {
+    const source = readRelative('../views/MiniAppLibraryView.tsx');
+    const projection = readRelative('../views/miniAppLibraryItems.ts');
+
+    expect(projection).toMatch(
+      /key: `local:\$\{app\.id\}`,[\s\S]*?downloadCount: 0,[\s\S]*?ratingAverage: 3,/,
+    );
+    expect(source).toMatch(
+      /downloadCount=\{item\.listing\s*\? formatNumber\(item\.downloadCount\)\s*: undefined\}/,
+    );
+    expect(source).toMatch(
+      /rating=\{item\.listing \? item\.ratingAverage\.toFixed\(1\) : undefined\}/,
+    );
+  });
+
   it('crops marketplace images into one fixed showcase slot with a neutral fallback', () => {
     const row = readRelative('./MiniAppLibraryRow.tsx');
     const library = readRelative('../views/MiniAppLibraryView.tsx');
     const stylesheet = readRelative('../views/MiniAppLibraryView.scss');
 
-    expect(library).toContain('showcaseUrl={item.listing?.screenshotUrls[0]}');
+    expect(library).toContain('getMiniAppShowcaseAsset(item.app.id)');
     expect(row).toContain('marketImageSrcSet(showcaseUrl)');
     expect(row).toContain('<GalleryHorizontalEnd');
     expect(row).not.toContain('renderMiniAppIcon');
