@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const dialogMeta = {
   category: "feedback",
-  description: "A compound dialog with attached or transparent floating footer anatomy on the shared overlay kernel.",
+  description: "A compound dialog with attached or opaque floating footer anatomy on the shared overlay kernel.",
   maturity: "stable",
   name: "Dialog",
   props: [
@@ -12,7 +12,7 @@ export const dialogMeta = {
     { defaultValue: "true", name: "closeOnEscape", type: "boolean" },
     { defaultValue: "true", name: "closeOnPointerOutside", type: "boolean" },
   ],
-  states: ["default", "open", "alert", "scrolling", "floating-footer"],
+  states: ["default", "open", "alert", "scrolling", "opaque-floating-footer"],
   tokens: [
     "color.overlay.scrim",
     "color.surface.raised",

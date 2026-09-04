@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const buttonMeta = {
   category: "action",
-  description: "A compact pill action with outline, neutral fill, secondary, primary, and text presentation variants.",
+  description: "A compact opaque pill action with outline, neutral fill, secondary, primary, and text presentation variants.",
   maturity: "stable",
   name: "Button",
   props: [

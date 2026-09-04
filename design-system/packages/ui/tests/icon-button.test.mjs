@@ -79,3 +79,20 @@ test("IconButton styles consume shared action and geometry tokens", async () => 
   assert.match(styles, /--bf-radius-sm/);
   assert.match(styles, /--bf-radius-pill/);
 });
+
+test("every IconButton variant is composited over an opaque surface", async () => {
+  const styles = await readFile(
+    new URL("../src/components/IconButton/IconButton.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    styles,
+    /\.button\s*\{[^}]*background:\s*var\(--bf-color-surface-tertiary\)/s,
+  );
+  assert.match(
+    styles,
+    /\.button::before\s*\{[^}]*background:\s*var\(--_icon-button-background\)/s,
+  );
+  assert.doesNotMatch(styles, /--_icon-button-background(?:-hover|-active)?:\s*transparent/);
+});

@@ -1,6 +1,6 @@
 @layer bf.components {
   .button {
-    --_icon-button-background: transparent;
+    --_icon-button-background: var(--bf-color-surface-tertiary);
     --_icon-button-background-hover: var(--bf-color-action-neutral-surface);
     --_icon-button-background-active: var(--bf-color-action-neutral-surface-pressed);
     --_icon-button-content: var(--bf-color-action-neutral-content);
@@ -19,18 +19,28 @@
     border: 0;
     border-radius: var(--bf-radius-sm);
     color: var(--_icon-button-content);
-    background: var(--_icon-button-background);
+    background: var(--bf-color-surface-tertiary);
     cursor: pointer;
-    transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    isolation: isolate;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
-  .button:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+  .button::before {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--_icon-button-background);
+    content: "";
+    pointer-events: none;
+    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .button:is(:hover, [data-bf-preview-state="hover"]):not(:disabled)::before {
     background: var(--_icon-button-background-hover);
   }
 
-  .button:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
+  .button:is(:active, [data-bf-preview-state="active"]):not(:disabled)::before {
     background: var(--_icon-button-background-active);
   }
 
@@ -106,6 +116,7 @@
     justify-content: center;
     inline-size: var(--_icon-button-icon-size);
     block-size: var(--_icon-button-icon-size);
+    z-index: 1;
   }
 
   .icon > :where(svg, img),

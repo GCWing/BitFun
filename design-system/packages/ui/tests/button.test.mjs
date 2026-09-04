@@ -100,6 +100,28 @@ test("secondary exposes the filled secondary-action contract", async () => {
   assert.match(styles, /--bf-color-action-neutral-content/);
 });
 
+test("every Button variant is composited over an opaque surface", async () => {
+  const styles = await readFile(
+    new URL("../src/components/Button/Button.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    styles,
+    /\.button\s*\{[^}]*background:\s*var\(--bf-color-surface-tertiary\)/s,
+  );
+  assert.match(
+    styles,
+    /\.button::before\s*\{[^}]*background:\s*var\(--_button-background\)/s,
+  );
+  assert.match(
+    styles,
+    /\[data-bf-variant="text"\]\s*\{[^}]*--_button-background:\s*var\(--bf-color-surface-tertiary\)/s,
+  );
+  assert.doesNotMatch(styles, /--_button-background(?:-hover|-active)?:\s*transparent/);
+  assert.doesNotMatch(styles, /\[data-bf-variant="text"\][^}]*padding-inline:\s*0/s);
+});
+
 test("Button owns the reference pill geometry and typography", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 

@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const iconButtonMeta = {
   category: "action",
-  description: "A labeled icon-only action with quiet, filled, and primary presentation variants.",
+  description: "A labeled icon-only action with opaque quiet, filled, and primary presentation variants.",
   maturity: "stable",
   name: "IconButton",
   props: [
@@ -25,6 +25,7 @@ export const iconButtonMeta = {
     "color.action.primary.content",
     "color.action.primary.hover",
     "color.action.primary.pressed",
+    "color.surface.tertiary",
     "color.focus.ring",
     "color.status.danger.content",
     "color.status.danger.surface",

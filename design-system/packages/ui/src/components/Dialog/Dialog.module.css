@@ -153,9 +153,8 @@
     inset-inline: 0;
     inset-block-end: 0;
     justify-content: center;
-    border-block-start: 0;
-    background: transparent;
-    pointer-events: none;
+    background: var(--bf-color-surface-raised);
+    pointer-events: auto;
   }
 
   .footer[data-appearance="floating"] > * {

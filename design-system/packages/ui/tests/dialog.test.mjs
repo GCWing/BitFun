@@ -69,7 +69,7 @@ test("Dialog geometry and typography use public design tokens", async () => {
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
 
-test("DialogFooter exposes a centered transparent floating action layer", async () => {
+test("DialogFooter exposes a centered opaque floating action layer", async () => {
   const markup = renderToStaticMarkup(
     createElement(
       DialogFooter,
@@ -83,6 +83,8 @@ test("DialogFooter exposes a centered transparent floating action layer", async 
   assert.match(markup, /data-appearance="floating"/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*position:absolute/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*justify-content:center/);
-  assert.match(styles, /\[data-appearance=floating\]\{[^}]*background:transparent/);
+  assert.match(styles, /\[data-appearance=floating\]\{[^}]*background:var\(--bf-color-surface-raised\)/);
+  assert.doesNotMatch(styles, /\[data-appearance=floating\]\{[^}]*background:transparent/);
+  assert.match(styles, /\[data-appearance=floating\]\{[^}]*pointer-events:auto/);
   assert.match(styles, /--bf-overlay-dialog-footer-action-min-width/);
 });
