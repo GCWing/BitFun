@@ -11,7 +11,6 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Phone } from 'lucide-react';
 
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
@@ -594,11 +593,21 @@ export const FloatingMiniChat: React.FC = () => {
           aria-expanded={isOpen}
           aria-label={t('toolCards.toolbar.startNewChat')}
           className="bitfun-fmc__button bitfun-fmc__button--hello"
-          leadingIcon={<Phone size={16} aria-hidden="true" />}
           onClick={handleOpen}
           onPointerDown={handleTriggerPointerDown}
         >
-          {tVoice('voiceCall.call.launcherLabel')}
+          <span
+            aria-hidden="true"
+            className="bitfun-fmc__button-label bitfun-fmc__button-label--compact"
+          >
+            {tVoice('voiceCall.call.launcherCompactLabel')}
+          </span>
+          <span
+            aria-hidden="true"
+            className="bitfun-fmc__button-label bitfun-fmc__button-label--expanded"
+          >
+            {tVoice('voiceCall.call.launcherLabel')}
+          </span>
         </LauncherButton>
       )}
 

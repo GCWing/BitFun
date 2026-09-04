@@ -81,6 +81,7 @@
     "call": {
       "title": "BitFun realtime call",
       "button": "Start a realtime voice call",
+      "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",
       "switchToVoice": "Switch to realtime voice",
       "switchToChat": "Return to text chat",

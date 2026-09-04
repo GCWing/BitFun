@@ -80,12 +80,13 @@ $panel-height: 680px;
 }
 
 // Keep the resting launcher no wider than a standard control so it does not
-// cover nearby composer actions on compact surfaces. Fine pointers reveal the
-// short label on deliberate hover; keyboard focus reveals it immediately.
+// cover nearby composer actions on compact surfaces. Fine pointers replace
+// the compact greeting with the full greeting on deliberate hover; keyboard
+// focus reveals it immediately.
 .bitfun-fmc__button--hello {
   inline-size: var(--bf-control-launcher-button-block-size);
   min-inline-size: var(--bf-control-launcher-button-block-size);
-  justify-content: flex-start;
+  justify-content: center;
   gap: 0;
   padding-inline: 0;
   overflow: hidden;
@@ -96,21 +97,10 @@ $panel-height: 680px;
     background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
     transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
-  > [data-bf-part='icon'] {
-    flex-basis: var(--bf-control-launcher-button-block-size);
-    inline-size: var(--bf-control-launcher-button-block-size);
-  }
-
   > [data-bf-part='label'] {
-    flex: 0 0 auto;
-    padding-inline:
-      var(--bf-control-launcher-button-gap)
-      var(--bf-control-launcher-button-padding-inline);
-    opacity: 0;
-    transform: translateX(var(--bf-space-1));
-    transition:
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    display: grid;
+    inline-size: 100%;
+    place-items: center;
   }
 
   &:active {
@@ -121,19 +111,49 @@ $panel-height: 680px;
     inline-size: var(--bf-control-launcher-button-min-inline-size);
     transition-duration: 0s;
 
-    > [data-bf-part='label'] {
-      opacity: 1;
-      transform: none;
+    .bitfun-fmc__button-label {
       transition: none;
     }
+
+    .bitfun-fmc__button-label--compact {
+      opacity: 0;
+      transform: translateX(calc(var(--bf-space-1) * -1));
+    }
+
+    .bitfun-fmc__button-label--expanded {
+      opacity: 1;
+      transform: none;
+    }
   }
+}
+
+.bitfun-fmc__button-label {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+}
+
+.bitfun-fmc__button-label--compact {
+  opacity: 1;
+  transform: none;
+}
+
+.bitfun-fmc__button-label--expanded {
+  opacity: 0;
+  transform: translateX(var(--bf-space-1));
 }
 
 @media (hover: hover) and (pointer: fine) {
   .bitfun-fmc__button--hello:hover {
     inline-size: var(--bf-control-launcher-button-min-inline-size);
 
-    > [data-bf-part='label'] {
+    .bitfun-fmc__button-label--compact {
+      opacity: 0;
+      transform: translateX(calc(var(--bf-space-1) * -1));
+    }
+
+    .bitfun-fmc__button-label--expanded {
       opacity: 1;
       transform: none;
     }
@@ -635,7 +655,7 @@ $panel-height: 680px;
 @media (prefers-reduced-motion: reduce) {
   .bitfun-fmc,
   .bitfun-fmc__button,
-  .bitfun-fmc__button--hello > [data-bf-part='label'],
+  .bitfun-fmc__button-label,
   .bitfun-fmc__panel,
   .bitfun-fmc__header-btn,
   .bitfun-fmc__miniapp-suggestion {
@@ -643,7 +663,7 @@ $panel-height: 680px;
   }
 
   .bitfun-fmc__button,
-  .bitfun-fmc__button--hello > [data-bf-part='label'],
+  .bitfun-fmc__button-label,
   .bitfun-fmc__panel,
   .bitfun-fmc__header-btn,
   .bitfun-fmc__miniapp-suggestion {
