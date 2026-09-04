@@ -25,6 +25,15 @@ describe('model service collapsed presentation', () => {
     expect(modelSettingsSource).toContain('{isExpanded && (');
   });
 
+  it('includes the leading card inset in the provider toggle hit area', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group-header\s*\{[\s\S]*?padding-inline:\s*0 var\(--bf-space-4\)/,
+    );
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group-toggle\s*\{[\s\S]*?align-self:\s*stretch[\s\S]*?padding-inline-start:\s*var\(--bf-space-4\)/,
+    );
+  });
+
   it('marks the primary model slot as required in both label and control semantics', () => {
     expect(defaultModelSource).toMatch(
       /label=\{t\('core\.primary\.label'\)\}[\s\S]*?description=\{t\('core\.primary\.description'\)\}[\s\S]*?required[\s\S]*?<Combobox[\s\S]*?aria-required="true"/,

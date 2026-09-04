@@ -157,7 +157,9 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--bf-space-3);
-    padding: var(--bf-space-3) var(--bf-space-4);
+    // Keep the leading inset inside the toggle so the space beside the chevron is clickable.
+    padding-block: 0;
+    padding-inline: 0 var(--bf-space-4);
     background: var(--bf-color-surface-subtle);
 
     &[data-expanded='true'] {
@@ -168,16 +170,22 @@
   &__provider-group-toggle {
     display: flex;
     flex: 1;
+    align-self: stretch;
     align-items: center;
     gap: var(--bf-space-2);
     min-width: 0;
     padding: 0;
+    padding-inline-start: var(--bf-space-4);
     border: 0;
     background: transparent;
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
+
+    &:focus-visible {
+      outline-offset: calc(0px - var(--bf-focus-width));
+    }
   }
 
   &__provider-group-chevron {
@@ -257,6 +265,7 @@
     align-items: center;
     gap: var(--bf-space-1);
     flex-shrink: 0;
+    padding-block: var(--bf-space-3);
   }
 
   &__model-actions {
