@@ -20,6 +20,7 @@ import {
 } from './FlowChatHeader';
 import type { SessionTreeSelection } from './SessionTreePopover';
 import { FlowChatTurnRail, type FlowChatTurnRailItem } from './FlowChatTurnRail';
+import { composerPresentationToTurnRailPreview, parseComposerPresentation } from '../../utils/composerPresentation';
 import { BackgroundCommandInputDialog } from '../background-command/BackgroundCommandInputDialog';
 import { WelcomePanel } from '../WelcomePanel';
 import { HistorySessionPlaceholder } from './HistorySessionPlaceholder';
@@ -1009,11 +1010,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       ...(historyView?.loadedRanges.flatMap(range => range.turns) ?? []),
     ];
     const dialogTurnById = new Map(loadedTurns.map(turn => [turn.id, turn]));
-    const loadedByStorageIndex = new Map<number, { turnId: string; content: string }>();
-    const loadedByOrdinal = new Map<number, { turnId: string; content: string }>();
+    const loadedByStorageIndex = new Map<number, { turnId: string; content: string; capsulePreview?: FlowChatTurnRailItem['capsulePreview'] }>();
+    const loadedByOrdinal = new Map<number, { turnId: string; content: string; capsulePreview?: FlowChatTurnRailItem['capsulePreview'] }>();
     for (const range of historyView?.loadedRanges ?? []) {
       range.turns.forEach((turn, index) => {
-        const loaded = { turnId: turn.id, content: turn.userMessage?.content ?? '' };
+        const loaded = {
+          turnId: turn.id,
+          content: turn.userMessage?.content ?? '',
+          capsulePreview: composerPresentationToTurnRailPreview(
+            parseComposerPresentation(turn.userMessage?.metadata?.composerPresentation),
+          ),
+        };
         loadedByOrdinal.set(range.startOrdinal + index, loaded);
         const storageTurnIndex = turn.storageTurnIndex ?? turn.backendTurnIndex;
         if (typeof storageTurnIndex === 'number') {
@@ -1022,9 +1029,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       });
     }
     for (const summary of absoluteRenderedTurnSummaries) {
+      const dialogTurn = dialogTurnById.get(summary.turnId);
       const loaded = {
         turnId: summary.turnId,
-        content: dialogTurnById.get(summary.turnId)?.userMessage?.content ?? '',
+        content: dialogTurn?.userMessage?.content ?? '',
+        capsulePreview: composerPresentationToTurnRailPreview(
+          parseComposerPresentation(dialogTurn?.userMessage?.metadata?.composerPresentation),
+        ),
       };
       loadedByOrdinal.set(Math.max(0, summary.turnIndex - 1), loaded);
       if (typeof summary.storageTurnIndex === 'number') {
@@ -1047,6 +1058,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         ?? (catalogEntry?.turnId && catalogDialogTurn ? {
           turnId: catalogEntry.turnId,
           content: catalogDialogTurn.userMessage?.content ?? '',
+          capsulePreview: composerPresentationToTurnRailPreview(
+            parseComposerPresentation(catalogDialogTurn.userMessage?.metadata?.composerPresentation),
+          ),
         } : undefined)
         ?? loadedByOrdinal.get(ordinal);
       const turnId = loaded?.turnId ?? catalogEntry?.turnId ?? null;
@@ -1059,6 +1073,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         ordinal,
         turnIndex: ordinal + 1,
         content: loaded?.content ?? catalogEntry?.preview ?? null,
+        capsulePreview: loaded?.capsulePreview ?? catalogEntry?.capsulePreview,
       };
     });
 
@@ -1074,6 +1089,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         ordinal: Math.max(0, summary.turnIndex - 1),
         turnIndex: summary.turnIndex,
         content: dialogTurnById.get(summary.turnId)?.userMessage?.content ?? '',
+        capsulePreview: composerPresentationToTurnRailPreview(
+          parseComposerPresentation(dialogTurnById.get(summary.turnId)?.userMessage?.metadata?.composerPresentation),
+        ),
       });
     }
 

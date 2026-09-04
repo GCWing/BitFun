@@ -392,6 +392,36 @@ pub struct SessionTurnCatalogEntry {
     pub preview: Option<String>,
     #[serde(default)]
     pub preview_truncated: bool,
+    /// Small, read-only projection used to render Turn Rail tooltips without
+    /// copying executable context payloads into the navigation catalog.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capsule_preview: Option<TurnRailCapsulePreview>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnRailCapsulePreview {
+    pub segments: Vec<TurnRailCapsuleSegment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TurnRailCapsuleSegment {
+    Text {
+        text: String,
+    },
+    Context {
+        #[serde(rename = "contextType")]
+        context_type: String,
+        label: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+    },
+    InlineToken {
+        #[serde(rename = "tokenType")]
+        token_type: String,
+        label: String,
+    },
 }
 
 /// Lightweight navigation catalog for a persisted Session.

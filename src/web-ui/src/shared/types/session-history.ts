@@ -174,6 +174,15 @@ export interface SessionTurnCatalogEntry {
   turnId?: string;
   preview?: string;
   previewTruncated: boolean;
+  capsulePreview?: TurnRailCapsulePreview;
+}
+
+export interface TurnRailCapsulePreview {
+  segments: Array<
+    | { kind: 'text'; text: string }
+    | { kind: 'context'; contextType: string; label: string; title?: string }
+    | { kind: 'inlineToken'; tokenType: string; label: string }
+  >;
 }
 
 export interface SessionTurnCatalog {
