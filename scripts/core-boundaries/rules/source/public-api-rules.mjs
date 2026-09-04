@@ -1294,6 +1294,7 @@ export const pluginSourceContractPublicApiEntries = [
   'PluginPackageTrustLevel',
   'PluginTrustDecision',
   'PluginTrustStore',
+  'PLUGIN_TRUST_STORE_SCHEMA_VERSION',
   'PluginSourceContractError',
   'PluginActivationAuthority',
 ].map((symbol) =>
