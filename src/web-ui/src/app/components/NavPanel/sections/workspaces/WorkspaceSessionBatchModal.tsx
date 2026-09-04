@@ -18,6 +18,8 @@ import type { SessionMetadata } from '@/shared/types/session-history';
 import { sessionBelongsToWorkspaceNavRow, compareSessionMetadataForDisplay } from '@/flow_chat/utils/sessionOrdering';
 import { deriveSessionRelationshipFromMetadata, resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { closeSessionSceneAfterActiveSessionArchive } from '@/flow_chat/services/sessionActivation';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -225,6 +227,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     }
 
     const selectedIds = Array.from(selectedSessionIds);
+    const activeSessionIdBeforeArchive = flowChatStore.getState().activeSessionId;
     setActionKind('archive');
     try {
       const results = await Promise.allSettled(
@@ -233,6 +236,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
       const successCount = results.filter(result => result.status === 'fulfilled').length;
       if (successCount > 0) {
         await refreshWorkspaceSessions();
+        closeSessionSceneAfterActiveSessionArchive(activeSessionIdBeforeArchive);
         window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
         notificationService.success(t('nav.sessions.archivedAll', { count: successCount }), { duration: 3000 });
       }

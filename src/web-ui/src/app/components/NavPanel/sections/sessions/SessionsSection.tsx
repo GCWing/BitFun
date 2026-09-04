@@ -24,7 +24,10 @@ import {
   openBtwSessionInAuxPane,
   selectActiveBtwSessionTab,
 } from '@/flow_chat/services/btwSessionPane';
-import { openMainSession } from '@/flow_chat/services/sessionActivation';
+import {
+  closeSessionSceneAfterActiveSessionArchive,
+  openMainSession,
+} from '@/flow_chat/services/sessionActivation';
 import {
   dispatchHistorySessionOpenIntent,
   shouldShowHistorySessionOpenIntent,
@@ -1297,7 +1300,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       );
       if (!confirmed) return;
       try {
+        const activeSessionIdBeforeArchive = flowChatStore.getState().activeSessionId;
         await flowChatManager.archiveChatSession(sessionId);
+        closeSessionSceneAfterActiveSessionArchive(activeSessionIdBeforeArchive);
         window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
       } catch (err) {
         log.error('Failed to archive session', err);
