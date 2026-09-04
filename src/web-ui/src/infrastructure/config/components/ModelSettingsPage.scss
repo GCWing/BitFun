@@ -2151,24 +2151,6 @@
     flex-wrap: wrap;
   }
 
-  &__subscription-migration-notice {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3);
-    border: 1px solid var(--bf-color-action-secondary-hover);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
-
-    svg {
-      color: var(--bf-color-status-info-content);
-    }
-  }
-
   &__subscription-login-panel {
     display: grid;
     gap: var(--bf-space-3);
@@ -2279,15 +2261,6 @@
 
     &__opencode-plan {
       margin-left: 0;
-    }
-
-    &__subscription-migration-notice {
-      grid-template-columns: auto minmax(0, 1fr);
-
-      button {
-        grid-column: 2;
-        justify-self: flex-start;
-      }
     }
 
     &__subscription-login-actions {

@@ -87,8 +87,6 @@
     "detected": "Will use {{label}} ({{account}})",
     "notConnected": "{{kind}} is not signed in; sign in above first",
     "unknownAccount": "current account",
-    "secureStoreMigrationNotice": "Subscription credentials are now protected by BitFun credential storage. Credentials previously imported from third-party CLIs are not read; if you used that flow, sign in here once.",
-    "dismissMigrationNotice": "Got it",
     "reauthenticationRequired": "No usable credential was found in credential storage. Sign in again once.",
     "vaultUnavailable": "Credential storage is temporarily unavailable. Try again; your sign-in has not been removed.",
     "retryVault": "Try vault again",

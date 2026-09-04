@@ -21,7 +21,6 @@ export const modelSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'form' },
     { id: 'formBody' },
     { id: 'subscriptionArea' },
-    { id: 'subscriptionNotice' },
     { id: 'subscriptionPanel' },
     { id: 'subscriptionSummary' },
     { id: 'subscriptionCode' },

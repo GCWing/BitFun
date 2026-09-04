@@ -87,8 +87,6 @@
     "detected": "将使用 {{label}}（账号 {{account}}）",
     "notConnected": "尚未登录 {{kind}}，请先在上方完成登录",
     "unknownAccount": "当前登录账号",
-    "secureStoreMigrationNotice": "订阅凭据现已由 BitFun 凭据存储保护。旧版从第三方 CLI 自动导入的凭据不会被读取；如果你曾使用该方式，请在此重新登录一次。",
-    "dismissMigrationNotice": "知道了",
     "reauthenticationRequired": "凭据存储中未找到可用凭据，请重新登录一次",
     "vaultUnavailable": "凭据存储暂时不可用，请重试；你的登录信息并未被移除",
     "retryVault": "重试凭据库",

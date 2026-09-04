@@ -177,7 +177,6 @@ interface ActiveConnectionTest {
 }
 
 const SUBSCRIPTION_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-const SUBSCRIPTION_MIGRATION_NOTICE_KEY = 'bitfun.subscription-auth.secure-store-notice.v1';
 
 function subscriptionLoginCancelledError(): Error {
   const error = new Error('Login cancelled');
@@ -454,14 +453,6 @@ const ModelSettingsPage: React.FC = () => {
   const [subscriptionLoginClock, setSubscriptionLoginClock] = useState(() => Date.now());
   const [subscriptionLogoutRequest, setSubscriptionLogoutRequest] = useState<SubscriptionLogoutRequest | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
-  const [showSubscriptionMigrationNotice, setShowSubscriptionMigrationNotice] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return window.localStorage.getItem(SUBSCRIPTION_MIGRATION_NOTICE_KEY) !== 'dismissed';
-    } catch {
-      return true;
-    }
-  });
   const lastRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const activeRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const editorSavingRef = React.useRef(false);
@@ -1438,15 +1429,6 @@ const ModelSettingsPage: React.FC = () => {
       notification.error(t('subscriptionAuth.logoutFailed', { error: String(e) }));
     }
   }, [notification, refreshSubscriptionAccounts, subscriptionLogoutRequest, t]);
-
-  const dismissSubscriptionMigrationNotice = useCallback(() => {
-    setShowSubscriptionMigrationNotice(false);
-    try {
-      window.localStorage.setItem(SUBSCRIPTION_MIGRATION_NOTICE_KEY, 'dismissed');
-    } catch (error) {
-      log.debug('Unable to persist subscription migration notice dismissal', { error: String(error) });
-    }
-  }, []);
 
   const handleSubscriptionRefresh = useCallback(async (provider: SubscriptionProvider) => {
     try {
@@ -3502,19 +3484,6 @@ const ModelSettingsPage: React.FC = () => {
           )}
         >
           <div className="bitfun-model-settings__cli-discovery" data-bf-component="model-settings" data-bf-part="subscriptionArea">
-            {showSubscriptionMigrationNotice && (
-              <div className="bitfun-model-settings__subscription-migration-notice" data-bf-component="model-settings" data-bf-part="subscriptionNotice" role="status">
-                <Icon name="info" size="md" aria-hidden="true" />
-                <span>{t('subscriptionAuth.secureStoreMigrationNotice')}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={dismissSubscriptionMigrationNotice}
-                >
-                  {t('subscriptionAuth.dismissMigrationNotice')}
-                </Button>
-              </div>
-            )}
             {subscriptionAccounts.map((account) => {
               const descriptionParts: string[] = [];
               if (account.connected && account.account) {
