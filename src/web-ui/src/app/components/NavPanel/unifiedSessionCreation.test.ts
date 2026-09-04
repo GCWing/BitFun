@@ -49,9 +49,8 @@ describe('unified project session creation', () => {
     expect(toolbarMode).toContain('<ConversationModeSurface');
     expect(toolbarMode).toContain('switchTestId="toolbar-realtime-voice-mode-switch"');
     expect(helloLauncher).toContain('<LauncherButton');
-    expect(helloLauncher).toContain(
-      'leadingIcon={<Phone size={16} aria-hidden="true" />}',
-    );
+    expect(helloLauncher).not.toContain('leadingIcon=');
+    expect(helloLauncher).toContain("tVoice('voiceCall.call.launcherCompactLabel')");
     expect(voicePanel).not.toContain('createPortal');
     expect(helloLauncherStyles).toContain('right: 0;');
     expect(helloLauncherStyles).toContain('bottom: 0;');

@@ -81,6 +81,7 @@
     "call": {
       "title": "BitFun 实时通话",
       "button": "开始实时语音通话",
+      "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",
       "switchToVoice": "切换到实时语音",
       "switchToChat": "返回文字聊天",

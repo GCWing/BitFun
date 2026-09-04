@@ -20,21 +20,22 @@ function readSource(relativePath: string): string {
 }
 
 describe('floating MiniApp chat activity', () => {
-  it('uses the realtime phone icon in the design-system launcher for Hello', () => {
+  it('uses text-only Hi and Hello states in the design-system launcher', () => {
     const component = readSource('./FloatingMiniChat.tsx');
     expect(component).toContain('IconButton, LauncherButton, Tooltip');
     expect(component).toContain('<LauncherButton');
     expect(component).toContain(
       'className="bitfun-fmc__button bitfun-fmc__button--hello"',
     );
-    expect(component).toContain(
-      'leadingIcon={<Phone size={16} aria-hidden="true" />}',
-    );
+    expect(component).not.toContain("from 'lucide-react'");
+    expect(component).not.toContain('leadingIcon=');
+    expect(component).toContain("tVoice('voiceCall.call.launcherCompactLabel')");
     expect(component).toContain("tVoice('voiceCall.call.launcherLabel')");
-    expect(component).not.toContain('className="bitfun-fmc__button-label"');
+    expect(component).toContain('bitfun-fmc__button-label--compact');
+    expect(component).toContain('bitfun-fmc__button-label--expanded');
   });
 
-  it('keeps Hello compact until fine-pointer hover or keyboard focus', () => {
+  it('keeps Hi compact until fine-pointer hover or keyboard focus reveals Hello', () => {
     const stylesheet = readSource('./FloatingMiniChat.scss');
 
     expect(stylesheet).not.toContain('--bf-color-control-launcher');
@@ -47,6 +48,8 @@ describe('floating MiniApp chat activity', () => {
     expect(stylesheet).toContain(
       'inline-size: var(--bf-control-launcher-button-min-inline-size);',
     );
+    expect(stylesheet).toContain('.bitfun-fmc__button-label--compact');
+    expect(stylesheet).toContain('.bitfun-fmc__button-label--expanded');
     expect(stylesheet).toContain('&:focus-visible');
   });
 
