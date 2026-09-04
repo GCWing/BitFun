@@ -1806,7 +1806,6 @@ impl ExecutionEngine {
         session: &Session,
         agent_type: &str,
         workspace: Option<&WorkspaceBinding>,
-        original_user_input: &str,
         turn_index: usize,
         frozen_model_id: Option<&str>,
         frozen_model_binding_fingerprint: Option<&str>,
@@ -2548,17 +2547,11 @@ impl ExecutionEngine {
                 OpenBitFunError::NotFound(format!("Agent not found: {}", context.agent_type))
             })?;
 
-        let original_user_input = context
-            .context
-            .get("original_user_input")
-            .cloned()
-            .unwrap_or_default();
         let (model_id, _) = self
             .resolve_model_id_for_turn(
                 session,
                 &context.agent_type,
                 context.workspace.as_ref(),
-                &original_user_input,
                 context.turn_index,
                 context
                     .context
@@ -3484,7 +3477,6 @@ impl ExecutionEngine {
                 &session,
                 &agent_type,
                 context.workspace.as_ref(),
-                &original_user_input,
                 context.turn_index,
                 context
                     .context
