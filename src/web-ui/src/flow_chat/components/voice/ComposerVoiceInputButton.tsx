@@ -1,7 +1,12 @@
-import { Button, IconButton } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Tooltip,
+} from '@bitfun/ui';
+import { ChatComposerActionButton } from '@bitfun/ui/flow-chat';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, VolumeX } from 'lucide-react';
-import { Tooltip, Icon } from '@bitfun/ui';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;
@@ -237,26 +242,25 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
 
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="cancel" data-bf-state={transcribing ? 'disabled' : undefined}>
             <Tooltip content={controller.cancelTooltip}>
-              <IconButton
+              <ChatComposerActionButton
                 aria-label={controller.cancelTooltip}
                 className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--cancel"
-                size="sm"
                 disabled={transcribing}
                 onClick={(event) => {
                   event.stopPropagation();
                   controller.cancel();
                 }}
                 icon={<Icon name="xmark" size="md" />}
+                variant="quiet"
               />
             </Tooltip>
           </span>
 
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="transcribe" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
             <Tooltip content={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}>
-              <IconButton
+              <ChatComposerActionButton
                 aria-label={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
                 className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--transcribe"
-                size="sm"
                 disabled={controlsDisabled}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -267,17 +271,17 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                 ) : (
                   <Icon name="check-line" size="md" />
                 )}
+                variant="fill"
               />
             </Tooltip>
           </span>
 
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="send" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
             <Tooltip content={controlsDisabled ? controller.tooltip : controller.sendTooltip}>
-              <IconButton
+              <ChatComposerActionButton
                 aria-label={controlsDisabled ? controller.tooltip : controller.sendTooltip}
-                className="bitfun-chat-input__voice-pill-send"
+                className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--send"
                 tone="danger"
-                size="sm"
                 disabled={controlsDisabled}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -288,6 +292,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                 ) : (
                   <Icon name="arrow-up" size="lg" style={{ width: 15, height: 15 }} />
                 )}
+                variant="primary"
               />
             </Tooltip>
           </span>
