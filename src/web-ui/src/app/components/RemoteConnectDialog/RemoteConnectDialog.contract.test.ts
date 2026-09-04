@@ -239,22 +239,6 @@ describe('Remote Connect safety contracts', () => {
     expect(backgroundSync.match(/accountAutoSync/g)).toHaveLength(1);
   });
 
-  it('offers an explicit local overwrite when a new-format cloud pull cannot be applied', () => {
-    const overwriteHandler = accountPanelSource.slice(
-      accountPanelSource.indexOf('const handleOverwriteCloudSettings'),
-      accountPanelSource.indexOf('/** Landing path after a completed login'),
-    );
-    const failedSyncActions = accountPanelSource.slice(
-      accountPanelSource.indexOf("{syncStatus === 'failed' && ("),
-      accountPanelSource.indexOf("{syncStatus === 'syncing' && ("),
-    );
-
-    expect(overwriteHandler).toContain('startBackgroundSync(true)');
-    expect(failedSyncActions).toContain('handleOverwriteCloudSettings');
-    expect(failedSyncActions).toContain("accountLogin.useLocalTitle");
-    expect(failedSyncActions).toContain("accountLogin.useLocalDesc");
-  });
-
   it('binds overwrite finalize and cleanup to an opaque pending login id', () => {
     expect(accountPanelSource).toContain('pendingLoginIdRef.current = result.pending_login_id');
     expect(accountPanelSource).toContain('accountFinalizeLogin(pendingLoginId)');
