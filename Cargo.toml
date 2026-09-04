@@ -209,6 +209,7 @@ tauri-plugin-notification = "2.3"
 tauri-plugin-updater = "2.10"
 tauri-plugin-single-instance = "2.4"
 tauri-plugin-window-state = "2.4"
+notify-rust = { version = "4.18", default-features = false }
 tauri-build = { version = "2.6", features = [] }
 keepawake = "0.6.0"
 
