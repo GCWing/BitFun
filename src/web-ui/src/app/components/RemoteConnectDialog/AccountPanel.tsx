@@ -734,6 +734,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     startBackgroundSync(lastSyncIsFirstLogin ?? false);
   }, [lastSyncIsFirstLogin, startBackgroundSync, syncStatus]);
 
+  const handleOverwriteCloudSettings = useCallback(() => {
+    if (syncStatus !== 'failed' || syncInFlightRef.current) return;
+    startBackgroundSync(true);
+  }, [startBackgroundSync, syncStatus]);
+
   /** Landing path after a completed login: devices view + background sync. */
   const completeLogin = useCallback((
     relayUrl: string,
@@ -1233,16 +1238,29 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     {syncStatus === 'failed' && syncFailureMessage(t, lastSyncError)}
                   </span>
                   {syncStatus === 'failed' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leadingIcon={<Icon name="refresh" size="lg" />}
-                      className="account-panel__sync-retry"
-                      onClick={handleRetrySync}
-                      disabled={loading}
-                    >
-                      {t('accountLogin.retrySync')}
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leadingIcon={<Icon name="refresh" size="lg" />}
+                        className="account-panel__sync-retry"
+                        onClick={handleRetrySync}
+                        disabled={loading}
+                      >
+                        {t('accountLogin.retrySync')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leadingIcon={<Icon name="upload" size="lg" />}
+                        className="account-panel__sync-retry"
+                        onClick={handleOverwriteCloudSettings}
+                        disabled={loading}
+                        title={t('accountLogin.useLocalDesc')}
+                      >
+                        {t('accountLogin.useLocalTitle')}
+                      </Button>
+                    </>
                   )}
                   {syncStatus === 'syncing' && (
                     <span className="account-panel__sync-indicator-percent">

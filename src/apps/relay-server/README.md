@@ -286,6 +286,22 @@ Docker build layout rather than duplicating the shared service.
 The standalone library facade is `openbitfun_relay_server`; reusable relay
 runtime ownership remains in the internal `openbitfun-relay-service` crate.
 
+Source builds are tagged as `openbitfun-relay:<git-commit>` by `deploy.sh` and
+carry the same commit in the `org.opencontainers.image.revision` label. The
+resolved commit is persisted in the local root-only `.env`, so `start.sh` and
+`restart.sh` keep selecting the deployed image instead of a floating tag.
+
+```bash
+docker inspect --format '{{.Config.Image}} {{index .Config.Labels "org.opencontainers.image.revision"}}' \
+  openbitfun-relay
+```
+
+The image must report `/app/openbitfun-relay-server` as its command and account
+mode must use `/app/data/openbitfun_relay.db`. A pre-1.0 deployment that still
+has `bitfun_relay.db` must be stopped and copied with SQLite's `.backup` command
+to the new filename before the OpenBitFun image is started. The runtime has no
+fallback to the retired filename.
+
 ## Quick Start (service ops)
 
 ### Recommended: Run on the target server

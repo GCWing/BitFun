@@ -125,19 +125,31 @@ fi
 resolve_compose
 echo "Compose: ${COMPOSE[*]}"
 
+# Stamp source-built images with the exact checkout revision. A copied source
+# tree without Git metadata remains explicitly identifiable as unknown.
+if [ -z "${RELAY_GIT_COMMIT:-}" ]; then
+  if RELAY_GIT_COMMIT="$(git -C "${SCRIPT_DIR}/../../.." rev-parse HEAD 2>/dev/null)"; then
+    :
+  else
+    RELAY_GIT_COMMIT=unknown
+  fi
+fi
+export RELAY_GIT_COMMIT
+
 # Persist compose build-args for CN builds (and subsequent restarts).
 touch .env
 chmod 600 .env 2>/dev/null || true
 # Refresh OpenBitFun-managed mirror keys without wiping unrelated .env entries.
 if [ -f .env ]; then
   tmp_env="$(mktemp)"
-  grep -Ev '^(OPENBITFUN_USE_CN_MIRROR|OPENBITFUN_APT_MIRROR|OPENBITFUN_CARGO_SPARSE_URL)=' .env >"$tmp_env" || true
+  grep -Ev '^(OPENBITFUN_USE_CN_MIRROR|OPENBITFUN_APT_MIRROR|OPENBITFUN_CARGO_SPARSE_URL|RELAY_GIT_COMMIT)=' .env >"$tmp_env" || true
   mv "$tmp_env" .env
 fi
 {
   echo "OPENBITFUN_USE_CN_MIRROR=${OPENBITFUN_USE_CN_MIRROR:-0}"
   echo "OPENBITFUN_APT_MIRROR=${OPENBITFUN_APT_MIRROR:-mirrors.aliyun.com}"
   echo "OPENBITFUN_CARGO_SPARSE_URL=${OPENBITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}"
+  echo "RELAY_GIT_COMMIT=${RELAY_GIT_COMMIT}"
 } >>.env
 
 # Build first so a compile failure does not take down a running relay.
@@ -171,11 +183,12 @@ else
         OPENBITFUN_USE_CN_MIRROR="${OPENBITFUN_USE_CN_MIRROR:-0}" \
         OPENBITFUN_APT_MIRROR="${OPENBITFUN_APT_MIRROR:-mirrors.aliyun.com}" \
         OPENBITFUN_CARGO_SPARSE_URL="${OPENBITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}" \
+        RELAY_GIT_COMMIT="${RELAY_GIT_COMMIT}" \
         docker compose --progress=plain build "${BUILD_ARGS[@]}"
       ;;
     sg)
       # shellcheck disable=SC2086
-      sg docker -c "env DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS='${BUILDKIT_PROGRESS}' OPENBITFUN_USE_CN_MIRROR='${OPENBITFUN_USE_CN_MIRROR:-0}' OPENBITFUN_APT_MIRROR='${OPENBITFUN_APT_MIRROR:-mirrors.aliyun.com}' OPENBITFUN_CARGO_SPARSE_URL='${OPENBITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}' docker compose --progress=plain build ${BUILD_ARGS[*]}"
+      sg docker -c "env DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS='${BUILDKIT_PROGRESS}' OPENBITFUN_USE_CN_MIRROR='${OPENBITFUN_USE_CN_MIRROR:-0}' OPENBITFUN_APT_MIRROR='${OPENBITFUN_APT_MIRROR:-mirrors.aliyun.com}' OPENBITFUN_CARGO_SPARSE_URL='${OPENBITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}' RELAY_GIT_COMMIT='${RELAY_GIT_COMMIT}' docker compose --progress=plain build ${BUILD_ARGS[*]}"
       ;;
     *)
       if [ "${#COMPOSE[@]}" -ge 2 ] && [ "${COMPOSE[0]}" = "docker" ] && [ "${COMPOSE[1]}" = "compose" ]; then

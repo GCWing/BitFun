@@ -128,8 +128,15 @@ RUN --mount=type=cache,id=openbitfun-relay-cargo-registry,target=/usr/local/carg
 
 FROM debian:bookworm-slim
 
+ARG RELAY_GIT_COMMIT=unknown
 ARG OPENBITFUN_USE_CN_MIRROR=0
 ARG OPENBITFUN_APT_MIRROR=mirrors.aliyun.com
+
+LABEL org.opencontainers.image.title="OpenBitFun Relay Server" \
+      org.opencontainers.image.description="Self-hosted relay server for OpenBitFun" \
+      org.opencontainers.image.source="https://github.com/GCWing/OpenBitFun" \
+      org.opencontainers.image.revision="${RELAY_GIT_COMMIT}" \
+      org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
