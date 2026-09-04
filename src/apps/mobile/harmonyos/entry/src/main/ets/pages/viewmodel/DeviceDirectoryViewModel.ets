@@ -236,7 +236,8 @@ export class DeviceDirectoryViewModel {
       return created;
     });
     this.state.replace(next);
-    if (this.state.find(this.state.selectedDeviceId)) {
+    if (this.state.find(this.state.selectedDeviceId) ||
+      (this.state.selectedDeviceId === activeId && activeId.length > 0 && activeConnected)) {
       return;
     }
     // A live control target is transport state, not a user selection in the
@@ -253,17 +254,27 @@ export class DeviceDirectoryViewModel {
   }
 
   async selectDevice(deviceId: string): Promise<void> {
-    const entry = this.state.find(deviceId);
+    const target = deviceId.trim();
+    const entry = this.state.find(target);
     if (!entry) {
+      // A QR-paired desktop is projected into the sidebar without belonging to
+      // the account directory. It is still a real selectable disclosure row
+      // while its control link is live; accepting only directory entries made
+      // that row render normally but ignore every tap.
+      if (target.length > 0 && target === this.hooks.activeDeviceId().trim() &&
+        this.hooks.activeDeviceConnected()) {
+        this.state.select(target);
+        RemoteLogger.info(`device directory select active projection device=${target}`);
+      }
       return;
     }
-    this.state.select(deviceId);
-    RemoteLogger.info(`device directory select device=${deviceId}`);
+    this.state.select(target);
+    RemoteLogger.info(`device directory select device=${target}`);
     if (this.shouldFetch(entry)) {
       entry.status = 'loading';
       entry.errorText = '';
     }
-    await this.ensureLoaded(deviceId);
+    await this.ensureLoaded(target);
   }
 
   async retryDevice(deviceId: string): Promise<void> {

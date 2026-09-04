@@ -71,6 +71,7 @@ import {
   RemoteModelPreferenceStore
 } from '../main/ets/services/RemoteModelController';
 import { RemotePairingPolicy } from '../main/ets/services/RemotePairingPolicy';
+import { PairIdentity, RelayHttpClient } from '../main/ets/services/RelayHttpClient';
 import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
 import { RemoteSessionClient, RemoteSessionController } from '../main/ets/services/RemoteSessionController';
 import { RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';
@@ -120,6 +121,7 @@ import { TimeFormat } from '../main/ets/services/TimeFormat';
 import { X25519 } from '../main/ets/services/X25519';
 import {
   ChatMessage,
+  CommandStatusResponse,
   FileInfo,
   ImageAttachment,
   PollSessionResult,
@@ -129,8 +131,11 @@ import {
   RemoteImageContext,
   RemoteQuestionAnswerPayload,
   InitialSyncResult,
+  InitialSyncResponse,
+  RemoteDescriptor,
   RemoteModelCatalog,
   ReadFileResult,
+  RemoteCommand,
   RemoteSession,
   SelectedImageAttachment,
   SessionItemResponse,
@@ -322,6 +327,64 @@ class ScriptedAccountSessionManager extends RemoteSessionManager {
   reset(): void {
     this.resets += 1;
     super.reset();
+  }
+}
+
+class RecordingRoomClient extends RelayHttpClient {
+  readonly events: string[] = [];
+  private descriptorReady: boolean = false;
+
+  bind(descriptor: RemoteDescriptor, _crypto: RemoteCrypto): void {
+    this.descriptorReady = true;
+    this.events.push(`bind:${descriptor.roomId}`);
+  }
+
+  reset(): void {
+    this.descriptorReady = false;
+    this.events.push('reset');
+  }
+
+  async pair(_deviceId: string, _identity: PairIdentity): Promise<InitialSyncResponse> {
+    if (!this.descriptorReady) {
+      throw new Error('Remote descriptor is not configured.');
+    }
+    this.events.push('pair');
+    return {
+      resp: 'initial_sync',
+      has_workspace: true,
+      path: '/workspace',
+      project_name: 'workspace',
+      sessions: [{
+        session_id: 'session-after-retry',
+        name: 'Recovered session',
+        agent_type: 'agentic'
+      }]
+    };
+  }
+
+  async requestDelegatedIdentity(_force: boolean = false): Promise<boolean> {
+    return false;
+  }
+}
+
+class RecordingAccountDeviceClient extends CloudAccountClient {
+  async deviceRpc<T extends CommandStatusResponse>(
+    _relayUrl: string,
+    _session: CloudAccountSession,
+    _targetDeviceId: string,
+    command: RemoteCommand,
+    _timeoutMs: number = 130000
+  ): Promise<T> {
+    if (command.cmd === 'get_workspace_info') {
+      return JSON.parse(
+        '{"resp":"workspace_info","has_workspace":true,"workspace_path":"/account-workspace",' +
+        '"workspace_name":"Account workspace"}'
+      ) as T;
+    }
+    return JSON.parse(
+      '{"resp":"session_list","sessions":[{"session_id":"account-device-session",' +
+      '"name":"Account device session","agent_type":"agentic"}],"has_more":false}'
+    ) as T;
   }
 }
 
@@ -559,6 +622,74 @@ export default function transportAndGeneralChatUnitTest() {
         didThrow = true;
       }
       expect(didThrow).assertEqual(true);
+    });
+  });
+
+  describe('RemoteSessionManager room reconnect', () => {
+    it('keeps the newly scanned descriptor and its initial sessions after a prior room transport', 0, async () => {
+      const roomClient = new RecordingRoomClient();
+      const manager = new RemoteSessionManager(roomClient, () => new RemoteCrypto({
+        cipher: new FakeRemoteCryptoCipher(),
+        keyPair: {
+          privateKey: new Uint8Array(32),
+          publicKey: new Uint8Array(32)
+        },
+        randomBytes: fixedRandomBytes
+      }));
+      const identity: PairIdentity = { userId: 'harmony-device' };
+      const first: RemoteDescriptor = {
+        relayUrl: 'https://relay.example.com',
+        roomId: 'expired-room',
+        publicKey: 'expired-key',
+        accountAuth: false,
+        accountUsername: ''
+      };
+      const replacement: RemoteDescriptor = {
+        relayUrl: 'https://relay.example.com',
+        roomId: 'fresh-room',
+        publicKey: 'fresh-key',
+        accountAuth: false,
+        accountUsername: ''
+      };
+
+      await manager.connect(first, identity, 'harmony-device');
+      const result = await manager.connect(replacement, identity, 'harmony-device');
+
+      expect(roomClient.events.join(','))
+        .assertEqual('bind:expired-room,pair,reset,bind:fresh-room,pair');
+      expect(result.sessions.length).assertEqual(1);
+      expect(result.sessions[0].id).assertEqual('session-after-retry');
+    });
+
+    it('replaces room state and loads sessions when switching to an account device', 0, async () => {
+      const roomClient = new RecordingRoomClient();
+      const manager = new RemoteSessionManager(roomClient, () => new RemoteCrypto({
+        cipher: new FakeRemoteCryptoCipher(),
+        keyPair: {
+          privateKey: new Uint8Array(32),
+          publicKey: new Uint8Array(32)
+        },
+        randomBytes: fixedRandomBytes
+      }));
+      await manager.connect({
+        relayUrl: 'https://relay.example.com',
+        roomId: 'room-before-account',
+        publicKey: 'room-key',
+        accountAuth: false,
+        accountUsername: ''
+      }, { userId: 'harmony-device' }, 'harmony-device');
+
+      const result = await manager.connectAccountDevice(
+        new RecordingAccountDeviceClient(),
+        'https://relay.example.com',
+        { token: 'token', userId: 'account-user', masterKey: new Uint8Array(32) },
+        'desktop-device'
+      );
+
+      expect(manager.hasRoomChannel()).assertFalse();
+      expect(result.workspace.path).assertEqual('/account-workspace');
+      expect(result.sessions.length).assertEqual(1);
+      expect(result.sessions[0].id).assertEqual('account-device-session');
     });
   });
 
@@ -1341,6 +1472,21 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.remoteState.activeSession.sessionId).assertEqual('');
       expect(harness.remoteState.statusText).assertEqual('');
       expect(harness.timelineResets).assertEqual(1);
+    });
+
+    it('migrates the same desktop from a QR room to the account transport', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      harness.remoteState.setControlTarget('room', 'desk-a', 'Desktop A');
+      harness.remoteState.setConnectionState('connected');
+
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+
+      expect(harness.sessionManager.dialled.join(',')).assertEqual('desk-a');
+      expect(harness.remoteState.controlTargetType).assertEqual('account_device');
+      expect(harness.remoteState.controlTargetDeviceId).assertEqual('desk-a');
+      expect(harness.remoteState.connectionState).assertEqual('connected');
+      expect(harness.sessionStore.saved.length).assertEqual(1);
+      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
     });
 
     it('puts the phone back on the previous desktop when a device switch fails', 0, async () => {

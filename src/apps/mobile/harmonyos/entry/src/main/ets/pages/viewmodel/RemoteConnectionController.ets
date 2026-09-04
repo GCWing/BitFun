@@ -181,7 +181,9 @@ export class RemoteConnectionController {
       // list that is already on screen. Its own failures are logged inside.
       void this.loadRecentWorkspaces();
       this.pageState.setLoadingHome(false);
-      RemoteLogger.info('connect success');
+      RemoteLogger.info(
+        `connect success sessions=${initialSync.sessions.length} has_more=${initialSync.hasMoreSessions ? '1' : '0'}`
+      );
     } catch (err) {
       if (!this.connection.isCurrentRequest()) {
         return;

@@ -189,6 +189,23 @@ export default function deviceDirectoryUnitTest() {
   });
 
   describe('DeviceDirectoryViewModel', () => {
+    it('selects a live QR device projected outside the account directory', 0, async () => {
+      const state = new DeviceDirectoryState();
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => 'qr-desktop',
+        activeDeviceConnected: () => true
+      });
+
+      await viewModel.selectDevice('qr-desktop');
+      expect(state.selectedDeviceId).assertEqual('qr-desktop');
+
+      // An account-directory refresh has no row for a scan-only target, but it
+      // must not collapse the disclosure while that target is still connected.
+      viewModel.syncDevices([]);
+      expect(state.selectedDeviceId).assertEqual('qr-desktop');
+    });
+
     it('does not issue RPC for an offline device', 0, async () => {
       let credentialCalls = 0;
       const state = new DeviceDirectoryState();
