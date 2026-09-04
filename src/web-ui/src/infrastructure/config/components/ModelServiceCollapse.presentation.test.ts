@@ -34,6 +34,12 @@ describe('model service collapsed presentation', () => {
     );
   });
 
+  it('matches provider rows to the persistent surface used by other settings groups', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group-header\s*\{[\s\S]*?background:\s*var\(--bf-color-surface-tertiary\)/,
+    );
+  });
+
   it('marks the primary model slot as required in both label and control semantics', () => {
     expect(defaultModelSource).toMatch(
       /label=\{t\('core\.primary\.label'\)\}[\s\S]*?description=\{t\('core\.primary\.description'\)\}[\s\S]*?required[\s\S]*?<Combobox[\s\S]*?aria-required="true"/,

@@ -160,7 +160,10 @@
     // Keep the leading inset inside the toggle so the space beside the chevron is clickable.
     padding-block: 0;
     padding-inline: 0 var(--openbitfun-space-4);
-    background: var(--openbitfun-color-surface-subtle);
+    // Provider rows are persistent grouped content, matching the surface used by
+    // the other settings sections. The translucent subtle tint is reserved for
+    // local feedback because it reads too bright over the dark scene surface.
+    background: var(--openbitfun-color-surface-tertiary);
 
     &[data-expanded='true'] {
       border-bottom: 1px solid var(--openbitfun-color-border-subtle);
