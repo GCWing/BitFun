@@ -1537,6 +1537,11 @@ $_section-header-height: 22px;
   transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
               background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
+  > [data-openbitfun-part='icon'] {
+    inline-size: var(--openbitfun-control-icon-size-md);
+    block-size: var(--openbitfun-control-icon-size-md);
+  }
+
   &:hover {
     color: var(--openbitfun-color-content-primary);
     background: var(--openbitfun-color-action-quiet-hover);

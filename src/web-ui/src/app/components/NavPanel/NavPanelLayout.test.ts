@@ -101,6 +101,16 @@ describe('NavPanel layout styles', () => {
     expect(footerBlocks[1]).toContain('padding: 2px 6px;');
   });
 
+  it('keeps the compact settings button while using a more legible gear icon', () => {
+    const stylesheet = readNavPanelStylesheet();
+    const settingsButtonBlock = extractBlock(stylesheet, '.openbitfun-nav-panel__footer-btn--icon');
+
+    expect(settingsButtonBlock).toContain('width: 28px;');
+    expect(settingsButtonBlock).toContain('height: 28px;');
+    expect(settingsButtonBlock).toContain("inline-size: var(--openbitfun-control-icon-size-md);");
+    expect(settingsButtonBlock).toContain("block-size: var(--openbitfun-control-icon-size-md);");
+  });
+
   it('keeps category actions flat on hover', () => {
     const stylesheet = readNavPanelStylesheet();
 

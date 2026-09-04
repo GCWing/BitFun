@@ -650,7 +650,7 @@
       "theme": "主题",
       "themeConfiguration": "主题配置",
       "appearanceSwitchFailed": "主题切换失败，请重试。",
-      "openSettings": "打开设置",
+      "openSettings": "$t(shared:features.settings)",
       "about": "关于"
     }
   },
